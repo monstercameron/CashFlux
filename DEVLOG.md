@@ -30,8 +30,19 @@ problems and fixes, and what's next.
   MCP server (`.mcp.json`, 81 `gwc_*` tools). Wrote `docs/GOWEBCOMPONENTS.md` and a CLAUDE.md
   quick-reference for new sessions. Moved pre-spec draft files to `_scratch/` (Go-ignored).
 
-**Next:** finalize spec sign-off, then begin Phase 1 — clean-architecture logic packages
-(money/FX, freshness) with tests first, then the IndexedDB store and UI.
+- **Skeleton:** built the routed app shell (`internal/app`: router + `Shell` + `NavBar`) and stub
+  screens for all 12 features (`internal/screens`), driven by a single screen registry. Verified on
+  the live `gwc dev` server (HTTP 200 for `/`, wasm, and glue; hot reload active).
+- **Layout cleanup:** moved web/build assets under `web/` so the project root holds only Go source,
+  config, and docs — clean and standard.
+- **Framework bug found (parked):** `gwc dev` resolves `-html` relative to the build/module root,
+  not the serve `-root` (contradicts its flag help). Workaround: pass `-html web\index.html`. Proper
+  fix is in GoWebComponents `tools/gwc/dev.go` — to be done, then rebuild + recopy `gwc`.
+- **Planning:** wrote `TODO.md`, the priority-ordered master backlog, and made bottom-up SDLC
+  (model → services → store → UI) an explicit rule in `CLAUDE.md`.
+
+**Next (per SDLC + TODO §1.1):** start the data model — `internal/domain` types + `internal/money`
+and `internal/currency` services with table-driven tests — before any feature UI.
 
 **Note:** a few pre-spec exploratory Go files (model/persist/dashboard/transactions/components)
 remain in the tree from early prototyping; they predate the locked spec and will be replaced to

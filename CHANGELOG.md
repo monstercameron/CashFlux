@@ -18,3 +18,11 @@ and every commit updates this file under `Unreleased`.
 - Wire the `gwc` runner (`.tools/gwc.exe`) and its **MCP server** (`.mcp.json`) for development.
 - Framework notes (`docs/GOWEBCOMPONENTS.md`) and a quick-reference section in `CLAUDE.md` for
   new/other sessions.
+- Routed app shell (`internal/app`) with top navigation and stub screens for every feature
+  (`internal/screens`).
+- Master feature backlog (`TODO.md`), ordered by implementation priority.
+
+### Changed
+- Serve web assets from `web/` (clean project root); restyled host page with a dark theme.
+- Require bottom-up SDLC build order in `CLAUDE.md` (data model → services/logic with tests →
+  persistence → state → UI last).
