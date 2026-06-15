@@ -24,8 +24,10 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
 - **Top gotcha:** never call `On*` prop options inside a variable-length loop — wrap per-row
   interactive elements in their own component (see framework notes §"CRITICAL gotchas").
 - **Status:** Phase 0 (toolchain + wiring done, wasm builds). Phase 1 not yet started.
-- **Hard rules:** one feature per commit; update CHANGELOG + DEVLOG each commit; pure idiomatic Go;
-  logic packages have no `syscall/js` and are unit-tested; `log/slog` only; plain-English UI.
+- **Hard rules:** build **bottom-up** (data model → services/logic with tests → persistence → state
+  → UI last; never UI-first); one feature per commit; update CHANGELOG + DEVLOG each commit; pure
+  idiomatic Go; logic packages have no `syscall/js` and are unit-tested; `log/slog` only;
+  plain-English UI.
 
 ## Stack & layout
 
@@ -92,6 +94,24 @@ Build artifacts (`bin/`, `static/bin/`, `static/wasm_exec.js`) and `.tools/` are
 7. **Strong core schema + additive extensibility.** Core entity types stay strongly typed; user
    flexibility comes from validated custom fields and the sandboxed formula engine — never by
    loosening core types into untyped maps.
+
+## Build order — SDLC (strict, non-negotiable)
+
+Build **bottom-up**. Never build a feature's UI before its model and services exist and are tested.
+For every feature, in order:
+
+1. **Data model** — define the domain types in `internal/domain` (pure Go, no `syscall/js`).
+2. **Services / business logic** — implement the behavior in pure packages
+   (`internal/money`, `internal/currency`, `internal/freshness`, `internal/allocate`,
+   `internal/formula`, …) with **table-driven tests that pass on native Go** before anything else.
+3. **Persistence** — wire the entity into `internal/store` (IndexedDB) with export/import + tests.
+4. **State** — expose it via atoms and the single load/persist path.
+5. **UI** — build the screen last, as a thin shell over the tested services. No business logic in
+   view code.
+
+A feature is not "started" by drawing its screen. It is started by modelling its data and proving
+its logic with tests. The current routed shell + screen stubs are **navigational scaffolding only**;
+each stub is replaced strictly in the order above. See `TODO.md` (ordered by this exact priority).
 
 ## UI & writing rules
 
