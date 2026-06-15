@@ -60,6 +60,8 @@ and every commit updates this file under `Unreleased`.
 - `internal/store`: `TransactionsToCSV`/`TransactionsFromCSV` — human-readable CSV with decimal
   amounts, header-name column matching (order/extra-column tolerant), generated ids for id-less rows,
   and per-line error reporting; lossless round-trip tested.
+- `internal/store`: `Get/PutSettings` accessors, atomic `Wipe`, and a valid `SampleDataset` starter
+  seed (validated in tests). Completes the Phase 1 persistence layer.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

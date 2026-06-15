@@ -82,8 +82,14 @@ problems and fixes, and what's next.
   (order-independent, extra columns ignored), generates ids when missing, reports errors per line.
   Round-trip is `reflect.DeepEqual`-stable.
 
-**Next:** finish §1.4 (Settings store accessor + sample dataset/wipe), then §1.5 `log/slog` logging,
-then start wiring app state to the store and the first real screen.
+- Added `Get/PutSettings`, atomic `Wipe`, and `SampleDataset` (a valid starter seed — checked by
+  running `internal/validate` over every entity in tests). **§1.4 persistence is complete.**
+
+**§1.3 + §1.4 done — 11 packages green** (money, currency, id, dateutil, domain, ledger, budgeting,
+goals, freshness, validate, store).
+
+**Next (§1.5):** `internal/logging` — a `log/slog` handler bridging to the browser console + an
+in-app ring buffer. Then wire app state (atoms ← store) and build the first real screen (Accounts).
 
 ## 2026-06-15 — Project kickoff & spec
 

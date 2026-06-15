@@ -83,14 +83,14 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] Object store per entity (members, accounts, categories, transactions, budgets, goals, tasks)
 - [x] CRUD per entity (create/get/list/update/delete)
 - [x] Query helpers: by account, by member, by date range, by category, by status
-- [ ] Settings store (base currency, FX rates, freshness overrides, prefs, OpenAI key)
+- [x] Settings store (base currency, FX rates, freshness overrides, prefs, OpenAI key) — `Get/PutSettings`
 - [x] ★ Export entire dataset → versioned JSON (entities + settings + custom fields)
 - [x] ★ Import dataset from JSON (version-migrate; rejects newer schema)
 - [x] ★ Lossless export→import round-trip test
 - [x] CSV export for transactions (stable columns)
 - [x] CSV import for transactions (header-name column mapping, error rows; UI preview later)
-- [ ] Sample dataset + "load sample data" action; "wipe all data" (confirm)
-- [ ] Tests: pure store logic, query helpers, import/export round-trip, migration
+- [x] Sample dataset (`SampleDataset`) + `Wipe` (data layer; UI "load sample"/"wipe" actions later)
+- [x] Tests: pure store logic, query helpers, import/export round-trip, migration
 
 ### 1.5 Logging — `internal/logging`
 
