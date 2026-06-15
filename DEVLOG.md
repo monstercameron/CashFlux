@@ -45,8 +45,13 @@ problems and fixes, and what's next.
   and `Project` (ceil-months estimate from an assumed monthly contribution; already-complete goals
   project to `from`; non-positive contribution yields no projection) via `Evaluate`. Tested.
 
-**Next:** `internal/freshness` (per-type staleness windows + `IsStale`, recurring-bill exemption),
-then `internal/validate` (per-entity validation) — each with tests.
+- Added `internal/freshness`: default per-type staleness windows (debt-like balances 14d, checking
+  30d, savings 45d, investment 60d), `Merge` for settings overrides, `IsStale` (archived/exempt/
+  untracked never stale; never-confirmed = stale), `DaysSinceUpdate`, `StaleAccounts`. Recurring
+  fixed bills are exempt by design (modeled as Recurring, not accounts; window 0 also exempts). Tested.
+
+**Next:** `internal/validate` (per-entity validation: required fields, positive amounts, valid refs,
+currency match) — completes the §1.3 pure-logic layer. Then §1.4 persistence (`internal/store`).
 
 ## 2026-06-15 — Project kickoff & spec
 

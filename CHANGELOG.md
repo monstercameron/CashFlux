@@ -41,6 +41,8 @@ and every commit updates this file under `Unreleased`.
   remaining, percent, and ok/near/over `State` thresholds — multi-currency + tests.
 - `internal/goals`: goal `Remaining`, `Percent` (clamped), `IsComplete`, and `Project` (read-only
   completion estimate from an assumed monthly contribution) via `Evaluate` + tests.
+- `internal/freshness`: per-type staleness `Windows` (defaults + `Merge` overrides), `IsStale`,
+  `DaysSinceUpdate`, and `StaleAccounts`; archived/exempt/untracked accounts never go stale + tests.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.
