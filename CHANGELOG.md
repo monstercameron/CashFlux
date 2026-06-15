@@ -84,6 +84,8 @@ and every commit updates this file under `Unreleased`.
   ok/near/over progress bar, plus add and per-row delete.
 - Goals screen: savings goals with a progress bar (% complete + remaining via `internal/goals`),
   optional target date, plus add and per-row delete.
+- To-do screen: tasks with priority badges and due dates — add, complete-toggle, delete, sorted
+  (open first, then by due date).
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

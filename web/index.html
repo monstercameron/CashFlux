@@ -99,7 +99,7 @@
       .rows { display: flex; flex-direction: column; }
       .row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.6rem 0; border-top: 1px solid var(--border); }
       .row:first-child { border-top: 0; }
-      .row-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+      .row-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
       .row-desc { font-weight: 500; }
       .row-meta { color: var(--text-dim); font-size: 0.82rem; }
       .amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
@@ -127,6 +127,17 @@
       .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
       .bar-fill.near { background: #f59e0b; }
       .bar-fill.over { background: var(--danger); }
+
+      /* To-do */
+      .field-wide { grid-column: 1 / -1; }
+      .check { background: transparent; border: 0; color: var(--text-dim); cursor: pointer; font-size: 1.15rem; padding: 0 0.5rem 0 0; line-height: 1; }
+      .check:hover { color: var(--accent); }
+      .row.done .row-desc { text-decoration: line-through; color: var(--text-faint); }
+      .task-meta { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.15rem; }
+      .badge-prio { font-size: 0.68rem; }
+      .prio-high { background: #3b0d0d; color: #fca5a5; border: 1px solid #7f1d1d; }
+      .prio-med { background: #2a230c; color: #fcd34d; border: 1px solid #854d0e; }
+      .prio-low { background: #0c2a17; color: #86efac; border: 1px solid #166534; }
     </style>
   </head>
   <body>

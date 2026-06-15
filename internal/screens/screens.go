@@ -56,11 +56,6 @@ func stat(label, value, accent string) ui.Node {
 	)
 }
 
-// Todo is the budgeting task list.
-func Todo() ui.Node {
-	return stub(1, "A budgeting-related to-do list — open/done, due dates, priority — with items linked to accounts, budgets, or goals.")
-}
-
 // Planning is the scenario/projection tool.
 func Planning() ui.Node {
 	return stub(2, "Build scenarios from recurring items and assumptions, compare against actuals, and push a chosen scenario into the forecast.")
