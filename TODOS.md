@@ -69,8 +69,8 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] `internal/ledger`: income/expense totals for a period (exclude transfers)
 - [x] `internal/ledger`: net worth (assets − liabilities) with multi-currency → base
 - [x] `internal/ledger`: per-member and group rollups
-- [ ] `internal/budgeting`: spent vs limit per budget (individual + group scope)
-- [ ] `internal/budgeting`: near/over-limit threshold evaluation
+- [x] `internal/budgeting`: spent vs limit per budget (individual + group scope)
+- [x] `internal/budgeting`: near/over-limit threshold evaluation
 - [ ] `internal/goals`: progress %, remaining, projected completion (read-only estimate)
 - [ ] ★ `internal/freshness`: per-type staleness windows + `IsStale(balanceAsOf, type, now)`; recurring-bill exemption
 - [ ] ★ `internal/validate`: per-entity validation (required, positive amounts, valid refs, currency match)

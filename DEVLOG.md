@@ -36,8 +36,13 @@ problems and fixes, and what's next.
   `NetByOwner` rollups. All cross-currency math routes through the `currency.Rates` base. Tests cover
   mixed currencies, transfers, archived accounts, and currency-mismatch errors.
 
-**Next:** `internal/budgeting` (spent vs limit per budget, near/over-limit thresholds), then
-`internal/goals` (progress, projection), then `internal/freshness` — each with tests.
+- Added `internal/budgeting`: scope-aware `Spent` (individual budgets count only the owner member's
+  expenses; shared/group budgets count everyone), `Evaluate`/`EvaluateAll` returning remaining,
+  percent, and ok/near/over `State` (default near threshold 80%). Handles multi-currency and
+  zero-limit edge cases. Tests cover scope, currency conversion, and all three states.
+
+**Next:** `internal/goals` (progress %, remaining, projected completion), then `internal/freshness`
+(staleness windows), then `internal/validate` — each with tests.
 
 ## 2026-06-15 — Project kickoff & spec
 

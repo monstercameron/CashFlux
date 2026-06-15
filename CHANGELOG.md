@@ -37,6 +37,8 @@ and every commit updates this file under `Unreleased`.
 - `internal/ledger`: account `Balance`/`RunningBalances`, period income/expense totals (transfers
   excluded), `NetWorth` (assets − liabilities), and per-owner net rollups — all multi-currency via
   base conversion + tests.
+- `internal/budgeting`: scope-aware `Spent` (individual vs group), `Evaluate`/`EvaluateAll` with
+  remaining, percent, and ok/near/over `State` thresholds — multi-currency + tests.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.
