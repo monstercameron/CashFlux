@@ -87,8 +87,8 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] ★ Export entire dataset → versioned JSON (entities + settings + custom fields)
 - [x] ★ Import dataset from JSON (version-migrate; rejects newer schema)
 - [x] ★ Lossless export→import round-trip test
-- [ ] CSV export for transactions (stable columns)
-- [ ] CSV import for transactions (column mapping, preview, error rows)
+- [x] CSV export for transactions (stable columns)
+- [x] CSV import for transactions (header-name column mapping, error rows; UI preview later)
 - [ ] Sample dataset + "load sample data" action; "wipe all data" (confirm)
 - [ ] Tests: pure store logic, query helpers, import/export round-trip, migration
 

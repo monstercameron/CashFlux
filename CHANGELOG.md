@@ -57,6 +57,9 @@ and every commit updates this file under `Unreleased`.
 - `internal/store`: per-entity CRUD (Put/Get/Delete/List for members, accounts, categories,
   transactions, budgets, goals, tasks) and query helpers (transactions by account/category/member/
   date-range via SQLite `json_extract`; tasks by status) + tests.
+- `internal/store`: `TransactionsToCSV`/`TransactionsFromCSV` — human-readable CSV with decimal
+  amounts, header-name column matching (order/extra-column tolerant), generated ids for id-less rows,
+  and per-line error reporting; lossless round-trip tested.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

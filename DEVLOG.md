@@ -77,8 +77,13 @@ problems and fixes, and what's next.
   round-trip tested). Kept it currency-agnostic (takes `decimals`, not a currency) to avoid an import
   cycle with `internal/currency`. This unblocks human-readable CSV. Symbol/grouping is a UI concern.
 
-**Next:** CSV transaction export/import (using `ParseMinor`/`FormatMinor` + `currency.Decimals`),
-then the Settings store accessor, then §1.5 `log/slog` logging.
+- Added `internal/store` CSV: `TransactionsToCSV`/`TransactionsFromCSV`. Decimal amounts via
+  `money.FormatMinor`/`ParseMinor` + `currency.Decimals`; import matches columns by header name
+  (order-independent, extra columns ignored), generates ids when missing, reports errors per line.
+  Round-trip is `reflect.DeepEqual`-stable.
+
+**Next:** finish §1.4 (Settings store accessor + sample dataset/wipe), then §1.5 `log/slog` logging,
+then start wiring app state to the store and the first real screen.
 
 ## 2026-06-15 — Project kickoff & spec
 
