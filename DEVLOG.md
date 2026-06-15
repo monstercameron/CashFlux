@@ -22,6 +22,14 @@ problems and fixes, and what's next.
   `syscall/js`, unit-tested on native Go), `log/slog` logging, readable plain-English UI,
   import/export, heavy configurability, and strict VCS/journaling (one feature per commit).
 
+- **Dependency cleanup:** replaced the local `../GoWebComponents` `replace` with a real `go get`
+  module pin (pseudo-version `v1.1.1-0.20260613162601-cad8af8`). `go mod tidy` + wasm build are
+  clean — `agenthub` is pruned (core packages don't import it); only `cbor`/`float16`/`goldmark`
+  come along indirect. Phase 0 wasm entrypoint builds (6.17 MB).
+- **Tooling:** built `gwc` from the framework checkout and wired it as `.tools/gwc.exe` + the `gwc`
+  MCP server (`.mcp.json`, 81 `gwc_*` tools). Wrote `docs/GOWEBCOMPONENTS.md` and a CLAUDE.md
+  quick-reference for new sessions. Moved pre-spec draft files to `_scratch/` (Go-ignored).
+
 **Next:** finalize spec sign-off, then begin Phase 1 — clean-architecture logic packages
 (money/FX, freshness) with tests first, then the IndexedDB store and UI.
 

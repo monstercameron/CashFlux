@@ -7,20 +7,55 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
 > **Process rule:** Agree the spec before writing feature code. Do not infer requirements; confirm
 > scope, then build. Scaffolding/tooling setup may proceed without asking.
 
+## Quick reference (read first — for new/other sessions)
+
+- **What:** local-first, household-aware budgeting *suite* (budgeting + planning + to-do + AI),
+  Go → WebAssembly on GoWebComponents. AI = OpenAI, client-side, bring-your-own-key.
+- **Read these:** [`SPEC.md`](./SPEC.md) (product), this file (rules),
+  [`docs/GOWEBCOMPONENTS.md`](./docs/GOWEBCOMPONENTS.md) (framework API/patterns/gotchas),
+  [`DEVLOG.md`](./DEVLOG.md) + [`CHANGELOG.md`](./CHANGELOG.md) (history/decisions).
+- **Toolchain (already installed):** Go 1.26.4, Git, GitHub CLI under
+  `%LOCALAPPDATA%\Programs`, on user PATH. (Run via PowerShell on Windows.)
+- **Framework:** versioned Go module via `go get` — **no local `replace`**. Tidy/build with
+  `GOOS=js GOARCH=wasm`.
+- **Dev tools:** `.tools\gwc.exe` (the `gwc` runner) and the **`gwc` MCP server** (`.mcp.json`) —
+  use `gwc_*` MCP tools for build/test/run and browser-driving.
+- **Entry point:** `main.go` (currently a Phase 0 smoke shell). App is mounted via the `router`.
+- **Top gotcha:** never call `On*` prop options inside a variable-length loop — wrap per-row
+  interactive elements in their own component (see framework notes §"CRITICAL gotchas").
+- **Status:** Phase 0 (toolchain + wiring done, wasm builds). Phase 1 not yet started.
+- **Hard rules:** one feature per commit; update CHANGELOG + DEVLOG each commit; pure idiomatic Go;
+  logic packages have no `syscall/js` and are unit-tested; `log/slog` only; plain-English UI.
+
 ## Stack & layout
 
 - **Language:** Go (target `GOOS=js GOARCH=wasm`). Requires Go 1.26+.
-- **Framework:** local checkout at `../GoWebComponents` (consumed via `replace` in `go.mod`).
+- **Framework:** consumed as a **normal versioned Go module** via `go get`
+  (`github.com/monstercameron/GoWebComponents`, pinned pseudo-version) — **no local `replace`
+  / file-path dependency**. Update with `go get <module>@<commit-or-tag>` then `go mod tidy`.
 - **UI:** `html/shorthand` (dot-imported) element + control-flow funcs (`If`, `IfElse`, `Map`,
   `MapKeyed`). State via `ui` hooks and `state` atoms; pages via `router` (history).
 - **Local store:** IndexedDB via the framework `interop` package.
 - **AI (Phase 2):** OpenAI, called client-side with the user's own key (from Settings).
 
+## Dev tooling: `gwc` + its MCP server (use these while developing)
+
+The framework ships the **`gwc`** runner. A prebuilt copy lives at **`.tools/gwc.exe`** (git-ignored;
+rebuild with `go build -o .tools/gwc.exe` from the GoWebComponents checkout's `./tools/gwc`).
+
+`gwc mcp` is also wired as a **project MCP server** (`.mcp.json`, server name `gwc`), exposing every
+gwc command as a `gwc_*` MCP tool (`gwc_dev`, `gwc_build`, `gwc_test`, `gwc_doctor`, `gwc_dom`,
+`gwc_eval`, `gwc_click`, `gwc_screenshot`, …). **Prefer the gwc MCP tools / `.tools/gwc.exe` for
+build, run, test, and browser-driving while developing** rather than ad-hoc `go` invocations.
+
 ## Build / run / test
 
 ```powershell
-# Inner loop (live reload) — run via the framework's gwc runner:
-go run ../GoWebComponents/tools/gwc dev -app .\main.go -root .
+# Inner loop (live reload):
+.\.tools\gwc.exe dev -app .\main.go -root .
+
+# Health check the toolchain:
+.\.tools\gwc.exe doctor
 
 # Build wasm directly:
 $env:GOOS="js"; $env:GOARCH="wasm"; go build -o .\static\bin\main.wasm .
@@ -29,10 +64,10 @@ $env:GOOS="js"; $env:GOARCH="wasm"; go build -o .\static\bin\main.wasm .
 go test ./...
 
 # Wasm / browser lanes via the runner:
-go run ../GoWebComponents/tools/gwc test -lane unit -lane wasm
+.\.tools\gwc.exe test -lane unit -lane wasm
 ```
 
-Build artifacts (`bin/`, `static/bin/`, `static/wasm_exec.js`) are git-ignored.
+Build artifacts (`bin/`, `static/bin/`, `static/wasm_exec.js`) and `.tools/` are git-ignored.
 
 ## Code-quality rules (non-negotiable)
 

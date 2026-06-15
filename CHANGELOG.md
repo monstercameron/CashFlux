@@ -12,3 +12,9 @@ and every commit updates this file under `Unreleased`.
 - Project rules and code-quality standards (`CLAUDE.md`), including version-control and journaling
   policy (one feature per commit, changelog + devlog).
 - Developer journal (`DEVLOG.md`) and this changelog.
+- Consume GoWebComponents as a versioned Go module via `go get` (no local `replace`); Phase 0
+  WebAssembly entrypoint (`main.go`) that builds and renders.
+- Host page (`index.html`) with wasm boot glue, served via the `gwc dev` live-reload server.
+- Wire the `gwc` runner (`.tools/gwc.exe`) and its **MCP server** (`.mcp.json`) for development.
+- Framework notes (`docs/GOWEBCOMPONENTS.md`) and a quick-reference section in `CLAUDE.md` for
+  new/other sessions.
