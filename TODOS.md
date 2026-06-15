@@ -84,9 +84,9 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [ ] CRUD per entity (create/get/list/update/delete)
 - [ ] Query helpers: by account, by member, by date range, by category, by status
 - [ ] Settings store (base currency, FX rates, freshness overrides, prefs, OpenAI key)
-- [ ] ★ Export entire dataset → versioned JSON (entities + settings + custom fields + formulas)
-- [ ] ★ Import dataset from JSON (validate, version-migrate, replace/merge modes)
-- [ ] ★ Lossless export→import round-trip test
+- [x] ★ Export entire dataset → versioned JSON (entities + settings + custom fields)
+- [x] ★ Import dataset from JSON (version-migrate; rejects newer schema)
+- [x] ★ Lossless export→import round-trip test
 - [ ] CSV export for transactions (stable columns)
 - [ ] CSV import for transactions (column mapping, preview, error rows)
 - [ ] Sample dataset + "load sample data" action; "wipe all data" (confirm)

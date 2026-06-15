@@ -46,6 +46,9 @@ and every commit updates this file under `Unreleased`.
 - `internal/validate`: per-entity validators returning all `Issues` at once (required fields, valid
   enums, positive amounts, currency consistency, class/type match, score/day ranges, related refs) + tests.
   Completes the Phase 1 pure-logic services layer.
+- `internal/store`: pure `Dataset` aggregate + `Settings`, with schema-versioned JSON `Export`/
+  `Import` (migration; rejects newer schema) and a lossless round-trip test. Storage-backend-agnostic
+  — also the sync/transfer payload.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.
