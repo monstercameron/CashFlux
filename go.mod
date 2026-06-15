@@ -2,13 +2,10 @@ module github.com/monstercameron/CashFlux
 
 go 1.26.0
 
-require github.com/monstercameron/GoWebComponents v0.0.0
+require github.com/monstercameron/GoWebComponents v1.1.1-0.20260613162601-cad8af8cd470
 
-// CashFlux is built directly on top of the local GoWebComponents checkout.
-// These replaces mirror the directives the framework declares for its own
-// local-only modules so the dependency resolves without a published proxy copy.
-replace github.com/monstercameron/GoWebComponents => ../GoWebComponents
-
-replace agenthub => ../GoWebComponents/tools/agenthub
-
-replace github.com/monstercameron/GoGRPCBridge => ../GoWebComponents/third_party/GoGRPCBridge
+require (
+	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
+	github.com/yuin/goldmark v1.7.13 // indirect
+)

@@ -1,7 +1,12 @@
 # Build output
 /bin/
-/static/bin/
-/static/wasm_exec.js
+/wasm_exec.js
+
+# Dev tooling (built gwc binary lives here; rebuild from the framework checkout)
+/.tools/
+
+# Pre-spec exploratory scratch (Go-ignored; not part of the build)
+/_scratch/
 
 # Local env / editor
 *.log

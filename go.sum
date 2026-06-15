@@ -1,0 +1,8 @@
+github.com/fxamacker/cbor/v2 v2.9.0 h1:NpKPmjDBgUfBms6tr6JZkTHtfFGcMKsw3eGcmD/sapM=
+github.com/fxamacker/cbor/v2 v2.9.0/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
+github.com/monstercameron/GoWebComponents v1.1.1-0.20260613162601-cad8af8cd470 h1:o2houTlLVrzHNYfs0hHi5090eOIxl6cIrciyLyV9tQc=
+github.com/monstercameron/GoWebComponents v1.1.1-0.20260613162601-cad8af8cd470/go.mod h1:s/S/HcSZxj/GgjCjbD0+9aCCoVW633DgcykTEvJaeHI=
+github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
+github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
+github.com/yuin/goldmark v1.7.13 h1:GPddIs617DnBLFFVJFgpo1aBfe/4xcvMc3SB5t/D0pA=
+github.com/yuin/goldmark v1.7.13/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
