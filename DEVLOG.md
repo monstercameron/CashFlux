@@ -107,8 +107,13 @@ goals, freshness, validate, store).
   compresses well (gzip/brotli) but is a real first-load cost — track it; consider lazy-loading or
   the tinygo path later if needed.
 
-**Next:** wire the Dashboard to real totals (net worth, this-month income/expense, recent activity),
-then add the Accounts add/edit form with a reactive refresh (`state.UseAtom` revision).
+- Wired the **Dashboard** to real data: net worth, this-month income/expense (`ledger.PeriodTotals`
+  over `dateutil.MonthRange(time.Now())`), active-account count, and a sorted recent-activity list.
+  `time.Now()` works at runtime in wasm. Two real screens now read the live store.
+
+**Next:** the first *mutating* feature — an Accounts add form — which needs reactive refresh. Plan:
+a `state.UseAtom` "revision" counter bumped after `appstate.Put*`, so the screen re-renders. Then
+the add/edit form UI. This also exercises the framework's per-row/On*-hook rules.
 
 ## 2026-06-15 — Project kickoff & spec
 

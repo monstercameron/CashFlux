@@ -49,19 +49,6 @@ func stub(phase int, description string, points ...string) ui.Node {
 	)
 }
 
-// Dashboard is the landing screen. Placeholder metrics until the store lands.
-func Dashboard() ui.Node {
-	return Div(
-		Div(Class("stat-grid"),
-			stat("Net worth", "—", ""),
-			stat("This month in", "—", "pos"),
-			stat("This month out", "—", "neg"),
-			stat("Accounts", "—", ""),
-		),
-		stub(1, "The dashboard will summarize net worth, per-member and group rollups, budget health, freshness nudges, your top AI insight, and recent activity."),
-	)
-}
-
 func stat(label, value, accent string) ui.Node {
 	return Div(Class("stat"),
 		Div(Class("stat-label"), label),

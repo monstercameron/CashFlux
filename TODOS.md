@@ -211,11 +211,11 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### 1.17 Dashboard
 
-- [ ] Net worth + per-member/group rollups (base currency)
-- [ ] This-month income/expense; balance trend snapshot
+- [~] Net worth (done) + per-member/group rollups (later)
+- [~] This-month income/expense (done); balance trend snapshot (later)
 - [ ] Budget health summary; next goal; overdue tasks
 - [ ] Freshness nudges block
-- [ ] Recent activity list
+- [x] Recent activity list
 - [ ] Placeholder slots for AI insight + formula results (wired P2)
 
 ### 1.18 Settings

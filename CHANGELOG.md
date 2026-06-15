@@ -71,6 +71,8 @@ and every commit updates this file under `Unreleased`.
 - Accounts screen: first real, data-backed screen — assets/liabilities grouped with live per-account
   balances (`internal/ledger`) and a net-worth/assets/liabilities summary, reading from `appstate`.
   Shared money display helpers (`fmtMoney`, amount classes).
+- Dashboard screen: real headline metrics — net worth, this-month income/expense (via
+  `ledger.PeriodTotals` over the current month), active-account count, and a recent-activity list.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
