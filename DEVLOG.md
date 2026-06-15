@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-15 — Phase 1 begins: data model (money)
+
+- Started executing the backlog at §1.1, SDLC bottom-up. First service: `internal/money` — a
+  precise `Money{Amount int64, Currency string}` type (integer minor units, never float), with
+  currency-checked `Add`/`Sub`/`Cmp`/`Neg`/`Abs`/`Sum`. Pure Go, no `syscall/js`; table-driven
+  tests pass on native Go (`go test ./internal/money`).
+- Renamed the master backlog to `TODOS.md` (project-wide tracking list).
+
+**Next:** `internal/currency` (registry + FX table + base-currency conversion) with tests, then
+`internal/domain` core types.
+
 ## 2026-06-15 — Project kickoff & spec
 
 - **Toolchain (fresh Windows machine):** installed GitHub CLI, portable Git, and Go 1.26.4 into
