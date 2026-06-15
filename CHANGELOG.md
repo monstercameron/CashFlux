@@ -49,8 +49,14 @@ and every commit updates this file under `Unreleased`.
 - `internal/store`: pure `Dataset` aggregate + `Settings`, with schema-versioned JSON `Export`/
   `Import` (migration; rejects newer schema) and a lossless round-trip test. Storage-backend-agnostic
   — also the sync/transfer payload.
+- `internal/store`: in-memory **SQLite** store backed by the pure-Go (no-cgo) `ncruces/go-sqlite3`
+  driver, with `Load`/`Snapshot` clean dataset ingress/egress + round-trip tests. Verified to build
+  for `js/wasm` (browser) and run natively.
 
 ### Changed
+- Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
+  dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
+  payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.
 - Serve web assets from `web/` (clean project root); restyled host page with a dark theme.
 - Require bottom-up SDLC build order in `CLAUDE.md` (data model → services/logic with tests →

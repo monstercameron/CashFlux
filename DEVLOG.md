@@ -56,9 +56,20 @@ problems and fixes, and what's next.
   related-ref requirements. Tested. **§1.3 pure-logic services layer is complete** — 10 packages,
   all green on native `go test`.
 
-**Next (§1.4 persistence):** `internal/store` over IndexedDB. Per clean architecture, split a
-pure/testable core (serialization, query/filter logic, import/export) from the thin `syscall/js`
-IndexedDB binding, so the core unit-tests natively.
+## 2026-06-15 — Persistence: pure-Go SQLite (corrected course)
+
+- Built the pure store core first: `store.Dataset` aggregate + `Settings` + schema-versioned JSON
+  `Export`/`Import` with a lossless round-trip test.
+- **I was wrong, and the owner was right.** I claimed pure-Go SQLite can't run in a browser tab. It
+  can: `github.com/ncruces/go-sqlite3` (no cgo, SQLite via wazero) **compiles for `GOOS=js
+  GOARCH=wasm`** and the full app wasm still builds. Lesson: test the claim, don't assume.
+- Switched persistence from IndexedDB to an in-memory SQLite store (`store.SQLiteStore`): schema +
+  `Load`/`Snapshot` for clean dataset ingress/egress. Native tests pass; the JSON Dataset stays the
+  portable import/export + sync format. Single pinned connection so `:memory:` is shared.
+- Clean architecture paid off: switching the storage engine touched zero logic packages.
+
+**Next:** per-entity CRUD + query helpers on the SQLite store (by account/member/date/category/
+status), then CSV import/export, then wire state to the store.
 
 ## 2026-06-15 — Project kickoff & spec
 

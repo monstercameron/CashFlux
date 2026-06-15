@@ -76,10 +76,10 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] ★ `internal/validate`: per-entity validation (required, positive amounts, valid refs, currency match)
 - [x] Tests for every service above (edge cases, multi-currency, rounding, boundaries)
 
-### 1.4 Persistence — `internal/store` (IndexedDB) ★
+### 1.4 Persistence — `internal/store` (pure-Go in-memory SQLite via `ncruces/go-sqlite3`) ★
 
-- [ ] ★ Store interface (pure) + JS-backed impl over framework `interop` (split so the pure part tests natively)
-- [ ] DB open/upgrade; schema-version constant; migration scaffold + version bump test
+- [x] ★ In-memory SQLite store (`NewMemory`) with clean `Load`/`Snapshot` dataset ingress/egress (builds for js/wasm + native)
+- [x] Schema + schema-version constant; migration scaffold (in `Import`) + version bump test
 - [ ] Object store per entity (members, accounts, categories, transactions, budgets, goals, tasks)
 - [ ] CRUD per entity (create/get/list/update/delete)
 - [ ] Query helpers: by account, by member, by date range, by category, by status

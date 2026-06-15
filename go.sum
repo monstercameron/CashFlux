@@ -2,7 +2,17 @@ github.com/fxamacker/cbor/v2 v2.9.0 h1:NpKPmjDBgUfBms6tr6JZkTHtfFGcMKsw3eGcmD/sa
 github.com/fxamacker/cbor/v2 v2.9.0/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
 github.com/monstercameron/GoWebComponents v1.1.1-0.20260613162601-cad8af8cd470 h1:o2houTlLVrzHNYfs0hHi5090eOIxl6cIrciyLyV9tQc=
 github.com/monstercameron/GoWebComponents v1.1.1-0.20260613162601-cad8af8cd470/go.mod h1:s/S/HcSZxj/GgjCjbD0+9aCCoVW633DgcykTEvJaeHI=
+github.com/ncruces/go-sqlite3 v0.35.0 h1:10wTnMpLwmhNowJ19LqHivHK3m8heBBllfFRYEXzM/U=
+github.com/ncruces/go-sqlite3 v0.35.0/go.mod h1:fXOSIkWwN5NXgbJk+7Zls8QIW4xOflmgh11OFvcY+J0=
+github.com/ncruces/go-sqlite3-wasm/v3 v3.1.35302 h1:Cew7/eNAMd1zhpXYBjofBua/63pFvbvB2h4PM/p6gKU=
+github.com/ncruces/go-sqlite3-wasm/v3 v3.1.35302/go.mod h1:xe0CfafDUxfh+fSVKjHHMiAxoG9KALt5nFtbGNb/jRs=
+github.com/ncruces/julianday v1.0.0 h1:fH0OKwa7NWvniGQtxdJRxAgkBMolni2BjDHaWTxqt7M=
+github.com/ncruces/julianday v1.0.0/go.mod h1:Dusn2KvZrrovOMJuOt0TNXL6tB7U2E8kvza5fFc9G7g=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 github.com/yuin/goldmark v1.7.13 h1:GPddIs617DnBLFFVJFgpo1aBfe/4xcvMc3SB5t/D0pA=
 github.com/yuin/goldmark v1.7.13/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
+golang.org/x/sys v0.46.0 h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=
+golang.org/x/sys v0.46.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
+golang.org/x/text v0.38.0 h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=
+golang.org/x/text v0.38.0/go.mod h1:YXZt3QhHUKYT53r2lLKFIVi6Ao1jdzrTR/KQ09qyxF4=
