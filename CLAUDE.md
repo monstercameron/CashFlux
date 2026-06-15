@@ -38,7 +38,7 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
   / file-path dependency**. Update with `go get <module>@<commit-or-tag>` then `go mod tidy`.
 - **UI:** `html/shorthand` (dot-imported) element + control-flow funcs (`If`, `IfElse`, `Map`,
   `MapKeyed`). State via `ui` hooks and `state` atoms; pages via `router` (history).
-- **Local store:** IndexedDB via the framework `interop` package.
+- **Local store:** pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo — builds for js/wasm).
 - **AI (Phase 2):** OpenAI, called client-side with the user's own key (from Settings).
 
 ## Dev tooling: `gwc` + its MCP server (use these while developing)
@@ -105,7 +105,7 @@ For every feature, in order:
 2. **Services / business logic** — implement the behavior in pure packages
    (`internal/money`, `internal/currency`, `internal/freshness`, `internal/allocate`,
    `internal/formula`, …) with **table-driven tests that pass on native Go** before anything else.
-3. **Persistence** — wire the entity into `internal/store` (IndexedDB) with export/import + tests.
+3. **Persistence** — wire the entity into `internal/store` (in-memory SQLite) with export/import + tests.
 4. **State** — expose it via atoms and the single load/persist path.
 5. **UI** — build the screen last, as a thin shell over the tested services. No business logic in
    view code.

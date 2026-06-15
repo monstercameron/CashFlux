@@ -13,9 +13,11 @@ Status: **LOCKED for Phase 1** (decisions agreed). Phase 2+ scoped but built lat
 
 1. **AI provider & hosting:** **OpenAI, called client-side** (this is a SPA). User supplies
    their own OpenAI API key in Settings; the wasm client calls OpenAI directly — no backend.
-   Caveat shown in UI: key lives in the browser (stored only in local IndexedDB on-device) and
+   Caveat shown in UI: key lives in the browser (stored only in the local on-device store) and
    is subject to CORS/cost on the user's own account.
-2. **Local store:** IndexedDB now (via the `interop` package).
+2. **Local store:** pure-Go in-memory **SQLite** (`ncruces/go-sqlite3`, no cgo — confirmed to build
+   for `js/wasm` and run in the browser). No dependency on browser web storage; the JSON `Dataset`
+   is the portable import/export and sync payload.
 3. **Currency:** Multi-currency. Each account has its own currency; aggregate/net-worth views
    convert to a chosen **base display currency** via a **manually editable rate table** in
    Settings (no live FX feed in v1).
@@ -228,8 +230,8 @@ mutating core types:
 
 - **Client**: Go → wasm SPA. `ui` hooks for local UI, `state` atoms for app-wide data,
   `router` (history) for pages, `html/shorthand` (+ control-flow funcs) for views.
-- **Persistence**: IndexedDB via the `interop` package; a small Go `store` layer wrapping object
-  stores for each entity. PWA/offline later.
+- **Persistence**: pure-Go in-memory SQLite (`ncruces/go-sqlite3`) in `internal/store`, with the
+  JSON `Dataset` as the clean ingress/egress (import/export + sync). PWA/offline later.
 - **Logging**: a `log/slog`-based logging package with a custom `slog.Handler` that bridges to the
   browser console and an in-app ring buffer (viewable in a debug panel). Levelled, structured,
   context-aware; no `fmt.Println` debugging.
@@ -244,7 +246,7 @@ mutating core types:
 
 ## 9. Phasing
 
-- **Phase 0 — Skeleton:** repo + toolchain (Go/git/gh installed ✓), routed shell, IndexedDB store
+- **Phase 0 — Skeleton:** repo + toolchain (Go/git/gh installed ✓), routed shell, SQLite store
   scaffold with the core schema + custom-field plumbing. *(Early draft code exists; being reshaped.)*
 - **Phase 1 — Local household core:** Members, Accounts (assets+liabilities), Categories,
   Transactions (+transfers), individual + group Budgets, Goals, **freshness nudges**, **To-do

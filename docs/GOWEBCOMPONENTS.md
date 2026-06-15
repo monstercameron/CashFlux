@@ -32,7 +32,7 @@ framework README, its `examples/`, and source. Keep this current as we learn mor
 | `state` | app-wide atoms (`UseAtom`, `UseComputed`, snapshots) |
 | `router` | history/hash routing, navigation, route inspection |
 | `fetch` | `UseFetch`, `UseResource[T]`, `UseWebSocket`/`UseEventSource`, imperative `Fetch` |
-| `interop` | browser bridges incl. storage (our IndexedDB layer will build on this) |
+| `interop` | browser bridges incl. storage, clipboard, observers (used for non-DB browser glue) |
 | `utils` | `WaitForever()`, `DisableAllDebug()` |
 
 `ui.Node` is `*runtime.Element`; `router.Element` is an alias of the same — so `ui.CreateElement(...)`
