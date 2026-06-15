@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gwc": {
+      "command": "C:\\Users\\cam\\Developer\\CashFlux\\.tools\\gwc.exe",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}
