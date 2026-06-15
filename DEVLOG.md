@@ -23,8 +23,11 @@ problems and fixes, and what's next.
 - Running as a self-paced `/loop`: one feature per iteration, granular commit + CHANGELOG each, with
   a ~1-minute cooldown between features.
 
-**Next:** `internal/dateutil` (period/month/week helpers), then `internal/domain` core types, then
-`internal/ledger` (balances, net worth, rollups) — all with tests, before any feature UI.
+- Added `internal/dateutil`: canonical date parse/format, month/week/fiscal-month ranges,
+  half-open `InRange`, and DST-safe `DaysBetween` (computed via UTC calendar dates).
+
+**Next:** `internal/domain` core types (Member, Account, Category, Transaction, Budget, Goal, Task +
+enums), then `internal/ledger` (balances, net worth, rollups) — all with tests, before any UI.
 
 ## 2026-06-15 — Project kickoff & spec
 

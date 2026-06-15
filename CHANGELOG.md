@@ -28,6 +28,8 @@ and every commit updates this file under `Unreleased`.
   base-currency `Convert`/`ToBase` (cross-currency, mixed decimals, nearest-minor rounding) + tests.
 - `internal/id`: collision-resistant 128-bit hex ID generator (optional prefix; seedable source for
   deterministic tests) + tests.
+- `internal/dateutil`: canonical date parsing/formatting plus month, week, and fiscal-month range
+  helpers, `InRange`, and DST-safe `DaysBetween` + tests.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.
