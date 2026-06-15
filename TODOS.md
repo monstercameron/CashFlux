@@ -136,14 +136,14 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### 1.9 Accounts (assets + liabilities) ★
 
-- [ ] ★ Accounts list grouped by class (assets / liabilities) with per-account balance
+- [x] ★ Accounts list grouped by class (assets / liabilities) with per-account balance
 - [ ] ★ Add/edit/archive account form (owner, type, currency, opening balance)
 - [ ] Liability sub-form (credit limit, APR, min payment, due day, lender)
 - [ ] Allocation attributes sub-form (expected return, liquidity, stability, lock-until)
 - [ ] Per-account ledger view (filtered txns + running balance)
 - [ ] "Update balance" action → adjustment txn + set `BalanceAsOf`
 - [ ] Credit utilization indicator; due-date reminder surfacing
-- [ ] Net-worth summary header (assets, liabilities, net) in base currency
+- [x] Net-worth summary header (assets, liabilities, net) in base currency
 - [ ] Per-account staleness indicator (from freshness service)
 - [ ] Tests already in services; add UI-state tests where logic leaks
 

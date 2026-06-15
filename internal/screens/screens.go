@@ -69,14 +69,6 @@ func stat(label, value, accent string) ui.Node {
 	)
 }
 
-// Accounts lists assets and liabilities.
-func Accounts() ui.Node {
-	return stub(1, "Manage all accounts — assets and liabilities — each owned by a member or the group, each with its own currency.",
-		"Assets: checking, debit, savings, cash, investment",
-		"Liabilities: credit cards, lines of credit, loans, personal/informal debts, mortgages",
-		"Balance freshness with one-tap updates")
-}
-
 // Transactions is the global ledger.
 func Transactions() ui.Node {
 	return stub(1, "The global ledger: add, edit, and delete income, expenses, and transfers, with filters by member, account, category, date, and text.")

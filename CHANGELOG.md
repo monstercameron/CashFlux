@@ -68,6 +68,9 @@ and every commit updates this file under `Unreleased`.
 - `internal/appstate`: the UI↔persistence/logic seam — owns the in-memory store + slog logger, with
   typed read accessors, validated write-through (`Put*`/`Delete*`), JSON export/import, and
   `Init`/`Default`; wired into `app.Run` to seed sample data on boot. Pure Go + native tests.
+- Accounts screen: first real, data-backed screen — assets/liabilities grouped with live per-account
+  balances (`internal/ledger`) and a net-worth/assets/liabilities summary, reading from `appstate`.
+  Shared money display helpers (`fmtMoney`, amount classes).
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

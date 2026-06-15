@@ -99,9 +99,16 @@ goals, freshness, validate, store).
   appstate is native-tested. Logging goes to `os.Stderr`, which Go's wasm runtime routes to the
   browser console — so no platform code needed.
 
-**13 packages green.** **Next:** convert the first stub screen (Accounts) to real data — read
-`appstate.Default.Accounts()`, render with `internal/ledger` balances, seed a `state.UseAtom`
-revision to refresh on mutation. First visible real feature on the live view.
+- Converted the **Accounts** screen from a stub to real data: reads `appstate.Default`, computes
+  per-account balances and net worth via `internal/ledger`, groups assets vs liabilities, and shows
+  a summary. Added shared display helpers (`fmtMoney`/`amountClass`/`humanizeType`). First visible
+  end-to-end feature on the live view. (Read-only for now; add/edit + reactivity next.)
+- **Note:** embedding SQLite (ncruces wasm) pushed the raw wasm to ~20 MB (was ~6.5 MB). It
+  compresses well (gzip/brotli) but is a real first-load cost — track it; consider lazy-loading or
+  the tinygo path later if needed.
+
+**Next:** wire the Dashboard to real totals (net worth, this-month income/expense, recent activity),
+then add the Accounts add/edit form with a reactive refresh (`state.UseAtom` revision).
 
 ## 2026-06-15 — Project kickoff & spec
 
