@@ -1,267 +1,362 @@
 # CashFlux — Master Feature Backlog
 
-The single source of truth for what to build, **ordered top-to-bottom by implementation
-priority**. Work the list in order; within a section, earlier items unblock later ones.
-See [`SPEC.md`](./SPEC.md) for product detail and [`CLAUDE.md`](./CLAUDE.md) for the rules.
+Single source of truth, **ordered top-to-bottom by implementation priority**. Work in order;
+within a section earlier items unblock later ones. Build **bottom-up** per the SDLC rule
+(data model → services/logic with tests → persistence → state → UI last). See [`SPEC.md`](./SPEC.md)
+for product detail and [`CLAUDE.md`](./CLAUDE.md) for the rules.
 
-**Legend:** `[ ]` todo · `[x]` done · `[~]` in progress · `(P#)` target phase ·
-`★` critical-path. **Discipline:** one feature per commit; update `CHANGELOG.md` + `DEVLOG.md`
-with every commit; logic packages are pure Go (no `syscall/js`) and ship with table-driven tests.
+**Legend:** `[ ]` todo · `[x]` done · `[~]` in progress · `(P#)` phase · `★` critical path.
+**Discipline:** one feature per commit; update `CHANGELOG.md` + `DEVLOG.md` each commit; pure logic
+packages have no `syscall/js` and ship with table-driven tests.
 
 ---
 
-## 0. Foundation & tooling  (Phase 0)
+## 0. Foundation & tooling (Phase 0)
 
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH
-- [x] Create repo, choose name, init git on `main`
+- [x] Init repo, name project, git on `main`
 - [x] Consume GoWebComponents as a versioned Go module (no local replace)
-- [x] WASM entrypoint builds and serves
+- [x] WASM entrypoint builds + serves
 - [x] `gwc` runner + MCP server wired (`.tools/gwc.exe`, `.mcp.json`)
-- [x] Init framework `GoGRPCBridge` submodule (unblocks `gwc dev`)
-- [x] Product spec, CLAUDE rules, CHANGELOG, DEVLOG, framework notes
-- [x] App skeleton: router + shell + nav + stub screens, served on live view
-- [x] Clean, standard layout (`main.go`, `internal/`, `web/`, `docs/`)
-- [ ] ★ Add `.gitattributes` (normalize LF, mark `*.wasm` binary)
-- [ ] Create GitHub repo `monstercameron/CashFlux` and push
-- [ ] Decide CI: GitHub Actions running `go test ./...` + wasm build
-- [ ] Fix framework `gwc dev -html` to resolve relative to `-root` (commit in GoWebComponents, rebuild + recopy `gwc`)
-- [ ] Optional: build a `playwrightgo`-tagged `gwc` + Chromium for automated DOM checks
+- [x] Init framework `GoGRPCBridge` submodule
+- [x] Spec, CLAUDE rules, CHANGELOG, DEVLOG, framework notes, this backlog
+- [x] Routed app shell + nav + stub screens, served on live view
+- [x] Clean standard layout (`main.go`, `internal/`, `web/`, `docs/`)
+- [ ] ★ `.gitattributes` (normalize LF; mark `*.wasm` binary) — fixes CRLF warnings
+- [ ] Create GitHub repo `monstercameron/CashFlux` + push
+- [ ] CI: GitHub Actions — `go test` (logic pkgs) + wasm build on push/PR
+- [ ] Fix framework `gwc dev -html` resolution (commit in GoWebComponents, rebuild + recopy `gwc`)
+- [ ] `playwrightgo`-tagged `gwc` + Chromium for automated DOM verification (optional)
 - [ ] Install Claude Code design skills (`frontend-design`, `playground`) — user action
+- [ ] Decide native test command (logic pkgs only; js/wasm pkgs excluded) + document it
 
 ---
 
 ## 1. Phase 1 — Local household core
 
-### 1.1 Domain model & pure logic  ★ (no `syscall/js`; fully unit-tested)
+### 1.1 Domain types — `internal/domain` ★ (pure, no build tags)
 
-- [ ] ★ `internal/domain`: core types — `Member`, `Account`, `Category`, `Transaction`, `Budget`, `Goal`, `Task`
-- [ ] ★ Enums/consts: account `class` (asset|liability), account `type` (checking/debit/savings/cash/credit_card/line_of_credit/loan/personal_loan/mortgage/investment/other), category `kind`
-- [ ] ★ Stable ID generation (`internal/id`) — deterministic, testable, collision-safe
-- [x] ★ `internal/money`: integer minor-units `Money{Amount int64, Currency string}`; add/sub/neg/compare; never float
-- [ ] Money formatting/parsing per currency (symbol, decimals, grouping); locale-aware later
-- [~] ★ `internal/currency`: currency registry (code, symbol, decimals) + FX rate table type — NEXT
-- [ ] ★ FX conversion to base currency; missing-rate handling; tests for rounding
-- [ ] Account balance computation from opening balance + transactions
-- [ ] Net worth (assets − liabilities), per-member and group rollups
-- [ ] Income/expense totals for a period; transfer exclusion from income/expense
-- [ ] Budget spent/remaining computation (individual + group scope)
-- [ ] Goal progress computation; projected completion (read-only estimate)
-- [ ] Period helpers (month boundaries, fiscal-month start) in `internal/dateutil`
-- [ ] ★ Validation rules per entity (required fields, positive amounts, valid refs)
-- [ ] Unit tests: money, currency/FX, balances, budgets, goals, validation (table-driven)
+- [ ] ★ `Member{ID, Name, Color, IsDefault}`
+- [ ] ★ `Account` core fields: `ID, Name, OwnerID, Scope(individual|shared), Class(asset|liability), Type, Currency, OpeningBalance, BalanceAsOf, Archived`
+- [ ] ★ Account liability fields: `CreditLimit, InterestRateAPR, MinPayment, DueDayOfMonth, Lender`
+- [ ] ★ Account allocation fields: `ExpectedReturnAPR, LiquidityScore, StabilityScore, LockUntil`
+- [ ] ★ `Category{ID, Name, Kind(income|expense), Color, ParentID}`
+- [ ] ★ `Transaction{ID, AccountID, Date, Payee, Desc, CategoryID, Amount(Money), TransferAccountID, Cleared, Tags, MemberID, SourceDocID}`
+- [ ] ★ `Budget{ID, Name, Scope(individual|group), OwnerID, CategoryID, Period(monthly), Limit(Money)}`
+- [ ] ★ `Goal{ID, Name, Scope, OwnerID, TargetAmount, CurrentAmount, TargetDate, AccountID}`
+- [ ] ★ `Task{ID, Title, Notes, Due, Status(open|done), Priority(low|med|high), RelatedType, RelatedID, MemberID, Source(manual|ai|nudge)}`
+- [ ] Enums + `Valid()`/`String()` for `AccountClass`, `AccountType`, `CategoryKind`, `Scope`, `TaskStatus`, `TaskPriority`, `RelatedType`
+- [ ] `custom map[string]any` field on every entity (for custom fields)
+- [ ] Doc comments on every exported type/field; package doc
+- [ ] Unit tests: enum `Valid()`/`String()`, zero-value sanity
 
-### 1.2 Persistence — IndexedDB store  ★
+### 1.2 Money & currency — ★
 
-- [ ] ★ `internal/store`: interface over the framework `interop` storage (object stores per entity)
-- [ ] DB open/upgrade with schema version; migration scaffold
-- [ ] CRUD for each entity (members, accounts, categories, transactions, budgets, goals, tasks)
-- [ ] Query helpers (by account, by member, by date range, by category)
-- [ ] Settings store (base currency, FX rates, freshness overrides, OpenAI key placeholder)
-- [ ] ★ Full export to JSON (schema-versioned, includes settings + custom fields)
-- [ ] ★ Import from JSON (validate, merge/replace, version-migrate); **lossless round-trip test**
-- [ ] CSV export for transactions
-- [ ] CSV import for transactions (column mapping)
-- [ ] Seed/sample dataset for first run + a "load sample data" action
-- [ ] Tests: store CRUD (native-testable layer separated from JS bindings), import/export round-trip
+- [x] ★ `internal/money`: `Money{Amount int64, Currency}`; `Add/Sub/Neg/Abs/Cmp/Equal/Sum`; tests
+- [ ] Money formatting per currency (symbol, decimals, grouping, sign placement)
+- [ ] Money parsing from user input ("1,234.56" → minor units) with validation + tests
+- [x] ★ `internal/currency`: registry (code, symbol, decimals, name) + `Rates` table type
+- [x] ★ `Rates.Convert` / `ToBase` rounding to target minor units (nearest; float-rate caveat noted)
+- [x] Missing-rate + non-positive-rate error handling; tests for cross-currency + rounding
+- [ ] Helper: format a `Money` in a target/base currency for display
 
-### 1.3 App state, logging, design system
+### 1.3 Pure logic services — ★ (each in its own `internal/*` pkg, table-driven tests)
 
-- [ ] ★ `internal/logging`: `log/slog` handler → browser console + in-app ring buffer
-- [ ] Log levels, context fields; a debug log viewer panel
-- [ ] ★ State wiring: atoms for members/accounts/categories/transactions/budgets/goals/tasks/settings
-- [ ] Store hydration on boot → atoms; persist on mutation (single save path)
-- [ ] ★ UI primitives: Button, Input, Select, Field, Money input, Modal, Toast, Badge, ProgressBar, EmptyState, ConfirmDialog
-- [ ] Form helper pattern (validation + error display) consistent across screens
-- [ ] App-wide currency/number/date formatting helpers bound to settings
-- [ ] Responsive layout pass (mobile nav, content widths)
-- [ ] Toast/notification system for save/error feedback
+- [ ] ★ `internal/id`: stable, collision-safe ID generation (seedable for tests)
+- [ ] `internal/dateutil`: month boundaries, fiscal-month start, week-start, period ranges
+- [ ] ★ `internal/ledger`: account balance from opening balance + transactions
+- [ ] `internal/ledger`: running balance series for an account
+- [ ] `internal/ledger`: income/expense totals for a period (exclude transfers)
+- [ ] `internal/ledger`: net worth (assets − liabilities) with multi-currency → base
+- [ ] `internal/ledger`: per-member and group rollups
+- [ ] `internal/budgeting`: spent vs limit per budget (individual + group scope)
+- [ ] `internal/budgeting`: near/over-limit threshold evaluation
+- [ ] `internal/goals`: progress %, remaining, projected completion (read-only estimate)
+- [ ] ★ `internal/freshness`: per-type staleness windows + `IsStale(balanceAsOf, type, now)`; recurring-bill exemption
+- [ ] ★ `internal/validate`: per-entity validation (required, positive amounts, valid refs, currency match)
+- [ ] Tests for every service above (edge cases, multi-currency, rounding, boundaries)
 
-### 1.4 Members / Household  ★
+### 1.4 Persistence — `internal/store` (IndexedDB) ★
 
-- [ ] ★ List members; add/edit/delete; default member; color picker
-- [ ] Assign ownership scope to accounts/budgets/goals (individual vs group)
+- [ ] ★ Store interface (pure) + JS-backed impl over framework `interop` (split so the pure part tests natively)
+- [ ] DB open/upgrade; schema-version constant; migration scaffold + version bump test
+- [ ] Object store per entity (members, accounts, categories, transactions, budgets, goals, tasks)
+- [ ] CRUD per entity (create/get/list/update/delete)
+- [ ] Query helpers: by account, by member, by date range, by category, by status
+- [ ] Settings store (base currency, FX rates, freshness overrides, prefs, OpenAI key)
+- [ ] ★ Export entire dataset → versioned JSON (entities + settings + custom fields + formulas)
+- [ ] ★ Import dataset from JSON (validate, version-migrate, replace/merge modes)
+- [ ] ★ Lossless export→import round-trip test
+- [ ] CSV export for transactions (stable columns)
+- [ ] CSV import for transactions (column mapping, preview, error rows)
+- [ ] Sample dataset + "load sample data" action; "wipe all data" (confirm)
+- [ ] Tests: pure store logic, query helpers, import/export round-trip, migration
+
+### 1.5 Logging — `internal/logging`
+
+- [ ] `log/slog` custom `slog.Handler` → browser console
+- [ ] In-app ring buffer sink (bounded) for a debug log viewer
+- [ ] Level config + contextual fields (`slog.With`)
+- [ ] Debug log viewer panel (toggleable)
+- [ ] Tests for the handler/ring buffer (pure parts)
+
+### 1.6 State wiring — `internal/state` (or app)
+
+- [ ] Atoms for each entity collection + settings
+- [ ] Boot hydration: store → atoms
+- [ ] Single persist path: atom mutation → store write (+ slog)
+- [ ] Derived/computed selectors (net worth, totals, budget health) via `state.UseComputed`
+- [ ] Error/toast surface for failed persistence
+
+### 1.7 Design system / UI primitives — `internal/ui`
+
+- [ ] Tokens: colors, spacing, typography scale (extend `web/index.html` styles or a CSS file)
+- [ ] Button (variants: primary/secondary/ghost/danger; sizes)
+- [ ] Input, NumberInput, MoneyInput (currency-aware), TextArea
+- [ ] Select / Dropdown, Combobox
+- [ ] Field wrapper (label, hint, error) + form validation pattern
+- [ ] Modal / Dialog, ConfirmDialog
+- [ ] Toast / notification system
+- [ ] Badge, Tag/Chip, ProgressBar, Meter
+- [ ] Card, Section, StatCard
+- [ ] EmptyState, Skeleton/Loading, ErrorState
+- [ ] Table/List with row-component pattern (respect On*-hooks-in-loops)
+- [ ] Color picker (members/categories), DatePicker, Icon set
+- [ ] Responsive: mobile nav (drawer/hamburger), content widths
+
+### 1.8 Members / Household
+
+- [ ] List members; add/edit/delete; set default; color
+- [ ] Ownership assignment UI (individual vs group) for accounts/budgets/goals
 - [ ] Member switcher / filter affecting relevant views
-- [ ] Tests: member logic, ownership assignment
+- [ ] Guard: prevent deleting a member with owned entities (reassign flow)
+- [ ] Tests: member logic, ownership rules
 
-### 1.5 Accounts (assets + liabilities)  ★
+### 1.9 Accounts (assets + liabilities) ★
 
-- [ ] ★ Accounts list grouped by class (assets / liabilities) with balances
-- [ ] ★ Add/edit/archive account; choose owner (member/group), type, currency, opening balance
-- [ ] Liability fields: credit limit, APR, min payment, due day, lender
-- [ ] Allocation attributes capture: expected return APR, liquidity score, stability score, lock-until
-- [ ] Per-account ledger view (filtered transactions + running balance)
-- [ ] Update-balance action (writes adjustment txn, sets `balanceAsOf`)
-- [ ] Account detail cards (utilization for credit, due-date reminders)
-- [ ] Tests: balance, utilization, liability fields
+- [ ] ★ Accounts list grouped by class (assets / liabilities) with per-account balance
+- [ ] ★ Add/edit/archive account form (owner, type, currency, opening balance)
+- [ ] Liability sub-form (credit limit, APR, min payment, due day, lender)
+- [ ] Allocation attributes sub-form (expected return, liquidity, stability, lock-until)
+- [ ] Per-account ledger view (filtered txns + running balance)
+- [ ] "Update balance" action → adjustment txn + set `BalanceAsOf`
+- [ ] Credit utilization indicator; due-date reminder surfacing
+- [ ] Net-worth summary header (assets, liabilities, net) in base currency
+- [ ] Per-account staleness indicator (from freshness service)
+- [ ] Tests already in services; add UI-state tests where logic leaks
 
-### 1.6 Categories
+### 1.10 Categories
 
-- [ ] Category list; add/edit/delete; income vs expense; color
-- [ ] Optional sub-categories (parentId)
-- [ ] Default category scheme + ability to reset/customize
-- [ ] Reassign transactions when a category is deleted
-- [ ] Tests: category tree, reassignment
+- [ ] List; add/edit/delete; income vs expense; color
+- [ ] Sub-categories (parentId) with tree display
+- [ ] Default scheme + reset; methodology-aware presets (envelope/zero-based)
+- [ ] Reassign transactions on category delete (pick replacement)
+- [ ] Tests: tree building, reassignment
 
-### 1.7 Transactions (+ transfers, filters)  ★
+### 1.11 Transactions (+ transfers, filters) ★
 
-- [ ] ★ Global ledger list (newest first, paginated/virtualized for large sets)
-- [ ] ★ Add transaction (description, amount, type income/expense, category, account, date, member)
-- [ ] ★ Edit + delete transaction
-- [ ] ★ Transfers between accounts (paired, excluded from income/expense)
-- [ ] Tags on transactions
-- [ ] Filters: member, account, category, date range, text search; combine + clear
-- [ ] Per-row component pattern for actions (respect On*-hooks-in-loops rule)
-- [ ] Bulk actions (delete, recategorize) — later in phase
-- [ ] Tests: signed amounts, transfer pairing, filter logic
+- [ ] ★ Ledger list (newest first), virtualized for large sets
+- [ ] ★ Add transaction (desc, amount, income/expense, category, account, date, member)
+- [ ] ★ Edit + delete transaction (confirm)
+- [ ] ★ Transfers between accounts (paired entries; excluded from income/expense)
+- [ ] Tags input + tag display
+- [ ] Filters: member, account, category, date range, text; combine + clear; persist last filter
+- [ ] Sort options (date, amount, payee)
+- [ ] Row component for actions; inline category quick-edit
+- [ ] Bulk select + bulk delete/recategorize
+- [ ] Duplicate / repeat-last helpers
+- [ ] Tests: signed amounts, transfer pairing, filter + sort logic
 
-### 1.8 Budgets (individual + group)
+### 1.12 Budgets (individual + group)
 
-- [ ] Budget list (individual + group) with spent vs limit + progress bar
-- [ ] Add/edit/delete budget; scope (member/group); category; period (monthly); limit
-- [ ] Over/near-limit indicators (gentle, not naggy)
-- [ ] Roll-up of group budgets across members
-- [ ] Tests: spent/remaining, scope aggregation, alert thresholds
+- [ ] List individual + group budgets with spent vs limit + progress
+- [ ] Add/edit/delete budget (scope, category, period, limit)
+- [ ] Near/over-limit indicators (gentle); per-member + group roll-up
+- [ ] Period selector (this month / specific month)
+- [ ] Tests: spent/remaining, scope aggregation, thresholds
 
-### 1.9 Goals
+### 1.13 Goals
 
-- [ ] Goal list with progress and projected completion
-- [ ] Add/edit/delete goal; scope; target amount; target date; linked account
-- [ ] Contribute-to-goal action; progress updates
-- [ ] Tests: progress + projection math
+- [ ] List with progress + projected completion
+- [ ] Add/edit/delete goal (scope, target, target date, linked account)
+- [ ] Contribute-to-goal action; auto-progress from linked account option
+- [ ] Tests: progress + projection
 
-### 1.10 To-do (budgeting tasks)
+### 1.14 To-do (budgeting tasks)
 
-- [ ] Task list (open/done) with due date + priority
-- [ ] Add/edit/delete/complete task; link to account/budget/goal/transaction
-- [ ] Sort/filter (due, priority, status, linked entity)
-- [ ] Surface overdue tasks on dashboard
-- [ ] Tests: task ordering, status transitions
+- [ ] List (open/done) with due + priority
+- [ ] Add/edit/delete/complete; link to account/budget/goal/transaction
+- [ ] Sort/filter (due, priority, status, linked); overdue surfacing
+- [ ] Create-from-nudge and create-from-insight hooks (P2 wires AI source)
+- [ ] Tests: ordering, status transitions
 
-### 1.11 Freshness & friendly nudges
+### 1.15 Freshness & friendly nudges
 
-- [ ] ★ Freshness model: per-type windows; `balanceAsOf` staleness computation (pure, tested)
-- [ ] Configurable windows + overrides in settings
-- [ ] Dashboard nudge card ("N balances could use a refresh"), dismissible, one-tap update
-- [ ] Per-account staleness indicator
-- [ ] Tests: staleness windows, dismissal, recurring-bill exemption
+- [ ] Dashboard nudge card ("N balances could use a refresh"), dismissible
+- [ ] One-tap "update balance" from nudge
+- [ ] Per-account staleness badges
+- [ ] Configurable windows in settings; recurring-bill exemption respected
+- [ ] Tests already in `internal/freshness`; add dismissal-state tests
 
-### 1.12 Custom fields (extensibility)
+### 1.16 Custom fields (extensibility)
 
-- [ ] `CustomFieldDef` storage + CRUD per entity type
-- [ ] Validated `custom{key->value}` map on entities; forms render core + custom fields
-- [ ] Types: text/number/date/bool/select/money; required + default
-- [ ] Export/import round-trips custom fields
-- [ ] Tests: validation, round-trip
+- [ ] `CustomFieldDef{ID, EntityType, Key, Label, Type, Options, Required, DefaultValue}` + store CRUD
+- [ ] Validate `custom{}` map against defs for the entity type
+- [ ] Forms render core + custom fields by type (text/number/date/bool/select/money)
+- [ ] Custom field management UI (per entity type)
+- [ ] Export/import round-trips custom fields + defs
+- [ ] Tests: validation, defaulting, round-trip
 
-### 1.13 Dashboard (depends on most of the above)
+### 1.17 Dashboard
 
-- [ ] ★ Net worth + per-member/group rollups
+- [ ] Net worth + per-member/group rollups (base currency)
 - [ ] This-month income/expense; balance trend snapshot
 - [ ] Budget health summary; next goal; overdue tasks
 - [ ] Freshness nudges block
 - [ ] Recent activity list
-- [ ] Custom formula results placeholder (wired in P2)
+- [ ] Placeholder slots for AI insight + formula results (wired P2)
 
-### 1.14 Settings
+### 1.18 Settings
 
-- [ ] Members management entry point
-- [ ] Base currency selector + editable FX rate table
-- [ ] Category management
-- [ ] Freshness window overrides
-- [ ] OpenAI key + model fields (stored locally; used in P2) with caveat copy
-- [ ] Data: export (JSON/CSV), import (JSON/CSV), load sample data, wipe data (confirm)
-- [ ] Configurable preferences: theme/density, week-start, fiscal-month start, number/date formats, budgeting methodology
+- [ ] Members management entry
+- [ ] Base currency selector + editable FX rate table (add/edit/remove rate)
+- [ ] Category management entry
+- [ ] Freshness window overrides editor
+- [ ] OpenAI key + model fields (stored locally) with caveat copy (used P2)
+- [ ] Data: export JSON, export CSV, import JSON, import CSV, load sample, wipe (confirm)
+- [ ] Preferences: theme/density, week-start, fiscal-month start, number/date formats
+- [ ] Budgeting methodology selector (envelope / zero-based / simple tracking)
 - [ ] Module visibility toggles (show/hide screens)
+- [ ] Debug: open log viewer
 
-### 1.15 Phase 1 hardening
+### 1.19 Configuration & modalities
 
-- [ ] Accessibility pass (labels, focus, keyboard nav) via framework a11y primitives
-- [ ] Empty/error/loading states for every screen
-- [ ] Plain-English copy review across all screens, nudges, errors
-- [ ] Performance check (large transaction sets, virtualization)
-- [ ] Phase 1 README/usage docs + screenshots
-- [ ] Tag a Phase 1 release; verify `gwc release` compressed build
+- [ ] Layered config resolution: defaults → household → member → screen
+- [ ] Config persisted + included in export/import
+- [ ] Methodology changes adjust UI affordances (e.g. envelope view)
+- [ ] Per-member preferences (formatting, default account/member)
+- [ ] Tests: config layering/resolution
+
+### 1.20 Phase 1 hardening
+
+- [ ] Accessibility pass (labels, focus order, keyboard nav, ARIA) via framework a11y
+- [ ] Empty/error/loading states on every screen
+- [ ] Plain-English copy review (labels, nudges, errors, confirmations)
+- [ ] Performance: large dataset (10k+ txns) virtualization + memoization
+- [ ] Usage docs + screenshots; update framework notes if APIs learned
+- [ ] Phase 1 release via `gwc release`; verify compressed sizes (`gwc wasm measure`)
 
 ---
 
-## 2. Phase 2 — Intelligence & power tools  (OpenAI, client-side)
+## 2. Phase 2 — Intelligence & power tools (OpenAI, client-side)
 
-### 2.1 OpenAI client (bring-your-own-key)
+### 2.1 OpenAI client — `internal/ai`
 
-- [ ] `internal/ai`: client over `fetch` to OpenAI with user key from settings
-- [ ] Structured outputs (JSON schema) mapped to Go structs
-- [ ] Model selection; token/cost surfacing; graceful "AI off until key set" state
-- [ ] Error handling (auth, rate limit, CORS) with plain-English messages
-- [ ] Tests for request/response mapping (mock transport; keep core pure)
+- [ ] Client over `fetch` with user key from settings; base URL configurable
+- [ ] Chat/Responses call with JSON-schema **structured outputs** → Go structs
+- [ ] Vision input support (images/PDF pages) for document parsing
+- [ ] Model selection; token + cost surfacing; "AI off until key set" state
+- [ ] Error handling: auth, rate limit, network, CORS — plain-English messages
+- [ ] Retry/backoff; request cancellation
+- [ ] Tests: request build + response decode via mock transport (keep core pure)
 
 ### 2.2 Documents — AI import
 
-- [ ] Upload UI (PDF/CSV/image); local CSV parse in Go
-- [ ] Send PDF/image to a vision-capable model → structured transactions
-- [ ] Review screen: edit/accept extracted rows → import to ledger
-- [ ] `Document` entity lifecycle (parsing/review/imported/discarded); link imported txns
-- [ ] Monthly-spend extraction summary
+- [ ] Upload UI (PDF / CSV / image); drag-drop
+- [ ] Local CSV parse → candidate transactions (no AI needed)
+- [ ] Send PDF/image to vision model → structured transactions
+- [ ] `Document{ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[]}` lifecycle
+- [ ] Review screen: edit/accept/reject extracted rows → import to ledger; dedupe vs existing
+- [ ] Monthly-spend extraction summary view
+- [ ] Tests: CSV parsing, extraction-to-transaction mapping, dedupe
 
 ### 2.3 Insights & NL query
 
-- [ ] "Explain my month" generated analysis
-- [ ] Natural-language query over data (household-aware)
-- [ ] Trend/anomaly highlights; advice cards on dashboard
-- [ ] Save/pin insights
+- [ ] "Explain my month" generated narrative
+- [ ] Natural-language query over data (household-aware) → answer + supporting figures
+- [ ] Trend/anomaly highlights; advice cards
+- [ ] Pin/save insights; show top insight on dashboard
+- [ ] Guardrails: scope data sent, redact where possible
+- [ ] Tests: prompt assembly, data-context selection (pure parts)
 
 ### 2.4 Auto-categorization & Rules
 
-- [ ] AI category suggestions on entry + for imported rows
-- [ ] `Rule` entity (match payee/desc → category/tags) + management UI
-- [ ] AI-proposed rules from history
-- [ ] Apply rules on import/entry; tests for rule matching
+- [ ] `Rule{ID, Match, SetCategoryID, SetTags}` store + management UI
+- [ ] Rule matching engine (pure) + tests
+- [ ] AI category suggestion on entry + for imported rows
+- [ ] AI-proposed rules from history (review + accept)
+- [ ] Apply rules on import/entry; conflict handling
 
-### 2.5 Formula builder + sandboxed engine
+### 2.5 Formula builder + sandboxed engine — `internal/formula`
 
-- [ ] ★ `internal/formula`: tokenizer/parser/evaluator — allow-list ops + funcs (sum/avg/min/max/count/if), no arbitrary code
-- [ ] Variable resolution: core fields, custom fields, filtered aggregates
+- [ ] ★ Tokenizer (numbers, strings, idents, operators, parens, commas)
+- [ ] ★ Parser → AST (precedence, unary, function calls)
+- [ ] ★ Evaluator with allow-list functions (`sum/avg/min/max/count/if/round/abs`) + arithmetic/compare
+- [ ] Variable resolution: core fields, custom fields, filtered aggregates over transactions
 - [ ] Typed results (number/money/percent/bool/text) + formatting
-- [ ] Builder UI with live preview + validation
-- [ ] Surface formula results on dashboard/entities
-- [ ] Extensive tests (parsing, evaluation, errors, edge cases)
+- [ ] `Formula{ID, Name, Target, Expr, ResultType, Format, Enabled}` store + CRUD
+- [ ] Builder UI: guided insert, live preview, validation + error messages
+- [ ] Surface results on dashboard / relevant entities
+- [ ] ★ Extensive tests: tokenizer, parser, evaluator, errors, security (no escape), edge cases
 
 ### 2.6 Planning + Forecast
 
-- [ ] `Recurring` + `Plan`/`PlanItem` entities + management
-- [ ] Forecast engine: projected balances/net worth N months out (pure, tested)
-- [ ] Debt payoff math (APR, min/extra payments, months-to-zero)
-- [ ] What-if scenarios (add recurring, change spend, extra debt payment)
+- [ ] `Recurring{ID, Kind, Label, Amount, Currency, Cadence, NextDate, AccountID, CategoryID, Autopost}` + CRUD
+- [ ] `Plan{ID, Name, HorizonMonths, BaseScenario, Assumptions[]}` + `PlanItem{...}` + CRUD
+- [ ] ★ Forecast engine (pure): projected balances/net worth over horizon from actuals + recurring + plan items
+- [ ] Debt payoff math (APR accrual, min/extra payments, months-to-zero, interest paid) + tests
+- [ ] What-if scenarios (add recurring, change spend, extra debt payment, rate change)
 - [ ] Planning screen: build scenario, compare vs actuals, push to forecast
-- [ ] Forecast charts/visuals
+- [ ] Forecast visualization (balance/net-worth curve)
+- [ ] ★ Tests: forecast projection, payoff math, scenario application
 
-### 2.7 Capital-allocation engine
+### 2.7 Capital-allocation engine — `internal/allocate`
 
-- [ ] ★ `internal/allocate`: scoring per criterion (returns, stability, liquidity, debt reduction, goal progress)
-- [ ] `AllocationProfile` (weights + constraints + custom/formula criteria) CRUD
-- [ ] Constraints: emergency buffer, max-per-destination, exclusions
-- [ ] Ranked suggestions with visible per-criterion breakdown
+- [ ] ★ Criterion scorers: returns, stability, liquidity/ease-of-withdrawal, debt reduction, goal progress
+- [ ] ★ Weighted combination by profile; normalization; deterministic
+- [ ] `AllocationProfile{ID, Name, Weights, Constraints, CustomCriteria[formulaID]}` + CRUD
+- [ ] Constraints: emergency buffer, max-per-destination, exclusions — applied/clamped
+- [ ] Candidate set assembly (asset accounts, goals, high-interest liabilities as guaranteed return)
+- [ ] Ranked output with per-criterion breakdown (no black box)
+- [ ] Allocate screen: amount input + profile select → ranked suggestions
 - [ ] Optional AI narrative ("why this split")
-- [ ] Extensive tests (scoring, weighting, constraints, determinism)
+- [ ] ★ Extensive tests: scoring, weighting, constraints, determinism, custom criteria
 
 ---
 
 ## 3. Phase 3 — Sync & PWA
 
-- [ ] Go sync server (HTTP) sharing client Go structs
-- [ ] Auth/account model for the household dataset
-- [ ] Pull/push deltas; conflict resolution strategy
-- [ ] Client sync integration + status UI; offline queue
-- [ ] PWA: manifest, service worker, installability, offline read
+### 3.1 Sync server (Go)
+
+- [ ] HTTP service sharing client domain structs
+- [ ] Household account/auth model
+- [ ] Endpoints: pull deltas, push deltas, full snapshot, health
+- [ ] Conflict resolution strategy (last-write-wins + vector/seq) + tests
+- [ ] Storage backend (sqlite/file) for the household dataset
+
+### 3.2 Client sync
+
+- [ ] Sync client in wasm app; background sync + status UI
+- [ ] Offline mutation queue + replay
+- [ ] Settings toggle + endpoint/credentials
 - [ ] End-to-end sync tests
+
+### 3.3 PWA / offline
+
+- [ ] Web manifest + icons
+- [ ] Service worker (cache shell + assets)
+- [ ] Installability prompt; offline read; update flow
+- [ ] Verify via framework `pwa` package
 
 ---
 
 ## 4. Cross-cutting (continuous)
 
 - [ ] Keep logic packages pure + table-driven tested as features land
-- [ ] Maintain CHANGELOG + DEVLOG per commit (one feature per commit)
+- [ ] One feature per commit; CHANGELOG + DEVLOG updated every commit
 - [ ] Grow the design system rather than one-off styles
 - [ ] Accessibility + plain-English copy on every new screen
-- [ ] Keep `docs/GOWEBCOMPONENTS.md` and `CLAUDE.md` current
+- [ ] Keep `docs/GOWEBCOMPONENTS.md`, `CLAUDE.md`, `SPEC.md`, `TODOS.md` current
 - [ ] CI green (tests + wasm build) before merge
 - [ ] Periodic bundle-size check (`gwc wasm measure`)
+- [ ] Security review before any data leaves the device (AI calls): scope + redaction
