@@ -171,11 +171,11 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### 1.12 Budgets (individual + group)
 
-- [ ] List individual + group budgets with spent vs limit + progress
-- [ ] Add/edit/delete budget (scope, category, period, limit)
-- [ ] Near/over-limit indicators (gentle); per-member + group roll-up
+- [x] List budgets with spent vs limit + progress bar (current month)
+- [~] Add + delete budget (scope, category, limit) done; edit + period selector later
+- [x] Near/over-limit indicators (gentle, colored bar)
 - [ ] Period selector (this month / specific month)
-- [ ] Tests: spent/remaining, scope aggregation, thresholds
+- [x] Tests: spent/remaining, scope aggregation, thresholds (in `internal/budgeting`)
 
 ### 1.13 Goals
 

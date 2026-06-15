@@ -116,6 +116,17 @@
       .btn-del { background: transparent; border: 0; color: var(--text-faint); cursor: pointer; font-size: 1rem; padding: 0 0.3rem; }
       .btn-del:hover { color: var(--danger); }
       .err { color: #fca5a5; margin: 0.6rem 0 0; font-size: 0.88rem; }
+
+      /* Budgets */
+      .budget { padding: 0.7rem 0; border-top: 1px solid var(--border); }
+      .budget:first-child { border-top: 0; }
+      .budget-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
+      .budget-amount { font-variant-numeric: tabular-nums; color: var(--text-dim); white-space: nowrap; }
+      .budget-sub { color: var(--text-dim); font-size: 0.82rem; }
+      .bar { height: 8px; background: var(--bg-elev); border-radius: 999px; overflow: hidden; margin: 0.45rem 0 0.35rem; }
+      .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+      .bar-fill.near { background: #f59e0b; }
+      .bar-fill.over { background: var(--danger); }
     </style>
   </head>
   <body>

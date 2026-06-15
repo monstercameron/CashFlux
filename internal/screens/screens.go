@@ -56,11 +56,6 @@ func stat(label, value, accent string) ui.Node {
 	)
 }
 
-// Budgets covers individual and group limits.
-func Budgets() ui.Node {
-	return stub(1, "Set individual (per member) and group budgets, and track spent vs. remaining with clear progress and gentle alerts.")
-}
-
 // Goals tracks savings goals.
 func Goals() ui.Node {
 	return stub(1, "Create individual and group savings goals with progress and a projected completion date.")

@@ -128,8 +128,12 @@ goals, freshness, validate, store).
   negative; newest-first list; per-row delete via `TransactionRow`. Member is inferred from the
   account's owner for individual accounts. Same reactive-revision pattern.
 
-**Next:** account-to-account **transfers** (paired legs, excluded from income/expense), then the
-**Budgets** screen (list with spent vs limit via `internal/budgeting`).
+- Built the **Budgets** screen on `internal/budgeting`: current-month spend vs limit per budget with
+  a colored ok/near/over progress bar (`Attr("style", "width:N%")` for the fill), plus add and
+  delete. Limit is recovered for display as `Spent + Remaining` (both base currency).
+
+**Next:** the **Goals** screen (progress + projected completion via `internal/goals`), then the
+**To-do** screen, then loop back to transfers and the remaining Phase-1 screens (Members, Settings).
 
 ## 2026-06-15 — Project kickoff & spec
 

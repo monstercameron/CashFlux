@@ -80,6 +80,8 @@ and every commit updates this file under `Unreleased`.
   rendering; deleting refreshes the screen and net-worth summary.
 - Transactions screen: add income/expense (account-aware currency, category/date), newest-first
   list, and per-row delete (`TransactionRow`), all with validated write-through and reactive refresh.
+- Budgets screen: current-month spend vs limit per budget via `internal/budgeting` with a colored
+  ok/near/over progress bar, plus add and per-row delete.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
