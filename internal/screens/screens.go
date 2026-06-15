@@ -56,11 +56,6 @@ func stat(label, value, accent string) ui.Node {
 	)
 }
 
-// Goals tracks savings goals.
-func Goals() ui.Node {
-	return stub(1, "Create individual and group savings goals with progress and a projected completion date.")
-}
-
 // Todo is the budgeting task list.
 func Todo() ui.Node {
 	return stub(1, "A budgeting-related to-do list — open/done, due dates, priority — with items linked to accounts, budgets, or goals.")

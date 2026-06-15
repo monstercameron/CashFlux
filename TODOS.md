@@ -179,10 +179,10 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### 1.13 Goals
 
-- [ ] List with progress + projected completion
-- [ ] Add/edit/delete goal (scope, target, target date, linked account)
+- [x] List with progress bar (% + remaining); projected completion later (needs contribution input)
+- [~] Add + delete goal (scope, target, current, target date) done; edit + linked account later
 - [ ] Contribute-to-goal action; auto-progress from linked account option
-- [ ] Tests: progress + projection
+- [x] Tests: progress + projection (in `internal/goals`)
 
 ### 1.14 To-do (budgeting tasks)
 

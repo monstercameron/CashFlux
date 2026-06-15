@@ -82,6 +82,8 @@ and every commit updates this file under `Unreleased`.
   list, and per-row delete (`TransactionRow`), all with validated write-through and reactive refresh.
 - Budgets screen: current-month spend vs limit per budget via `internal/budgeting` with a colored
   ok/near/over progress bar, plus add and per-row delete.
+- Goals screen: savings goals with a progress bar (% complete + remaining via `internal/goals`),
+  optional target date, plus add and per-row delete.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

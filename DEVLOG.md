@@ -132,8 +132,12 @@ goals, freshness, validate, store).
   a colored ok/near/over progress bar (`Attr("style", "width:N%")` for the fill), plus add and
   delete. Limit is recovered for display as `Spent + Remaining` (both base currency).
 
-**Next:** the **Goals** screen (progress + projected completion via `internal/goals`), then the
-**To-do** screen, then loop back to transfers and the remaining Phase-1 screens (Members, Settings).
+- Built the **Goals** screen on `internal/goals`: progress bar (% + remaining), optional target date,
+  add and delete. Projection is deferred until we capture an assumed monthly contribution. Reused the
+  budget/bar CSS. (Imported the goals package as `goalsvc` to avoid shadowing the local `goals` var.)
+
+**Next:** the **To-do** screen (task list + add + complete + delete), then transfers, then the
+remaining Phase-1 screens (Members, Categories, Settings with import/export + load-sample/wipe).
 
 ## 2026-06-15 — Project kickoff & spec
 
