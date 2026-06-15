@@ -137,7 +137,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 ### 1.9 Accounts (assets + liabilities) ★
 
 - [x] ★ Accounts list grouped by class (assets / liabilities) with per-account balance
-- [~] ★ Add account form (owner, type, currency, opening balance) done; edit/archive later
+- [~] ★ Add + delete account done (per-row component); edit/archive later
 - [ ] Liability sub-form (credit limit, APR, min payment, due day, lender)
 - [ ] Allocation attributes sub-form (expected return, liquidity, stability, lock-until)
 - [ ] Per-account ledger view (filtered txns + running balance)

@@ -117,8 +117,14 @@ goals, freshness, validate, store).
   store data. Form hooks (`UseState`/`UseEvent`) sit at stable top-level positions; option lists are
   built in plain loops (no `On*` there). Added the missing row/form/amount CSS to the host page.
 
-**Next:** delete + archive on account rows (per-row component so the `On*` hook stays stable), then
-the Transactions screen (list + add + transfers), reusing this pattern.
+- Added per-row account **delete**: converted `accountRow` (plain func) into an `AccountRow`
+  component so its delete-handler `On*` hook is stable, and switched the lists to `MapKeyed` (keyed
+  by account id). The parent passes a `func(string)` delete callback that calls
+  `appstate.DeleteAccount` and bumps the revision. This is the canonical per-row pattern for the
+  whole app. (Note: deleting an account currently leaves its transactions; cascade/cleanup later.)
+
+**Next:** the **Transactions** screen — list (newest first) + add form (income/expense/transfer) +
+delete, reusing the add-form + per-row-component + revision patterns.
 
 ## 2026-06-15 — Project kickoff & spec
 

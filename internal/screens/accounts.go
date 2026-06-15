@@ -17,8 +17,8 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// Accounts lists assets and liabilities with live balances and a net-worth
-// summary, and provides a form to add an account.
+// Accounts lists assets and liabilities with live balances, a net-worth summary,
+// an add form, and per-row delete.
 func Accounts() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -40,6 +40,8 @@ func Accounts() ui.Node {
 	onAmount := ui.UseEvent(func(v string) { amount.Set(v) })
 	onType := ui.UseEvent(func(e ui.Event) { accType.Set(e.GetValue()) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+
+	bump := func() { rev.Set(rev.Get() + 1) }
 
 	add := ui.UseEvent(Prevent(func() {
 		c := strings.ToUpper(strings.TrimSpace(curr.Get()))
@@ -65,10 +67,17 @@ func Accounts() ui.Node {
 		name.Set("")
 		amount.Set("0")
 		errMsg.Set("")
-		rev.Set(rev.Get() + 1)
+		bump()
 	}))
 
-	// Option lists (no hooks — safe to build in loops).
+	deleteAccount := func(accountID string) {
+		if err := app.DeleteAccount(accountID); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		bump()
+	}
+
 	typeOptions := make([]ui.Node, 0, len(domain.AllAccountTypes))
 	for _, t := range domain.AllAccountTypes {
 		typeOptions = append(typeOptions, Option(Value(string(t)), SelectedIf(accType.Get() == string(t)), humanizeType(string(t))))
@@ -93,7 +102,6 @@ func Accounts() ui.Node {
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 	)
 
-	// Live lists.
 	accounts := app.Accounts()
 	txns := app.Transactions()
 	base := app.Settings().BaseCurrency
@@ -103,19 +111,23 @@ func Accounts() ui.Node {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	net, assets, liabilities, _ := ledger.NetWorth(accounts, txns, rates)
 
-	var assetRows, liabRows []ui.Node
+	var assetList, liabList []domain.Account
 	for _, ac := range accounts {
 		if ac.Archived {
 			continue
 		}
-		bal, _ := ledger.Balance(ac, txns)
-		row := accountRow(ac, bal)
 		if ac.Class == domain.ClassLiability {
-			liabRows = append(liabRows, row)
+			liabList = append(liabList, ac)
 		} else {
-			assetRows = append(assetRows, row)
+			assetList = append(assetList, ac)
 		}
 	}
+
+	renderRow := func(ac domain.Account) ui.Node {
+		bal, _ := ledger.Balance(ac, txns)
+		return ui.CreateElement(AccountRow, accountRowProps{Account: ac, Balance: bal, OnDelete: deleteAccount})
+	}
+	keyOf := func(ac domain.Account) any { return ac.ID }
 
 	return Div(
 		Div(Class("stat-grid"),
@@ -126,21 +138,31 @@ func Accounts() ui.Node {
 		form,
 		Section(Class("card"),
 			H2(Class("card-title"), "Assets"),
-			IfElse(len(assetRows) == 0, P(Class("empty"), "No asset accounts yet."), Div(Class("rows"), assetRows)),
+			IfElse(len(assetList) == 0, P(Class("empty"), "No asset accounts yet."), Div(Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), "Liabilities"),
-			IfElse(len(liabRows) == 0, P(Class("empty"), "No liabilities — nice."), Div(Class("rows"), liabRows)),
+			IfElse(len(liabList) == 0, P(Class("empty"), "No liabilities — nice."), Div(Class("rows"), MapKeyed(liabList, keyOf, renderRow))),
 		),
 	)
 }
 
-func accountRow(ac domain.Account, bal money.Money) ui.Node {
+type accountRowProps struct {
+	Account  domain.Account
+	Balance  money.Money
+	OnDelete func(string)
+}
+
+// AccountRow is a per-account row component; it owns its delete-handler hook so
+// the list can change without breaking hook ordering.
+func AccountRow(props accountRowProps) ui.Node {
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Account.ID) }))
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), ac.Name),
-			Span(Class("row-meta"), humanizeType(string(ac.Type))+" · "+ac.Currency),
+			Span(Class("row-desc"), props.Account.Name),
+			Span(Class("row-meta"), humanizeType(string(props.Account.Type))+" · "+props.Account.Currency),
 		),
-		Span(Class(amountClass(bal)), fmtMoney(bal)),
+		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
+		Button(Class("btn-del"), Type("button"), Title("Delete account"), OnClick(del), "✕"),
 	)
 }

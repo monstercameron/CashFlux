@@ -76,6 +76,8 @@ and every commit updates this file under `Unreleased`.
 - Accounts add form: create an account (name, type, owner, currency, opening balance) with
   validated write-through and a reactive refresh (`state.UseAtom` revision bump). First mutating
   feature. Added row/form/amount styles to the host page.
+- Accounts per-row delete via an `AccountRow` component (stable `On*` hook) with `MapKeyed` keyed
+  rendering; deleting refreshes the screen and net-worth summary.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
