@@ -92,10 +92,16 @@ goals, freshness, validate, store).
   into a bounded `Ring`), with level filtering and `With`/`WithGroup`. Kept pure — the wasm app will
   pass a console-backed writer. Ring eviction, attr capture, grouping, and filtering are tested.
 
-**12 pure packages green.** The entire Phase 1 non-UI foundation (logic + persistence + logging) is
-done. **Next:** start the UI/state track — wire app state (atoms hydrated from the SQLite store via
-the JSON dataset) and build the first real screen, replacing a stub. This is where `syscall/js`/wasm
-code begins; logic stays in the tested packages.
+- Added `internal/appstate` — the UI↔logic seam. Kept it **pure Go** (no syscall/js): it owns the
+  in-memory SQLite store + slog logger, exposes typed read accessors and validated write-through
+  (`Put*` run `internal/validate` first), and does JSON export/import. `Init` seeds sample data and
+  sets a package `Default` the screens will read. Wired into `app.Run`; the wasm app still builds and
+  appstate is native-tested. Logging goes to `os.Stderr`, which Go's wasm runtime routes to the
+  browser console — so no platform code needed.
+
+**13 packages green.** **Next:** convert the first stub screen (Accounts) to real data — read
+`appstate.Default.Accounts()`, render with `internal/ledger` balances, seed a `state.UseAtom`
+revision to refresh on mutation. First visible real feature on the live view.
 
 ## 2026-06-15 — Project kickoff & spec
 

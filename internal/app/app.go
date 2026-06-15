@@ -5,16 +5,24 @@
 package app
 
 import (
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 	"github.com/monstercameron/GoWebComponents/utils"
 )
 
-// Run builds the router, registers every screen wrapped in the shell, mounts
-// the app, and blocks the wasm runtime so the page stays interactive.
+// Run initializes app state, builds the router, registers every screen wrapped
+// in the shell, mounts the app, and blocks the wasm runtime so the page stays
+// interactive.
 func Run() {
 	utils.DisableAllDebug()
+
+	// Seed an in-memory store with sample data on boot. Logs (os.Stderr) surface
+	// in the browser console.
+	if err := appstate.Init(nil, true); err != nil {
+		panic(err)
+	}
 
 	r := router.NewHistoryRouter(router.RouterOptions{DefaultRoute: "/"})
 	for _, route := range screens.All() {

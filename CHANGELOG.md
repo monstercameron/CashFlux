@@ -65,6 +65,9 @@ and every commit updates this file under `Unreleased`.
 - `internal/logging`: `log/slog`-based `Handler` writing human-readable lines to any `io.Writer`
   plus a bounded, concurrency-safe `Ring` buffer for an in-app log viewer; supports level filtering
   and `With`/`WithGroup` contextual attrs + tests.
+- `internal/appstate`: the UI↔persistence/logic seam — owns the in-memory store + slog logger, with
+  typed read accessors, validated write-through (`Put*`/`Delete*`), JSON export/import, and
+  `Init`/`Default`; wired into `app.Run` to seed sample data on boot. Pure Go + native tests.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

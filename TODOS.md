@@ -100,13 +100,15 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [ ] Debug log viewer panel (toggleable) — UI
 - [x] Tests for the handler/ring buffer (pure parts)
 
-### 1.6 State wiring — `internal/state` (or app)
+### 1.6 State wiring — `internal/appstate`
 
-- [ ] Atoms for each entity collection + settings
-- [ ] Boot hydration: store → atoms
-- [ ] Single persist path: atom mutation → store write (+ slog)
-- [ ] Derived/computed selectors (net worth, totals, budget health) via `state.UseComputed`
-- [ ] Error/toast surface for failed persistence
+- [x] `internal/appstate` seam: in-memory store + slog logger, typed read accessors, validated
+      write-through (`Put*`/`Delete*`), JSON export/import; `Init`/`Default` for screens
+- [x] Boot hydration: `appstate.Init` loads sample data on boot (wired into `app.Run`)
+- [x] Single persist path: every write goes through validated `appstate.Put*` → store (+ slog)
+- [ ] Reactive atoms per screen (`state.UseAtom` seeded from `appstate`, refresh on mutation) — with screens
+- [ ] Derived/computed selectors (net worth, totals, budget health) via `state.UseComputed` — with screens
+- [ ] Error/toast surface for failed persistence — with UI primitives
 
 ### 1.7 Design system / UI primitives — `internal/ui`
 
