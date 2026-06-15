@@ -1,0 +1,9 @@
+# Build output
+/bin/
+/static/bin/
+/static/wasm_exec.js
+
+# Local env / editor
+*.log
+.DS_Store
+.vscode/
