@@ -88,8 +88,14 @@ problems and fixes, and what's next.
 **§1.3 + §1.4 done — 11 packages green** (money, currency, id, dateutil, domain, ledger, budgeting,
 goals, freshness, validate, store).
 
-**Next (§1.5):** `internal/logging` — a `log/slog` handler bridging to the browser console + an
-in-app ring buffer. Then wire app state (atoms ← store) and build the first real screen (Accounts).
+- Added `internal/logging` (§1.5): a `log/slog` `Handler` (writes lines to an `io.Writer` + records
+  into a bounded `Ring`), with level filtering and `With`/`WithGroup`. Kept pure — the wasm app will
+  pass a console-backed writer. Ring eviction, attr capture, grouping, and filtering are tested.
+
+**12 pure packages green.** The entire Phase 1 non-UI foundation (logic + persistence + logging) is
+done. **Next:** start the UI/state track — wire app state (atoms hydrated from the SQLite store via
+the JSON dataset) and build the first real screen, replacing a stub. This is where `syscall/js`/wasm
+code begins; logic stays in the tested packages.
 
 ## 2026-06-15 — Project kickoff & spec
 

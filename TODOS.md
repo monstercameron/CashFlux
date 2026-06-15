@@ -94,11 +94,11 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### 1.5 Logging — `internal/logging`
 
-- [ ] `log/slog` custom `slog.Handler` → browser console
-- [ ] In-app ring buffer sink (bounded) for a debug log viewer
-- [ ] Level config + contextual fields (`slog.With`)
-- [ ] Debug log viewer panel (toggleable)
-- [ ] Tests for the handler/ring buffer (pure parts)
+- [x] `log/slog` custom `slog.Handler` → `io.Writer` (browser console writer wired in the app)
+- [x] In-app ring buffer sink (bounded) for a debug log viewer
+- [x] Level config + contextual fields (`slog.With`/`WithGroup`)
+- [ ] Debug log viewer panel (toggleable) — UI
+- [x] Tests for the handler/ring buffer (pure parts)
 
 ### 1.6 State wiring — `internal/state` (or app)
 
