@@ -73,8 +73,8 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] `internal/budgeting`: near/over-limit threshold evaluation
 - [x] `internal/goals`: progress %, remaining, projected completion (read-only estimate)
 - [x] ★ `internal/freshness`: per-type staleness windows + `IsStale(balanceAsOf, type, now)`; recurring-bill exemption
-- [ ] ★ `internal/validate`: per-entity validation (required, positive amounts, valid refs, currency match)
-- [ ] Tests for every service above (edge cases, multi-currency, rounding, boundaries)
+- [x] ★ `internal/validate`: per-entity validation (required, positive amounts, valid refs, currency match)
+- [x] Tests for every service above (edge cases, multi-currency, rounding, boundaries)
 
 ### 1.4 Persistence — `internal/store` (IndexedDB) ★
 

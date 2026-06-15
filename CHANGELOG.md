@@ -43,6 +43,9 @@ and every commit updates this file under `Unreleased`.
   completion estimate from an assumed monthly contribution) via `Evaluate` + tests.
 - `internal/freshness`: per-type staleness `Windows` (defaults + `Merge` overrides), `IsStale`,
   `DaysSinceUpdate`, and `StaleAccounts`; archived/exempt/untracked accounts never go stale + tests.
+- `internal/validate`: per-entity validators returning all `Issues` at once (required fields, valid
+  enums, positive amounts, currency consistency, class/type match, score/day ranges, related refs) + tests.
+  Completes the Phase 1 pure-logic services layer.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.

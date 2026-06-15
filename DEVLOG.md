@@ -50,8 +50,15 @@ problems and fixes, and what's next.
   untracked never stale; never-confirmed = stale), `DaysSinceUpdate`, `StaleAccounts`. Recurring
   fixed bills are exempt by design (modeled as Recurring, not accounts; window 0 also exempts). Tested.
 
-**Next:** `internal/validate` (per-entity validation: required fields, positive amounts, valid refs,
-currency match) — completes the §1.3 pure-logic layer. Then §1.4 persistence (`internal/store`).
+- Added `internal/validate`: `Validate{Member,Account,Category,Transaction,Budget,Goal,Task}`
+  returning `Issues` (all problems at once, form-friendly). Covers required fields, enum validity,
+  positive limits/targets, currency consistency, account class/type match, score/due-day ranges, and
+  related-ref requirements. Tested. **§1.3 pure-logic services layer is complete** — 10 packages,
+  all green on native `go test`.
+
+**Next (§1.4 persistence):** `internal/store` over IndexedDB. Per clean architecture, split a
+pure/testable core (serialization, query/filter logic, import/export) from the thin `syscall/js`
+IndexedDB binding, so the core unit-tests natively.
 
 ## 2026-06-15 — Project kickoff & spec
 
