@@ -111,9 +111,14 @@ goals, freshness, validate, store).
   over `dateutil.MonthRange(time.Now())`), active-account count, and a sorted recent-activity list.
   `time.Now()` works at runtime in wasm. Two real screens now read the live store.
 
-**Next:** the first *mutating* feature — an Accounts add form — which needs reactive refresh. Plan:
-a `state.UseAtom` "revision" counter bumped after `appstate.Put*`, so the screen re-renders. Then
-the add/edit form UI. This also exercises the framework's per-row/On*-hook rules.
+- Built the **Accounts add form** — the first mutating feature. Reactivity pattern that works with
+  this framework: a screen-level `state.UseAtom("rev:accounts", 0)` subscribes the component; after a
+  successful `appstate.PutAccount` the handler bumps the atom, re-rendering the screen against fresh
+  store data. Form hooks (`UseState`/`UseEvent`) sit at stable top-level positions; option lists are
+  built in plain loops (no `On*` there). Added the missing row/form/amount CSS to the host page.
+
+**Next:** delete + archive on account rows (per-row component so the `On*` hook stays stable), then
+the Transactions screen (list + add + transfers), reusing this pattern.
 
 ## 2026-06-15 — Project kickoff & spec
 

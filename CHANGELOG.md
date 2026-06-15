@@ -73,6 +73,9 @@ and every commit updates this file under `Unreleased`.
   Shared money display helpers (`fmtMoney`, amount classes).
 - Dashboard screen: real headline metrics — net worth, this-month income/expense (via
   `ledger.PeriodTotals` over the current month), active-account count, and a recent-activity list.
+- Accounts add form: create an account (name, type, owner, currency, opening balance) with
+  validated write-through and a reactive refresh (`state.UseAtom` revision bump). First mutating
+  feature. Added row/form/amount styles to the host page.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

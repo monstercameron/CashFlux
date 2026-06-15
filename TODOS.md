@@ -106,7 +106,7 @@ packages have no `syscall/js` and ship with table-driven tests.
       write-through (`Put*`/`Delete*`), JSON export/import; `Init`/`Default` for screens
 - [x] Boot hydration: `appstate.Init` loads sample data on boot (wired into `app.Run`)
 - [x] Single persist path: every write goes through validated `appstate.Put*` → store (+ slog)
-- [ ] Reactive atoms per screen (`state.UseAtom` seeded from `appstate`, refresh on mutation) — with screens
+- [x] Reactive refresh per screen (`state.UseAtom` revision bumped after `appstate.Put*`) — Accounts add form
 - [ ] Derived/computed selectors (net worth, totals, budget health) via `state.UseComputed` — with screens
 - [ ] Error/toast surface for failed persistence — with UI primitives
 
@@ -137,7 +137,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 ### 1.9 Accounts (assets + liabilities) ★
 
 - [x] ★ Accounts list grouped by class (assets / liabilities) with per-account balance
-- [ ] ★ Add/edit/archive account form (owner, type, currency, opening balance)
+- [~] ★ Add account form (owner, type, currency, opening balance) done; edit/archive later
 - [ ] Liability sub-form (credit limit, APR, min payment, due day, lender)
 - [ ] Allocation attributes sub-form (expected return, liquidity, stability, lock-until)
 - [ ] Per-account ledger view (filtered txns + running balance)
