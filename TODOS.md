@@ -53,8 +53,8 @@ packages have no `syscall/js` and ship with table-driven tests.
 ### 1.2 Money & currency — ★
 
 - [x] ★ `internal/money`: `Money{Amount int64, Currency}`; `Add/Sub/Neg/Abs/Cmp/Equal/Sum`; tests
-- [ ] Money formatting per currency (symbol, decimals, grouping, sign placement)
-- [ ] Money parsing from user input ("1,234.56" → minor units) with validation + tests
+- [~] Money formatting per currency: `FormatMinor` (plain decimal) done; symbol/grouping/locale = UI layer
+- [x] Money parsing: `ParseMinor` (strict decimal → minor units, validation, round-trip) + tests; grouping input later
 - [x] ★ `internal/currency`: registry (code, symbol, decimals, name) + `Rates` table type
 - [x] ★ `Rates.Convert` / `ToBase` rounding to target minor units (nearest; float-rate caveat noted)
 - [x] Missing-rate + non-positive-rate error handling; tests for cross-currency + rounding

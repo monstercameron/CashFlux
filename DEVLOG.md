@@ -73,8 +73,12 @@ problems and fixes, and what's next.
   `dateutil.InRange`. `Put` upserts via `ON CONFLICT`. Tests cover CRUD, missing-key, upsert, and
   all queries.
 
-**Next:** CSV transaction export/import, then the Settings store accessor, then wire app state to
-the store. After §1.4, the §1.5 `log/slog` logging package.
+- Added `internal/money` `FormatMinor`/`ParseMinor` (plain decimal ↔ minor units, strict, validated,
+  round-trip tested). Kept it currency-agnostic (takes `decimals`, not a currency) to avoid an import
+  cycle with `internal/currency`. This unblocks human-readable CSV. Symbol/grouping is a UI concern.
+
+**Next:** CSV transaction export/import (using `ParseMinor`/`FormatMinor` + `currency.Decimals`),
+then the Settings store accessor, then §1.5 `log/slog` logging.
 
 ## 2026-06-15 — Project kickoff & spec
 

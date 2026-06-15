@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
 
 - `internal/money`: precise integer-minor-unit `Money` value type with safe, currency-checked
   arithmetic (`Add`/`Sub`/`Neg`/`Abs`/`Cmp`/`Sum`) and table-driven tests (backlog §1.1).
+- `internal/money`: `FormatMinor`/`Money.Format` (plain decimal rendering) and `ParseMinor` (strict
+  decimal → minor units with validation), round-trip tested — the basis for clean CSV and inputs.
 - `internal/currency`: currency registry (code/symbol/decimals/name) + manual `Rates` table with
   base-currency `Convert`/`ToBase` (cross-currency, mixed decimals, nearest-minor rounding) + tests.
 - `internal/id`: collision-resistant 128-bit hex ID generator (optional prefix; seedable source for
