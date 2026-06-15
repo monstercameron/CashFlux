@@ -80,9 +80,9 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 - [x] ★ In-memory SQLite store (`NewMemory`) with clean `Load`/`Snapshot` dataset ingress/egress (builds for js/wasm + native)
 - [x] Schema + schema-version constant; migration scaffold (in `Import`) + version bump test
-- [ ] Object store per entity (members, accounts, categories, transactions, budgets, goals, tasks)
-- [ ] CRUD per entity (create/get/list/update/delete)
-- [ ] Query helpers: by account, by member, by date range, by category, by status
+- [x] Object store per entity (members, accounts, categories, transactions, budgets, goals, tasks)
+- [x] CRUD per entity (create/get/list/update/delete)
+- [x] Query helpers: by account, by member, by date range, by category, by status
 - [ ] Settings store (base currency, FX rates, freshness overrides, prefs, OpenAI key)
 - [x] ★ Export entire dataset → versioned JSON (entities + settings + custom fields)
 - [x] ★ Import dataset from JSON (version-migrate; rejects newer schema)

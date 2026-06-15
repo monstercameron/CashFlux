@@ -52,6 +52,9 @@ and every commit updates this file under `Unreleased`.
 - `internal/store`: in-memory **SQLite** store backed by the pure-Go (no-cgo) `ncruces/go-sqlite3`
   driver, with `Load`/`Snapshot` clean dataset ingress/egress + round-trip tests. Verified to build
   for `js/wasm` (browser) and run natively.
+- `internal/store`: per-entity CRUD (Put/Get/Delete/List for members, accounts, categories,
+  transactions, budgets, goals, tasks) and query helpers (transactions by account/category/member/
+  date-range via SQLite `json_extract`; tasks by status) + tests.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

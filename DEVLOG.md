@@ -68,8 +68,13 @@ problems and fixes, and what's next.
   portable import/export + sync format. Single pinned connection so `:memory:` is shared.
 - Clean architecture paid off: switching the storage engine touched zero logic packages.
 
-**Next:** per-entity CRUD + query helpers on the SQLite store (by account/member/date/category/
-status), then CSV import/export, then wire state to the store.
+- Added per-entity CRUD (`Put/Get/Delete/List`) and query helpers on the SQLite store. Equality
+  filters use SQLite `json_extract` (confirmed working with ncruces); date-range filters in Go via
+  `dateutil.InRange`. `Put` upserts via `ON CONFLICT`. Tests cover CRUD, missing-key, upsert, and
+  all queries.
+
+**Next:** CSV transaction export/import, then the Settings store accessor, then wire app state to
+the store. After §1.4, the §1.5 `log/slog` logging package.
 
 ## 2026-06-15 — Project kickoff & spec
 

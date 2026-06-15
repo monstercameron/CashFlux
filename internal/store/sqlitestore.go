@@ -68,24 +68,7 @@ func replaceRows[T any](tx *sql.Tx, table string, items []T, idOf func(T) string
 }
 
 func loadRows[T any](db *sql.DB, table string) ([]T, error) {
-	rows, err := db.Query("SELECT data FROM " + table + " ORDER BY id")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []T
-	for rows.Next() {
-		var data string
-		if err := rows.Scan(&data); err != nil {
-			return nil, err
-		}
-		var item T
-		if err := json.Unmarshal([]byte(data), &item); err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	return out, rows.Err()
+	return queryRows[T](db, "SELECT data FROM "+table+" ORDER BY id")
 }
 
 // Load replaces all stored data with the given dataset (clean ingress).
