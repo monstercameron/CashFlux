@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CashFlux</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --bg-elev: #121a2e;
+        --bg-card: #151f38;
+        --border: #243049;
+        --text: #e6ebf5;
+        --text-dim: #9aa7c2;
+        --text-faint: #6b7a99;
+        --accent: #4ade80;
+        --accent-dim: #16331f;
+        --brand: #38bdf8;
+        --danger: #f87171;
+        --radius: 14px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* Boot placeholder */
+      #boot {
+        position: fixed; inset: 0; display: grid; place-items: center;
+        color: var(--text-dim); transition: opacity 0.25s ease; z-index: 10;
+      }
+      #boot.hidden { opacity: 0; pointer-events: none; }
+      #boot .dot { animation: pulse 1.2s ease-in-out infinite; }
+      @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+      #boot-error {
+        display: none; position: fixed; inset: auto 1rem 1rem 1rem; z-index: 20;
+        background: #3b0d0d; color: #fecaca; border: 1px solid #7f1d1d;
+        padding: 0.75rem 1rem; border-radius: 8px; font-family: ui-monospace, monospace;
+        font-size: 0.8rem; white-space: pre-wrap;
+      }
+
+      /* App shell */
+      .app { min-height: 100vh; display: flex; flex-direction: column; }
+      .topbar {
+        position: sticky; top: 0; z-index: 5;
+        display: flex; align-items: center; gap: 1.25rem;
+        padding: 0.75rem 1.25rem; background: rgba(11,16,32,0.85);
+        backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+      }
+      .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 800; white-space: nowrap; }
+      .brand-mark {
+        display: grid; place-items: center; width: 1.6rem; height: 1.6rem;
+        background: var(--accent); color: #052e13; border-radius: 8px; font-weight: 900;
+      }
+      .brand-name { font-size: 1.05rem; letter-spacing: -0.01em; }
+      .nav { display: flex; gap: 0.25rem; flex-wrap: nowrap; }
+      .nav-link {
+        appearance: none; border: 0; background: transparent; color: var(--text-dim);
+        font: inherit; font-size: 0.9rem; padding: 0.4rem 0.7rem; border-radius: 8px;
+        cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s;
+      }
+      .nav-link:hover { background: var(--bg-elev); color: var(--text); }
+      .nav-link.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+
+      /* Page */
+      .page { width: 100%; max-width: 1040px; margin: 0 auto; padding: 1.75rem 1.25rem 4rem; }
+      .page-head { margin-bottom: 1.5rem; }
+      .page-title { margin: 0; font-size: 1.6rem; letter-spacing: -0.02em; }
+      .page-sub { margin: 0.25rem 0 0; color: var(--text-dim); }
+
+      /* Cards & bits */
+      .card {
+        background: var(--bg-card); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem;
+      }
+      .card-title { margin: 0 0 0.75rem; font-size: 1.05rem; }
+      .muted { color: var(--text-dim); margin: 0.25rem 0; }
+      .empty { color: var(--text-faint); font-style: italic; }
+      .badge {
+        display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
+        text-transform: uppercase; padding: 0.2rem 0.55rem; border-radius: 999px;
+      }
+      .badge-soon { background: #1e293b; color: #93c5fd; border: 1px solid #334155; }
+
+      .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+      .stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
+      .stat-label { color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+      .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; }
+      .stat-value.pos { color: var(--accent); }
+      .stat-value.neg { color: var(--danger); }
+    </style>
+  </head>
+  <body>
+    <div id="boot"><span>Loading CashFlux<span class="dot">…</span></span></div>
+    <div id="app"></div>
+    <div id="boot-error"></div>
+
+    <script src="./wasm_exec.js"></script>
+    <script>
+      (function () {
+        const boot = document.getElementById("boot");
+        const app = document.getElementById("app");
+        const errorBox = document.getElementById("boot-error");
+
+        if (app && typeof MutationObserver === "function") {
+          const obs = new MutationObserver(function () {
+            if (app.children.length > 0) { boot.classList.add("hidden"); obs.disconnect(); }
+          });
+          obs.observe(app, { childList: true });
+        }
+
+        if (typeof Go !== "function") {
+          errorBox.style.display = "block";
+          errorBox.textContent = "wasm_exec.js failed to load (Go runtime glue missing).";
+          return;
+        }
+
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("./bin/main.wasm"), go.importObject)
+          .then(function (result) { go.run(result.instance); })
+          .catch(function (err) {
+            errorBox.style.display = "block";
+            errorBox.textContent = "Failed to start CashFlux wasm app:\n" + String(err);
+            console.error(err);
+          });
+      })();
+    </script>
+  </body>
+</html>
