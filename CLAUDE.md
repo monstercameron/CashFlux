@@ -11,7 +11,8 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
 
 - **What:** local-first, household-aware budgeting *suite* (budgeting + planning + to-do + AI),
   Go → WebAssembly on GoWebComponents. AI = OpenAI, client-side, bring-your-own-key.
-- **Read these:** [`SPEC.md`](./SPEC.md) (product), this file (rules),
+- **Read these:** [`SPEC.md`](./SPEC.md) (product), [`TODOS.md`](./TODOS.md) (priority-ordered
+  backlog — what to build next), this file (rules),
   [`docs/GOWEBCOMPONENTS.md`](./docs/GOWEBCOMPONENTS.md) (framework API/patterns/gotchas),
   [`DEVLOG.md`](./DEVLOG.md) + [`CHANGELOG.md`](./CHANGELOG.md) (history/decisions).
 - **Toolchain (already installed):** Go 1.26.4, Git, GitHub CLI under
@@ -111,7 +112,7 @@ For every feature, in order:
 
 A feature is not "started" by drawing its screen. It is started by modelling its data and proving
 its logic with tests. The current routed shell + screen stubs are **navigational scaffolding only**;
-each stub is replaced strictly in the order above. See `TODO.md` (ordered by this exact priority).
+each stub is replaced strictly in the order above. See `TODOS.md` (ordered by this exact priority).
 
 ## UI & writing rules
 

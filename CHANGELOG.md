@@ -20,7 +20,7 @@ and every commit updates this file under `Unreleased`.
   new/other sessions.
 - Routed app shell (`internal/app`) with top navigation and stub screens for every feature
   (`internal/screens`).
-- Master feature backlog (`TODO.md`), ordered by implementation priority.
+- Master feature backlog (`TODOS.md`), ordered by implementation priority.
 
 - `internal/money`: precise integer-minor-unit `Money` value type with safe, currency-checked
   arithmetic (`Add`/`Sub`/`Neg`/`Abs`/`Cmp`/`Sum`) and table-driven tests (backlog §1.1).

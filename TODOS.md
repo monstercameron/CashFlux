@@ -37,9 +37,9 @@ with every commit; logic packages are pure Go (no `syscall/js`) and ship with ta
 - [ ] ★ `internal/domain`: core types — `Member`, `Account`, `Category`, `Transaction`, `Budget`, `Goal`, `Task`
 - [ ] ★ Enums/consts: account `class` (asset|liability), account `type` (checking/debit/savings/cash/credit_card/line_of_credit/loan/personal_loan/mortgage/investment/other), category `kind`
 - [ ] ★ Stable ID generation (`internal/id`) — deterministic, testable, collision-safe
-- [ ] ★ `internal/money`: integer minor-units `Money{Amount int64, Currency string}`; add/sub/neg/compare; never float
+- [x] ★ `internal/money`: integer minor-units `Money{Amount int64, Currency string}`; add/sub/neg/compare; never float
 - [ ] Money formatting/parsing per currency (symbol, decimals, grouping); locale-aware later
-- [ ] ★ `internal/currency`: currency registry (code, symbol, decimals) + FX rate table type
+- [~] ★ `internal/currency`: currency registry (code, symbol, decimals) + FX rate table type — NEXT
 - [ ] ★ FX conversion to base currency; missing-rate handling; tests for rounding
 - [ ] Account balance computation from opening balance + transactions
 - [ ] Net worth (assets − liabilities), per-member and group rollups
