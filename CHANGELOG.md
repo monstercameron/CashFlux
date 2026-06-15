@@ -39,6 +39,8 @@ and every commit updates this file under `Unreleased`.
   base conversion + tests.
 - `internal/budgeting`: scope-aware `Spent` (individual vs group), `Evaluate`/`EvaluateAll` with
   remaining, percent, and ok/near/over `State` thresholds — multi-currency + tests.
+- `internal/goals`: goal `Remaining`, `Percent` (clamped), `IsComplete`, and `Project` (read-only
+  completion estimate from an assumed monthly contribution) via `Evaluate` + tests.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.

@@ -41,8 +41,12 @@ problems and fixes, and what's next.
   percent, and ok/near/over `State` (default near threshold 80%). Handles multi-currency and
   zero-limit edge cases. Tests cover scope, currency conversion, and all three states.
 
-**Next:** `internal/goals` (progress %, remaining, projected completion), then `internal/freshness`
-(staleness windows), then `internal/validate` — each with tests.
+- Added `internal/goals`: `Remaining` (never negative), `Percent` (0..100 clamped), `IsComplete`,
+  and `Project` (ceil-months estimate from an assumed monthly contribution; already-complete goals
+  project to `from`; non-positive contribution yields no projection) via `Evaluate`. Tested.
+
+**Next:** `internal/freshness` (per-type staleness windows + `IsStale`, recurring-bill exemption),
+then `internal/validate` (per-entity validation) — each with tests.
 
 ## 2026-06-15 — Project kickoff & spec
 
