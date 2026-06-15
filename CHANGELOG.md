@@ -26,6 +26,8 @@ and every commit updates this file under `Unreleased`.
   arithmetic (`Add`/`Sub`/`Neg`/`Abs`/`Cmp`/`Sum`) and table-driven tests (backlog §1.1).
 - `internal/currency`: currency registry (code/symbol/decimals/name) + manual `Rates` table with
   base-currency `Convert`/`ToBase` (cross-currency, mixed decimals, nearest-minor rounding) + tests.
+- `internal/id`: collision-resistant 128-bit hex ID generator (optional prefix; seedable source for
+  deterministic tests) + tests.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.

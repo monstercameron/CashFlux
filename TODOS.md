@@ -62,7 +62,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### 1.3 Pure logic services — ★ (each in its own `internal/*` pkg, table-driven tests)
 
-- [ ] ★ `internal/id`: stable, collision-safe ID generation (seedable for tests)
+- [x] ★ `internal/id`: stable, collision-safe ID generation (seedable for tests)
 - [ ] `internal/dateutil`: month boundaries, fiscal-month start, week-start, period ranges
 - [ ] ★ `internal/ledger`: account balance from opening balance + transactions
 - [ ] `internal/ledger`: running balance series for an account

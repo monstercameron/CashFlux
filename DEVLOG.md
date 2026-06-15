@@ -17,8 +17,14 @@ problems and fixes, and what's next.
   float-stable rounding cases and the conversion rounds to the nearest minor unit.
 - Expanded `TODOS.md` to a granular per-entity/service/screen backlog (full spec coverage).
 
-**Next:** `internal/id` + `internal/dateutil`, then `internal/domain` core types, then the
-`internal/ledger` balance/net-worth/rollup services — all with tests, before any feature UI.
+- Added `internal/id`: 128-bit hex IDs via crypto/rand, optional prefix, seedable source for
+  deterministic tests. (Test helper lesson: a single-byte counter wraps at 256 and collides — the
+  uniqueness test now uses real crypto/rand.)
+- Running as a self-paced `/loop`: one feature per iteration, granular commit + CHANGELOG each, with
+  a ~1-minute cooldown between features.
+
+**Next:** `internal/dateutil` (period/month/week helpers), then `internal/domain` core types, then
+`internal/ledger` (balances, net worth, rollups) — all with tests, before any feature UI.
 
 ## 2026-06-15 — Project kickoff & spec
 
