@@ -26,8 +26,13 @@ problems and fixes, and what's next.
 - Added `internal/dateutil`: canonical date parse/format, month/week/fiscal-month ranges,
   half-open `InRange`, and DST-safe `DaysBetween` (computed via UTC calendar dates).
 
-**Next:** `internal/domain` core types (Member, Account, Category, Transaction, Budget, Goal, Task +
-enums), then `internal/ledger` (balances, net worth, rollups) — all with tests, before any UI.
+- Added `internal/domain`: all core entity types with custom-field maps and JSON tags, plus
+  validated enums (`Valid()`/`String()`/`All*`), `AccountType.Class()`/`IsLiability()`, and
+  `Transaction.IsTransfer/IsIncome/IsExpense`. Scope uses individual|shared (shared == group-level,
+  owner `GroupOwnerID`). Tests cover enum validity, class mapping, and transaction classification.
+
+**Next:** `internal/ledger` (account balance from opening + transactions, running balance,
+income/expense totals excluding transfers, net worth, per-member/group rollups) with tests.
 
 ## 2026-06-15 — Project kickoff & spec
 

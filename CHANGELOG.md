@@ -30,6 +30,10 @@ and every commit updates this file under `Unreleased`.
   deterministic tests) + tests.
 - `internal/dateutil`: canonical date parsing/formatting plus month, week, and fiscal-month range
   helpers, `InRange`, and DST-safe `DaysBetween` + tests.
+- `internal/domain`: core entity types (`Member`, `Account` incl. liability + allocation fields,
+  `Category`, `Transaction`, `Budget`, `Goal`, `Task`) with custom-field maps, plus validated
+  enumerations (`AccountClass`/`AccountType`/`CategoryKind`/`Scope`/`Period`/`TaskStatus`/
+  `TaskPriority`/`RelatedType`/`TaskSource`), `AccountType.Class()`, transaction classification, and tests.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.

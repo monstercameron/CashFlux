@@ -36,19 +36,19 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### 1.1 Domain types — `internal/domain` ★ (pure, no build tags)
 
-- [ ] ★ `Member{ID, Name, Color, IsDefault}`
-- [ ] ★ `Account` core fields: `ID, Name, OwnerID, Scope(individual|shared), Class(asset|liability), Type, Currency, OpeningBalance, BalanceAsOf, Archived`
-- [ ] ★ Account liability fields: `CreditLimit, InterestRateAPR, MinPayment, DueDayOfMonth, Lender`
-- [ ] ★ Account allocation fields: `ExpectedReturnAPR, LiquidityScore, StabilityScore, LockUntil`
-- [ ] ★ `Category{ID, Name, Kind(income|expense), Color, ParentID}`
-- [ ] ★ `Transaction{ID, AccountID, Date, Payee, Desc, CategoryID, Amount(Money), TransferAccountID, Cleared, Tags, MemberID, SourceDocID}`
-- [ ] ★ `Budget{ID, Name, Scope(individual|group), OwnerID, CategoryID, Period(monthly), Limit(Money)}`
-- [ ] ★ `Goal{ID, Name, Scope, OwnerID, TargetAmount, CurrentAmount, TargetDate, AccountID}`
-- [ ] ★ `Task{ID, Title, Notes, Due, Status(open|done), Priority(low|med|high), RelatedType, RelatedID, MemberID, Source(manual|ai|nudge)}`
-- [ ] Enums + `Valid()`/`String()` for `AccountClass`, `AccountType`, `CategoryKind`, `Scope`, `TaskStatus`, `TaskPriority`, `RelatedType`
-- [ ] `custom map[string]any` field on every entity (for custom fields)
-- [ ] Doc comments on every exported type/field; package doc
-- [ ] Unit tests: enum `Valid()`/`String()`, zero-value sanity
+- [x] ★ `Member{ID, Name, Color, IsDefault}`
+- [x] ★ `Account` core fields: `ID, Name, OwnerID, Scope(individual|shared), Class(asset|liability), Type, Currency, OpeningBalance, BalanceAsOf, Archived`
+- [x] ★ Account liability fields: `CreditLimit, InterestRateAPR, MinPayment, DueDayOfMonth, Lender`
+- [x] ★ Account allocation fields: `ExpectedReturnAPR, LiquidityScore, StabilityScore, LockUntil`
+- [x] ★ `Category{ID, Name, Kind(income|expense), Color, ParentID}`
+- [x] ★ `Transaction{ID, AccountID, Date, Payee, Desc, CategoryID, Amount(Money), TransferAccountID, Cleared, Tags, MemberID, SourceDocID}`
+- [x] ★ `Budget{ID, Name, Scope(individual|group), OwnerID, CategoryID, Period(monthly), Limit(Money)}`
+- [x] ★ `Goal{ID, Name, Scope, OwnerID, TargetAmount, CurrentAmount, TargetDate, AccountID}`
+- [x] ★ `Task{ID, Title, Notes, Due, Status(open|done), Priority(low|med|high), RelatedType, RelatedID, MemberID, Source(manual|ai|nudge)}`
+- [x] Enums + `Valid()`/`String()` for `AccountClass`, `AccountType`, `CategoryKind`, `Scope`, `TaskStatus`, `TaskPriority`, `RelatedType`
+- [x] `custom map[string]any` field on every entity (for custom fields)
+- [x] Doc comments on every exported type/field; package doc
+- [x] Unit tests: enum `Valid()`/`String()`, zero-value sanity
 
 ### 1.2 Money & currency — ★
 
