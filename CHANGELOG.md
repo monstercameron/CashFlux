@@ -24,8 +24,11 @@ and every commit updates this file under `Unreleased`.
 
 - `internal/money`: precise integer-minor-unit `Money` value type with safe, currency-checked
   arithmetic (`Add`/`Sub`/`Neg`/`Abs`/`Cmp`/`Sum`) and table-driven tests (backlog §1.1).
+- `internal/currency`: currency registry (code/symbol/decimals/name) + manual `Rates` table with
+  base-currency `Convert`/`ToBase` (cross-currency, mixed decimals, nearest-minor rounding) + tests.
 
 ### Changed
+- Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.
 - Serve web assets from `web/` (clean project root); restyled host page with a dark theme.
 - Require bottom-up SDLC build order in `CLAUDE.md` (data model → services/logic with tests →
   persistence → state → UI last).

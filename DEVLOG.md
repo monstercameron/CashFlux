@@ -11,8 +11,14 @@ problems and fixes, and what's next.
   tests pass on native Go (`go test ./internal/money`).
 - Renamed the master backlog to `TODOS.md` (project-wide tracking list).
 
-**Next:** `internal/currency` (registry + FX table + base-currency conversion) with tests, then
-`internal/domain` core types.
+- Added `internal/currency`: registry + manual `Rates` table + `Convert`/`ToBase` (cross-currency
+  via base, mixed decimals, nearest-minor rounding). A rounding test surfaced a good lesson —
+  `1.005` as float64 is `1.00499…`, so exact half-cents aren't representable; tests now use
+  float-stable rounding cases and the conversion rounds to the nearest minor unit.
+- Expanded `TODOS.md` to a granular per-entity/service/screen backlog (full spec coverage).
+
+**Next:** `internal/id` + `internal/dateutil`, then `internal/domain` core types, then the
+`internal/ledger` balance/net-worth/rollup services — all with tests, before any feature UI.
 
 ## 2026-06-15 — Project kickoff & spec
 
