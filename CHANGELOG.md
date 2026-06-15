@@ -34,6 +34,9 @@ and every commit updates this file under `Unreleased`.
   `Category`, `Transaction`, `Budget`, `Goal`, `Task`) with custom-field maps, plus validated
   enumerations (`AccountClass`/`AccountType`/`CategoryKind`/`Scope`/`Period`/`TaskStatus`/
   `TaskPriority`/`RelatedType`/`TaskSource`), `AccountType.Class()`, transaction classification, and tests.
+- `internal/ledger`: account `Balance`/`RunningBalances`, period income/expense totals (transfers
+  excluded), `NetWorth` (assets − liabilities), and per-owner net rollups — all multi-currency via
+  base conversion + tests.
 
 ### Changed
 - Expanded `TODOS.md` into a granular, per-entity/service/screen backlog covering the full spec.

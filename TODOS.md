@@ -64,11 +64,11 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 - [x] ★ `internal/id`: stable, collision-safe ID generation (seedable for tests)
 - [x] `internal/dateutil`: month boundaries, fiscal-month start, week-start, period ranges
-- [ ] ★ `internal/ledger`: account balance from opening balance + transactions
-- [ ] `internal/ledger`: running balance series for an account
-- [ ] `internal/ledger`: income/expense totals for a period (exclude transfers)
-- [ ] `internal/ledger`: net worth (assets − liabilities) with multi-currency → base
-- [ ] `internal/ledger`: per-member and group rollups
+- [x] ★ `internal/ledger`: account balance from opening balance + transactions
+- [x] `internal/ledger`: running balance series for an account
+- [x] `internal/ledger`: income/expense totals for a period (exclude transfers)
+- [x] `internal/ledger`: net worth (assets − liabilities) with multi-currency → base
+- [x] `internal/ledger`: per-member and group rollups
 - [ ] `internal/budgeting`: spent vs limit per budget (individual + group scope)
 - [ ] `internal/budgeting`: near/over-limit threshold evaluation
 - [ ] `internal/goals`: progress %, remaining, projected completion (read-only estimate)

@@ -31,8 +31,13 @@ problems and fixes, and what's next.
   `Transaction.IsTransfer/IsIncome/IsExpense`. Scope uses individual|shared (shared == group-level,
   owner `GroupOwnerID`). Tests cover enum validity, class mapping, and transaction classification.
 
-**Next:** `internal/ledger` (account balance from opening + transactions, running balance,
-income/expense totals excluding transfers, net worth, per-member/group rollups) with tests.
+- Added `internal/ledger`: `Balance`, `RunningBalances`, `PeriodTotals` (income/expense, transfers
+  excluded, base-converted), `NetWorth` (assets − liabilities, liabilities reported positive), and
+  `NetByOwner` rollups. All cross-currency math routes through the `currency.Rates` base. Tests cover
+  mixed currencies, transfers, archived accounts, and currency-mismatch errors.
+
+**Next:** `internal/budgeting` (spent vs limit per budget, near/over-limit thresholds), then
+`internal/goals` (progress, projection), then `internal/freshness` — each with tests.
 
 ## 2026-06-15 — Project kickoff & spec
 
