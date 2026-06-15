@@ -78,6 +78,8 @@ and every commit updates this file under `Unreleased`.
   feature. Added row/form/amount styles to the host page.
 - Accounts per-row delete via an `AccountRow` component (stable `On*` hook) with `MapKeyed` keyed
   rendering; deleting refreshes the screen and net-worth summary.
+- Transactions screen: add income/expense (account-aware currency, category/date), newest-first
+  list, and per-row delete (`TransactionRow`), all with validated write-through and reactive refresh.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

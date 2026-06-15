@@ -56,11 +56,6 @@ func stat(label, value, accent string) ui.Node {
 	)
 }
 
-// Transactions is the global ledger.
-func Transactions() ui.Node {
-	return stub(1, "The global ledger: add, edit, and delete income, expenses, and transfers, with filters by member, account, category, date, and text.")
-}
-
 // Budgets covers individual and group limits.
 func Budgets() ui.Node {
 	return stub(1, "Set individual (per member) and group budgets, and track spent vs. remaining with clear progress and gentle alerts.")

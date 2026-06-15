@@ -157,9 +157,9 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### 1.11 Transactions (+ transfers, filters) ★
 
-- [ ] ★ Ledger list (newest first), virtualized for large sets
-- [ ] ★ Add transaction (desc, amount, income/expense, category, account, date, member)
-- [ ] ★ Edit + delete transaction (confirm)
+- [x] ★ Ledger list (newest first); virtualization for large sets later
+- [x] ★ Add transaction (desc, amount, income/expense, category, account, date, member)
+- [~] ★ Delete transaction done (per-row component); edit + confirm later
 - [ ] ★ Transfers between accounts (paired entries; excluded from income/expense)
 - [ ] Tags input + tag display
 - [ ] Filters: member, account, category, date range, text; combine + clear; persist last filter

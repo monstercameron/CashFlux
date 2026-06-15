@@ -123,8 +123,13 @@ goals, freshness, validate, store).
   `appstate.DeleteAccount` and bumps the revision. This is the canonical per-row pattern for the
   whole app. (Note: deleting an account currently leaves its transactions; cascade/cleanup later.)
 
-**Next:** the **Transactions** screen — list (newest first) + add form (income/expense/transfer) +
-delete, reusing the add-form + per-row-component + revision patterns.
+- Built the **Transactions** screen: add form (description, amount, income/expense, account,
+  category, date) where the amount's currency follows the chosen account and expenses are stored
+  negative; newest-first list; per-row delete via `TransactionRow`. Member is inferred from the
+  account's owner for individual accounts. Same reactive-revision pattern.
+
+**Next:** account-to-account **transfers** (paired legs, excluded from income/expense), then the
+**Budgets** screen (list with spent vs limit via `internal/budgeting`).
 
 ## 2026-06-15 — Project kickoff & spec
 
