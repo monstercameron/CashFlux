@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Goals: editable owner
+
+- Added the owner picker to the goal inline editor too, reusing `ownerSelectOptions`. `saveGoal`
+  gained an owner param and sets `OwnerID`/`Scope` the same way as budgets. Budgets and goals now
+  both allow post-creation ownership changes inline.
+- **Next.** Account owner edit to finish uniform ownership editing, then the local feature set is
+  effectively complete.
+
 ## 2026-06-16 — Budgets: editable owner
 
 - You could set a budget's owner at creation and reassign it only by deleting a member; now the

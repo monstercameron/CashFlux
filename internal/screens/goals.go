@@ -114,7 +114,7 @@ func Goals() ui.Node {
 		bump()
 	}
 
-	saveGoal := func(id, newName, targetStr, dateStr, accountID string) {
+	saveGoal := func(id, newName, targetStr, dateStr, accountID, ownerID string) {
 		for _, g := range app.Goals() {
 			if g.ID != id {
 				continue
@@ -123,6 +123,12 @@ func Goals() ui.Node {
 				g.Name = n
 			}
 			g.AccountID = accountID
+			g.OwnerID = ownerID
+			if ownerID == domain.GroupOwnerID {
+				g.Scope = domain.ScopeShared
+			} else {
+				g.Scope = domain.ScopeIndividual
+			}
 			cur := g.TargetAmount.Currency
 			if cur == "" {
 				cur = base
@@ -211,7 +217,7 @@ func Goals() ui.Node {
 		rows := MapKeyed(goals,
 			func(g domain.Goal) any { return g.ID },
 			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal})
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: app.Members(), OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal})
 			},
 		)
 		listBody = Div(rows)
@@ -229,9 +235,10 @@ func Goals() ui.Node {
 type goalRowProps struct {
 	Goal         domain.Goal
 	Accounts     []domain.Account
+	Members      []domain.Member
 	OnDelete     func(string)
 	OnContribute func(domain.Goal, string)
-	OnSave       func(id, name, target, date, accountID string)
+	OnSave       func(id, name, target, date, accountID, owner string)
 }
 
 // goalAccountOptions builds the linked-account <option>s for a goal, with a
@@ -277,20 +284,23 @@ func GoalRow(props goalRowProps) ui.Node {
 	targetS := ui.UseState(targetMajor)
 	dateS := ui.UseState(dateISO)
 	acctS := ui.UseState(g.AccountID)
+	ownerS := ui.UseState(g.OwnerID)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onTarget := ui.UseEvent(func(v string) { targetS.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
 	onAcct := ui.UseEvent(func(e ui.Event) { acctS.Set(e.GetValue()) })
+	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(g.Name)
 		targetS.Set(targetMajor)
 		dateS.Set(dateISO)
 		acctS.Set(g.AccountID)
+		ownerS.Set(g.OwnerID)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(g.ID, nameS.Get(), targetS.Get(), dateS.Get(), acctS.Get())
+		props.OnSave(g.ID, nameS.Get(), targetS.Get(), dateS.Get(), acctS.Get(), ownerS.Get())
 		editing.Set(false)
 	}))
 
@@ -300,6 +310,7 @@ func GoalRow(props goalRowProps) ui.Node {
 				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
 				Input(Class("field"), Type("number"), Placeholder("Target"), Value(targetS.Get()), Step("0.01"), OnInput(onTarget)),
 				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
+				Select(Class("field"), Title("Owner"), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
 				Select(Class("field"), Title("Linked account"), OnChange(onAcct), goalAccountOptions(props.Accounts, acctS.Get())),
 				Button(Class("btn btn-primary"), Type("submit"), "Save"),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
