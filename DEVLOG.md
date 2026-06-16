@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Designed Lucide (B13) + D3 (B14) integrations (planning)
+
+- User: integrate Lucide (glyphs) and D3 (charts) with strong Go interfaces. Per planning mode, logged
+  the designs as B13/B14 rather than building.
+- **B13 Lucide:** the existing `ui.Icon(name string)` already emits 24×24 stroked currentColor SVGs —
+  Lucide's exact format — so it's a clean swap. Proposed a type-safe `internal/icon` (`Name` constants
+  → embedded Lucide path data, compile-checked), with a build-time generator to pull the curated set.
+  Flagged embed-at-build (recommended, offline/vdom-safe) vs. CDN createIcons (fragile).
+- **B14 D3:** proposed a pure, typed `chartspec.Spec` (Kind/Series/Axis + Validate + extent helpers)
+  with `ui.Chart(spec)` driving D3 through a ref/portal + UseEffect (since D3 mutates the DOM and the
+  framework owns a vdom), D3 pinned via CDN and SW-cached for offline. Flagged the real decision: adopt
+  the heavy D3 dep vs. keep growing the working pure-Go SVG charts — needs the user's call before build.
+- Both interfaces sketched in TODOS so the "strong Go interfaces" ask is answered at design level.
+
 ## 2026-06-16 — Switch pushes to gh; pause widget-settings wiring → B12
 
 - User: use the `gh` CLI for pushing (more reliable), and go back to TODO-planning mode.

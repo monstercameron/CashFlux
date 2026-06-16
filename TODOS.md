@@ -304,6 +304,81 @@ cleanest path is to **reuse that mechanism** rather than build a parallel overla
 - _Decision to confirm:_ what "custom workflows" means here — map to the existing Customize screen
   (custom fields + formula builder), or a new "workflow" concept? Need scope before building that card.
 
+### B13. Integrate Lucide icons behind a strong Go interface ★
+
+**Goal:** replace the hand-rolled icon set with [Lucide](https://lucide.dev) glyphs, exposed through a
+**type-safe** Go API (no stringly-typed names).
+**Current:** `internal/ui.Icon(name string, …)` switches on a string and emits inline 24×24 stroked
+`currentColor` SVGs — already Lucide's exact format, so this is a clean swap, not a rewrite.
+**Proposed strong Go interface (pure `internal/icon`):**
+```go
+package icon
+// Name is a Lucide icon id; only the constants below are valid (compile-checked).
+type Name string
+const (
+    Dashboard    Name = "layout-dashboard"
+    Wallet       Name = "wallet"
+    Transactions Name = "arrow-left-right"
+    TrendingUp   Name = "trending-up"
+    // … the curated set the app actually uses
+)
+// Inner returns the icon's inner SVG markup (Lucide path data); "" if unknown.
+func (n Name) Inner() string
+func (n Name) Valid() bool
+```
+Then `internal/ui.Icon(n icon.Name, extra ...PropOption) ui.Node` renders Lucide's paths with the
+existing viewBox/stroke/currentColor defaults (size + tint still via caller classes).
+**Approach decision (flag before building):**
+  - **Embed at build time (recommended):** a small generator pulls the curated icons' SVG path data
+    from the Lucide package into a generated Go file (`internal/icon/icons_gen.go`). No runtime JS
+    dependency → robust with the vdom and works offline (PWA). Re-run to add icons.
+  - *vs.* CDN + `lucide.createIcons()` rewriting `<i data-lucide>` — simpler but fights the framework's
+    vdom and needs network; **not** recommended for this wasm/offline app.
+**Bottom-up plan:**
+- [ ] `internal/icon`: `Name` + curated constants + embedded Lucide path data; `Inner`/`Valid`; tests
+      (every constant resolves to non-empty data; `Valid` correct). Pure, no `syscall/js`.
+- [ ] Generator/script to fetch Lucide SVGs for the set and write the Go file (documented, repeatable).
+- [ ] Rewire `ui.Icon` to take `icon.Name`; migrate call sites (sidebar nav string names → Lucide ids).
+- [ ] Verify: all existing icons render identically/closely; unknown-name path is gone (compile-checked).
+
+### B14. Integrate D3 charting behind a strong Go interface ★
+
+**Goal:** richer, interactive charts via [D3](https://d3js.org), exposed through a **declarative,
+typed** Go spec — the Go side describes a chart; the D3/JS is hidden.
+**Current:** charts are pure-Go SVG (`ui.AreaChart` + the `chart` helper) — works, but limited (no
+axes/ticks/tooltips/transitions).
+**Proposed strong Go interface:**
+```go
+// Pure, testable spec — no syscall/js (internal/chartspec).
+package chartspec
+type Kind string
+const ( Line Kind = "line"; Area Kind = "area"; Bar Kind = "bar"; Donut Kind = "donut" )
+type Point  struct { X, Y float64; Label string }
+type Series struct { Name, Color string; Points []Point }
+type Axis   struct { Label, Format string }
+type Spec   struct { Kind Kind; Series []Series; X, Y Axis; Stacked, Legend bool }
+func (s Spec) Validate() error
+func (s Spec) Extent() (minX, maxX, minY, maxY float64) // pure scale helpers, tested
+```
+Then `internal/ui.Chart(spec chartspec.Spec, extra ...PropOption) ui.Node` renders it via D3.
+**Integration approach (the hard part — D3 mutates the DOM, the framework owns a vdom):**
+  - Render a **managed container** the framework creates but doesn't draw into; in a `UseEffect` keyed
+    on a hash of the spec, call a thin JS shim `cashfluxRenderChart(el, specJSON)` that runs D3 to draw
+    into it; redraw on spec change; clean up on unmount (the ref/portal pattern).
+  - Load D3 via a pinned CDN `<script>` in `index.html`; **add it to the service-worker `CORE` cache**
+    so charts work offline (PWA).
+**Decision to confirm (significant):** D3 is a large dependency and the pure-Go SVG charts already
+work. Adopt D3 for the richer/interactive charts (accepting the JS dep + offline caching + the
+vdom-portal complexity), **or** keep growing the pure-Go SVG helpers (no dep, fully testable)? If D3:
+which chart kinds first (line/area/bar/donut)?
+**Bottom-up plan (assuming D3 is approved):**
+- [ ] `internal/chartspec`: the typed spec + `Validate` + scale/extent helpers; table tests. Pure.
+- [ ] JS shim (`web/`) `cashfluxRenderChart(el, specJSON)` building each Kind with D3; pin D3 version;
+      SW-cache it.
+- [ ] `ui.Chart`: managed container + effect that drives the shim; cleanup; theme-aware (reads CSS vars).
+- [ ] Migrate one widget (e.g. net-worth trend) to `ui.Chart` as the proof; keep others until parity.
+- [ ] Verify: chart renders + updates on data change, survives hot-reload, works offline, matches theme.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)
