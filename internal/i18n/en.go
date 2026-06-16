@@ -188,6 +188,15 @@ var english = Catalog{
 	"documents.noDescription":       "(no description)",
 	"documents.editRow":             "Edit this row",
 	"documents.removeRow":           "Remove this row",
+	"documents.historyTitle":        "Import history",
+	"documents.historyEmpty":        "No imports yet. Import a CSV or an image above to start a history.",
+	"documents.deleteHistTitle":     "Remove this from history",
+	"documents.kindCsv":             "CSV",
+	"documents.kindImage":           "Image",
+	"documents.statusPending":       "Pending",
+	"documents.statusExtracted":     "Extracted",
+	"documents.statusImported":      "Imported",
+	"documents.statusFailed":        "Failed",
 
 	// Allocate screen
 	"allocate.exclude":            "Exclude",

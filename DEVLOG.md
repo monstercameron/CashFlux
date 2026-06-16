@@ -26,6 +26,16 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — documents import-history list UI
+
+- Added an "Import history" card to the Documents screen: `app.Documents()` sorted newest-first,
+  rendered as `DocHistoryRow` components (own delete handler) showing kind · date · status · row count
+  · account, each removable via `app.DeleteDocument`. Empty state when there's nothing yet.
+- Localized kind/status via `docKindLabel`/`docStatusLabel` helpers + new `documents.kind*`/`status*`
+  keys; date stays a display-format literal (consistent with the app's other date examples).
+- This closes the §2.2 Document lifecycle end-to-end: model → persistence → recorded on import →
+  visible/auditable history. Catalog + wasm green.
+
 ## 2026-06-16 — record Documents on import
 
 - Wired the Document model into the Documents screen: both import paths now call a `recordDocument`

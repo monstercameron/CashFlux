@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"sort"
 	"strings"
 	"syscall/js"
 	"time"
@@ -240,6 +241,30 @@ func Documents() ui.Node {
 		)
 	}
 
+	// Import history: every recorded document, newest first.
+	deleteDoc := func(docID string) {
+		_ = app.DeleteDocument(docID)
+		rev.Set(rev.Get() + 1)
+	}
+	docs := app.Documents()
+	sort.Slice(docs, func(i, j int) bool { return docs[i].UploadedAt.After(docs[j].UploadedAt) })
+	historyCard := Section(Class("card"),
+		H2(Class("card-title"), uistate.T("documents.historyTitle")),
+		IfElse(len(docs) == 0,
+			P(Class("empty"), uistate.T("documents.historyEmpty")),
+			Div(Class("rows"), MapKeyed(docs,
+				func(d domain.Document) any { return d.ID },
+				func(d domain.Document) ui.Node {
+					name := ""
+					if a, ok := accByIDFrom(accounts, d.AccountID); ok {
+						name = a.Name
+					}
+					return ui.CreateElement(DocHistoryRow, docHistoryRowProps{Doc: d, AccountName: name, OnDelete: deleteDoc})
+				},
+			)),
+		),
+	)
+
 	return Div(
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("documents.imageTitle")),
@@ -266,6 +291,7 @@ func Documents() ui.Node {
 			),
 			If(msg.Get() != "", P(Class("muted"), msg.Get())),
 		),
+		historyCard,
 	)
 }
 
@@ -332,6 +358,55 @@ func DraftRow(props draftRowProps) ui.Node {
 		Button(Class("btn"), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uistate.T("action.edit")),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("documents.removeRow")), OnClick(rm), "✕"),
 	)
+}
+
+type docHistoryRowProps struct {
+	Doc         domain.Document
+	AccountName string
+	OnDelete    func(string)
+}
+
+// DocHistoryRow renders one recorded import in the history list, with a remove
+// button. It owns its own click handler (per the no-hooks-in-loops rule).
+func DocHistoryRow(props docHistoryRowProps) ui.Node {
+	d := props.Doc
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(d.ID) }))
+	meta := docKindLabel(d.Kind) + " · " + d.UploadedAt.Format("Jan 2, 2006") + " · " + docStatusLabel(d.Status)
+	if len(d.Extracted) > 0 {
+		meta += " · " + plural(len(d.Extracted), "row")
+	}
+	if props.AccountName != "" {
+		meta += " · " + props.AccountName
+	}
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), firstNonEmpty(d.Filename, docKindLabel(d.Kind))),
+			Span(Class("row-meta"), meta),
+		),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("documents.deleteHistTitle")), OnClick(del), "✕"),
+	)
+}
+
+// docKindLabel localizes a document kind.
+func docKindLabel(k domain.DocumentKind) string {
+	if k == domain.DocImage {
+		return uistate.T("documents.kindImage")
+	}
+	return uistate.T("documents.kindCsv")
+}
+
+// docStatusLabel localizes a document status.
+func docStatusLabel(s domain.DocumentStatus) string {
+	switch s {
+	case domain.DocPending:
+		return uistate.T("documents.statusPending")
+	case domain.DocExtracted:
+		return uistate.T("documents.statusExtracted")
+	case domain.DocFailed:
+		return uistate.T("documents.statusFailed")
+	default:
+		return uistate.T("documents.statusImported")
+	}
 }
 
 // toDocumentRows maps reviewed extract rows to the persisted document-row shape.

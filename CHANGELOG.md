@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Documents screen now has an **Import history** card listing every recorded import (newest
+  first) — kind, date, status, row count, and target account — each removable. Completes the document
+  lifecycle: import → recorded → reviewable/auditable.
 - Importing transactions (CSV paste or receipt/statement image) now records a **Document** in the
   history — kind, time, target account, status, and (for image imports) the rows read — so every
   import leaves an auditable trail. Recorded best-effort, only when at least one transaction lands.
