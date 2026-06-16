@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Docs: status refresh
+
+- The CLAUDE.md "Status" bullet had drifted badly — it still listed custom-field defs, document
+  vision AI, and reload-persistent prefs as *remaining*, all of which shipped many commits ago.
+  Rewrote it to reflect reality: Phases 1–2 essentially complete, every entity add/edit/delete, the
+  full pure-package roster (now ~21 packages), and the headline features per screen. Multi-device
+  sync is called out as the only major remaining item (needs a hosted backend, out of scope here).
+- Keeps the new-session quick-reference accurate so a future session doesn't re-implement done work
+  or mis-scope what's left. TODOS.md remains the granular checklist.
+- **Next.** Genuine small polish only; the local feature set is comprehensive.
+
 ## 2026-06-16 — Members → ledger drill-down
 
 - Added a "Transactions" button to each member row that sets the persisted `TxFilter.Member` and

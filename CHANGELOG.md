@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Docs
+- Refreshed the CLAUDE.md status section to reflect the now-comprehensive feature set (full
+  CRUD/inline-edit, reconciliation, sub-categories, budget periods, preferences/themes, document
+  vision import, allocation split, AI insight/nudge → tasks); multi-device sync noted as the sole
+  remaining major item.
+
 ### Changed
 - The sidebar now hides screens switched off via module visibility: the primary nav (Accounts,
   Transactions, Budgets, Goals, To-do) and the System items (Members, Categories) are filtered by the

@@ -24,17 +24,23 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
 - **Entry point:** `main.go` (currently a Phase 0 smoke shell). App is mounted via the `router`.
 - **Top gotcha:** never call `On*` prop options inside a variable-length loop — wrap per-row
   interactive elements in their own component (see framework notes §"CRITICAL gotchas").
-- **Status:** Phases 1–3 substantially built. **Phase 1 complete**: pure tested logic
-  (`money`/`currency`/`ledger`/`budgeting`/`goals`/`freshness`/`validate`/`dateutil`/`id`), SQLite
-  store + JSON/CSV import-export, `appstate` seam, the **candidate-C bento UI** (reconfigurable +
-  `localStorage`-persistent), and all screens (Accounts incl. liability sub-form/archive/stale,
-  Transactions incl. transfers/filters/sort/tags/repeat, Budgets, Goals, To-do, Members, Categories,
-  Settings w/ log viewer). **Phase 2**: tested engines `payoff`/`allocate`/`forecast`/`formula`(lexer
-  +parser+evaluator)/`rules`/`ai`(codec+fetch) behind live screens (Planning w/ payoff + forecast
-  what-ifs, Allocate w/ ranking + AI narrative, Customize formula calculator, Documents CSV import,
-  Insights "explain my month" + NL Q&A). **Phase 3 (PWA)**: manifest + offline service worker +
-  install prompt; GitHub Actions CI. Remaining: sync server/client (Phase 3), custom-field defs,
-  document vision AI, reload-persistent prefs. See `TODOS.md` for the live checklist.
+- **Status:** Phases 1–2 essentially complete; Phase 3 = PWA done, multi-device sync is the only
+  major item left (needs a hosted backend — out of scope for the local build). Pure tested logic
+  packages: `money`/`currency`/`ledger`(+cleared balance)/`budgeting`(+weekly/quarterly
+  `PeriodRange`)/`goals`(+`MonthlyNeeded`)/`freshness`/`validate`/`dateutil`/`id`/`payoff`/`allocate`
+  (+`Constraints`/`RankWith`/`Distribute`)/`forecast`/`formula`/`rules`/`ai`(chat+vision codec)/
+  `customfields`/`prefs`/`modules`/`categorytree`/`extract`. SQLite store + JSON/CSV import-export,
+  `appstate` seam, candidate-C bento UI (reconfigurable + `localStorage`). **Every entity supports
+  add / inline-edit / delete**; categories & members have reassign-on-delete. Highlights: transactions
+  (transfers, filters incl. cleared + persisted, sort, tags, repeat, duplicate, bulk
+  delete/recategorize/clear, CSV export, inline edit); accounts (liability + allocation sub-forms,
+  archive, stale + Mark-all-updated, update-balance reconcile, lock-until, → ledger drill-down);
+  budgets (periods + owner edit); goals (pace + linked account + owner); sub-categories (tree +
+  rollup); custom fields (defs + per-entity forms); preferences (week-start/date-format/theme(light
+  +dark)/accent/density, reload-persistent); module-visibility toggles; Planning, Allocate (rank +
+  exclude + amount split + AI), Customize (formula), Documents (CSV + **vision image import** w/
+  review+dedupe), Insights (explain + Q&A + save-as-task), freshness nudge → task. **Phase 3 (PWA)**:
+  manifest + offline SW + install prompt; GitHub Actions CI. See `TODOS.md` for the live checklist.
 - **Hard rules:** build **bottom-up** (data model → services/logic with tests → persistence → state
   → UI last; never UI-first); one feature per commit; update CHANGELOG + DEVLOG each commit; pure
   idiomatic Go; logic packages have no `syscall/js` and are unit-tested; `log/slog` only;
