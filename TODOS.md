@@ -234,13 +234,13 @@ Shared control components (from mockup):
 
 - [x] ★ Ledger list (newest first); virtualization for large sets later
 - [x] ★ Add transaction (desc, amount, income/expense, category, account, date, member)
-- [~] ★ Delete transaction done (per-row component); edit + confirm later
+- [x] ★ Delete + inline edit transaction (desc, amount, category, date; non-transfers; sign preserved)
 - [x] ★ Transfers between accounts (paired entries; excluded from income/expense); deleting one leg removes both
 - [x] Tags input + tag display (income/expense); search matches tags
 - [x] Filters: member, account, category, text, date range + sort (combine + clear) + persist last
       filter across reloads (`uistate.UseTxFilter` localStorage atom)
 - [x] Sort options (date, amount, payee)
-- [ ] Row component for actions; inline category quick-edit
+- [x] Row component for actions; inline edit (incl. category) — `TransactionRow` edit mode
 - [ ] Bulk select + bulk delete/recategorize
 - [x] Repeat-last helper (pre-fills form from newest txn) + per-row duplicate (copies row to today)
 - [ ] Tests: signed amounts, transfer pairing, filter + sort logic

@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Edit transactions inline: income and expense rows get an Edit button that swaps in a form for the
+  description, amount, category, and date, saving through the validated path (the original
+  income/expense sign and account are preserved). Transfers remain non-editable inline.
 - Edit goals inline: each goal row has an Edit button that swaps in a form for the name, target
   amount, and target date (clearable), saving through the validated path. Complements the existing
   Contribute action.

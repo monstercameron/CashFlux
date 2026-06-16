@@ -209,6 +209,33 @@ func Transactions() ui.Node {
 		bump()
 	}
 
+	editTxn := func(orig domain.Transaction, newDesc, amountStr, catID, dateStr string) {
+		acc := accByID[orig.AccountID]
+		amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(acc.Currency))
+		if err != nil || amt <= 0 {
+			errMsg.Set("Enter a positive amount.")
+			return
+		}
+		if orig.Amount.IsNegative() {
+			amt = -amt // preserve the original income/expense sign
+		}
+		date, derr := dateutil.ParseDate(strings.TrimSpace(dateStr))
+		if derr != nil {
+			errMsg.Set("Enter a valid date (YYYY-MM-DD).")
+			return
+		}
+		orig.Desc = strings.TrimSpace(newDesc)
+		orig.Amount = money.New(amt, orig.Amount.Currency)
+		orig.CategoryID = catID
+		orig.Date = date
+		if err := app.PutTransaction(orig); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
+
 	deleteTxn := func(txnID string) {
 		all := app.Transactions()
 		var target domain.Transaction
@@ -386,8 +413,8 @@ func Transactions() ui.Node {
 			func(t domain.Transaction) ui.Node {
 				acc := accByID[t.AccountID]
 				return ui.CreateElement(TransactionRow, transactionRowProps{
-					Txn: t, Account: acc.Name, Category: catName[t.CategoryID],
-					OnDelete: deleteTxn, OnDuplicate: duplicateTxn,
+					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], Categories: categories,
+					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn,
 				})
 			},
 		)
@@ -434,8 +461,10 @@ type transactionRowProps struct {
 	Txn         domain.Transaction
 	Account     string
 	Category    string
+	Categories  []domain.Category // for the edit-mode category picker
 	OnDelete    func(string)
 	OnDuplicate func(domain.Transaction)
+	OnSave      func(orig domain.Transaction, desc, amount, categoryID, date string)
 }
 
 // absAmount returns the absolute minor-unit amount of a transaction (for sorting
@@ -477,11 +506,55 @@ func parseTags(s string) []string {
 	return out
 }
 
-// TransactionRow is a per-transaction row with a stable delete-handler hook.
+// TransactionRow is a per-transaction row. Income/expense rows can be edited
+// inline (description, amount, category, date); transfers cannot. All hooks are
+// declared unconditionally so the edit toggle never reorders them.
 func TransactionRow(props transactionRowProps) ui.Node {
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Txn.ID) }))
-	dup := ui.UseEvent(Prevent(func() { props.OnDuplicate(props.Txn) }))
+	t := props.Txn
+	amountMajor := money.FormatMinor(absAmount(t), currency.Decimals(t.Amount.Currency))
+	dateISO := dateutil.FormatDate(t.Date)
+
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
+	dup := ui.UseEvent(Prevent(func() { props.OnDuplicate(t) }))
 	pr := uistate.UsePrefs().Get()
+	editing := ui.UseState(false)
+	descS := ui.UseState(t.Desc)
+	amountS := ui.UseState(amountMajor)
+	catS := ui.UseState(t.CategoryID)
+	dateS := ui.UseState(dateISO)
+	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
+	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
+	onCat := ui.UseEvent(func(e ui.Event) { catS.Set(e.GetValue()) })
+	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		descS.Set(t.Desc)
+		amountS.Set(amountMajor)
+		catS.Set(t.CategoryID)
+		dateS.Set(dateISO)
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		props.OnSave(t, descS.Get(), amountS.Get(), catS.Get(), dateS.Get())
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		catOptions := []ui.Node{Option(Value(""), SelectedIf(catS.Get() == ""), "— No category —")}
+		for _, c := range props.Categories {
+			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catS.Get() == c.ID), c.Name))
+		}
+		return Div(Class("row"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field"), Type("text"), Placeholder("Description"), Value(descS.Get()), OnInput(onDesc)),
+				Input(Class("field"), Type("number"), Placeholder("Amount"), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
+				Select(Class("field"), OnChange(onCat), catOptions),
+				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
+				Button(Class("btn btn-primary"), Type("submit"), "Save"),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+			),
+		)
+	}
 
 	cat := props.Category
 	switch {
@@ -504,6 +577,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class(amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
+		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title("Edit this transaction"), OnClick(startEdit), "Edit")),
 		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title("Copy this transaction to today"), OnClick(dup), "Duplicate")),
 		Button(Class("btn-del"), Type("button"), Title("Delete transaction"), OnClick(del), "✕"),
 	)

@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: inline edit (non-transfers)
+
+- Completed CRUD-edit parity: income/expense rows now edit inline (description, amount, category,
+  date). `TransactionRow` gained the editing toggle + four field states; the category picker needs
+  the category list, so the row now takes a `Categories` prop. `OnSave(orig, desc, amount, cat,
+  date)` hands the original txn back so the parent keeps the account and re-applies the sign.
+- **Sign + account preserved, not re-entered.** The amount field shows the absolute value
+  (`absAmount` + `FormatMinor`); on save the parent negates it iff the original was negative, so an
+  expense stays an expense without a kind selector in the row. The account isn't editable inline
+  (changing it is rare and affects currency) — that stays a delete-and-re-add.
+- **Transfers excluded.** Editing one leg of a paired transfer can't keep the pair consistent, so —
+  like Duplicate — Edit is hidden on transfer rows.
+- Add / edit / delete now exist for accounts(+archive), transactions, budgets, goals, categories,
+  members, tasks.
+- **Next.** The big remaining items are document vision-AI parsing and Phase-3 sync. Likely start the
+  sync groundwork with a pure, tested merge primitive, or do a smaller empty-state/a11y polish pass.
+
 ## 2026-06-16 — Goals: inline edit
 
 - Same edit pattern as budgets, one entity over: `GoalRow` gets an `editing` toggle and name/target/
