@@ -77,6 +77,8 @@ and every commit updates this file under `Unreleased`.
 - The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
   panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
   with a shared `owner.group` key.
+- The Settings screen's verbiage is now on the language store (household summary + the debug-log
+  viewer).
 - The Dashboard's chrome is now on the language store: every widget title, the header cell
   (title/hint/Reset), the freshness nudge (incl. the stale-count and reminder), the savings sub-line,
   and the KPI assets/accounts sublines. (Some dynamic period+plural KPI sublines remain literal for a

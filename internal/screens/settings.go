@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -17,7 +18,7 @@ import (
 func Settings() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:settings-log", 0)
@@ -29,20 +30,20 @@ func Settings() ui.Node {
 	}
 
 	summary := Section(Class("card"),
-		H2(Class("card-title"), "Household"),
+		H2(Class("card-title"), uistate.T("settings.household")),
 		Div(Class("rows"),
-			settingRow("Base currency", base),
-			settingRow("Members", fmt.Sprintf("%d", len(app.Members()))),
-			settingRow("Accounts", fmt.Sprintf("%d", len(app.Accounts()))),
-			settingRow("Categories", fmt.Sprintf("%d", len(app.Categories()))),
+			settingRow(uistate.T("settings.baseCurrency"), base),
+			settingRow(uistate.T("nav.members"), fmt.Sprintf("%d", len(app.Members()))),
+			settingRow(uistate.T("nav.accounts"), fmt.Sprintf("%d", len(app.Accounts()))),
+			settingRow(uistate.T("nav.categories"), fmt.Sprintf("%d", len(app.Categories()))),
 		),
-		P(Class("muted"), "Manage members, categories, base currency, exchange rates, AI, and data from the household panel (your household card at the bottom of the sidebar) or the dedicated screens."),
+		P(Class("muted"), uistate.T("settings.manageHint")),
 	)
 
 	entries := app.LogRing().Entries()
 	var logBody ui.Node
 	if len(entries) == 0 {
-		logBody = P(Class("empty"), "No log entries yet.")
+		logBody = P(Class("empty"), uistate.T("settings.noLog"))
 	} else {
 		rows := make([]ui.Node, 0, len(entries))
 		for i := len(entries) - 1; i >= 0; i-- { // newest first
@@ -59,8 +60,8 @@ func Settings() ui.Node {
 
 	logCard := Section(Class("card"),
 		Div(Class("budget-head"),
-			H2(Class("card-title"), "Debug log"),
-			Button(Class("btn"), Type("button"), Title("Refresh log"), OnClick(refresh), "Refresh"),
+			H2(Class("card-title"), uistate.T("settings.debugLog")),
+			Button(Class("btn"), Type("button"), Title(uistate.T("settings.refreshLog")), OnClick(refresh), uistate.T("settings.refresh")),
 		),
 		logBody,
 	)

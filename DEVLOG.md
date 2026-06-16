@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Settings screen migrated
+
+- Twelfth screen onto i18n: `screens/settings.go` — household summary (reusing `nav.members/accounts/
+  categories` for the row labels) + the debug-log viewer (title, refresh, empty state). Added uistate
+  import; `fmt` stays for the count values.
+- `i18n` tests + wasm green. Remaining UI verbiage: the big `app/settings.go` global panel, the
+  Accounts + Transactions screens, and the CustomFieldsManager/CustomFieldInput components.
+
 ## 2026-06-16 — i18n: Dashboard chrome migrated
 
 - Eleventh screen onto i18n: `dashboard.go` — every widget title (reusing `nav.*` for Accounts/

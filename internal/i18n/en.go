@@ -190,6 +190,15 @@ var english = Catalog{
 	"allocate.thinking":           "Thinking…",
 	"allocate.explainAI":          "Explain with AI",
 
+	// Settings screen
+	"settings.household":    "Household",
+	"settings.baseCurrency": "Base currency",
+	"settings.manageHint":   "Manage members, categories, base currency, exchange rates, AI, and data from the household panel (your household card at the bottom of the sidebar) or the dedicated screens.",
+	"settings.noLog":        "No log entries yet.",
+	"settings.debugLog":     "Debug log",
+	"settings.refreshLog":   "Refresh log",
+	"settings.refresh":      "Refresh",
+
 	// Dashboard
 	"dashboard.netWorth":       "Net worth",
 	"dashboard.income":         "Income",
