@@ -482,6 +482,10 @@ problems and fixes, and what's next.
   them onto the `Account`. This finally gives the Upcoming-bills widget and credit-utilization a real
   data source.
 
+- Added **unfinished goals as allocation candidates** (stability 80 / liquidity 60, no return), so the
+  Allocate ranking can suggest funding a goal alongside accounts and debts. ~100 features in this
+  session: the candidate-C design, all Phase-1 core, deep Phase 2, and Phase-3 PWA all shipped.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

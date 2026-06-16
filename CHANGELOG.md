@@ -211,9 +211,9 @@ and every commit updates this file under `Unreleased`.
 - `internal/allocate`: pure capital-allocation scorer — normalizes each candidate on returns,
   stability, liquidity, and debt-reduction, combines by a user `Weights` profile into an explainable
   `Score` + `Breakdown`, and `Rank`s candidates highest-first. Table-driven tested; deterministic.
-- Allocate screen (replacing the stub): builds candidates from asset accounts and high-interest
-  liabilities, ranks them by a chosen profile (Balanced / Maximize returns / Safety & access / Pay
-  down debt), and shows each suggestion's score bar and per-criterion breakdown.
+- Allocate screen (replacing the stub): builds candidates from asset accounts, high-interest
+  liabilities, and **unfinished goals**, ranks them by a chosen profile (Balanced / Maximize returns /
+  Safety & access / Pay down debt), and shows each suggestion's score bar and per-criterion breakdown.
 - `internal/formula`: tokenizer for the sandboxed formula language — numbers (incl. leading-dot),
   identifiers, double-quoted strings, arithmetic/comparison operators, parens, and commas; errors on
   unterminated strings, stray `=`/`!`, and unexpected characters. Table-driven tested.

@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -52,6 +53,16 @@ func Allocate() ui.Node {
 		cands = append(cands, allocate.Candidate{
 			ID: a.ID, Name: a.Name, ExpectedReturnAPR: a.ExpectedReturnAPR,
 			StabilityScore: a.StabilityScore, LiquidityScore: a.LiquidityScore,
+		})
+	}
+	// Unfinished goals are candidates too — funding them is a place to put money.
+	for _, g := range app.Goals() {
+		if done, _ := goalsvc.IsComplete(g); done {
+			continue
+		}
+		cands = append(cands, allocate.Candidate{
+			ID: "goal:" + g.ID, Name: "Goal · " + g.Name,
+			StabilityScore: 80, LiquidityScore: 60,
 		})
 	}
 

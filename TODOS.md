@@ -391,7 +391,7 @@ Shared control components (from mockup):
 - [x] ★ Weighted combination by profile; normalization; deterministic (`Score`/`Rank`)
 - [ ] `AllocationProfile{ID, Name, Weights, Constraints, CustomCriteria[formulaID]}` + CRUD
 - [ ] Constraints: emergency buffer, max-per-destination, exclusions — applied/clamped
-- [~] Candidate set assembly (asset accounts + high-interest liabilities) done; goals as candidates later
+- [x] Candidate set assembly (asset accounts + high-interest liabilities + unfinished goals)
 - [x] Ranked output with per-criterion breakdown (no black box)
 - [~] Allocate screen: profile select → ranked suggestions done; amount input + constraints later
 - [ ] Optional AI narrative ("why this split")
