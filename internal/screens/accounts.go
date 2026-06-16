@@ -78,6 +78,15 @@ func Accounts() ui.Node {
 		bump()
 	}
 
+	archiveAccount := func(ac domain.Account) {
+		ac.Archived = !ac.Archived
+		if err := app.PutAccount(ac); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		bump()
+	}
+
 	typeOptions := make([]ui.Node, 0, len(domain.AllAccountTypes))
 	for _, t := range domain.AllAccountTypes {
 		typeOptions = append(typeOptions, Option(Value(string(t)), SelectedIf(accType.Get() == string(t)), humanizeType(string(t))))
@@ -111,21 +120,21 @@ func Accounts() ui.Node {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	net, assets, liabilities, _ := ledger.NetWorth(accounts, txns, rates)
 
-	var assetList, liabList []domain.Account
+	var assetList, liabList, archivedList []domain.Account
 	for _, ac := range accounts {
-		if ac.Archived {
-			continue
-		}
-		if ac.Class == domain.ClassLiability {
+		switch {
+		case ac.Archived:
+			archivedList = append(archivedList, ac)
+		case ac.Class == domain.ClassLiability:
 			liabList = append(liabList, ac)
-		} else {
+		default:
 			assetList = append(assetList, ac)
 		}
 	}
 
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
-		return ui.CreateElement(AccountRow, accountRowProps{Account: ac, Balance: bal, OnDelete: deleteAccount})
+		return ui.CreateElement(AccountRow, accountRowProps{Account: ac, Balance: bal, OnDelete: deleteAccount, OnArchive: archiveAccount})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
 
@@ -144,25 +153,36 @@ func Accounts() ui.Node {
 			H2(Class("card-title"), "Liabilities"),
 			IfElse(len(liabList) == 0, P(Class("empty"), "No liabilities — nice."), Div(Class("rows"), MapKeyed(liabList, keyOf, renderRow))),
 		),
+		If(len(archivedList) > 0, Section(Class("card"),
+			H2(Class("card-title"), "Archived"),
+			Div(Class("rows"), MapKeyed(archivedList, keyOf, renderRow)),
+		)),
 	)
 }
 
 type accountRowProps struct {
-	Account  domain.Account
-	Balance  money.Money
-	OnDelete func(string)
+	Account   domain.Account
+	Balance   money.Money
+	OnDelete  func(string)
+	OnArchive func(domain.Account)
 }
 
-// AccountRow is a per-account row component; it owns its delete-handler hook so
+// AccountRow is a per-account row component; it owns its action-handler hooks so
 // the list can change without breaking hook ordering.
 func AccountRow(props accountRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Account.ID) }))
+	arch := ui.UseEvent(Prevent(func() { props.OnArchive(props.Account) }))
+	archLabel := "Archive"
+	if props.Account.Archived {
+		archLabel = "Restore"
+	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), props.Account.Name),
 			Span(Class("row-meta"), humanizeType(string(props.Account.Type))+" · "+props.Account.Currency),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
+		Button(Class("btn"), Type("button"), Title(archLabel+" account"), OnClick(arch), archLabel),
 		Button(Class("btn-del"), Type("button"), Title("Delete account"), OnClick(del), "✕"),
 	)
 }

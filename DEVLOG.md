@@ -250,8 +250,13 @@ problems and fixes, and what's next.
   empty state distinct from "No transactions yet". Date-range/category/member filters + persistence
   can follow.
 
-**Next:** account edit/archive, then category/member filters + date range, then the Members and
-Categories screens, continuing the priority-ordered Phase-1 backlog.
+- Added **account archive/restore**: each account row gets an Archive/Restore toggle (`AccountRow`
+  grows a second action hook); archived accounts move to a dedicated "Archived" card and leave the
+  assets/liabilities lists and net-worth totals (`ledger` already excludes them). Toggling just flips
+  `Archived` and re-puts through the validated `appstate` path.
+
+**Next:** category/member transaction filters + date range, then the Members and Categories screens,
+then account edit (full field edit) — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
