@@ -258,6 +258,27 @@ a `Week | Month | Quarter` segmented toggle + **two** independent stepper pills 
 - _Decision to confirm:_ how far to simplify — keep the full From/To range power behind "Custom range"
   (recommended), or drop ranges entirely for a single-period-only control.
 
+### B12. Wire per-widget flip-panel settings to content (persisted) ★
+
+**Goal:** clicking a dashboard widget's gear opens its *own* settings in the flip panel (e.g. Savings
+rate → savings settings), with values persisted, and the widget renders accordingly.
+**Done (foundation, committed):** pure `internal/widgetcfg` — typed `Field`/`Schema`/`Config` +
+registry + accessors; savings rate schema (target rate %, show-bar toggle). Table-tested.
+**Remaining (the wiring — was started then deferred back to planning):**
+- [ ] `uistate` persisted atom `WidgetConfigs` (`map[widgetID]widgetcfg.Config`) backed by
+      localStorage (load/persist + a copy-on-write `WithField` setter), mirroring the layout/filter atoms.
+- [ ] Rebuild `app.widgetSettingsForm` to be **schema-driven**: pass the widget `ID` through from
+      `SettingsHost` (currently only Title is passed), look up `widgetcfg.SchemaFor(id)`, and render a
+      control per field — toggle / number / select — bound to the persisted config, saving on change.
+      Each field row must be its own component (On*-hooks-in-loops rule). Show a friendly placeholder
+      for widgets with no schema yet.
+- [ ] Savings widget consumes its config: read the target rate + show-bar from `WidgetConfigs.For("savings")`
+      and reflect them (e.g. compare actual vs target, tint, optional bar).
+- [ ] Register feasible schemas for the other widgets incrementally (recent-transactions count,
+      budgets scope, trend range, etc.) — "any feasible settings exposed and persisted".
+- [ ] Verify: gear opens widget-specific settings; changes persist across reload; savings reflects its
+      target.
+
 ### B11. "+ Add" opens a flip-panel of add actions ★
 
 **Want:** the top-bar "+ Add" button should open a centered flip panel (the same lift-to-center +

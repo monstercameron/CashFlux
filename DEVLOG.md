@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Switch pushes to gh; pause widget-settings wiring → B12
+
+- User: use the `gh` CLI for pushing (more reliable), and go back to TODO-planning mode.
+- **Push fix:** background `git push` was failing with "could not read Username for github.com" — the
+  Windows/bare-git credential prompt pops a GUI dialog that can't complete in a non-interactive shell.
+  Ran `gh auth setup-git` (gh is logged in as monstercameron, repo scope) so git uses gh's token
+  non-interactively; pushes now succeed. Updated the CLAUDE.md push rule accordingly.
+- **Back to planning:** the per-widget settings API foundation (`internal/widgetcfg`) is committed and
+  tested, but I'd started the UI wiring (a `uistate.WidgetConfigs` atom). Per the user's "just todo
+  planning", removed that uncommitted file and logged the remaining wiring as **B12** (persisted atom +
+  schema-driven `widgetSettingsForm` + savings consumption + more widget schemas). The committed pure
+  package stays — it's a standalone tested foundation with no consumers yet, which is fine.
+
 ## 2026-06-16 — Per-widget settings API (widgetcfg) — step 1
 
 - User wants the per-widget flip panel wired to each widget's own settings (savings rate → savings

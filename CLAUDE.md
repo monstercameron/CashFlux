@@ -175,9 +175,13 @@ These rules are non-negotiable and apply to every change:
   `origin/main`. A feature isn't done until it's pushed. (Remote: `origin` →
   `github.com/monstercameron/CashFlux`; `main` tracks `origin/main`.) If a push fails (e.g. non-
   fast-forward), pull/rebase and resolve before continuing — don't leave commits unpushed.
-- **Run the push in the background (fire-and-forget).** Pushes can block on a credential/elevation
-  prompt or a UI button, which would hang a non-interactive shell. Launch `git push` as a background
-  command and don't wait on / track its result; keep working. (Commits stay local and are pushed on
-  the next push if one is interrupted.)
+- **Auth via the `gh` CLI.** Use the GitHub CLI's credential helper for pushes — it's already wired
+  (`gh auth setup-git`, account `monstercameron`, token in keyring), so `git push` authenticates
+  non-interactively with no OS credential dialog. The bare-git/Windows credential prompt is
+  unreliable here (it pops a GUI dialog that fails in a non-interactive shell — "could not read
+  Username for github.com"); gh avoids that. Re-run `gh auth setup-git` if a push ever 401s.
+- **Run the push in the background (fire-and-forget).** Even with gh, launch `git push` as a
+  background command and don't block on its result; keep working. Commits stay local and go out on the
+  next push if one is interrupted.
 - Do not let work accumulate uncommitted. Commit each completed feature immediately, with its
   CHANGELOG + DEVLOG updates.
