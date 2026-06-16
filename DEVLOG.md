@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: filtered summary line
+
+- Added a "N shown · net $X" line above the ledger list: the count of the filtered set plus its net
+  total, each transaction converted to the base currency via the FX rates (skipping any that fail to
+  convert). Recomputes from `shown` each render, so it tracks the filter (account, category, member,
+  date, cleared) live.
+- **Net, not income/expense.** It's the raw sum of shown amounts — for an account or category filter
+  that's the meaningful figure; transfers (rare in a filtered view) net out within an account anyway.
+- Pairs naturally with the existing "Export CSV" of the same filtered set — see the total, then
+  export it.
+- **Next.** Genuine small polish only; the local feature set is comprehensive (sync needs a backend).
+
 ## 2026-06-16 — Docs: status refresh
 
 - The CLAUDE.md "Status" bullet had drifted badly — it still listed custom-field defs, document

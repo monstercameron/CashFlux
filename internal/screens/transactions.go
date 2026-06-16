@@ -433,6 +433,19 @@ func Transactions() ui.Node {
 	txns := app.Transactions()
 	shown := applyTxFilter(txns, f)
 
+	// Summary of the shown set: count + net total converted to the base currency.
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	var shownNet int64
+	for _, t := range shown {
+		if c, err := rates.Convert(t.Amount, base); err == nil {
+			shownNet += c.Amount
+		}
+	}
+
 	var listBody ui.Node
 	switch {
 	case len(txns) == 0:
@@ -504,6 +517,7 @@ func Transactions() ui.Node {
 				Button(Class("btn-del"), Type("button"), Title("Delete the selected transactions"), OnClick(bulkDelete), "Delete selected"),
 				Button(Class("btn"), Type("button"), OnClick(clearSelection), "Clear selection"),
 			)),
+			If(len(shown) > 0, P(Class("muted"), Textf("%s shown · net %s", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base))))),
 			listBody,
 		),
 	)

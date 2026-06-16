@@ -247,6 +247,7 @@ Shared control components (from mockup):
       filter across reloads (`uistate.UseTxFilter` localStorage atom)
 - [x] Sort options (date, amount, payee)
 - [x] Export the filtered/sorted view to CSV (`applyTxFilter` shared with the list)
+- [x] Filtered summary line: count + net total (base currency) of the shown set
 - [x] Row component for actions; inline edit (incl. category) — `TransactionRow` edit mode
 - [x] Bulk select + bulk delete (transfer-aware) + bulk recategorize + bulk mark cleared/uncleared
 - [x] Repeat-last helper (pre-fills form from newest txn) + per-row duplicate (copies row to today)

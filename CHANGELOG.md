@@ -22,6 +22,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Filtered-transactions summary: the ledger shows "N shown · net $X" for the current filter — the
+  count and net total (converted to base currency), updating as you filter.
 - Per-member "Transactions" drill-down: each member row links to the ledger filtered to that
   member, matching the per-account drill-down.
 - "Update balance" on account rows: enter an account's real balance and the app posts a cleared
