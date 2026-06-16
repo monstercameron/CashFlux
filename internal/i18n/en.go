@@ -37,6 +37,31 @@ var english = Catalog{
 	"action.delete": "Delete",
 	"action.edit":   "Edit",
 	"action.close":  "Close",
+
+	// Shared
+	"common.notReady": "App state is not ready yet.",
+
+	// Priority (shared)
+	"priority.high":   "High",
+	"priority.medium": "Medium",
+	"priority.low":    "Low",
+
+	// To-do screen
+	"todo.addTitle":         "Add task",
+	"todo.titlePlaceholder": "What needs doing?",
+	"todo.notesPlaceholder": "Notes (optional)",
+	"todo.invalidDue":       "Enter a valid due date (YYYY-MM-DD).",
+	"todo.empty":            "No tasks yet.",
+	"todo.allDone":          "All done 🎉",
+	"todo.hideDone":         "Hide done",
+	"todo.showAll":          "Show all",
+	"todo.listTitle":        "Tasks",
+	"todo.taskPlaceholder":  "Task",
+	"todo.notesEdit":        "Notes",
+	"todo.due":              "due",
+	"todo.toggle":           "Toggle complete",
+	"todo.editTitle":        "Edit task",
+	"todo.deleteTitle":      "Delete task",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

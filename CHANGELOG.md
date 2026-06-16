@@ -71,6 +71,9 @@ and every commit updates this file under `Unreleased`.
   against the English catalog (no visible change — first screen migrated onto i18n).
 - The top bar's chrome (menu-toggle tooltip and the "+ Add" button + its tooltip) now resolves via
   `uistate.T` too, completing the app-shell verbiage migration.
+- The To-do screen's verbiage is now fully on the language store (form labels/placeholders, priority
+  options, empty/all-done states, hide-done toggle, row actions, validation message), with shared
+  `priority.*` and `common.notReady` keys other screens can reuse.
 - A central language store (`internal/i18n`): a pure, table-tested message catalog keyed by stable
   dot-namespaced keys (e.g. `nav.accounts`), with English as the source/fallback language, `%s`/`%d`
   argument formatting, translation-coverage reporting (`MissingKeys`), and whole-bundle JSON

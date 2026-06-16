@@ -21,7 +21,7 @@ import (
 func Todo() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:tasks", 0)
@@ -45,7 +45,7 @@ func Todo() ui.Node {
 		if ds := strings.TrimSpace(dueStr.Get()); ds != "" {
 			d, err := dateutil.ParseDate(ds)
 			if err != nil {
-				errMsg.Set("Enter a valid due date (YYYY-MM-DD).")
+				errMsg.Set(uistate.T("todo.invalidDue"))
 				return
 			}
 			due = d
@@ -108,7 +108,7 @@ func Todo() ui.Node {
 		if ds := strings.TrimSpace(dueStr); ds != "" {
 			d, err := dateutil.ParseDate(ds)
 			if err != nil {
-				errMsg.Set("Enter a valid due date (YYYY-MM-DD).")
+				errMsg.Set(uistate.T("todo.invalidDue"))
 				return
 			}
 			t.Due = d
@@ -125,19 +125,19 @@ func Todo() ui.Node {
 	}
 
 	prioOptions := []ui.Node{
-		Option(Value(string(domain.PriorityHigh)), SelectedIf(priority.Get() == string(domain.PriorityHigh)), "High"),
-		Option(Value(string(domain.PriorityMedium)), SelectedIf(priority.Get() == string(domain.PriorityMedium)), "Medium"),
-		Option(Value(string(domain.PriorityLow)), SelectedIf(priority.Get() == string(domain.PriorityLow)), "Low"),
+		Option(Value(string(domain.PriorityHigh)), SelectedIf(priority.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
+		Option(Value(string(domain.PriorityMedium)), SelectedIf(priority.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
+		Option(Value(string(domain.PriorityLow)), SelectedIf(priority.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 	}
 
 	form := Section(Class("card"),
-		H2(Class("card-title"), "Add task"),
+		H2(Class("card-title"), uistate.T("todo.addTitle")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field field-wide"), Type("text"), Placeholder("What needs doing?"), Value(title.Get()), OnInput(onTitle)),
+			Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)),
 			Select(Class("field"), OnChange(onPriority), prioOptions),
 			Input(Class("field"), Type("date"), Value(dueStr.Get()), OnInput(onDue)),
-			Input(Class("field field-wide"), Type("text"), Placeholder("Notes (optional)"), Value(notes.Get()), OnInput(onNotes)),
-			Button(Class("btn btn-primary"), Type("submit"), "Add"),
+			Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
+			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 	)
@@ -150,9 +150,9 @@ func Todo() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(tasks) == 0:
-		listBody = P(Class("empty"), "No tasks yet.")
+		listBody = P(Class("empty"), uistate.T("todo.empty"))
 	case len(shown) == 0:
-		listBody = P(Class("empty"), "All done 🎉")
+		listBody = P(Class("empty"), uistate.T("todo.allDone"))
 	default:
 		rows := MapKeyed(shown,
 			func(t domain.Task) any { return t.ID },
@@ -163,16 +163,16 @@ func Todo() ui.Node {
 		listBody = Div(Class("rows"), rows)
 	}
 
-	hideLabel := "Hide done"
+	hideLabel := uistate.T("todo.hideDone")
 	if hideDone.Get() {
-		hideLabel = "Show all"
+		hideLabel = uistate.T("todo.showAll")
 	}
 
 	return Div(
 		form,
 		Section(Class("card"),
 			Div(Class("budget-head"),
-				H2(Class("card-title"), "Tasks"),
+				H2(Class("card-title"), uistate.T("todo.listTitle")),
 				Button(Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
 			),
 			listBody,
@@ -225,16 +225,16 @@ func TaskRow(props taskRowProps) ui.Node {
 	if editing.Get() {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field field-wide"), Type("text"), Placeholder("Task"), Value(titleS.Get()), OnInput(onTitle)),
+				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
 				Select(Class("field"), OnChange(onPrio),
-					Option(Value(string(domain.PriorityHigh)), SelectedIf(prioS.Get() == string(domain.PriorityHigh)), "High"),
-					Option(Value(string(domain.PriorityMedium)), SelectedIf(prioS.Get() == string(domain.PriorityMedium)), "Medium"),
-					Option(Value(string(domain.PriorityLow)), SelectedIf(prioS.Get() == string(domain.PriorityLow)), "Low"),
+					Option(Value(string(domain.PriorityHigh)), SelectedIf(prioS.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
+					Option(Value(string(domain.PriorityMedium)), SelectedIf(prioS.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
+					Option(Value(string(domain.PriorityLow)), SelectedIf(prioS.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 				),
 				Input(Class("field"), Type("date"), Value(dueS.Get()), OnInput(onDue)),
-				Input(Class("field field-wide"), Type("text"), Placeholder("Notes"), Value(notesS.Get()), OnInput(onNotes)),
-				Button(Class("btn btn-primary"), Type("submit"), "Save"),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -250,30 +250,30 @@ func TaskRow(props taskRowProps) ui.Node {
 
 	meta := []ui.Node{Span(Class("badge badge-prio "+pclass), plabel)}
 	if !t.Due.IsZero() {
-		meta = append(meta, Span(Class("row-meta"), "due "+pr.FormatDate(t.Due)))
+		meta = append(meta, Span(Class("row-meta"), uistate.T("todo.due")+" "+pr.FormatDate(t.Due)))
 	}
 	if t.Notes != "" {
 		meta = append(meta, Span(Class("row-meta"), t.Notes))
 	}
 
 	return Div(Class(rowClass),
-		Button(Class("check"), Type("button"), Title("Toggle complete"), OnClick(toggle), glyph),
+		Button(Class("check"), Type("button"), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), t.Title),
 			Div(Class("task-meta"), meta),
 		),
-		Button(Class("btn"), Type("button"), Title("Edit task"), OnClick(startEdit), "Edit"),
-		Button(Class("btn-del"), Type("button"), Title("Delete task"), OnClick(del), "✕"),
+		Button(Class("btn"), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("todo.deleteTitle")), OnClick(del), "✕"),
 	)
 }
 
 func priorityMeta(p domain.TaskPriority) (label, class string) {
 	switch p {
 	case domain.PriorityHigh:
-		return "High", "prio-high"
+		return uistate.T("priority.high"), "prio-high"
 	case domain.PriorityLow:
-		return "Low", "prio-low"
+		return uistate.T("priority.low"), "prio-low"
 	default:
-		return "Medium", "prio-med"
+		return uistate.T("priority.medium"), "prio-med"
 	}
 }

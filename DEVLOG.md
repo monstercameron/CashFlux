@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: To-do screen migrated (first full screen)
+
+- First full screen onto the language store: every user-facing string in `todo.go` now resolves via
+  `uistate.T` — add-form title/placeholders, priority options (both the add form and inline edit),
+  empty/all-done states, the hide-done toggle, the validation message, and the row actions
+  (toggle/edit/delete titles, due prefix). `priorityMeta` returns translated labels.
+- Added shared keys (`priority.high/medium/low`, `common.notReady`) so the other screens reuse them
+  rather than re-adding. Catalog grew accordingly; English values match the old literals → no visible
+  change.
+- `i18n` tests + wasm green. **Next:** migrate the next screen (Members or Categories), reusing the
+  shared keys; track coverage as the catalog grows.
+
 ## 2026-06-16 — Extract credit-utilization into ledger
 
 - Moved the inline `owed*100/limit` from `accountMeta` into pure `ledger.Utilization(balance, limit)`
