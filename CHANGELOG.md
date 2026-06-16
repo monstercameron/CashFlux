@@ -14,6 +14,10 @@ and every commit updates this file under `Unreleased`.
   HTTP-status check in the fetch transport.
 
 ### Added
+- Settings → AI now offers a fuller **model picker** (GPT-4o mini, GPT-4.1 nano/mini, GPT-4o,
+  GPT-4.1, o4-mini) — all models the cost estimator knows, so token-cost surfacing stays accurate —
+  and shows an "AI features stay off until you add a key" hint while no key is set, reinforcing the
+  local-first, bring-your-own-key model.
 - Insights now shows token usage and approximate cost after an AI answer — "Used 1,234 tokens ·
   about $0.0019" — using the call's reported usage and the model's pricing (just the token count when
   pricing is unknown). The fetch transport now hands the token usage back alongside the content.

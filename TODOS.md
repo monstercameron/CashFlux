@@ -856,10 +856,9 @@ Shared control components (from mockup):
 - [x] Client over `fetch` with user key from settings; base URL configurable — `ai.SendChat`
 - [ ] Chat/Responses call with JSON-schema **structured outputs** → Go structs
 - [~] Vision input support (images/PDF pages) for document parsing — `ai.BuildVisionRequest` (pure) done
-- [~] Model selection; token + cost surfacing; "AI off until key set" state — **cost surfacing done**:
-      pure `ai.EstimateCostUSD`/`FormatCostUSD` + per-model price table, `Usage` threaded through the
-      transport, and Insights shows "Used N tokens · about $X" after an answer. Still TODO: a model
-      picker in Settings, and the explicit "AI off until key set" state.
+- [x] Model selection; token + cost surfacing; "AI off until key set" state — cost surfacing
+      (`ai.EstimateCostUSD`/`FormatCostUSD` + `Usage` through the transport, shown in Insights), a
+      Settings model picker covering the priced models, and an explicit "AI off until key set" hint.
 - [x] Error handling: auth, rate limit, network, CORS — plain-English messages via pure, table-tested
       `ai.ErrorMessage(status, body)` + an HTTP-status check in the fetch transport (network/CORS
       handled in the catch). Inherited by Insights + Documents with no screen changes.

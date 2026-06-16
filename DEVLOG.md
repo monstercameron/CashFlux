@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — model picker + AI-off-until-key hint
+
+- Expanded the Settings → AI model `<select>` from two options to the six the cost table knows
+  (gpt-4o-mini, gpt-4.1-nano/mini, gpt-4o, gpt-4.1, o4-mini), kept deliberately aligned with the
+  pricing table so the new token-cost line stays accurate for whatever the user picks.
+- Added an inline hint under the key input shown only when no key is set: "AI features stay off until
+  you add a key…", restating the bring-your-own-key/local-first promise right where it matters. The
+  enable toggle + empty-key gating already existed; this makes the off state explicit.
+- Completes §2.1's model/cost item (cost surfacing + model picker + AI-off-until-key). i18n + wasm
+  green.
+
 ## 2026-06-16 — surface AI token usage + cost in Insights
 
 - Threaded `Usage` through the transport: `SendChat`/`SendVisionChat`/`postCompletions` now call
