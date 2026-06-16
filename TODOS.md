@@ -206,14 +206,14 @@ trail yet.
      nav-history atom.
   3. *Logical hierarchy*: e.g. `Dashboard / Accounts / {account} transactions` once drill-downs carry
      context (account→ledger filter already exists). Richest but needs per-drill-down context.
-**Fix (assuming option 1 unless told otherwise):**
-- [ ] Derive crumbs from the current route via `router.InspectCurrentRoute()` + `screens.All()` labels;
-      render a clickable `Dashboard / {page}` breadcrumb (last crumb non-link). Place per the request
-      (right side); reconcile with the existing left-aligned title (likely replace the title or move it).
-- [ ] Each crumb navigates via `router.UseNavigate()`; readable styling (muted separators, hover).
-- [ ] Keyboard-accessible + labelled; respects light/dark.
-- [ ] Verify: every screen shows a correct trail; clicking a crumb navigates; the home crumb returns
-      to the dashboard.
+**Fix — implemented option 1 (home-rooted):**
+- [x] Derived from `router.InspectCurrentRoute().Path`: a `Dashboard › {page}` breadcrumb in the top
+      bar (replaced the plain title); last crumb non-link, marked `aria-current="page"`. On the
+      dashboard route only the title shows.
+- [x] The Dashboard crumb navigates via the existing `nav` (router.UseNavigate); muted styling + hover.
+- [x] Keyboard-accessible (a real `<button>` crumb) + `<nav aria-label="Breadcrumb">`; theme-agnostic
+      utility classes.
+- [~] Verify: trail correct per screen; clicking returns home (wasm green; browser spot-check pending).
 
 ### B10. Rethink the time-resolution control (drastic UX improvement) ★
 

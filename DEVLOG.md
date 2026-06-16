@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B9: top-bar breadcrumb
+
+- Replaced the plain title in `TopBar` with a `<nav aria-label="Breadcrumb">`: a Dashboard crumb
+  (a real `<button>`, so it's keyboard-operable) + a `›` separator + the current screen title marked
+  `aria-current="page"`. On the dashboard route only the title shows. The home crumb navigates via the
+  existing `nav`; current route comes from `router.InspectCurrentRoute().Path`.
+- The app's routes are flat (one screen per route), so the trail is at most two deep — no nested-route
+  derivation needed. Reused existing utility classes (no new CSS); works in both themes. wasm green.
+
 ## 2026-06-16 — B5: collapsed-rail hover labels
 
 - Added `Title(props.Label)` to `navItem` (and a title on the household card) — a native tooltip that

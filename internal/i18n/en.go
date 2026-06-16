@@ -10,9 +10,10 @@ var english = Catalog{
 	"household.settings": "Settings",
 
 	// Top bar
-	"topbar.menu":     "Collapse menu",
-	"topbar.add":      "Add a transaction",
-	"topbar.addLabel": "+ Add",
+	"topbar.menu":       "Collapse menu",
+	"topbar.add":        "Add a transaction",
+	"topbar.addLabel":   "+ Add",
+	"topbar.breadcrumb": "Breadcrumb",
 
 	// Primary navigation
 	"nav.dashboard":    "Dashboard",

@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The top bar now shows a **breadcrumb**: off the dashboard it reads "Dashboard › <screen>", with the
+  Dashboard crumb a keyboard-operable button that navigates home; the current screen is marked
+  `aria-current="page"`. On the dashboard it's just the title.
 - The collapsed sidebar now **reveals each item's label on hover/focus** as a flyout (no rail
   widening), and every nav item + the household card carry a `title` so the name is available on hover
   and to screen readers when only the icon shows. The flyout respects `prefers-reduced-motion`.
