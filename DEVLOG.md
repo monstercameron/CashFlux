@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Appearance prefs: extend the engine
+
+- The settings panel's theme / accent / density controls have been local-only React-style state all
+  along (they reset on close). Making them real reuses the prefs pipeline, so step one is extending
+  `internal/prefs`: added `Theme` (dark/light/system), `Accent` (hex string), and `Compact` (bool).
+- **Decision — validate the accent in `Normalize` with a tiny `isHexColor`.** Accent comes from a
+  color `<input>` but persisted data could be anything; rather than trust it, normalize rejects
+  non-`#rgb`/`#rrggbb` strings back to the default green. Keeps the "always-usable persisted data"
+  invariant the rest of prefs already holds.
+- `Default()` now seeds dark + green; `Compact` defaults to false (zero value), so no special case.
+  Existing week-start/date tests unchanged; added theme/accent/hex-color tests.
+- **Next.** Wire the settings appearance controls to these fields (atom + PersistPrefs), then apply
+  them to the DOM (a `data-theme`/`data-density` attribute + accent CSS var on the document root),
+  and seed that application on boot so it survives reload.
+
 ## 2026-06-16 — Module visibility: Settings toggles (feature complete)
 
 - Final step: a "Screens" section in the global settings left column. A package-level

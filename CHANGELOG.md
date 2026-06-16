@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Theme, accent, and density added to the display-preferences engine (`internal/prefs`): `Theme`
+  (dark/light/system), `Accent` (validated hex color), and `Compact` fields, with `Normalize`
+  defaulting unknown themes to dark and invalid accents to the candidate-C green, plus an
+  `isHexColor` check. Table-tested. Prepares the appearance controls to become real and persistent.
 - Screen show/hide toggles in the global Settings panel: a "Screens" section with a Show toggle per
   hideable screen (Accounts, Transactions, Budgets, Goals, To-do, Members, Categories). Flipping a
   toggle updates the hidden-modules atom and persists to localStorage, hiding or restoring the

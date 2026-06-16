@@ -26,15 +26,32 @@ const (
 	DateLong DateStyle = "long" // Jan 2, 2006
 )
 
+// Theme is the color theme of the app.
+type Theme string
+
+// The supported themes. ThemeSystem follows the OS preference.
+const (
+	ThemeDark   Theme = "dark"
+	ThemeLight  Theme = "light"
+	ThemeSystem Theme = "system"
+)
+
+// defaultAccent is the out-of-the-box accent color (candidate-C green).
+const defaultAccent = "#54b884"
+
 // Prefs holds the user's display preferences.
 type Prefs struct {
 	WeekStart WeekStart `json:"weekStart"`
 	DateStyle DateStyle `json:"dateStyle"`
+	Theme     Theme     `json:"theme"`
+	Accent    string    `json:"accent"`  // hex color, e.g. "#54b884"
+	Compact   bool      `json:"compact"` // denser layout
 }
 
-// Default returns the out-of-the-box preferences (Sunday week start, ISO dates).
+// Default returns the out-of-the-box preferences (Sunday week start, ISO dates,
+// dark theme, green accent, comfortable density).
 func Default() Prefs {
-	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO}
+	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent}
 }
 
 // Normalize fills any blank or unrecognized field with its default, so partial or
@@ -50,7 +67,33 @@ func (p Prefs) Normalize() Prefs {
 	default:
 		p.DateStyle = DateISO
 	}
+	switch p.Theme {
+	case ThemeDark, ThemeLight, ThemeSystem:
+	default:
+		p.Theme = ThemeDark
+	}
+	if !isHexColor(p.Accent) {
+		p.Accent = defaultAccent
+	}
 	return p
+}
+
+// isHexColor reports whether s is a "#rgb" or "#rrggbb" hex color.
+func isHexColor(s string) bool {
+	if len(s) != 4 && len(s) != 7 {
+		return false
+	}
+	if s[0] != '#' {
+		return false
+	}
+	for _, c := range s[1:] {
+		switch {
+		case c >= '0' && c <= '9', c >= 'a' && c <= 'f', c >= 'A' && c <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // dateLayout maps a date style to its Go reference layout.

@@ -56,12 +56,44 @@ func TestWeekStartOf(t *testing.T) {
 }
 
 func TestNormalize(t *testing.T) {
-	got := Prefs{WeekStart: "x", DateStyle: "y"}.Normalize()
+	got := Prefs{WeekStart: "x", DateStyle: "y", Theme: "z", Accent: "nope"}.Normalize()
 	if got != Default() {
 		t.Errorf("bad values should normalize to default, got %+v", got)
 	}
-	keep := Prefs{WeekStart: WeekMonday, DateStyle: DateLong}
+	keep := Prefs{WeekStart: WeekMonday, DateStyle: DateLong, Theme: ThemeLight, Accent: "#abc", Compact: true}
 	if keep.Normalize() != keep {
 		t.Errorf("valid values should be preserved, got %+v", keep.Normalize())
+	}
+}
+
+func TestNormalizeThemeAndAccent(t *testing.T) {
+	for _, th := range []Theme{ThemeDark, ThemeLight, ThemeSystem} {
+		if got := (Prefs{Theme: th}).Normalize().Theme; got != th {
+			t.Errorf("theme %q should be preserved, got %q", th, got)
+		}
+	}
+	if got := (Prefs{}).Normalize().Theme; got != ThemeDark {
+		t.Errorf("blank theme should default to dark, got %q", got)
+	}
+	if got := (Prefs{Accent: "#7c83ff"}).Normalize().Accent; got != "#7c83ff" {
+		t.Errorf("valid accent should be preserved, got %q", got)
+	}
+	if got := (Prefs{Accent: "blue"}).Normalize().Accent; got != defaultAccent {
+		t.Errorf("invalid accent should default, got %q", got)
+	}
+}
+
+func TestIsHexColor(t *testing.T) {
+	good := []string{"#fff", "#54b884", "#ABCDEF", "#000000"}
+	bad := []string{"", "fff", "#ff", "#12345", "#gggggg", "54b884"}
+	for _, s := range good {
+		if !isHexColor(s) {
+			t.Errorf("%q should be a valid hex color", s)
+		}
+	}
+	for _, s := range bad {
+		if isHexColor(s) {
+			t.Errorf("%q should be invalid", s)
+		}
 	}
 }
