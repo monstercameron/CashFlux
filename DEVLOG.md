@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Custom fields: the validation core first
+
+- Started SPEC §1.16 (user-defined custom fields) bottom-up, per the SDLC rule: model + validate
+  before any store or UI. New pure package `internal/customfields`.
+- **Design.** `Def` is a strongly-typed field definition (id, entity type, map key, label, one of
+  five `FieldType`s, optional select `Options`, `Required`). This honours code-rule #7: the core
+  schema stays strongly typed; extensibility comes from *validated* custom fields, not from
+  loosening entities into untyped maps. `Validate(defs, values)` collects *all* issues (not
+  first-fail) so a form can show every problem at once, and returns plain-English messages.
+- **Trade-offs.** Custom values arrive from JSON, so numbers are `float64` — `isNumber` accepts the
+  float and int kinds rather than insisting on one. Dates are validated through the existing
+  `dateutil.ParseDate` (single source of truth for the YYYY-MM-DD format) instead of a second
+  parser. Unknown keys in a value map are ignored rather than flagged, so data written before a def
+  existed (or after one is removed) never hard-fails — forward/backward compatible by default.
+- **Next.** Persist `CustomFieldDef`s (store + export/import round-trip), expose them via appstate,
+  then a thin Settings UI to manage defs and render the inputs on entity forms — strictly in that
+  order.
+
 ## 2026-06-15 — Porting candidate C: design-system foundation
 
 - Resumed the `/loop`, now executing §1.7c (port the chosen design into Go components), one feature

@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Custom-field definitions and validation engine (`internal/customfields`): typed `Def`
+  (text/number/date/bool/select, required, select options) plus `Validate`, which checks an
+  entity's `custom{}` value map against its definitions — flagging missing required fields, type
+  mismatches, invalid dates, and out-of-list select values in plain English, while ignoring unknown
+  keys so old data stays forward-compatible. Pure, table-tested. (Foundation for SPEC §1.16.)
 - Initialize Go module and `.gitignore`.
 - Product specification (`SPEC.md`).
 - Project rules and code-quality standards (`CLAUDE.md`), including version-control and journaling
