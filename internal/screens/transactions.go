@@ -316,6 +316,20 @@ func Transactions() ui.Node {
 		}
 		selected.Set(map[string]bool{})
 	}))
+	bulkSetCleared := func(val bool) {
+		sel := selected.Get()
+		for _, t := range app.Transactions() {
+			if !sel[t.ID] || t.Cleared == val {
+				continue
+			}
+			t.Cleared = val
+			_ = app.PutTransaction(t)
+		}
+		selected.Set(map[string]bool{})
+		bump()
+	}
+	bulkMarkCleared := ui.UseEvent(Prevent(func() { bulkSetCleared(true) }))
+	bulkMarkUncleared := ui.UseEvent(Prevent(func() { bulkSetCleared(false) }))
 	onBulkCat := ui.UseEvent(func(e ui.Event) { bulkCat.Set(e.GetValue()) })
 	bulkRecategorize := ui.UseEvent(Prevent(func() {
 		sel := selected.Get()
@@ -485,6 +499,8 @@ func Transactions() ui.Node {
 				Span(Class("muted"), plural(len(selected.Get()), "transaction")+" selected"),
 				Select(Class("field"), Title("Category to apply"), OnChange(onBulkCat), bulkCatOptions),
 				Button(Class("btn"), Type("button"), Title("Set this category on the selected transactions"), OnClick(bulkRecategorize), "Apply category"),
+				Button(Class("btn"), Type("button"), Title("Mark the selected transactions cleared"), OnClick(bulkMarkCleared), "Mark cleared"),
+				Button(Class("btn"), Type("button"), Title("Mark the selected transactions not cleared"), OnClick(bulkMarkUncleared), "Mark uncleared"),
 				Button(Class("btn-del"), Type("button"), Title("Delete the selected transactions"), OnClick(bulkDelete), "Delete selected"),
 				Button(Class("btn"), Type("button"), OnClick(clearSelection), "Clear selection"),
 			)),

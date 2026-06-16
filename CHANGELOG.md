@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Bulk mark transactions cleared/uncleared: the selection bar now has "Mark cleared" and "Mark
+  uncleared" actions, so you can reconcile many at once.
 - Filter transactions by cleared status (cleared / not cleared / both), persisted with the rest of
   the transaction filter — pairs with the cleared toggle to make reconciling against a statement
   easy (show only what's not yet cleared).

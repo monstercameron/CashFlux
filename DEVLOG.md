@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: bulk mark cleared
+
+- Added "Mark cleared"/"Mark uncleared" to the selection bar. One `bulkSetCleared(val)` closure sets
+  the flag on each selected transaction (skipping ones already in the target state) and clears the
+  selection; two thin event hooks bind the two buttons.
+- Reconciliation is now fully ergonomic: filter to "not cleared", select a run of statement-matched
+  rows, "Mark cleared" — repeat. Per-row toggle remains for one-offs.
+- **Next.** Continue with genuine small polish where it helps; the major remaining backlog (sync)
+  needs a backend.
+
 ## 2026-06-16 — Transactions: cleared-status filter
 
 - Completed the reconciliation loop: a tri-state cleared filter (both / not cleared / cleared) added
