@@ -158,16 +158,23 @@ func freshnessRow(props freshnessRowProps) uic.Node {
 }
 
 // hideableScreens lists the screens a user can show or hide from the sidebar.
-// The dashboard and settings are intentionally omitted — they are locked visible
-// in internal/modules.
+// The dashboard is intentionally omitted — it is locked visible in
+// internal/modules. Covers every routed main-line screen (primary nav, the Tools
+// group, and the System group).
 var hideableScreens = []struct{ Label, Path string }{
 	{"Accounts", "/accounts"},
 	{"Transactions", "/transactions"},
 	{"Budgets", "/budgets"},
 	{"Goals", "/goals"},
 	{"To-do", "/todo"},
+	{"Planning", "/planning"},
+	{"Allocate", "/allocate"},
+	{"Insights", "/insights"},
+	{"Documents", "/documents"},
+	{"Customize", "/customize"},
 	{"Members", "/members"},
 	{"Categories", "/categories"},
+	{"Rules", "/rules"},
 }
 
 // globalSettingsForm is the two-column household/global settings back face:

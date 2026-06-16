@@ -86,6 +86,9 @@ and every commit updates this file under `Unreleased`.
   GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.
 
 ### Changed
+- The Settings → Screens **show/hide toggles now cover every main-line screen**, including the Tools
+  group (Planning, Allocate, Insights, Documents, Customize) and Rules — so any nav item except the
+  dashboard can be hidden from the sidebar.
 - Removed the placeholder **"My pages"** sidebar segment (the example "Debt payoff plan / FIRE tracker /
   Side hustle P&L" entries and the "New page" affordance) — they were mockup stubs, not real pages, so
   the rail is now just the actual screens. (Menu visibility is already configurable via the

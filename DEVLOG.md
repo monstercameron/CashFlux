@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B8: menu visibility covers all nav items
+
+- Extended `hideableScreens` (Settings → Screens toggles) to the Tools group (Planning/Allocate/
+  Insights/Documents/Customize) and Rules — they already respected `hidden.IsHidden` in the sidebar
+  filter but weren't in the toggle list, so now every routed main-line screen is toggleable (dashboard
+  stays locked). Closes the B8 "menu visibility settings" sub-item; only shift+drag reorder remains.
+- (Removed the stray `/settings` from the comment too, since it's no longer a screen.) wasm green.
+
 ## 2026-06-16 — B8 (partial): drop the "My pages" segment
 
 - Removed the mockup "My pages" rail group (the three example custom pages + the "New page" item) and

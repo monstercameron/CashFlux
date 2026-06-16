@@ -182,10 +182,9 @@ Three related sidebar changes (relates to B5 collapsed-hover, B7 missing items):
 - [x] **Remove the "My pages" segment.** Dropped the `myPages()` example section + "New page"
       affordance (and the dead `customPage`/`myPages` code) from the rail — the rail is now just the
       real screens.
-- [~] **Menu visibility settings.** Base exists: `internal/modules` + `hideableScreens` + the Settings
-      → Screens module toggles drive the sidebar filter. Could extend `hideableScreens` to cover the
-      B7 Tools additions (Planning/Allocate/Insights/Documents/Customize), which already respect
-      `hidden.IsHidden` but aren't yet in the toggle list. Small follow-up.
+- [x] **Menu visibility settings.** `hideableScreens` (Settings → Screens toggles) now covers every
+      routed main-line screen — primary nav, the Tools group (Planning/Allocate/Insights/Documents/
+      Customize), and System (Members/Categories/Rules). Dashboard stays locked.
 - [~] Verify: no "My pages" group (done, wasm green). Shift+drag reorder still pending.
 
 ### B9. Clickable breadcrumb in the top bar ★
