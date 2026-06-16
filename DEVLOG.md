@@ -392,8 +392,14 @@ problems and fixes, and what's next.
   fed through `forecast.Project` into the `AreaChart` (toned red when the monthly net is negative),
   with a plain-English caption of the projected end value.
 
-**Next:** explicit recurring-items entry / scenarios, then a `Recurring`/`Formula` entity + store
-CRUD — continuing Phase 2 bottom-up.
+- Built the **Documents** screen (replaced the stub): paste-and-import transactions from CSV via a new
+  `appstate.ImportTransactionsCSV` (wraps `store.TransactionsFromCSV`, best-effort: stores each valid
+  row through the validated path, skips invalid, returns the count). Header-name column matching means
+  any spreadsheet export works; AI PDF/receipt parsing is flagged as arriving with the OpenAI client.
+  (Reminder logged: don't run native `go test` with `GOOS=js` still set — it silently "fails" fast.)
+
+**Next:** the OpenAI client scaffolding (`internal/ai`: request/response structs over `fetch`), then
+the Insights screen — continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

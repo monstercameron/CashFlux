@@ -338,7 +338,7 @@ Shared control components (from mockup):
 ### 2.2 Documents — AI import
 
 - [ ] Upload UI (PDF / CSV / image); drag-drop
-- [ ] Local CSV parse → candidate transactions (no AI needed)
+- [x] Local CSV parse → import transactions (no AI needed) — Documents screen paste-and-import
 - [ ] Send PDF/image to vision model → structured transactions
 - [ ] `Document{ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[]}` lifecycle
 - [ ] Review screen: edit/accept/reject extracted rows → import to ledger; dedupe vs existing

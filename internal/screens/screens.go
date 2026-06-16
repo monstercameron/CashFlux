@@ -63,8 +63,3 @@ func Insights() ui.Node {
 	return stub(2, "AI-generated analysis and advice (OpenAI, using your own key): explain your month, spot trends, and answer plain-language questions about your money.")
 }
 
-// Documents is AI import.
-func Documents() ui.Node {
-	return stub(2, "Upload statements and receipts; AI extracts transactions for you to review and import, powering effortless monthly-spend tracking.")
-}
-

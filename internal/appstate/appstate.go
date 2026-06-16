@@ -97,6 +97,24 @@ func (a *App) ExportCSV() ([]byte, error) {
 	return store.TransactionsToCSV(a.Transactions())
 }
 
+// ImportTransactionsCSV parses CSV transaction rows and stores each via the
+// validated write path (best-effort: invalid rows are skipped), returning how
+// many were imported. A parse error (malformed CSV) is returned as-is.
+func (a *App) ImportTransactionsCSV(data []byte) (int, error) {
+	txns, err := store.TransactionsFromCSV(data)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, t := range txns {
+		if err := a.PutTransaction(t); err == nil {
+			n++
+		}
+	}
+	a.log.Info("imported transactions from CSV", "imported", n, "rows", len(txns))
+	return n, nil
+}
+
 // LoadSample replaces all data with the built-in sample dataset (the "load
 // sample" action), giving a new household something to explore.
 func (a *App) LoadSample() error {

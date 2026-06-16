@@ -227,8 +227,11 @@ and every commit updates this file under `Unreleased`.
   shared control primitives; appearance controls hold local state and data actions are wired next.
 - Export JSON data action: downloads the full dataset as `cashflux.json` (the portable export/import
   + sync payload) via `appstate.ExportJSON` and a small Blob/anchor browser-download helper.
-- `internal/appstate`: `ExportCSV` (transactions → CSV), `LoadSample` (replace with the sample
-  dataset), and `Wipe` (clear all data) — the data-action seams; tested natively.
+- `internal/appstate`: `ExportCSV` (transactions → CSV), `ImportTransactionsCSV` (parse CSV rows →
+  validated writes, best-effort), `LoadSample` (replace with the sample dataset), and `Wipe` (clear
+  all data) — the data-action seams; tested natively.
+- Documents screen (replacing the stub): paste a CSV of transactions and import them (no AI needed) —
+  header-name column matching, decimal amounts, negatives for expenses; reports how many imported.
 - Global settings Data actions wired: Export CSV (download), Import (file picker → replace dataset),
   Load sample, and Wipe (with a confirm dialog). A shared `data:revision` atom is bumped on bulk
   changes so the dashboard re-renders; added `pickFile`/`confirmAction` browser helpers.
