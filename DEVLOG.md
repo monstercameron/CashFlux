@@ -440,6 +440,12 @@ problems and fixes, and what's next.
   when offline; pre-caches the core shell (index/wasm_exec/main.wasm/manifest) on install, evicts old
   caches on activate, and only touches same-origin GETs so cross-origin OpenAI calls pass through.
 
+- Added **GitHub Actions CI** (`.github/workflows/ci.yml`): on push/PR it sets up Go from `go.mod`,
+  runs `go vet ./...`, `go test ./...`, and a `GOOS=js GOARCH=wasm` build. Verified locally that
+  native `vet`/`test ./...` don't choke on the js-only view packages (Go skips build-constraint-
+  excluded packages silently), so the workflow is green-by-construction. Activates once the repo is
+  pushed to GitHub (the create-repo step is still pending — needs the owner's `gh` auth).
+
 **Next:** PWA install prompt / update flow, then back to Phase 2 polish (Rule store, custom fields)
 as the loop continues.
 
