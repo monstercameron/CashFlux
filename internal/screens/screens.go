@@ -58,11 +58,6 @@ func stat(label, value, accent string) ui.Node {
 	)
 }
 
-// Allocate is the capital-allocation engine.
-func Allocate() ui.Node {
-	return stub(2, "Enter an amount and pick a profile to get ranked suggestions for where to put your money — scored on stability, returns, ease of withdrawal, and debt reduction, with a clear breakdown.")
-}
-
 // Insights is AI analysis.
 func Insights() ui.Node {
 	return stub(2, "AI-generated analysis and advice (OpenAI, using your own key): explain your month, spot trends, and answer plain-language questions about your money.")

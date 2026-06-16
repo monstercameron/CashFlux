@@ -355,8 +355,13 @@ problems and fixes, and what's next.
   (explainable, no black box), and `Rank` sorting highest-first (stable). Tests cover normalization +
   capping, equal-weight averaging, zero-weight safety, returns ordering, and debt-priority weighting.
 
-**Next:** an Allocate screen (amount + profile → ranked suggestions with breakdown), then the
-formula-engine tokenizer — continuing Phase 2 bottom-up.
+- Built the **Allocate screen** (replaced the stub): assembles candidates from non-archived asset
+  accounts (return/stability/liquidity) and interest-bearing liabilities ("Pay down …", guaranteed
+  return), ranks them with one of four preset profiles, and renders a score bar + per-criterion
+  breakdown per suggestion. Amount input + constraints (emergency buffer, max-per-destination) later.
+
+**Next:** the formula-engine tokenizer (`internal/formula`), then parser/evaluator — continuing
+Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

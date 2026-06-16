@@ -181,6 +181,9 @@ and every commit updates this file under `Unreleased`.
 - `internal/allocate`: pure capital-allocation scorer — normalizes each candidate on returns,
   stability, liquidity, and debt-reduction, combines by a user `Weights` profile into an explainable
   `Score` + `Breakdown`, and `Rank`s candidates highest-first. Table-driven tested; deterministic.
+- Allocate screen (replacing the stub): builds candidates from asset accounts and high-interest
+  liabilities, ranks them by a chosen profile (Balanced / Maximize returns / Safety & access / Pay
+  down debt), and shows each suggestion's score bar and per-criterion breakdown.
 - `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
   the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
   current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.
