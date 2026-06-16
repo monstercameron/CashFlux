@@ -98,6 +98,7 @@ func Transactions() ui.Node {
 	onFilterMember := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Member = e.GetValue() }) })
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
+	onFilterCleared := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Cleared = e.GetValue() }) })
 
 	txnDefs := app.CustomFieldDefsFor("transaction")
 	onCustom := func(key, value string) {
@@ -467,6 +468,11 @@ func Transactions() ui.Node {
 				Select(Class("field"), Title("Member"), OnChange(onFilterMember), filterMemberOptions),
 				Input(Class("field"), Type("date"), Title("From date"), Value(f.From), OnInput(onFilterFrom)),
 				Input(Class("field"), Type("date"), Title("To date"), Value(f.To), OnInput(onFilterTo)),
+				Select(Class("field"), Title("Cleared status"), OnChange(onFilterCleared),
+					Option(Value(""), SelectedIf(f.Cleared == ""), "Cleared & not"),
+					Option(Value("no"), SelectedIf(f.Cleared == "no"), "Not cleared"),
+					Option(Value("yes"), SelectedIf(f.Cleared == "yes"), "Cleared"),
+				),
 				Select(Class("field"), Title("Sort by"), OnChange(onSortBy),
 					Option(Value("date"), SelectedIf(f.Sort == "date"), "Newest first"),
 					Option(Value("amount"), SelectedIf(f.Sort == "amount"), "Largest amount"),
@@ -547,6 +553,12 @@ func applyTxFilter(txns []domain.Transaction, f uistate.TxFilter) []domain.Trans
 			continue
 		}
 		if ft != "" && !matchesText(t, ft) {
+			continue
+		}
+		if f.Cleared == "yes" && !t.Cleared {
+			continue
+		}
+		if f.Cleared == "no" && t.Cleared {
 			continue
 		}
 		shown = append(shown, t)

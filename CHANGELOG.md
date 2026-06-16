@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Filter transactions by cleared status (cleared / not cleared / both), persisted with the rest of
+  the transaction filter — pairs with the cleared toggle to make reconciling against a statement
+  easy (show only what's not yet cleared).
 - Mark transactions cleared/reconciled: each transaction row has a toggle that flips the (now
   surfaced) `Cleared` flag, with the status shown in the row meta — useful for reconciling against a
   statement.

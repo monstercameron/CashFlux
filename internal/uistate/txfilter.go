@@ -19,6 +19,7 @@ type TxFilter struct {
 	From     string `json:"from,omitempty"`
 	To       string `json:"to,omitempty"`
 	Sort     string `json:"sort,omitempty"`
+	Cleared  string `json:"cleared,omitempty"` // "", "yes", or "no"
 }
 
 // Normalize fills in defaults (the sort defaults to newest-first by date).

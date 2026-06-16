@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: cleared-status filter
+
+- Completed the reconciliation loop: a tri-state cleared filter (both / not cleared / cleared) added
+  to `TxFilter` (so it persists with the rest of the filter), honored in the shared `applyTxFilter`,
+  and surfaced as a dropdown. "Not cleared" gives a clean reconcile worklist; the toggle then clears
+  items off it.
+- Reused the existing persisted-filter + `applyTxFilter` plumbing — the new field flows through
+  display, export, and persistence with no extra wiring.
+- **Next.** Reconciliation is now usable end-to-end (toggle + filter). Will continue with genuine
+  small polish; the major remaining item (sync) is out of scope without a backend.
+
 ## 2026-06-16 — Transactions: cleared/reconciled toggle
 
 - Surfaced the long-defined-but-unused `Transaction.Cleared` flag. Each row gets a toggle
