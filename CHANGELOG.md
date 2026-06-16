@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Edit accounts inline: each account row has an Edit button that swaps in a form for the name,
+  opening balance, and the type-specific attributes (liabilities: credit limit, APR, minimum
+  payment, due day, lender; assets: expected return, liquidity, stability), saving through the
+  validated path. Completes inline edit across every main entity.
 - Bulk transaction actions: each transaction row has a select toggle, and when any are selected a
   bar shows the count with a category picker + "Apply category" (recategorizes the selected
   non-transfer rows), "Delete selected" (transfer-aware, removing paired legs), and "Clear

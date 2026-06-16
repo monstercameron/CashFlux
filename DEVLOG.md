@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Accounts: inline edit (CRUD-edit fully complete)
+
+- The last CRUD-edit gap: `AccountRow` now edits inline. It mirrors the add form — name, opening
+  balance, and the `If(isLiab,…)`/`If(!isLiab,…)` split for liability vs asset attributes. `OnSave`
+  takes a fully-built `domain.Account`, so the row does the parsing (it has the currency) and the
+  parent just `PutAccount`s it through validation.
+- **Many hooks, all unconditional.** A dozen field states + their event hooks + the three action
+  hooks are declared at the top; only the *return* branches on `editing`. Added small
+  `moneyMajorOrEmpty`/`floatOrEmpty`/`intOrEmpty` seeders and `parseMoneyOrZero`/`parseFloatOrZero`/
+  `parseIntOrZero` so blank optional fields round-trip as zero cleanly.
+- **Currency intentionally not editable.** Changing an account's currency reinterprets every stored
+  amount, so it stays fixed; everything else is editable. Opening balance edits flow through the
+  balance calc immediately.
+- Inline edit now exists for accounts, transactions, budgets, goals (+ categories/members via their
+  forms). Every primary entity supports add / edit / delete.
+- **Next.** The remaining substantial backlog item is Phase-3 sync (server + client), which needs a
+  backend; otherwise the feature set is essentially complete. Will continue with contained polish or
+  note completion.
+
 ## 2026-06-16 — Transactions: bulk recategorize (bulk actions complete)
 
 - Added a category picker + "Apply category" to the selection bar. `bulkRecategorize` walks the

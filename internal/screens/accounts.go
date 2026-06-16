@@ -228,13 +228,22 @@ func Accounts() ui.Node {
 		}
 	}
 
+	saveAccount := func(ac domain.Account) {
+		if err := app.PutAccount(ac); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
+
 	windows := app.FreshnessWindows()
 	now := time.Now()
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
 		return ui.CreateElement(AccountRow, accountRowProps{
 			Account: ac, Balance: bal, Stale: freshness.IsStale(ac, windows, now),
-			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount,
+			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount, OnSave: saveAccount,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
@@ -287,28 +296,154 @@ type accountRowProps struct {
 	OnDelete  func(string)
 	OnArchive func(domain.Account)
 	OnRefresh func(domain.Account)
+	OnSave    func(domain.Account)
 }
 
-// AccountRow is a per-account row component; it owns its action-handler hooks so
-// the list can change without breaking hook ordering.
+// moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
+func moneyMajorOrEmpty(m money.Money, dec int) string {
+	if m.Amount == 0 {
+		return ""
+	}
+	return money.FormatMinor(m.Amount, dec)
+}
+
+// floatOrEmpty renders a float as a plain string, or "" when zero.
+func floatOrEmpty(f float64) string {
+	if f == 0 {
+		return ""
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
+// intOrEmpty renders an int, or "" when zero.
+func intOrEmpty(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
+// AccountRow is a per-account row component. It can be edited inline (name,
+// opening balance, and the type-specific asset/liability attributes); it owns all
+// its hooks so the list and the edit toggle never disturb hook ordering.
 func AccountRow(props accountRowProps) ui.Node {
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Account.ID) }))
-	arch := ui.UseEvent(Prevent(func() { props.OnArchive(props.Account) }))
-	refresh := ui.UseEvent(Prevent(func() { props.OnRefresh(props.Account) }))
+	a := props.Account
+	dec := currency.Decimals(a.Currency)
+
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(a.ID) }))
+	arch := ui.UseEvent(Prevent(func() { props.OnArchive(a) }))
+	refresh := ui.UseEvent(Prevent(func() { props.OnRefresh(a) }))
+	editing := ui.UseState(false)
+	nameS := ui.UseState(a.Name)
+	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
+	climS := ui.UseState(moneyMajorOrEmpty(a.CreditLimit, dec))
+	aprS := ui.UseState(floatOrEmpty(a.InterestRateAPR))
+	minpS := ui.UseState(moneyMajorOrEmpty(a.MinPayment, dec))
+	dueS := ui.UseState(intOrEmpty(a.DueDayOfMonth))
+	lenderS := ui.UseState(a.Lender)
+	retS := ui.UseState(floatOrEmpty(a.ExpectedReturnAPR))
+	liqS := ui.UseState(intOrEmpty(a.LiquidityScore))
+	stabS := ui.UseState(intOrEmpty(a.StabilityScore))
+	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
+	onClim := ui.UseEvent(func(v string) { climS.Set(v) })
+	onApr := ui.UseEvent(func(v string) { aprS.Set(v) })
+	onMinp := ui.UseEvent(func(v string) { minpS.Set(v) })
+	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
+	onLender := ui.UseEvent(func(v string) { lenderS.Set(v) })
+	onRet := ui.UseEvent(func(v string) { retS.Set(v) })
+	onLiq := ui.UseEvent(func(v string) { liqS.Set(v) })
+	onStab := ui.UseEvent(func(v string) { stabS.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		nameS.Set(a.Name)
+		balS.Set(money.FormatMinor(a.OpeningBalance.Amount, dec))
+		climS.Set(moneyMajorOrEmpty(a.CreditLimit, dec))
+		aprS.Set(floatOrEmpty(a.InterestRateAPR))
+		minpS.Set(moneyMajorOrEmpty(a.MinPayment, dec))
+		dueS.Set(intOrEmpty(a.DueDayOfMonth))
+		lenderS.Set(a.Lender)
+		retS.Set(floatOrEmpty(a.ExpectedReturnAPR))
+		liqS.Set(intOrEmpty(a.LiquidityScore))
+		stabS.Set(intOrEmpty(a.StabilityScore))
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		cp := a
+		cp.Name = strings.TrimSpace(nameS.Get())
+		if amt, err := money.ParseMinor(strings.TrimSpace(balS.Get()), dec); err == nil {
+			cp.OpeningBalance = money.New(amt, a.Currency)
+		}
+		if a.Class == domain.ClassLiability {
+			cp.CreditLimit = parseMoneyOrZero(climS.Get(), dec, a.Currency)
+			cp.InterestRateAPR = parseFloatOrZero(aprS.Get())
+			cp.MinPayment = parseMoneyOrZero(minpS.Get(), dec, a.Currency)
+			cp.DueDayOfMonth = parseIntOrZero(dueS.Get())
+			cp.Lender = strings.TrimSpace(lenderS.Get())
+		} else {
+			cp.ExpectedReturnAPR = parseFloatOrZero(retS.Get())
+			cp.LiquidityScore = parseIntOrZero(liqS.Get())
+			cp.StabilityScore = parseIntOrZero(stabS.Get())
+		}
+		props.OnSave(cp)
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		isLiab := a.Class == domain.ClassLiability
+		return Div(Class("row"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Type("number"), Placeholder("Opening balance"), Value(balS.Get()), Step("0.01"), OnInput(onBal)),
+				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Credit limit"), Value(climS.Get()), Step("0.01"), OnInput(onClim))),
+				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Interest APR %"), Value(aprS.Get()), Step("0.01"), OnInput(onApr))),
+				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Minimum payment"), Value(minpS.Get()), Step("0.01"), OnInput(onMinp))),
+				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Due day (1–28)"), Value(dueS.Get()), OnInput(onDue))),
+				If(isLiab, Input(Class("field"), Type("text"), Placeholder("Lender"), Value(lenderS.Get()), OnInput(onLender))),
+				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Expected return APR %"), Value(retS.Get()), Step("0.01"), OnInput(onRet))),
+				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Liquidity 0–100"), Value(liqS.Get()), OnInput(onLiq))),
+				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Stability 0–100"), Value(stabS.Get()), OnInput(onStab))),
+				Button(Class("btn btn-primary"), Type("submit"), "Save"),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+			),
+		)
+	}
+
 	archLabel := "Archive"
-	if props.Account.Archived {
+	if a.Archived {
 		archLabel = "Restore"
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), props.Account.Name,
+			Span(Class("row-desc"), a.Name,
 				If(props.Stale, Span(Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), "Stale")),
 			),
-			Span(Class("row-meta"), accountMeta(props.Account, props.Balance)),
+			Span(Class("row-meta"), accountMeta(a, props.Balance)),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
-		If(!props.Account.Archived, Button(Class("btn"), Type("button"), Title("Mark balance as checked today"), OnClick(refresh), "Mark updated")),
+		If(!a.Archived, Button(Class("btn"), Type("button"), Title("Mark balance as checked today"), OnClick(refresh), "Mark updated")),
+		Button(Class("btn"), Type("button"), Title("Edit account"), OnClick(startEdit), "Edit"),
 		Button(Class("btn"), Type("button"), Title(archLabel+" account"), OnClick(arch), archLabel),
 		Button(Class("btn-del"), Type("button"), Title("Delete account"), OnClick(del), "✕"),
 	)
+}
+
+// parseMoneyOrZero parses a major-unit amount to money, returning zero on error.
+func parseMoneyOrZero(s string, dec int, cur string) money.Money {
+	if amt, err := money.ParseMinor(strings.TrimSpace(s), dec); err == nil {
+		return money.New(amt, cur)
+	}
+	return money.Money{Currency: cur}
+}
+
+// parseFloatOrZero parses a float, returning 0 on error.
+func parseFloatOrZero(s string) float64 {
+	f, _ := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	return f
+}
+
+// parseIntOrZero parses an int, returning 0 on error.
+func parseIntOrZero(s string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(s))
+	return n
 }

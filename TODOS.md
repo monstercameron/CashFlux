@@ -211,7 +211,7 @@ Shared control components (from mockup):
 ### 1.9 Accounts (assets + liabilities) ★
 
 - [x] ★ Accounts list grouped by class (assets / liabilities) with per-account balance
-- [~] ★ Add + delete + archive/restore account done (per-row component); full edit later
+- [x] ★ Add + delete + archive/restore + inline edit account (name, opening balance, type attributes)
 - [x] Liability sub-form (credit limit, APR, min payment, due day, lender) — shown for liability types
 - [~] Allocation attributes sub-form (expected return, liquidity, stability) done; lock-until later
 - [ ] Per-account ledger view (filtered txns + running balance)
