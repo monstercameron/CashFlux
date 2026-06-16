@@ -219,6 +219,21 @@ func SavingsRate(income, expense int64) int {
 	return int((income - expense) * 100 / income)
 }
 
+// Utilization returns credit utilization as a whole percent — how much of a
+// credit limit is used — from a balance and limit (same minor units). It uses
+// the magnitude of the balance (a liability owed is typically negative) and
+// returns ok=false when the limit is non-positive (no meaningful utilization).
+func Utilization(balance, limit int64) (pct int, ok bool) {
+	if limit <= 0 {
+		return 0, false
+	}
+	owed := balance
+	if owed < 0 {
+		owed = -owed
+	}
+	return int(owed * 100 / limit), true
+}
+
 // PercentChange returns the whole-percent change from prev to curr (both in the
 // same minor units), with ok=false when prev is zero (no meaningful baseline).
 // It divides by the magnitude of prev so the sign always reflects the real

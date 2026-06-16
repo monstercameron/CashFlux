@@ -203,6 +203,30 @@ func TestNetByOwner(t *testing.T) {
 	}
 }
 
+func TestUtilization(t *testing.T) {
+	cases := []struct {
+		name           string
+		balance, limit int64
+		wantPct        int
+		wantOK         bool
+	}{
+		{"no limit is not ok", -500, 0, 0, false},
+		{"negative limit is not ok", -500, -100, 0, false},
+		{"owed (negative balance) 50pct", -5000, 10000, 50, true},
+		{"positive balance magnitude", 5000, 10000, 50, true},
+		{"zero owed", 0, 10000, 0, true},
+		{"over limit", -12000, 10000, 120, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			pct, ok := Utilization(c.balance, c.limit)
+			if pct != c.wantPct || ok != c.wantOK {
+				t.Errorf("Utilization(%d, %d) = (%d, %v), want (%d, %v)", c.balance, c.limit, pct, ok, c.wantPct, c.wantOK)
+			}
+		})
+	}
+}
+
 func TestSavingsRate(t *testing.T) {
 	cases := []struct {
 		name            string

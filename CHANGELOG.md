@@ -95,6 +95,9 @@ and every commit updates this file under `Unreleased`.
 - Moved the upcoming-bills "next due date" math out of the js-only dashboard into pure, table-tested
   `dateutil.NextMonthlyDue(now, day)` (next monthly due on/after today, day clamped to 1–28 so it's
   valid every month).
+- Extracted the account credit-utilization calc into pure, table-tested `ledger.Utilization(balance,
+  limit)` (uses the balance magnitude; ok=false when there's no limit) — the Accounts liability rows
+  delegate to it.
 - Added a pure, table-tested ordered-sequence + bin-packing model to `internal/dashlayout` (`Item`,
   `Pack`, `Move`, `ResizeItem`) — the foundation for iOS-home-screen-style dashboard reflow (drag =
   reorder + re-pack, multi-cell tiles never overlap). Not yet wired to the UI; the legacy

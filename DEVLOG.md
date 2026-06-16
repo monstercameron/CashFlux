@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Extract credit-utilization into ledger
+
+- Moved the inline `owed*100/limit` from `accountMeta` into pure `ledger.Utilization(balance, limit)`
+  (balance magnitude, ok=false for non-positive limit). Accounts liability rows delegate to it.
+- Table-tested: no/negative limit not-ok, negative & positive balance magnitudes, zero owed, over-limit.
+  `internal/ledger` + wasm green.
+- Continues the "no math in view code" + trust theme; the ledger package now owns SavingsRate,
+  PercentChange, and Utilization alongside the balance/net-worth functions.
+
 ## 2026-06-16 — Top-bar verbiage migrated to i18n (chrome complete)
 
 - Migrated the top bar's chrome onto `uistate.T`: menu-toggle tooltip (`topbar.menu`), "+ Add" label

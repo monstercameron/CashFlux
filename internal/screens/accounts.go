@@ -362,12 +362,10 @@ func Accounts() ui.Node {
 // utilization for liability accounts that have a credit limit.
 func accountMeta(a domain.Account, bal money.Money) string {
 	meta := humanizeType(string(a.Type)) + " · " + a.Currency
-	if a.Class == domain.ClassLiability && a.CreditLimit.Amount > 0 {
-		owed := bal.Amount
-		if owed < 0 {
-			owed = -owed
+	if a.Class == domain.ClassLiability {
+		if pct, ok := ledger.Utilization(bal.Amount, a.CreditLimit.Amount); ok {
+			meta += fmt.Sprintf(" · %d%% of limit used", pct)
 		}
-		meta += fmt.Sprintf(" · %d%% of limit used", owed*100/a.CreditLimit.Amount)
 	}
 	return meta
 }
