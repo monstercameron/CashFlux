@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Allocation: honor account lock-until
+
+- Put the long-unused `Account.LockUntil` to work. The Allocate screen now skips an asset account
+  whose `LockUntil` is in the future when building candidates — you can't put new money into a locked
+  account (a CD, a vesting lot), so it shouldn't be suggested. Added a "Locked until" date to the
+  account add form's asset section.
+- Clear semantics (locked = no new money before the date), so no spec ambiguity — unlike a member
+  view filter, which I'm deliberately not inferring.
+- **Next.** Add the lock-until field to the account *inline editor* too (so an existing account can
+  be locked/unlocked), then it's fully manageable.
+
 ## 2026-06-16 — Spending breakdown: roll up to parent categories
 
 - The dashboard breakdown now attributes each expense to its top-level ancestor category, so

@@ -15,6 +15,10 @@ and every commit updates this file under `Unreleased`.
   format (via `prefs.FormatDate`) instead of always ISO. Each row component reads the preferences
   atom, so changing the format updates every list live.
 
+### Added
+- Account "locked until" date (assets): set on the add form, and the Allocate screen excludes an
+  account locked until a future date from its suggestions (you can't add money to it yet).
+
 ### Changed
 - The dashboard spending breakdown now rolls sub-category spend up to its top-level parent category,
   so e.g. Restaurants and Groceries are counted under Food — a cleaner high-level view.

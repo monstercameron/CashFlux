@@ -5,6 +5,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/allocate"
@@ -118,6 +119,10 @@ func Allocate() ui.Node {
 					StabilityScore: 100, LiquidityScore: 0, DebtReduction: true,
 				})
 			}
+			continue
+		}
+		// A locked account (e.g. a CD) can't take new money until its lock lifts.
+		if !a.LockUntil.IsZero() && a.LockUntil.After(time.Now()) {
 			continue
 		}
 		cands = append(cands, allocate.Candidate{

@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -45,6 +46,7 @@ func Accounts() ui.Node {
 	expReturn := ui.UseState("")
 	liquidity := ui.UseState("")
 	stability := ui.UseState("")
+	lockUntil := ui.UseState("")
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 
@@ -61,6 +63,7 @@ func Accounts() ui.Node {
 	onExpReturn := ui.UseEvent(func(v string) { expReturn.Set(v) })
 	onLiquidity := ui.UseEvent(func(v string) { liquidity.Set(v) })
 	onStability := ui.UseEvent(func(v string) { stability.Set(v) })
+	onLockUntil := ui.UseEvent(func(v string) { lockUntil.Set(v) })
 
 	bump := func() { rev.Set(rev.Get() + 1) }
 
@@ -116,6 +119,11 @@ func Accounts() ui.Node {
 			if s, e := strconv.Atoi(strings.TrimSpace(stability.Get())); e == nil {
 				acc.StabilityScore = s
 			}
+			if lu := strings.TrimSpace(lockUntil.Get()); lu != "" {
+				if d, e := dateutil.ParseDate(lu); e == nil {
+					acc.LockUntil = d
+				}
+			}
 		}
 		acc.Custom = customValuesToMap(accDefs, customVals.Get())
 		if err := app.PutAccount(acc); err != nil {
@@ -131,6 +139,7 @@ func Accounts() ui.Node {
 		lender.Set("")
 		expReturn.Set("")
 		liquidity.Set("")
+		lockUntil.Set("")
 		stability.Set("")
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
@@ -199,6 +208,7 @@ func Accounts() ui.Node {
 			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Expected return APR %"), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn))),
 			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Liquidity 0–100"), Value(liquidity.Get()), OnInput(onLiquidity))),
 			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Stability 0–100"), Value(stability.Get()), OnInput(onStability))),
+			If(!isLiab, Input(Class("field"), Type("date"), Title("Locked until (no new money before this date)"), Value(lockUntil.Get()), OnInput(onLockUntil))),
 			MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),
