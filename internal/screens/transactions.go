@@ -62,6 +62,7 @@ func Transactions() ui.Node {
 	tagsStr := ui.UseState("")
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	customVals := ui.UseState(map[string]string{})
+	selected := ui.UseState(map[string]bool{})
 	errMsg := ui.UseState("")
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
@@ -268,6 +269,29 @@ func Transactions() ui.Node {
 		bump()
 	}
 
+	toggleSelect := func(txnID string) {
+		m := selected.Get()
+		nm := make(map[string]bool, len(m)+1)
+		for k, v := range m {
+			if v {
+				nm[k] = v
+			}
+		}
+		if nm[txnID] {
+			delete(nm, txnID)
+		} else {
+			nm[txnID] = true
+		}
+		selected.Set(nm)
+	}
+	clearSelection := ui.UseEvent(Prevent(func() { selected.Set(map[string]bool{}) }))
+	bulkDelete := ui.UseEvent(Prevent(func() {
+		for id := range selected.Get() {
+			deleteTxn(id)
+		}
+		selected.Set(map[string]bool{})
+	}))
+
 	repeatLast := ui.UseEvent(func() {
 		all := app.Transactions()
 		if len(all) == 0 {
@@ -414,7 +438,8 @@ func Transactions() ui.Node {
 				acc := accByID[t.AccountID]
 				return ui.CreateElement(TransactionRow, transactionRowProps{
 					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], Categories: categories,
-					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn,
+					Selected: selected.Get()[t.ID],
+					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect,
 				})
 			},
 		)
@@ -452,19 +477,26 @@ func Transactions() ui.Node {
 				),
 				Button(Class("btn"), Type("submit"), "Clear"),
 			),
+			If(len(selected.Get()) > 0, Div(Class("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
+				Span(Class("muted"), plural(len(selected.Get()), "transaction")+" selected"),
+				Button(Class("btn-del"), Type("button"), Title("Delete the selected transactions"), OnClick(bulkDelete), "Delete selected"),
+				Button(Class("btn"), Type("button"), OnClick(clearSelection), "Clear selection"),
+			)),
 			listBody,
 		),
 	)
 }
 
 type transactionRowProps struct {
-	Txn         domain.Transaction
-	Account     string
-	Category    string
-	Categories  []domain.Category // for the edit-mode category picker
-	OnDelete    func(string)
-	OnDuplicate func(domain.Transaction)
-	OnSave      func(orig domain.Transaction, desc, amount, categoryID, date string)
+	Txn            domain.Transaction
+	Account        string
+	Category       string
+	Categories     []domain.Category // for the edit-mode category picker
+	Selected       bool
+	OnDelete       func(string)
+	OnDuplicate    func(domain.Transaction)
+	OnSave         func(orig domain.Transaction, desc, amount, categoryID, date string)
+	OnToggleSelect func(string)
 }
 
 // absAmount returns the absolute minor-unit amount of a transaction (for sorting
@@ -516,6 +548,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
 	dup := ui.UseEvent(Prevent(func() { props.OnDuplicate(t) }))
+	sel := ui.UseEvent(Prevent(func() { props.OnToggleSelect(t.ID) }))
 	pr := uistate.UsePrefs().Get()
 	editing := ui.UseState(false)
 	descS := ui.UseState(t.Desc)
@@ -571,7 +604,12 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		meta += " · #" + strings.Join(props.Txn.Tags, " #")
 	}
 
+	selectGlyph := "☐"
+	if props.Selected {
+		selectGlyph = "☑"
+	}
 	return Div(Class("row"),
+		Button(Class("check"), Type("button"), Title("Select for bulk actions"), OnClick(sel), selectGlyph),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), props.Txn.Desc),
 			Span(Class("row-meta"), meta),

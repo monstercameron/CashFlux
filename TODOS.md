@@ -241,7 +241,7 @@ Shared control components (from mockup):
       filter across reloads (`uistate.UseTxFilter` localStorage atom)
 - [x] Sort options (date, amount, payee)
 - [x] Row component for actions; inline edit (incl. category) — `TransactionRow` edit mode
-- [ ] Bulk select + bulk delete/recategorize
+- [~] Bulk select + bulk delete done (per-row select toggle + action bar, transfer-aware); bulk recategorize later
 - [x] Repeat-last helper (pre-fills form from newest txn) + per-row duplicate (copies row to today)
 - [ ] Tests: signed amounts, transfer pairing, filter + sort logic
 

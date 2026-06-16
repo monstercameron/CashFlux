@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: bulk select + delete
+
+- Added multi-select to the ledger. A `selected` set state in `Transactions`; each `TransactionRow`
+  gets a `☐/☑` toggle button (reusing the to-do `check` style and the per-row-component hook rule),
+  and when the set is non-empty a bar shows "N transactions selected" with Delete selected / Clear.
+- **Bulk delete reuses `deleteTxn`.** Rather than a separate path, bulk delete calls the existing
+  per-row `deleteTxn` for each selected id — so transfer pairs are still removed together, and a
+  leg whose partner was already deleted is a harmless no-op. Selection clears afterward.
+- Used a glyph toggle button instead of a real `<input type=checkbox>` to dodge the checked-attribute
+  binding question and match the existing to-do check control — consistent and simple.
+- **Next.** Bulk *recategorize* is the natural follow-up (reuse the category picker + a set update),
+  or move to remaining polish / Phase-3.
+
 ## 2026-06-16 — Document import: dedupe vs existing (review TODO closed)
 
 - Added duplicate detection so re-importing the same receipt doesn't double-enter rows. Pure side:
