@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: navigating to a new screen now moves keyboard and screen-reader focus into the
+  main content region (not on first page load, so the first Tab still reaches the skip link) — so
+  SPA navigation no longer strands focus on the screen you just left.
 - Accessibility: a **"Skip to content"** link (the first focusable element, visible only on keyboard
   focus) jumps past the sidebar to the now-focusable `<main>`, and a clear **focus-visible ring** is
   drawn on every interactive element in both themes — so keyboard users can navigate efficiently and

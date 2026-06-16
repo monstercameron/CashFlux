@@ -31,6 +31,19 @@ type ShellProps struct {
 // independently scrolling main pane with a sticky top bar, wrapping the active
 // screen's content. (Ported from design/candidate-c.html.)
 func Shell(props ShellProps) uic.Node {
+	// Move focus into <main> whenever the route changes — but not on the first
+	// render, so a keyboard user's initial Tab still reaches the skip link. This
+	// keeps SPA navigation from leaving focus stranded on the previous screen.
+	firstRender := uic.UseRef(true)
+	uic.UseEffect(func() func() {
+		if firstRender.Get() {
+			firstRender.Set(false)
+			return nil
+		}
+		focusMain()
+		return nil
+	}, router.InspectCurrentRoute().Path)
+
 	return Div(Class("flex h-screen overflow-hidden bg-base text-fg font-sans"),
 		A(Class("skip-link"), Attr("href", "#main"), uistate.T("a11y.skipToContent")),
 		uic.CreateElement(Sidebar),

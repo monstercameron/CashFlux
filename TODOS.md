@@ -426,8 +426,8 @@ one-line a11y item in §1.20.
 - [ ] **Zoom / reflow:** usable at 200% browser zoom and with enlarged browser font sizes — the
       px-heavy styling (see B6) is the risk; pairs with the B6 UI-scale work.
 - [ ] **Forms:** correct input types (number/date), every field labelled, inline validation announced.
-- [ ] **Route changes (SPA):** update `document.title` and move focus to the new screen's `<h1>`/main on
-      navigation (intersects B3 routing + B9 breadcrumb).
+- [~] **Route changes (SPA):** focus now moves to `<main>` on navigation (skips the initial load so the
+      first Tab still reaches the skip link). Still TODO: update `document.title` per screen.
 - [~] **Charts:** `ui.AreaChart` is now `role="img"` + `aria-label` with a live-figure summary (net-worth
       trend, forecast). Remaining: the div-based bar charts + any future D3 charts (B14).
 - [ ] **Touch targets:** ≥44×44px hit areas (watch compact density + small icon buttons).

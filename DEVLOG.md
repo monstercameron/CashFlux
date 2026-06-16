@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B15 (slice): route-change focus
+
+- On navigation, move focus into `<main>` so SPA route changes behave like a real page load for
+  keyboard/SR users instead of leaving focus on the old screen's control. Implemented with a
+  `UseEffect` in `Shell` keyed on `InspectCurrentRoute().Path`, guarded by a `UseRef(true)`
+  first-render flag so the initial load does NOT steal focus (keeps the first Tab landing on the
+  skip link). New `focusMain()` helper calls `getElementById("main").focus({preventScroll:true})`.
+- Closes the B15 "route-change focus" item. Remaining B15: live regions for async results, the
+  color-only-cue audit, real keyboard operability for the div-based switches/swatches and bento
+  drag/resize (needs framework key handlers), and single-h1-per-screen heading order.
+
 ## 2026-06-16 — B15 (slice): skip link + focus rings
 
 - Added a `.skip-link` as the Shell's first child (`href="#main"`), off-screen until focused, and made
