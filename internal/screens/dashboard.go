@@ -178,7 +178,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 		if a.Archived || a.Class != domain.ClassLiability || a.MinPayment.Amount <= 0 || a.DueDayOfMonth <= 0 {
 			continue
 		}
-		bills = append(bills, bill{name: a.Name, due: nextDue(now, a.DueDayOfMonth), amount: a.MinPayment})
+		bills = append(bills, bill{name: a.Name, due: dateutil.NextMonthlyDue(now, a.DueDayOfMonth), amount: a.MinPayment})
 	}
 	sort.Slice(bills, func(i, j int) bool { return bills[i].due.Before(bills[j].due) })
 
@@ -207,21 +207,6 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 		ID: "bills", Title: "Upcoming bills", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "6",
 		Body: body,
 	})
-}
-
-// nextDue returns the next occurrence of a monthly due-day on or after today
-// (the day is clamped to 28 to stay valid in every month).
-func nextDue(now time.Time, day int) time.Time {
-	if day > 28 {
-		day = 28
-	}
-	y, m, _ := now.Date()
-	due := time.Date(y, m, day, 0, 0, 0, 0, now.Location())
-	today := time.Date(y, m, now.Day(), 0, 0, 0, 0, now.Location())
-	if due.Before(today) {
-		due = dateutil.AddMonths(due, 1)
-	}
-	return due
 }
 
 // spendingBreakdownWidget is the 2×1 Spending breakdown widget: a segmented bar

@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Extract bill next-due date into dateutil
+
+- Moved `nextDue` out of the js-only dashboard into pure `dateutil.NextMonthlyDue(now, day)` — the
+  next occurrence of a monthly due-day on/after today, day clamped to 1–28 so it's valid every month
+  (incl. February). The upcoming-bills widget calls it.
+- Table-tested the fiddly cases: later-this-month, on-the-day, already-passed→next-month, >28 clamp,
+  February clamp, non-positive→1. `internal/dateutil` + wasm green.
+- (Fixed a wrong expected value while writing the test — day=0 clamps to the 1st, which is already
+  past the 10th, so it rolls to next month.)
+
 ## 2026-06-16 — Extract savings-rate calc into ledger
 
 - Moved the dashboard's inline `(income-expense)*100/income` into pure `ledger.SavingsRate` (0 when

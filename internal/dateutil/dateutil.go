@@ -85,3 +85,22 @@ func DaysBetween(a, b time.Time) int {
 	b0 := time.Date(by, bm, bd, 0, 0, 0, 0, time.UTC)
 	return int(b0.Sub(a0).Hours()) / 24
 }
+
+// NextMonthlyDue returns the next occurrence of a monthly due-day on or after
+// the day containing `now` (at 00:00 in now's location). The day is clamped to
+// 28 so it stays valid in every month, including February.
+func NextMonthlyDue(now time.Time, day int) time.Time {
+	if day > 28 {
+		day = 28
+	}
+	if day < 1 {
+		day = 1
+	}
+	y, m, d := now.Date()
+	due := time.Date(y, m, day, 0, 0, 0, 0, now.Location())
+	today := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	if due.Before(today) {
+		due = AddMonths(due, 1)
+	}
+	return due
+}

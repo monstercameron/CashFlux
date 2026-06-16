@@ -84,6 +84,9 @@ and every commit updates this file under `Unreleased`.
 - Extracted the dashboard's inline savings-rate calculation into a pure, table-tested
   `ledger.SavingsRate(income, expense)` (0 when income is non-positive; negative when overspent) —
   one more KPI computation moved out of view code.
+- Moved the upcoming-bills "next due date" math out of the js-only dashboard into pure, table-tested
+  `dateutil.NextMonthlyDue(now, day)` (next monthly due on/after today, day clamped to 1–28 so it's
+  valid every month).
 - Added a pure, table-tested ordered-sequence + bin-packing model to `internal/dashlayout` (`Item`,
   `Pack`, `Move`, `ResizeItem`) — the foundation for iOS-home-screen-style dashboard reflow (drag =
   reorder + re-pack, multi-cell tiles never overlap). Not yet wired to the UI; the legacy

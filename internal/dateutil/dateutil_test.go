@@ -13,6 +13,30 @@ func date(s string) time.Time {
 	return t
 }
 
+func TestNextMonthlyDue(t *testing.T) {
+	cases := []struct {
+		name string
+		now  string
+		day  int
+		want string
+	}{
+		{"later this month", "2026-06-10", 15, "2026-06-15"},
+		{"on the due day", "2026-06-15", 15, "2026-06-15"},
+		{"already passed rolls to next month", "2026-06-20", 15, "2026-07-15"},
+		{"clamp over-28 to 28", "2026-06-10", 31, "2026-06-28"},
+		{"february clamps to 28", "2026-02-10", 30, "2026-02-28"},
+		{"non-positive day clamps to the 1st (already passed → next month)", "2026-06-10", 0, "2026-07-01"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := NextMonthlyDue(date(c.now), c.day)
+			if FormatDate(got) != c.want {
+				t.Errorf("NextMonthlyDue(%s, %d) = %s, want %s", c.now, c.day, FormatDate(got), c.want)
+			}
+		})
+	}
+}
+
 func TestParseFormatRoundTrip(t *testing.T) {
 	got := FormatDate(date("2026-06-15"))
 	if got != "2026-06-15" {
