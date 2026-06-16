@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Member delete now offers reassignment: deleting a member who owns accounts, budgets, or goals
+  opens a panel to move everything to another owner (or the shared group) and then deletes them,
+  instead of just refusing. Scope follows the new owner and transactions attributed to the member
+  are re-attributed. Backed by `appstate.ReassignOwner` (tested).
 - Category delete now offers reassignment: deleting a category that's still used by transactions or
   budgets opens a panel to move those records to another category and then deletes it, instead of
   just refusing. Backed by `appstate.ReassignCategory` (tested). Unused categories still delete

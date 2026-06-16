@@ -120,6 +120,44 @@ func TestReassignCategory(t *testing.T) {
 	}
 }
 
+func TestReassignOwner(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutMember(domain.Member{ID: "m1", Name: "Alex"}); err != nil {
+		t.Fatalf("PutMember: %v", err)
+	}
+	if err := a.PutAccount(domain.Account{
+		ID: "a1", Name: "Alex Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: "m1", Scope: domain.ScopeIndividual,
+	}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	if err := a.PutGoal(domain.Goal{
+		ID: "g1", Name: "Trip", OwnerID: "m1", Scope: domain.ScopeIndividual,
+		TargetAmount: money.New(100000, "USD"),
+	}); err != nil {
+		t.Fatalf("PutGoal: %v", err)
+	}
+
+	// Reassign to the group owner: scope becomes shared.
+	moved, err := a.ReassignOwner("m1", domain.GroupOwnerID)
+	if err != nil {
+		t.Fatalf("ReassignOwner: %v", err)
+	}
+	if moved != 2 {
+		t.Errorf("moved = %d, want 2", moved)
+	}
+	for _, ac := range a.Accounts() {
+		if ac.ID == "a1" && (ac.OwnerID != domain.GroupOwnerID || ac.Scope != domain.ScopeShared) {
+			t.Errorf("account not reassigned: owner=%q scope=%v", ac.OwnerID, ac.Scope)
+		}
+	}
+	for _, g := range a.Goals() {
+		if g.ID == "g1" && g.OwnerID != domain.GroupOwnerID {
+			t.Errorf("goal not reassigned: owner=%q", g.OwnerID)
+		}
+	}
+}
+
 func TestPutValidatesAndPersists(t *testing.T) {
 	a := newApp(t, false)
 

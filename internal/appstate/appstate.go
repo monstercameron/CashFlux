@@ -223,6 +223,59 @@ func (a *App) PutMember(m domain.Member) error {
 }
 func (a *App) DeleteMember(id string) error { return a.del("member", id, a.store.DeleteMember) }
 
+// ReassignOwner moves every account, budget, goal, and transaction owned by oldID
+// to newID, returning how many records moved. Scope follows the new owner (shared
+// for the group owner, individual otherwise); transactions attributed to the old
+// member are re-attributed (cleared when moving to the group). Use it before
+// deleting a member who still owns entities. The member itself is not deleted.
+func (a *App) ReassignOwner(oldID, newID string) (int, error) {
+	scope := domain.ScopeIndividual
+	memberID := newID
+	if newID == domain.GroupOwnerID {
+		scope = domain.ScopeShared
+		memberID = ""
+	}
+	moved := 0
+	for _, ac := range a.Accounts() {
+		if ac.OwnerID == oldID {
+			ac.OwnerID, ac.Scope = newID, scope
+			if err := a.store.PutAccount(ac); err != nil {
+				return moved, err
+			}
+			moved++
+		}
+	}
+	for _, b := range a.Budgets() {
+		if b.OwnerID == oldID {
+			b.OwnerID, b.Scope = newID, scope
+			if err := a.store.PutBudget(b); err != nil {
+				return moved, err
+			}
+			moved++
+		}
+	}
+	for _, g := range a.Goals() {
+		if g.OwnerID == oldID {
+			g.OwnerID, g.Scope = newID, scope
+			if err := a.store.PutGoal(g); err != nil {
+				return moved, err
+			}
+			moved++
+		}
+	}
+	for _, t := range a.Transactions() {
+		if t.MemberID == oldID {
+			t.MemberID = memberID
+			if err := a.store.PutTransaction(t); err != nil {
+				return moved, err
+			}
+			moved++
+		}
+	}
+	a.log.Info("reassigned owner", "from", oldID, "to", newID, "moved", moved)
+	return moved, nil
+}
+
 func (a *App) PutAccount(ac domain.Account) error {
 	if is := validate.ValidateAccount(ac); !is.OK() {
 		return is

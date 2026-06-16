@@ -33,9 +33,12 @@ func Members() ui.Node {
 	color := ui.UseState("#7c83ff")
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
+	reassignID := ui.UseState("") // member awaiting reassignment before delete
+	reassignTo := ui.UseState(domain.GroupOwnerID)
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onColor := ui.UseEvent(func(v string) { color.Set(v) })
+	onReassignTo := ui.UseEvent(func(e ui.Event) { reassignTo.Set(e.GetValue()) })
 
 	memberDefs := app.CustomFieldDefsFor("member")
 	onCustom := func(key, value string) {
@@ -68,8 +71,7 @@ func Members() ui.Node {
 		bump()
 	}))
 
-	deleteMember := func(memberID string) {
-		// Guard: don't orphan entities this member owns.
+	ownedCount := func(memberID string) int {
 		owned := 0
 		for _, a := range app.Accounts() {
 			if a.OwnerID == memberID {
@@ -86,8 +88,15 @@ func Members() ui.Node {
 				owned++
 			}
 		}
-		if owned > 0 {
-			errMsg.Set(fmt.Sprintf("This member still owns %d account(s), budget(s), or goal(s). Reassign or remove those first.", owned))
+		return owned
+	}
+
+	deleteMember := func(memberID string) {
+		// If the member owns entities, open the reassign panel; otherwise delete now.
+		if ownedCount(memberID) > 0 {
+			reassignID.Set(memberID)
+			reassignTo.Set(domain.GroupOwnerID)
+			errMsg.Set("")
 			return
 		}
 		if err := app.DeleteMember(memberID); err != nil {
@@ -97,6 +106,27 @@ func Members() ui.Node {
 		errMsg.Set("")
 		bump()
 	}
+
+	cancelReassign := ui.UseEvent(Prevent(func() { reassignID.Set("") }))
+	confirmReassign := ui.UseEvent(Prevent(func() {
+		from := reassignID.Get()
+		to := reassignTo.Get()
+		if to == from {
+			errMsg.Set("Pick a different owner to move these to.")
+			return
+		}
+		if _, err := app.ReassignOwner(from, to); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		if err := app.DeleteMember(from); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		reassignID.Set("")
+		errMsg.Set("")
+		bump()
+	}))
 
 	setDefault := func(memberID string) {
 		for _, m := range app.Members() {
@@ -147,6 +177,29 @@ func Members() ui.Node {
 		Span(Class(accentFor(grp)), fmtMoney(grp)),
 	))
 
+	// Reassign-before-delete panel, shown when a member who owns entities is deleted.
+	reassignPanel := Fragment()
+	if rid := reassignID.Get(); rid != "" {
+		var targetName string
+		opts := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(reassignTo.Get() == domain.GroupOwnerID), "Group (shared)")}
+		for _, m := range members {
+			if m.ID == rid {
+				targetName = m.Name
+				continue
+			}
+			opts = append(opts, Option(Value(m.ID), SelectedIf(reassignTo.Get() == m.ID), m.Name))
+		}
+		reassignPanel = Section(Class("card"),
+			H2(Class("card-title"), "Reassign before deleting"),
+			P(Class("muted"), fmt.Sprintf("%q owns %d account(s), budget(s), or goal(s). Move them to another owner, then this member will be deleted.", targetName, ownedCount(rid))),
+			Form(Class("form-grid"), OnSubmit(confirmReassign),
+				Select(Class("field"), OnChange(onReassignTo), opts),
+				Button(Class("btn btn-primary"), Type("submit"), "Move and delete"),
+				Button(Class("btn"), Type("button"), OnClick(cancelReassign), "Cancel"),
+			),
+		)
+	}
+
 	return Div(
 		Section(Class("card"),
 			H2(Class("card-title"), "Add member"),
@@ -160,6 +213,7 @@ func Members() ui.Node {
 			),
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 		),
+		reassignPanel,
 		Section(Class("card"),
 			H2(Class("card-title"), "Household members"),
 			IfElse(len(members) == 0, P(Class("empty"), "No members yet."), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),

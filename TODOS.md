@@ -204,7 +204,8 @@ Shared control components (from mockup):
 - [~] List members; add/delete; set default; color done — edit later
 - [ ] Ownership assignment UI (individual vs group) for accounts/budgets/goals
 - [ ] Member switcher / filter affecting relevant views
-- [~] Guard: prevent deleting a member with owned entities done (blocks with a message); reassign flow later
+- [x] Member delete: reassign owned accounts/budgets/goals (+ transactions) to another owner via
+      `appstate.ReassignOwner` + Members reassign panel, then delete
 - [ ] Tests: member logic, ownership rules
 
 ### 1.9 Accounts (assets + liabilities) ★

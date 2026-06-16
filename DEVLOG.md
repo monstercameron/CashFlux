@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Members: reassign-before-delete
+
+- Mirrored the category reassign flow for members. `appstate.ReassignOwner(old, new)` moves owned
+  accounts, budgets, and goals — and re-attributes the member's transactions — to the new owner,
+  setting scope to match (shared for the group owner, individual otherwise) and clearing the
+  transaction member when moving to the group. Tested with an account + goal reassigned to the group.
+- The Members screen's delete now opens a reassign panel (default target: the shared group) instead
+  of blocking; "Move and delete" reassigns then deletes. Same stable-hook discipline: panel hooks
+  declared at the top, panel conditionally rendered, reusing the `Fragment()`-default pattern.
+- **Decision — reuse the existing per-screen reassign shape rather than abstracting it.** Categories
+  and members now have near-identical panels, but the entity types and the "what counts as owned/used"
+  differ enough that a shared component would need awkward generics; two ~30-line panels read more
+  clearly than one parameterized one. Noted in case a third reassign target appears.
+- Both delete-guards (members §1.13, categories) are now reassign flows, not dead ends.
+- **Next.** A larger remaining area — document vision-AI parsing, or a Phase-3 sync primitive — or an
+  empty-state/accessibility polish pass.
+
 ## 2026-06-16 — Categories: reassign-before-delete
 
 - Replaced the hard block on deleting an in-use category with a reassignment flow. Logic first:
