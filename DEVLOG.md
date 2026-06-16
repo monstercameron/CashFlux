@@ -335,8 +335,18 @@ problems and fixes, and what's next.
 - Added **credit utilization** to liability account rows (an `accountMeta` helper appends "N% of limit
   used" when a liability has a credit limit), using the row's already-computed balance.
 
-**Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
-and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
+## 2026-06-15 — Phase 2 begins (bottom-up): debt payoff
+
+- Phase-1 core is broadly built out (all candidate-C UI + accounts/transactions/budgets/goals/todo/
+  members/categories/settings with filters, transfers, archive, freshness, tags, etc.), so I started
+  **Phase 2 bottom-up** with a pure logic package: `internal/payoff`. `Project(balance, aprPercent,
+  payment)` simulates monthly APR compounding + a fixed payment, returning months-to-zero, total
+  interest, and total paid; `ok=false` when the payment can't cover the interest (so it would never
+  clear) and a 1200-month cap as a backstop. Table-driven tests: 0% APR exact (10 months), an
+  interest-bearing case (~11 months, interest > 0), payment-too-small, already-paid, zero-payment.
+
+**Next:** surface payoff in a planning view (and add extra-payment / payoff-date scenarios), then the
+allocation-engine scorers and the formula-engine tokenizer — continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

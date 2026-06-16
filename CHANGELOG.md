@@ -171,6 +171,10 @@ and every commit updates this file under `Unreleased`.
   `AreaPath` (closed to a baseline). Table-driven tested; no rendering dependency.
 - `internal/ledger`: `NetWorthSeries` — net worth as of each cutoff time (transactions strictly
   before the cutoff counted), in base currency, for the net-worth trend chart. Table-driven tested.
+- `internal/payoff` (Phase 2 start): pure debt-payoff projection — `Project(balance, aprPercent,
+  payment)` simulates monthly APR accrual and a fixed payment, returning months-to-zero, total
+  interest, and total paid, with `ok=false` when the payment can't cover the interest. Table-driven
+  tested.
 - `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
   the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
   current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.

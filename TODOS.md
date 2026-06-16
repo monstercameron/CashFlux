@@ -379,7 +379,7 @@ Shared control components (from mockup):
 - [ ] `Recurring{ID, Kind, Label, Amount, Currency, Cadence, NextDate, AccountID, CategoryID, Autopost}` + CRUD
 - [ ] `Plan{ID, Name, HorizonMonths, BaseScenario, Assumptions[]}` + `PlanItem{...}` + CRUD
 - [ ] ★ Forecast engine (pure): projected balances/net worth over horizon from actuals + recurring + plan items
-- [ ] Debt payoff math (APR accrual, min/extra payments, months-to-zero, interest paid) + tests
+- [~] Debt payoff math (`internal/payoff.Project`: APR accrual, months-to-zero, interest paid) + tests; extra-payment scenarios later
 - [ ] What-if scenarios (add recurring, change spend, extra debt payment, rate change)
 - [ ] Planning screen: build scenario, compare vs actuals, push to forecast
 - [ ] Forecast visualization (balance/net-worth curve)
