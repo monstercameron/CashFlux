@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Refactor: transaction filtering → pure tested package
+
+- Moved the ledger's filter+sort out of the js-only `transactions.go` (untestable) into pure
+  `internal/txnfilter`: `Criteria` (the persisted shape), `Apply` (filter + sort, non-mutating), and
+  `AbsAmount`. `uistate.TxFilter` is now a type alias for `txnfilter.Criteria`, so the localStorage
+  atom and JSON are unchanged; the screen calls `txnfilter.Apply`.
+- **Why:** filtering is core behavior (account/category/member/text/date/cleared + three sorts) that
+  had zero tests because it lived behind the wasm build tag. Now it's table-tested (8 cases incl.
+  tag-text match, date range, each sort, and a no-mutation check) per the standards.
+- Kept the alias so nothing downstream changed type-wise; verified the full native suite plus the
+  wasm build. The explicit `go test ./internal/uistate` "setup failed" is just that js-only package
+  having no native build target — `./...` skips it cleanly.
+- **Next.** Genuine small polish or further testability extraction; the feature set is comprehensive.
+
 ## 2026-06-16 — Budgets: period summary header
 
 - Added a stat-grid above the budgets list: total spent, total budgeted (sum of each status's

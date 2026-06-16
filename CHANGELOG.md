@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- Extracted transaction filtering/sorting into a pure, table-tested `internal/txnfilter` package
+  (`Criteria` + `Apply` + `AbsAmount`); `uistate.TxFilter` now aliases `txnfilter.Criteria` and the
+  ledger screen delegates to it. No behavior change — a core behavior is now unit-tested instead of
+  living only in the js-only screen.
+
 ### Docs
 - Refreshed the CLAUDE.md status section to reflect the now-comprehensive feature set (full
   CRUD/inline-edit, reconciliation, sub-categories, budget periods, preferences/themes, document

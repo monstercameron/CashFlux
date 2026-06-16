@@ -6,29 +6,14 @@ import (
 	"encoding/json"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/GoWebComponents/state"
 )
 
-// TxFilter holds the transaction list's filter and sort selections. It persists
-// to localStorage so the user's view is restored on reload.
-type TxFilter struct {
-	Text     string `json:"text,omitempty"`
-	Account  string `json:"account,omitempty"`
-	Category string `json:"category,omitempty"`
-	Member   string `json:"member,omitempty"`
-	From     string `json:"from,omitempty"`
-	To       string `json:"to,omitempty"`
-	Sort     string `json:"sort,omitempty"`
-	Cleared  string `json:"cleared,omitempty"` // "", "yes", or "no"
-}
-
-// Normalize fills in defaults (the sort defaults to newest-first by date).
-func (f TxFilter) Normalize() TxFilter {
-	if f.Sort == "" {
-		f.Sort = "date"
-	}
-	return f
-}
+// TxFilter is the transaction list's filter/sort selection. It aliases the pure
+// txnfilter.Criteria (where the apply logic lives and is tested); this file only
+// persists it to localStorage so the user's view survives reloads.
+type TxFilter = txnfilter.Criteria
 
 const (
 	txFilterAtomID  = "transactions:filter"

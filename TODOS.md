@@ -252,7 +252,7 @@ Shared control components (from mockup):
 - [x] Bulk select + bulk delete (transfer-aware) + bulk recategorize + bulk mark cleared/uncleared
 - [x] Repeat-last helper (pre-fills form from newest txn) + per-row duplicate (copies row to today)
 - [x] Cleared/reconciled toggle per transaction + cleared-status filter (both/not/cleared, persisted)
-- [ ] Tests: signed amounts, transfer pairing, filter + sort logic
+- [x] Tests: filter + sort logic (`internal/txnfilter`, table-tested); signed amounts/transfer pairing in `ledger`
 
 ### 1.12 Budgets (individual + group)
 

@@ -3,7 +3,6 @@
 package screens
 
 import (
-	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -116,7 +116,7 @@ func Transactions() ui.Node {
 		uistate.PersistTxFilter(cleared)
 	}))
 	exportFiltered := ui.UseEvent(Prevent(func() {
-		rows := applyTxFilter(app.Transactions(), filterAtom.Get())
+		rows := txnfilter.Apply(app.Transactions(), filterAtom.Get())
 		if len(rows) == 0 {
 			errMsg.Set("No transactions match to export.")
 			return
@@ -431,7 +431,7 @@ func Transactions() ui.Node {
 	}
 
 	txns := app.Transactions()
-	shown := applyTxFilter(txns, f)
+	shown := txnfilter.Apply(txns, f)
 
 	// Summary of the shown set: count + net total converted to the base currency.
 	base := app.Settings().BaseCurrency
@@ -536,86 +536,8 @@ type transactionRowProps struct {
 	OnToggleCleared func(domain.Transaction)
 }
 
-// absAmount returns the absolute minor-unit amount of a transaction (for sorting
-// by size regardless of income/expense sign).
-func absAmount(t domain.Transaction) int64 {
-	a := t.Amount.Amount
-	if a < 0 {
-		return -a
-	}
-	return a
-}
-
-// applyTxFilter returns the transactions matching the filter f, sorted per
-// f.Sort (newest-first by default). Shared by the ledger view and CSV export so
-// "export these" matches exactly what's shown.
-func applyTxFilter(txns []domain.Transaction, f uistate.TxFilter) []domain.Transaction {
-	sorted := append([]domain.Transaction(nil), txns...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Date.After(sorted[j].Date) })
-
-	ft := strings.ToLower(strings.TrimSpace(f.Text))
-	var fromT, toT time.Time
-	if s := strings.TrimSpace(f.From); s != "" {
-		if d, err := dateutil.ParseDate(s); err == nil {
-			fromT = d
-		}
-	}
-	if s := strings.TrimSpace(f.To); s != "" {
-		if d, err := dateutil.ParseDate(s); err == nil {
-			toT = d
-		}
-	}
-	shown := make([]domain.Transaction, 0, len(sorted))
-	for _, t := range sorted {
-		if f.Account != "" && t.AccountID != f.Account {
-			continue
-		}
-		if f.Category != "" && t.CategoryID != f.Category {
-			continue
-		}
-		if f.Member != "" && t.MemberID != f.Member {
-			continue
-		}
-		if !fromT.IsZero() && t.Date.Before(fromT) {
-			continue
-		}
-		if !toT.IsZero() && t.Date.After(toT) {
-			continue
-		}
-		if ft != "" && !matchesText(t, ft) {
-			continue
-		}
-		if f.Cleared == "yes" && !t.Cleared {
-			continue
-		}
-		if f.Cleared == "no" && t.Cleared {
-			continue
-		}
-		shown = append(shown, t)
-	}
-
-	switch f.Sort {
-	case "amount":
-		sort.Slice(shown, func(i, j int) bool { return absAmount(shown[i]) > absAmount(shown[j]) })
-	case "payee":
-		sort.Slice(shown, func(i, j int) bool { return strings.ToLower(shown[i].Desc) < strings.ToLower(shown[j].Desc) })
-	}
-	return shown
-}
-
-// matchesText reports whether the (already-lowercased) query appears in a
-// transaction's description or any of its tags.
-func matchesText(t domain.Transaction, q string) bool {
-	if strings.Contains(strings.ToLower(t.Desc), q) {
-		return true
-	}
-	for _, tag := range t.Tags {
-		if strings.Contains(strings.ToLower(tag), q) {
-			return true
-		}
-	}
-	return false
-}
+// (Transaction filtering/sorting now lives in the pure, tested internal/txnfilter
+// package; see txnfilter.Apply and txnfilter.AbsAmount.)
 
 // parseTags splits a comma-separated string into trimmed, non-empty tags.
 func parseTags(s string) []string {
@@ -637,7 +559,7 @@ func parseTags(s string) []string {
 // declared unconditionally so the edit toggle never reorders them.
 func TransactionRow(props transactionRowProps) ui.Node {
 	t := props.Txn
-	amountMajor := money.FormatMinor(absAmount(t), currency.Decimals(t.Amount.Currency))
+	amountMajor := money.FormatMinor(txnfilter.AbsAmount(t), currency.Decimals(t.Amount.Currency))
 	dateISO := dateutil.FormatDate(t.Date)
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
