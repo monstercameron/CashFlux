@@ -16,6 +16,11 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Document image import on the Documents screen: choose a receipt or statement image, "Read with
+  AI" sends it to the OpenAI vision model (bring-your-own-key, client-side), and the extracted
+  transactions appear in a review list — pick an account and import them through the validated path
+  (categories matched by name, dates falling back to today). Ties together `ai.BuildVisionRequest`,
+  `ai.SendVisionChat`, and `extract.ParseRows`. The CSV paste-import remains.
 - Extraction parser (`internal/extract`): `ParseRows` turns an AI vision reply into reviewable
   `Row{Date, Description, Amount, Category}` values, tolerant of a bare array or an object wrapper
   (transactions/rows/items/data), numeric or string amounts, varied field names (merchant/payee/…),

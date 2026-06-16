@@ -347,12 +347,12 @@ Shared control components (from mockup):
 
 ### 2.2 Documents — AI import
 
-- [ ] Upload UI (PDF / CSV / image); drag-drop
+- [~] Upload UI (CSV paste + image picker) done; PDF + drag-drop later
 - [x] Local CSV parse → import transactions (no AI needed) — Documents screen paste-and-import
-- [~] Send PDF/image to vision model → structured transactions — pure `ai.BuildVisionRequest` codec,
-      `ai.SendVisionChat` transport, and `extract.ParseRows` reply parser done & tested; Documents UI next
+- [x] Send PDF/image to vision model → structured transactions — `ai.BuildVisionRequest` +
+      `ai.SendVisionChat` + `extract.ParseRows` + Documents image-import UI (choose → read → review → import)
 - [ ] `Document{ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[]}` lifecycle
-- [ ] Review screen: edit/accept/reject extracted rows → import to ledger; dedupe vs existing
+- [~] Review screen: list extracted rows → import to ledger (account-pick) done; per-row edit/reject + dedupe later
 - [ ] Monthly-spend extraction summary view
 - [ ] Tests: CSV parsing, extraction-to-transaction mapping, dedupe
 

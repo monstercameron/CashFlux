@@ -5,16 +5,31 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"syscall/js"
+	"time"
 
+	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/extract"
+	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/money"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// Documents imports transactions from CSV (no AI needed). Paste rows with a
-// header (date, payee/desc, amount, account, category, member), then Import —
-// valid rows are added through the validated write path.
+const visionSystemPrompt = "You extract transactions from receipt and bank-statement images. " +
+	"Reply with ONLY a JSON array of objects with keys: date (YYYY-MM-DD), description, " +
+	"amount (a number, negative for money out / expenses, positive for money in), and category. " +
+	"No prose, no explanation, no Markdown code fence."
+
+// Documents imports transactions two ways: paste CSV (no AI), or read a receipt/
+// statement image with the OpenAI vision model (bring-your-own-key). Extracted
+// rows are reviewed, then imported into a chosen account through the validated
+// write path.
 func Documents() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -25,7 +40,19 @@ func Documents() ui.Node {
 	csvText := ui.UseState("")
 	msg := ui.UseState("")
 
+	accounts := app.Accounts()
+	defaultAcc := ""
+	if len(accounts) > 0 {
+		defaultAcc = accounts[0].ID
+	}
+	imageURL := ui.UseState("")
+	aiLoading := ui.UseState(false)
+	aiErr := ui.UseState("")
+	draft := ui.UseState([]extract.Row{})
+	importAcct := ui.UseState(defaultAcc)
+
 	onCsv := ui.UseEvent(func(v string) { csvText.Set(v) })
+	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
 
 	importCSV := ui.UseEvent(Prevent(func() {
 		data := strings.TrimSpace(csvText.Get())
@@ -42,7 +69,131 @@ func Documents() ui.Node {
 		rev.Set(rev.Get() + 1)
 	}))
 
+	chooseImage := ui.UseEvent(func() {
+		pickImageDataURL(func(u string) {
+			imageURL.Set(u)
+			aiErr.Set("")
+			draft.Set([]extract.Row{})
+		})
+	})
+
+	settings := app.Settings()
+	aiModel := settings.OpenAIModel
+	if aiModel == "" || aiModel == "gpt-4o-mini" {
+		aiModel = "gpt-4o" // vision needs a vision-capable model
+	}
+	readAI := ui.UseEvent(func() {
+		if settings.OpenAIKey == "" {
+			aiErr.Set("Add your OpenAI key in Settings to read images.")
+			return
+		}
+		if imageURL.Get() == "" {
+			aiErr.Set("Choose an image first.")
+			return
+		}
+		aiLoading.Set(true)
+		aiErr.Set("")
+		ai.SendVisionChat(settings.OpenAIKey, ai.DefaultBaseURL, aiModel, visionSystemPrompt,
+			"Extract every transaction you can read from this image.", imageURL.Get(), 0.1,
+			func(content string) {
+				aiLoading.Set(false)
+				rows, err := extract.ParseRows(content)
+				if err != nil {
+					aiErr.Set(err.Error())
+					return
+				}
+				if len(rows) == 0 {
+					aiErr.Set("No transactions were found in that image.")
+					return
+				}
+				draft.Set(rows)
+			},
+			func(e string) { aiLoading.Set(false); aiErr.Set(e) },
+		)
+	})
+
+	importDraft := ui.UseEvent(Prevent(func() {
+		rows := draft.Get()
+		acc, ok := accByIDFrom(accounts, importAcct.Get())
+		if !ok {
+			aiErr.Set("Choose an account to import into.")
+			return
+		}
+		catByName := map[string]string{}
+		for _, c := range app.Categories() {
+			catByName[strings.ToLower(c.Name)] = c.ID
+		}
+		dec := currency.Decimals(acc.Currency)
+		n := 0
+		for _, r := range rows {
+			amt, err := money.ParseMinor(strings.TrimSpace(r.Amount), dec)
+			if err != nil || amt == 0 {
+				continue
+			}
+			date, derr := dateutil.ParseDate(strings.TrimSpace(r.Date))
+			if derr != nil {
+				date = time.Now()
+			}
+			t := domain.Transaction{
+				ID: id.New(), AccountID: acc.ID, Date: date, Desc: strings.TrimSpace(r.Description),
+				CategoryID: catByName[strings.ToLower(r.Category)], Amount: money.New(amt, acc.Currency),
+			}
+			if err := app.PutTransaction(t); err == nil {
+				n++
+			}
+		}
+		draft.Set([]extract.Row{})
+		imageURL.Set("")
+		aiErr.Set("")
+		msg.Set(fmt.Sprintf("Imported %s from the image.", plural(n, "transaction")))
+		rev.Set(rev.Get() + 1)
+	}))
+
+	// Draft review list (read-only; the user picks the account and imports).
+	rows := draft.Get()
+	draftBody := ui.Node(nil)
+	if len(rows) > 0 {
+		items := make([]ui.Node, 0, len(rows))
+		for _, r := range rows {
+			meta := r.Date
+			if r.Category != "" {
+				meta += " · " + r.Category
+			}
+			items = append(items, Div(Class("row"),
+				Div(Class("row-main"),
+					Span(Class("row-desc"), firstNonEmpty(r.Description, "(no description)")),
+					Span(Class("row-meta"), meta),
+				),
+				Span(Class("amount fig"), r.Amount),
+			))
+		}
+		acctOptions := make([]ui.Node, 0, len(accounts))
+		for _, a := range accounts {
+			acctOptions = append(acctOptions, Option(Value(a.ID), SelectedIf(importAcct.Get() == a.ID), a.Name))
+		}
+		draftBody = Section(Class("card"),
+			H2(Class("card-title"), fmt.Sprintf("Review %s", plural(len(rows), "transaction"))),
+			P(Class("muted"), "Check these look right, choose the account, then import. Categories are matched by name."),
+			Div(Class("rows"), items),
+			Form(Class("form-grid"), OnSubmit(importDraft),
+				Select(Class("field"), OnChange(onAcct), acctOptions),
+				Button(Class("btn btn-primary"), Type("submit"), "Import these"),
+			),
+		)
+	}
+
 	return Div(
+		Section(Class("card"),
+			H2(Class("card-title"), "Read a receipt or statement image"),
+			P(Class("muted"), "Pick a photo or screenshot of a receipt or statement; the OpenAI vision model reads it into transactions you can review before importing. Needs your OpenAI key in Settings."),
+			Div(Class("flex flex-wrap gap-2 items-center"),
+				Button(Class("btn"), Type("button"), OnClick(chooseImage), "Choose image"),
+				If(imageURL.Get() != "", Span(Class("muted"), "Image ready.")),
+				Button(Class("btn btn-primary"), Type("button"), OnClick(readAI), IfElse(aiLoading.Get(), Text("Reading…"), Text("Read with AI"))),
+			),
+			If(aiErr.Get() != "", P(Class("err"), aiErr.Get())),
+		),
+		draftBody,
 		Section(Class("card"),
 			H2(Class("card-title"), "Import transactions from CSV"),
 			P(Class("muted"), "Paste rows with a header line. Columns are matched by name (date, payee/desc, amount, account, category, member); extra columns are ignored. Amounts are decimal — negative for expenses."),
@@ -57,9 +208,54 @@ func Documents() ui.Node {
 			),
 			If(msg.Get() != "", P(Class("muted"), msg.Get())),
 		),
-		Section(Class("card"),
-			Div(Class("badge badge-soon"), "Planned · Phase 2"),
-			P(Class("muted"), "AI document parsing (PDFs and receipt images → transactions) arrives with the OpenAI client; this CSV import works today, no key required."),
-		),
 	)
+}
+
+// accByIDFrom finds an account by id in a slice.
+func accByIDFrom(accounts []domain.Account, id string) (domain.Account, bool) {
+	for _, a := range accounts {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	return domain.Account{}, false
+}
+
+// firstNonEmpty returns a if non-empty, else b.
+func firstNonEmpty(a, b string) string {
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
+	return b
+}
+
+// pickImageDataURL opens a file picker for images and calls onData with the
+// chosen file as a base64 data: URL. The data never leaves the device except to
+// OpenAI when the user clicks Read.
+func pickImageDataURL(onData func(string)) {
+	doc := js.Global().Get("document")
+	input := doc.Call("createElement", "input")
+	input.Set("type", "file")
+	input.Set("accept", "image/*")
+
+	var onChange, onLoad js.Func
+	onLoad = js.FuncOf(func(this js.Value, _ []js.Value) any {
+		onData(this.Get("result").String())
+		onLoad.Release()
+		return nil
+	})
+	onChange = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		files := input.Get("files")
+		if files.Length() > 0 {
+			reader := js.Global().Get("FileReader").New()
+			reader.Set("onload", onLoad)
+			reader.Call("readAsDataURL", files.Index(0))
+		} else {
+			onLoad.Release()
+		}
+		onChange.Release()
+		return nil
+	})
+	input.Set("onchange", onChange)
+	input.Call("click")
 }

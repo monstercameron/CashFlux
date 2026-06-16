@@ -3,6 +3,28 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Document vision AI: the Documents UI (feature complete)
+
+- Wired the three pieces into a working flow: Choose image → `pickImageDataURL` (a small js helper
+  that creates a hidden file input, reads the chosen file via `FileReader.readAsDataURL`, and calls
+  back with the data URL) → "Read with AI" → `SendVisionChat` with a strict JSON system prompt →
+  `extract.ParseRows` → a review list → pick account → `importDraft` maps rows to transactions and
+  saves through `PutTransaction`.
+- **Forces a vision model.** Settings often holds `gpt-4o-mini` (fine for text, no vision), so the
+  screen upgrades the model to `gpt-4o` for image reads rather than failing cryptically.
+- **Mapping decisions at import:** amounts parse to minor units with the chosen account's currency
+  and keep the model's sign (negative = expense); categories match by name (blank if unknown); an
+  unparseable date falls back to today. Invalid/zero-amount rows are skipped. Review list is
+  read-only for v1 — per-row editing can come later, but the user already controls the account and
+  can decline to import.
+- **js gotcha handled:** the framework's `OnChange` event doesn't expose the picked `File`, so the
+  data-URL read is done with a direct `js.FuncOf` FileReader chain (funcs released on completion),
+  the same pattern as the ai transport.
+- Document vision import is now end-to-end (codec → transport → parser → UI). The CSV paste path is
+  untouched and still key-free.
+- **Next.** Larger remaining work is Phase-3 sync; smaller polish includes per-row editing of draft
+  rows or empty-state/a11y passes.
+
 ## 2026-06-16 — Document vision AI: the extraction parser
 
 - `internal/extract.ParseRows` bridges the model's reply to the import flow. Models are unreliable
