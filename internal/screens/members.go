@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -30,10 +31,22 @@ func Members() ui.Node {
 
 	name := ui.UseState("")
 	color := ui.UseState("#7c83ff")
+	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onColor := ui.UseEvent(func(v string) { color.Set(v) })
+
+	memberDefs := app.CustomFieldDefsFor("member")
+	onCustom := func(key, value string) {
+		m := customVals.Get()
+		nm := make(map[string]string, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[key] = value
+		customVals.Set(nm)
+	}
 
 	add := ui.UseEvent(Prevent(func() {
 		n := strings.TrimSpace(name.Get())
@@ -41,12 +54,16 @@ func Members() ui.Node {
 			errMsg.Set("Enter a member name.")
 			return
 		}
-		m := domain.Member{ID: id.New(), Name: n, Color: strings.TrimSpace(color.Get())}
+		m := domain.Member{
+			ID: id.New(), Name: n, Color: strings.TrimSpace(color.Get()),
+			Custom: customValuesToMap(memberDefs, customVals.Get()),
+		}
 		if err := app.PutMember(m); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		name.Set("")
+		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		bump()
 	}))
@@ -136,6 +153,9 @@ func Members() ui.Node {
 			Form(Class("form-grid"), OnSubmit(add),
 				Input(Class("field"), Type("text"), Placeholder("Name"), Value(name.Get()), OnInput(onName)),
 				Input(Class("field"), Type("color"), Value(color.Get()), OnInput(onColor)),
+				MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+				}),
 				Button(Class("btn btn-primary"), Type("submit"), "Add member"),
 			),
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),

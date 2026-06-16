@@ -11,6 +11,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
@@ -41,6 +42,7 @@ func Goals() ui.Node {
 	current := ui.UseState("0")
 	owner := ui.UseState(domain.GroupOwnerID)
 	dateStr := ui.UseState("")
+	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
@@ -48,6 +50,17 @@ func Goals() ui.Node {
 	onCurrent := ui.UseEvent(func(v string) { current.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateStr.Set(v) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+
+	goalDefs := app.CustomFieldDefsFor("goal")
+	onCustom := func(key, value string) {
+		m := customVals.Get()
+		nm := make(map[string]string, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[key] = value
+		customVals.Set(nm)
+	}
 
 	add := ui.UseEvent(Prevent(func() {
 		tgt, err := money.ParseMinor(strings.TrimSpace(target.Get()), currency.Decimals(base))
@@ -73,6 +86,7 @@ func Goals() ui.Node {
 		g := domain.Goal{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			TargetAmount: money.New(tgt, base), CurrentAmount: money.New(cur, base), TargetDate: targetDate,
+			Custom: customValuesToMap(goalDefs, customVals.Get()),
 		}
 		if err := app.PutGoal(g); err != nil {
 			errMsg.Set(err.Error())
@@ -82,6 +96,7 @@ func Goals() ui.Node {
 		target.Set("")
 		current.Set("0")
 		dateStr.Set("")
+		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		bump()
 	}))
@@ -124,6 +139,9 @@ func Goals() ui.Node {
 			Input(Class("field"), Type("number"), Placeholder("Saved so far"), Value(current.Get()), Step("0.01"), OnInput(onCurrent)),
 			Select(Class("field"), OnChange(onOwner), ownerOptions),
 			Input(Class("field"), Type("date"), Value(dateStr.Get()), OnInput(onDate)),
+			MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+			}),
 			Button(Class("btn btn-primary"), Type("submit"), "Add"),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),

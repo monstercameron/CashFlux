@@ -201,6 +201,9 @@ func (a *App) PutMember(m domain.Member) error {
 	if is := validate.ValidateMember(m); !is.OK() {
 		return is
 	}
+	if err := a.validateCustom("member", m.Custom); err != nil {
+		return err
+	}
 	if err := a.store.PutMember(m); err != nil {
 		return err
 	}
@@ -280,6 +283,9 @@ func (a *App) PutBudget(b domain.Budget) error {
 	if is := validate.ValidateBudget(b); !is.OK() {
 		return is
 	}
+	if err := a.validateCustom("budget", b.Custom); err != nil {
+		return err
+	}
 	if err := a.store.PutBudget(b); err != nil {
 		return err
 	}
@@ -291,6 +297,9 @@ func (a *App) DeleteBudget(id string) error { return a.del("budget", id, a.store
 func (a *App) PutGoal(g domain.Goal) error {
 	if is := validate.ValidateGoal(g); !is.OK() {
 		return is
+	}
+	if err := a.validateCustom("goal", g.Custom); err != nil {
+		return err
 	}
 	if err := a.store.PutGoal(g); err != nil {
 		return err

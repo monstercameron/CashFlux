@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -55,6 +56,7 @@ func Budgets() ui.Node {
 	}
 	catID := ui.UseState(defaultCat)
 	owner := ui.UseState(domain.GroupOwnerID)
+	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 	monthOffset := ui.UseState(0)
 
@@ -62,6 +64,17 @@ func Budgets() ui.Node {
 	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+
+	budgetDefs := app.CustomFieldDefsFor("budget")
+	onCustom := func(key, value string) {
+		m := customVals.Get()
+		nm := make(map[string]string, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[key] = value
+		customVals.Set(nm)
+	}
 	prevMonth := ui.UseEvent(func() { monthOffset.Set(monthOffset.Get() - 1) })
 	nextMonth := ui.UseEvent(func() { monthOffset.Set(monthOffset.Get() + 1) })
 
@@ -78,6 +91,7 @@ func Budgets() ui.Node {
 		b := domain.Budget{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			CategoryID: catID.Get(), Period: domain.PeriodMonthly, Limit: money.New(amt, base),
+			Custom: customValuesToMap(budgetDefs, customVals.Get()),
 		}
 		if err := app.PutBudget(b); err != nil {
 			errMsg.Set(err.Error())
@@ -85,6 +99,7 @@ func Budgets() ui.Node {
 		}
 		name.Set("")
 		limit.Set("")
+		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		bump()
 	}))
@@ -116,6 +131,9 @@ func Budgets() ui.Node {
 				Select(Class("field"), OnChange(onCat), catOptions),
 				Select(Class("field"), OnChange(onOwner), ownerOptions),
 				Input(Class("field"), Type("number"), Placeholder("Monthly limit ("+base+")"), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
+				MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+				}),
 				Button(Class("btn btn-primary"), Type("submit"), "Add"),
 			),
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),

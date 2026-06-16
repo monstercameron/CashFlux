@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Custom fields on the Goals, Budgets, and Members forms — completing the rollout across all five
+  entity types. Each add-form renders its registered custom fields via `CustomFieldInput`, types the
+  values into the entity's `custom{}` map on save, and validates them through the matching appstate
+  write path (`PutGoal`/`PutBudget`/`PutMember` now call `validateCustom`). Closes §1.16 form
+  rendering: custom fields are available everywhere they're defined.
 - Custom fields on the Transactions form: custom-field definitions registered for transactions now
   render in the add-transaction form (reusing `CustomFieldInput`) for income and expense entries,
   with values typed into the transaction's `custom{}` map on save and validated by

@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Custom fields: Goals, Budgets, Members (rollout complete)
+
+- Applied the now-proven pattern to the last three entity forms in one pass: each gets a
+  `customVals` value-map state, a `<entity>Defs := app.CustomFieldDefsFor(...)`, the `onCustom`
+  push-up closure, a `MapKeyed` of `CustomFieldInput`s in the form, `Custom:
+  customValuesToMap(...)` on the built entity, and a reset on success. The matching appstate write
+  paths (`PutGoal`/`PutBudget`/`PutMember`) now call `validateCustom`.
+- **Grouped as one feature deliberately.** The three integrations are byte-for-byte the same shape
+  the Accounts/Transactions commits already established; splitting them into three near-identical
+  commits would be noise, not granularity. The unit of work here is "finish the rollout", and it
+  maps to one checklist line in §1.16.
+- §1.16 form rendering is now closed for all five entity types (accounts, transactions, budgets,
+  goals, members). The whole custom-fields feature — model, validate, persist, manage UI, render on
+  forms, export/import — is complete.
+- **Next.** Pick up the next backlog area: module-visibility toggles / reload-persistent
+  preferences, or a contained Phase-3 sync primitive.
+
 ## 2026-06-16 — Custom fields: Transactions form
 
 - Second entity wired up, and the reusable pieces paid off: the Transactions add-form now renders
