@@ -64,6 +64,52 @@ func TestWithWeekStartLeavesMonthAnchorsAlone(t *testing.T) {
 	}
 }
 
+func TestShiftMovesWholeWindow(t *testing.T) {
+	w := NewWindow(Month, d(2026, time.June, 15), time.Monday).Shift(-1)
+	if !w.From.Equal(d(2026, time.May, 1)) || !w.To.Equal(d(2026, time.May, 1)) {
+		t.Errorf("Shift(-1) = %s..%s, want May..May", w.From.Format("2006-01-02"), w.To.Format("2006-01-02"))
+	}
+	// A two-month range shifts as a unit, preserving the span.
+	r := NewWindow(Month, d(2026, time.June, 1), time.Monday).StepTo(1).Shift(1) // Jun..Jul -> Jul..Aug
+	if !r.From.Equal(d(2026, time.July, 1)) || !r.To.Equal(d(2026, time.August, 1)) {
+		t.Errorf("range Shift(1) = %s..%s, want Jul..Aug", r.From.Format("2006-01-02"), r.To.Format("2006-01-02"))
+	}
+}
+
+func TestIsCurrent(t *testing.T) {
+	now := d(2026, time.June, 15)
+	if !NewWindow(Month, now, time.Monday).IsCurrent(now) {
+		t.Error("current month window should be IsCurrent")
+	}
+	if NewWindow(Month, now, time.Monday).Shift(-1).IsCurrent(now) {
+		t.Error("previous month window should not be IsCurrent")
+	}
+	if NewWindow(Month, now, time.Monday).StepTo(1).IsCurrent(now) {
+		t.Error("a multi-month range should not be IsCurrent")
+	}
+}
+
+func TestPreviousPreset(t *testing.T) {
+	w := Previous(Month, d(2026, time.June, 15), time.Monday)
+	if !w.From.Equal(d(2026, time.May, 1)) || !w.To.Equal(d(2026, time.May, 1)) {
+		t.Errorf("Previous = %s..%s, want May..May", w.From.Format("2006-01-02"), w.To.Format("2006-01-02"))
+	}
+}
+
+func TestYearToDatePreset(t *testing.T) {
+	w := YearToDate(d(2026, time.June, 15), time.Monday)
+	if w.Res != Month {
+		t.Errorf("YearToDate resolution = %s, want month", w.Res)
+	}
+	if !w.From.Equal(d(2026, time.January, 1)) || !w.To.Equal(d(2026, time.June, 1)) {
+		t.Errorf("YearToDate = %s..%s, want Jan..Jun", w.From.Format("2006-01-02"), w.To.Format("2006-01-02"))
+	}
+	start, end := w.Range()
+	if !start.Equal(d(2026, time.January, 1)) || !end.Equal(d(2026, time.July, 1)) {
+		t.Errorf("YTD Range = [%s,%s), want [Jan, Jul)", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	}
+}
+
 func TestWindowRange(t *testing.T) {
 	w := NewWindow(Month, d(2026, time.June, 1), time.Monday).StepTo(2) // Jun..Aug
 	start, end := w.Range()

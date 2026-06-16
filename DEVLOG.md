@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B10 foundation: pure period presets
+
+- Shifted off the widget-settings sweep to the B10 resolution-control redesign, starting with the
+  decision-free pure layer: `period.Previous`, `period.YearToDate`, plus `Window.Shift` (move the
+  whole window as a unit — distinct from the edge-only StepFrom/StepTo) and `Window.IsCurrent` (flag
+  when the view has paged off "now"). All take an explicit `now` so they're pure; table-tested.
+- Dropped `LastNDays` from the plan: the Window model is unit-based (week/month/quarter), so an
+  arbitrary N-day range doesn't fit it cleanly — noted for the UI step (those would need a different
+  representation). ThisPeriod stays `NewWindow`.
+- `internal/period` green + wasm build green. The UI redesign (single stepper + presets dropdown)
+  still carries the keep-range-vs-drop decision, so it stays parked until the user calls it; these
+  constructors are ready for whichever way it goes.
+
 ## 2026-06-16 — B12: Spending breakdown top-N setting
 
 - Fourth widget on the settings API: "breakdown" schema (`topN`, 2–6, default 3); the widget reads it

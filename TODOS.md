@@ -244,9 +244,10 @@ a `Week | Month | Quarter` segmented toggle + **two** independent stepper pills 
   default. Show "From – To" only in range mode; a single label otherwise.
 
 **Bottom-up plan (pure logic first):**
-- [ ] `internal/period`: add pure preset constructors over an injected `now` — `ThisPeriod`, `Previous`,
-      `YearToDate`, `LastNDays(n)` (and an `IsCurrent(now)` predicate for the off-now indicator).
-      Table-test them (boundaries, week-start sensitivity, quarter math).
+- [x] `internal/period` preset constructors (pure, table-tested): `Previous`, `YearToDate`, plus
+      `Window.Shift` (page the whole window) and `Window.IsCurrent` (off-now predicate). `ThisPeriod` =
+      `NewWindow`. `LastNDays` dropped — arbitrary day ranges don't fit the unit-based Window model
+      (would need a different representation if wanted).
 - [ ] `Window`: a single-period helper (set both anchors to one unit) + a clear "is single period" check
       so the label collapses correctly. Tests.
 - [ ] UI: rebuild `ResolutionControl` as single-stepper + presets dropdown + reset, with Custom-range

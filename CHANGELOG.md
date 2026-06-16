@@ -65,6 +65,11 @@ and every commit updates this file under `Unreleased`.
   export/import so every supported language round-trips for translators. English-only for now; screen
   verbiage is migrated onto it incrementally.
 
+### Added
+- Pure, table-tested time-period presets in `internal/period` (`Previous`, `YearToDate`) plus
+  `Window.Shift` (page the whole window as a unit) and `Window.IsCurrent` (is this the current period)
+  — the foundation for the planned resolution-control redesign (B10). Not yet wired to the UI.
+
 ### Changed
 - Added a pure, table-tested ordered-sequence + bin-packing model to `internal/dashlayout` (`Item`,
   `Pack`, `Move`, `ResizeItem`) — the foundation for iOS-home-screen-style dashboard reflow (drag =

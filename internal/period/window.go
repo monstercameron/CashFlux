@@ -47,6 +47,25 @@ func (w Window) WithWeekStart(weekStart time.Weekday) Window {
 	}
 }
 
+// Shift moves the whole window by delta units of its resolution, preserving the
+// span (both anchors move together) — paging a single period or a range back or
+// forward as a unit. The anchors are assumed to sit at unit boundaries.
+func (w Window) Shift(delta int) Window {
+	return Window{
+		Res:       w.Res,
+		From:      Step(w.Res, w.From, delta),
+		To:        Step(w.Res, w.To, delta),
+		WeekStart: w.WeekStart,
+	}
+}
+
+// IsCurrent reports whether the window is the single current period for its
+// resolution at now — used to flag when the view has paged away from "now".
+func (w Window) IsCurrent(now time.Time) bool {
+	cur := Truncate(w.Res, now, w.WeekStart)
+	return w.From.Equal(cur) && w.To.Equal(cur)
+}
+
 // StepFrom moves the from anchor by delta units, pushing the to anchor forward
 // if from would otherwise pass it (keeps from <= to).
 func (w Window) StepFrom(delta int) Window {
