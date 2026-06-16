@@ -56,6 +56,7 @@ func Transactions() ui.Node {
 	filterText := ui.UseState("")
 	filterAcc := ui.UseState("")
 	filterCat := ui.UseState("")
+	sortBy := ui.UseState("date")
 
 	onDesc := ui.UseEvent(func(v string) { desc.Set(v) })
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
@@ -68,7 +69,8 @@ func Transactions() ui.Node {
 	onFilterText := ui.UseEvent(func(v string) { filterText.Set(v) })
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { filterAcc.Set(e.GetValue()) })
 	onFilterCat := ui.UseEvent(func(e ui.Event) { filterCat.Set(e.GetValue()) })
-	clearFilters := ui.UseEvent(Prevent(func() { filterText.Set(""); filterAcc.Set(""); filterCat.Set("") }))
+	onSortBy := ui.UseEvent(func(e ui.Event) { sortBy.Set(e.GetValue()) })
+	clearFilters := ui.UseEvent(Prevent(func() { filterText.Set(""); filterAcc.Set(""); filterCat.Set(""); sortBy.Set("date") }))
 
 	add := ui.UseEvent(Prevent(func() {
 		acc, ok := accByID[accID.Get()]
@@ -246,6 +248,14 @@ func Transactions() ui.Node {
 		shown = append(shown, t)
 	}
 
+	switch sortBy.Get() {
+	case "amount":
+		sort.Slice(shown, func(i, j int) bool { return absAmount(shown[i]) > absAmount(shown[j]) })
+	case "payee":
+		sort.Slice(shown, func(i, j int) bool { return strings.ToLower(shown[i].Desc) < strings.ToLower(shown[j].Desc) })
+	}
+	// "date" keeps the newest-first order already applied above.
+
 	var listBody ui.Node
 	switch {
 	case len(txns) == 0:
@@ -282,6 +292,11 @@ func Transactions() ui.Node {
 				Input(Class("field"), Type("search"), Placeholder("Search description or tag"), Value(filterText.Get()), OnInput(onFilterText)),
 				Select(Class("field"), OnChange(onFilterAcc), filterAccOptions),
 				Select(Class("field"), OnChange(onFilterCat), filterCatOptions),
+				Select(Class("field"), Title("Sort by"), OnChange(onSortBy),
+					Option(Value("date"), SelectedIf(sortBy.Get() == "date"), "Newest first"),
+					Option(Value("amount"), SelectedIf(sortBy.Get() == "amount"), "Largest amount"),
+					Option(Value("payee"), SelectedIf(sortBy.Get() == "payee"), "Payee A–Z"),
+				),
 				Button(Class("btn"), Type("submit"), "Clear"),
 			),
 			listBody,
@@ -294,6 +309,16 @@ type transactionRowProps struct {
 	Account  string
 	Category string
 	OnDelete func(string)
+}
+
+// absAmount returns the absolute minor-unit amount of a transaction (for sorting
+// by size regardless of income/expense sign).
+func absAmount(t domain.Transaction) int64 {
+	a := t.Amount.Amount
+	if a < 0 {
+		return -a
+	}
+	return a
 }
 
 // matchesText reports whether the (already-lowercased) query appears in a
