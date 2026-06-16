@@ -77,7 +77,46 @@ func Dashboard() ui.Node {
 		recentWidget(txns),
 		budgetsWidget(app, txns, rates),
 		goalsWidget(app),
+		todoWidget(app),
 	)
+}
+
+// todoWidget is the 1×1 To-do widget: up to three open tasks, dot-toned by
+// priority (high = amber, others = dim/faint).
+func todoWidget(app *appstate.App) ui.Node {
+	var open []domain.Task
+	for _, t := range app.Tasks() {
+		if t.Status == domain.StatusOpen {
+			open = append(open, t)
+		}
+	}
+	var body ui.Node
+	if len(open) == 0 {
+		body = P(Class("empty text-dim text-[13px]"), "Nothing to do — nice.")
+	} else {
+		if len(open) > 3 {
+			open = open[:3]
+		}
+		rows := make([]ui.Node, 0, len(open))
+		for _, t := range open {
+			dotTone, dot := "text-faint", "○"
+			switch t.Priority {
+			case domain.PriorityHigh:
+				dotTone, dot = "text-warn", "●"
+			case domain.PriorityMedium:
+				dotTone, dot = "text-dim", "●"
+			}
+			rows = append(rows, Div(Class("flex gap-2"),
+				Span(Class(dotTone), dot),
+				Span(t.Title),
+			))
+		}
+		body = Div(Class("text-[13px] space-y-2"), rows)
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "todo", Title: "To-do", Draggable: true, GridColumn: "2", GridRow: "5",
+		Body: body,
+	})
 }
 
 // goalsWidget is the 1×1 Goals widget: the first goal's progress (% + saved /
