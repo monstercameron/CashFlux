@@ -69,6 +69,8 @@ and every commit updates this file under `Unreleased`.
 - The sidebar verbiage now flows through the language store: the brand, primary + System nav labels,
   the "My pages"/"System"/"New page" headers, and the household card all resolve via `uistate.T(key)`
   against the English catalog (no visible change — first screen migrated onto i18n).
+- The top bar's chrome (menu-toggle tooltip and the "+ Add" button + its tooltip) now resolves via
+  `uistate.T` too, completing the app-shell verbiage migration.
 - A central language store (`internal/i18n`): a pure, table-tested message catalog keyed by stable
   dot-namespaced keys (e.g. `nav.accounts`), with English as the source/fallback language, `%s`/`%d`
   argument formatting, translation-coverage reporting (`MissingKeys`), and whole-bundle JSON

@@ -9,6 +9,11 @@ var english = Catalog{
 	"household.title":    "Your household",
 	"household.settings": "Settings",
 
+	// Top bar
+	"topbar.menu":     "Collapse menu",
+	"topbar.add":      "Add a transaction",
+	"topbar.addLabel": "+ Add",
+
 	// Primary navigation
 	"nav.dashboard":    "Dashboard",
 	"nav.accounts":     "Accounts",

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Top-bar verbiage migrated to i18n (chrome complete)
+
+- Migrated the top bar's chrome onto `uistate.T`: menu-toggle tooltip (`topbar.menu`), "+ Add" label
+  (`topbar.addLabel`) and its tooltip (`topbar.add`). With the sidebar already done, the app shell's
+  verbiage is fully on the language store.
+- The page title itself still comes from `screens.All()` data (per-route Title/Subtitle); i18n-ing
+  those needs per-route title keys — left for the screen-verbiage migration pass.
+- `i18n` tests + wasm green. **Next:** begin per-screen verbiage migration, or pivot to another area.
+
 ## 2026-06-16 — Language bundle export/import in Settings
 
 - Made the language store's round-trip user-accessible (the user's "easy to export/import all langs"
