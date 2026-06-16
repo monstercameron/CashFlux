@@ -105,6 +105,32 @@ func iconBody(name string) []any {
 			Path(Attr("d", "M16 5.3a3 3 0 0 1 0 5.4")),
 			Path(Attr("d", "M21 20c0-2.6-1.6-4.8-3.9-5.7")),
 		}
+	case "planning":
+		return []any{
+			Path(Attr("d", "M4 19V5")),
+			Path(Attr("d", "M4 19h16")),
+			Path(Attr("d", "M7 15l3-4 3 2 4-6")),
+		}
+	case "allocate":
+		return []any{
+			Circle(Attr("cx", "12"), Attr("cy", "12"), Attr("r", "9")),
+			Path(Attr("d", "M12 3v9l7 4")),
+		}
+	case "insights":
+		return []any{
+			Path(Attr("d", "M9 18h6")),
+			Path(Attr("d", "M10 21h4")),
+			Path(Attr("d", "M12 3a6 6 0 0 1 4 10.5c-.7.7-1 1.2-1 2.5H9c0-1.3-.3-1.8-1-2.5A6 6 0 0 1 12 3z")),
+		}
+	case "customize":
+		return []any{
+			Path(Attr("d", "M4 7h16")),
+			Path(Attr("d", "M4 12h16")),
+			Path(Attr("d", "M4 17h16")),
+			Circle(Attr("cx", "9"), Attr("cy", "7"), Attr("r", "1.8")),
+			Circle(Attr("cx", "15"), Attr("cy", "12"), Attr("r", "1.8")),
+			Circle(Attr("cx", "7"), Attr("cy", "17"), Attr("r", "1.8")),
+		}
 	default:
 		return nil
 	}

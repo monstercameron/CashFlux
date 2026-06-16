@@ -163,13 +163,13 @@ Accounts / Transactions / Budgets / Goals / To-do; System has Members / Categori
 typing the URL: **Planning** (`/planning`), **Allocate** (`/allocate`), **Insights** (`/insights`),
 **Documents** (`/documents`), **Customize** (`/customize`).
 **Fix:**
-- [ ] Add the five missing screens to the sidebar — likely a "Tools" / Phase-2 nav group (or extend
-      primary nav) with icons (`internal/app/shell.go` `primaryNav`/`Sidebar`).
-- [ ] Add them to the module-visibility set (`hideableScreens` + `internal/modules`) so they can be
-      shown/hidden like the others; decide which (if any) are locked.
-- [ ] Keep the nav in sync with `screens.All()` — ideally derive nav groups from the routed set (or a
-      Group field on Route) so a new screen can't silently miss the menu again.
-- [ ] Verify: every routed main-line screen has a menu entry; module toggles cover them.
+- [x] Add the five missing screens to the sidebar — a "Tools" nav group (`shell.go` `toolsNav()`/
+      `Sidebar`) with new icons (planning/allocate/insights/customize; documents reuses `page`).
+- [x] They respect the module-visibility set (filtered by `hidden.IsHidden(path)` like primary nav).
+- [ ] Optional hardening: derive nav groups from `screens.All()` (or a Group field on Route) so a new
+      routed screen can't silently miss the menu again.
+- [~] Verify: every routed main-line screen now has a menu entry (wasm build green; browser spot-check
+      pending). Module toggles cover them via the hidden-path filter.
 
 ### B8. Sidebar menu management: reorder, drop "My pages", visibility settings ★
 

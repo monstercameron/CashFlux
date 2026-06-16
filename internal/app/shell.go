@@ -61,6 +61,18 @@ func primaryNav() []railItem {
 	}
 }
 
+// toolsNav is the Phase-2 "Tools" group: the routed power-tool screens that were
+// otherwise only reachable by URL.
+func toolsNav() []railItem {
+	return []railItem{
+		{"nav.planning", "/planning", "planning"},
+		{"nav.allocate", "/allocate", "allocate"},
+		{"nav.insights", "/insights", "insights"},
+		{"nav.documents", "/documents", "page"},
+		{"nav.customize", "/customize", "customize"},
+	}
+}
+
 // customPage is an example "My pages" entry. Real, user-created custom pages
 // arrive with the custom-pages feature; for now these mirror the mockup.
 type customPage struct {
@@ -99,6 +111,12 @@ func Sidebar() uic.Node {
 			visibleNav = append(visibleNav, it)
 		}
 	}
+	var visibleTools []railItem
+	for _, it := range toolsNav() {
+		if !hidden.IsHidden(it.Path) {
+			visibleTools = append(visibleTools, it)
+		}
+	}
 	return Aside(Class(cls),
 		Div(Class("railhead h-14 flex items-center gap-2.5 px-5 border-b border-line"),
 			Span(Class("grid place-items-center w-7 h-7 rounded bg-fg text-base font-display font-semibold text-[13px] shrink-0"), "C"),
@@ -106,6 +124,18 @@ func Sidebar() uic.Node {
 		),
 		Nav(Class("flex-1 overflow-y-auto p-3 flex flex-col gap-0.5 text-dim text-[13.5px]"),
 			MapKeyed(visibleNav,
+				func(it railItem) any { return it.Path },
+				func(it railItem) uic.Node {
+					return uic.CreateElement(navItem, navItemProps{
+						Label:  uistate.T(it.Key),
+						Path:   it.Path,
+						Icon:   it.Icon,
+						Active: current == it.Path,
+					})
+				},
+			),
+			If(len(visibleTools) > 0, railHeader(uistate.T("rail.tools"))),
+			MapKeyed(visibleTools,
 				func(it railItem) any { return it.Path },
 				func(it railItem) uic.Node {
 					return uic.CreateElement(navItem, navItemProps{

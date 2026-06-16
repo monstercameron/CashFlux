@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — nav: Tools group for the missing main-line screens (B7)
+
+- Planning, Allocate, Insights, Documents, Customize were routed but absent from the sidebar — only
+  reachable by URL. Added a `toolsNav()` group rendered as a "Tools" rail section (module-visibility
+  filtered like primary nav), and four new SVG icons (planning/allocate/insights/customize; documents
+  reuses `page`). New `nav.*` + `rail.tools` keys.
+- Scoping note: this is the uncontroversial reachability half of the menu work (B7) — making routed
+  screens reachable. The B8 redesign (shift-drag reorder, drop "My pages", per-item visibility
+  settings) stays as analysis-only per the user's earlier note. Catalog + wasm green.
+
 ## 2026-06-16 — allocation profile picker + weight editor
 
 - Allocate now drives the ranking from four editable weight inputs (returns/stability/liquidity/debt)

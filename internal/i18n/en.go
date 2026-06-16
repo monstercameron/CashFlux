@@ -25,11 +25,17 @@ var english = Catalog{
 	"nav.categories":   "Categories",
 	"nav.rules":        "Rules",
 	"nav.settings":     "Settings",
+	"nav.planning":     "Planning",
+	"nav.allocate":     "Allocate",
+	"nav.insights":     "Insights",
+	"nav.documents":    "Documents",
+	"nav.customize":    "Customize",
 
 	// Rail sections
 	"rail.myPages": "My pages",
 	"rail.newPage": "New page",
 	"rail.system":  "System",
+	"rail.tools":   "Tools",
 
 	// Common actions (shared across screens)
 	"action.add":    "Add",

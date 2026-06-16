@@ -69,6 +69,9 @@ and every commit updates this file under `Unreleased`.
   GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.
 
 ### Fixed
+- The sidebar was missing five routed main-line screens — Planning, Allocate, Insights, Documents, and
+  Customize were only reachable by typing the URL. Added a **Tools** nav group for them (each with an
+  icon, respecting module-visibility toggles), so every main-line screen is now reachable from the menu.
 - Deep-link refresh in the installed/offline PWA: the service worker now serves the cached app shell
   for navigation requests, so hard-refreshing a client-side route like `/accounts` boots the app (which
   then routes to that screen) instead of failing on a 404 or while offline. Complements the static
