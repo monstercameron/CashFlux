@@ -130,11 +130,17 @@ var hideableScreens = []struct{ Label, Path string }{
 func globalSettingsForm() uic.Node {
 	aiOn := uic.UseState(false)
 	prefsAtom := uistate.UsePrefs()
+	periodAtom := uistate.UsePeriod()
 	savePrefs := func(p prefs.Prefs) {
 		p = p.Normalize()
 		prefsAtom.Set(p)
 		uistate.PersistPrefs(p)
 		uistate.ApplyPrefs(p)
+		// Keep the dashboard window's week boundaries in lockstep with the
+		// week-start preference (no-op for any non-week-start change).
+		if w := periodAtom.Get(); w.WeekStart != p.WeekStartWeekday() {
+			periodAtom.Set(w.WithWeekStart(p.WeekStartWeekday()))
+		}
 	}
 	onDateStyle := uic.UseEvent(func(e uic.Event) {
 		p := prefsAtom.Get()

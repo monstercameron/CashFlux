@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- The dashboard's week resolution now honors the configured week-start (Sunday/Monday) instead of
+  always starting weeks on Monday. The window is seeded from the saved preference on boot, and
+  changing the week-start in Settings re-snaps the dashboard's week boundaries live (new pure,
+  tested `period.Window.WithWeekStart`).
+
 ### Added
 - The dashboard time resolution (Week / Month / Quarter) now persists across reloads. Only the
   resolution is remembered — the view re-anchors to the current period on load, so you keep your

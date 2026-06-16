@@ -38,6 +38,32 @@ func TestStepToClampsFrom(t *testing.T) {
 	}
 }
 
+func TestWithWeekStartResnapsWeek(t *testing.T) {
+	w := NewWindow(Week, d(2026, time.June, 17), time.Monday) // anchors snap to Mon Jun 15
+	if !w.From.Equal(d(2026, time.June, 15)) {
+		t.Fatalf("setup: From = %s, want 2026-06-15", w.From.Format("2006-01-02"))
+	}
+	got := w.WithWeekStart(time.Sunday)
+	if got.WeekStart != time.Sunday || !got.From.Equal(d(2026, time.June, 14)) {
+		t.Errorf("WithWeekStart(Sunday) = %s (weekStart %s), want 2026-06-14 Sunday", got.From.Format("2006-01-02"), got.WeekStart)
+	}
+}
+
+func TestWithWeekStartNoOpWhenUnchanged(t *testing.T) {
+	w := NewWindow(Week, d(2026, time.June, 17), time.Monday)
+	if got := w.WithWeekStart(time.Monday); got != w {
+		t.Errorf("WithWeekStart(Monday) = %+v, want unchanged %+v", got, w)
+	}
+}
+
+func TestWithWeekStartLeavesMonthAnchorsAlone(t *testing.T) {
+	w := NewWindow(Month, d(2026, time.June, 17), time.Monday) // From = Jun 1
+	got := w.WithWeekStart(time.Sunday)
+	if !got.From.Equal(d(2026, time.June, 1)) || got.WeekStart != time.Sunday {
+		t.Errorf("WithWeekStart on Month = %s (weekStart %s), want 2026-06-01 Sunday", got.From.Format("2006-01-02"), got.WeekStart)
+	}
+}
+
 func TestWindowRange(t *testing.T) {
 	w := NewWindow(Month, d(2026, time.June, 1), time.Monday).StepTo(2) // Jun..Aug
 	start, end := w.Range()

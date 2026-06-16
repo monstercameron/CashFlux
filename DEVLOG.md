@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Dashboard week boundaries honor the week-start preference
+
+- Closed the nit flagged in the previous entry: `defaultWindow` hardcoded `time.Monday`, so the
+  dashboard's Week resolution ignored a Sunday week-start preference. Now it seeds from
+  `loadPrefs().WeekStartWeekday()`.
+- Added a pure, tested `period.Window.WithWeekStart(weekday)` mutator (re-snaps both anchors under
+  the new convention; no-op when unchanged; leaves Month/Quarter anchors alone). Settings' `savePrefs`
+  reconciles the period atom through it whenever the week-start changes, so the dashboard updates live
+  — consistent with how the date-format pref already updates lists live.
+- **Why a mutator in the pure package rather than rebuilding the window in view code?** Date/anchor
+  math belongs in `internal/period`, not the shell; this keeps the screen a thin caller and gives the
+  behavior table tests (week re-snap Mon→Sun, no-op, month-untouched).
+- Verified: `internal/period` green, wasm build green, full native suite clean.
+- **Next.** Further small polish; the local-first feature set is comprehensive (sync remains the only
+  out-of-scope major item — needs a hosted backend).
+
 ## 2026-06-16 — Dashboard resolution persists across reloads
 
 - The top-bar Week/Month/Quarter toggle now survives reloads. `uistate.PersistResolution` stores the

@@ -24,7 +24,7 @@ const (
 // the resolution persists — the From/To anchors are transient navigation, so a
 // reload always lands on the current period rather than a stale one.
 func defaultWindow() period.Window {
-	return period.NewWindow(loadResolution(), time.Now(), time.Monday)
+	return period.NewWindow(loadResolution(), time.Now(), loadPrefs().WeekStartWeekday())
 }
 
 // UsePeriod returns the shared dashboard time-window atom. Every component that

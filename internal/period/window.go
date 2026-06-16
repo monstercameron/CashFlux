@@ -31,6 +31,22 @@ func (w Window) SetResolution(r Resolution) Window {
 	}
 }
 
+// WithWeekStart returns the window using a different week-start convention,
+// re-snapping both anchors to their unit under the new convention. Only Week
+// resolution is sensitive to it; Month and Quarter anchors are unaffected. It
+// is a no-op (returns the same window) when the convention is unchanged.
+func (w Window) WithWeekStart(weekStart time.Weekday) Window {
+	if weekStart == w.WeekStart {
+		return w
+	}
+	return Window{
+		Res:       w.Res,
+		From:      Truncate(w.Res, w.From, weekStart),
+		To:        Truncate(w.Res, w.To, weekStart),
+		WeekStart: weekStart,
+	}
+}
+
 // StepFrom moves the from anchor by delta units, pushing the to anchor forward
 // if from would otherwise pass it (keeps from <= to).
 func (w Window) StepFrom(delta int) Window {
