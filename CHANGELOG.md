@@ -77,6 +77,10 @@ and every commit updates this file under `Unreleased`.
 - The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
   panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
   with a shared `owner.group` key.
+- The Dashboard's chrome is now on the language store: every widget title, the header cell
+  (title/hint/Reset), the freshness nudge (incl. the stale-count and reminder), the savings sub-line,
+  and the KPI assets/accounts sublines. (Some dynamic period+plural KPI sublines remain literal for a
+  follow-up.)
 - The Allocate screen's verbiage is now on the language store (profile picker + amount/reserve inputs,
   ranked suggestion rows incl. breakdown + exclude/restore, candidate name prefixes, empty states, and
   the AI-explanation card); numeric score formatting and the AI prompt stay literal.

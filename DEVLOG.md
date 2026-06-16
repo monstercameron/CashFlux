@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Dashboard chrome migrated
+
+- Eleventh screen onto i18n: `dashboard.go` — every widget title (reusing `nav.*` for Accounts/
+  Budgets/Goals/To-do), the header cell (title/hint/Reset), the freshness widget (all-fresh, stale
+  count via T args, Remind), the savings sub-line + "this period", and the KPI assets/accounts
+  sublines. The nudge task title is localized too.
+- Left a couple of dynamic KPI sublines (`periodLabel + plural(...)`) literal — they concat a
+  date-label with the English `plural()` helper, so cleanly localizing them is its own task (plural
+  rules). The cashflow bar heights and the freshness "· %dd" chip stay `fmt` (numeric). `fmt` remains.
+- `i18n` tests + wasm green. 11 screens + chrome. Remaining: Accounts, Transactions (the giants),
+  Settings, and the CustomFieldsManager/CustomFieldInput components.
+
 ## 2026-06-16 — i18n: Allocate screen migrated
 
 - Tenth screen onto i18n: `allocate.go` — profile picker + amount/reserve inputs, ranked rows (the

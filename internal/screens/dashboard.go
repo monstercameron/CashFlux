@@ -78,7 +78,7 @@ func Dashboard() ui.Node {
 	noticeAtom := uistate.UseNotice()
 	remindToUpdate := ui.UseEvent(func() {
 		if err := app.PutTask(domain.Task{
-			ID: id.New(), Title: "Update stale account balances",
+			ID: id.New(), Title: uistate.T("dashboard.staleTaskTitle"),
 			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceNudge,
 		}); err != nil {
 			noticeAtom.Set(noticeAtom.Get().With("Couldn't create the reminder: "+err.Error(), true))
@@ -88,7 +88,7 @@ func Dashboard() ui.Node {
 	})
 
 	// Net-worth change since the start of this month (end of last month).
-	nwSub, nwTone := fmt.Sprintf("Assets %s", fmtAccounting(assets)), "text-dim"
+	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtAccounting(assets)), "text-dim"
 	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
 		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
 			if d < 0 {
@@ -102,24 +102,24 @@ func Dashboard() ui.Node {
 	return Div(Class("bento"),
 		dashboardHeaderCell(),
 		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-networth", Title: "Net worth", Draggable: true, Resizable: true,
+			ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
 			GridColumn: "1", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
 			Body: kpiBody(fmtAccounting(net), figTone(net), nwSub, nwTone),
 		}),
 		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-income", Title: "Income", Draggable: true, Resizable: true,
+			ID: "kpi-income", Title: uistate.T("dashboard.income"), Draggable: true, Resizable: true,
 			GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
 			Body: kpiBody(fmtAccounting(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-spending", Title: "Spending", Draggable: true, Resizable: true,
+			ID: "kpi-spending", Title: uistate.T("dashboard.spending"), Draggable: true, Resizable: true,
 			GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
 			Body: kpiBody(fmtAccounting(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-liabilities", Title: "Liabilities", Draggable: true, Resizable: true,
+			ID: "kpi-liabilities", Title: uistate.T("dashboard.liabilities"), Draggable: true, Resizable: true,
 			GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtAccounting(liabilities), "", fmt.Sprintf("%d accounts", active), "text-dim"),
+			Body: kpiBody(fmtAccounting(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
 		}),
 		recentWidget(txns, widgetCfgs.For("recent")),
 		budgetsWidget(app, txns, rates),
@@ -143,7 +143,7 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, onRem
 	stale := freshness.StaleAccounts(accounts, windows, now)
 	var body ui.Node
 	if len(stale) == 0 {
-		body = P(Class("text-up text-[13px]"), "Everything's up to date — nice work.")
+		body = P(Class("text-up text-[13px]"), uistate.T("dashboard.allFresh"))
 	} else {
 		chips := make([]ui.Node, 0, len(stale))
 		for _, a := range stale {
@@ -153,13 +153,13 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, onRem
 			))
 		}
 		body = Div(
-			P(Class("text-dim text-[13px] mb-2"), fmt.Sprintf("%d balances could use a refresh.", len(stale))),
+			P(Class("text-dim text-[13px] mb-2"), uistate.T("dashboard.staleCount", len(stale))),
 			Div(Class("flex flex-wrap gap-2 items-center"), chips),
-			Button(Class("btn mt-2"), Type("button"), Title("Add a to-do to update these"), OnClick(onRemind), "Remind me"),
+			Button(Class("btn mt-2"), Type("button"), Title(uistate.T("dashboard.remindTitle")), OnClick(onRemind), uistate.T("dashboard.remind")),
 		)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "freshness", Title: "Freshness", Draggable: true, Resizable: true,
+		ID: "freshness", Title: uistate.T("dashboard.freshness"), Draggable: true, Resizable: true,
 		GridColumn: "1 / span 4", GridRow: "8", Body: body,
 	})
 }
@@ -204,7 +204,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 		body = Div(Class("text-[13px] space-y-2.5"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "bills", Title: "Upcoming bills", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "6",
+		ID: "bills", Title: uistate.T("dashboard.upcomingBills"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "6",
 		Body: body,
 	})
 }
@@ -262,8 +262,8 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 
 	if total == 0 {
 		return uiw.Widget(uiw.WidgetProps{
-			ID: "breakdown", Title: "Spending breakdown", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
-			Body: P(Class("empty text-dim text-[13px]"), "No spending in this period."),
+			ID: "breakdown", Title: uistate.T("dashboard.breakdown"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
+			Body: P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noSpending")),
 		})
 	}
 
@@ -308,7 +308,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 		Div(Class("flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[12px] text-dim"), legend),
 	)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "breakdown", Title: "Spending breakdown", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
+		ID: "breakdown", Title: uistate.T("dashboard.breakdown"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
 		Body: body,
 	})
 }
@@ -341,18 +341,18 @@ func savingsRateWidget(income, expense money.Money, cfg widgetcfg.Config) ui.Nod
 
 	left := Div(
 		Div(Class("font-display fig text-[34px] leading-none "+tone), fmt.Sprintf("%d%%", pct)),
-		Div(Class("text-[12px] text-dim mt-1"), fmt.Sprintf("of income saved · target %d%%", target)),
+		Div(Class("text-[12px] text-dim mt-1"), uistate.T("dashboard.savingsSub", target)),
 	)
 	var right ui.Node = Fragment()
 	if showBar {
 		right = Div(Class("flex-1"),
 			uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: bar}),
-			Div(Class("text-[11px] text-faint mt-2"), "this period"),
+			Div(Class("text-[11px] text-faint mt-2"), uistate.T("dashboard.thisPeriod")),
 		)
 	}
 	body := Div(Class("flex items-center gap-5"), left, right)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "savings", Title: "Savings rate", Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "7",
+		ID: "savings", Title: uistate.T("dashboard.savingsRate"), Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "7",
 		Body: body,
 	})
 }
@@ -409,7 +409,7 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 	)
 
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "cashflow", Title: "Cash flow", Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "6",
+		ID: "cashflow", Title: uistate.T("dashboard.cashFlow"), Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "6",
 		Body: Div(Class("flex items-end gap-5"), bars, netBlock),
 	})
 }
@@ -439,7 +439,7 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 		uiw.AreaChart(uiw.AreaChartProps{Values: values, GradientID: "cf-networth"}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "trend", Title: "Net worth", Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",
+		ID: "trend", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",
 		BodyClass: "flex flex-col", Body: body,
 	})
 }
@@ -472,7 +472,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction) ui.Node {
 		body = Div(Class("grid grid-cols-3 gap-4 text-[13px]"), cells)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "accounts", Title: "Accounts", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "5",
+		ID: "accounts", Title: uistate.T("nav.accounts"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "5",
 		Body: body,
 	})
 }
@@ -510,7 +510,7 @@ func todoWidget(app *appstate.App) ui.Node {
 		body = Div(Class("text-[13px] space-y-2"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "todo", Title: "To-do", Draggable: true, Resizable: true, GridColumn: "2", GridRow: "5",
+		ID: "todo", Title: uistate.T("nav.todo"), Draggable: true, Resizable: true, GridColumn: "2", GridRow: "5",
 		Body: body,
 	})
 }
@@ -521,7 +521,7 @@ func goalsWidget(app *appstate.App) ui.Node {
 	list := app.Goals()
 	if len(list) == 0 {
 		return uiw.Widget(uiw.WidgetProps{
-			ID: "goals", Title: "Goals", Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
+			ID: "goals", Title: uistate.T("nav.goals"), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
 			Body: P(Class("empty text-dim text-[13px]"), "No goals yet."),
 		})
 	}
@@ -540,7 +540,7 @@ func goalsWidget(app *appstate.App) ui.Node {
 		Div(Class("text-[12px] text-dim mt-1.5"), caption),
 	)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "goals", Title: "Goal · " + g.Name, Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
+		ID: "goals", Title: uistate.T("dashboard.goalPrefix", g.Name), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
 		Body: body,
 	})
 }
@@ -587,7 +587,7 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 		body = Div(Class("space-y-4 text-[13px]"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "budgets", Title: "Budgets", Draggable: true, Resizable: true,
+		ID: "budgets", Title: uistate.T("nav.budgets"), Draggable: true, Resizable: true,
 		GridColumn: "3", GridRow: "3 / span 2", Body: body,
 	})
 }
@@ -604,7 +604,7 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 	recent := recentTransactions(txns, count)
 	var body ui.Node
 	if len(recent) == 0 {
-		body = P(Class("empty text-dim text-[13px]"), "No transactions yet.")
+		body = P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noTransactions"))
 	} else {
 		rows := make([]ui.Node, 0, len(recent))
 		for _, t := range recent {
@@ -617,7 +617,7 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 		body = Table(Class("w-full text-[13px]"), Tbody(rows))
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "recent", Title: "Recent transactions", Draggable: true, Resizable: true,
+		ID: "recent", Title: uistate.T("dashboard.recent"), Draggable: true, Resizable: true,
 		GridColumn: "1 / span 2", GridRow: "3 / span 2", BodyClass: "overflow-hidden",
 		Body: body,
 	})
@@ -635,10 +635,10 @@ func dashboardHeaderCell() ui.Node {
 	return Div(Class("w"), Style(map[string]string{"grid-column": "1 / -1", "grid-row": "1"}),
 		Div(Class("flex-1 flex items-center px-5 gap-3"),
 			Div(Class("flex-1"),
-				H1(Class("font-display text-2xl font-semibold tracking-tight"), "Your dashboard"),
-				P(Class("text-dim mt-0.5 text-[13px]"), "Drag tiles to move · grab the edge handles to resize"),
+				H1(Class("font-display text-2xl font-semibold tracking-tight"), uistate.T("dashboard.title")),
+				P(Class("text-dim mt-0.5 text-[13px]"), uistate.T("dashboard.hint")),
 			),
-			Button(Class("data-btn"), Type("button"), OnClick(reset), "Reset layout"),
+			Button(Class("data-btn"), Type("button"), OnClick(reset), uistate.T("dashboard.reset")),
 		),
 	)
 }
