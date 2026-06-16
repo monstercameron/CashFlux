@@ -9,6 +9,8 @@
 /web/design/
 
 # Local env / editor
+.env
+.env.*
 *.log
 .DS_Store
 .vscode/
