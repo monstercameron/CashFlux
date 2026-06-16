@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- AI requests can now be **cancelled**: Insights shows a **Cancel** button while a request is in
+  flight, which aborts the call (via `AbortController`) and clears any pending retry so the callbacks
+  go quiet. `ai.SendChat`/`SendVisionChat`/`SendStructuredVisionChat` now return a cancel function.
 - README "Hosting (SPA history fallback)" → a **Local development** note documenting that `gwc dev`
   does not yet serve the app shell for history routes (deep link / hard refresh at `/accounts` 404s;
   only built assets serve), with the workaround (start from `/` and navigate in-app, or run a

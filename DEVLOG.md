@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — AI request cancellation
+
+- `postCompletions` now creates an `AbortController`, passes its signal to fetch, and returns a cancel
+  closure that aborts the controller, clears any pending retry `setTimeout`, and flips a `cancelled`
+  flag the onText/onCatch callbacks check so a cancelled request reports nothing. The Send* funcs now
+  return that cancel; Insights captures it in state and shows a Cancel button (with a disabled
+  "Thinking…") while loading.
+- One AbortController is created once and reused across retry attempts, so a single abort kills the
+  whole retry chain. Build-error paths return `noopCancel` so callers can always call the result
+  safely. Existing callers that ignore the return value (allocate, documents) compile unchanged — Go
+  discards an unused return value.
+- Completes §2.1 "retry/backoff; request cancellation". Can't browser-test the abort here, but it's the
+  standard AbortController shape; ai + i18n tests + wasm green.
+
 ## 2026-06-16 — B1 triage: deep-link 404 is now framework-side only
 
 - Worked the Section-B bug backlog starting at B1 (deep-link refresh 404). The CashFlux-side fixes

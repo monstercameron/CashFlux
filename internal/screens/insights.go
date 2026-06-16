@@ -59,6 +59,14 @@ func Insights() ui.Node {
 	errMsg := ui.UseState("")
 	saved := ui.UseState("")
 	usage := ui.UseState(ai.Usage{})
+	var noCancel func()
+	cancelFn := ui.UseState(noCancel)
+	cancelAI := ui.UseEvent(func() {
+		if c := cancelFn.Get(); c != nil {
+			c()
+		}
+		loading.Set(false)
+	})
 	question := ui.UseState("")
 	onQuestion := ui.UseEvent(func(v string) { question.Set(v) })
 
@@ -97,10 +105,10 @@ func Insights() ui.Node {
 			{Role: ai.RoleSystem, Content: "You are a concise, encouraging personal-finance assistant. Plain English, no jargon."},
 			{Role: ai.RoleUser, Content: prompt},
 		}
-		ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.5,
+		cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.5,
 			func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
 			func(e string) { loading.Set(false); errMsg.Set(e) },
-		)
+		))
 	})
 
 	ask := ui.UseEvent(Prevent(func() {
@@ -122,10 +130,10 @@ func Insights() ui.Node {
 			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant. Answer using the provided context; if it isn't enough, say what's missing. Plain English, no jargon."},
 			{Role: ai.RoleUser, Content: "Context — " + aiCtx.Line() + "\n\nQuestion: " + q},
 		}
-		ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4,
+		cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4,
 			func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
 			func(e string) { loading.Set(false); errMsg.Set(e) },
-		)
+		))
 	}))
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates)
@@ -142,14 +150,16 @@ func Insights() ui.Node {
 	}
 
 	var action ui.Node
-	if key == "" {
+	switch {
+	case key == "":
 		action = P(Class("muted"), uistate.T("insights.keyHint"))
-	} else {
-		label := uistate.T("insights.explainTitle")
-		if loading.Get() {
-			label = uistate.T("insights.thinking")
-		}
-		action = Button(Class("btn btn-primary"), Type("button"), OnClick(explain), label)
+	case loading.Get():
+		action = Div(Class("flex items-center gap-2"),
+			Button(Class("btn btn-primary"), Type("button"), Attr("disabled", "disabled"), uistate.T("insights.thinking")),
+			Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
+		)
+	default:
+		action = Button(Class("btn btn-primary"), Type("button"), OnClick(explain), uistate.T("insights.explainTitle"))
 	}
 
 	return Div(

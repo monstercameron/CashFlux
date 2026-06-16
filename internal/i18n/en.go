@@ -468,6 +468,7 @@ var english = Catalog{
 	"insights.savedToTodo":     "Saved to your to-do list.",
 	"insights.usageCost":       "Used %d tokens · about %s",
 	"insights.usageTokens":     "Used %d tokens",
+	"insights.cancel":          "Cancel",
 	"insights.highlightsTitle": "Spending highlights",
 	"insights.highlightsHint":  "Categories that moved a lot versus your recent average — no AI needed.",
 	"insights.highlightUp":     "%s spending is up %d%% — %s this month vs about %s a month.",
