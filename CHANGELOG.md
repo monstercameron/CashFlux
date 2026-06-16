@@ -77,6 +77,9 @@ and every commit updates this file under `Unreleased`.
 - The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
   panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
   with a shared `owner.group` key.
+- The Insights (AI) screen's verbiage is now on the language store (explain/ask cards, key hint,
+  prompts' UI labels, answer + save-as-task, status messages); the AI model instructions stay English
+  as they're sent to the model, not shown to the user.
 - The Budgets screen's verbiage is now on the language store (add form, period picker, month stepper,
   spent/budgeted/left stats, over/near summary, and budget rows incl. on-track/near/over labels), and
   the shared `ownerSelectOptions` owner picker now localizes "Group (shared)".

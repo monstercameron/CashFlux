@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Insights screen migrated
+
+- Sixth screen onto i18n: `insights.go` UI strings (explain/ask cards, the key hint, placeholders,
+  answer + save-as-task, status messages). Added the missing `uistate` import.
+- **Decision:** left the OpenAI system/user prompt strings in English — they're instructions sent to
+  the model, not user-facing text, so they shouldn't be translated (and the `fmt.Sprintf` prompt
+  builders stay). Only the visible chrome is localized.
+- Sequencing: did Insights (moderate) rather than the 330-line Accounts to keep the cycle's token cost
+  reasonable; Accounts/Transactions (the two giants) remain, plus Dashboard/Documents/Allocate/
+  Planning/Customize/Settings. `i18n` tests + wasm green.
+
 ## 2026-06-16 — i18n: Budgets screen migrated (+ shared owner picker)
 
 - Fifth screen onto i18n: `budgets.go` — add form (incl. `Limit (%s)` via T args), period picker, month

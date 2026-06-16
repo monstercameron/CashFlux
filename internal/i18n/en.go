@@ -113,6 +113,21 @@ var english = Catalog{
 	"goals.saveSuffix":        " · save %s/mo",
 	"goals.linkedSuffix":      " · linked to %s",
 
+	// Insights screen
+	"insights.explainTitle":   "Explain my month",
+	"insights.explainHint":    "A friendly summary of your month, generated from your live figures.",
+	"insights.thinking":       "Thinking…",
+	"insights.needKey":        "Add your OpenAI key in Settings first.",
+	"insights.keyHint":        "Add your OpenAI key in Settings to enable AI insights. Your key stays on this device and is only sent to OpenAI when you ask.",
+	"insights.askTitle":       "Ask about your money",
+	"insights.askPlaceholder": "e.g. How much could I save if I cut spending 10%?",
+	"insights.ask":            "Ask",
+	"insights.needQuestion":   "Type a question first.",
+	"insights.answerTitle":    "Answer",
+	"insights.saveTask":       "Save as task",
+	"insights.saveTaskTitle":  "Save this as a to-do task",
+	"insights.savedToTodo":    "Saved to your to-do list.",
+
 	// Priority (shared)
 	"priority.high":   "High",
 	"priority.medium": "Medium",

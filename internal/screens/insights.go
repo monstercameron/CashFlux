@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -23,7 +24,7 @@ import (
 func Insights() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	settings := app.Settings()
@@ -74,12 +75,12 @@ func Insights() ui.Node {
 			errMsg.Set(err.Error())
 			return
 		}
-		saved.Set("Saved to your to-do list.")
+		saved.Set(uistate.T("insights.savedToTodo"))
 	}))
 
 	explain := ui.UseEvent(func() {
 		if key == "" {
-			errMsg.Set("Add your OpenAI key in Settings first.")
+			errMsg.Set(uistate.T("insights.needKey"))
 			return
 		}
 		loading.Set(true)
@@ -103,11 +104,11 @@ func Insights() ui.Node {
 	ask := ui.UseEvent(Prevent(func() {
 		q := strings.TrimSpace(question.Get())
 		if key == "" {
-			errMsg.Set("Add your OpenAI key in Settings first.")
+			errMsg.Set(uistate.T("insights.needKey"))
 			return
 		}
 		if q == "" {
-			errMsg.Set("Type a question first.")
+			errMsg.Set(uistate.T("insights.needQuestion"))
 			return
 		}
 		loading.Set(true)
@@ -128,33 +129,33 @@ func Insights() ui.Node {
 
 	var action ui.Node
 	if key == "" {
-		action = P(Class("muted"), "Add your OpenAI key in Settings to enable AI insights. Your key stays on this device and is only sent to OpenAI when you ask.")
+		action = P(Class("muted"), uistate.T("insights.keyHint"))
 	} else {
-		label := "Explain my month"
+		label := uistate.T("insights.explainTitle")
 		if loading.Get() {
-			label = "Thinking…"
+			label = uistate.T("insights.thinking")
 		}
 		action = Button(Class("btn btn-primary"), Type("button"), OnClick(explain), label)
 	}
 
 	return Div(
 		Section(Class("card"),
-			H2(Class("card-title"), "Explain my month"),
-			P(Class("muted"), "A friendly summary of your month, generated from your live figures."),
+			H2(Class("card-title"), uistate.T("insights.explainTitle")),
+			P(Class("muted"), uistate.T("insights.explainHint")),
 			action,
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 		),
 		If(key != "", Section(Class("card"),
-			H2(Class("card-title"), "Ask about your money"),
+			H2(Class("card-title"), uistate.T("insights.askTitle")),
 			Form(Class("form-grid"), OnSubmit(ask),
-				Input(Class("field field-wide"), Type("text"), Placeholder("e.g. How much could I save if I cut spending 10%?"), Value(question.Get()), OnInput(onQuestion)),
-				Button(Class("btn btn-primary"), Type("submit"), "Ask"),
+				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("insights.askPlaceholder")), Value(question.Get()), OnInput(onQuestion)),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("insights.ask")),
 			),
 		)),
 		If(result.Get() != "", Section(Class("card"),
-			H2(Class("card-title"), "Answer"),
+			H2(Class("card-title"), uistate.T("insights.answerTitle")),
 			P(result.Get()),
-			Button(Class("btn"), Type("button"), Title("Save this as a to-do task"), OnClick(saveAsTask), "Save as task"),
+			Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(saveAsTask), uistate.T("insights.saveTask")),
 			If(saved.Get() != "", Span(Class("muted"), Style(map[string]string{"margin-left": "0.5rem"}), saved.Get())),
 		)),
 	)
