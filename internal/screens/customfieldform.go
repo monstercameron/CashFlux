@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -31,15 +32,15 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 
 	label := d.Label
 	if d.Required {
-		label += " (required)"
+		label += uistate.T("cf.requiredLabel")
 	}
 
 	switch d.Type {
 	case customfields.TypeBool:
 		return Select(Class("field"), Title(label), OnChange(onSel),
 			Option(Value(""), SelectedIf(props.Value == ""), label+"…"),
-			Option(Value("true"), SelectedIf(props.Value == "true"), "Yes"),
-			Option(Value("false"), SelectedIf(props.Value == "false"), "No"),
+			Option(Value("true"), SelectedIf(props.Value == "true"), uistate.T("cf.yes")),
+			Option(Value("false"), SelectedIf(props.Value == "false"), uistate.T("cf.no")),
 		)
 	case customfields.TypeSelect:
 		opts := []ui.Node{Option(Value(""), SelectedIf(props.Value == ""), label+"…")}

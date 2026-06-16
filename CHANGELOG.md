@@ -79,6 +79,9 @@ and every commit updates this file under `Unreleased`.
   with a shared `owner.group` key.
 - The Settings screen's verbiage is now on the language store (household summary + the debug-log
   viewer).
+- The custom-fields UI is now on the language store: the manager (entity/type pickers, form, list,
+  per-row meta/delete) and the per-field input control (required label, Yes/No), with the entity/type
+  tables converted to i18n keys.
 - The Dashboard's chrome is now on the language store: every widget title, the header cell
   (title/hint/Reset), the freshness nudge (incl. the stale-count and reminder), the savings sub-line,
   and the KPI assets/accounts sublines. (Some dynamic period+plural KPI sublines remain literal for a

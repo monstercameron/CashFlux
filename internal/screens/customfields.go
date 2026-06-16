@@ -8,30 +8,33 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
 // cfEntities are the entity types that can carry custom fields, in display order.
-var cfEntities = []struct{ Value, Label string }{
-	{"account", "Accounts"},
-	{"transaction", "Transactions"},
-	{"budget", "Budgets"},
-	{"goal", "Goals"},
-	{"member", "Members"},
+// Key is an i18n key resolved at render (reuses the nav labels).
+var cfEntities = []struct{ Value, Key string }{
+	{"account", "nav.accounts"},
+	{"transaction", "nav.transactions"},
+	{"budget", "nav.budgets"},
+	{"goal", "nav.goals"},
+	{"member", "nav.members"},
 }
 
-// cfTypes are the supported custom-field data types, in display order.
+// cfTypes are the supported custom-field data types, in display order. Key is an
+// i18n key resolved at render.
 var cfTypes = []struct {
 	Value customfields.FieldType
-	Label string
+	Key   string
 }{
-	{customfields.TypeText, "Text"},
-	{customfields.TypeNumber, "Number"},
-	{customfields.TypeDate, "Date"},
-	{customfields.TypeBool, "Yes / no"},
-	{customfields.TypeSelect, "Choice"},
+	{customfields.TypeText, "cf.typeText"},
+	{customfields.TypeNumber, "cf.typeNumber"},
+	{customfields.TypeDate, "cf.typeDate"},
+	{customfields.TypeBool, "cf.typeBool"},
+	{customfields.TypeSelect, "cf.typeSelect"},
 }
 
 // CustomFieldsManager lets you define extra fields on your entities: pick the
@@ -41,7 +44,7 @@ var cfTypes = []struct {
 func CustomFieldsManager() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:customfields", 0)
@@ -94,29 +97,29 @@ func CustomFieldsManager() ui.Node {
 
 	entityOptions := make([]ui.Node, 0, len(cfEntities))
 	for _, e := range cfEntities {
-		entityOptions = append(entityOptions, Option(Value(e.Value), SelectedIf(entity.Get() == e.Value), e.Label))
+		entityOptions = append(entityOptions, Option(Value(e.Value), SelectedIf(entity.Get() == e.Value), uistate.T(e.Key)))
 	}
 	typeOptions := make([]ui.Node, 0, len(cfTypes))
 	for _, ty := range cfTypes {
-		typeOptions = append(typeOptions, Option(Value(string(ty.Value)), SelectedIf(ftype.Get() == string(ty.Value)), ty.Label))
+		typeOptions = append(typeOptions, Option(Value(string(ty.Value)), SelectedIf(ftype.Get() == string(ty.Value)), uistate.T(ty.Key)))
 	}
 
 	isChoice := ftype.Get() == string(customfields.TypeSelect)
 
 	form := Section(Class("card"),
-		H2(Class("card-title"), "Add a custom field"),
-		P(Class("muted"), "Define your own fields on any entity. Choose where it lives, name it, and pick a type. Choice fields take a comma-separated list of options."),
+		H2(Class("card-title"), uistate.T("cf.addTitle")),
+		P(Class("muted"), uistate.T("cf.addDesc")),
 		Form(Class("form-grid"), OnSubmit(add),
 			Select(Class("field"), OnChange(onEntity), entityOptions),
-			Input(Class("field"), Type("text"), Placeholder("Key (e.g. account_number)"), Value(key.Get()), OnInput(onKey)),
-			Input(Class("field"), Type("text"), Placeholder("Label (e.g. Account number)"), Value(label.Get()), OnInput(onLabel)),
+			Input(Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Value(key.Get()), OnInput(onKey)),
+			Input(Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
 			Select(Class("field"), OnChange(onType), typeOptions),
-			If(isChoice, Input(Class("field field-wide"), Type("text"), Placeholder("Options, comma-separated (e.g. gold, silver, bronze)"), Value(options.Get()), OnInput(onOptions))),
+			If(isChoice, Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
 			Select(Class("field"), OnChange(onRequired),
-				Option(Value("no"), SelectedIf(required.Get() == "no"), "Optional"),
-				Option(Value("yes"), SelectedIf(required.Get() == "yes"), "Required"),
+				Option(Value("no"), SelectedIf(required.Get() == "no"), uistate.T("cf.optional")),
+				Option(Value("yes"), SelectedIf(required.Get() == "yes"), uistate.T("cf.required")),
 			),
-			Button(Class("btn btn-primary"), Type("submit"), "Add field"),
+			Button(Class("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 	)
@@ -139,14 +142,14 @@ func CustomFieldsManager() ui.Node {
 		}
 		keyOf := func(d customfields.Def) any { return d.ID }
 		sections = append(sections, Section(Class("card"),
-			H2(Class("card-title"), e.Label),
+			H2(Class("card-title"), uistate.T(e.Key)),
 			Div(Class("rows"), MapKeyed(rows, keyOf, renderRow)),
 		))
 	}
 
 	list := ui.Node(nil)
 	if len(sections) == 0 {
-		list = Section(Class("card"), P(Class("empty"), "No custom fields yet. Add one above."))
+		list = Section(Class("card"), P(Class("empty"), uistate.T("cf.empty")))
 	} else {
 		list = Fragment(sections...)
 	}
@@ -169,7 +172,7 @@ func parseOptions(s string) []string {
 func cfTypeLabel(t customfields.FieldType) string {
 	for _, ty := range cfTypes {
 		if ty.Value == t {
-			return ty.Label
+			return uistate.T(ty.Key)
 		}
 	}
 	return string(t)
@@ -185,7 +188,7 @@ func CustomFieldRow(props customFieldRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Def.ID) }))
 	meta := cfTypeLabel(props.Def.Type)
 	if props.Def.Required {
-		meta += " · required"
+		meta += uistate.T("cf.requiredSuffix")
 	}
 	if props.Def.Type == customfields.TypeSelect && len(props.Def.Options) > 0 {
 		meta += " · " + strings.Join(props.Def.Options, ", ")
@@ -195,6 +198,6 @@ func CustomFieldRow(props customFieldRowProps) ui.Node {
 			Span(Class("row-desc"), props.Def.Label),
 			Span(Class("row-meta"), props.Def.Key+" — "+meta),
 		),
-		Button(Class("btn-del"), Type("button"), Title("Delete custom field"), OnClick(del), "✕"),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("cf.deleteTitle")), OnClick(del), "✕"),
 	)
 }

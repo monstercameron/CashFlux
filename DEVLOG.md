@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: custom-fields components migrated
+
+- Migrated the shared custom-fields UI onto i18n: `customfields.go` (CustomFieldsManager) and
+  `customfieldform.go` (CustomFieldInput). Converted the package-level `cfEntities`/`cfTypes` tables
+  from hardcoded `Label` to an i18n `Key` resolved at render (entities reuse `nav.*`; types get
+  `cf.type*`), so `cfTypeLabel` and the section headers localize too. Added the form/list strings,
+  the required suffix/label, and Yes/No. Added uistate imports to both files.
+- `i18n` tests + wasm green. Remaining UI verbiage: the big `app/settings.go` global panel, and the
+  two large screens Accounts + Transactions.
+
 ## 2026-06-16 — i18n: Settings screen migrated
 
 - Twelfth screen onto i18n: `screens/settings.go` — household summary (reusing `nav.members/accounts/

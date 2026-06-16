@@ -190,6 +190,27 @@ var english = Catalog{
 	"allocate.thinking":           "Thinking…",
 	"allocate.explainAI":          "Explain with AI",
 
+	// Custom fields (manager + types)
+	"cf.typeText":           "Text",
+	"cf.typeNumber":         "Number",
+	"cf.typeDate":           "Date",
+	"cf.typeBool":           "Yes / no",
+	"cf.typeSelect":         "Choice",
+	"cf.addTitle":           "Add a custom field",
+	"cf.addDesc":            "Define your own fields on any entity. Choose where it lives, name it, and pick a type. Choice fields take a comma-separated list of options.",
+	"cf.keyPlaceholder":     "Key (e.g. account_number)",
+	"cf.labelPlaceholder":   "Label (e.g. Account number)",
+	"cf.optionsPlaceholder": "Options, comma-separated (e.g. gold, silver, bronze)",
+	"cf.optional":           "Optional",
+	"cf.required":           "Required",
+	"cf.addField":           "Add field",
+	"cf.empty":              "No custom fields yet. Add one above.",
+	"cf.requiredSuffix":     " · required",
+	"cf.deleteTitle":        "Delete custom field",
+	"cf.requiredLabel":      " (required)",
+	"cf.yes":                "Yes",
+	"cf.no":                 "No",
+
 	// Settings screen
 	"settings.household":    "Household",
 	"settings.baseCurrency": "Base currency",
