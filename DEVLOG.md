@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B6: display-scale setting
+
+- Now green-lit ("do all the todos"), built B6 — the font/UI scale the user had earlier asked me to
+  hold. Pure `prefs.Scale` (int percent, `ScaleMin/Max/Default` = 70/130/100, clamped in `Normalize`,
+  `ScaleFraction()` → CSS multiplier; table-tested). `uistate.ApplyPrefs` sets `--ui-scale`;
+  `index.html` adds `#app { zoom: var(--ui-scale, 1) }`; Settings → Appearance gets a "Display scale"
+  `<select>` (70–130% in 10s, 100% marked default) that persists + applies live.
+- Used CSS `zoom` (simple, scales the whole app cleanly incl. layout) over a font-size cascade. Fixed
+  the pre-existing `TestNormalize` fixture (added a valid `Scale: 110` so the preserve-valid assertion
+  accounts for the new field). prefs + i18n + wasm green.
+
 ## 2026-06-16 — saved formulas: Customize UI
 
 - Added save/list/edit/delete to the Customize screen: a name input + Save below the calculator, and a

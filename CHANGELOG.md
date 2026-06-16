@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A **Display scale** setting (Settings → Appearance): pick 70%–130% (100% default) to make the whole
+  UI larger or smaller — applied live via a `--ui-scale` CSS zoom and persisted across reloads. The
+  scale value is a pure, clamped `prefs.Scale` (table-tested). Addresses the "fonts/buttons feel ~30%
+  too large for me but fine for others" feedback without forcing one size on everyone.
 - The Customize screen can now **save formulas**: name the current expression and save it; saved
   formulas appear in a list with their **live result**, an Edit button (loads it back into the editor),
   and delete. So a custom KPI you build once can be kept and revisited.

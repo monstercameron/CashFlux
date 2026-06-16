@@ -87,6 +87,8 @@
       @keyframes boot-breathe { 0%,100% { opacity: 0.55; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1); } }
       @keyframes boot-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
+      /* Display scale: zoom the whole app by the user's preference (default 1). */
+      #app { zoom: var(--ui-scale, 1); }
       /* App settle-in: a calm fade + slight lift/scale once mounted. */
       #app.app-enter { animation: app-settle 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
       @keyframes app-settle {

@@ -39,19 +39,27 @@ const (
 // defaultAccent is the out-of-the-box accent color (candidate-C green).
 const defaultAccent = "#54b884"
 
+// Display-scale bounds (whole percent). 100 is the unscaled default.
+const (
+	ScaleMin     = 70
+	ScaleMax     = 130
+	ScaleDefault = 100
+)
+
 // Prefs holds the user's display preferences.
 type Prefs struct {
 	WeekStart WeekStart `json:"weekStart"`
 	DateStyle DateStyle `json:"dateStyle"`
 	Theme     Theme     `json:"theme"`
-	Accent    string    `json:"accent"`  // hex color, e.g. "#54b884"
-	Compact   bool      `json:"compact"` // denser layout
+	Accent    string    `json:"accent"`          // hex color, e.g. "#54b884"
+	Compact   bool      `json:"compact"`         // denser layout
+	Scale     int       `json:"scale,omitempty"` // UI zoom percent (70..130); 0 means default 100
 }
 
 // Default returns the out-of-the-box preferences (Sunday week start, ISO dates,
-// dark theme, green accent, comfortable density).
+// dark theme, green accent, comfortable density, 100% scale).
 func Default() Prefs {
-	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent}
+	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault}
 }
 
 // Normalize fills any blank or unrecognized field with its default, so partial or
@@ -75,7 +83,21 @@ func (p Prefs) Normalize() Prefs {
 	if !isHexColor(p.Accent) {
 		p.Accent = defaultAccent
 	}
+	switch {
+	case p.Scale == 0:
+		p.Scale = ScaleDefault
+	case p.Scale < ScaleMin:
+		p.Scale = ScaleMin
+	case p.Scale > ScaleMax:
+		p.Scale = ScaleMax
+	}
 	return p
+}
+
+// ScaleFraction returns the display scale as a CSS zoom multiplier (e.g. 1.1 for
+// 110%), normalized into the supported range.
+func (p Prefs) ScaleFraction() float64 {
+	return float64(p.Normalize().Scale) / 100
 }
 
 // isHexColor reports whether s is a "#rgb" or "#rrggbb" hex color.

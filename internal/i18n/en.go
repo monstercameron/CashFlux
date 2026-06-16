@@ -314,6 +314,8 @@ var english = Catalog{
 	"settings.aiKeyPlaceholder": "OpenAI API key (sk-…)",
 	"settings.aiNoKey":          "AI features stay off until you add a key. Your key is stored on this device and only sent to OpenAI when you ask.",
 	"settings.aiModel":          "AI model",
+	"settings.displayScale":     "Display scale",
+	"settings.scaleDefault":     "%d%% (default)",
 	"settings.appearance":       "Appearance",
 	"settings.themeDark":        "Dark",
 	"settings.themeLight":       "Light",

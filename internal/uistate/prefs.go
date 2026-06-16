@@ -4,6 +4,7 @@ package uistate
 
 import (
 	"encoding/json"
+	"strconv"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -54,6 +55,7 @@ func ApplyPrefs(p prefs.Prefs) {
 	}
 	root.Call("setAttribute", "data-density", density)
 	root.Get("style").Call("setProperty", "--accent", p.Accent)
+	root.Get("style").Call("setProperty", "--ui-scale", strconv.FormatFloat(p.ScaleFraction(), 'f', -1, 64))
 }
 
 // resolveTheme turns the theme preference into a concrete "dark"/"light" value,

@@ -198,6 +198,13 @@ func globalSettingsForm() uic.Node {
 		savePrefs(p)
 	})
 	onLang := uic.UseEvent(func(e uic.Event) { uistate.SetActiveLanguage(i18n.Lang(e.GetValue())) })
+	onScale := uic.UseEvent(func(e uic.Event) {
+		p := prefsAtom.Get()
+		if n, err := strconv.Atoi(e.GetValue()); err == nil {
+			p.Scale = n
+		}
+		savePrefs(p)
+	})
 	hiddenAtom := uistate.UseHiddenModules()
 	toggleModule := func(path string) {
 		nh := hiddenAtom.Get().Toggle(path)
@@ -360,6 +367,10 @@ func globalSettingsForm() uic.Node {
 			p.Compact = v
 			savePrefs(p)
 		}}),
+		Div(Class("toggle-row"),
+			Span(uistate.T("settings.displayScale")),
+			Select(Class("set-input"), Title(uistate.T("settings.displayScale")), OnChange(onScale), scaleOptions(pr.Scale)),
+		),
 		Div(Class("set-label"), uistate.T("settings.preferences")),
 		Div(Class("toggle-row"),
 			Span(uistate.T("settings.weekStart")),
@@ -396,6 +407,20 @@ func globalSettingsForm() uic.Node {
 	)
 
 	return Div(Class("grid grid-cols-2 gap-x-7 content-start"), left, right)
+}
+
+// scaleOptions builds the Display-scale <option>s (70%–130% in 10% steps), with
+// the current scale preselected and 100% labelled as the default.
+func scaleOptions(current int) []uic.Node {
+	opts := make([]uic.Node, 0, 7)
+	for s := prefs.ScaleMin; s <= prefs.ScaleMax; s += 10 {
+		label := strconv.Itoa(s) + "%"
+		if s == prefs.ScaleDefault {
+			label = uistate.T("settings.scaleDefault", s)
+		}
+		opts = append(opts, Option(Value(strconv.Itoa(s)), SelectedIf(current == s), label))
+	}
+	return opts
 }
 
 // langDisplay gives a human label for a language code: English by name, any

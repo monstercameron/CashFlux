@@ -148,12 +148,12 @@ find them fine — add a setting to scale the whole interface up or down.
 rem-based root-font scale would NOT resize buttons/spacing. Use a **whole-UI zoom**: a `--ui-scale`
 CSS variable applied via `zoom` on `#app` (Chromium target; `zoom` reflows and scales fonts + buttons
 + spacing together).
-- [ ] `internal/prefs`: add a `Scale` percent field (e.g. range 70–130, default 100) + `Normalize`
-      clamp (treat 0/unset as 100) + a `ScaleFraction()` helper; table tests.
-- [ ] `uistate.ApplyPrefs`: set `--ui-scale` from the scale; CSS `#app { zoom: var(--ui-scale, 1); }`.
-- [ ] Settings → Appearance: a "Display scale" select (70%–130%, 100% marked default); persists with
+- [x] `internal/prefs`: `Scale` percent field (range 70–130, default 100) + `Normalize` clamp (0/unset
+      → 100) + `ScaleFraction()`; table-tested.
+- [x] `uistate.ApplyPrefs`: sets `--ui-scale` from the scale; CSS `#app { zoom: var(--ui-scale, 1); }`.
+- [x] Settings → Appearance: a "Display scale" select (70%–130%, 100% marked default); persists with
       prefs (reload-persistent, like theme/accent/density).
-- [ ] Verify: changing scale resizes the whole UI live and survives reload; 100% == current.
+- [~] Verify: changing scale resizes the whole UI (wasm build green; browser spot-check pending); 100% == current.
 
 ### B7. Menu is missing main-line features ★
 

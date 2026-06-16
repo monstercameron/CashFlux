@@ -25,6 +25,29 @@ func TestFormatDate(t *testing.T) {
 	}
 }
 
+func TestScaleNormalize(t *testing.T) {
+	cases := map[int]int{
+		0:   ScaleDefault, // unset → 100
+		100: 100,
+		70:  70,
+		130: 130,
+		50:  ScaleMin, // below range clamps up
+		200: ScaleMax, // above range clamps down
+		90:  90,
+	}
+	for in, want := range cases {
+		if got := (Prefs{Scale: in}).Normalize().Scale; got != want {
+			t.Errorf("Normalize scale %d = %d, want %d", in, got, want)
+		}
+	}
+	if f := (Prefs{Scale: 110}).ScaleFraction(); f != 1.1 {
+		t.Errorf("ScaleFraction(110) = %v, want 1.1", f)
+	}
+	if f := (Prefs{}).ScaleFraction(); f != 1.0 {
+		t.Errorf("ScaleFraction(default) = %v, want 1.0", f)
+	}
+}
+
 func TestWeekStartWeekday(t *testing.T) {
 	if (Prefs{WeekStart: WeekMonday}).WeekStartWeekday() != time.Monday {
 		t.Error("Monday pref should map to time.Monday")
@@ -60,7 +83,7 @@ func TestNormalize(t *testing.T) {
 	if got != Default() {
 		t.Errorf("bad values should normalize to default, got %+v", got)
 	}
-	keep := Prefs{WeekStart: WeekMonday, DateStyle: DateLong, Theme: ThemeLight, Accent: "#abc", Compact: true}
+	keep := Prefs{WeekStart: WeekMonday, DateStyle: DateLong, Theme: ThemeLight, Accent: "#abc", Compact: true, Scale: 110}
 	if keep.Normalize() != keep {
 		t.Errorf("valid values should be preserved, got %+v", keep.Normalize())
 	}
