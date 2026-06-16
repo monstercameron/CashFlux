@@ -12,6 +12,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- localStorage-backed hidden-modules atom (`uistate.UseHiddenModules`/`PersistHiddenModules`): seeds
+  the hidden-screen set from localStorage on boot and writes it back on change, so show/hide choices
+  survive reloads. Loads are normalized (false/locked/stale entries dropped).
 - Module-visibility engine (`internal/modules`): a `Hidden` set of hidden screen paths with
   `IsHidden`/`Toggle`/`Normalize`, plus locked core screens (home and settings) that can never be
   hidden. Toggle is immutable (returns a new minimal set) and a no-op for locked paths. Table-tested.

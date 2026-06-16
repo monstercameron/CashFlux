@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Module visibility: the persistence atom
+
+- `uistate/modules.go` — the third localStorage-backed atom (after layout and prefs), same shape:
+  `UseHiddenModules` seeds from `loadHiddenModules()` (key `cashflux:hidden-modules`, normalized,
+  empty set on miss/parse error), `PersistHiddenModules` marshals the normalized set back. Empty set
+  = everything visible, which is the right default.
+- Thin plumbing again — the `Normalize`/locked-path logic all lives in the tested `internal/modules`
+  package; this file is JSON ↔ localStorage only.
+- **Next.** Filter the sidebar nav by the hidden set (shell.go), then add per-screen show/hide
+  toggles to the global Settings panel.
+
 ## 2026-06-16 — Module visibility: the pure engine
 
 - New backlog item (§1.18 module-visibility toggles). Same reload-persistent shape as preferences,
