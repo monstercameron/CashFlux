@@ -92,6 +92,10 @@ and every commit updates this file under `Unreleased`.
   global-settings flip).
 - Granular, reusability-focused component backlog for the candidate-C dashboard UI (`TODOS.md` §1.7c),
   every item referencing `design/candidate-c.html`.
+- Dashboard design-system foundation in the host page: Fraunces + Inter web fonts, the candidate-C
+  Tailwind palette/type config, and the full candidate-C component CSS (bento grid, unified widget
+  header, drag/resize handles, flip-settings panel, dark scroll pane, sidebar collapse, control
+  primitives) — ported verbatim from `design/candidate-c.html`, ready for the Go component port.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

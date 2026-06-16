@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-15 — Porting candidate C: design-system foundation
+
+- Resumed the `/loop`, now executing §1.7c (port the chosen design into Go components), one feature
+  per commit. First feature is the foundation everything else references.
+- **Decision — adopt Tailwind (CDN) + the candidate-C custom CSS** rather than re-authoring every
+  utility class as semantic CSS. The mockup was authored in Tailwind; faithful reproduction and low
+  drift matter more here than shedding a CDN dependency, and it keeps the port mechanical. The
+  palette/type scale live in `tailwind.config`; the bespoke component CSS (bento, widget header,
+  drag/resize, flip panel, scrollbar, sidebar collapse, settings controls) is a single `<style
+  id="design-system">` block ported verbatim from `design/candidate-c.html`.
+- **Additive, not a switch-over:** the old semantic theme + top-nav shell still render so the build
+  stays green at every commit; the new tokens just become available. The scroll-pane and body
+  scrollbar selectors were namespaced (`main.cf-scroll`, `body.cf`) so they only apply once the new
+  shell opts in, avoiding restyling the current screens mid-migration.
+
+**Next:** port the app shell (fixed left rail + scrolling `main` + sticky top bar) as Go components,
+then the `Widget` shell and `FlipPanel` primitives, then individual widgets.
+
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
 - Paused screen porting to explore the dashboard visual design with the owner. Built 5 static
