@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: settings panel (left column + chrome)
+
+- Migrated the first half of `app/settings.go`'s global panel: SettingsHost panel title, the
+  widgetSettingsForm no-settings placeholder, and the left column (household members, base currency,
+  exchange rates, screens + hint, freshness + hint). Converted the `freshnessTypes` table from
+  hardcoded `Label` to an i18n `Key` (like cfEntities), resolved at render.
+- Kept the currency option display names ("USD — US Dollar") literal (registry territory). Split the
+  panel across two cycles to keep edits bounded — the right column (AI/appearance/prefs/data/languages)
+  is next.
+- `i18n` tests + wasm green.
+
 ## 2026-06-16 — i18n: custom-fields components migrated
 
 - Migrated the shared custom-fields UI onto i18n: `customfields.go` (CustomFieldsManager) and

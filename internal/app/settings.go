@@ -32,7 +32,7 @@ func SettingsHost() uic.Node {
 	switch target.Kind {
 	case "global":
 		return ui.FlipPanel(ui.FlipPanelProps{
-			Title:   "Settings",
+			Title:   uistate.T("settings.panelTitle"),
 			Width:   "760px",
 			Height:  "560px",
 			Back:    uic.CreateElement(globalSettingsForm),
@@ -62,7 +62,7 @@ func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 	if !ok {
 		return Div(
 			Div(Class("set-label"), props.Title),
-			P(Class("muted"), "This widget doesn't have any settings yet."),
+			P(Class("muted"), uistate.T("settings.noWidgetSettings")),
 		)
 	}
 	all := cfgAtom.Get()
@@ -124,15 +124,15 @@ func widgetFieldRow(props widgetFieldRowProps) uic.Node {
 // freshnessTypes lists the account types whose staleness window is editable, with
 // friendly labels. Keyed by the domain account-type string used in settings.
 var freshnessTypes = []struct {
-	Label string
-	Type  domain.AccountType
+	Key  string // i18n key resolved at render
+	Type domain.AccountType
 }{
-	{"Credit cards", domain.TypeCreditCard},
-	{"Checking", domain.TypeChecking},
-	{"Savings", domain.TypeSavings},
-	{"Investments", domain.TypeInvestment},
-	{"Loans", domain.TypeLoan},
-	{"Cash", domain.TypeCash},
+	{"settings.freshCredit", domain.TypeCreditCard},
+	{"settings.freshChecking", domain.TypeChecking},
+	{"settings.freshSavings", domain.TypeSavings},
+	{"settings.freshInvestments", domain.TypeInvestment},
+	{"settings.freshLoans", domain.TypeLoan},
+	{"settings.freshCash", domain.TypeCash},
 }
 
 type freshnessRowProps struct {
@@ -253,7 +253,7 @@ func globalSettingsForm() uic.Node {
 	for _, m := range members {
 		memberChips = append(memberChips, memberChip(m))
 	}
-	memberChips = append(memberChips, Button(Class("member-add"), Type("button"), OnClick(goManageMembers), "+ Add member"))
+	memberChips = append(memberChips, Button(Class("member-add"), Type("button"), OnClick(goManageMembers), uistate.T("settings.addMember")))
 
 	pr := prefsAtom.Get().Normalize()
 
@@ -276,7 +276,7 @@ func globalSettingsForm() uic.Node {
 		fw := a.FreshnessWindows()
 		for _, ft := range freshnessTypes {
 			freshnessRows = append(freshnessRows, uic.CreateElement(freshnessRow, freshnessRowProps{
-				Label: ft.Label, TypeKey: string(ft.Type), Days: fw[ft.Type], OnSet: setFreshness,
+				Label: uistate.T(ft.Key), TypeKey: string(ft.Type), Days: fw[ft.Type], OnSet: setFreshness,
 			}))
 		}
 	}
@@ -286,29 +286,29 @@ func globalSettingsForm() uic.Node {
 	for _, sc := range hideableScreens {
 		path := sc.Path
 		screenToggles = append(screenToggles, ui.ToggleRow(ui.ToggleRowProps{
-			Label:    "Show " + sc.Label,
+			Label:    uistate.T("settings.showScreen", sc.Label),
 			On:       !hidden.IsHidden(path),
 			OnChange: func(bool) { toggleModule(path) },
 		}))
 	}
 
 	left := Div(
-		Div(Class("set-label"), "Household members"),
+		Div(Class("set-label"), uistate.T("settings.householdMembers")),
 		Div(Class("flex flex-wrap gap-2 py-1"), memberChips),
-		Div(Class("set-label"), "Base currency"),
+		Div(Class("set-label"), uistate.T("settings.baseCurrency")),
 		Select(Class("set-input"),
 			Option(Value("USD"), SelectedIf(base == "USD"), "USD — US Dollar"),
 			Option(Value("EUR"), SelectedIf(base == "EUR"), "EUR — Euro"),
 			Option(Value("GBP"), SelectedIf(base == "GBP"), "GBP — British Pound"),
 		),
-		Div(Class("set-label"), "Exchange rates"),
-		If(len(fxRows) == 0, P(Class("text-faint text-[12px]"), "No custom rates.")),
+		Div(Class("set-label"), uistate.T("settings.exchangeRates")),
+		If(len(fxRows) == 0, P(Class("text-faint text-[12px]"), uistate.T("settings.noRates"))),
 		Div(fxRows),
-		Div(Class("set-label"), "Screens"),
-		P(Class("text-faint text-[12px]"), "Hide screens you don't use. Dashboard and Settings always stay."),
+		Div(Class("set-label"), uistate.T("settings.screens")),
+		P(Class("text-faint text-[12px]"), uistate.T("settings.screensHint")),
 		Div(screenToggles),
-		Div(Class("set-label"), "Freshness reminders"),
-		P(Class("text-faint text-[12px]"), "How many days before a balance looks stale, by account type."),
+		Div(Class("set-label"), uistate.T("settings.freshnessTitle")),
+		P(Class("text-faint text-[12px]"), uistate.T("settings.freshnessHint")),
 		Div(freshnessRows),
 	)
 

@@ -211,6 +211,25 @@ var english = Catalog{
 	"cf.yes":                "Yes",
 	"cf.no":                 "No",
 
+	// Settings panel (household / global flip panel)
+	"settings.panelTitle":       "Settings",
+	"settings.noWidgetSettings": "This widget doesn't have any settings yet.",
+	"settings.addMember":        "+ Add member",
+	"settings.householdMembers": "Household members",
+	"settings.exchangeRates":    "Exchange rates",
+	"settings.noRates":          "No custom rates.",
+	"settings.screens":          "Screens",
+	"settings.screensHint":      "Hide screens you don't use. Dashboard and Settings always stay.",
+	"settings.showScreen":       "Show %s",
+	"settings.freshnessTitle":   "Freshness reminders",
+	"settings.freshnessHint":    "How many days before a balance looks stale, by account type.",
+	"settings.freshCredit":      "Credit cards",
+	"settings.freshChecking":    "Checking",
+	"settings.freshSavings":     "Savings",
+	"settings.freshInvestments": "Investments",
+	"settings.freshLoans":       "Loans",
+	"settings.freshCash":        "Cash",
+
 	// Settings screen
 	"settings.household":    "Household",
 	"settings.baseCurrency": "Base currency",
