@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -65,6 +67,20 @@ func ExcludedChip(props excludedChipProps) ui.Node {
 	)
 }
 
+// parseWeight reads a weight input, treating blank/invalid/negative as 0.
+func parseWeight(s string) float64 {
+	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || f < 0 {
+		return 0
+	}
+	return f
+}
+
+// trimWeight renders a weight for an input field without trailing zeros.
+func trimWeight(f float64) string {
+	return strconv.FormatFloat(f, 'g', -1, 64)
+}
+
 // allocProfiles maps a profile key to its criterion weights.
 func allocProfiles() map[string]allocate.Weights {
 	return map[string]allocate.Weights{
@@ -86,7 +102,44 @@ func Allocate() ui.Node {
 	}
 
 	profile := ui.UseState("balanced")
-	onProfile := ui.UseEvent(func(e ui.Event) { profile.Set(e.GetValue()) })
+	// Editable criterion weights drive the ranking; the profile select loads a
+	// preset or saved profile into them, and they can be saved as a new profile.
+	wReturns := ui.UseState("1")
+	wStability := ui.UseState("1")
+	wLiquidity := ui.UseState("1")
+	wDebt := ui.UseState("1")
+	profName := ui.UseState("")
+	profMsg := ui.UseState("")
+	setWeights := func(w allocate.Weights) {
+		wReturns.Set(trimWeight(w.Returns))
+		wStability.Set(trimWeight(w.Stability))
+		wLiquidity.Set(trimWeight(w.Liquidity))
+		wDebt.Set(trimWeight(w.DebtReduction))
+	}
+	resolveWeights := func(sel string) allocate.Weights {
+		if strings.HasPrefix(sel, "saved:") {
+			for _, p := range app.AllocProfiles() {
+				if "saved:"+p.ID == sel {
+					return allocate.Weights{Returns: p.Returns, Stability: p.Stability, Liquidity: p.Liquidity, DebtReduction: p.DebtReduction}
+				}
+			}
+		}
+		if w, ok := allocProfiles()[sel]; ok {
+			return w
+		}
+		return allocProfiles()["balanced"]
+	}
+	onProfile := ui.UseEvent(func(e ui.Event) {
+		sel := e.GetValue()
+		profile.Set(sel)
+		setWeights(resolveWeights(sel))
+		profMsg.Set("")
+	})
+	onWReturns := ui.UseEvent(func(v string) { wReturns.Set(v) })
+	onWStability := ui.UseEvent(func(v string) { wStability.Set(v) })
+	onWLiquidity := ui.UseEvent(func(v string) { wLiquidity.Set(v) })
+	onWDebt := ui.UseEvent(func(v string) { wDebt.Set(v) })
+	onProfName := ui.UseEvent(func(v string) { profName.Set(v) })
 	amountStr := ui.UseState("")
 	reserveStr := ui.UseState("")
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
@@ -142,8 +195,42 @@ func Allocate() ui.Node {
 		})
 	}
 
-	weights := allocProfiles()[profile.Get()]
+	weights := allocate.Weights{
+		Returns:       parseWeight(wReturns.Get()),
+		Stability:     parseWeight(wStability.Get()),
+		Liquidity:     parseWeight(wLiquidity.Get()),
+		DebtReduction: parseWeight(wDebt.Get()),
+	}
 	ranked := allocate.RankWith(cands, weights, allocate.Constraints{Exclude: excluded.Get()})
+
+	saveProfile := ui.UseEvent(Prevent(func() {
+		name := strings.TrimSpace(profName.Get())
+		if name == "" {
+			profMsg.Set(uistate.T("allocate.profileNameRequired"))
+			return
+		}
+		p := domain.AllocationProfile{
+			ID: id.New(), Name: name, Returns: weights.Returns, Stability: weights.Stability,
+			Liquidity: weights.Liquidity, DebtReduction: weights.DebtReduction,
+		}
+		if err := app.PutAllocProfile(p); err != nil {
+			profMsg.Set(err.Error())
+			return
+		}
+		profName.Set("")
+		profile.Set("saved:" + p.ID)
+		profMsg.Set(uistate.T("allocate.profileSaved"))
+	}))
+	deleteProfile := ui.UseEvent(Prevent(func() {
+		sel := profile.Get()
+		if !strings.HasPrefix(sel, "saved:") {
+			return
+		}
+		_ = app.DeleteAllocProfile(strings.TrimPrefix(sel, "saved:"))
+		profile.Set("balanced")
+		setWeights(allocProfiles()["balanced"])
+		profMsg.Set("")
+	}))
 
 	// Excluded candidates (shown in a restore list below).
 	var excludedRows []ui.Node
@@ -233,6 +320,12 @@ func Allocate() ui.Node {
 		))
 	}
 
+	savedOpts := make([]ui.Node, 0)
+	for _, p := range app.AllocProfiles() {
+		key := "saved:" + p.ID
+		savedOpts = append(savedOpts, Option(Value(key), SelectedIf(profile.Get() == key), p.Name))
+	}
+
 	return Div(
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("allocate.profileTitle")),
@@ -243,10 +336,24 @@ func Allocate() ui.Node {
 					Option(Value("returns"), SelectedIf(profile.Get() == "returns"), uistate.T("allocate.maxReturns")),
 					Option(Value("safety"), SelectedIf(profile.Get() == "safety"), uistate.T("allocate.safety")),
 					Option(Value("debt"), SelectedIf(profile.Get() == "debt"), uistate.T("allocate.debt")),
+					savedOpts,
 				),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("allocate.reservePlaceholder")), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve)),
 			),
+			P(Class("set-label"), uistate.T("allocate.weightsTitle")),
+			Form(Class("form-grid"),
+				Input(Class("field"), Type("number"), Title(uistate.T("allocate.wReturns")), Placeholder(uistate.T("allocate.wReturns")), Value(wReturns.Get()), Step("0.5"), OnInput(onWReturns)),
+				Input(Class("field"), Type("number"), Title(uistate.T("allocate.wStability")), Placeholder(uistate.T("allocate.wStability")), Value(wStability.Get()), Step("0.5"), OnInput(onWStability)),
+				Input(Class("field"), Type("number"), Title(uistate.T("allocate.wLiquidity")), Placeholder(uistate.T("allocate.wLiquidity")), Value(wLiquidity.Get()), Step("0.5"), OnInput(onWLiquidity)),
+				Input(Class("field"), Type("number"), Title(uistate.T("allocate.wDebt")), Placeholder(uistate.T("allocate.wDebt")), Value(wDebt.Get()), Step("0.5"), OnInput(onWDebt)),
+			),
+			Form(Class("form-grid"), OnSubmit(saveProfile),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("allocate.profileNamePlaceholder")), Value(profName.Get()), OnInput(onProfName)),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("allocate.saveProfile")),
+				If(strings.HasPrefix(profile.Get(), "saved:"), Button(Class("btn"), Type("button"), OnClick(deleteProfile), uistate.T("allocate.deleteProfile"))),
+			),
+			If(profMsg.Get() != "", P(Class("muted"), profMsg.Get())),
 			If(totalMinor > 0 && remainder > 0, P(Class("muted"), uistate.T("allocate.keptBack", fmtMoney(money.New(remainder, base))))),
 		),
 		Section(Class("card"),

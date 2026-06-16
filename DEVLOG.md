@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — allocation profile picker + weight editor
+
+- Allocate now drives the ranking from four editable weight inputs (returns/stability/liquidity/debt)
+  instead of a fixed preset lookup. The profile select merges the built-in presets with saved profiles
+  ("saved:<id>" keys); picking one loads its weights into the inputs (`resolveWeights`/`setWeights`).
+  "Save profile" persists the current weights as a `domain.AllocationProfile`; a Delete appears for
+  saved selections.
+- Helpers `parseWeight` (blank/invalid/negative → 0) and `trimWeight` (no trailing zeros). New
+  `allocate.weights*`/`saveProfile`/etc. i18n keys. This completes §2.7's AllocationProfile picker UI
+  on top of the persisted model. Catalog + wasm green.
+
 ## 2026-06-16 — saved allocation profiles: model + persistence
 
 - Added `domain.AllocationProfile` (name + four float weights) persisted like the other entities

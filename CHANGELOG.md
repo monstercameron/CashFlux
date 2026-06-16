@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Allocate screen now has **editable criterion weights** and **saved profiles**: tweak the
+  returns/stability/liquidity/debt weights directly (the ranking updates live), pick a built-in preset
+  or one of your saved profiles to load its weights, and **Save profile** persists the current mix
+  under a name (delete removes it). Custom allocation strategies beyond the four presets.
 - Saved **allocation profiles** (`domain.AllocationProfile` + store/state): persist a named mix of
   capital-allocation weights (returns/stability/liquidity/debt) with full CRUD, export/import
   round-trip, and validated `appstate.AllocProfiles`/`PutAllocProfile`/`DeleteAllocProfile`.

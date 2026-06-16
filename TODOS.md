@@ -966,10 +966,10 @@ Shared control components (from mockup):
 
 - [~] ★ Criterion scorers: returns, stability, liquidity, debt reduction done (`internal/allocate`); goal-progress criterion later
 - [x] ★ Weighted combination by profile; normalization; deterministic (`Score`/`Rank`)
-- [~] `AllocationProfile{ID, Name, Weights}` + CRUD — model + persistence done (`domain.AllocationProfile`
-      w/ inline weight floats, `allocprofiles` table, store CRUD, dataset round-trip, validated appstate
-      accessors; table-tested). Still TODO: a profile picker/manager on Allocate (merge saved profiles
-      with presets); Constraints/CustomCriteria on the profile are a later extension.
+- [x] `AllocationProfile{ID, Name, Weights}` + CRUD — model + persistence (`domain.AllocationProfile`,
+      `allocprofiles` table, store CRUD, dataset round-trip, validated appstate accessors; table-tested)
+      **and** an Allocate picker with editable criterion weights, preset/saved-profile loading, and
+      save/delete. Constraints/CustomCriteria on the profile are a later extension.
 - [~] Constraints: emergency buffer, max-per-destination, exclusions — applied/clamped
       — exclusions complete (engine + UI); emergency buffer + max-per-destination implemented in the
         `Distribute` split engine (tested); amount-split UI next
