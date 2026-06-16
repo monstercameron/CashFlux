@@ -168,10 +168,10 @@ func navItem(props navItemProps) uic.Node {
 }
 
 // HouseholdCard sits at the bottom of the rail, summarizing the household and
-// opening Settings on click. It reads live member count and base currency from
-// app state. (The global-settings flip panel replaces the navigate later.)
+// opening the global settings flip panel on click. It reads live member count
+// and base currency from app state.
 func HouseholdCard() uic.Node {
-	nav := router.UseNavigate()
+	settings := uistate.UseSettings()
 	name := "Your household"
 	summary := "Settings"
 	if app := appstate.Default; app != nil {
@@ -188,7 +188,7 @@ func HouseholdCard() uic.Node {
 	}
 	return Button(
 		Class("hh mt-auto m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover"),
-		OnClick(func() { nav.Navigate("/settings") }),
+		OnClick(func() { settings.Set(uistate.Global()) }),
 		ui.Icon("settings", Class("w-4 h-4 shrink-0 text-dim")),
 		Span(Class("hh-text leading-tight"),
 			Span(Class("font-display text-[14px] font-medium block"), name),

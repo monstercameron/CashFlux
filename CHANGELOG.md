@@ -182,6 +182,8 @@ and every commit updates this file under `Unreleased`.
   `settings:target` atom + a `SettingsHost` mounted at the shell root). The settings back face has an
   editable title and behavior toggles (show on dashboard, allow moving/resizing, compact), built from
   the `ToggleRow` primitive. The household card's global panel opens too (body coming next).
+- The rail's household card now opens the global settings flip panel (via the shared settings atom)
+  instead of navigating to the Settings route.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
