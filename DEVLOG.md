@@ -345,8 +345,12 @@ problems and fixes, and what's next.
   clear) and a 1200-month cap as a backstop. Table-driven tests: 0% APR exact (10 months), an
   interest-bearing case (~11 months, interest > 0), payment-too-small, already-paid, zero-payment.
 
-**Next:** surface payoff in a planning view (and add extra-payment / payoff-date scenarios), then the
-allocation-engine scorers and the formula-engine tokenizer — continuing Phase 2 bottom-up.
+- Surfaced payoff in the **Planning screen** (replaced the stub): a live debt-payoff calculator
+  (balance / APR / monthly payment → months, total interest, total paid) wired to `payoff.Project`,
+  recomputing on each keystroke (no submit) with a plain-English non-viable message.
+
+**Next:** extra-payment / payoff-date scenarios, then the allocation-engine scorers and the
+formula-engine tokenizer — continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

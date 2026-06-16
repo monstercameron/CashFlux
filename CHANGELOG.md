@@ -175,6 +175,9 @@ and every commit updates this file under `Unreleased`.
   payment)` simulates monthly APR accrual and a fixed payment, returning months-to-zero, total
   interest, and total paid, with `ok=false` when the payment can't cover the interest. Table-driven
   tested.
+- Planning screen (replacing the stub): a **debt-payoff calculator** — enter balance, APR, and
+  monthly payment to see months-to-zero, total interest, and total paid, updating live via the
+  `internal/payoff` engine, with a friendly message when the payment can't cover the interest.
 - `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
   the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
   current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.

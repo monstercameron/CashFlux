@@ -58,11 +58,6 @@ func stat(label, value, accent string) ui.Node {
 	)
 }
 
-// Planning is the scenario/projection tool.
-func Planning() ui.Node {
-	return stub(2, "Build scenarios from recurring items and assumptions, compare against actuals, and push a chosen scenario into the forecast.")
-}
-
 // Allocate is the capital-allocation engine.
 func Allocate() ui.Node {
 	return stub(2, "Enter an amount and pick a profile to get ranked suggestions for where to put your money — scored on stability, returns, ease of withdrawal, and debt reduction, with a clear breakdown.")
