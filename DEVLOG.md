@@ -279,8 +279,12 @@ problems and fixes, and what's next.
   still owns any account, budget, or goal, so those references can't be orphaned. A reassign flow is
   the richer follow-up.
 
-**Next:** full edit flows (account/transaction/budget/goal field edit), category delete-reassign,
-then the Settings screen — continuing the priority-ordered Phase-1 backlog.
+- Added a **category delete-guard** mirroring the member one: blocks deletion (with a count) when any
+  transaction or budget still references the category. A pick-a-replacement reassign flow is the
+  richer follow-up.
+
+**Next:** full edit flows (account/transaction/budget/goal field edit), then category-delete reassign
+and the Settings screen — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

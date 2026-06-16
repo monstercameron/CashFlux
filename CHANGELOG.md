@@ -224,7 +224,8 @@ and every commit updates this file under `Unreleased`.
   section and drop out of the assets/liabilities lists and net-worth totals (already excluded by
   `ledger`).
 - Categories screen: add categories (name + income/expense), listed grouped by kind with per-row
-  delete; reachable from a new "Categories" rail item (tag icon) under System.
+  delete; reachable from a new "Categories" rail item (tag icon) under System. Deleting a category
+  still used by transactions or budgets is blocked with a plain-English message.
 - Members screen: add household members (name + color), list with a color swatch, set the default
   member, and per-row delete; reachable from a new "Members" rail item (users icon) under System.
   Deleting a member who still owns accounts/budgets/goals is blocked with a plain-English message.

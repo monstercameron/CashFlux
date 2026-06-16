@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -48,10 +49,27 @@ func Categories() ui.Node {
 	}))
 
 	deleteCat := func(catID string) {
+		// Guard: don't orphan transactions/budgets that reference this category.
+		used := 0
+		for _, t := range app.Transactions() {
+			if t.CategoryID == catID {
+				used++
+			}
+		}
+		for _, b := range app.Budgets() {
+			if b.CategoryID == catID {
+				used++
+			}
+		}
+		if used > 0 {
+			errMsg.Set(fmt.Sprintf("This category is used by %d transaction(s) or budget(s). Recategorize those first.", used))
+			return
+		}
 		if err := app.DeleteCategory(catID); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
+		errMsg.Set("")
 		bump()
 	}
 
