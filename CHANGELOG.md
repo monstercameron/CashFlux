@@ -204,7 +204,8 @@ and every commit updates this file under `Unreleased`.
   via a shared drag-source atom; `dragover` allows the drop with `Prevent`). The dragged widget dims
   (`.drag`) and the source clears on drag-end.
 - Resize handles: a widget's right/bottom edge handles now cycle its column/row span
-  (`dashlayout.Resize`, clamped to the 4×3 grid bounds) and re-place it live.
+  (`dashlayout.Resize`, clamped to the 4×3 grid bounds) and re-place it live. Every dashboard widget
+  is now both draggable and resizable.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

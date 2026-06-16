@@ -62,17 +62,17 @@ func Dashboard() ui.Node {
 			Body: kpiBody(fmtAccounting(net), figTone(net), fmt.Sprintf("Assets %s", fmtAccounting(assets)), "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-income", Title: "Income", Draggable: true,
+			ID: "kpi-income", Title: "Income", Draggable: true, Resizable: true,
 			GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
 			Body: kpiBody(fmtAccounting(income), "text-up", periodLabel, "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-spending", Title: "Spending", Draggable: true,
+			ID: "kpi-spending", Title: "Spending", Draggable: true, Resizable: true,
 			GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
 			Body: kpiBody(fmtAccounting(expense), "text-down", periodLabel, "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-liabilities", Title: "Liabilities", Draggable: true,
+			ID: "kpi-liabilities", Title: "Liabilities", Draggable: true, Resizable: true,
 			GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
 			Body: kpiBody(fmtAccounting(liabilities), "", fmt.Sprintf("%d accounts", active), "text-dim"),
 		}),
@@ -129,7 +129,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 		body = Div(Class("text-[13px] space-y-2.5"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "bills", Title: "Upcoming bills", Draggable: true, GridColumn: "3 / span 2", GridRow: "6",
+		ID: "bills", Title: "Upcoming bills", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "6",
 		Body: body,
 	})
 }
@@ -177,7 +177,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 
 	if total == 0 {
 		return uiw.Widget(uiw.WidgetProps{
-			ID: "breakdown", Title: "Spending breakdown", Draggable: true, GridColumn: "3 / span 2", GridRow: "7",
+			ID: "breakdown", Title: "Spending breakdown", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
 			Body: P(Class("empty text-dim text-[13px]"), "No spending in this period."),
 		})
 	}
@@ -223,7 +223,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 		Div(Class("flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[12px] text-dim"), legend),
 	)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "breakdown", Title: "Spending breakdown", Draggable: true, GridColumn: "3 / span 2", GridRow: "7",
+		ID: "breakdown", Title: "Spending breakdown", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
 		Body: body,
 	})
 }
@@ -250,7 +250,7 @@ func savingsRateWidget(income, expense money.Money) ui.Node {
 		),
 	)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "savings", Title: "Savings rate", Draggable: true, GridColumn: "1 / span 2", GridRow: "7",
+		ID: "savings", Title: "Savings rate", Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "7",
 		Body: body,
 	})
 }
@@ -307,7 +307,7 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 	)
 
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "cashflow", Title: "Cash flow", Draggable: true, GridColumn: "1 / span 2", GridRow: "6",
+		ID: "cashflow", Title: "Cash flow", Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "6",
 		Body: Div(Class("flex items-end gap-5"), bars, netBlock),
 	})
 }
@@ -331,7 +331,7 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 		uiw.AreaChart(uiw.AreaChartProps{Values: values, GradientID: "cf-networth"}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "trend", Title: "Net worth", Draggable: true, GridColumn: "4", GridRow: "3 / span 2",
+		ID: "trend", Title: "Net worth", Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",
 		BodyClass: "flex flex-col", Body: body,
 	})
 }
@@ -364,7 +364,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction) ui.Node {
 		body = Div(Class("grid grid-cols-3 gap-4 text-[13px]"), cells)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "accounts", Title: "Accounts", Draggable: true, GridColumn: "3 / span 2", GridRow: "5",
+		ID: "accounts", Title: "Accounts", Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "5",
 		Body: body,
 	})
 }
@@ -402,7 +402,7 @@ func todoWidget(app *appstate.App) ui.Node {
 		body = Div(Class("text-[13px] space-y-2"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "todo", Title: "To-do", Draggable: true, GridColumn: "2", GridRow: "5",
+		ID: "todo", Title: "To-do", Draggable: true, Resizable: true, GridColumn: "2", GridRow: "5",
 		Body: body,
 	})
 }
@@ -413,7 +413,7 @@ func goalsWidget(app *appstate.App) ui.Node {
 	list := app.Goals()
 	if len(list) == 0 {
 		return uiw.Widget(uiw.WidgetProps{
-			ID: "goals", Title: "Goals", Draggable: true, GridColumn: "1", GridRow: "5",
+			ID: "goals", Title: "Goals", Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
 			Body: P(Class("empty text-dim text-[13px]"), "No goals yet."),
 		})
 	}
@@ -432,7 +432,7 @@ func goalsWidget(app *appstate.App) ui.Node {
 		Div(Class("text-[12px] text-dim mt-1.5"), caption),
 	)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "goals", Title: "Goal · " + g.Name, Draggable: true, GridColumn: "1", GridRow: "5",
+		ID: "goals", Title: "Goal · " + g.Name, Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
 		Body: body,
 	})
 }
@@ -479,7 +479,7 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 		body = Div(Class("space-y-4 text-[13px]"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "budgets", Title: "Budgets", Draggable: true,
+		ID: "budgets", Title: "Budgets", Draggable: true, Resizable: true,
 		GridColumn: "3", GridRow: "3 / span 2", Body: body,
 	})
 }
@@ -503,7 +503,7 @@ func recentWidget(txns []domain.Transaction) ui.Node {
 		body = Table(Class("w-full text-[13px]"), Tbody(rows))
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "recent", Title: "Recent transactions", Draggable: true,
+		ID: "recent", Title: "Recent transactions", Draggable: true, Resizable: true,
 		GridColumn: "1 / span 2", GridRow: "3 / span 2", BodyClass: "overflow-hidden",
 		Body: body,
 	})
