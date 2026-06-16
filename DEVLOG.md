@@ -204,8 +204,14 @@ problems and fixes, and what's next.
   single `layout.Swap`/`Resize` written to the atom re-places every widget. Widgets already subscribe
   to the atom via the hook, so reorder/resize will re-render the whole grid.
 
-**Next:** the drag-to-swap interaction (`OnDragStart`/`OnDrop` on the widget cell → `layout.Swap`),
-then edge-resize handles → `layout.Resize`, then persist the layout to the store Settings.
+- Wired **drag-to-swap**: the framework's `Prevent` wrapper calls `PreventDefault` before the handler,
+  so `OnDragOver(Prevent(func(){}))` enables the drop. `OnDragStart` stashes the widget id in a shared
+  `drag-source` atom; `OnDrop` swaps via `dashlayout.Swap` written to the layout atom (re-placing both
+  widgets) and clears the source; `OnDragEnd` clears it if dropped outside. The dragged cell dims via
+  `.drag`. No `DataTransfer` needed — the atom carries the source id.
+
+**Next:** edge-resize handles (right/bottom) → `dashlayout.Resize` (pointer drag, snap to cells),
+then persist the layout (and per-widget settings) to the store; then restyle the non-dashboard screens.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

@@ -14,3 +14,11 @@ const layoutAtomID = "dashboard:layout"
 func UseLayout() state.Atom[dashlayout.Layout] {
 	return state.UseAtom(layoutAtomID, dashlayout.Default())
 }
+
+const dragSrcAtomID = "dashboard:drag-source"
+
+// UseDragSource returns the shared atom holding the id of the widget currently
+// being dragged ("" when none), so the drop target knows what to swap with.
+func UseDragSource() state.Atom[string] {
+	return state.UseAtom(dragSrcAtomID, "")
+}

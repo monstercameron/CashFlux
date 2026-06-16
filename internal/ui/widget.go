@@ -46,17 +46,36 @@ func widget(props WidgetProps) uic.Node {
 
 	// Grid placement comes from the shared layout when present (so drag-reorder
 	// and resize take effect), falling back to the caller-provided defaults.
+	layoutAtom := uistate.UseLayout()
+	layout := layoutAtom.Get()
 	gridCol, gridRow := props.GridColumn, props.GridRow
-	if p, ok := uistate.UseLayout().Get().Get(props.ID); ok {
+	if p, ok := layout.Get(props.ID); ok {
 		gridCol, gridRow = p.GridColumn(), p.GridRow()
 	}
+	dragSrc := uistate.UseDragSource()
 
-	args := []any{Class("w"), Attr("data-widget", props.ID)}
+	cellClass := "w"
+	if dragSrc.Get() == props.ID && props.ID != "" {
+		cellClass += " drag" // dims the widget while it is being dragged
+	}
+	args := []any{Class(cellClass), Attr("data-widget", props.ID)}
 	if style := gridStyle(gridCol, gridRow); style != nil {
 		args = append(args, Style(style))
 	}
 	if props.Draggable {
-		args = append(args, Attr("draggable", "true"))
+		id := props.ID
+		args = append(args,
+			Attr("draggable", "true"),
+			OnDragStart(func() { dragSrc.Set(id) }),
+			OnDragOver(Prevent(func() {})), // allow drop
+			OnDrop(Prevent(func() {
+				if src := dragSrc.Get(); src != "" && src != id {
+					layoutAtom.Set(layout.Swap(src, id))
+				}
+				dragSrc.Set("")
+			})),
+			OnDragEnd(func() { dragSrc.Set("") }), // clear if dropped outside a target
+		)
 	}
 	args = append(args,
 		Div(Class("wh"),
