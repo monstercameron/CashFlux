@@ -217,7 +217,7 @@ and every commit updates this file under `Unreleased`.
 - Transactions: account-to-account transfers — a "Transfer" kind swaps the category picker for a
   "To account" picker and creates paired entries (debit + credit, each with `TransferAccountID`) that
   move both balances and are excluded from income/expense. Same-currency only for now; rows labelled
-  "Transfer".
+  "Transfer". Deleting either leg removes the reciprocal so balances stay consistent.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

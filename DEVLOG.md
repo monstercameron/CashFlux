@@ -241,8 +241,12 @@ problems and fixes, and what's next.
   currency (cross-currency deferred) and writes both legs. Known gap: deleting one leg orphans the
   other — a paired delete is the follow-up.
 
-**Next:** paired transfer delete; then more Phase-1 (Members + Categories screens, account
-edit/archive, transaction filters/edit), continuing the priority-ordered backlog.
+- **Paired transfer delete**: deleting a transfer leg now finds and removes its reciprocal (accounts
+  swapped, amount negated, same date) so balances don't drift. Heuristic match (no schema change /
+  migration); a shared transfer-group id would be more robust if duplicate transfers collide — noted.
+
+**Next:** more Phase-1 — account edit/archive, transaction filters (member/account/category/date/
+text), then the Members and Categories screens, continuing the priority-ordered backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
