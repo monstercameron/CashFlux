@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CashFlux — C · Bento Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: {
+        fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'], display: ['Fraunces','Georgia','serif'] },
+        colors: { base:'#0e0e0f', tile:'#121214', line:'#232325', fg:'#f4f4f5', dim:'#a6a6ac', faint:'#6c6c72', up:'#54b884', down:'#d8716f', warn:'#cfa14e' },
+      } } }
+    </script>
+    <style>
+      body{-webkit-font-smoothing:antialiased;} .fig{font-variant-numeric:tabular-nums lining-nums;}
+      .nav:hover{background:#161617;color:#f4f4f5;}
+      /* Bento grid — square outlined cells with a small gap */
+      /* one base cell unit; every row is exactly one unit so widgets integer-scale */
+      .bento { display:grid; --cell:152px; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(7, var(--cell)); gap:10px; }
+      .w{ position:relative; background:#121214; border:1px solid #34343a; overflow:hidden; display:flex; flex-direction:column; }  /* square, visible cell border */
+      .w:hover{ border-color:#44444c; }
+      .w.drag{ opacity:.4; }
+      /* reconfigure controls */
+      .ghandle{ position:absolute; top:7px; right:40px; z-index:3; color:#5a5a64; cursor:grab; font-size:.95rem; line-height:1; }
+      .ghandle:active{ cursor:grabbing; }
+      /* per-widget settings gear */
+      .gear-inline{ margin-left:auto; color:#5a5a64; background:transparent; border:0; cursor:pointer; font-size:.95rem; line-height:1; }
+      .gear-inline:hover{ color:#f4f4f5; }
+      .gear-abs{ position:absolute; top:7px; right:16px; z-index:3; color:#5a5a64; background:transparent; border:0; cursor:pointer; font-size:.95rem; line-height:1; }
+      .gear-abs:hover{ color:#f4f4f5; }
+      /* time resolution + range controls */
+      .seg{ display:inline-flex; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; padding:2px; }
+      .seg-btn{ padding:.32rem .72rem; border-radius:3px; font-size:.8rem; color:#a6a6ac; background:transparent; border:0; cursor:pointer; }
+      .seg-btn:hover{ color:#f4f4f5; }
+      .seg-btn.active{ background:#2a2a30; color:#f4f4f5; }
+      .rcap{ font-size:.66rem; text-transform:uppercase; letter-spacing:.12em; color:#6c6c72; }
+      .rpill{ display:inline-flex; align-items:center; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; padding:.2rem .25rem; }
+      .rstep{ background:transparent; border:0; color:#a6a6ac; cursor:pointer; padding:0 .3rem; font-size:1rem; line-height:1; }
+      .rstep:hover{ color:#f4f4f5; }
+      .rlabel{ min-width:128px; text-align:center; font-size:.8rem; }
+      .rz{ position:absolute; z-index:3; }
+      .rz[data-dir="r"]{ top:0; right:0; height:100%; width:11px; cursor:ew-resize; }
+      .rz[data-dir="b"]{ left:0; bottom:0; width:100%; height:11px; cursor:ns-resize; }
+      .rz::after{ content:""; position:absolute; background:#5a5a64; border-radius:3px; }
+      .rz[data-dir="r"]::after{ top:50%; right:2px; transform:translateY(-50%); width:3px; height:24px; }
+      .rz[data-dir="b"]::after{ left:50%; bottom:2px; transform:translateX(-50%); height:3px; width:24px; }
+      .rz:hover::after{ background:#9a9aa4; }
+      /* dark, modern scrollbar */
+      main { scrollbar-width: thin; scrollbar-color: #34343a transparent; scroll-behavior: smooth; }
+      main::-webkit-scrollbar { width: 11px; }
+      main::-webkit-scrollbar-track { background: transparent; }
+      main::-webkit-scrollbar-thumb { background: #2d2d33; border-radius: 999px; border: 3px solid #0e0e0f; background-clip: padding-box; }
+      main::-webkit-scrollbar-thumb:hover { background: #44444c; }
+      main::-webkit-scrollbar-thumb:active { background: #55555e; }
+      /* Settings flip */
+      .flip-backdrop{ position:fixed; inset:0; background:rgba(4,4,6,.6); backdrop-filter:blur(3px); display:grid; place-items:center; opacity:0; transition:opacity .28s; z-index:50; }
+      .flip-backdrop.show{ opacity:1; }
+      .flip-wrap{ width:384px; max-width:92vw; height:470px; max-height:86vh; perspective:1500px; }
+      .flip-inner{ position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .55s cubic-bezier(.2,.75,.2,1); transform:rotateY(0) scale(.86); }
+      .flip-inner.flipped{ transform:rotateY(180deg) scale(1); }
+      .flip-face{ position:absolute; inset:0; backface-visibility:hidden; border:1px solid #34343a; border-radius:4px; background:#121214; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 30px 70px -20px rgba(0,0,0,.75); }
+      .flip-back{ transform:rotateY(180deg); }
+      .set-h{ display:flex; align-items:center; gap:.5rem; padding:.85rem 1rem; border-bottom:1px solid #2a2a2c; }
+      .set-h h3{ font-family:'Fraunces',serif; font-size:1.05rem; font-weight:600; flex:1; text-align:center; }
+      .set-close{ background:transparent; border:0; color:#8a8a92; cursor:pointer; font-size:.95rem; width:1.5rem; line-height:1; }
+      .set-close:hover{ color:#f4f4f5; }
+      .set-body{ flex:1; overflow-y:auto; padding:1rem; scrollbar-width:thin; scrollbar-color:#34343a transparent; }
+      .set-body::-webkit-scrollbar{ width:9px; } .set-body::-webkit-scrollbar-thumb{ background:#2d2d33; border-radius:999px; border:2px solid #121214; }
+      .set-label{ font-size:.7rem; text-transform:uppercase; letter-spacing:.12em; color:#6c6c72; margin:.7rem 0 .3rem; }
+      .toggle-row{ display:flex; align-items:center; justify-content:space-between; padding:.55rem 0; border-bottom:1px solid #1f1f22; font-size:.9rem; }
+      .switch{ width:36px; height:21px; border-radius:999px; background:#34343a; position:relative; cursor:pointer; transition:background .2s; flex-shrink:0; }
+      .switch::after{ content:""; position:absolute; top:2px; left:2px; width:17px; height:17px; border-radius:50%; background:#9a9aa4; transition:.2s; }
+      .switch.on{ background:#3e7f5e; } .switch.on::after{ left:17px; background:#e6f3ec; }
+      .swatch{ width:22px; height:22px; border-radius:6px; cursor:pointer; border:2px solid transparent; }
+      .swatch.sel{ border-color:#f4f4f5; }
+      .set-input{ width:100%; padding:.5rem .6rem; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; color:#f4f4f5; font:inherit; }
+      .set-foot{ padding:.75rem 1rem; border-top:1px solid #2a2a2c; display:flex; gap:.5rem; justify-content:flex-end; }
+      .set-btn{ min-width:96px; padding:.55rem 1rem; border-radius:4px; cursor:pointer; font-size:.9rem; }
+      .set-btn.save{ background:#1f2c24; border:1px solid #356b50; color:#7fd0a3; font-weight:600; }
+      .set-btn.save:hover{ background:#26382d; }
+      .set-btn.cancel{ background:transparent; border:1px solid #34343a; color:#a6a6ac; font-weight:500; }
+      .set-btn.cancel:hover{ color:#f4f4f5; border-color:#44444c; }
+      /* squared progress bars (consistent radii) */
+      .bento [class*="rounded-full"][class*="overflow-hidden"]{ border-radius:2px; }
+      /* sidebar collapse */
+      aside.rail{ transition:width .18s ease; }
+      aside.rail.collapsed{ width:58px; }
+      aside.rail.collapsed .brand-name,
+      aside.rail.collapsed .nv span,
+      aside.rail.collapsed nav > div,
+      aside.rail.collapsed .hh-text{ display:none; }
+      aside.rail.collapsed .nv{ justify-content:center; gap:0; padding-left:0; padding-right:0; }
+      aside.rail.collapsed .railhead{ padding-left:0; padding-right:0; justify-content:center; }
+      aside.rail.collapsed .hh{ justify-content:center; padding-left:0; padding-right:0; }
+      .menu-btn{ background:transparent; border:0; color:#a6a6ac; cursor:pointer; display:grid; place-items:center; }
+      .menu-btn:hover{ color:#f4f4f5; }
+      /* global settings panel bits */
+      .member-chip{ display:inline-flex; align-items:center; gap:.4rem; padding:.25rem .6rem; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; font-size:.8rem; }
+      .member-add{ padding:.25rem .6rem; border:1px dashed #3a3a40; border-radius:4px; color:#a6a6ac; font-size:.8rem; cursor:pointer; background:transparent; }
+      .member-add:hover{ color:#f4f4f5; }
+      .rate-row{ display:flex; align-items:center; gap:.6rem; padding:.25rem 0; font-size:.85rem; }
+      .rate-row .rate-in{ width:90px; padding:.35rem .5rem; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; color:#f4f4f5; font:inherit; text-align:right; }
+      .data-btn{ padding:.45rem .7rem; border:1px solid #34343a; border-radius:4px; color:#d6d6da; background:#1a1a1d; cursor:pointer; font-size:.82rem; }
+      .data-btn:hover{ border-color:#44444c; color:#f4f4f5; }
+      .wh{ display:flex; align-items:center; gap:.55rem; padding:.7rem .85rem .55rem; }
+      .wh h3{ font-family:'Fraunces',serif; font-size:1rem; font-weight:600; letter-spacing:-0.01em; flex:1; text-align:center; }
+      .wh .grip{ width:1.1rem; } /* balance the gear on the right so the title centers */
+      .grip{ cursor:grab; color:#4f4f55; }
+      .wbody{ padding:0 .85rem .85rem; flex:1; min-height:0; }
+      .kpi{ padding:.95rem 1rem; }
+    </style>
+  </head>
+  <body class="bg-base text-fg font-sans h-screen overflow-hidden text-[14px] leading-relaxed">
+    <div class="flex h-screen overflow-hidden">
+      <!-- Rail -->
+      <aside class="rail w-60 shrink-0 border-r border-line flex flex-col">
+        <div class="railhead h-14 flex items-center gap-2.5 px-5 border-b border-line">
+          <span class="grid place-items-center w-7 h-7 rounded bg-fg text-base font-display font-semibold text-[13px] shrink-0">C</span>
+          <span class="brand-name font-display text-lg font-semibold tracking-tight">CashFlux</span>
+        </div>
+        <nav class="flex-1 overflow-y-auto p-3 flex flex-col gap-0.5 text-dim text-[13.5px]">
+          <a class="nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] bg-[#1c1c1e] text-fg font-medium">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg><span>Dashboard</span>
+          </a>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.1"/></svg><span>Accounts</span>
+          </a>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4"/><path d="M20 7H5"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h15"/></svg><span>Transactions</span>
+          </a>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 9 9h-9z"/></svg><span>Budgets</span>
+          </a>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg><span>Goals</span>
+          </a>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12l3 3 5-6"/></svg><span>To-do</span>
+          </a>
+
+          <div class="px-3 pt-4 pb-1 text-[10px] uppercase tracking-[0.16em] text-faint">My pages</div>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0 text-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span>Debt payoff plan</span>
+          </a>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0 text-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span>FIRE tracker</span>
+          </a>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0" style="color:#7c83ff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span>Side hustle P&amp;L</span>
+          </a>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] text-faint">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>New page</span>
+          </a>
+
+          <div class="px-3 pt-4 pb-1 text-[10px] uppercase tracking-[0.16em] text-faint">System</div>
+          <a class="nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px]">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg><span>Settings</span>
+          </a>
+        </nav>
+        <button id="globalBtn" class="hh mt-auto m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover">
+          <svg class="w-4 h-4 shrink-0 text-dim" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+          <span class="hh-text leading-tight">
+            <span class="font-display text-[14px] font-medium block">Cameron Family</span>
+            <span class="text-xs text-faint block">3 members · USD base · Settings</span>
+          </span>
+        </button>
+      </aside>
+
+      <!-- Main (independent scroll) -->
+      <main class="flex-1 min-w-0 overflow-y-auto">
+        <div class="h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20">
+          <button id="menuToggle" class="menu-btn w-7 h-7 -ml-1" title="Collapse menu"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+          <div class="font-display text-lg font-semibold">Dashboard</div>
+          <div class="ml-auto flex items-center gap-2.5 text-dim text-[13px]">
+            <div class="seg" id="resSeg">
+              <button class="seg-btn" data-res="week">Week</button>
+              <button class="seg-btn active" data-res="month">Month</button>
+              <button class="seg-btn" data-res="quarter">Quarter</button>
+            </div>
+            <div class="rpill"><button class="rstep" data-edge="from" data-dir="-1">‹</button><span class="rlabel" id="fromLabel">Jun 2026</span><button class="rstep" data-edge="from" data-dir="1">›</button></div>
+            <span class="text-faint">–</span>
+            <div class="rpill"><button class="rstep" data-edge="to" data-dir="-1">‹</button><span class="rlabel" id="toLabel">Aug 2026</span><button class="rstep" data-edge="to" data-dir="1">›</button></div>
+            <button class="px-3 py-1.5 border border-line text-fg hover:bg-hover ml-1" style="border-radius:4px">+ Add</button>
+          </div>
+        </div>
+
+        <div class="p-[10px]">
+          <div class="bento" id="bento">
+            <!-- Header cell — part of the same grid -->
+            <div class="w" style="grid-column:1 / -1;grid-row:1">
+              <div class="flex-1 flex items-center px-5">
+                <div>
+                  <h1 class="font-display text-2xl font-semibold tracking-tight">Your dashboard</h1>
+                  <p class="text-dim mt-0.5 text-[13px]">Drag tiles to move · grab the edge handles to resize</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- KPI tiles (1x1) -->
+            <div class="w" id="demoCard" draggable="true" style="grid-column:1;grid-row:2">
+              <div class="wh"><span class="grip">⠿</span><h3>Net worth</h3></div>
+              <div class="wbody flex flex-col justify-center">
+                <div class="font-display fig text-[24px] leading-tight">$58,450.00</div>
+                <div class="pt-1.5 text-[12px] text-up">▲ 2.4% this month</div>
+              </div>
+              <div class="rz" data-dir="r" title="Scale wide"></div>
+              <div class="rz" data-dir="b" title="Scale tall"></div>
+            </div>
+            <div class="w" draggable="true" style="grid-column:2;grid-row:2">
+              <div class="wh"><span class="grip">⠿</span><h3>Income</h3></div>
+              <div class="wbody flex flex-col justify-center"><div class="font-display fig text-[24px] leading-tight text-up">$4,200.00</div><div class="pt-1.5 text-[12px] text-dim">June · 1 deposit</div></div>
+            </div>
+            <div class="w" draggable="true" style="grid-column:3;grid-row:2">
+              <div class="wh"><span class="grip">⠿</span><h3>Spending</h3></div>
+              <div class="wbody flex flex-col justify-center"><div class="font-display fig text-[24px] leading-tight text-down">$1,790.75</div><div class="pt-1.5 text-[12px] text-dim">June · 12 transactions</div></div>
+            </div>
+            <div class="w" draggable="true" style="grid-column:4;grid-row:2">
+              <div class="wh"><span class="grip">⠿</span><h3>Liabilities</h3></div>
+              <div class="wbody flex flex-col justify-center"><div class="font-display fig text-[24px] leading-tight">$850.00</div><div class="pt-1.5 text-[12px] text-warn">card due Jun 15</div></div>
+            </div>
+
+            <!-- Recent (2x2) -->
+            <div class="w" draggable="true" style="grid-column:1 / span 2;grid-row:3 / span 2">
+              <div class="wh"><span class="grip">⠿</span><h3>Recent transactions</h3></div>
+              <div class="wbody overflow-hidden">
+                <table class="w-full text-[13px]"><tbody>
+                  <tr class="border-b border-line/70"><td class="py-2.5 fig text-dim w-16">Jun 1</td><td class="py-2.5">Salary</td><td class="py-2.5 text-right font-display fig text-up">$4,200.00</td></tr>
+                  <tr class="border-b border-line/70"><td class="py-2.5 fig text-dim">Jun 2</td><td class="py-2.5">Apartment rent</td><td class="py-2.5 text-right font-display fig text-down">($1,500.00)</td></tr>
+                  <tr class="border-b border-line/70"><td class="py-2.5 fig text-dim">Jun 3</td><td class="py-2.5">Groceries</td><td class="py-2.5 text-right font-display fig text-down">($240.55)</td></tr>
+                  <tr class="border-b border-line/70"><td class="py-2.5 fig text-dim">Jun 5</td><td class="py-2.5">Fuel</td><td class="py-2.5 text-right font-display fig text-down">($60.20)</td></tr>
+                  <tr><td class="py-2.5 fig text-dim">Jun 7</td><td class="py-2.5">Electricity</td><td class="py-2.5 text-right font-display fig text-down">($92.40)</td></tr>
+                </tbody></table>
+              </div>
+            </div>
+
+            <!-- Budgets (1x2) -->
+            <div class="w" draggable="true" style="grid-column:3;grid-row:3 / span 2">
+              <div class="wh"><span class="grip">⠿</span><h3>Budgets</h3></div>
+              <div class="wbody space-y-4 text-[13px]">
+                <div><div class="flex justify-between"><span>Food</span><span class="font-display fig text-dim">$240</span></div><div class="h-1.5 bg-line rounded-full mt-1.5 overflow-hidden"><div class="h-full bg-up" style="width:40%"></div></div></div>
+                <div><div class="flex justify-between"><span>Housing</span><span class="font-display fig text-warn">94%</span></div><div class="h-1.5 bg-line rounded-full mt-1.5 overflow-hidden"><div class="h-full bg-warn" style="width:94%"></div></div></div>
+                <div><div class="flex justify-between"><span>Transport</span><span class="font-display fig text-dim">$60</span></div><div class="h-1.5 bg-line rounded-full mt-1.5 overflow-hidden"><div class="h-full bg-dim" style="width:30%"></div></div></div>
+                <div><div class="flex justify-between"><span>Utilities</span><span class="font-display fig text-dim">$92</span></div><div class="h-1.5 bg-line rounded-full mt-1.5 overflow-hidden"><div class="h-full bg-up" style="width:37%"></div></div></div>
+              </div>
+            </div>
+
+            <!-- Net worth trend (1x2) -->
+            <div class="w" draggable="true" style="grid-column:4;grid-row:3 / span 2">
+              <div class="wh"><span class="grip">⠿</span><h3>Net worth</h3></div>
+              <div class="wbody flex flex-col">
+                <div class="font-display fig text-[22px]">$58,450</div>
+                <svg viewBox="0 0 180 90" class="w-full mt-auto" preserveAspectRatio="none" height="120">
+                  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#54b884" stop-opacity=".25"/><stop offset="1" stop-color="#54b884" stop-opacity="0"/></linearGradient></defs>
+                  <path d="M0,72 C25,66 40,48 60,52 S110,30 130,34 S165,14 180,18 L180,90 L0,90 Z" fill="url(#g)"/>
+                  <path d="M0,72 C25,66 40,48 60,52 S110,30 130,34 S165,14 180,18" fill="none" stroke="#54b884" stroke-width="2"/>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Goals (1x1) -->
+            <div class="w" draggable="true" style="grid-column:1;grid-row:5">
+              <div class="wh"><span class="grip">⠿</span><h3>Goal · Vacation</h3></div>
+              <div class="wbody"><div class="flex justify-between text-[13px]"><span class="text-dim">saved</span><span class="font-display fig">$500 / $3,000</span></div><div class="h-1.5 bg-line rounded-full mt-2 overflow-hidden"><div class="h-full bg-fg" style="width:17%"></div></div><div class="text-[12px] text-dim mt-1.5">17% · by Dec 1</div></div>
+            </div>
+
+            <!-- To-do (1x1) -->
+            <div class="w" draggable="true" style="grid-column:2;grid-row:5">
+              <div class="wh"><span class="grip">⠿</span><h3>To-do</h3></div>
+              <div class="wbody text-[13px] space-y-2">
+                <div class="flex gap-2"><span class="text-warn">●</span><span>Pay credit card by the 15th</span></div>
+                <div class="flex gap-2 text-dim"><span class="text-faint">○</span><span>Review subscriptions</span></div>
+              </div>
+            </div>
+
+            <!-- Accounts (2x1) -->
+            <div class="w" draggable="true" style="grid-column:3 / span 2;grid-row:5">
+              <div class="wh"><span class="grip">⠿</span><h3>Accounts</h3></div>
+              <div class="wbody grid grid-cols-3 gap-4 text-[13px]">
+                <div><div class="text-dim">Checking</div><div class="font-display fig mt-0.5">$4,200.00</div></div>
+                <div><div class="text-dim">Savings</div><div class="font-display fig mt-0.5">$15,000.00</div></div>
+                <div><div class="text-dim">Credit Card</div><div class="font-display fig mt-0.5 text-down">($850.00)</div></div>
+              </div>
+            </div>
+
+            <!-- Cash flow (2x1) -->
+            <div class="w" draggable="true" style="grid-column:1 / span 2;grid-row:6">
+              <div class="wh"><span class="grip">⠿</span><h3>Cash flow</h3></div>
+              <div class="wbody flex items-end gap-5">
+                <div class="flex flex-col items-center gap-1.5"><div class="flex items-end gap-1 h-14"><div class="w-3 bg-up" style="height:62%"></div><div class="w-3 bg-down" style="height:44%"></div></div><span class="text-[11px] text-faint">Mar</span></div>
+                <div class="flex flex-col items-center gap-1.5"><div class="flex items-end gap-1 h-14"><div class="w-3 bg-up" style="height:70%"></div><div class="w-3 bg-down" style="height:52%"></div></div><span class="text-[11px] text-faint">Apr</span></div>
+                <div class="flex flex-col items-center gap-1.5"><div class="flex items-end gap-1 h-14"><div class="w-3 bg-up" style="height:58%"></div><div class="w-3 bg-down" style="height:48%"></div></div><span class="text-[11px] text-faint">May</span></div>
+                <div class="flex flex-col items-center gap-1.5"><div class="flex items-end gap-1 h-14"><div class="w-3 bg-up" style="height:88%"></div><div class="w-3 bg-down" style="height:38%"></div></div><span class="text-[11px] text-fg">Jun</span></div>
+                <div class="ml-auto text-right"><div class="text-[11px] text-faint">net · Jun</div><div class="font-display fig text-up text-lg">$2,410</div></div>
+              </div>
+            </div>
+
+            <!-- Upcoming bills (2x1) -->
+            <div class="w" draggable="true" style="grid-column:3 / span 2;grid-row:6">
+              <div class="wh"><span class="grip">⠿</span><h3>Upcoming bills</h3></div>
+              <div class="wbody text-[13px] space-y-2.5">
+                <div class="flex justify-between"><span>Apartment rent</span><span class="text-faint">Jul 1</span><span class="font-display fig text-down w-24 text-right">($1,500.00)</span></div>
+                <div class="flex justify-between"><span>Credit card min.</span><span class="text-warn">Jun 15</span><span class="font-display fig text-down w-24 text-right">($45.00)</span></div>
+                <div class="flex justify-between"><span>Electricity</span><span class="text-faint">Jul 9</span><span class="font-display fig text-down w-24 text-right">($92.40)</span></div>
+              </div>
+            </div>
+
+            <!-- Savings rate (2x1) -->
+            <div class="w" draggable="true" style="grid-column:1 / span 2;grid-row:7">
+              <div class="wh"><span class="grip">⠿</span><h3>Savings rate</h3></div>
+              <div class="wbody flex items-center gap-5">
+                <div><div class="font-display fig text-[34px] leading-none text-up">57%</div><div class="text-[12px] text-dim mt-1">of income saved</div></div>
+                <div class="flex-1"><div class="h-2 bg-line rounded-full overflow-hidden"><div class="h-full bg-up" style="width:57%"></div></div><div class="text-[11px] text-faint mt-2">target 40% · 17pts ahead</div></div>
+              </div>
+            </div>
+
+            <!-- Spending breakdown (2x1) -->
+            <div class="w" draggable="true" style="grid-column:3 / span 2;grid-row:7">
+              <div class="wh"><span class="grip">⠿</span><h3>Spending breakdown</h3></div>
+              <div class="wbody">
+                <div class="h-2.5 rounded-full overflow-hidden flex"><div class="bg-up" style="width:50%"></div><div class="bg-warn" style="width:22%"></div><div class="bg-dim" style="width:18%"></div><div class="bg-down" style="width:10%"></div></div>
+                <div class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[12px] text-dim">
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-up"></span>Housing 50%</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-warn"></span>Food 22%</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-dim"></span>Transport 18%</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-down"></span>Other 10%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // Drag-to-swap on the bento grid: dropping one tile on another swaps their cells.
+      const bento = document.getElementById('bento');
+      let src = null;
+      bento.querySelectorAll('.w[draggable=true]').forEach(w => {
+        w.addEventListener('dragstart', () => { src = w; w.classList.add('drag'); });
+        w.addEventListener('dragend', () => w.classList.remove('drag'));
+        w.addEventListener('dragover', e => e.preventDefault());
+        w.addEventListener('drop', e => {
+          e.preventDefault();
+          if (!src || src === w) return;
+          const a = { c: src.style.gridColumn, r: src.style.gridRow };
+          const b = { c: w.style.gridColumn, r: w.style.gridRow };
+          src.style.gridColumn = b.c; src.style.gridRow = b.r;
+          w.style.gridColumn = a.c; w.style.gridRow = a.r;
+        });
+      });
+
+      // Per-widget settings gear (right side of each component).
+      bento.querySelectorAll('.w[draggable=true]').forEach(w => {
+        const g = document.createElement('button');
+        g.title = 'Widget settings'; g.textContent = '⚙';
+        const wh = w.querySelector('.wh');
+        if (wh) { g.className = 'gear-inline'; wh.appendChild(g); }
+        else { g.className = 'gear-abs'; w.appendChild(g); }
+        g.addEventListener('pointerdown', e => e.stopPropagation());
+        g.addEventListener('dragstart', e => e.preventDefault());
+        g.addEventListener('click', e => { e.stopPropagation(); openSettings(w); });
+      });
+
+      // Scale-wide / scale-tall: drag the edge handles to change the card's cell span.
+      (function () {
+        const card = document.getElementById('demoCard');
+        if (!card) return;
+        const cols = 4, rowH = 152, gap = 10, lastRow = 5;
+        card.querySelectorAll('.rz').forEach(h => {
+          h.addEventListener('dragstart', e => e.preventDefault());
+          h.addEventListener('pointerdown', e => {
+            e.preventDefault(); e.stopPropagation();
+            h.setPointerCapture(e.pointerId);
+            const dir = h.dataset.dir;
+            const rect = card.getBoundingClientRect();
+            const startCol = parseInt(card.style.gridColumn) || 1;
+            const startRow = parseInt(card.style.gridRow) || 1;
+            const colW = (bento.clientWidth - gap * (cols - 1)) / cols;
+            function move(ev) {
+              if (dir === 'r') {
+                let span = Math.round((ev.clientX - rect.left) / (colW + gap));
+                span = Math.max(1, Math.min(span, cols - (startCol - 1)));
+                card.style.gridColumn = startCol + ' / span ' + span;
+              } else {
+                let span = Math.round((ev.clientY - rect.top) / (rowH + gap));
+                span = Math.max(1, Math.min(span, lastRow - startRow + 1));
+                card.style.gridRow = startRow + ' / span ' + span;
+              }
+            }
+            function up() { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); }
+            document.addEventListener('pointermove', move);
+            document.addEventListener('pointerup', up);
+          });
+        });
+      })();
+
+      // Dashboard time resolution + From/To range.
+      (function () {
+        const periods = {
+          week: ['Wk 21 · May 25–31', 'Wk 22 · Jun 1–7', 'Wk 23 · Jun 8–14', 'Wk 24 · Jun 15–21', 'Wk 25 · Jun 22–28', 'Wk 26 · Jun 29–Jul 5', 'Wk 27 · Jul 6–12', 'Wk 28 · Jul 13–19'],
+          month: ['Mar 2026', 'Apr 2026', 'May 2026', 'Jun 2026', 'Jul 2026', 'Aug 2026', 'Sep 2026', 'Oct 2026'],
+          quarter: ['Q3 2025', 'Q4 2025', 'Q1 2026', 'Q2 2026', 'Q3 2026', 'Q4 2026'],
+        };
+        const defaults = { week: { from: 3, to: 5 }, month: { from: 3, to: 5 }, quarter: { from: 3, to: 4 } };
+        let res = 'month', from = defaults[res].from, to = defaults[res].to;
+        const fromLabel = document.getElementById('fromLabel');
+        const toLabel = document.getElementById('toLabel');
+        const seg = document.getElementById('resSeg');
+        function render() {
+          const arr = periods[res];
+          from = Math.max(0, Math.min(from, arr.length - 1));
+          to = Math.max(from, Math.min(to, arr.length - 1));
+          fromLabel.textContent = arr[from];
+          toLabel.textContent = arr[to];
+        }
+        seg.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
+          seg.querySelectorAll('.seg-btn').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          res = b.dataset.res; from = defaults[res].from; to = defaults[res].to; render();
+        }));
+        document.querySelectorAll('.rstep').forEach(s => s.addEventListener('click', () => {
+          const dir = parseInt(s.dataset.dir);
+          if (s.dataset.edge === 'from') from = Math.max(0, Math.min(from + dir, to));
+          else to = Math.min(periods[res].length - 1, Math.max(to + dir, from));
+          render();
+        }));
+        render();
+      })();
+
+      // Gear → flip the card to its settings back.
+      function settingsHTML(title) {
+        const tog = (label, on) => '<div class="toggle-row"><span>' + label + '</span><span class="switch ' + (on ? 'on' : '') + '"></span></div>';
+        return ''
+          + '<div class="set-h"><span style="width:1.5rem"></span><h3>Widget settings</h3><button class="set-close" aria-label="Close">✕</button></div>'
+          + '<div class="set-body">'
+          +   '<div class="set-label">Title</div>'
+          +   '<input class="set-input" value="' + title + '">'
+          +   '<div class="set-label">Behavior</div>'
+          +   tog('Allow moving', true) + tog('Allow resizing', true)
+          +   tog('Show header', true) + tog('Show on dashboard', true)
+          +   tog('Compact mode', false) + tog('Show last updated', false)
+          +   '<div class="set-label">Accent</div>'
+          +   '<div style="display:flex;gap:.5rem;padding:.3rem 0">'
+          +     '<span class="swatch sel" style="background:#54b884"></span>'
+          +     '<span class="swatch" style="background:#cfa14e"></span>'
+          +     '<span class="swatch" style="background:#d8716f"></span>'
+          +     '<span class="swatch" style="background:#7c83ff"></span>'
+          +     '<span class="swatch" style="background:#9a9aa4"></span>'
+          +   '</div>'
+          +   '<div class="set-label">Default size</div>'
+          +   '<select class="set-input"><option>1 × 1</option><option>2 × 1</option><option>2 × 2</option><option>4 × 1</option></select>'
+          +   '<div class="set-label">Refresh</div>'
+          +   '<select class="set-input"><option>On change</option><option>Every minute</option><option>Manual</option></select>'
+          +   '<div class="set-label">Notes</div>'
+          +   '<p style="color:#a6a6ac;font-size:.82rem;line-height:1.55">Reads live from your local store. Settings here change only how this widget appears on your dashboard.</p>'
+          + '</div>'
+          + '<div class="set-foot">'
+          +   '<button class="set-btn cancel">Cancel</button>'
+          +   '<button class="set-btn save">Save</button>'
+          + '</div>';
+      }
+
+      function buildFlip(frontHTML, backHTML, w, h) {
+        const back = document.createElement('div'); back.className = 'flip-backdrop';
+        const wrap = document.createElement('div'); wrap.className = 'flip-wrap';
+        if (w) wrap.style.width = w + 'px';
+        if (h) wrap.style.height = h + 'px';
+        const inner = document.createElement('div'); inner.className = 'flip-inner';
+        const front = document.createElement('div'); front.className = 'flip-face flip-front'; front.innerHTML = frontHTML;
+        const backF = document.createElement('div'); backF.className = 'flip-face flip-back'; backF.innerHTML = backHTML;
+        inner.appendChild(front); inner.appendChild(backF); wrap.appendChild(inner); back.appendChild(wrap);
+        document.body.appendChild(back);
+        requestAnimationFrame(() => { back.classList.add('show'); inner.classList.add('flipped'); });
+        function close() { inner.classList.remove('flipped'); back.classList.remove('show'); setTimeout(() => back.remove(), 420); }
+        back.addEventListener('click', e => { if (e.target === back) close(); });
+        backF.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => s.classList.toggle('on')));
+        backF.querySelectorAll('.swatch').forEach(s => s.addEventListener('click', () => {
+          backF.querySelectorAll('.swatch').forEach(x => x.classList.remove('sel')); s.classList.add('sel');
+        }));
+        backF.querySelectorAll('.set-close, .cancel, .save').forEach(b => b.addEventListener('click', close));
+      }
+
+      function openSettings(card) {
+        const h3 = card.querySelector('.wh h3');
+        buildFlip(card.innerHTML, settingsHTML(h3 ? h3.textContent : 'Widget'), 384, 470);
+      }
+
+      function openGlobalSettings() {
+        const front = '<div class="set-h"><span style="width:1.5rem"></span><h3>Settings</h3><span style="width:1.5rem"></span></div><div class="flex-1 grid place-items-center text-faint">Cameron Family</div>';
+        buildFlip(front, globalSettingsHTML(), 760, 560);
+      }
+
+      function globalSettingsHTML() {
+        const tog = (label, on) => '<div class="toggle-row"><span>' + label + '</span><span class="switch ' + (on ? 'on' : '') + '"></span></div>';
+        const member = (name, color) => '<span class="member-chip"><span style="width:9px;height:9px;border-radius:50%;background:' + color + '"></span>' + name + '</span>';
+        const rate = (code, val) => '<div class="rate-row"><span style="width:40px">' + code + '</span><span class="text-faint">1 ' + code + ' =</span><input class="rate-in" value="' + val + '"><span class="text-faint">USD</span></div>';
+        return ''
+          + '<div class="set-h"><span style="width:1.5rem"></span><h3>Settings</h3><button class="set-close" aria-label="Close">✕</button></div>'
+          + '<div class="set-body" style="display:grid;grid-template-columns:1fr 1fr;gap:0 1.75rem;align-content:start">'
+          +   '<div>'
+          +     '<div class="set-label">Household members</div>'
+          +     '<div style="display:flex;flex-wrap:wrap;gap:.5rem;padding:.3rem 0">'
+          +       member('Alice', '#7c83ff') + member('Ben', '#54b884') + member('Cara', '#cfa14e')
+          +       '<button class="member-add">+ Add member</button>'
+          +     '</div>'
+          +     '<div class="set-label">Base currency</div>'
+          +     '<select class="set-input"><option>USD — US Dollar</option><option>EUR — Euro</option><option>GBP — British Pound</option></select>'
+          +     '<div class="set-label">Exchange rates</div>'
+          +     rate('EUR', '1.08') + rate('GBP', '1.27') + rate('JPY', '0.0064')
+          +   '</div>'
+          +   '<div>'
+          +     '<div class="set-label">AI (OpenAI · bring your own key)</div>'
+          +     tog('Enable AI features', false)
+          +     '<input class="set-input" placeholder="OpenAI API key (sk-…)" style="margin-top:.45rem">'
+          +     '<select class="set-input" style="margin-top:.45rem"><option>Model — latest</option><option>Model — mini</option></select>'
+          +     '<div class="set-label">Appearance</div>'
+          +     '<div class="seg" style="margin:.2rem 0"><button class="seg-btn active">Dark</button><button class="seg-btn">Light</button><button class="seg-btn">System</button></div>'
+          +     '<div class="toggle-row"><span>Accent</span><span style="display:flex;gap:.4rem"><span class="swatch sel" style="background:#54b884"></span><span class="swatch" style="background:#cfa14e"></span><span class="swatch" style="background:#7c83ff"></span><span class="swatch" style="background:#d8716f"></span></span></div>'
+          +     tog('Compact density', false)
+          +     '<div class="set-label">Data</div>'
+          +     '<div style="display:flex;flex-wrap:wrap;gap:.5rem;padding:.2rem 0"><button class="data-btn">Export JSON</button><button class="data-btn">Export CSV</button><button class="data-btn">Import…</button><button class="data-btn">Load sample</button><button class="data-btn" style="color:#d8716f;border-color:#5a2a2a">Wipe data</button></div>'
+          +   '</div>'
+          + '</div>'
+          + '<div class="set-foot"><button class="set-btn cancel">Cancel</button><button class="set-btn save">Save</button></div>';
+      }
+
+      document.getElementById('menuToggle').addEventListener('click', () => document.querySelector('aside.rail').classList.toggle('collapsed'));
+      document.getElementById('globalBtn').addEventListener('click', openGlobalSettings);
+    </script>
+  </body>
+</html>

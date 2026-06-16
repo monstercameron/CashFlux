@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CashFlux — A · Aurora Glass</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: {
+        fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'] },
+        colors: { up: '#34d399', down: '#fb7185' },
+      } } }
+    </script>
+    <style>
+      body { font-feature-settings: "cv11","ss01"; }
+      .aurora::before, .aurora::after { content:""; position:fixed; inset:-20% -10% auto auto; z-index:-1; filter: blur(90px); opacity:.55; pointer-events:none; }
+      .aurora::before { width:55vw; height:55vw; right:-10%; top:-15%; background: radial-gradient(circle at 30% 30%, #7c3aed, transparent 60%), radial-gradient(circle at 70% 60%, #06b6d4, transparent 60%); }
+      .aurora::after { width:45vw; height:45vw; left:-10%; right:auto; bottom:-15%; top:auto; inset:auto auto -15% -10%; background: radial-gradient(circle at 50% 50%, #10b981, transparent 60%); }
+      .glass { background: rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.08); box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 30px 60px -30px rgba(0,0,0,.6); }
+      .gradtext { background: linear-gradient(90deg,#a78bfa,#22d3ee); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    </style>
+  </head>
+  <body class="aurora bg-[#070710] text-slate-200 font-sans min-h-screen antialiased">
+    <div class="flex min-h-screen">
+      <!-- Sidebar -->
+      <aside class="hidden lg:flex w-64 flex-col p-4 gap-1 border-r border-white/5">
+        <div class="flex items-center gap-2.5 px-2 py-4">
+          <span class="grid place-items-center w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-400 text-white font-black shadow-lg shadow-violet-500/30">$</span>
+          <span class="text-lg font-extrabold tracking-tight">CashFlux</span>
+        </div>
+        <a class="px-3 py-2.5 rounded-xl bg-white/10 font-semibold flex items-center gap-3">◆ Dashboard</a>
+        <a class="px-3 py-2.5 rounded-xl text-slate-400 hover:bg-white/5 hover:text-slate-100 flex items-center gap-3">◇ Accounts</a>
+        <a class="px-3 py-2.5 rounded-xl text-slate-400 hover:bg-white/5 hover:text-slate-100 flex items-center gap-3">◇ Transactions</a>
+        <a class="px-3 py-2.5 rounded-xl text-slate-400 hover:bg-white/5 hover:text-slate-100 flex items-center gap-3">◇ Budgets</a>
+        <a class="px-3 py-2.5 rounded-xl text-slate-400 hover:bg-white/5 hover:text-slate-100 flex items-center gap-3">◇ Goals</a>
+        <a class="px-3 py-2.5 rounded-xl text-slate-400 hover:bg-white/5 hover:text-slate-100 flex items-center gap-3">◇ To-do</a>
+        <div class="mt-auto glass rounded-2xl p-4">
+          <div class="text-xs text-slate-400">Household</div>
+          <div class="font-semibold mt-0.5">The Cameron Family</div>
+          <div class="text-xs text-slate-500 mt-1">3 members · USD base</div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="flex-1 min-w-0 p-6 lg:p-10 max-w-6xl">
+        <header class="flex items-end justify-between mb-8">
+          <div>
+            <p class="text-slate-400">Saturday, June 15</p>
+            <h1 class="text-3xl font-extrabold tracking-tight mt-0.5">Dashboard</h1>
+          </div>
+          <button class="px-4 py-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-400 text-white font-semibold shadow-lg shadow-cyan-500/20">+ New transaction</button>
+        </header>
+
+        <!-- Hero net worth -->
+        <section class="glass rounded-3xl p-7 mb-6 relative overflow-hidden">
+          <div class="flex flex-wrap items-end justify-between gap-6">
+            <div>
+              <div class="text-sm text-slate-400">Net worth</div>
+              <div class="text-5xl font-black tracking-tight mt-1 gradtext">$58,450.00</div>
+              <div class="mt-3 flex items-center gap-2 text-sm">
+                <span class="px-2 py-0.5 rounded-full bg-up/15 text-up font-semibold">▲ 2.4%</span>
+                <span class="text-slate-400">vs last month</span>
+              </div>
+            </div>
+            <svg viewBox="0 0 320 90" class="w-72 h-24 max-w-full">
+              <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22d3ee" stop-opacity=".5"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0,70 C40,60 60,40 90,45 S150,30 180,34 S250,12 320,18 L320,90 L0,90 Z" fill="url(#ag)"/>
+              <path d="M0,70 C40,60 60,40 90,45 S150,30 180,34 S250,12 320,18" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </section>
+
+        <!-- Stat trio -->
+        <section class="grid sm:grid-cols-3 gap-4 mb-6">
+          <div class="glass rounded-2xl p-5"><div class="text-xs uppercase tracking-wider text-slate-400">In · June</div><div class="text-2xl font-bold mt-1 text-up">+$4,200.00</div></div>
+          <div class="glass rounded-2xl p-5"><div class="text-xs uppercase tracking-wider text-slate-400">Out · June</div><div class="text-2xl font-bold mt-1 text-down">−$1,790.75</div></div>
+          <div class="glass rounded-2xl p-5"><div class="text-xs uppercase tracking-wider text-slate-400">Liabilities</div><div class="text-2xl font-bold mt-1">$850.00</div></div>
+        </section>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+          <!-- Recent -->
+          <section class="lg:col-span-2 glass rounded-3xl p-6">
+            <div class="flex items-center justify-between mb-4"><h2 class="font-semibold">Recent activity</h2><a class="text-sm text-cyan-300">View all →</a></div>
+            <ul class="space-y-1">
+              <li class="flex items-center justify-between py-2.5 border-b border-white/5"><div class="flex items-center gap-3"><span class="w-9 h-9 grid place-items-center rounded-xl bg-up/15 text-up">↑</span><div><div class="font-medium">Salary</div><div class="text-xs text-slate-400">Income · Jun 1</div></div></div><span class="text-up font-semibold tabular-nums">+$4,200.00</span></li>
+              <li class="flex items-center justify-between py-2.5 border-b border-white/5"><div class="flex items-center gap-3"><span class="w-9 h-9 grid place-items-center rounded-xl bg-white/5 text-slate-300">⌂</span><div><div class="font-medium">Apartment rent</div><div class="text-xs text-slate-400">Housing · Jun 2</div></div></div><span class="text-down font-semibold tabular-nums">−$1,500.00</span></li>
+              <li class="flex items-center justify-between py-2.5 border-b border-white/5"><div class="flex items-center gap-3"><span class="w-9 h-9 grid place-items-center rounded-xl bg-white/5 text-slate-300">🛒</span><div><div class="font-medium">Groceries</div><div class="text-xs text-slate-400">Food · Jun 3</div></div></div><span class="text-down font-semibold tabular-nums">−$240.55</span></li>
+              <li class="flex items-center justify-between py-2.5"><div class="flex items-center gap-3"><span class="w-9 h-9 grid place-items-center rounded-xl bg-white/5 text-slate-300">⛽</span><div><div class="font-medium">Fuel</div><div class="text-xs text-slate-400">Transport · Jun 5</div></div></div><span class="text-down font-semibold tabular-nums">−$60.20</span></li>
+            </ul>
+          </section>
+
+          <!-- Spending donut -->
+          <section class="glass rounded-3xl p-6">
+            <h2 class="font-semibold mb-4">Spending by category</h2>
+            <div class="grid place-items-center relative">
+              <svg viewBox="0 0 42 42" class="w-44 h-44 -rotate-90">
+                <circle cx="21" cy="21" r="15.915" fill="none" stroke="#1f2430" stroke-width="5"/>
+                <circle cx="21" cy="21" r="15.915" fill="none" stroke="#a78bfa" stroke-width="5" stroke-dasharray="48 52" stroke-dashoffset="0"/>
+                <circle cx="21" cy="21" r="15.915" fill="none" stroke="#22d3ee" stroke-width="5" stroke-dasharray="22 78" stroke-dashoffset="-48"/>
+                <circle cx="21" cy="21" r="15.915" fill="none" stroke="#34d399" stroke-width="5" stroke-dasharray="18 82" stroke-dashoffset="-70"/>
+                <circle cx="21" cy="21" r="15.915" fill="none" stroke="#fbbf24" stroke-width="5" stroke-dasharray="12 88" stroke-dashoffset="-88"/>
+              </svg>
+              <div class="absolute text-center"><div class="text-xs text-slate-400">Total</div><div class="text-xl font-bold">$1,790</div></div>
+            </div>
+            <div class="mt-5 space-y-2 text-sm">
+              <div class="flex justify-between"><span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-violet-400"></span>Housing</span><span class="text-slate-400">$1,500</span></div>
+              <div class="flex justify-between"><span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>Food</span><span class="text-slate-400">$240</span></div>
+              <div class="flex justify-between"><span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>Transport</span><span class="text-slate-400">$60</span></div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

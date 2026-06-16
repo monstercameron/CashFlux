@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CashFlux — E · Private Bank (Dark Serif)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: {
+        fontFamily: { sans: ['Inter','ui-sans-serif','sans-serif'], display: ['Fraunces','Georgia','serif'] },
+        colors: { base:'#15120d', panel:'#1d1812', panel2:'#231d15', line:'rgba(232,214,178,.10)', cream:'#ece3d2', dim:'#a89e8c', faint:'#6f6657', gold:'#cfa856', up:'#76b48d', down:'#d18a80' },
+      } } }
+    </script>
+    <style>
+      body{-webkit-font-smoothing:antialiased;} .num{font-variant-numeric:tabular-nums;}
+      .hair{border-color:rgba(232,214,178,.10);}
+      .gild{background:linear-gradient(180deg,rgba(207,168,86,.06),rgba(207,168,86,0) 50%),#1d1812;}
+      tr.lrow:hover{background:rgba(232,214,178,.03);}
+      .rule{height:1px;background:linear-gradient(90deg,transparent,rgba(207,168,86,.4),transparent);}
+    </style>
+  </head>
+  <body class="bg-base text-cream font-sans min-h-screen text-[13.5px] leading-relaxed">
+    <div class="flex min-h-screen">
+      <!-- Rail -->
+      <aside class="w-60 shrink-0 bg-panel border-r hair flex flex-col">
+        <div class="h-16 flex items-center gap-3 px-5 border-b hair">
+          <span class="grid place-items-center w-9 h-9 rounded-full border border-gold/50 text-gold font-display font-semibold">C</span>
+          <span class="font-display text-xl font-semibold tracking-tight">CashFlux</span>
+        </div>
+        <nav class="p-3 flex flex-col gap-0.5 text-dim">
+          <a class="px-3 py-2 rounded-lg bg-cream/[0.05] text-cream font-medium">Dashboard</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-cream/[0.03] hover:text-cream">Accounts</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-cream/[0.03] hover:text-cream">Transactions</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-cream/[0.03] hover:text-cream">Budgets</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-cream/[0.03] hover:text-cream">Goals</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-cream/[0.03] hover:text-cream">To-do</a>
+          <div class="px-3 pt-4 pb-1 text-[10px] uppercase tracking-[0.18em] text-faint">System</div>
+          <a class="px-3 py-2 rounded-lg hover:bg-cream/[0.03] hover:text-cream">Settings</a>
+        </nav>
+        <div class="mt-auto m-3 p-4 rounded-xl gild border hair">
+          <div class="font-display font-semibold">Cameron Family</div>
+          <div class="text-xs text-dim mt-0.5">3 members · USD base</div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="flex-1 min-w-0">
+        <div class="h-16 border-b hair flex items-center px-7 gap-4">
+          <h1 class="font-display text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <div class="ml-auto flex items-center gap-2 text-sm text-dim">
+            <button class="px-3 py-1.5 rounded-full border hair hover:text-cream">June 2026 ▾</button>
+            <button class="px-4 py-1.5 rounded-full bg-gold text-base font-semibold">+ Add</button>
+          </div>
+        </div>
+
+        <div class="p-7 space-y-7 max-w-6xl">
+          <!-- KPI strip -->
+          <section class="grid grid-cols-2 lg:grid-cols-4 rounded-2xl border hair overflow-hidden">
+            <div class="gild p-5 border-r hair">
+              <div class="text-[11px] uppercase tracking-[0.16em] text-faint">Net worth</div>
+              <div class="font-display text-3xl font-semibold mt-1 num">$58,450</div>
+              <div class="text-xs text-up mt-1">▲ 2.4% this month</div>
+            </div>
+            <div class="gild p-5 border-r hair">
+              <div class="text-[11px] uppercase tracking-[0.16em] text-faint">Income · Jun</div>
+              <div class="font-display text-3xl font-semibold mt-1 num text-up">$4,200</div>
+            </div>
+            <div class="gild p-5 border-r hair">
+              <div class="text-[11px] uppercase tracking-[0.16em] text-faint">Spending · Jun</div>
+              <div class="font-display text-3xl font-semibold mt-1 num text-down">$1,790</div>
+            </div>
+            <div class="gild p-5">
+              <div class="text-[11px] uppercase tracking-[0.16em] text-faint">Liabilities</div>
+              <div class="font-display text-3xl font-semibold mt-1 num">$850</div>
+              <div class="text-xs text-gold mt-1">Card due Jun 15</div>
+            </div>
+          </section>
+
+          <div class="grid lg:grid-cols-3 gap-7">
+            <!-- Ledger -->
+            <section class="lg:col-span-2 rounded-2xl border hair overflow-hidden">
+              <div class="px-5 py-3.5 border-b hair flex items-center justify-between">
+                <h2 class="font-display text-lg font-semibold">Recent transactions</h2>
+                <span class="text-xs text-faint">4 of 128</span>
+              </div>
+              <table class="w-full text-[14px]">
+                <tbody>
+                  <tr class="lrow border-b hair"><td class="px-5 py-3.5 num text-dim w-20">Jun 1</td><td class="px-3 py-3.5">Salary</td><td class="px-3 py-3.5 text-dim">Income</td><td class="px-5 py-3.5 text-right num text-up font-medium">+$4,200.00</td></tr>
+                  <tr class="lrow border-b hair"><td class="px-5 py-3.5 num text-dim">Jun 2</td><td class="px-3 py-3.5">Apartment rent</td><td class="px-3 py-3.5 text-dim">Housing</td><td class="px-5 py-3.5 text-right num font-medium">−$1,500.00</td></tr>
+                  <tr class="lrow border-b hair"><td class="px-5 py-3.5 num text-dim">Jun 3</td><td class="px-3 py-3.5">Groceries</td><td class="px-3 py-3.5 text-dim">Food</td><td class="px-5 py-3.5 text-right num font-medium">−$240.55</td></tr>
+                  <tr class="lrow"><td class="px-5 py-3.5 num text-dim">Jun 5</td><td class="px-3 py-3.5">Fuel</td><td class="px-3 py-3.5 text-dim">Transport</td><td class="px-5 py-3.5 text-right num font-medium">−$60.20</td></tr>
+                </tbody>
+              </table>
+            </section>
+
+            <!-- Budgets -->
+            <section class="rounded-2xl border hair gild">
+              <div class="px-5 py-3.5 border-b hair"><h2 class="font-display text-lg font-semibold">Budgets · June</h2></div>
+              <div class="p-5 space-y-5 text-sm">
+                <div>
+                  <div class="flex justify-between"><span>Food</span><span class="num text-dim">$240 / $600</span></div>
+                  <div class="h-1.5 bg-cream/[0.08] rounded-full mt-2 overflow-hidden"><div class="h-full bg-up rounded-full" style="width:40%"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between"><span>Housing</span><span class="num text-dim">$1,500 / $1,600</span></div>
+                  <div class="h-1.5 bg-cream/[0.08] rounded-full mt-2 overflow-hidden"><div class="h-full bg-gold rounded-full" style="width:94%"></div></div>
+                  <div class="text-xs text-gold mt-1.5">Near limit · 94%</div>
+                </div>
+                <div>
+                  <div class="flex justify-between"><span>Transport</span><span class="num text-dim">$60 / $200</span></div>
+                  <div class="h-1.5 bg-cream/[0.08] rounded-full mt-2 overflow-hidden"><div class="h-full bg-up rounded-full" style="width:30%"></div></div>
+                </div>
+                <div class="rule my-1"></div>
+                <div>
+                  <div class="flex justify-between text-dim text-xs"><span>Vacation goal</span><span class="num">$500 / $3,000</span></div>
+                  <div class="h-1.5 bg-cream/[0.08] rounded-full mt-2 overflow-hidden"><div class="h-full bg-gradient-to-r from-gold to-up rounded-full" style="width:17%"></div></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

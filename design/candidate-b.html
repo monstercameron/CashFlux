@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CashFlux — B · Editorial Light</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: {
+        fontFamily: { sans: ['Inter','ui-sans-serif','sans-serif'], display: ['Fraunces','Georgia','serif'] },
+        colors: { paper: '#f7f5ef', ink: '#1c1c1a', forest: '#15803d', forestsoft: '#e7f0e9' },
+      } } }
+    </script>
+    <style> body{ -webkit-font-smoothing:antialiased; } .ledger td{ font-variant-numeric: tabular-nums; } </style>
+  </head>
+  <body class="bg-paper text-ink font-sans min-h-screen">
+    <div class="max-w-6xl mx-auto px-6 lg:px-10">
+      <!-- Header -->
+      <header class="flex items-center justify-between py-6 border-b border-ink/10">
+        <div class="flex items-center gap-3">
+          <span class="grid place-items-center w-9 h-9 rounded-full bg-ink text-paper font-display font-semibold">C</span>
+          <span class="font-display text-xl font-semibold tracking-tight">CashFlux</span>
+        </div>
+        <nav class="hidden md:flex items-center gap-7 text-sm text-ink/60">
+          <a class="text-ink font-medium border-b-2 border-forest pb-5 -mb-[1.4rem]">Dashboard</a>
+          <a class="hover:text-ink">Accounts</a>
+          <a class="hover:text-ink">Transactions</a>
+          <a class="hover:text-ink">Budgets</a>
+          <a class="hover:text-ink">Goals</a>
+          <a class="hover:text-ink">To-do</a>
+        </nav>
+        <button class="px-4 py-2 rounded-full bg-ink text-paper text-sm font-medium">Add</button>
+      </header>
+
+      <!-- Hero -->
+      <section class="py-12 grid lg:grid-cols-[1.1fr_1fr] gap-10 items-center">
+        <div>
+          <p class="uppercase tracking-[0.2em] text-xs text-ink/50">Net worth</p>
+          <h1 class="font-display text-6xl lg:text-7xl font-semibold tracking-tight mt-2">$58,450<span class="text-ink/40">.00</span></h1>
+          <p class="mt-4 text-ink/60 max-w-md leading-relaxed">Up <span class="text-forest font-semibold">2.4%</span> this month. Your savings rate is healthy and the Housing budget is the only one near its limit.</p>
+        </div>
+        <svg viewBox="0 0 360 140" class="w-full">
+          <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#15803d" stop-opacity=".18"/><stop offset="1" stop-color="#15803d" stop-opacity="0"/></linearGradient></defs>
+          <path d="M0,110 C50,100 80,70 120,76 S200,50 240,56 S320,22 360,30 L360,140 L0,140 Z" fill="url(#bg)"/>
+          <path d="M0,110 C50,100 80,70 120,76 S200,50 240,56 S320,22 360,30" fill="none" stroke="#15803d" stroke-width="2.5"/>
+          <circle cx="360" cy="30" r="4" fill="#15803d"/>
+        </svg>
+      </section>
+
+      <!-- Stat row -->
+      <section class="grid sm:grid-cols-3 gap-6 pb-10">
+        <div class="border-t-2 border-ink pt-3"><div class="text-sm text-ink/55">Income · June</div><div class="font-display text-3xl font-semibold mt-1 text-forest">$4,200</div></div>
+        <div class="border-t-2 border-ink pt-3"><div class="text-sm text-ink/55">Spending · June</div><div class="font-display text-3xl font-semibold mt-1">$1,790</div></div>
+        <div class="border-t-2 border-ink pt-3"><div class="text-sm text-ink/55">Saved this month</div><div class="font-display text-3xl font-semibold mt-1 text-forest">$2,410</div></div>
+      </section>
+
+      <div class="grid lg:grid-cols-3 gap-10 pb-16">
+        <!-- Ledger -->
+        <section class="lg:col-span-2">
+          <h2 class="font-display text-2xl font-semibold mb-4">Recent activity</h2>
+          <table class="w-full ledger">
+            <tbody class="text-[15px]">
+              <tr class="border-b border-ink/10"><td class="py-3.5">Salary</td><td class="py-3.5 text-ink/50">Income · Jun 1</td><td class="py-3.5 text-right text-forest font-semibold">+$4,200.00</td></tr>
+              <tr class="border-b border-ink/10"><td class="py-3.5">Apartment rent</td><td class="py-3.5 text-ink/50">Housing · Jun 2</td><td class="py-3.5 text-right font-semibold">−$1,500.00</td></tr>
+              <tr class="border-b border-ink/10"><td class="py-3.5">Groceries</td><td class="py-3.5 text-ink/50">Food · Jun 3</td><td class="py-3.5 text-right font-semibold">−$240.55</td></tr>
+              <tr><td class="py-3.5">Fuel</td><td class="py-3.5 text-ink/50">Transport · Jun 5</td><td class="py-3.5 text-right font-semibold">−$60.20</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Budgets -->
+        <section>
+          <h2 class="font-display text-2xl font-semibold mb-4">Budgets</h2>
+          <div class="space-y-5">
+            <div>
+              <div class="flex justify-between text-sm mb-1.5"><span>Food</span><span class="text-ink/55">$240 / $600</span></div>
+              <div class="h-1.5 bg-ink/10 rounded-full overflow-hidden"><div class="h-full bg-forest" style="width:40%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-sm mb-1.5"><span>Housing</span><span class="text-ink/55">$1,500 / $1,600</span></div>
+              <div class="h-1.5 bg-ink/10 rounded-full overflow-hidden"><div class="h-full bg-amber-500" style="width:94%"></div></div>
+              <div class="text-xs text-amber-700 mt-1">Near limit · 94%</div>
+            </div>
+            <div>
+              <div class="flex justify-between text-sm mb-1.5"><span>Transport</span><span class="text-ink/55">$60 / $200</span></div>
+              <div class="h-1.5 bg-ink/10 rounded-full overflow-hidden"><div class="h-full bg-forest" style="width:30%"></div></div>
+            </div>
+          </div>
+          <div class="mt-8 p-5 rounded-2xl bg-forestsoft">
+            <div class="font-display text-lg font-semibold">Vacation</div>
+            <div class="h-1.5 bg-white rounded-full overflow-hidden mt-3"><div class="h-full bg-forest" style="width:17%"></div></div>
+            <div class="text-sm text-ink/60 mt-2">$500 of $3,000 saved · by Dec 1</div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>
