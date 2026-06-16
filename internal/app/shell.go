@@ -31,11 +31,15 @@ type ShellProps struct {
 // independently scrolling main pane with a sticky top bar, wrapping the active
 // screen's content. (Ported from design/candidate-c.html.)
 func Shell(props ShellProps) uic.Node {
-	// Move focus into <main> whenever the route changes — but not on the first
-	// render, so a keyboard user's initial Tab still reaches the skip link. This
-	// keeps SPA navigation from leaving focus stranded on the previous screen.
+	// On each route change: set the document title to the active screen (always,
+	// including first load, so tabs/history/screen readers name the page), then
+	// move focus into <main> — but not on the first render, so a keyboard user's
+	// initial Tab still reaches the skip link. This keeps SPA navigation from
+	// leaving focus stranded on the previous screen.
 	firstRender := uic.UseRef(true)
+	docTitle := props.Title + " · " + uistate.T("app.name")
 	uic.UseEffect(func() func() {
+		setDocumentTitle(docTitle)
 		if firstRender.Get() {
 			firstRender.Set(false)
 			return nil

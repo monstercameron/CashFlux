@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B15 (slice): persistent live region for notices
+
+- Reworked `Toast` so the live region is always mounted: when idle it renders an empty `.sr-only`
+  div carrying `role`/`aria-live`, so the next post mutates an existing region (the reliable pattern)
+  instead of mounting region+text together (which many SRs skip). Errors now use
+  `aria-live="assertive"` + `role="alert"` to interrupt; ordinary notices stay `polite`/`status`.
+  Added a `.sr-only` utility to `index.html`. Covers the B15 "live regions for async results" item —
+  every notice flows through this one surface (saves, imports, AI, failures).
+
+## 2026-06-16 — document.title per screen
+
+- Set `document.title` to "<Screen> · CashFlux" on each route change (and initial load) from the same
+  `Shell` route-change effect, via a new `setDocumentTitle` helper. Title is set unconditionally
+  (including first render) — unlike the focus move, which still skips first render. Completes the
+  document-title half of the SPA route-change a11y item; the focus half shipped in the prior slice.
+
 ## 2026-06-16 — B15 (slice): route-change focus
 
 - On navigation, move focus into `<main>` so SPA route changes behave like a real page load for

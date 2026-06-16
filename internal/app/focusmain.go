@@ -23,3 +23,15 @@ func focusMain() {
 	opts.Set("preventScroll", true)
 	el.Call("focus", opts)
 }
+
+// setDocumentTitle updates the browser tab/history title to the active screen.
+// This is what users see in their tab strip and back-button history, and what
+// screen readers announce on a route change, so it should name the current
+// screen rather than stay a static "CashFlux".
+func setDocumentTitle(title string) {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return
+	}
+	doc.Set("title", title)
+}

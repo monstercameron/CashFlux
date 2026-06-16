@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the app-wide notice (toast) is now a **persistent live region** — it stays in the
+  DOM while idle so screen readers reliably announce each new notice, and error notices are now
+  `assertive`/`role="alert"` (they interrupt) while ordinary notices stay polite. So async outcomes
+  (saves, imports, AI results, failures) are spoken aloud, with failures given priority.
+- The browser tab and history entry now show the current screen's name (e.g. "Budgets · CashFlux")
+  instead of a static title — so tabs, the back-button menu, and screen readers all name the page
+  you're actually on.
 - Accessibility: navigating to a new screen now moves keyboard and screen-reader focus into the
   main content region (not on first page load, so the first Tab still reaches the skip link) — so
   SPA navigation no longer strands focus on the screen you just left.

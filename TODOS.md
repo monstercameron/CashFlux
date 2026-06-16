@@ -414,9 +414,10 @@ one-line a11y item in §1.20.
       icon-buttons' `aria-label`s, and real keyboard operability for the div-based Toggle/Swatch.
 - [x] **Focus visibility:** a global `:focus-visible` ring (accent, 2px offset) on every interactive
       element/role in both themes.
-- [ ] **Screen-reader / live regions:** announce dynamic changes — filtered-result counts, balance
-      updates, toast errors (toast is `role=status` polite; consider assertive for errors); associate
-      form errors via `aria-describedby`; mark required fields.
+- [~] **Screen-reader / live regions:** the toast notice is now a persistent live region (idle region
+      stays mounted; errors are `assertive`/`role=alert`, normal notices polite) so async outcomes are
+      announced. Still TODO: announce filtered-result counts / balance updates inline; associate form
+      errors via `aria-describedby`; mark required fields.
 - [ ] **Color is never the only cue:** up/down, over-budget, stale, cleared must carry a non-color
       signal (arrows/sign/parentheses/text) — audit every color-coded state.
 - [ ] **Contrast:** verify AA (4.5:1 text / 3:1 large+UI) for both themes — `text-faint` and accent-on-
@@ -426,8 +427,8 @@ one-line a11y item in §1.20.
 - [ ] **Zoom / reflow:** usable at 200% browser zoom and with enlarged browser font sizes — the
       px-heavy styling (see B6) is the risk; pairs with the B6 UI-scale work.
 - [ ] **Forms:** correct input types (number/date), every field labelled, inline validation announced.
-- [~] **Route changes (SPA):** focus now moves to `<main>` on navigation (skips the initial load so the
-      first Tab still reaches the skip link). Still TODO: update `document.title` per screen.
+- [x] **Route changes (SPA):** focus moves to `<main>` on navigation (skips the initial load so the
+      first Tab still reaches the skip link) and `document.title` is set to "<Screen> · CashFlux".
 - [~] **Charts:** `ui.AreaChart` is now `role="img"` + `aria-label` with a live-figure summary (net-worth
       trend, forecast). Remaining: the div-based bar charts + any future D3 charts (B14).
 - [ ] **Touch targets:** ≥44×44px hit areas (watch compact density + small icon buttons).

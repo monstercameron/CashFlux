@@ -41,14 +41,24 @@ func Toast() uic.Node {
 		}
 	}, n.Seq)
 
+	// Errors interrupt (assertive/alert); ordinary notices are announced politely.
+	// Keeping the same live-region element mounted across the empty and active
+	// states — rather than mounting a fresh node only when there's text — is what
+	// makes screen readers reliably announce each new notice.
+	live, role := "polite", "status"
+	if n.Err {
+		live, role = "assertive", "alert"
+	}
 	if n.Text == "" {
-		return Fragment()
+		// Idle: an empty, visually-hidden live region stays in the DOM so the next
+		// post is announced (a region inserted together with its text often isn't).
+		return Div(Class("sr-only"), Attr("role", role), Attr("aria-live", live))
 	}
 	cls := "toast"
 	if n.Err {
 		cls += " toast-err"
 	}
-	return Div(Class(cls), Attr("role", "status"), Attr("aria-live", "polite"),
+	return Div(Class(cls), Attr("role", role), Attr("aria-live", live),
 		Span(Class("toast-msg"), n.Text),
 		Button(Class("toast-x"), Attr("type", "button"), Attr("title", "Dismiss"),
 			OnClick(func() { atom.Set(n.Cleared()) }), "×"),

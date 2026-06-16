@@ -233,6 +233,12 @@
       .btn-del:hover { color: var(--danger); }
       .err { color: #fca5a5; margin: 0.6rem 0 0; font-size: 0.88rem; }
 
+      /* Visually hidden but available to screen readers (e.g. an idle live region). */
+      .sr-only {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+      }
+
       /* App-wide toast notice (bottom-center) */
       .toast {
         position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%);
