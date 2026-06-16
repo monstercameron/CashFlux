@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Appearance prefs: apply to the DOM
+
+- `uistate.ApplyPrefs(p)` reflects prefs onto `document.documentElement`: `data-theme` (with
+  `resolveTheme` consulting `matchMedia` for "system"), `data-density`, and `--accent` via
+  `style.setProperty`. Added `LoadPrefs()` so boot can apply the saved prefs without a hook (the
+  atom can't be read outside a component). `app.Run` calls it right after `appstate.Init`, before
+  mounting, so the first paint is already correct — no flash of defaults. `savePrefs` calls it too,
+  so changes are instant.
+- **Why accent works immediately:** the legacy `:root --accent` var is wired through the
+  design-system CSS (buttons, `.bar-fill`, `.field:focus`, active nav), so overriding it on the root
+  cascades everywhere at once. Density got a new `[data-density="compact"]` block tightening cards,
+  rows, and fields.
+- **Honest scope note — theme is half-applied on purpose.** The candidate-C surfaces are authored in
+  fixed dark hexes (Tailwind config + hardcoded values), so a real light skin is a sizable CSS pass.
+  This commit lands the mechanism (the `data-theme` attribute is set, system-resolved) and the two
+  pieces that work cleanly today (accent, density). Picking "Light" sets the attribute but the skin
+  is deferred to its own feature, so I don't ship a broken half-light look.
+- **Next.** Either the light-theme stylesheet (a `[data-theme="light"]` palette pass) or move on to
+  another backlog item (persist-last-filter, transaction duplicate, allocation constraints).
+
 ## 2026-06-16 — Appearance prefs: wire the controls
 
 - Replaced the three local `UseState`s (theme/accent/compact) in `globalSettingsForm` with reads off

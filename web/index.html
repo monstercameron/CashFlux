@@ -105,6 +105,11 @@
         background: var(--bg-card); border: 1px solid var(--border);
         border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem;
       }
+      /* Compact density: tighter cards, rows, and fields (set via data-density on <html>). */
+      [data-density="compact"] .card { padding: 0.7rem 0.8rem; margin-bottom: 0.6rem; }
+      [data-density="compact"] .card-title { margin-bottom: 0.45rem; }
+      [data-density="compact"] .row { padding-top: 0.3rem; padding-bottom: 0.3rem; }
+      [data-density="compact"] .field, [data-density="compact"] .btn { padding-top: 0.35rem; padding-bottom: 0.35rem; }
       .card-title { margin: 0 0 0.75rem; font-size: 1.05rem; }
       .muted { color: var(--text-dim); margin: 0.25rem 0; }
       .empty { color: var(--text-faint); font-style: italic; }

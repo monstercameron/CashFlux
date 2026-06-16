@@ -98,6 +98,7 @@ func globalSettingsForm() uic.Node {
 		p = p.Normalize()
 		prefsAtom.Set(p)
 		uistate.PersistPrefs(p)
+		uistate.ApplyPrefs(p)
 	}
 	onDateStyle := uic.UseEvent(func(e uic.Event) {
 		p := prefsAtom.Get()

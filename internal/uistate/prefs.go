@@ -33,6 +33,42 @@ func PersistPrefs(p prefs.Prefs) {
 	js.Global().Get("localStorage").Call("setItem", prefsStoreID, string(data))
 }
 
+// LoadPrefs returns the persisted preferences directly (without the atom), for
+// one-shot application at boot before any component mounts.
+func LoadPrefs() prefs.Prefs { return loadPrefs() }
+
+// ApplyPrefs reflects the appearance preferences onto the document root so CSS
+// can react: a data-theme attribute (resolving "system" to the OS setting), a
+// data-density attribute, and the --accent custom property. Call it on boot and
+// whenever the preferences change.
+func ApplyPrefs(p prefs.Prefs) {
+	p = p.Normalize()
+	root := js.Global().Get("document").Get("documentElement")
+	if root.IsNull() || root.IsUndefined() {
+		return
+	}
+	root.Call("setAttribute", "data-theme", resolveTheme(p.Theme))
+	density := "comfortable"
+	if p.Compact {
+		density = "compact"
+	}
+	root.Call("setAttribute", "data-density", density)
+	root.Get("style").Call("setProperty", "--accent", p.Accent)
+}
+
+// resolveTheme turns the theme preference into a concrete "dark"/"light" value,
+// consulting the OS color-scheme for "system".
+func resolveTheme(t prefs.Theme) string {
+	if t == prefs.ThemeSystem {
+		m := js.Global().Call("matchMedia", "(prefers-color-scheme: light)")
+		if !m.IsNull() && !m.IsUndefined() && m.Get("matches").Bool() {
+			return "light"
+		}
+		return "dark"
+	}
+	return string(t)
+}
+
 // loadPrefs reads saved preferences from localStorage, falling back to defaults
 // when absent or invalid. The result is always normalized.
 func loadPrefs() prefs.Prefs {

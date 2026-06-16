@@ -7,6 +7,7 @@ package app
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/screens"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 	"github.com/monstercameron/GoWebComponents/utils"
@@ -23,6 +24,10 @@ func Run() {
 	if err := appstate.Init(nil, true); err != nil {
 		panic(err)
 	}
+
+	// Apply saved appearance preferences (theme/accent/density) before mounting,
+	// so the first paint matches the user's choice instead of flashing defaults.
+	uistate.ApplyPrefs(uistate.LoadPrefs())
 
 	r := router.NewHistoryRouter(router.RouterOptions{DefaultRoute: "/"})
 	for _, route := range screens.All() {

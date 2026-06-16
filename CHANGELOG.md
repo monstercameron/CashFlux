@@ -15,6 +15,14 @@ and every commit updates this file under `Unreleased`.
   format (via `prefs.FormatDate`) instead of always ISO. Each row component reads the preferences
   atom, so changing the format updates every list live.
 
+### Added
+- Appearance preferences now apply to the page: `uistate.ApplyPrefs` writes `data-theme`
+  (resolving "system" to the OS color scheme), `data-density`, and the `--accent` CSS variable onto
+  the document root — applied on boot (before first paint) and on every change. The accent color
+  retints buttons, bars, focus rings, and active states immediately; a new `[data-density="compact"]`
+  stylesheet rule tightens cards, rows, and fields. (A full light-theme skin is still to come; the
+  `data-theme` attribute is in place for it to hook.)
+
 ### Changed
 - The Settings appearance controls (theme, accent, density) are now backed by the persistent
   preferences atom instead of throwaway local state, so the selections are remembered and saved to
