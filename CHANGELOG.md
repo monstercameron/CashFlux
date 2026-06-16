@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- A pure, deterministic rule suggester (`internal/rulesuggest`): it studies how you've already
+  categorized transactions and proposes auto-categorization rules where a payee/description reliably
+  maps to one category — appearing often enough, agreeing ≥80% of the time, and not already covered by
+  a rule — ranked by supporting evidence. No AI needed; explainable (each suggestion carries its
+  support/total counts). Table-tested. The data behind a future "suggested rules" review on the Rules
+  screen.
+
 ### Changed
 - AI requests now retry transient failures automatically: a rate limit (429), server error (5xx), or
   network blip is retried up to three times with exponential backoff (0.5s → 1s → 2s) before giving

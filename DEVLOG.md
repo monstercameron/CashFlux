@@ -26,6 +26,21 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — rulesuggest: deterministic rule suggestions
+
+- New pure `internal/rulesuggest.Suggest(txns, existing, minCount)`: groups categorized non-transfer
+  transactions by a normalized key (payee, or description when there's no payee), and where a key
+  appears ≥ minCount times with ≥80% category agreement and isn't already covered by an existing rule,
+  proposes `rules.Rule{Match, SetCategoryID}` with its support/total counts, sorted by support.
+- Design call: did this as a deterministic heuristic rather than the backlog's literal "AI-proposed
+  rules". It's free, instant, explainable (carries the evidence), and aligns with the project's
+  determinism/explainability rule — strictly better than an AI round-trip for this. AI proposals could
+  layer on later for fuzzier patterns. Lives in its own leaf package (imports domain + rules) so the
+  rules engine stays domain-free.
+- Edge handling tested: min-count gate, the 80% consistency gate (mixed key skipped), existing-rule
+  skip, payee-vs-desc key, transfers/uncategorized ignored, sort by support. UI (a "suggested rules"
+  list with Add buttons on the Rules screen) is the next step.
+
 ## 2026-06-16 — AI retry with backoff
 
 - Added pure `ai.IsRetryable(status)` (429/5xx/0) and `ai.RetryDelayMS(attempt)` (500ms doubling, up
