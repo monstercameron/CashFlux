@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Per-widget settings API (widgetcfg) — step 1
+
+- User wants the per-widget flip panel wired to each widget's own settings (savings rate → savings
+  settings), persisted. Building it bottom-up.
+- Step 1: pure `internal/widgetcfg` — `Field` (toggle/number/select + default/bounds/options),
+  `Schema` per widget, `Config` (key→string values) with typed accessors (`Str`/`Bool`/`Int` with
+  default fallback + clamp + select validation), and a registry (`SchemaFor`/`Has`/`IDs`). Savings
+  rate registers the first schema (target rate %, show-bar toggle). Table-tested.
+- Next: a persisted `uistate` widget-configs atom + a schema-driven `widgetSettingsForm`, then the
+  savings widget consuming its target setting.
+
 ## 2026-06-16 — README + Pages-hosting TODOs; background pushes
 
 - Logged two §0 items: a proper **README.md**, and **hosting the app on GitHub Pages from `/docs`**

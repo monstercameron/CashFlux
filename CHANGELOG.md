@@ -42,6 +42,10 @@ and every commit updates this file under `Unreleased`.
   preferred granularity without landing on a stale week or month.
 
 ### Added
+- A per-widget settings API (`internal/widgetcfg`): each dashboard widget registers a typed `Schema`
+  (toggle/number/select fields with defaults and bounds), and reads its values from a persisted
+  `Config` via clamping/validating accessors — the bridge between a widget's flip-panel settings and
+  its content. Pure and table-tested; savings rate ships the first schema (target rate + show-bar).
 - A central language store (`internal/i18n`): a pure, table-tested message catalog keyed by stable
   dot-namespaced keys (e.g. `nav.accounts`), with English as the source/fallback language, `%s`/`%d`
   argument formatting, translation-coverage reporting (`MissingKeys`), and whole-bundle JSON
