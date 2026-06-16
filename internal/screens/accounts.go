@@ -179,6 +179,19 @@ func Accounts() ui.Node {
 		}
 		bump()
 	}))
+	markAllUpdated := ui.UseEvent(Prevent(func() {
+		w := app.FreshnessWindows()
+		now := time.Now()
+		for _, ac := range app.Accounts() {
+			if ac.Archived || !freshness.IsStale(ac, w, now) {
+				continue
+			}
+			ac.BalanceAsOf = now
+			_ = app.PutAccount(ac)
+		}
+		errMsg.Set("")
+		bump()
+	}))
 
 	typeOptions := make([]ui.Node, 0, len(domain.AllAccountTypes))
 	for _, t := range domain.AllAccountTypes {
@@ -249,6 +262,12 @@ func Accounts() ui.Node {
 
 	windows := app.FreshnessWindows()
 	now := time.Now()
+	staleCount := 0
+	for _, ac := range accounts {
+		if freshness.IsStale(ac, windows, now) {
+			staleCount++
+		}
+	}
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
 		cleared, _ := ledger.ClearedBalance(ac, txns)
@@ -270,6 +289,10 @@ func Accounts() ui.Node {
 			stat("Assets", fmtMoney(assets), "pos"),
 			stat("Liabilities", fmtMoney(liabilities), "neg"),
 		),
+		If(staleCount > 0, Div(Style(map[string]string{"margin-bottom": "0.6rem"}),
+			Button(Class("btn"), Type("button"), Title("Mark every stale balance as checked today"), OnClick(markAllUpdated),
+				Textf("Mark all updated (%s stale)", plural(staleCount, "account"))),
+		)),
 		form,
 		Section(Class("card"),
 			H2(Class("card-title"), "Assets"),

@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- "Mark all updated" on the Accounts screen: when any balances are stale, a one-click action stamps
+  every stale account as checked today, clearing the stale badges (and the dashboard freshness
+  nudge) at once.
 - Account "locked until" date (assets): set on the add form and the inline editor (blank unlocks),
   and the Allocate screen excludes an account locked until a future date from its suggestions (you
   can't add money to it yet).

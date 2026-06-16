@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Accounts: Mark all updated
+
+- Added a bulk "Mark all updated (N stale)" button (shown only when something's stale) that stamps
+  `BalanceAsOf = now` on every stale, non-archived account via `PutAccount` — clearing all stale
+  badges and the dashboard freshness nudge in one click, instead of per-row "Mark updated".
+- Reused `freshness.IsStale` + `FreshnessWindows` for both the visible count and the action, so the
+  button's label and effect agree.
+- **Next.** Genuine small polish as it arises; sync remains out of scope without a backend.
+
 ## 2026-06-16 — Accounts: edit lock-until inline (lock-until complete)
 
 - Added the "Locked until" date to the account inline editor's asset branch (seeded from

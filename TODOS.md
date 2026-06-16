@@ -216,12 +216,12 @@ Shared control components (from mockup):
 - [x] ★ Accounts list grouped by class (assets / liabilities) with per-account balance
 - [x] ★ Add + delete + archive/restore + inline edit account (name, opening balance, type attributes)
 - [x] Liability sub-form (credit limit, APR, min payment, due day, lender) — shown for liability types
-- [~] Allocation attributes sub-form (expected return, liquidity, stability) done; lock-until later
+- [x] Allocation attributes sub-form (expected return, liquidity, stability, lock-until) on add + edit
 - [ ] Per-account ledger view (filtered txns + running balance)
 - [ ] "Update balance" action → adjustment txn + set `BalanceAsOf`
 - [~] Credit utilization indicator done (on liability rows); due-date reminder via Upcoming bills widget
 - [x] Net-worth summary header (assets, liabilities, net) in base currency
-- [x] Per-account staleness indicator (Stale badge, from freshness service)
+- [x] Per-account staleness indicator (Stale badge) + per-row "Mark updated" + bulk "Mark all updated"
 - [ ] Tests already in services; add UI-state tests where logic leaks
 
 ### 1.10 Categories
