@@ -134,6 +134,10 @@ and every commit updates this file under `Unreleased`.
   `StepperPill`s, backed by a shared `internal/uistate` window atom over `period.Window`. The
   dashboard now derives its income/spending period from this control (re-rendering on change) instead
   of a hardcoded current-month range; stat labels are now period-relative ("Income"/"Spending").
+- `internal/ui`: reusable `Widget` shell — the candidate-C bento cell with the unified header (grip ·
+  centered title · gear) and a padded body, props-driven (title, body, grid span, draggable,
+  resizable, gear handler) so every dashboard widget is `Widget` + content. Optional edge resize
+  handles; gear is its own component for stable hooks in lists.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

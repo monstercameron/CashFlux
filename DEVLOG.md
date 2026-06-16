@@ -85,8 +85,14 @@ problems and fixes, and what's next.
   `Dashboard` now reads the same atom for its period range and re-renders on change — first proof the
   shared-state plumbing works end to end. Full js/wasm build green.
 
-**Next:** a quick browser/DOM sanity check of the new shell via the gwc dev server, then the
-`Widget` shell + `FlipPanel` primitives and the bento widgets.
+- Built the keystone **`Widget` shell** in `internal/ui`: the candidate-C bento cell (square outlined
+  `.w`, unified `.wh` header = grip · centered title · gear, padded `.wbody`) as one generic
+  props-driven component (title, body, grid span, draggable, resizable, `OnGear`). Every widget will
+  be `Widget` + content, so the chrome is defined once. Grid placement is emitted as inline style per
+  axis; the gear is its own component for hook stability in widget lists.
+
+**Next:** a quick browser/DOM sanity check of the new shell via the gwc dev server; then the
+`FlipPanel` primitive (per-widget + global settings) and the bento grid + first widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
