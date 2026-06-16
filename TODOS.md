@@ -431,6 +431,42 @@ one-line a11y item in §1.20.
 - [ ] **i18n:** route `aria-label`s/announcements through the language store (B i18n) so they translate.
 - [ ] **Tooling:** wire an automated a11y check into CI (axe via the browser lane) once Playwright is in.
 
+### B16. End-to-end test stories — every feature, UX + correctness ★
+
+**Goal:** a *trustworthy* app: dozens of E2E "stories" (scripted user journeys) covering every feature's
+standard path so it's provably flawless and regression-guarded. Each story asserts **both** UX (the
+standard path is smooth — controls reachable, feedback shown, no dead ends) **and** correctness (the
+resulting data, persisted state, and derived figures match expectations). Canonical example: *add a
+transaction* — open the form, fill it the standard way, save, see it appear in the ledger, see balances
+and dashboard KPIs update, and confirm it survives reload.
+**Tooling:** browser E2E needs the framework's wasm/browser lane (`gwc test -lane wasm -lane browser`)
+which requires **Playwright + Chromium (§0, not yet installed)**; `gwc export-test` can also generate a
+testkit Go test from a recorded live session. Until that's installed, author/queue the stories and keep
+relying on the (already extensive) pure-logic unit tests. Run the suite in CI once available.
+**Story backlog (each = happy path + key edge cases; expand to "dozens"):**
+- [ ] Transactions: add expense / add income / add transfer (paired, excluded from totals) / inline-edit
+      / delete (+transfer-pair removal) / duplicate / repeat-last / tags.
+- [ ] Transactions: filter (member/account/category/text/date) + sort + clear + **persist across reload**;
+      CSV export of the filtered view; filtered summary line correctness.
+- [ ] Reconcile: toggle cleared, cleared-status filter, bulk clear/unclear, cleared balance, update-balance
+      adjustment txn.
+- [ ] Accounts: add asset / add liability (+sub-forms) / archive+restore / inline-edit / mark-all-updated /
+      drill to filtered ledger; net-worth header correctness.
+- [ ] Budgets: create / period switch (week/month/quarter) / near+over indicators / summary totals.
+- [ ] Goals: create / contribute / pace + projection.
+- [ ] Members: add / set default / inline-edit / reassign-on-delete. Categories: add / sub-category /
+      reassign-on-delete.
+- [ ] To-do: add / complete-toggle / inline-edit / ordering / hide-done; create-from-insight + from-nudge.
+- [ ] Settings: theme/accent/density/week-start/date-format **persist across reload**; export→import
+      round-trip; load sample; wipe (with confirm).
+- [ ] Dashboard: resolution control (presets/range), KPIs match the data, drill-downs, widget settings (B12),
+      drag/resize (B2).
+- [ ] Documents: CSV import; image vision import review + dedupe. AI: insight/Q&A → save-as-task.
+- [ ] Allocate / Planning / Customize(formula) happy paths.
+- [ ] Cross-cutting: reload persistence, offline (PWA), deep-link routing (B1/B3), accessibility journeys (B15).
+- [ ] Organize as story files; gate CI on them once the browser lane is available; aim for full
+      standard-path coverage of every feature.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)
@@ -450,14 +486,13 @@ one-line a11y item in §1.20.
 - [ ] **README.md** — what CashFlux is, screenshots/GIF, the stack (Go→wasm on GoWebComponents),
       local dev (`gwc dev`), build/test commands, the local-first + BYO-AI-key model, link to the live
       GitHub Pages demo, and a pointer to SPEC/DEVLOG/TODOS. First-impression doc for the repo.
-- [ ] **Host the app on GitHub Pages from `/docs`.** Produce a production build into `docs/` (via
-      `gwc release`/`prerender` or a scripted copy of `index.html` + `bin/main.wasm` + `wasm_exec.js` +
-      `sw.js` + `manifest`), commit it (these artifacts are normally gitignored — `/docs` build output
-      must be *tracked*), and enable Pages → "Deploy from branch: main /docs".
-      - Use **relative asset paths** (already `./…`) so it works under the `/CashFlux/` Pages subpath.
-      - Add a `docs/404.html` that serves the app shell so deep-link refreshes route correctly on Pages
-        (the static-host side of bug B1).
-      - Add a build script / Make-style task (or a CI job) so `/docs` is rebuilt on release, not hand-copied.
+- [x] **Host the app on GitHub Pages.** Done via Actions instead of a committed `/docs` folder:
+      `.github/workflows/deploy-pages.yml` builds the wasm site on every push to `main` and deploys it
+      as a Pages artifact (`upload-pages-artifact` + `deploy-pages`) — relative asset paths (already
+      `./…`) work under the `/CashFlux/` subpath, and a `404.html` shell is generated for deep-link
+      routing (static-host side of B1). No committed build artifacts, no commit loops.
+  - [ ] **One-time:** set repo Settings → Pages → Source = "GitHub Actions" (or via `gh api`), then the
+        live URL is https://monstercameron.github.io/CashFlux/.
 - [ ] Fix framework `gwc dev -html` resolution (commit in GoWebComponents, rebuild + recopy `gwc`)
 - [ ] `playwrightgo`-tagged `gwc` + Chromium for automated DOM verification (optional)
 - [ ] Install Claude Code design skills (`frontend-design`, `playground`) — user action

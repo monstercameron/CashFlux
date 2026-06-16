@@ -1,0 +1,73 @@
+name: Deploy to GitHub Pages
+
+# Whenever main is pushed, build the wasm app and publish it to GitHub Pages so
+# the latest build is reviewable from anywhere (https://monstercameron.github.io/CashFlux/).
+# We deploy the freshly built site as a Pages *artifact* via Actions rather than
+# committing build output into /docs — same live URL, no committed artifacts or
+# commit loops. (Requires repo Settings → Pages → Source = "GitHub Actions", once.)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a newer push supersede an in-flight deploy, but never cancel a run mid-deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build WebAssembly
+        env:
+          GOOS: js
+          GOARCH: wasm
+        run: |
+          mkdir -p web/bin
+          go build -o web/bin/main.wasm .
+
+      - name: Copy Go wasm runtime glue
+        run: |
+          if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then
+            cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/wasm_exec.js
+          else
+            cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" web/wasm_exec.js
+          fi
+
+      - name: SPA deep-link fallback
+        # GitHub Pages serves 404.html for unknown paths; serving the app shell
+        # there lets deep links / refreshes route client-side (static-host side of B1).
+        run: cp web/index.html web/404.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

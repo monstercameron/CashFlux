@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Pages deploy workflow (built); E2E test stories logged (B16)
+
+- User: build a CI workflow that redeploys the build on every push so they can review from anywhere,
+  and (separately) log an extensive E2E testing program.
+- **Built `deploy-pages.yml`:** on push to main, set up Go, build `web/bin/main.wasm` (GOOS=js), copy
+  `wasm_exec.js` from GOROOT (`lib/wasm` with `misc/wasm` fallback), generate `404.html` from
+  index.html for deep-link routing, upload `web/` as a Pages artifact, deploy via `deploy-pages@v4`.
+  - **Chose Actions-deploy over committing a `/docs` folder.** Same live URL
+    (monstercameron.github.io/CashFlux), but no build artifacts committed and no push/commit loop.
+    Updated the §0 hosting item to reflect this; the only manual step is setting Pages Source =
+    "GitHub Actions" once (will try via `gh api`).
+- **B16 — E2E stories:** logged a trustworthy-app testing program — dozens of scripted user-journey
+  stories (canonical: add a transaction) asserting both UX (smooth standard path) and correctness
+  (data/state/derived figures), covering every feature + cross-cutting (reload/offline/routing/a11y).
+  Needs the Playwright/Chromium browser lane (§0, not installed) to run; authored/queued until then.
+- Planning for B16; the deploy workflow is the one build action this turn (explicitly requested).
+
 ## 2026-06-16 — App-wide accessibility spike + program (B15)
 
 - User: think deeply about app-wide accessibility and log it as a spike (it's extensive). Added B15.

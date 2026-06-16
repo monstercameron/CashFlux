@@ -42,6 +42,9 @@ and every commit updates this file under `Unreleased`.
   preferred granularity without landing on a stale week or month.
 
 ### Added
+- GitHub Pages deployment via Actions (`.github/workflows/deploy-pages.yml`): every push to `main`
+  builds the wasm app and publishes it to Pages, so the latest build is reviewable from anywhere. A
+  `404.html` app-shell is generated for deep-link routing.
 - A per-widget settings API (`internal/widgetcfg`): each dashboard widget registers a typed `Schema`
   (toggle/number/select fields with defaults and bounds), and reads its values from a persisted
   `Config` via clamping/validating accessors — the bridge between a widget's flip-panel settings and
