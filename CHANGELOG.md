@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Edit rows in the document review list before importing: each extracted transaction has an Edit
+  button to fix its date, description, amount, or category (e.g. correct a misread) prior to import.
 - Remove rows from the document review list before importing: each extracted transaction has a ✕ to
   drop a misread, so only the rows you keep are imported.
 - Document image import on the Documents screen: choose a receipt or statement image, "Read with

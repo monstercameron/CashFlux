@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Document review: per-row edit (review complete)
+
+- `DraftRow` now also edits inline: an Edit button reveals date/description/amount/category fields;
+  Save calls `OnUpdate(index, Row)` which rebuilds the draft slice with the corrected row. Same
+  unconditional-hooks-then-branch-on-editing shape as the budget/goal/transaction rows.
+- Vision misreads (a smudged amount, a wrong date) can now be fixed in place rather than removed and
+  re-entered, so the import is trustworthy without leaving the review step.
+- The review screen is now full-featured: list → edit any row → remove any row → pick account →
+  import. Only dedupe-vs-existing remains from the original review TODO.
+- **Next.** Dedupe on import (skip rows already in the account by date+amount), or shift to Phase-3
+  sync groundwork / other polish.
+
 ## 2026-06-16 — Document review: per-row remove
 
 - Small polish on the just-shipped import: the review list rows are now `DraftRow` components with a

@@ -160,13 +160,23 @@ func Documents() ui.Node {
 		draft.Set(next)
 	}
 
+	updateDraft := func(i int, r extract.Row) {
+		cur := draft.Get()
+		if i < 0 || i >= len(cur) {
+			return
+		}
+		next := append([]extract.Row{}, cur...)
+		next[i] = r
+		draft.Set(next)
+	}
+
 	// Draft review list: each row can be removed before importing.
 	rows := draft.Get()
 	draftBody := ui.Node(nil)
 	if len(rows) > 0 {
 		items := make([]ui.Node, 0, len(rows))
 		for i, r := range rows {
-			items = append(items, ui.CreateElement(DraftRow, draftRowProps{Index: i, Row: r, OnRemove: removeDraft}))
+			items = append(items, ui.CreateElement(DraftRow, draftRowProps{Index: i, Row: r, OnRemove: removeDraft, OnUpdate: updateDraft}))
 		}
 		acctOptions := make([]ui.Node, 0, len(accounts))
 		for _, a := range accounts {
@@ -216,13 +226,52 @@ type draftRowProps struct {
 	Index    int
 	Row      extract.Row
 	OnRemove func(int)
+	OnUpdate func(int, extract.Row)
 }
 
-// DraftRow renders one extracted transaction in the review list with a Remove
-// action. Its own component so the remove hook stays at a stable position.
+// DraftRow renders one extracted transaction in the review list. It can be edited
+// inline (date, description, amount, category) or removed. All hooks are declared
+// unconditionally so the edit toggle never reorders them.
 func DraftRow(props draftRowProps) ui.Node {
-	rm := ui.UseEvent(Prevent(func() { props.OnRemove(props.Index) }))
 	r := props.Row
+	rm := ui.UseEvent(Prevent(func() { props.OnRemove(props.Index) }))
+	editing := ui.UseState(false)
+	dateS := ui.UseState(r.Date)
+	descS := ui.UseState(r.Description)
+	amtS := ui.UseState(r.Amount)
+	catS := ui.UseState(r.Category)
+	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
+	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
+	onAmt := ui.UseEvent(func(v string) { amtS.Set(v) })
+	onCat := ui.UseEvent(func(v string) { catS.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		dateS.Set(r.Date)
+		descS.Set(r.Description)
+		amtS.Set(r.Amount)
+		catS.Set(r.Category)
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		props.OnUpdate(props.Index, extract.Row{
+			Date: dateS.Get(), Description: descS.Get(), Amount: amtS.Get(), Category: catS.Get(),
+		})
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		return Div(Class("row"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
+				Input(Class("field"), Type("text"), Placeholder("Description"), Value(descS.Get()), OnInput(onDesc)),
+				Input(Class("field"), Type("text"), Placeholder("Amount"), Value(amtS.Get()), OnInput(onAmt)),
+				Input(Class("field"), Type("text"), Placeholder("Category"), Value(catS.Get()), OnInput(onCat)),
+				Button(Class("btn btn-primary"), Type("submit"), "Save"),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+			),
+		)
+	}
+
 	meta := r.Date
 	if r.Category != "" {
 		meta += " · " + r.Category
@@ -233,6 +282,7 @@ func DraftRow(props draftRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class("amount fig"), r.Amount),
+		Button(Class("btn"), Type("button"), Title("Edit this row"), OnClick(startEdit), "Edit"),
 		Button(Class("btn-del"), Type("button"), Title("Remove this row"), OnClick(rm), "✕"),
 	)
 }
