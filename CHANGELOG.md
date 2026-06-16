@@ -149,6 +149,8 @@ and every commit updates this file under `Unreleased`.
   (Net worth, Income, Spending, Liabilities) built from the live ledger and shown as accounting
   figures (`$1,234.56` / `($240.55)`, green/red tone). Each KPI is the reusable `Widget` shell +
   content; Income/Spending follow the time-resolution window. New `fmtAccounting`/`figTone` helpers.
+- Recent transactions widget (2×2) on the dashboard: newest activity as a compact table with short
+  dates and accounting amounts (green/red), in the reusable `Widget` shell.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

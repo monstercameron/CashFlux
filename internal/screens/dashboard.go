@@ -70,7 +70,33 @@ func Dashboard() ui.Node {
 			GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
 			Body: kpiBody(fmtAccounting(liabilities), "", fmt.Sprintf("%d accounts", active), "text-dim"),
 		}),
+		recentWidget(txns),
 	)
+}
+
+// recentWidget is the 2×2 Recent transactions widget: newest activity as a
+// compact table with accounting amounts. Display-only, so rows build in a loop.
+func recentWidget(txns []domain.Transaction) ui.Node {
+	recent := recentTransactions(txns, 6)
+	var body ui.Node
+	if len(recent) == 0 {
+		body = P(Class("empty text-dim text-[13px]"), "No transactions yet.")
+	} else {
+		rows := make([]ui.Node, 0, len(recent))
+		for _, t := range recent {
+			rows = append(rows, Tr(Class("border-b border-line/70"),
+				Td(Class("py-2.5 fig text-dim w-16"), t.Date.Format("Jan 2")),
+				Td(Class("py-2.5"), t.Desc),
+				Td(Class("py-2.5 text-right font-display fig "+figTone(t.Amount)), fmtAccounting(t.Amount)),
+			))
+		}
+		body = Table(Class("w-full text-[13px]"), Tbody(rows))
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "recent", Title: "Recent transactions", Draggable: true,
+		GridColumn: "1 / span 2", GridRow: "3 / span 2", BodyClass: "overflow-hidden",
+		Body: body,
+	})
 }
 
 // dashboardHeaderCell is the full-width intro cell at the top of the bento grid.

@@ -115,8 +115,12 @@ problems and fixes, and what's next.
   `ledger.NetWorth`. Aliased `internal/ui` as `uiw` in screens (framework `ui` keeps the bare name).
   `recentTransactions` stays for the next widget (unused package funcs are legal Go; build confirms).
 
-**Next:** more bento widgets (Recent transactions, Budgets, Goals, To-do, Accounts, charts), then the
-per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
+- Added the **Recent transactions** widget (2×2): newest six as a compact table (short "Jan 2" dates,
+  payee, accounting amount with green/red tone) in the `Widget` shell. Display-only, so rows build in
+  a plain loop (no per-row hooks needed). Reuses the existing `recentTransactions` helper.
+
+**Next:** remaining bento widgets (Budgets, Goals, To-do, Accounts, charts), then the per-widget
+settings wiring (target atom + form + FlipPanel host) and global settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
