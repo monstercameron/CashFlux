@@ -291,8 +291,12 @@ problems and fixes, and what's next.
   trims/drops empties), stored on `Transaction.Tags` and shown on the row as `#tag`. Tag-based
   filtering is a follow-up.
 
-**Next:** full edit flows (account/transaction/budget/goal field edit), then preferences (week-start,
-formats) and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
+- Added **contribute-to-goal**: a per-goal Contribute button prompts for an amount (`promptText`
+  wraps `window.prompt`), parses it in the goal's currency, and adds it to `CurrentAmount` via the
+  validated put — advancing the progress bar. Auto-progress from a linked account is a follow-up.
+
+**Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
+and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

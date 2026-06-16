@@ -254,7 +254,7 @@ Shared control components (from mockup):
 
 - [x] List with progress bar (% + remaining); projected completion later (needs contribution input)
 - [~] Add + delete goal (scope, target, current, target date) done; edit + linked account later
-- [ ] Contribute-to-goal action; auto-progress from linked account option
+- [~] Contribute-to-goal action done (prompt); auto-progress from linked account later
 - [x] Tests: progress + projection (in `internal/goals`)
 
 ### 1.14 To-do (budgeting tasks)

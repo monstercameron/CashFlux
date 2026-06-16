@@ -5,6 +5,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -92,6 +93,23 @@ func Goals() ui.Node {
 		bump()
 	}
 
+	contribute := func(g domain.Goal, amtStr string) {
+		cur := g.CurrentAmount.Currency
+		if cur == "" {
+			cur = base
+		}
+		amt, err := money.ParseMinor(strings.TrimSpace(amtStr), currency.Decimals(cur))
+		if err != nil || amt == 0 {
+			return
+		}
+		g.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, cur)
+		if err := app.PutGoal(g); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		bump()
+	}
+
 	ownerOptions := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), "Group (shared)")}
 	for _, m := range app.Members() {
 		ownerOptions = append(ownerOptions, Option(Value(m.ID), SelectedIf(owner.Get() == m.ID), m.Name))
@@ -118,7 +136,7 @@ func Goals() ui.Node {
 		rows := MapKeyed(goals,
 			func(g domain.Goal) any { return g.ID },
 			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, OnDelete: deleteGoal})
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, OnDelete: deleteGoal, OnContribute: contribute})
 			},
 		)
 		listBody = Div(rows)
@@ -134,13 +152,19 @@ func Goals() ui.Node {
 }
 
 type goalRowProps struct {
-	Goal     domain.Goal
-	OnDelete func(string)
+	Goal         domain.Goal
+	OnDelete     func(string)
+	OnContribute func(domain.Goal, string)
 }
 
-// GoalRow renders one goal's progress toward its target.
+// GoalRow renders one goal's progress toward its target, with a contribute action.
 func GoalRow(props goalRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Goal.ID) }))
+	contribute := ui.UseEvent(Prevent(func() {
+		if v := promptText("Contribute how much to " + props.Goal.Name + "?"); v != "" {
+			props.OnContribute(props.Goal, v)
+		}
+	}))
 
 	g := props.Goal
 	pct := goalsvc.Percent(g)
@@ -159,9 +183,19 @@ func GoalRow(props goalRowProps) ui.Node {
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), g.Name),
 			Span(Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
+			Button(Class("btn"), Type("button"), Title("Add to this goal"), OnClick(contribute), "Contribute"),
 			Button(Class("btn-del"), Type("button"), Title("Delete goal"), OnClick(del), "✕"),
 		),
 		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", pct)))),
 		Span(Class("budget-sub"), sub),
 	)
+}
+
+// promptText shows a browser prompt and returns the entered text ("" if cancelled).
+func promptText(message string) string {
+	v := js.Global().Get("window").Call("prompt", message)
+	if v.IsNull() || v.IsUndefined() {
+		return ""
+	}
+	return v.String()
 }

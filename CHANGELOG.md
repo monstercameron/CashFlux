@@ -222,6 +222,8 @@ and every commit updates this file under `Unreleased`.
   ledger list, with a distinct "No matching transactions" empty state.
 - Transactions: a comma-separated tags field on income/expense entries; tags show on the row
   (`#tag`).
+- Goals: a "Contribute" action per goal adds an entered amount to its saved total (advancing the
+  progress bar) via a quick prompt.
 - Accounts: archive/restore an account from its row — archived accounts move to a separate "Archived"
   section and drop out of the assets/liabilities lists and net-worth totals (already excluded by
   `ledger`).
