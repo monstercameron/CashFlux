@@ -53,8 +53,16 @@ problems and fixes, and what's next.
   `IconClass` for per-item icon tinting, and `Muted` styling. Section headers are direct `<div>`
   children of `<nav>` so the collapsed-rail CSS (`nav > div { display:none }`) hides them cleanly.
 
-**Next:** `.gitattributes` (quiet CRLF warnings); collapsible rail toggle; the time-resolution
-control; then the `Widget` shell, `FlipPanel`, and the bento widgets.
+- Added `.gitattributes` (LF normalization + binary marks); `git add --renormalize` was a no-op
+  (repo blobs were already LF), so the Windows CRLF warnings are gone with a one-file commit.
+- **Collapsible rail**: the framework's `state.UseAtom` is global-by-id and re-renders every
+  subscribed component, so a shared `rail:collapsed` bool atom cleanly coordinates the top-bar menu
+  button (toggles) and the `Sidebar` (adds the `collapsed` class → the CSS does the 58px icon-only
+  switch). No `syscall/js` needed. Collapse persists across navigation (atom is global); persisting
+  across reloads waits on the prefs/settings wiring.
+
+**Next:** the time-resolution control (Week/Month/Quarter + From/To steppers); then the `Widget`
+shell, `FlipPanel`, and the bento widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

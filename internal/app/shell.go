@@ -9,8 +9,14 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
+	"github.com/monstercameron/GoWebComponents/state"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
+
+// railCollapsed is the shared atom coordinating the collapsible rail: the top
+// bar's menu button toggles it and the sidebar reads it to switch to icon-only
+// mode. Keyed globally so both components stay in sync.
+const railCollapsedAtom = "rail:collapsed"
 
 // ShellProps configures the chrome around a screen.
 type ShellProps struct {
@@ -76,7 +82,11 @@ func railHeader(label string) uic.Node {
 // custom "My pages", the System group, and a household card that opens settings.
 func Sidebar() uic.Node {
 	current := router.InspectCurrentRoute().Path
-	return Aside(Class("rail w-60 shrink-0 border-r border-line flex flex-col"),
+	cls := "rail w-60 shrink-0 border-r border-line flex flex-col"
+	if state.UseAtom(railCollapsedAtom, false).Get() {
+		cls += " collapsed"
+	}
+	return Aside(Class(cls),
 		Div(Class("railhead h-14 flex items-center gap-2.5 px-5 border-b border-line"),
 			Span(Class("grid place-items-center w-7 h-7 rounded bg-fg text-base font-display font-semibold text-[13px] shrink-0"), "C"),
 			Span(Class("brand-name font-display text-lg font-semibold tracking-tight"), "CashFlux"),
@@ -191,8 +201,10 @@ type topBarProps struct {
 // TopBar is the sticky page header inside the scrolling main pane: a (currently
 // static) menu toggle, the page title, and an Add action.
 func TopBar(props topBarProps) uic.Node {
+	collapsed := state.UseAtom(railCollapsedAtom, false)
 	return Div(Class("h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20"),
 		Button(Class("menu-btn w-7 h-7 -ml-1"), Attr("title", "Collapse menu"),
+			OnClick(func() { collapsed.Update(func(c bool) bool { return !c }) }),
 			ui.Icon("menu", Class("w-5 h-5")),
 		),
 		Div(Class("font-display text-lg font-semibold"), props.Title),

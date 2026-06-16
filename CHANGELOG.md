@@ -116,6 +116,9 @@ and every commit updates this file under `Unreleased`.
   household card pinned to the bottom that shows live member count and base currency and opens
   Settings. `navItem` is now reusable across all groups (optional path for placeholders, custom icon
   class, muted styling).
+- Collapsible rail: the top-bar menu button toggles the sidebar into 58px icon-only mode (labels,
+  captions, brand text, and household summary hidden), coordinated by a shared `rail:collapsed`
+  state atom so the button and rail stay in sync.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
