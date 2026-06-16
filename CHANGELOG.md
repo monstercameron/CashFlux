@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Freshness reminders editor in the global Settings panel: per-account-type day inputs (credit
+  cards, checking, savings, investments, loans, cash) that write `Settings.FreshnessOverrides`; 0
+  means never flag that type. Changes apply immediately to the stale badges and dashboard widget.
 - Freshness window overrides now take effect: `appstate.FreshnessWindows` layers the household's
   per-account-type overrides (from Settings) over the built-in defaults, and the Accounts stale
   badges and the dashboard Freshness widget both use it. Previously the stored overrides field was

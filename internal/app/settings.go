@@ -5,6 +5,7 @@ package app
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -70,6 +71,41 @@ func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Allow moving", On: allowMoving.Get(), OnChange: func(v bool) { allowMoving.Set(v) }}),
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Allow resizing", On: allowResizing.Get(), OnChange: func(v bool) { allowResizing.Set(v) }}),
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact", On: compact.Get(), OnChange: func(v bool) { compact.Set(v) }}),
+	)
+}
+
+// freshnessTypes lists the account types whose staleness window is editable, with
+// friendly labels. Keyed by the domain account-type string used in settings.
+var freshnessTypes = []struct {
+	Label string
+	Type  domain.AccountType
+}{
+	{"Credit cards", domain.TypeCreditCard},
+	{"Checking", domain.TypeChecking},
+	{"Savings", domain.TypeSavings},
+	{"Investments", domain.TypeInvestment},
+	{"Loans", domain.TypeLoan},
+	{"Cash", domain.TypeCash},
+}
+
+type freshnessRowProps struct {
+	Label   string
+	TypeKey string
+	Days    int
+	OnSet   func(typeKey string, days int)
+}
+
+// freshnessRow is one editable staleness-window row. Its own component so the
+// number input's change hook stays at a stable position across the list.
+func freshnessRow(props freshnessRowProps) uic.Node {
+	on := uic.UseEvent(func(v string) {
+		n, _ := strconv.Atoi(strings.TrimSpace(v))
+		props.OnSet(props.TypeKey, n)
+	})
+	return Div(Class("rate-row"),
+		Span(Style(map[string]string{"width": "110px"}), props.Label),
+		Input(Class("rate-in"), Type("number"), Value(strconv.Itoa(props.Days)), OnInput(on)),
+		Span(Class("text-faint"), "days (0 = never)"),
 	)
 }
 
@@ -166,6 +202,30 @@ func globalSettingsForm() uic.Node {
 
 	pr := prefsAtom.Get().Normalize()
 
+	// Freshness window editor: per-type day inputs writing Settings.FreshnessOverrides.
+	setFreshness := func(typeKey string, days int) {
+		a := appstate.Default
+		if a == nil {
+			return
+		}
+		s := a.Settings()
+		if s.FreshnessOverrides == nil {
+			s.FreshnessOverrides = map[string]int{}
+		}
+		s.FreshnessOverrides[typeKey] = days
+		_ = a.PutSettings(s)
+		bump()
+	}
+	var freshnessRows []uic.Node
+	if a := appstate.Default; a != nil {
+		fw := a.FreshnessWindows()
+		for _, ft := range freshnessTypes {
+			freshnessRows = append(freshnessRows, uic.CreateElement(freshnessRow, freshnessRowProps{
+				Label: ft.Label, TypeKey: string(ft.Type), Days: fw[ft.Type], OnSet: setFreshness,
+			}))
+		}
+	}
+
 	hidden := hiddenAtom.Get()
 	screenToggles := make([]uic.Node, 0, len(hideableScreens))
 	for _, sc := range hideableScreens {
@@ -192,6 +252,9 @@ func globalSettingsForm() uic.Node {
 		Div(Class("set-label"), "Screens"),
 		P(Class("text-faint text-[12px]"), "Hide screens you don't use. Dashboard and Settings always stay."),
 		Div(screenToggles),
+		Div(Class("set-label"), "Freshness reminders"),
+		P(Class("text-faint text-[12px]"), "How many days before a balance looks stale, by account type."),
+		Div(freshnessRows),
 	)
 
 	right := Div(

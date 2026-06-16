@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Freshness overrides: the editor (feature complete)
+
+- Added a "Freshness reminders" section to the global settings left column: one number input per
+  account type (a curated six), seeded from `app.FreshnessWindows()` so each shows its *effective*
+  window (override or default). `setFreshness(typeKey, days)` writes `Settings.FreshnessOverrides`
+  and bumps the data revision; the Accounts badges and dashboard widget re-read immediately.
+- **Per-row component again.** Each input is a `freshnessRow` (CreateElement) so its `OnInput` hook
+  is at a stable position — rendering them in a plain loop would break hook order.
+- **0 means never.** Kept freshness's existing semantics (`window <= 0` → never stale) rather than
+  inventing a separate "off" control; the helper text says "0 = never". To restore a default a user
+  re-types it — acceptable, and avoids a tri-state.
+- Freshness overrides are now end-to-end: stored field → `Merge` in the engine → `FreshnessWindows`
+  application → Settings editor.
+- **Next.** The category-delete reassign flow (move referencing transactions/budgets to another
+  category before deleting), which currently just blocks with an error.
+
 ## 2026-06-16 — Freshness overrides: apply them
 
 - `Settings.FreshnessOverrides` (a `map[string]int` of account-type → days) has existed and round-

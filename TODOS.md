@@ -299,7 +299,8 @@ Shared control components (from mockup):
 - [ ] Members management entry
 - [ ] Base currency selector + editable FX rate table (add/edit/remove rate)
 - [ ] Category management entry
-- [ ] Freshness window overrides editor
+- [x] Freshness window overrides editor — per-type day inputs in Settings writing
+      `Settings.FreshnessOverrides`, applied via `appstate.FreshnessWindows`
 - [x] OpenAI key + model fields persist to Settings (global panel) — used by Insights
 - [ ] Data: export JSON, export CSV, import JSON, import CSV, load sample, wipe (confirm)
 - [~] Preferences: theme/density, week-start, fiscal-month start, number/date formats
