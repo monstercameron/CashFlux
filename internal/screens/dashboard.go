@@ -5,9 +5,12 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -71,7 +74,55 @@ func Dashboard() ui.Node {
 			Body: kpiBody(fmtAccounting(liabilities), "", fmt.Sprintf("%d accounts", active), "text-dim"),
 		}),
 		recentWidget(txns),
+		budgetsWidget(app, txns, rates),
 	)
+}
+
+// budgetsWidget is the 1×2 Budgets widget: current-month spend vs limit per
+// budget with an ok/near/over progress bar (via internal/budgeting). Budgets are
+// monthly, so it always evaluates the current month regardless of the dashboard
+// window.
+func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates) ui.Node {
+	budgets := app.Budgets()
+	start, end := dateutil.MonthRange(time.Now())
+	statuses, _ := budgeting.EvaluateAll(budgets, txns, start, end, rates, budgeting.DefaultNearThreshold)
+
+	catName := make(map[string]string)
+	for _, c := range app.Categories() {
+		catName[c.ID] = c.Name
+	}
+
+	var body ui.Node
+	if len(statuses) == 0 {
+		body = P(Class("empty text-dim text-[13px]"), "No budgets yet.")
+	} else {
+		rows := make([]ui.Node, 0, len(statuses))
+		for _, s := range statuses {
+			tone, bar := "text-dim", "bg-up"
+			switch s.State {
+			case budgeting.StateNear:
+				tone, bar = "text-warn", "bg-warn"
+			case budgeting.StateOver:
+				tone, bar = "text-down", "bg-down"
+			}
+			label := s.Budget.Name
+			if label == "" {
+				label = catName[s.Budget.CategoryID]
+			}
+			rows = append(rows, Div(
+				Div(Class("flex justify-between"),
+					Span(label),
+					Span(Class("font-display fig "+tone), fmt.Sprintf("%d%%", s.Percent)),
+				),
+				uiw.ProgressBar(uiw.ProgressBarProps{Percent: s.Percent, Tone: bar, Class: "mt-1.5"}),
+			))
+		}
+		body = Div(Class("space-y-4 text-[13px]"), rows)
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "budgets", Title: "Budgets", Draggable: true,
+		GridColumn: "3", GridRow: "3 / span 2", Body: body,
+	})
 }
 
 // recentWidget is the 2×2 Recent transactions widget: newest activity as a

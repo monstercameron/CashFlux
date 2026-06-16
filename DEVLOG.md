@@ -123,8 +123,13 @@ problems and fixes, and what's next.
   function, not a component) rendering the candidate-C track + fill with a clamped percent and tone
   class. Reused by budgets/goals/savings-rate widgets next.
 
-**Next:** Budgets, Goals, To-do, Accounts widgets (reusing `budgeting`/`goals`/`ledger`), then
-charts, then the per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
+- Added the **Budgets** widget (1×2): current-month spend per budget via `budgeting.EvaluateAll`,
+  each row a label + percent (toned green/amber/red by ok/near/over) over a `ProgressBar`. Kept it
+  month-scoped on purpose (budgets are monthly) rather than following the dashboard window, so the
+  percentages stay meaningful. Confirmed `appstate.Default` is `*appstate.App` (build passes).
+
+**Next:** Goals, To-do, Accounts widgets, then charts (net-worth trend, cash flow), then the
+per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
