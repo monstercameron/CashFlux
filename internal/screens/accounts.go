@@ -228,7 +228,7 @@ func Accounts() ui.Node {
 		}
 	}
 
-	windows := freshness.DefaultWindows()
+	windows := app.FreshnessWindows()
 	now := time.Now()
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)

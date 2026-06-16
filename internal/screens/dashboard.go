@@ -112,16 +112,16 @@ func Dashboard() ui.Node {
 		savingsRateWidget(income, expense),
 		spendingBreakdownWidget(app, txns, rates, start, end),
 		upcomingBillsWidget(app),
-		freshnessWidget(accounts),
+		freshnessWidget(accounts, app.FreshnessWindows()),
 	)
 }
 
 // freshnessWidget is the full-width Freshness nudge: a friendly reminder of which
 // account balances look stale (via internal/freshness), with how long since each
 // was last updated.
-func freshnessWidget(accounts []domain.Account) ui.Node {
+func freshnessWidget(accounts []domain.Account, windows freshness.Windows) ui.Node {
 	now := time.Now()
-	stale := freshness.StaleAccounts(accounts, freshness.DefaultWindows(), now)
+	stale := freshness.StaleAccounts(accounts, windows, now)
 	var body ui.Node
 	if len(stale) == 0 {
 		body = P(Class("text-up text-[13px]"), "Everything's up to date — nice work.")

@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Freshness window overrides now take effect: `appstate.FreshnessWindows` layers the household's
+  per-account-type overrides (from Settings) over the built-in defaults, and the Accounts stale
+  badges and the dashboard Freshness widget both use it. Previously the stored overrides field was
+  unused; overrides set via imported data now change which balances are flagged stale.
 - The transaction list now remembers your filter and sort across reloads: the search text, account,
   category, member, date range, and sort are held in a single `uistate.UseTxFilter` atom persisted
   to localStorage. Clearing resets it. (Previously the filter reset on every reload.)

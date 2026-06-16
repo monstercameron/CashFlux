@@ -14,6 +14,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/logging"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/validate"
@@ -180,6 +181,16 @@ func (a *App) CustomFieldDefsFor(entityType string) []customfields.Def {
 	v, err := a.store.CustomFieldDefsByEntity(entityType)
 	a.logErr("customFieldDefs", err)
 	return v
+}
+
+// FreshnessWindows returns the staleness windows with the household's per-type
+// overrides (from Settings) layered over the built-in defaults.
+func (a *App) FreshnessWindows() freshness.Windows {
+	overrides := freshness.Windows{}
+	for k, v := range a.Settings().FreshnessOverrides {
+		overrides[domain.AccountType(k)] = v
+	}
+	return freshness.DefaultWindows().Merge(overrides)
 }
 
 // Settings returns the stored settings.

@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Freshness overrides: apply them
+
+- `Settings.FreshnessOverrides` (a `map[string]int` of account-type → days) has existed and round-
+  trips through export/import, but nothing read it — the screens always used `DefaultWindows()`.
+  Wired it in via `appstate.FreshnessWindows()`, which converts the string-keyed overrides to a
+  `freshness.Windows` and layers them over the defaults with the package's existing `Merge`.
+- Both stale surfaces now use it: the Accounts list's stale badges and the dashboard Freshness
+  widget (gave `freshnessWidget` a `windows` parameter rather than reaching for `app` inside it).
+- **Bottom-up first.** No editor UI yet, but the feature is already functional — overrides set via
+  imported JSON now change staleness — and the logic (`Merge`) was already tested. The Settings
+  editor is the next, purely additive commit.
+- **Next.** A Settings "Freshness" section: per-type day inputs that write `Settings.FreshnessOverrides`,
+  so users can tune windows without editing JSON.
+
 ## 2026-06-16 — Transactions: persist the last filter
 
 - The seven filter/sort fields were independent `UseState`s that reset on reload. Consolidated them
