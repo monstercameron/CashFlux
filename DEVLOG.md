@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Sub-categories: re-parent on the inline editor
+
+- The inline category editor gains a parent `Select`, so an existing category can be nested under
+  another, moved, or promoted to top level. `saveCat` now takes a parent and sets `ParentID`;
+  `CategoryRow` receives `AllCategories` and builds same-kind, self-excluded, indented options.
+- **Self excluded; deeper cycles tolerated.** The picker drops the category itself (the obvious
+  self-parent); picking a *descendant* could form a cycle, but `categorytree.Build`'s visited-set
+  guard drops cyclic nodes from display rather than looping — so the worst case is a temporarily
+  hidden branch the user can fix, not a hang. Changing kind clears the parent (kinds must match).
+- Sub-categories are now fully usable: create nested, re-parent, indented display. Breakdown
+  rollup-to-parent remains an optional future enhancement.
+- **Next.** Optional: roll the dashboard spending breakdown up to parent categories; otherwise other
+  small polish.
+
 ## 2026-06-16 — Sub-categories: add-form picker + indented lists
 
 - Wired the tree engine into the UI. The add form gains a parent `Select` populated from

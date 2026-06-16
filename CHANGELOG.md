@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Re-parent categories: the category inline editor now has a parent picker too (same-kind, self
+  excluded), so an existing category can be nested, moved, or promoted to top level.
 - Sub-categories in the Categories screen: the add form has a parent picker (categories of the same
   kind, indented), and the category lists now display the parent/child hierarchy indented (via
   `categorytree.Flatten`). Lets you nest e.g. Restaurants and Groceries under Food.

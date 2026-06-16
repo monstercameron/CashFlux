@@ -149,7 +149,7 @@ func Categories() ui.Node {
 			expenseList = append(expenseList, c)
 		}
 	}
-	saveCat := func(id, newName, kind string) {
+	saveCat := func(id, newName, kind, parent string) {
 		for _, c := range app.Categories() {
 			if c.ID != id {
 				continue
@@ -160,6 +160,7 @@ func Categories() ui.Node {
 			if k := domain.CategoryKind(kind); k.Valid() {
 				c.Kind = k
 			}
+			c.ParentID = parent
 			if err := app.PutCategory(c); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -170,7 +171,7 @@ func Categories() ui.Node {
 		bump()
 	}
 	renderFlat := func(f categorytree.Flat) ui.Node {
-		return ui.CreateElement(CategoryRow, categoryRowProps{Category: f.Category, Depth: f.Depth, OnDelete: deleteCat, OnSave: saveCat})
+		return ui.CreateElement(CategoryRow, categoryRowProps{Category: f.Category, Depth: f.Depth, AllCategories: cats, OnDelete: deleteCat, OnSave: saveCat})
 	}
 	flatKey := func(f categorytree.Flat) any { return f.Category.ID }
 
@@ -211,10 +212,11 @@ func Categories() ui.Node {
 }
 
 type categoryRowProps struct {
-	Category domain.Category
-	Depth    int
-	OnDelete func(string)
-	OnSave   func(id, name, kind string)
+	Category      domain.Category
+	Depth         int
+	AllCategories []domain.Category // for the inline parent picker
+	OnDelete      func(string)
+	OnSave        func(id, name, kind, parent string)
 }
 
 // indentLabel returns a depth-proportional prefix for nested category labels.
@@ -230,20 +232,37 @@ func CategoryRow(props categoryRowProps) ui.Node {
 	editing := ui.UseState(false)
 	nameS := ui.UseState(c.Name)
 	kindS := ui.UseState(string(c.Kind))
+	parentS := ui.UseState(c.ParentID)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
-	onKind := ui.UseEvent(func(e ui.Event) { kindS.Set(e.GetValue()) })
+	onKind := ui.UseEvent(func(e ui.Event) {
+		kindS.Set(e.GetValue())
+		parentS.Set("") // parent must share the kind
+	})
+	onParent := ui.UseEvent(func(e ui.Event) { parentS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(c.Name)
 		kindS.Set(string(c.Kind))
+		parentS.Set(c.ParentID)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(c.ID, nameS.Get(), kindS.Get())
+		props.OnSave(c.ID, nameS.Get(), kindS.Get(), parentS.Get())
 		editing.Set(false)
 	}))
 
 	if editing.Get() {
+		// Parent options: same-kind categories except this one (prevents self-parenting).
+		var sameKind []domain.Category
+		for _, cc := range props.AllCategories {
+			if string(cc.Kind) == kindS.Get() && cc.ID != c.ID {
+				sameKind = append(sameKind, cc)
+			}
+		}
+		parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentS.Get() == ""), "— No parent —")}
+		for _, f := range categorytree.Flatten(sameKind) {
+			parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentS.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
+		}
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
 				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
@@ -251,6 +270,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 					Option(Value(string(domain.KindExpense)), SelectedIf(kindS.Get() == string(domain.KindExpense)), "Expense"),
 					Option(Value(string(domain.KindIncome)), SelectedIf(kindS.Get() == string(domain.KindIncome)), "Income"),
 				),
+				Select(Class("field"), Title("Parent category"), OnChange(onParent), parentOpts),
 				Button(Class("btn btn-primary"), Type("submit"), "Save"),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
 			),
