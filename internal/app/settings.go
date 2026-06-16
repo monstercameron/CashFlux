@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -83,6 +84,9 @@ func globalSettingsForm() uic.Node {
 	aiOn := uic.UseState(false)
 	dataRev := uistate.UseDataRevision()
 	bump := func() { dataRev.Update(func(n int) int { return n + 1 }) }
+	nav := router.UseNavigate()
+	settingsAtom := uistate.UseSettings()
+	goManageMembers := func() { settingsAtom.Set(uistate.SettingsTarget{}); nav.Navigate("/members") }
 
 	curKey, curModel := "", ""
 	if a := appstate.Default; a != nil {
@@ -129,7 +133,7 @@ func globalSettingsForm() uic.Node {
 	for _, m := range members {
 		memberChips = append(memberChips, memberChip(m))
 	}
-	memberChips = append(memberChips, Button(Class("member-add"), Type("button"), "+ Add member"))
+	memberChips = append(memberChips, Button(Class("member-add"), Type("button"), OnClick(goManageMembers), "+ Add member"))
 
 	left := Div(
 		Div(Class("set-label"), "Household members"),

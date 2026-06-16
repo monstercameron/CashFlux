@@ -494,6 +494,9 @@ problems and fixes, and what's next.
   reflect reality for future sessions: Phase 1 complete, Phase 2 engines+screens live, Phase 3 PWA +
   CI in, with the remaining work (sync, custom fields, vision AI, reload-persistent prefs) noted.
 
+- Wired the global-settings **"+ Add member"** button (was a no-op) to close the flip panel (clear the
+  settings target) and navigate to `/members`, via `router.UseNavigate` + the settings atom.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
