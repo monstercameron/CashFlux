@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Reload-persistent preferences: the Settings UI
+
+- Step 5 (UI): a "Preferences" block in the global settings back-face. Week start is a `Segmented`
+  (its OnSelect is a plain prop, so no parent hook needed); date format is a `Select`, whose
+  `OnChange` *does* register a parent hook — so `onDateStyle` is declared unconditionally at the top
+  with the other event hooks, keeping hook order stable.
+- Both controls funnel through one `savePrefs` closure that normalizes, sets the atom, and calls
+  `PersistPrefs`. Reading uses `prefsAtom.Get().Normalize()` so the rendered selection always
+  reflects a valid value. Date options show a live example (2026-06-05, 06/05/2026, …) so the choice
+  is self-explanatory — plain-English-UI rule.
+- **Next.** The preference is captured and persists, but the screens still render dates via
+  `dateutil.FormatDate`. Final step: route user-facing date rendering through `prefs.FormatDate` so
+  the choice actually shows up in Transactions, Goals, etc.
+
 ## 2026-06-16 — Reload-persistent preferences: the persistence atom
 
 - Step 4 (state): `uistate/prefs.go`, a near-mirror of `layout.go`. `UsePrefs` is a `state.Atom`

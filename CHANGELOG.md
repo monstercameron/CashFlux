@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Preferences section in the global Settings panel: choose the week start (Sunday/Monday segmented
+  control) and the date format (ISO / US / European / long), each showing a live example. Changes
+  write the `UsePrefs` atom and persist to localStorage immediately, so they survive reloads.
 - localStorage-backed preferences atom (`uistate.UsePrefs`/`PersistPrefs`): seeds the display
   preferences from localStorage on boot and writes them back on change, so week-start and date-format
   choices survive reloads — the same durable channel the dashboard layout uses (the dataset is

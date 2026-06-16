@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -82,6 +83,17 @@ func globalSettingsForm() uic.Node {
 	accent := uic.UseState("#54b884")
 	compact := uic.UseState(false)
 	aiOn := uic.UseState(false)
+	prefsAtom := uistate.UsePrefs()
+	savePrefs := func(p prefs.Prefs) {
+		p = p.Normalize()
+		prefsAtom.Set(p)
+		uistate.PersistPrefs(p)
+	}
+	onDateStyle := uic.UseEvent(func(e uic.Event) {
+		p := prefsAtom.Get()
+		p.DateStyle = prefs.DateStyle(e.GetValue())
+		savePrefs(p)
+	})
 	dataRev := uistate.UseDataRevision()
 	bump := func() { dataRev.Update(func(n int) int { return n + 1 }) }
 	nav := router.UseNavigate()
@@ -135,6 +147,8 @@ func globalSettingsForm() uic.Node {
 	}
 	memberChips = append(memberChips, Button(Class("member-add"), Type("button"), OnClick(goManageMembers), "+ Add member"))
 
+	pr := prefsAtom.Get().Normalize()
+
 	left := Div(
 		Div(Class("set-label"), "Household members"),
 		Div(Class("flex flex-wrap gap-2 py-1"), memberChips),
@@ -172,6 +186,25 @@ func globalSettingsForm() uic.Node {
 			}),
 		),
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact density", On: compact.Get(), OnChange: func(v bool) { compact.Set(v) }}),
+		Div(Class("set-label"), "Preferences"),
+		Div(Class("toggle-row"),
+			Span("Week starts on"),
+			ui.Segmented(ui.SegmentedProps{
+				Options:  []ui.SegOption{{Value: string(prefs.WeekSunday), Label: "Sunday"}, {Value: string(prefs.WeekMonday), Label: "Monday"}},
+				Selected: string(pr.WeekStart),
+				OnSelect: func(v string) {
+					p := prefsAtom.Get()
+					p.WeekStart = prefs.WeekStart(v)
+					savePrefs(p)
+				},
+			}),
+		),
+		Select(Class("set-input mt-[0.45rem]"), Title("Date format"), OnChange(onDateStyle),
+			Option(Value(string(prefs.DateISO)), SelectedIf(pr.DateStyle == prefs.DateISO), "2026-06-05  (ISO)"),
+			Option(Value(string(prefs.DateUS)), SelectedIf(pr.DateStyle == prefs.DateUS), "06/05/2026  (US)"),
+			Option(Value(string(prefs.DateEU)), SelectedIf(pr.DateStyle == prefs.DateEU), "05/06/2026  (European)"),
+			Option(Value(string(prefs.DateLong)), SelectedIf(pr.DateStyle == prefs.DateLong), "Jun 5, 2026  (Long)"),
+		),
 		Div(Class("set-label"), "Data"),
 		Div(Class("flex flex-wrap gap-2 py-1"),
 			dataBtn("Export JSON", false, exportJSON),
