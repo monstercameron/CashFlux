@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Appearance prefs: wire the controls
+
+- Replaced the three local `UseState`s (theme/accent/compact) in `globalSettingsForm` with reads off
+  the normalized `pr` and writes through the existing `savePrefs` (normalize → atom set →
+  `PersistPrefs`). Dropping three hooks is safe — they were removed wholesale, so hook order stays
+  consistent across renders.
+- The Segmented/SwatchPicker/ToggleRow now reflect the persisted values and remember them; closing
+  and reopening the panel keeps the selection, and it survives reload.
+- **Note.** This makes the *preference* real and durable, but it does not yet *apply* visually — the
+  page still renders dark with the green accent regardless. That is the next step: on change and on
+  boot, set a `data-theme`/`data-density` attribute and the accent CSS variable on the document root
+  so the choice actually changes the look.
+
 ## 2026-06-16 — Appearance prefs: extend the engine
 
 - The settings panel's theme / accent / density controls have been local-only React-style state all

@@ -92,9 +92,6 @@ var hideableScreens = []struct{ Label, Path string }{
 // state; appearance controls hold local state for now (persisting preferences
 // and wiring data actions land in their own features).
 func globalSettingsForm() uic.Node {
-	theme := uic.UseState("dark")
-	accent := uic.UseState("#54b884")
-	compact := uic.UseState(false)
 	aiOn := uic.UseState(false)
 	prefsAtom := uistate.UsePrefs()
 	savePrefs := func(p prefs.Prefs) {
@@ -206,19 +203,31 @@ func globalSettingsForm() uic.Node {
 		),
 		Div(Class("set-label"), "Appearance"),
 		ui.Segmented(ui.SegmentedProps{
-			Options:  []ui.SegOption{{Value: "dark", Label: "Dark"}, {Value: "light", Label: "Light"}, {Value: "system", Label: "System"}},
-			Selected: theme.Get(),
-			OnSelect: func(v string) { theme.Set(v) },
+			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: "Dark"}, {Value: string(prefs.ThemeLight), Label: "Light"}, {Value: string(prefs.ThemeSystem), Label: "System"}},
+			Selected: string(pr.Theme),
+			OnSelect: func(v string) {
+				p := prefsAtom.Get()
+				p.Theme = prefs.Theme(v)
+				savePrefs(p)
+			},
 		}),
 		Div(Class("toggle-row"),
 			Span("Accent"),
 			ui.SwatchPicker(ui.SwatchPickerProps{
 				Colors:   []string{"#54b884", "#cfa14e", "#7c83ff", "#d8716f"},
-				Selected: accent.Get(),
-				OnSelect: func(c string) { accent.Set(c) },
+				Selected: pr.Accent,
+				OnSelect: func(c string) {
+					p := prefsAtom.Get()
+					p.Accent = c
+					savePrefs(p)
+				},
 			}),
 		),
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact density", On: compact.Get(), OnChange: func(v bool) { compact.Set(v) }}),
+		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact density", On: pr.Compact, OnChange: func(v bool) {
+			p := prefsAtom.Get()
+			p.Compact = v
+			savePrefs(p)
+		}}),
 		Div(Class("set-label"), "Preferences"),
 		Div(Class("toggle-row"),
 			Span("Week starts on"),

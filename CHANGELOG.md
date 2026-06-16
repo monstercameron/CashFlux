@@ -15,6 +15,11 @@ and every commit updates this file under `Unreleased`.
   format (via `prefs.FormatDate`) instead of always ISO. Each row component reads the preferences
   atom, so changing the format updates every list live.
 
+### Changed
+- The Settings appearance controls (theme, accent, density) are now backed by the persistent
+  preferences atom instead of throwaway local state, so the selections are remembered and saved to
+  localStorage on change (they no longer reset when the panel closes).
+
 ### Added
 - Theme, accent, and density added to the display-preferences engine (`internal/prefs`): `Theme`
   (dark/light/system), `Accent` (validated hex color), and `Compact` fields, with `Normalize`
