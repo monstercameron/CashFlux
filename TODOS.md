@@ -894,9 +894,12 @@ Shared control components (from mockup):
       CRUD, dataset export/import, validated `appstate.Rules/PutRule/DeleteRule`, table-tested) **and**
       the `/rules` management screen (add/list/inline-edit/delete + nav entry, localized validation).
 - [x] Rule matching engine (pure) + tests — `internal/rules` (Category/Tags/FirstMatch)
-- [~] Rule-based category suggestion on entry (category-name match) done; AI suggestion + import rows later
+- [x] Rule-based category suggestion on entry — saved rules (priority) + implicit category-name match
+      auto-fill category **and tags** as you type the description, never overriding a manual choice
 - [ ] AI-proposed rules from history (review + accept)
-- [ ] Apply rules on import/entry; conflict handling
+- [~] Apply rules on import/entry; conflict handling — **entry done** (add form via `autoRules`,
+      first-match-wins). Still TODO: route CSV/image import rows through the same `autoRules` (they
+      match category by name today), and conflict handling beyond first-match.
 
 ### 2.5 Formula builder + sandboxed engine — `internal/formula`
 

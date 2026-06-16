@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — apply saved rules on transaction entry
+
+- Wired the persisted rules into the add-transaction form: built `autoRules` = user rules (priority)
+  ++ implicit category-name rules, and switched `onDesc` from `rules.Category` to `rules.FirstMatch`
+  so a single matching rule can fill both the category and the tags. Guarded so it never overrides a
+  category or tags the user already entered.
+- Scope: manual entry only this commit. Import paths (CSV paste + vision review→import) match
+  categories by name today; routing those through `autoRules` is the remaining §2.4 "apply on import"
+  piece — kept separate to stay feature-granular. wasm green.
+
 ## 2026-06-16 — Rules management screen
 
 - Added the `/rules` screen (Rules view) mirroring the Categories management pattern: an add form

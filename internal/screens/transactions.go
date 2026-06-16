@@ -42,12 +42,15 @@ func Transactions() ui.Node {
 	for _, c := range categories {
 		catName[c.ID] = c.Name
 	}
-	// Implicit auto-categorization: treat each category name as a match rule, so
-	// typing "Groceries" in the description suggests that category.
+	// Auto-categorization: the user's saved rules take priority (first match wins,
+	// and they can also assign tags), then fall back to implicit rules that treat
+	// each category name as a match — so typing "Groceries" suggests that category.
+	userRules := app.Rules()
 	implicitRules := make([]rules.Rule, 0, len(categories))
 	for _, c := range categories {
 		implicitRules = append(implicitRules, rules.Rule{Match: c.Name, SetCategoryID: c.ID})
 	}
+	autoRules := append(append(make([]rules.Rule, 0, len(userRules)+len(implicitRules)), userRules...), implicitRules...)
 
 	desc := ui.UseState("")
 	amountStr := ui.UseState("")
@@ -79,10 +82,14 @@ func Transactions() ui.Node {
 
 	onDesc := ui.UseEvent(func(v string) {
 		desc.Set(v)
-		// Auto-suggest a category from the description, but never override a choice.
-		if strings.TrimSpace(catID.Get()) == "" {
-			if cid := rules.Category(implicitRules, "", v); cid != "" {
-				catID.Set(cid)
+		// Auto-suggest from the description via the matching rule, but never override
+		// a category or tags the user already entered.
+		if r := rules.FirstMatch(autoRules, v); r != nil {
+			if strings.TrimSpace(catID.Get()) == "" && r.SetCategoryID != "" {
+				catID.Set(r.SetCategoryID)
+			}
+			if strings.TrimSpace(tagsStr.Get()) == "" && len(r.SetTags) > 0 {
+				tagsStr.Set(strings.Join(r.SetTags, ", "))
 			}
 		}
 	})

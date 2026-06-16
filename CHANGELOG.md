@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Saved auto-categorization rules now apply as you type a transaction's description: the matching
+  rule's category (and any tags) auto-fill the add form, never overriding a choice you've already
+  made. Your saved rules take priority over the implicit category-name matching, and a rule's tags
+  fill the tags field too. (Applies on manual entry; CSV/image import wiring to follow.)
 - A **Rules** screen (System nav, `/rules`) to manage auto-categorization rules: add a rule (match
   phrase → category, with optional comma-separated tags), see all rules, edit any rule inline, and
   delete. Client-side validation shows friendly messages (match phrase + category required), and the
