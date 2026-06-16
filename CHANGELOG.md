@@ -169,6 +169,8 @@ and every commit updates this file under `Unreleased`.
 - `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
   the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
   current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.
+- Cash flow widget (2×1): income (green, up) vs expense (red, down) bars for the last four months,
+  scaled to the largest bar, with the current month's net figure — via `ledger.PeriodTotals`.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

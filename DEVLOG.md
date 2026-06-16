@@ -147,8 +147,13 @@ problems and fixes, and what's next.
   (1×2): current figure + a six-month end-of-month area chart from `ledger.NetWorthSeries`. Cutoffs
   are first-of-month from M-5 to M (AddMonths(start, i-4)).
 
-**Next:** the Cash-flow widget (div bars from `PeriodTotals` over recent months), then the remaining
-widgets (Upcoming bills, Savings rate, Spending breakdown), then per-widget/global settings wiring.
+- Added the **Cash flow** widget (2×1): income/expense bars for the last four months (div bars,
+  height % scaled to the largest bar across all months) plus the current month's net, from
+  `ledger.PeriodTotals` (confirmed it returns expense as a positive magnitude). Used a tiny div-bar
+  approach rather than SVG since the mockup does.
+
+**Next:** the remaining widgets (Upcoming bills, Savings rate, Spending breakdown), then the
+per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

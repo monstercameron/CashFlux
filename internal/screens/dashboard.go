@@ -81,7 +81,65 @@ func Dashboard() ui.Node {
 		todoWidget(app),
 		accountsWidget(app, txns),
 		netWorthTrendWidget(accounts, txns, rates, net),
+		cashFlowWidget(txns, rates),
 	)
+}
+
+// cashFlowWidget is the 2×1 Cash flow widget: income (up) vs expense (down) bars
+// for the last four months, scaled to the largest bar, with the current month's
+// net to the right. Totals via ledger.PeriodTotals.
+func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
+	type monthBar struct {
+		label           string
+		income, expense int64
+	}
+	start := dateutil.MonthStart(time.Now())
+	months := make([]monthBar, 0, 4)
+	var maxv int64 = 1
+	for i := 0; i < 4; i++ {
+		ms := dateutil.AddMonths(start, i-3) // three months ago … current
+		s, e := dateutil.MonthRange(ms)
+		inc, exp, _ := ledger.PeriodTotals(txns, s, e, rates)
+		mb := monthBar{label: ms.Format("Jan"), income: inc.Amount, expense: exp.Amount}
+		if mb.income > maxv {
+			maxv = mb.income
+		}
+		if mb.expense > maxv {
+			maxv = mb.expense
+		}
+		months = append(months, mb)
+	}
+
+	bars := make([]ui.Node, 0, len(months))
+	for i, mb := range months {
+		labelTone := "text-faint"
+		if i == len(months)-1 {
+			labelTone = "text-fg"
+		}
+		bars = append(bars, Div(Class("flex flex-col items-center gap-1.5"),
+			Div(Class("flex items-end gap-1 h-14"),
+				Div(Class("w-3 bg-up"), Style(map[string]string{"height": fmt.Sprintf("%d%%", int(mb.income*100/maxv))})),
+				Div(Class("w-3 bg-down"), Style(map[string]string{"height": fmt.Sprintf("%d%%", int(mb.expense*100/maxv))})),
+			),
+			Span(Class("text-[11px] "+labelTone), mb.label),
+		))
+	}
+
+	last := months[len(months)-1]
+	netMoney := money.New(last.income-last.expense, rates.Base)
+	netTone := "text-up"
+	if last.income-last.expense < 0 {
+		netTone = "text-down"
+	}
+	netBlock := Div(Class("ml-auto text-right"),
+		Div(Class("text-[11px] text-faint"), "net · "+last.label),
+		Div(Class("font-display fig text-lg "+netTone), fmtAccounting(netMoney)),
+	)
+
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "cashflow", Title: "Cash flow", Draggable: true, GridColumn: "1 / span 2", GridRow: "6",
+		Body: Div(Class("flex items-end gap-5"), bars, netBlock),
+	})
 }
 
 // netWorthTrendWidget is the 1×2 Net worth trend widget: the current figure over
