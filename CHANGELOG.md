@@ -112,6 +112,8 @@ and every commit updates this file under `Unreleased`.
 - PWA service worker (`sw.js`, registered on load): network-first caching of same-origin GETs (core
   shell pre-cached on install) so the app stays fresh online and loads offline; cross-origin calls
   (e.g. OpenAI) pass through uncached.
+- PWA install prompt: an "Install CashFlux" button appears when the browser offers installation
+  (`beforeinstallprompt`) and hides after install.
 
 ### Changed
 - Retargeted the legacy screen palette (the shared CSS variables) to candidate-C values, so the

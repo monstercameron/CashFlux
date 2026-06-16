@@ -286,6 +286,36 @@
     <div id="boot"><span>Loading CashFlux<span class="dot">…</span></span></div>
     <div id="app"></div>
     <div id="boot-error"></div>
+    <button id="installBtn" type="button"
+      style="display:none; position:fixed; bottom:1rem; right:1rem; z-index:30;
+             padding:0.55rem 1rem; border-radius:4px; cursor:pointer; font: inherit; font-size:0.9rem;
+             background:#1f2c24; border:1px solid #356b50; color:#7fd0a3;">Install CashFlux</button>
+
+    <script>
+      // PWA install prompt: surface an Install button when the browser offers one.
+      (function () {
+        var deferred = null;
+        var btn = document.getElementById("installBtn");
+        window.addEventListener("beforeinstallprompt", function (e) {
+          e.preventDefault();
+          deferred = e;
+          if (btn) btn.style.display = "block";
+        });
+        if (btn) {
+          btn.addEventListener("click", function () {
+            if (!deferred) return;
+            deferred.prompt();
+            deferred.userChoice.then(function () {
+              deferred = null;
+              btn.style.display = "none";
+            });
+          });
+        }
+        window.addEventListener("appinstalled", function () {
+          if (btn) btn.style.display = "none";
+        });
+      })();
+    </script>
 
     <script src="./wasm_exec.js"></script>
     <script>

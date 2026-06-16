@@ -452,7 +452,12 @@ problems and fixes, and what's next.
 - Added a **From/To date-range** to the transaction filters (parsed via `dateutil.ParseDate`,
   inclusive bounds, ignored when blank/invalid), combining with the other filters and Clear.
 
-**Next:** PWA install prompt, persist-last-filter, then Phase 2 polish — as the loop continues.
+- Added the **PWA install prompt**: capture `beforeinstallprompt`, reveal an "Install CashFlux"
+  button (dark-themed, fixed bottom-right), call `prompt()` on click, and hide it after the choice or
+  on `appinstalled`. With the manifest + service worker, the PWA install path is complete.
+
+**Next:** persist-last-filter, an update-available flow for the service worker, then Phase 2 polish —
+as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

@@ -420,7 +420,7 @@ Shared control components (from mockup):
 
 - [~] Web manifest done (`manifest.webmanifest` + theme-color/apple meta); icons later
 - [x] Service worker (`sw.js`): network-first cache of shell + assets, offline fallback
-- [ ] Installability prompt; offline read; update flow
+- [~] Installability prompt done (beforeinstallprompt button); offline read works (sw); update flow later
 - [ ] Verify via framework `pwa` package
 
 ---
