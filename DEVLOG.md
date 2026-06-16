@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Budget periods: enum + range engine
+
+- Lifting budgets beyond monthly, bottom-up. `domain.Period` gains `PeriodWeekly`/`PeriodQuarterly`
+  (with a `Label()` for the UI) and `Valid()`/`AllPeriods` updated. `budgeting.PeriodRange(p, ref,
+  weekStart)` returns the half-open window of the period containing `ref`: weekly via
+  `dateutil.WeekStart` (honoring the week-start pref) +7d, quarterly snapped to the calendar quarter
+  (Apr–Jun → Apr 1..Jul 1), monthly via the existing `MonthRange`; unknown falls back to monthly.
+- **Caught a brittle test.** `validate`'s budget test used `Period: "weekly"` as its *invalid*
+  example (from when only monthly existed). Widening the enum made "weekly" valid and flipped the
+  test; updated it to `"yearly"` (a genuinely unknown period). Good reminder that "invalid" fixtures
+  age when an enum grows.
+- Tested PeriodRange for monthly/weekly(Sun & Mon start)/quarterly.
+- **Next.** Wire it into the budgets screen: a period selector on the add/edit form and per-budget
+  evaluation using `PeriodRange(b.Period, ref, weekStart)` instead of one shared month range.
+
 ## 2026-06-16 — Goals: linked account
 
 - Put the long-defined-but-unused `Goal.AccountID` to work. Added an optional "linked account"

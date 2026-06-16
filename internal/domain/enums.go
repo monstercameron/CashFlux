@@ -121,18 +121,41 @@ func (s Scope) Valid() bool {
 	}
 }
 
-// Period is a budgeting period. Only monthly is supported in Phase 1.
+// Period is a budgeting period.
 type Period string
 
-const PeriodMonthly Period = "monthly"
+const (
+	PeriodWeekly    Period = "weekly"
+	PeriodMonthly   Period = "monthly"
+	PeriodQuarterly Period = "quarterly"
+)
 
 // AllPeriods lists every valid period.
-var AllPeriods = []Period{PeriodMonthly}
+var AllPeriods = []Period{PeriodWeekly, PeriodMonthly, PeriodQuarterly}
 
 func (p Period) String() string { return string(p) }
 
+// Label returns a human-friendly name for the period.
+func (p Period) Label() string {
+	switch p {
+	case PeriodWeekly:
+		return "Weekly"
+	case PeriodQuarterly:
+		return "Quarterly"
+	default:
+		return "Monthly"
+	}
+}
+
 // Valid reports whether p is a known period.
-func (p Period) Valid() bool { return p == PeriodMonthly }
+func (p Period) Valid() bool {
+	switch p {
+	case PeriodWeekly, PeriodMonthly, PeriodQuarterly:
+		return true
+	default:
+		return false
+	}
+}
 
 // TaskStatus is the completion state of a to-do item.
 type TaskStatus string

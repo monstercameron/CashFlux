@@ -22,6 +22,33 @@ func mustDate(s string) time.Time {
 
 var june = func() (start, end time.Time) { return dateutil.MonthRange(mustDate("2026-06-15")) }
 
+func TestPeriodRange(t *testing.T) {
+	ref := mustDate("2026-06-15") // a Monday
+
+	// Monthly: the whole of June.
+	s, e := PeriodRange(domain.PeriodMonthly, ref, time.Sunday)
+	if s != mustDate("2026-06-01") || e != mustDate("2026-07-01") {
+		t.Errorf("monthly = %v..%v", s.Format("2006-01-02"), e.Format("2006-01-02"))
+	}
+
+	// Weekly (Sunday start): 2026-06-14 .. 2026-06-21.
+	s, e = PeriodRange(domain.PeriodWeekly, ref, time.Sunday)
+	if s != mustDate("2026-06-14") || e != mustDate("2026-06-21") {
+		t.Errorf("weekly(Sun) = %v..%v", s.Format("2006-01-02"), e.Format("2006-01-02"))
+	}
+	// Weekly (Monday start): 2026-06-15 .. 2026-06-22.
+	s, e = PeriodRange(domain.PeriodWeekly, ref, time.Monday)
+	if s != mustDate("2026-06-15") || e != mustDate("2026-06-22") {
+		t.Errorf("weekly(Mon) = %v..%v", s.Format("2006-01-02"), e.Format("2006-01-02"))
+	}
+
+	// Quarterly: Q2 is Apr 1 .. Jul 1.
+	s, e = PeriodRange(domain.PeriodQuarterly, ref, time.Sunday)
+	if s != mustDate("2026-04-01") || e != mustDate("2026-07-01") {
+		t.Errorf("quarterly = %v..%v", s.Format("2006-01-02"), e.Format("2006-01-02"))
+	}
+}
+
 func expense(amount int64, cur, cat, member, day string) domain.Transaction {
 	return domain.Transaction{
 		Amount:     money.New(-amount, cur),

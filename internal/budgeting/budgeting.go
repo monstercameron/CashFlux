@@ -104,6 +104,24 @@ func Evaluate(budget domain.Budget, all []domain.Transaction, start, end time.Ti
 	}, nil
 }
 
+// PeriodRange returns the half-open [start, end) range for the budget period of
+// kind p that contains ref. weekStart sets the first day of the week for weekly
+// periods. An unknown period falls back to monthly.
+func PeriodRange(p domain.Period, ref time.Time, weekStart time.Weekday) (start, end time.Time) {
+	switch p {
+	case domain.PeriodWeekly:
+		start = dateutil.WeekStart(ref, weekStart)
+		return start, start.AddDate(0, 0, 7)
+	case domain.PeriodQuarterly:
+		y, m, _ := ref.Date()
+		qm := ((int(m)-1)/3)*3 + 1
+		start = time.Date(y, time.Month(qm), 1, 0, 0, 0, 0, ref.Location())
+		return start, dateutil.AddMonths(start, 3)
+	default:
+		return dateutil.MonthRange(ref)
+	}
+}
+
 // EvaluateAll evaluates a set of budgets over the same period.
 func EvaluateAll(budgets []domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) ([]Status, error) {
 	out := make([]Status, 0, len(budgets))

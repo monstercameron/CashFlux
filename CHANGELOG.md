@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Budget periods (weekly / monthly / quarterly): the `Period` enum gained weekly and quarterly (with
+  a `Label`), and `budgeting.PeriodRange` computes the current [start, end) window for a period
+  containing a reference date (weekly honors the week-start preference; quarterly snaps to calendar
+  quarters). Pure, table-tested. Foundation for per-budget periods in the UI.
 - Link a goal to an account: the goal add and edit forms now have an optional "linked account"
   picker (populating `Goal.AccountID`), and the goal row shows "linked to <account>". Records which
   account a goal is funded from.
