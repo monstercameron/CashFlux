@@ -210,6 +210,20 @@ func Goals() ui.Node {
 		return goals[i].Name < goals[j].Name
 	})
 
+	// Combined progress across all goals (amounts are in the base currency).
+	var savedTotal, targetTotal int64
+	for _, g := range goals {
+		savedTotal += g.CurrentAmount.Amount
+		targetTotal += g.TargetAmount.Amount
+	}
+	overallPct := 0
+	if targetTotal > 0 {
+		overallPct = int(savedTotal * 100 / targetTotal)
+		if overallPct > 100 {
+			overallPct = 100
+		}
+	}
+
 	var listBody ui.Node
 	if len(goals) == 0 {
 		listBody = P(Class("empty"), "No goals yet.")
@@ -225,6 +239,11 @@ func Goals() ui.Node {
 
 	return Div(
 		form,
+		If(len(goals) > 0, Div(Class("stat-grid"),
+			stat("Saved so far", fmtMoney(money.New(savedTotal, base)), "pos"),
+			stat("Total target", fmtMoney(money.New(targetTotal, base)), ""),
+			stat("Overall progress", fmt.Sprintf("%d%%", overallPct), ""),
+		)),
 		Section(Class("card"),
 			H2(Class("card-title"), "Goals"),
 			listBody,

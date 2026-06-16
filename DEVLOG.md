@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Goals: combined progress header
+
+- Added a stat-grid above the goals list (when there are goals): total saved, total target, and
+  overall progress % — the at-a-glance "how am I doing across everything" the per-goal bars don't
+  give. Amounts sum directly since goals are stored in the base currency; percent clamps at 100.
+- Reused the shared `stat` cell used on the accounts net-worth header for visual consistency.
+- **Next.** Genuine small polish; the local feature set is comprehensive (sync needs a backend).
+
 ## 2026-06-16 — Transactions: filtered summary line
 
 - Added a "N shown · net $X" line above the ledger list: the count of the filtered set plus its net

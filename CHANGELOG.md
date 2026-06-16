@@ -22,6 +22,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Goals summary header: the Goals screen shows combined saved, total target, and overall progress
+  percent across all goals.
 - Filtered-transactions summary: the ledger shows "N shown · net $X" for the current filter — the
   count and net total (converted to base currency), updating as you filter.
 - Per-member "Transactions" drill-down: each member row links to the ledger filtered to that

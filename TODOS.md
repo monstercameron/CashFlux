@@ -265,7 +265,7 @@ Shared control components (from mockup):
 
 ### 1.13 Goals
 
-- [x] List with progress bar (% + remaining) + pace guidance (`goals.MonthlyNeeded`: save $X/mo to hit the date)
+- [x] List with progress bar (% + remaining) + pace guidance + combined progress header (saved/target/%)
 - [x] Add + delete + inline edit goal (name, target, target date, linked account) + contribute
 - [~] Contribute-to-goal action done (prompt); auto-progress from linked account later
 - [x] Tests: progress + projection (in `internal/goals`)
