@@ -358,7 +358,7 @@ Shared control components (from mockup):
 
 - [ ] `Rule{ID, Match, SetCategoryID, SetTags}` store + management UI
 - [x] Rule matching engine (pure) + tests — `internal/rules` (Category/Tags/FirstMatch)
-- [ ] AI category suggestion on entry + for imported rows
+- [~] Rule-based category suggestion on entry (category-name match) done; AI suggestion + import rows later
 - [ ] AI-proposed rules from history (review + accept)
 - [ ] Apply rules on import/entry; conflict handling
 

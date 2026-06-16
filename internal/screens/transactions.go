@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -39,6 +40,12 @@ func Transactions() ui.Node {
 	for _, c := range categories {
 		catName[c.ID] = c.Name
 	}
+	// Implicit auto-categorization: treat each category name as a match rule, so
+	// typing "Groceries" in the description suggests that category.
+	implicitRules := make([]rules.Rule, 0, len(categories))
+	for _, c := range categories {
+		implicitRules = append(implicitRules, rules.Rule{Match: c.Name, SetCategoryID: c.ID})
+	}
 
 	desc := ui.UseState("")
 	amountStr := ui.UseState("")
@@ -58,7 +65,15 @@ func Transactions() ui.Node {
 	filterCat := ui.UseState("")
 	sortBy := ui.UseState("date")
 
-	onDesc := ui.UseEvent(func(v string) { desc.Set(v) })
+	onDesc := ui.UseEvent(func(v string) {
+		desc.Set(v)
+		// Auto-suggest a category from the description, but never override a choice.
+		if strings.TrimSpace(catID.Get()) == "" {
+			if cid := rules.Category(implicitRules, "", v); cid != "" {
+				catID.Set(cid)
+			}
+		}
+	})
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateStr.Set(v) })
 	onKind := ui.UseEvent(func(e ui.Event) { kind.Set(e.GetValue()) })

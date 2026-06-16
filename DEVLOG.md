@@ -420,8 +420,12 @@ problems and fixes, and what's next.
   `Category`/`Tags`/`FirstMatch` helpers; empty matches never fire. Table-driven tested (case folding,
   ordering, tags, empty-match). The transaction entry/import flows can apply it to auto-fill category.
 
-**Next:** apply rules on transaction entry (suggest category from payee), then a rules management UI —
-continuing Phase 2.
+- Applied auto-categorization on **transaction entry** with zero new storage: built implicit
+  `rules.Rule`s from the existing categories (Match = name → SetCategoryID = id) and, on each
+  description keystroke, suggest a category via `rules.Category` only when none is chosen — so it
+  helps without fighting the user. A real `Rule` store + management UI (custom patterns/tags) is later.
+
+**Next:** a `Rule` entity + store CRUD and management UI, or custom fields — continuing Phase 2.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
