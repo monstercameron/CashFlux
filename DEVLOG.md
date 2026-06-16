@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12: savings widget consumes its settings
+
+- Closed the loop on the per-widget settings example: `savingsRateWidget` now reads its persisted
+  config (target rate %, show-bar). Dashboard reads `uistate.UseWidgetConfigs()` at the top (stable
+  hook position) and passes `widgetCfgs.For("savings")` down — cleaner than a hook inside the helper.
+- Behavior: tone now reflects performance vs target — at/above target green, positive-but-short amber
+  (`text-warn`), negative red; the subline shows the target; the bar hides when `showBar` is off.
+- End-to-end demoable: gear → set target/hide bar → persists across reload → widget reflects it.
+- wasm build green. **Next:** register feasible schemas for more widgets (recent count, trend range,
+  budgets scope) so "any feasible settings exposed and persisted" extends across the dashboard.
+
 ## 2026-06-16 — B12 wiring: schema-driven, persisted widget settings panel
 
 - Loop back in implement mode; resumed B12 (the widget-settings wiring paused earlier). Picked it as

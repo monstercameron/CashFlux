@@ -270,8 +270,8 @@ registry + accessors; savings rate schema (target rate %, show-bar toggle). Tabl
 - [x] Rebuilt `app.widgetSettingsForm` schema-driven: ID threaded from `SettingsHost`, looks up
       `widgetcfg.SchemaFor(id)`, renders a control per field (toggle/number/select) via a dedicated
       `widgetFieldRow` component bound to the persisted config; placeholder for widgets with no schema.
-- [ ] Savings widget consumes its config: read the target rate + show-bar from `WidgetConfigs.For("savings")`
-      and reflect them (e.g. compare actual vs target, tint, optional bar).
+- [x] Savings widget consumes its config: reads target rate + show-bar from `WidgetConfigs.For("savings")`
+      — tone reflects performance vs target (green/amber/red), subline shows the target, bar hides when off.
 - [ ] Register feasible schemas for the other widgets incrementally (recent-transactions count,
       budgets scope, trend range, etc.) — "any feasible settings exposed and persisted".
 - [ ] Verify: gear opens widget-specific settings; changes persist across reload; savings reflects its

@@ -46,6 +46,9 @@ and every commit updates this file under `Unreleased`.
   widget's registered `widgetcfg.Schema` (toggle / number / select) bound to a localStorage-backed
   `WidgetConfigs` atom, so changes survive reloads. Savings rate is the first widget with real
   settings (target rate %, show progress bar); widgets without a schema show a friendly placeholder.
+- The Savings rate widget now reflects its settings: it compares the actual rate against your target
+  (green at/above target, amber when positive but short, red when negative) and shows the target in
+  the subline; the progress bar can be hidden.
 - GitHub Pages deployment via Actions (`.github/workflows/deploy-pages.yml`): every push to `main`
   builds the wasm app and publishes it to Pages, so the latest build is reviewable from anywhere. A
   `404.html` app-shell is generated for deep-link routing.

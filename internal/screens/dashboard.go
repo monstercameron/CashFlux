@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -44,6 +45,7 @@ func Dashboard() ui.Node {
 
 	net, assets, liabilities, _ := ledger.NetWorth(accounts, txns, rates)
 	w := uistate.UsePeriod().Get()
+	widgetCfgs := uistate.UseWidgetConfigs().Get()
 	start, end := w.Range()
 	income, expense, _ := ledger.PeriodTotals(txns, start, end, rates)
 	periodLabel := w.FromLabel()
@@ -126,7 +128,7 @@ func Dashboard() ui.Node {
 		accountsWidget(app, txns),
 		netWorthTrendWidget(accounts, txns, rates, net),
 		cashFlowWidget(txns, rates),
-		savingsRateWidget(income, expense),
+		savingsRateWidget(income, expense, widgetCfgs.For("savings")),
 		spendingBreakdownWidget(app, txns, rates, start, end),
 		upcomingBillsWidget(app),
 		freshnessWidget(accounts, app.FreshnessWindows(), remindToUpdate),
@@ -322,25 +324,45 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 
 // savingsRateWidget is the 2×1 Savings rate widget: the share of the period's
 // income that wasn't spent, as a big figure and a bar.
-func savingsRateWidget(income, expense money.Money) ui.Node {
+func savingsRateWidget(income, expense money.Money, cfg widgetcfg.Config) ui.Node {
 	pct := 0
 	if income.Amount > 0 {
 		pct = int((income.Amount - expense.Amount) * 100 / income.Amount)
 	}
-	tone, bar := "text-up", "bg-up"
-	if pct < 0 {
-		tone, bar = "text-down", "bg-down"
+
+	// Widget settings (gear → flip): target savings rate and whether to show the bar.
+	target, showBar := 20, true
+	if sch, ok := widgetcfg.SchemaFor("savings"); ok {
+		if f, ok := sch.FieldByKey("target"); ok {
+			target = f.Int(cfg)
+		}
+		if f, ok := sch.FieldByKey("showBar"); ok {
+			showBar = f.Bool(cfg)
+		}
 	}
-	body := Div(Class("flex items-center gap-5"),
-		Div(
-			Div(Class("font-display fig text-[34px] leading-none "+tone), fmt.Sprintf("%d%%", pct)),
-			Div(Class("text-[12px] text-dim mt-1"), "of income saved"),
-		),
-		Div(Class("flex-1"),
+
+	// Tone reflects performance against the user's target: at/above = good,
+	// positive-but-short = warning, negative = bad.
+	tone, bar := "text-up", "bg-up"
+	switch {
+	case pct < 0:
+		tone, bar = "text-down", "bg-down"
+	case pct < target:
+		tone, bar = "text-warn", "bg-warn"
+	}
+
+	left := Div(
+		Div(Class("font-display fig text-[34px] leading-none "+tone), fmt.Sprintf("%d%%", pct)),
+		Div(Class("text-[12px] text-dim mt-1"), fmt.Sprintf("of income saved · target %d%%", target)),
+	)
+	var right ui.Node = Fragment()
+	if showBar {
+		right = Div(Class("flex-1"),
 			uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: bar}),
 			Div(Class("text-[11px] text-faint mt-2"), "this period"),
-		),
-	)
+		)
+	}
+	body := Div(Class("flex items-center gap-5"), left, right)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "savings", Title: "Savings rate", Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "7",
 		Body: body,
