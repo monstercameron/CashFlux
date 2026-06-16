@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Members → ledger drill-down
+
+- Added a "Transactions" button to each member row that sets the persisted `TxFilter.Member` and
+  navigates to `/transactions` — same parent-owned-closure + `OnView` pattern as the account
+  drill-down (router + filter atom in `Members`, `MemberRow` stays import-light).
+- Drill-down now exists from both accounts and members into the filtered ledger; consistent
+  navigation across the app.
+- **Next.** Genuine small polish; sync is the only large remaining item and needs a backend.
+
 ## 2026-06-16 — Accounts: update-balance reconcile
 
 - Added "Update balance" to account rows: `promptText` asks for the real balance, then `setBalance`

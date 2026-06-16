@@ -13,7 +13,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -162,9 +164,18 @@ func Members() ui.Node {
 		bump()
 	}
 
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	viewTransactions := func(memberID string) {
+		f := uistate.TxFilter{Member: memberID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate("/transactions")
+	}
+
 	members := app.Members()
 	renderRow := func(m domain.Member) ui.Node {
-		return ui.CreateElement(MemberRow, memberRowProps{Member: m, OnDelete: deleteMember, OnSetDefault: setDefault, OnSave: saveMember})
+		return ui.CreateElement(MemberRow, memberRowProps{Member: m, OnDelete: deleteMember, OnSetDefault: setDefault, OnSave: saveMember, OnView: viewTransactions})
 	}
 	keyOf := func(m domain.Member) any { return m.ID }
 
@@ -249,6 +260,7 @@ type memberRowProps struct {
 	OnDelete     func(string)
 	OnSetDefault func(string)
 	OnSave       func(id, name, color string)
+	OnView       func(string)
 }
 
 // MemberRow is a per-member row. It can be edited inline (name + color). All
@@ -262,6 +274,7 @@ func MemberRow(props memberRowProps) ui.Node {
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(m.ID) }))
 	mkDefault := ui.UseEvent(Prevent(func() { props.OnSetDefault(m.ID) }))
+	view := ui.UseEvent(Prevent(func() { props.OnView(m.ID) }))
 	editing := ui.UseState(false)
 	nameS := ui.UseState(m.Name)
 	colorS := ui.UseState(color)
@@ -305,6 +318,7 @@ func MemberRow(props memberRowProps) ui.Node {
 			Span(Class("badge badge-soon"), "Default"),
 			Button(Class("btn"), Type("button"), Title("Make default member"), OnClick(mkDefault), "Make default"),
 		),
+		Button(Class("btn"), Type("button"), Title("View this member's transactions"), OnClick(view), "Transactions"),
 		Button(Class("btn"), Type("button"), Title("Edit member"), OnClick(startEdit), "Edit"),
 		Button(Class("btn-del"), Type("button"), Title("Delete member"), OnClick(del), "✕"),
 	)

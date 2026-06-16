@@ -206,7 +206,8 @@ Shared control components (from mockup):
 - [x] List members; add/delete; set default; color; inline edit (name + color)
 - [x] Ownership assignment UI (individual vs group) — set at creation everywhere and editable inline
       on accounts, budgets, and goals (shared `ownerSelectOptions` owner picker)
-- [ ] Member switcher / filter affecting relevant views
+- [~] Member switcher / filter — per-member "Transactions" drill-down filters the ledger by member;
+      global cross-screen member scope deferred (ambiguous semantics)
 - [x] Member delete: reassign owned accounts/budgets/goals (+ transactions) to another owner via
       `appstate.ReassignOwner` + Members reassign panel, then delete
 - [ ] Tests: member logic, ownership rules

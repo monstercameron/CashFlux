@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Per-member "Transactions" drill-down: each member row links to the ledger filtered to that
+  member, matching the per-account drill-down.
 - "Update balance" on account rows: enter an account's real balance and the app posts a cleared
   "Balance adjustment" transaction for the difference and marks it checked today — reconciling the
   computed balance to a statement without hunting for the missing entry.
