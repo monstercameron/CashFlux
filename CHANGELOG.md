@@ -25,6 +25,7 @@ and every commit updates this file under `Unreleased`.
   warnings) and mark `*.wasm` and common asset types as binary.
 - GitHub Actions CI (`.github/workflows/ci.yml`): on push/PR, runs `go vet`, `go test ./...` (the
   pure logic packages; js/wasm view packages are build-tagged out of native), and a `js/wasm` build.
+- Project `README.md`: overview, feature highlights, stack, build/run, architecture, and doc links.
 
 - `internal/money`: precise integer-minor-unit `Money` value type with safe, currency-checked
   arithmetic (`Add`/`Sub`/`Neg`/`Abs`/`Cmp`/`Sum`) and table-driven tests (backlog §1.1).

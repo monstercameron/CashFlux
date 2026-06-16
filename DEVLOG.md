@@ -501,6 +501,10 @@ problems and fixes, and what's next.
   stability), mirroring the liability sub-form (conditional `If(!isLiab, …)` inputs, parsed in the
   add handler's else branch). Now the Allocate engine scores asset candidates on real data, not zeros.
 
+- Wrote a project **`README.md`** (the repo had none): tagline, feature highlights, stack, build/run
+  commands, the pure-logic-vs-thin-wasm-UI architecture, and links to the other docs — the GitHub
+  landing page for when the repo is pushed.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
