@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Hardened the **capital-allocation engine** tests: explicit determinism (Rank + Distribute give
+  identical results across repeated runs), tie-stability (equal scores keep input order), and
+  breakdown clamping (out-of-range APR/stability/liquidity normalize into [0,1]) — pinning the
+  "deterministic & explainable" guarantee against regressions.
 - Hardened the sandboxed **formula engine** with security + edge-case tests: non-allow-listed/host-like
   functions (`exec`, `eval`, `system`, `import`, even `SUM`/`Sum` — the allow-list is case-sensitive)
   are rejected, undeclared variables never silently resolve, evaluation only ever yields a

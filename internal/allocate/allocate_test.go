@@ -177,6 +177,69 @@ func TestRankOrdersByScore(t *testing.T) {
 	}
 }
 
+func TestRankTieStability(t *testing.T) {
+	// All equal returns → equal scores → input order preserved (stable sort).
+	cands := []Candidate{
+		{ID: "first", ExpectedReturnAPR: 5},
+		{ID: "second", ExpectedReturnAPR: 5},
+		{ID: "third", ExpectedReturnAPR: 5},
+	}
+	ranked := Rank(cands, Weights{Returns: 1})
+	want := []string{"first", "second", "third"}
+	for i, w := range want {
+		if ranked[i].Candidate.ID != w {
+			t.Errorf("tie order[%d] = %s, want %s (stable)", i, ranked[i].Candidate.ID, w)
+		}
+	}
+}
+
+func TestRankAndDistributeDeterministic(t *testing.T) {
+	cands := []Candidate{
+		{ID: "a", ExpectedReturnAPR: 7, StabilityScore: 60, LiquidityScore: 80},
+		{ID: "b", ExpectedReturnAPR: 12, StabilityScore: 30, LiquidityScore: 40, DebtReduction: true},
+		{ID: "c", ExpectedReturnAPR: 4, StabilityScore: 95, LiquidityScore: 95},
+	}
+	w := Weights{Returns: 2, Stability: 1, Liquidity: 1, DebtReduction: 3}
+	first := Rank(cands, w)
+	for run := 0; run < 25; run++ {
+		got := Rank(cands, w)
+		if len(got) != len(first) {
+			t.Fatalf("run %d: length changed", run)
+		}
+		for i := range got {
+			if got[i].Candidate.ID != first[i].Candidate.ID || !approx(got[i].Score, first[i].Score) {
+				t.Fatalf("run %d index %d: %+v != %+v (non-deterministic)", run, i, got[i], first[i])
+			}
+		}
+		// Distribute over the same ranking must also be identical each run.
+		p1, r1 := Distribute(first, 100000, SplitOptions{Reserve: 5000, MaxPer: 40000})
+		p2, r2 := Distribute(got, 100000, SplitOptions{Reserve: 5000, MaxPer: 40000})
+		if r1 != r2 {
+			t.Fatalf("run %d: remainder %d != %d", run, r1, r2)
+		}
+		for i := range p1 {
+			if p1[i].Amount != p2[i].Amount {
+				t.Fatalf("run %d: plan %d amount %d != %d", run, i, p1[i].Amount, p2[i].Amount)
+			}
+		}
+	}
+}
+
+func TestScoreBreakdownClamped(t *testing.T) {
+	// Out-of-range inputs are clamped into [0,1]: negative APR → 0, over-100
+	// stability → 1, negative liquidity → 0.
+	_, b := Score(Candidate{ExpectedReturnAPR: -10, StabilityScore: 250, LiquidityScore: -5}, Weights{Returns: 1, Stability: 1, Liquidity: 1})
+	if b.Returns != 0 {
+		t.Errorf("negative APR returns = %g, want 0", b.Returns)
+	}
+	if b.Stability != 1 {
+		t.Errorf("over-100 stability = %g, want 1", b.Stability)
+	}
+	if b.Liquidity != 0 {
+		t.Errorf("negative liquidity = %g, want 0", b.Liquidity)
+	}
+}
+
 func TestRankDebtPriority(t *testing.T) {
 	cands := []Candidate{
 		{ID: "savings", ExpectedReturnAPR: 4, StabilityScore: 90, LiquidityScore: 90},

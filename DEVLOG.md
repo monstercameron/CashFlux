@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — allocate: determinism + clamping tests
+
+- Filled the §2.7 "extensive tests" gap that mattered most: an explicit determinism test (Rank +
+  Distribute identical across 25 runs — guards against map-iteration or unstable-sort creeping in),
+  a tie-stability test (equal scores keep input order, since the UI shows a ranked list), and a
+  breakdown-clamping test (negative APR → 0, stability > 100 → 1, negative liquidity → 0).
+- The package was already well-covered for scoring/weights/constraints/Distribute; this pins the
+  "deterministic & explainable" core guarantee specifically. No engine change. Full suite green.
+
 ## 2026-06-16 — formula engine: security + edge-case tests
 
 - Added `eval_security_test.go` to nail down the §2.5 "extensive tests incl. security (no escape)"

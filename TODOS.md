@@ -967,7 +967,10 @@ Shared control components (from mockup):
 - [x] Allocate screen: profile select → ranked suggestions + exclude/restore + amount-split input
       (amount + emergency buffer → per-destination dollar amounts via `Distribute`, with kept-back note)
 - [x] Optional AI narrative ("Explain with AI" on the Allocate screen)
-- [ ] ★ Extensive tests: scoring, weighting, constraints, determinism, custom criteria
+- [x] ★ Extensive tests: scoring, weighting, constraints, determinism — scoring/weights/constraints/
+      Distribute (proportional/reserve/cap/even/edge) plus explicit determinism (Rank+Distribute stable
+      across runs), tie-stability, and breakdown clamping. (Custom-criteria scoring lands with the
+      formula-backed criteria.)
 
 ---
 
