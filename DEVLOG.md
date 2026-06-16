@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — MIT licensing: LICENSE file + SPDX convention
+
+- Added a top-level `LICENSE` (standard MIT text, 2026, copyright holder `monstercameron` — the
+  verifiable repo-owner identity, chosen over guessing a legal name). Established the per-file
+  convention as a single `// SPDX-License-Identifier: MIT` line rather than full headers, matching
+  idiomatic Go and the TODOS §0 note.
+- Placement decision: in `main.go` the SPDX line goes *above* the `//go:build js && wasm` constraint
+  (build constraints may be preceded by line comments). Verified the wasm build still succeeds and
+  the native toolchain still excludes the file — so the constraint survived the insertion.
+- Scope decision: did **not** sweep SPDX across all ~150 files in this commit. Many carry build tags
+  where header placement is fragile, and a tree-wide sweep is a mechanical change better done
+  deliberately; the entrypoint marker plus the LICENSE file is the substantive licensing act. The
+  README "License" section + badge ships with the README feature (LICENSE has to exist first, which
+  it now does). TODOS §0 MIT item left open, narrowed to those follow-ups.
+
 ## 2026-06-16 — i18n: CI catalog-quality guard
 
 - Added `TestDefaultCatalogQuality` to `internal/i18n`: asserts the seeded English catalog is

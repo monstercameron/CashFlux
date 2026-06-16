@@ -485,11 +485,13 @@ relying on the (already extensive) pure-logic unit tests. Run the suite in CI on
 - [ ] **README.md** — what CashFlux is, screenshots/GIF, the stack (Go→wasm on GoWebComponents),
       local dev (`gwc dev`), build/test commands, the local-first + BYO-AI-key model, link to the live
       GitHub Pages demo, and a pointer to SPEC/DEVLOG/TODOS. First-impression doc for the repo.
-- [ ] **MIT licensing.** Set the project up under the MIT license: add a top-level `LICENSE` file
-      (standard MIT text, current year + copyright holder), add license headers/references wherever
-      the repo convention calls for them (a one-line SPDX `// SPDX-License-Identifier: MIT` reference
-      rather than a full header per Go file, matching idiomatic Go practice), and note the license in
-      `README.md` (a "License" section + badge).
+- [~] **MIT licensing.** Set the project up under the MIT license.
+      - [x] Top-level `LICENSE` file (standard MIT text, 2026, copyright holder `monstercameron`).
+      - [x] Establish the lightweight convention: one-line `// SPDX-License-Identifier: MIT` in the
+            `main.go` entrypoint (above the `//go:build` constraint; wasm build verified unaffected).
+      - [ ] Optional: sweep the SPDX one-liner across the remaining Go files (deferred — mechanical,
+            and fragile around build-tagged files; do deliberately).
+      - [ ] Note the license in `README.md` ("License" section + badge) — ships with the README item below.
 - [x] **Host the app on GitHub Pages.** Done via Actions instead of a committed `/docs` folder:
       `.github/workflows/deploy-pages.yml` builds the wasm site on every push to `main` and deploys it
       as a Pages artifact (`upload-pages-artifact` + `deploy-pages`) — relative asset paths (already

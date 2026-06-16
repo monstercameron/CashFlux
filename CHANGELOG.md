@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The project is now licensed under the **MIT License**: added a top-level `LICENSE` file (standard
+  MIT text, 2026, monstercameron) and established the lightweight per-file convention with a one-line
+  `// SPDX-License-Identifier: MIT` marker in the `main.go` entrypoint (placed above the `//go:build`
+  constraint so the wasm build is unaffected). The README "License" section/badge will land with the
+  README; a full tree-wide SPDX sweep is intentionally deferred to avoid churn and build-tag fragility.
 - A CI guard for the source-of-truth English message catalog (`internal/i18n` `TestDefaultCatalogQuality`):
   every key must be dot-namespaced with no whitespace, and every key must define a non-empty string —
   so a blank or malformed entry (which would silently surface the raw key in the UI) fails `go test`

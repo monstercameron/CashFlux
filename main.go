@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 // Command cashflux is the WebAssembly entrypoint for the CashFlux app.
