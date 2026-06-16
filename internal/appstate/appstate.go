@@ -263,6 +263,9 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	if is := validate.ValidateTransaction(t); !is.OK() {
 		return is
 	}
+	if err := a.validateCustom("transaction", t.Custom); err != nil {
+		return err
+	}
 	if err := a.store.PutTransaction(t); err != nil {
 		return err
 	}

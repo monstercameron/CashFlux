@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -59,6 +60,7 @@ func Transactions() ui.Node {
 	toAccID := ui.UseState("")
 	tagsStr := ui.UseState("")
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
+	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 	filterText := ui.UseState("")
 	filterAcc := ui.UseState("")
@@ -91,6 +93,17 @@ func Transactions() ui.Node {
 	onFilterMember := ui.UseEvent(func(e ui.Event) { filterMember.Set(e.GetValue()) })
 	onFilterFrom := ui.UseEvent(func(v string) { filterFrom.Set(v) })
 	onFilterTo := ui.UseEvent(func(v string) { filterTo.Set(v) })
+
+	txnDefs := app.CustomFieldDefsFor("transaction")
+	onCustom := func(key, value string) {
+		m := customVals.Get()
+		nm := make(map[string]string, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[key] = value
+		customVals.Set(nm)
+	}
 	clearFilters := ui.UseEvent(Prevent(func() {
 		filterText.Set("")
 		filterAcc.Set("")
@@ -167,7 +180,7 @@ func Transactions() ui.Node {
 		t := domain.Transaction{
 			ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
 			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: memberFor(acc),
-			Tags: parseTags(tagsStr.Get()),
+			Tags: parseTags(tagsStr.Get()), Custom: customValuesToMap(txnDefs, customVals.Get()),
 		}
 		if err := app.PutTransaction(t); err != nil {
 			errMsg.Set(err.Error())
@@ -176,6 +189,7 @@ func Transactions() ui.Node {
 		desc.Set("")
 		amountStr.Set("")
 		tagsStr.Set("")
+		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		bump()
 	}))
@@ -268,6 +282,11 @@ func Transactions() ui.Node {
 		if isTransfer {
 			accLabel = "From account"
 		}
+		// Custom fields apply to income/expense entries, not transfer legs.
+		formTxnDefs := txnDefs
+		if isTransfer {
+			formTxnDefs = nil
+		}
 		formCard = Section(Class("card"),
 			H2(Class("card-title"), "Add transaction"),
 			Form(Class("form-grid"), OnSubmit(add),
@@ -281,6 +300,9 @@ func Transactions() ui.Node {
 				),
 				If(!isTransfer, Input(Class("field"), Type("text"), Placeholder("Tags (comma-separated)"), Value(tagsStr.Get()), OnInput(onTags))),
 				Input(Class("field"), Type("date"), Value(dateStr.Get()), OnInput(onDate)),
+				MapKeyed(formTxnDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+				}),
 				Button(Class("btn btn-primary"), Type("submit"), "Add"),
 				Button(Class("btn"), Type("button"), Title("Copy the most recent transaction"), OnClick(repeatLast), "Repeat last"),
 			),

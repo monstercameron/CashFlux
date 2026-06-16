@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Custom fields: Transactions form
+
+- Second entity wired up, and the reusable pieces paid off: the Transactions add-form now renders
+  transaction custom fields via the same `CustomFieldInput` + `customValuesToMap` + parent value-map
+  pattern, and `appstate.PutTransaction` gained the `validateCustom("transaction", …)` guard.
+- **Decision — custom fields apply to income/expense, not transfer legs.** A transfer is two paired
+  rows; hanging user fields off one leg is ambiguous, so when the kind is Transfer the form passes an
+  empty def slice (`formTxnDefs = nil`) and nothing renders. Keeps the model honest without inventing
+  transfer-pair custom semantics.
+- Confirmed the empty-slice-flattens trick again: `MapKeyed(nil, …)` renders nothing, so no `If`
+  guard is needed around the custom inputs.
+- **Next.** Budgets, Goals, Members forms — same mechanical integration — then §1.16 is fully closed.
+
 ## 2026-06-16 — Custom fields: rendering on entity forms (Accounts first)
 
 - The defs now drive real inputs. `CustomFieldInput` is a reusable component that picks the control

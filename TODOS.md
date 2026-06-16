@@ -279,7 +279,7 @@ Shared control components (from mockup):
       — `customfields.Def` (pure) + `customfielddefs` table CRUD + `CustomFieldDefsByEntity`; appstate accessors
 - [x] Validate `custom{}` map against defs for the entity type — `customfields.Validate`, table-tested
 - [~] Forms render core + custom fields by type (text/number/date/bool/select) — done on Accounts
-      via `CustomFieldInput`; remaining entities (transactions, budgets, goals, members) pending
+      and Transactions via `CustomFieldInput`; remaining entities (budgets, goals, members) pending
 - [x] Custom field management UI (per entity type) — `CustomFieldsManager` on the Customize screen
 - [x] Export/import round-trips custom field defs — dataset + Export/Import covered by tests
 - [x] Tests: validation (value + Def), round-trip (store CRUD, dataset, export/import), save-path enforcement
