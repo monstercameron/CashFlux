@@ -143,9 +143,28 @@ func Members() ui.Node {
 		bump()
 	}
 
+	saveMember := func(id, newName, newColor string) {
+		for _, m := range app.Members() {
+			if m.ID != id {
+				continue
+			}
+			if n := strings.TrimSpace(newName); n != "" {
+				m.Name = n
+			}
+			m.Color = strings.TrimSpace(newColor)
+			if err := app.PutMember(m); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			break
+		}
+		errMsg.Set("")
+		bump()
+	}
+
 	members := app.Members()
 	renderRow := func(m domain.Member) ui.Node {
-		return ui.CreateElement(MemberRow, memberRowProps{Member: m, OnDelete: deleteMember, OnSetDefault: setDefault})
+		return ui.CreateElement(MemberRow, memberRowProps{Member: m, OnDelete: deleteMember, OnSetDefault: setDefault, OnSave: saveMember})
 	}
 	keyOf := func(m domain.Member) any { return m.ID }
 
@@ -229,33 +248,64 @@ type memberRowProps struct {
 	Member       domain.Member
 	OnDelete     func(string)
 	OnSetDefault func(string)
+	OnSave       func(id, name, color string)
 }
 
-// MemberRow is a per-member row with stable action-handler hooks.
+// MemberRow is a per-member row. It can be edited inline (name + color). All
+// hooks are declared unconditionally so the edit toggle never reorders them.
 func MemberRow(props memberRowProps) ui.Node {
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Member.ID) }))
-	mkDefault := ui.UseEvent(Prevent(func() { props.OnSetDefault(props.Member.ID) }))
-
-	color := props.Member.Color
+	m := props.Member
+	color := m.Color
 	if color == "" {
 		color = "#7c83ff"
 	}
+
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(m.ID) }))
+	mkDefault := ui.UseEvent(Prevent(func() { props.OnSetDefault(m.ID) }))
+	editing := ui.UseState(false)
+	nameS := ui.UseState(m.Name)
+	colorS := ui.UseState(color)
+	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		nameS.Set(m.Name)
+		colorS.Set(color)
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		props.OnSave(m.ID, nameS.Get(), colorS.Get())
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		return Div(Class("row"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Type("color"), Value(colorS.Get()), OnInput(onColor)),
+				Button(Class("btn btn-primary"), Type("submit"), "Save"),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+			),
+		)
+	}
+
 	meta := "Member"
-	if props.Member.IsDefault {
+	if m.IsDefault {
 		meta = "Default member"
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"),
 				Span(Class("swatch"), Style(map[string]string{"background": color, "display": "inline-block", "margin-right": "0.5rem", "vertical-align": "middle"})),
-				props.Member.Name,
+				m.Name,
 			),
 			Span(Class("row-meta"), meta),
 		),
-		IfElse(props.Member.IsDefault,
+		IfElse(m.IsDefault,
 			Span(Class("badge badge-soon"), "Default"),
 			Button(Class("btn"), Type("button"), Title("Make default member"), OnClick(mkDefault), "Make default"),
 		),
+		Button(Class("btn"), Type("button"), Title("Edit member"), OnClick(startEdit), "Edit"),
 		Button(Class("btn-del"), Type("button"), Title("Delete member"), OnClick(del), "✕"),
 	)
 }

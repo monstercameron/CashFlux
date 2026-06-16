@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Edit members inline: each member row has an Edit button to change the name and color (members
+  previously supported only add, delete, and set-default).
 - Export filtered transactions to CSV: an "Export CSV" button on the transaction list downloads
   exactly the currently filtered and sorted set (shared `applyTxFilter` ensures the export matches
   the view), complementing the export-all in Settings.

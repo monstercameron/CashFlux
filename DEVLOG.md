@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Members: inline edit (name + color)
+
+- Closed a real CRUD gap — members had add / delete / set-default but no edit. `MemberRow` now has
+  an inline editor for the name and color via the same unconditional-hooks + editing-toggle pattern;
+  `saveMember` persists through `PutMember`.
+- **Next.** Category edit (name/kind) is the last remaining CRUD-edit gap; after that every entity
+  is fully editable.
+
 ## 2026-06-16 — Transactions: export the filtered view to CSV
 
 - Added an "Export CSV" button to the ledger filter bar that downloads exactly what's shown. To
