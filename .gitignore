@@ -5,6 +5,9 @@
 # Dev tooling (built gwc binary lives here; rebuild from the framework checkout)
 /.tools/
 
+# Design candidates copied into web/ for local preview (canonical copies live in design/)
+/web/design/
+
 # Local env / editor
 *.log
 .DS_Store
