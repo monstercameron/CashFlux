@@ -317,6 +317,9 @@ problems and fixes, and what's next.
 - Added a **Hide done / Show all** toggle to the To-do list (filters completed tasks; distinct
   "All done 🎉" state when everything's hidden).
 
+- Sorted the **goals list incomplete-first** (then alphabetical) via a stable sort using
+  `goals.IsComplete`, so active goals stay on top.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

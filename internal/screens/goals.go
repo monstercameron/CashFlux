@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"syscall/js"
 	"time"
@@ -129,6 +130,16 @@ func Goals() ui.Node {
 	)
 
 	goals := app.Goals()
+	// Incomplete goals first, then alphabetical.
+	sort.SliceStable(goals, func(i, j int) bool {
+		ci, _ := goalsvc.IsComplete(goals[i])
+		cj, _ := goalsvc.IsComplete(goals[j])
+		if ci != cj {
+			return !ci
+		}
+		return goals[i].Name < goals[j].Name
+	})
+
 	var listBody ui.Node
 	if len(goals) == 0 {
 		listBody = P(Class("empty"), "No goals yet.")

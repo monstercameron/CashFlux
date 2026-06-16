@@ -225,7 +225,7 @@ and every commit updates this file under `Unreleased`.
   (`#tag`) and the search box matches tags as well as descriptions.
 - Transactions: a sort selector (newest first / largest amount / payee A–Z).
 - Goals: a "Contribute" action per goal adds an entered amount to its saved total (advancing the
-  progress bar) via a quick prompt.
+  progress bar) via a quick prompt. The list now sorts incomplete goals first, then alphabetically.
 - Top bar: the "+ Add" button now navigates to the Transactions screen (was inert).
 - Budgets: a month stepper (‹ month ›) lets you view budget spend for any month, not just the current
   one.
