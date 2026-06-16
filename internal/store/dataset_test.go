@@ -26,6 +26,10 @@ func sampleDataset() Dataset {
 		Goals:        []domain.Goal{{ID: "g1", Name: "Trip", Scope: domain.ScopeIndividual, OwnerID: "m1", TargetAmount: money.New(200000, "USD"), CurrentAmount: money.New(50000, "USD"), TargetDate: asOf}},
 		Tasks:        []domain.Task{{ID: "k1", Title: "Pay rent", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Source: domain.SourceManual}},
 		Rules:        []rules.Rule{{ID: "r1", Match: "coffee", SetCategoryID: "c1", SetTags: []string{"treats"}}},
+		Documents: []domain.Document{{
+			ID: "d1", Filename: "june.csv", Kind: domain.DocCSV, UploadedAt: asOf, AccountID: "a1",
+			Status: domain.DocImported, Extracted: []domain.DocumentRow{{Date: "2026-06-01", Description: "Coffee", Amount: "-4.50", Category: "Food"}},
+		}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
 			FXRates:            map[string]float64{"EUR": 1.1},
@@ -80,6 +84,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if len(imported.Rules) != 1 || imported.Rules[0].Match != "coffee" || len(imported.Rules[0].SetTags) != 1 {
 		t.Errorf("rules lost: %+v", imported.Rules)
+	}
+	if len(imported.Documents) != 1 || imported.Documents[0].Kind != domain.DocCSV || len(imported.Documents[0].Extracted) != 1 {
+		t.Errorf("documents lost: %+v", imported.Documents)
 	}
 }
 

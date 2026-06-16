@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- An imported-**Document** record (`domain.Document` + store/state): filename, kind (CSV/image),
+  upload time, target account/member, a lifecycle status (pending → extracted → imported / failed),
+  and the rows read from it — persisted with full CRUD, export/import round-trip, and validated
+  `appstate.Documents`/`PutDocument`/`DeleteDocument`. Table-tested. The model behind a documents
+  history/audit view (recording on import + the list UI are follow-ups).
 - A pure codec for OpenAI **structured outputs** (`ai.BuildStructuredRequest`): builds a chat request
   with a `response_format` JSON-schema so the model returns JSON matching a given schema, decodable
   straight into a Go struct instead of parsed out of prose. Round-trip tested. The building block for

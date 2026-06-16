@@ -118,6 +118,26 @@ func TestApplyRules(t *testing.T) {
 	}
 }
 
+func TestDocumentRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutDocument(domain.Document{}); err == nil {
+		t.Error("expected error putting a document without an id")
+	}
+	doc := domain.Document{ID: "d1", Kind: domain.DocImage, Status: domain.DocPending, UploadedAt: time.Now()}
+	if err := a.PutDocument(doc); err != nil {
+		t.Fatalf("PutDocument: %v", err)
+	}
+	if got := a.Documents(); len(got) != 1 || got[0].Kind != domain.DocImage {
+		t.Fatalf("Documents() = %+v", got)
+	}
+	if err := a.DeleteDocument("d1"); err != nil {
+		t.Fatalf("DeleteDocument: %v", err)
+	}
+	if len(a.Documents()) != 0 {
+		t.Error("document still present after delete")
+	}
+}
+
 func TestPutAccountValidatesCustomFields(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutCustomFieldDef(customfields.Def{

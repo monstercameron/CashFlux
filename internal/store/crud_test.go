@@ -93,6 +93,44 @@ func TestRuleCRUD(t *testing.T) {
 	}
 }
 
+func TestDocumentCRUD(t *testing.T) {
+	s := newStore(t)
+	doc := domain.Document{
+		ID: "d1", Filename: "stmt.csv", Kind: domain.DocCSV, UploadedAt: time.Now(),
+		AccountID: "a1", Status: domain.DocExtracted,
+		Extracted: []domain.DocumentRow{{Date: "2026-06-01", Description: "Coffee", Amount: "-4.50"}},
+	}
+	if err := s.PutDocument(doc); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, ok, err := s.GetDocument("d1")
+	if err != nil || !ok {
+		t.Fatalf("Get: ok=%v err=%v", ok, err)
+	}
+	if got.Status != domain.DocExtracted || len(got.Extracted) != 1 || got.Extracted[0].Description != "Coffee" {
+		t.Errorf("document round-trip wrong: %+v", got)
+	}
+
+	// Status transition via upsert.
+	doc.Status = domain.DocImported
+	if err := s.PutDocument(doc); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got, _, _ = s.GetDocument("d1"); got.Status != domain.DocImported {
+		t.Errorf("after update status = %q", got.Status)
+	}
+
+	if list, _ := s.ListDocuments(); len(list) != 1 {
+		t.Errorf("list len = %d, want 1", len(list))
+	}
+	if deleted, err := s.DeleteDocument("d1"); err != nil || !deleted {
+		t.Fatalf("delete: deleted=%v err=%v", deleted, err)
+	}
+	if _, ok, _ := s.GetDocument("d1"); ok {
+		t.Error("document still present after delete")
+	}
+}
+
 func TestGetAndDeleteMissing(t *testing.T) {
 	s := newStore(t)
 	if _, ok, err := s.GetGoal("nope"); ok || err != nil {

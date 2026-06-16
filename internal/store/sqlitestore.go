@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS goals        (id TEXT PRIMARY KEY, data TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS tasks        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS customfielddefs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS rules        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS documents    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 `
 
@@ -110,6 +111,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "rules", ds.Rules, func(r rules.Rule) string { return r.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "documents", ds.Documents, func(d domain.Document) string { return d.ID }); err != nil {
+		return err
+	}
 
 	settingsData, err := json.Marshal(ds.Settings)
 	if err != nil {
@@ -153,6 +157,9 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.Rules, err = loadRows[rules.Rule](s.db, "rules"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.Documents, err = loadRows[domain.Document](s.db, "documents"); err != nil {
 		return Dataset{}, err
 	}
 

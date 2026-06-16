@@ -78,6 +78,54 @@ type Transaction struct {
 	Custom            map[string]any `json:"custom,omitempty"`
 }
 
+// DocumentKind is the source type of an imported document.
+type DocumentKind string
+
+const (
+	// DocCSV is a pasted/uploaded CSV statement.
+	DocCSV DocumentKind = "csv"
+	// DocImage is a receipt or statement image read by the vision model.
+	DocImage DocumentKind = "image"
+)
+
+// DocumentStatus tracks an imported document through its lifecycle.
+type DocumentStatus string
+
+const (
+	// DocPending means uploaded but not yet read.
+	DocPending DocumentStatus = "pending"
+	// DocExtracted means a read produced reviewable rows, not yet committed.
+	DocExtracted DocumentStatus = "extracted"
+	// DocImported means the rows were committed to the ledger.
+	DocImported DocumentStatus = "imported"
+	// DocFailed means reading the document failed.
+	DocFailed DocumentStatus = "failed"
+)
+
+// DocumentRow is one extracted line from a document, as reviewed before import.
+// Fields are strings (the user can edit them); it mirrors the parser's row shape
+// but is persisted independently so a document record isn't tied to the parser.
+type DocumentRow struct {
+	Date        string `json:"date,omitempty"`
+	Description string `json:"description,omitempty"`
+	Amount      string `json:"amount,omitempty"`
+	Category    string `json:"category,omitempty"`
+}
+
+// Document records an imported statement or receipt and the rows read from it, so
+// an import can be reviewed, audited, or re-run later. It is the persistent
+// counterpart to the in-flight import on the Documents screen.
+type Document struct {
+	ID         string         `json:"id"`
+	Filename   string         `json:"filename,omitempty"`
+	Kind       DocumentKind   `json:"kind"`
+	UploadedAt time.Time      `json:"uploadedAt"`
+	AccountID  string         `json:"accountId,omitempty"`
+	MemberID   string         `json:"memberId,omitempty"`
+	Status     DocumentStatus `json:"status"`
+	Extracted  []DocumentRow  `json:"extracted,omitempty"`
+}
+
 // IsTransfer reports whether the transaction is a transfer between accounts.
 func (t Transaction) IsTransfer() bool { return t.TransferAccountID != "" }
 

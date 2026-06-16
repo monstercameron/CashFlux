@@ -875,7 +875,10 @@ Shared control components (from mockup):
 - [x] Local CSV parse → import transactions (no AI needed) — Documents screen paste-and-import
 - [x] Send PDF/image to vision model → structured transactions — `ai.BuildVisionRequest` +
       `ai.SendVisionChat` + `extract.ParseRows` + Documents image-import UI (choose → read → review → import)
-- [ ] `Document{ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[]}` lifecycle
+- [~] `Document{ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[]}` lifecycle —
+      model + persistence done (`domain.Document` + kinds/statuses + `DocumentRow`; `documents` table,
+      store CRUD, dataset round-trip, `appstate.Documents/PutDocument/DeleteDocument`; table-tested).
+      Still TODO: record a Document on CSV/image import and a documents history/audit list UI.
 - [x] Review screen: list + per-row edit + per-row remove → import to ledger (account-pick) +
       dedupe vs existing (skip same date+amount in account, reported)
 - [ ] Monthly-spend extraction summary view

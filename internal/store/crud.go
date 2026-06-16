@@ -239,3 +239,18 @@ func (s *SQLiteStore) DeleteRule(id string) (bool, error) {
 func (s *SQLiteStore) ListRules() ([]rules.Rule, error) {
 	return loadRows[rules.Rule](s.db, "rules")
 }
+
+// --- Documents (imported statements/receipts) ---
+
+func (s *SQLiteStore) PutDocument(d domain.Document) error {
+	return putJSON(s.db, "documents", d.ID, d)
+}
+func (s *SQLiteStore) GetDocument(id string) (domain.Document, bool, error) {
+	return getJSON[domain.Document](s.db, "documents", id)
+}
+func (s *SQLiteStore) DeleteDocument(id string) (bool, error) {
+	return deleteRow(s.db, "documents", id)
+}
+func (s *SQLiteStore) ListDocuments() ([]domain.Document, error) {
+	return loadRows[domain.Document](s.db, "documents")
+}

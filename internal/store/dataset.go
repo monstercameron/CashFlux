@@ -39,6 +39,7 @@ type Dataset struct {
 	Tasks         []domain.Task        `json:"tasks"`
 	CustomFields  []customfields.Def   `json:"customFieldDefs,omitempty"`
 	Rules         []rules.Rule         `json:"rules,omitempty"`
+	Documents     []domain.Document    `json:"documents,omitempty"`
 	Settings      Settings             `json:"settings"`
 }
 

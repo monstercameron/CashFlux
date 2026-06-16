@@ -26,6 +26,20 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — Document lifecycle model + persistence
+
+- Added `domain.Document` (ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[])
+  with `DocumentKind` (csv/image), `DocumentStatus` (pending/extracted/imported/failed), and a
+  `DocumentRow` for the reviewed lines. Persisted exactly like rules: a `documents` table, store CRUD,
+  dataset export/import, and validated appstate accessors. Table-tested (store CRUD + status
+  transition, dataset round-trip, appstate id-required + round-trip).
+- Layering call: gave Document its own `DocumentRow` rather than importing `extract.Row`, keeping
+  `domain` a pure leaf (nothing it imports knows about the parser). The Documents screen maps
+  extract.Row ↔ domain.DocumentRow at the edge (same four string fields). Avoids a domain→extract
+  dependency and the can't-define-methods-on-another-package's-type problem with `extract.Row`.
+- This is the model/persistence half of §2.2's lifecycle item; recording a Document when the user
+  imports (CSV or image) and a documents history list are the UI follow-ups. wasm green.
+
 ## 2026-06-16 — AI structured-outputs codec
 
 - Added `ai.BuildStructuredRequest(model, messages, temp, schemaName, schema)` + `ResponseFormat`/

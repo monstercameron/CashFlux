@@ -180,6 +180,13 @@ func (a *App) Tasks() []domain.Task { v, err := a.store.ListTasks(); a.logErr("t
 // Rules returns every auto-categorization rule.
 func (a *App) Rules() []rules.Rule { v, err := a.store.ListRules(); a.logErr("rules", err); return v }
 
+// Documents returns every imported-document record.
+func (a *App) Documents() []domain.Document {
+	v, err := a.store.ListDocuments()
+	a.logErr("documents", err)
+	return v
+}
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -359,6 +366,21 @@ func (a *App) PutRule(r rules.Rule) error {
 
 // DeleteRule removes an auto-categorization rule.
 func (a *App) DeleteRule(id string) error { return a.del("rule", id, a.store.DeleteRule) }
+
+// PutDocument saves an imported-document record (needs an ID).
+func (a *App) PutDocument(d domain.Document) error {
+	if d.ID == "" {
+		return fmt.Errorf("appstate: document needs an id")
+	}
+	if err := a.store.PutDocument(d); err != nil {
+		return err
+	}
+	a.log.Info("document saved", "id", d.ID, "status", string(d.Status))
+	return nil
+}
+
+// DeleteDocument removes an imported-document record.
+func (a *App) DeleteDocument(id string) error { return a.del("document", id, a.store.DeleteDocument) }
 
 // ApplyRules assigns a category to every currently uncategorized, non-transfer
 // transaction whose payee/description matches a saved rule (first match wins),
