@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Allocation: amount-split engine
+
+- The ranking told you the *order*; `Distribute` now turns it into *amounts*. Pure function:
+  proportional-to-score split of a total (minor units), after a `Reserve` (emergency buffer) is held
+  back and with an optional `MaxPer` cap per destination. Returns `[]Plan` + the unallocated
+  remainder.
+- **Decision — don't redistribute the remainder, return it.** Capped overflow and integer-rounding
+  leftovers, plus the reserve, all flow into the returned remainder rather than being re-spread.
+  That keeps the function simple and deterministic, and the remainder is meaningful to show ("kept
+  back: $X"). A redistribution pass can come later if users want every cent placed.
+- Money stays int64 minor units throughout (code-rule #6); the only float is the transient score
+  proportion. Even-split fallback when all scores are zero avoids a divide-by-zero and still does
+  something sensible.
+- Tested proportional split, reserve hold-back, per-destination cap, even split, and the empty /
+  over-reserve edges.
+- **Next.** Wire it into the Allocate screen: an amount input (+ optional buffer) that runs
+  `Distribute` over the current ranking and shows each destination's suggested dollar amount.
+
 ## 2026-06-16 — Allocation: exclusion UI
 
 - Wired the engine constraint into the Allocate screen. An `excluded` map state feeds

@@ -113,3 +113,62 @@ func RankWith(candidates []Candidate, w Weights, cons Constraints) []Ranked {
 	}
 	return Rank(filtered, w)
 }
+
+// Plan is one destination's allocated amount, in minor currency units.
+type Plan struct {
+	Candidate Candidate
+	Amount    int64
+}
+
+// SplitOptions configures how Distribute spreads money across destinations.
+type SplitOptions struct {
+	Reserve int64 // emergency buffer held back from the total before splitting
+	MaxPer  int64 // cap per destination (0 = no cap)
+}
+
+// Distribute splits total (minor units) across ranked candidates in proportion to
+// their scores, after holding back Reserve and capping each destination at MaxPer.
+// It returns one Plan per candidate (in ranked order) plus the unallocated
+// remainder — the reserve, anything left by per-destination caps, and integer
+// rounding. Amounts are whole minor units and never exceed the available total.
+// When every score is zero (or absent) the available amount is split evenly.
+func Distribute(ranked []Ranked, total int64, opts SplitOptions) ([]Plan, int64) {
+	plans := make([]Plan, len(ranked))
+	for i, r := range ranked {
+		plans[i] = Plan{Candidate: r.Candidate}
+	}
+	available := total - opts.Reserve
+	if available < 0 {
+		available = 0
+	}
+	if available == 0 || len(ranked) == 0 {
+		return plans, total
+	}
+
+	var sumScore float64
+	for _, r := range ranked {
+		if r.Score > 0 {
+			sumScore += r.Score
+		}
+	}
+
+	var allocated int64
+	for i, r := range ranked {
+		var amt int64
+		if sumScore > 0 {
+			score := r.Score
+			if score < 0 {
+				score = 0
+			}
+			amt = int64(float64(available) * (score / sumScore))
+		} else {
+			amt = available / int64(len(ranked))
+		}
+		if opts.MaxPer > 0 && amt > opts.MaxPer {
+			amt = opts.MaxPer
+		}
+		plans[i].Amount = amt
+		allocated += amt
+	}
+	return plans, total - allocated
+}

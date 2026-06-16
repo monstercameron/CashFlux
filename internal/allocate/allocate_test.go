@@ -79,6 +79,74 @@ func TestConstraintsEligible(t *testing.T) {
 	}
 }
 
+func TestDistributeProportional(t *testing.T) {
+	ranked := []Ranked{
+		{Candidate: Candidate{ID: "a"}, Score: 0.75},
+		{Candidate: Candidate{ID: "b"}, Score: 0.25},
+	}
+	plans, rem := Distribute(ranked, 1000, SplitOptions{})
+	if plans[0].Amount != 750 || plans[1].Amount != 250 {
+		t.Errorf("amounts = %d,%d; want 750,250", plans[0].Amount, plans[1].Amount)
+	}
+	if rem != 0 {
+		t.Errorf("remainder = %d; want 0", rem)
+	}
+}
+
+func TestDistributeReserve(t *testing.T) {
+	ranked := []Ranked{
+		{Candidate: Candidate{ID: "a"}, Score: 0.75},
+		{Candidate: Candidate{ID: "b"}, Score: 0.25},
+	}
+	plans, rem := Distribute(ranked, 1000, SplitOptions{Reserve: 200})
+	// available 800 → 600 / 200; remainder keeps the 200 reserve.
+	if plans[0].Amount != 600 || plans[1].Amount != 200 {
+		t.Errorf("amounts = %d,%d; want 600,200", plans[0].Amount, plans[1].Amount)
+	}
+	if rem != 200 {
+		t.Errorf("remainder = %d; want 200", rem)
+	}
+}
+
+func TestDistributeMaxPerCap(t *testing.T) {
+	ranked := []Ranked{
+		{Candidate: Candidate{ID: "a"}, Score: 0.75},
+		{Candidate: Candidate{ID: "b"}, Score: 0.25},
+	}
+	plans, rem := Distribute(ranked, 1000, SplitOptions{MaxPer: 500})
+	// a would get 750 but is capped at 500; b gets 250. 250 stays unallocated.
+	if plans[0].Amount != 500 || plans[1].Amount != 250 {
+		t.Errorf("amounts = %d,%d; want 500,250", plans[0].Amount, plans[1].Amount)
+	}
+	if rem != 250 {
+		t.Errorf("remainder = %d; want 250", rem)
+	}
+}
+
+func TestDistributeEqualWhenNoScores(t *testing.T) {
+	ranked := []Ranked{
+		{Candidate: Candidate{ID: "a"}},
+		{Candidate: Candidate{ID: "b"}},
+	}
+	plans, rem := Distribute(ranked, 1000, SplitOptions{})
+	if plans[0].Amount != 500 || plans[1].Amount != 500 || rem != 0 {
+		t.Errorf("even split failed: %d,%d rem %d", plans[0].Amount, plans[1].Amount, rem)
+	}
+}
+
+func TestDistributeEdgeCases(t *testing.T) {
+	// No candidates → whole total is remainder.
+	if plans, rem := Distribute(nil, 1000, SplitOptions{}); len(plans) != 0 || rem != 1000 {
+		t.Errorf("empty: plans %d rem %d; want 0,1000", len(plans), rem)
+	}
+	// Reserve exceeds total → nothing allocated, total is remainder.
+	ranked := []Ranked{{Candidate: Candidate{ID: "a"}, Score: 1}}
+	plans, rem := Distribute(ranked, 100, SplitOptions{Reserve: 500})
+	if plans[0].Amount != 0 || rem != 100 {
+		t.Errorf("over-reserve: amount %d rem %d; want 0,100", plans[0].Amount, rem)
+	}
+}
+
 func TestScoreEqualWeights(t *testing.T) {
 	c := Candidate{ExpectedReturnAPR: 0, StabilityScore: 100, LiquidityScore: 0, DebtReduction: true}
 	// Equal weights over [0, 1, 0, 1] → 0.5.
