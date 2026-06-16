@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -149,9 +150,14 @@ func Accounts() ui.Node {
 		}
 	}
 
+	windows := freshness.DefaultWindows()
+	now := time.Now()
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
-		return ui.CreateElement(AccountRow, accountRowProps{Account: ac, Balance: bal, OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount})
+		return ui.CreateElement(AccountRow, accountRowProps{
+			Account: ac, Balance: bal, Stale: freshness.IsStale(ac, windows, now),
+			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount,
+		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
 
@@ -185,6 +191,7 @@ func Accounts() ui.Node {
 type accountRowProps struct {
 	Account   domain.Account
 	Balance   money.Money
+	Stale     bool
 	OnDelete  func(string)
 	OnArchive func(domain.Account)
 	OnRefresh func(domain.Account)
@@ -202,7 +209,9 @@ func AccountRow(props accountRowProps) ui.Node {
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), props.Account.Name),
+			Span(Class("row-desc"), props.Account.Name,
+				If(props.Stale, Span(Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), "Stale")),
+			),
 			Span(Class("row-meta"), humanizeType(string(props.Account.Type))+" · "+props.Account.Currency),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),

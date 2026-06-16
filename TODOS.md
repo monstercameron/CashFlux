@@ -217,7 +217,7 @@ Shared control components (from mockup):
 - [ ] "Update balance" action → adjustment txn + set `BalanceAsOf`
 - [ ] Credit utilization indicator; due-date reminder surfacing
 - [x] Net-worth summary header (assets, liabilities, net) in base currency
-- [ ] Per-account staleness indicator (from freshness service)
+- [x] Per-account staleness indicator (Stale badge, from freshness service)
 - [ ] Tests already in services; add UI-state tests where logic leaks
 
 ### 1.10 Categories

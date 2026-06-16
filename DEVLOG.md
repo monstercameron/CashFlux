@@ -326,6 +326,9 @@ problems and fixes, and what's next.
 - Hygiene pass after ~67 features: `go vet ./...` (js/wasm) is clean; `gofmt -w` tidied alignment in
   seven files (mostly table-comment columns + one entities.go gap). Native tests still green.
 
+- Added a **per-account "Stale" badge** (amber) on the Accounts screen via `freshness.IsStale`,
+  closing the loop with the dashboard freshness nudge and the per-row "Mark updated" action.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 
