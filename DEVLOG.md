@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B15 (slice): central control ARIA
+
+- Roles/state on the shared controls (one edit → every usage): `Toggle` gets `aria-checked` + an
+  `aria-label` (threaded from `ToggleRow`'s label so the unlabeled switch has an accessible name);
+  `Segmented` becomes a `role="radiogroup"` (optional `Label` for the group name) of `role="radio"`
+  buttons with `aria-checked`. The seg buttons are already real `<button>`s, so they're keyboard-
+  operable — this just adds the semantics AT needs.
+- Deliberately did NOT add `tabindex` to the div-based Toggle: making it focusable without a key
+  handler (Enter/Space) would be focusable-but-not-operable (a WCAG 2.1.1 fail). Real keyboard
+  operability for the div switches is the separate "Keyboard" B15 item (needs a framework key handler).
+  StepperPill/Swatch icon-button labels are the next slice. wasm green.
+
 ## 2026-06-16 — B15 (slice): chart + landmark labels
 
 - Started the accessibility program with low-risk wins: `ui.AreaChart` gained a `Label` prop and now

@@ -18,6 +18,7 @@ type SegmentedProps struct {
 	Options  []SegOption
 	Selected string
 	OnSelect func(value string)
+	Label    string // accessible group name (role="radiogroup"); optional
 }
 
 // Segmented renders the candidate-C segmented toggle (`.seg`): a row of mutually
@@ -28,7 +29,11 @@ func Segmented(props SegmentedProps) uic.Node {
 }
 
 func segmented(props SegmentedProps) uic.Node {
-	return Div(Class("seg"),
+	args := []any{Class("seg"), Attr("role", "radiogroup")}
+	if props.Label != "" {
+		args = append(args, Attr("aria-label", props.Label))
+	}
+	args = append(args,
 		MapKeyed(props.Options,
 			func(o SegOption) any { return o.Value },
 			func(o SegOption) uic.Node {
@@ -41,6 +46,7 @@ func segmented(props SegmentedProps) uic.Node {
 			},
 		),
 	)
+	return Div(args...)
 }
 
 type segButtonProps struct {
@@ -58,9 +64,15 @@ func segButton(props segButtonProps) uic.Node {
 		cls = "seg-btn active"
 	}
 	value, onSelect := props.Value, props.OnSelect
+	checked := "false"
+	if props.Active {
+		checked = "true"
+	}
 	return Button(
 		Class(cls),
 		Type("button"),
+		Attr("role", "radio"),
+		Attr("aria-checked", checked),
 		OnClick(func() {
 			if onSelect != nil {
 				onSelect(value)
@@ -105,6 +117,7 @@ func stepperPill(props StepperPillProps) uic.Node {
 type ToggleProps struct {
 	On       bool
 	OnChange func(on bool)
+	Label    string // accessible name (the switch has no visible text); optional
 }
 
 // Toggle renders the candidate-C pill switch (`.switch`). Generic on/off control
@@ -117,15 +130,24 @@ func toggle(props ToggleProps) uic.Node {
 		cls += " on"
 	}
 	on, onChange := props.On, props.OnChange
-	return Div(
+	checked := "false"
+	if on {
+		checked = "true"
+	}
+	args := []any{
 		Class(cls),
 		Attr("role", "switch"),
+		Attr("aria-checked", checked),
 		OnClick(func() {
 			if onChange != nil {
 				onChange(!on)
 			}
 		}),
-	)
+	}
+	if props.Label != "" {
+		args = append(args, Attr("aria-label", props.Label))
+	}
+	return Div(args...)
 }
 
 // ToggleRowProps configures a labeled ToggleRow.
@@ -142,7 +164,7 @@ func ToggleRow(props ToggleRowProps) uic.Node { return uic.CreateElement(toggleR
 func toggleRow(props ToggleRowProps) uic.Node {
 	return Div(Class("toggle-row"),
 		Span(props.Label),
-		Toggle(ToggleProps{On: props.On, OnChange: props.OnChange}),
+		Toggle(ToggleProps{On: props.On, OnChange: props.OnChange, Label: props.Label}),
 	)
 }
 

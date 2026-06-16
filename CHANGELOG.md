@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the shared **Toggle** switch now exposes `role="switch"` + `aria-checked` + an
+  accessible name (from its row label), and the **Segmented** control is a `role="radiogroup"` of
+  `role="radio"` buttons with `aria-checked` — so every theme/week-start/density/resolution toggle and
+  every settings switch announces its state to screen readers (one central change covers them all).
 - Accessibility: the SVG trend/forecast charts are now `role="img"` with a descriptive `aria-label`
   (e.g. "Net worth trend, currently $X"), and the sidebar's navigation landmark is labelled "Main
   navigation" (distinct from the breadcrumb nav) — so screen readers announce them meaningfully.
