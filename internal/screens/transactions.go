@@ -224,6 +224,16 @@ func Transactions() ui.Node {
 		bump()
 	}
 
+	toggleCleared := func(t domain.Transaction) {
+		t.Cleared = !t.Cleared
+		if err := app.PutTransaction(t); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
+
 	editTxn := func(orig domain.Transaction, newDesc, amountStr, catID, dateStr string) {
 		acc := accByID[orig.AccountID]
 		amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(acc.Currency))
@@ -422,7 +432,7 @@ func Transactions() ui.Node {
 				return ui.CreateElement(TransactionRow, transactionRowProps{
 					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], Categories: categories,
 					Selected: selected.Get()[t.ID],
-					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect,
+					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect, OnToggleCleared: toggleCleared,
 				})
 			},
 		)
@@ -478,15 +488,16 @@ func Transactions() ui.Node {
 }
 
 type transactionRowProps struct {
-	Txn            domain.Transaction
-	Account        string
-	Category       string
-	Categories     []domain.Category // for the edit-mode category picker
-	Selected       bool
-	OnDelete       func(string)
-	OnDuplicate    func(domain.Transaction)
-	OnSave         func(orig domain.Transaction, desc, amount, categoryID, date string)
-	OnToggleSelect func(string)
+	Txn             domain.Transaction
+	Account         string
+	Category        string
+	Categories      []domain.Category // for the edit-mode category picker
+	Selected        bool
+	OnDelete        func(string)
+	OnDuplicate     func(domain.Transaction)
+	OnSave          func(orig domain.Transaction, desc, amount, categoryID, date string)
+	OnToggleSelect  func(string)
+	OnToggleCleared func(domain.Transaction)
 }
 
 // absAmount returns the absolute minor-unit amount of a transaction (for sorting
@@ -590,6 +601,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
 	dup := ui.UseEvent(Prevent(func() { props.OnDuplicate(t) }))
 	sel := ui.UseEvent(Prevent(func() { props.OnToggleSelect(t.ID) }))
+	clr := ui.UseEvent(Prevent(func() { props.OnToggleCleared(t) }))
 	pr := uistate.UsePrefs().Get()
 	editing := ui.UseState(false)
 	descS := ui.UseState(t.Desc)
@@ -649,12 +661,18 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	if props.Selected {
 		selectGlyph = "☑"
 	}
+	clearedLabel := "Mark cleared"
+	if t.Cleared {
+		clearedLabel = "Cleared ✓"
+		meta += " · cleared"
+	}
 	return Div(Class("row"),
 		Button(Class("check"), Type("button"), Title("Select for bulk actions"), OnClick(sel), selectGlyph),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), props.Txn.Desc),
 			Span(Class("row-meta"), meta),
 		),
+		Button(Class("btn"), Type("button"), Title("Toggle reconciled (cleared) status"), OnClick(clr), clearedLabel),
 		Span(Class(amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
 		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title("Edit this transaction"), OnClick(startEdit), "Edit")),
 		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title("Copy this transaction to today"), OnClick(dup), "Duplicate")),

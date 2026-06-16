@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: cleared/reconciled toggle
+
+- Surfaced the long-defined-but-unused `Transaction.Cleared` flag. Each row gets a toggle
+  ("Mark cleared" ↔ "Cleared ✓") that flips it via `PutTransaction`, and the meta line shows
+  "· cleared" — the start of statement reconciliation.
+- Used existing schema (no migration) and the per-row component hook pattern (`clr` event +
+  `OnToggleCleared` prop taking the whole txn so the parent flips and persists).
+- **Next.** A "cleared only / uncleared only" filter would round this out, but I'll keep increments
+  genuine; otherwise polish or the out-of-scope sync.
+
 ## 2026-06-16 — To-do: inline edit (CRUD-edit complete across all entities)
 
 - Added inline edit to `TaskRow` (title, priority, due, notes), the last entity without it.

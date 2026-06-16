@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Mark transactions cleared/reconciled: each transaction row has a toggle that flips the (now
+  surfaced) `Cleared` flag, with the status shown in the row meta — useful for reconciling against a
+  statement.
 - Edit tasks inline: each to-do row has an Edit button to change the title, priority, due date, and
   notes. Every entity — including to-do — now supports inline edit.
 - Edit categories inline: each category row has an Edit button to rename it and switch its kind

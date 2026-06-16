@@ -245,6 +245,7 @@ Shared control components (from mockup):
 - [x] Row component for actions; inline edit (incl. category) — `TransactionRow` edit mode
 - [x] Bulk select + bulk delete (transfer-aware) + bulk recategorize (select toggle + action bar)
 - [x] Repeat-last helper (pre-fills form from newest txn) + per-row duplicate (copies row to today)
+- [x] Cleared/reconciled toggle per transaction (surfaces the `Cleared` flag)
 - [ ] Tests: signed amounts, transfer pairing, filter + sort logic
 
 ### 1.12 Budgets (individual + group)
