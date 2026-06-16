@@ -73,8 +73,14 @@ problems and fixes, and what's next.
   `Range` (from/to anchors → half-open reporting range, with a to<from clamp). Table-driven tests
   green on native Go. The UI will just hold the resolution + two anchors in state and call this.
 
-**Next:** wire the control into the top bar (resolution + from/to atoms, `Segmented`/`StepperPill`)
-and drive the dashboard period from it; then the `Widget` shell, `FlipPanel`, and bento widgets.
+- Added an immutable `period.Window` (resolution + from/to anchors + week start) holding all the
+  control's stepping/clamping rules as pure, tested methods (`SetResolution`, `StepFrom`/`StepTo`
+  with the from ≤ to clamp, `Range`, labels). This is the value the UI will store in a single atom,
+  so the top-bar control and dashboard share one source of truth and the view stays logic-free.
+
+**Next:** a small `uistate` atom wrapping `period.Window`, the top-bar resolution control
+(`Segmented` + two `StepperPill`s), and feeding the window's range into the dashboard; then the
+`Widget` shell, `FlipPanel`, and bento widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

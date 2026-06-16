@@ -126,6 +126,10 @@ and every commit updates this file under `Unreleased`.
   (week/month/quarter) with anchor `Truncate`/`Step`/`Label` and `Range` (from/to anchors → a
   half-open reporting range, clamped). Table-driven tests cover quarter boundaries, week starts,
   cross-year stepping, and range spanning. Pure, native-tested.
+- `internal/period`: immutable `Window` value (resolution + from/to anchors + week start) with the
+  control's stepping rules — `SetResolution` (re-snaps anchors), `StepFrom`/`StepTo` (move one
+  anchor, clamping the other so from ≤ to), `Range`, and from/to labels. Drops straight into UI
+  state; clamp behavior table-driven tested.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
