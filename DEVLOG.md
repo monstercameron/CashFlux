@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Default category scheme (§1.10, pure)
+
+- Added `internal/catscheme.Default()` — a starter set of income/expense categories plus a few
+  sub-categories (Housing → Rent/Utilities, Transportation → Fuel/Public transit). Returns ID-less
+  `Item`s with `Parent` named so the persistence layer assigns IDs and resolves parents.
+- Table-tested: both kinds present, unique names, parents resolve to a same-kind top-level item, hex
+  colors. `internal/catscheme` green.
+- Bottom-up piece of §1.10 "Default scheme + reset": the pure scheme now exists; the "reset
+  categories" action (apply it via appstate, replacing/merging) and methodology presets (envelope/
+  zero-based) remain.
+
 ## 2026-06-16 — Backlog: Electron desktop app as a post-core item (§5.1)
 
 - Added a new `TODOS.md` §5 "Future / nice-to-have (post-core)" tier and logged **standalone

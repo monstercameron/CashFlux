@@ -70,6 +70,9 @@ and every commit updates this file under `Unreleased`.
   verbiage is migrated onto it incrementally.
 
 ### Added
+- A pure, table-tested default category scheme (`internal/catscheme`): a sensible starter set of
+  income/expense categories (with a few sub-categories) for onboarding and a future "reset categories"
+  action. Returns ID-less items with parents named, so the store assigns IDs.
 - Pure, table-tested currency display helpers `Rates.FormatAccounting(m, target)` and
   `Rates.FormatInBase(m)` — convert a Money through the rate table and render it accounting-style in
   the target/base currency (symbol, decimals, negatives in parentheses).

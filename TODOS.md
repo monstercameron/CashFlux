@@ -703,7 +703,9 @@ Shared control components (from mockup):
 - [x] List + add + delete + inline edit (name + kind); income vs expense
 - [x] Sub-categories (parentId): engine + parent picker (add & inline edit) + indented lists +
       dashboard breakdown rolls sub-category spend up to the top-level parent
-- [ ] Default scheme + reset; methodology-aware presets (envelope/zero-based)
+- [~] Default scheme + reset; methodology-aware presets (envelope/zero-based) — pure
+      `internal/catscheme.Default()` (starter income/expense set + sub-categories), table-tested; the
+      reset action (apply via appstate) + methodology presets remain
 - [x] Reassign transactions on category delete (pick replacement) — `appstate.ReassignCategory` +
       Categories reassign panel (moves transactions and budgets, then deletes)
 - [~] Tests: tree building, reassignment — reassignment tested; category tree building N/A (flat list)
