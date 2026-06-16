@@ -3,6 +3,9 @@
 package app
 
 import (
+	"fmt"
+
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -48,7 +51,29 @@ func primaryNav() []railItem {
 	}
 }
 
-// Sidebar renders the left rail: brand header and the primary navigation.
+// customPage is an example "My pages" entry. Real, user-created custom pages
+// arrive with the custom-pages feature; for now these mirror the mockup.
+type customPage struct {
+	Label     string
+	IconClass string
+}
+
+// myPages returns the example custom pages shown in the rail.
+func myPages() []customPage {
+	return []customPage{
+		{"Debt payoff plan", "w-4 h-4 shrink-0 text-down"},
+		{"FIRE tracker", "w-4 h-4 shrink-0 text-up"},
+		{"Side hustle P&L", "w-4 h-4 shrink-0 text-[#7c83ff]"},
+	}
+}
+
+// railHeader renders a small uppercase section label inside the rail.
+func railHeader(label string) uic.Node {
+	return Div(Class("px-3 pt-4 pb-1 text-[10px] uppercase tracking-[0.16em] text-faint"), label)
+}
+
+// Sidebar renders the left rail: brand header, primary navigation, the user's
+// custom "My pages", the System group, and a household card that opens settings.
 func Sidebar() uic.Node {
 	current := router.InspectCurrentRoute().Path
 	return Aside(Class("rail w-60 shrink-0 border-r border-line flex flex-col"),
@@ -68,15 +93,37 @@ func Sidebar() uic.Node {
 					})
 				},
 			),
+			railHeader("My pages"),
+			MapKeyed(myPages(),
+				func(p customPage) any { return p.Label },
+				func(p customPage) uic.Node {
+					return uic.CreateElement(navItem, navItemProps{
+						Label:     p.Label,
+						Icon:      "page",
+						IconClass: p.IconClass,
+					})
+				},
+			),
+			uic.CreateElement(navItem, navItemProps{Label: "New page", Icon: "plus", Muted: true}),
+			railHeader("System"),
+			uic.CreateElement(navItem, navItemProps{
+				Label:  "Settings",
+				Path:   "/settings",
+				Icon:   "settings",
+				Active: current == "/settings",
+			}),
 		),
+		uic.CreateElement(HouseholdCard),
 	)
 }
 
 type navItemProps struct {
-	Label  string
-	Path   string
-	Icon   string
-	Active bool
+	Label     string
+	Path      string // empty = non-navigating placeholder (e.g. example pages)
+	Icon      string
+	IconClass string // defaults to "w-4 h-4 shrink-0"
+	Active    bool
+	Muted     bool // faint styling for low-emphasis actions ("New page")
 }
 
 // navItem is its own component so its click-handler hook stays stable regardless
@@ -84,14 +131,56 @@ type navItemProps struct {
 func navItem(props navItemProps) uic.Node {
 	nav := router.UseNavigate()
 	cls := "nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer"
-	if props.Active {
+	switch {
+	case props.Active:
 		cls = "nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer bg-[#1c1c1e] text-fg font-medium"
+	case props.Muted:
+		cls = "nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer text-faint"
 	}
+	iconClass := props.IconClass
+	if iconClass == "" {
+		iconClass = "w-4 h-4 shrink-0"
+	}
+	path := props.Path
 	return A(
 		Class(cls),
-		OnClick(func() { nav.Navigate(props.Path) }),
-		ui.Icon(props.Icon, Class("w-4 h-4 shrink-0")),
+		OnClick(func() {
+			if path != "" {
+				nav.Navigate(path)
+			}
+		}),
+		ui.Icon(props.Icon, Class(iconClass)),
 		Span(props.Label),
+	)
+}
+
+// HouseholdCard sits at the bottom of the rail, summarizing the household and
+// opening Settings on click. It reads live member count and base currency from
+// app state. (The global-settings flip panel replaces the navigate later.)
+func HouseholdCard() uic.Node {
+	nav := router.UseNavigate()
+	name := "Your household"
+	summary := "Settings"
+	if app := appstate.Default; app != nil {
+		base := app.Settings().BaseCurrency
+		if base == "" {
+			base = "USD"
+		}
+		members := len(app.Members())
+		noun := "members"
+		if members == 1 {
+			noun = "member"
+		}
+		summary = fmt.Sprintf("%d %s · %s base · Settings", members, noun, base)
+	}
+	return Button(
+		Class("hh mt-auto m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover"),
+		OnClick(func() { nav.Navigate("/settings") }),
+		ui.Icon("settings", Class("w-4 h-4 shrink-0 text-dim")),
+		Span(Class("hh-text leading-tight"),
+			Span(Class("font-display text-[14px] font-medium block"), name),
+			Span(Class("text-xs text-faint block"), summary),
+		),
 	)
 }
 

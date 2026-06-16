@@ -109,6 +109,11 @@ and every commit updates this file under `Unreleased`.
   independently scrolling main pane with a sticky top bar (menu toggle, page title, Add action).
   `internal/app` now composes `internal/ui` primitives (`Icon`); screen bodies render inside the
   new `main` scroll pane.
+- Rail completed with the candidate-C lower groups: a **My pages** section (example custom pages with
+  colored page icons + a muted "New page" action), a **System** group (Settings), and a
+  household card pinned to the bottom that shows live member count and base currency and opens
+  Settings. `navItem` is now reusable across all groups (optional path for placeholders, custom icon
+  class, muted styling).
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

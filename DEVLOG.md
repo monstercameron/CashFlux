@@ -45,7 +45,15 @@ problems and fixes, and what's next.
 - Full `GOOS=js GOARCH=wasm` build is green (~22 MB). Top bar's menu toggle, time-resolution control,
   and the Add action are present but static for now — wired in upcoming features.
 
-**Next:** rail's "My pages" + System groups + household card; collapsible rail; the time-resolution
+- Completed the rail: **My pages** (example custom pages with colored page icons + a muted "New page"
+  action), **System** (Settings), and a bottom **household card** that reads live member count + base
+  currency from `appstate` and navigates to Settings (the global-settings flip panel replaces that
+  navigate later). Generalized `navItem` into the one reusable rail primitive — optional `Path`
+  (empty = non-navigating placeholder, used by the example pages until custom pages are real),
+  `IconClass` for per-item icon tinting, and `Muted` styling. Section headers are direct `<div>`
+  children of `<nav>` so the collapsed-rail CSS (`nav > div { display:none }`) hides them cleanly.
+
+**Next:** `.gitattributes` (quiet CRLF warnings); collapsible rail toggle; the time-resolution
 control; then the `Widget` shell, `FlipPanel`, and the bento widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
