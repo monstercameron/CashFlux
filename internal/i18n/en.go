@@ -6,6 +6,7 @@ package i18n
 var english = Catalog{
 	// App + chrome
 	"app.name":           "CashFlux",
+	"a11y.skipToContent": "Skip to content",
 	"household.title":    "Your household",
 	"household.settings": "Settings",
 

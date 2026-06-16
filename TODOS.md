@@ -400,9 +400,9 @@ one-line a11y item in §1.20.
       assigned items). Spike is done when the plan is actionable, not when a11y is "finished".
 
 **Deep analysis — the areas the program must cover (becomes tasks after the spike):**
-- [~] **Semantics & landmarks:** the sidebar `<nav>` is now labelled "Main navigation" (distinct from
-      the breadcrumb nav); `<main>`/`<aside>`/`<nav>` provide implicit landmarks. Still TODO: a single
-      `<h1>` per screen + heading order, a "skip to content" link, `banner`/`contentinfo` roles.
+- [~] **Semantics & landmarks:** sidebar `<nav>` labelled "Main navigation"; `<main id=main tabindex=-1>`
+      + a **skip-to-content** link added. Still TODO: a single `<h1>` per screen + heading order,
+      `banner`/`contentinfo` roles.
 - [ ] **Keyboard:** everything reachable + operable in a logical tab order; **the bento drag/resize is
       pointer-only — needs a keyboard alternative** (move/resize via arrows; Shift+drag in B2/B8 is
       pointer-only); inline-edit rows manage focus on enter/exit.
@@ -412,8 +412,8 @@ one-line a11y item in §1.20.
       Toggle/ToggleRow = `role="switch"` + `aria-checked` + name; StepperPill ‹/› have `aria-label`s;
       SwatchPicker = labelled `role="radiogroup"` of `role="radio"` chips. Still TODO: the gear/menu/grip
       icon-buttons' `aria-label`s, and real keyboard operability for the div-based Toggle/Swatch.
-- [ ] **Focus visibility:** clear `:focus-visible` rings in both themes (custom styling must not
-      suppress outlines).
+- [x] **Focus visibility:** a global `:focus-visible` ring (accent, 2px offset) on every interactive
+      element/role in both themes.
 - [ ] **Screen-reader / live regions:** announce dynamic changes — filtered-result counts, balance
       updates, toast errors (toast is `role=status` polite; consider assertive for errors); associate
       form errors via `aria-describedby`; mark required fields.

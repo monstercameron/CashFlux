@@ -32,8 +32,9 @@ type ShellProps struct {
 // screen's content. (Ported from design/candidate-c.html.)
 func Shell(props ShellProps) uic.Node {
 	return Div(Class("flex h-screen overflow-hidden bg-base text-fg font-sans"),
+		A(Class("skip-link"), Attr("href", "#main"), uistate.T("a11y.skipToContent")),
 		uic.CreateElement(Sidebar),
-		Main(Class("cf-scroll flex-1 min-w-0 overflow-y-auto"),
+		Main(Class("cf-scroll flex-1 min-w-0 overflow-y-auto"), Attr("id", "main"), Attr("tabindex", "-1"),
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title}),
 			Div(Class("p-[10px]"), uic.CreateElement(props.View)),
 		),

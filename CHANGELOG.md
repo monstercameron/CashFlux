@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: a **"Skip to content"** link (the first focusable element, visible only on keyboard
+  focus) jumps past the sidebar to the now-focusable `<main>`, and a clear **focus-visible ring** is
+  drawn on every interactive element in both themes — so keyboard users can navigate efficiently and
+  always see where focus is.
 - Accessibility: the time-resolution stepper's ‹/› arrows now have `aria-label`s ("Move start
   earlier", etc.) and the accent **color swatches** are a labelled `role="radiogroup"` of `role="radio"`
   chips (each labelled by its hex, `aria-checked` reflecting the selection) — so these icon/color-only

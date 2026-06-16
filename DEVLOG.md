@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B15 (slice): skip link + focus rings
+
+- Added a `.skip-link` as the Shell's first child (`href="#main"`), off-screen until focused, and made
+  `<main id="main" tabindex="-1">` a focus target — standard skip-to-content. Plus a global
+  `:focus-visible` outline (accent, 2px, offset) scoped to interactive elements/roles in `index.html`,
+  honoring reduced-motion for the skip-link transition.
+- Closes the "Semantics & landmarks → skip link" and "Focus visibility" B15 items. Remaining big B15
+  pieces: real keyboard operability for the div-based switches/swatches and the bento drag/resize
+  (needs framework key handlers), live regions, the color-only-cue audit, and the route-change
+  title/focus move. New `a11y.skipToContent` key; catalog + wasm green.
+
 ## 2026-06-16 — B15 (slice): stepper + swatch labels
 
 - `StepperPill` gained `PrevLabel`/`NextLabel` props (default "Previous"/"Next"), wired to the
