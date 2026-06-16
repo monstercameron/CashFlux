@@ -661,7 +661,9 @@ func dashboardHeaderCell() ui.Node {
 	return Div(Class("w"), Style(map[string]string{"grid-column": "1 / -1", "grid-row": "1"}),
 		Div(Class("flex-1 flex items-center px-5 gap-3"),
 			Div(Class("flex-1"),
-				H1(Class("font-display text-2xl font-semibold tracking-tight"), uistate.T("dashboard.title")),
+				// The page <h1> lives in the top bar (the breadcrumb's current page),
+				// so this in-canvas header is an <h2> to keep the heading order valid.
+				H2(Class("font-display text-2xl font-semibold tracking-tight"), uistate.T("dashboard.title")),
 				P(Class("text-dim mt-0.5 text-[13px]"), uistate.T("dashboard.hint")),
 			),
 			Button(Class("data-btn"), Type("button"), OnClick(reset), uistate.T("dashboard.reset")),

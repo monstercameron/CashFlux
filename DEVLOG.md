@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B15 (slice): single h1 per screen
+
+- Promoted the top bar's current-page breadcrumb title from a `Span` to an `<h1>`, so every screen
+  has exactly one top-level heading (it lives in `<main>`, where the topbar renders). Demoted the
+  dashboard's in-canvas header `<h1>` → `<h2>` so it no longer double-h1s. Other screens' section
+  headings were already `<h2>`/`<h3>`, so they now sit correctly under the page h1. Closes the B15
+  "single h1 + heading order" item; per-screen h2/h3 nesting can be tightened later if needed.
+
 ## 2026-06-16 — B15 (slice): color-not-only-cue audit
 
 - Audited the UI for status conveyed by color alone. Most spots already pair color with text/shape:

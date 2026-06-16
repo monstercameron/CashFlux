@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: every screen now has exactly one top-level `<h1>` — the page title in the top bar
+  is now a real heading (the dashboard's in-canvas title dropped to `<h2>` to match) — so
+  screen-reader users can jump to the page heading and the heading order is valid.
 - Accessibility: the dashboard To-do widget's priority markers no longer rely on color alone — high,
   medium, and low now use distinct shapes (▲ / ● / ○) and each carries an accessible name
   ("High priority", etc.), so colorblind users and screen readers can tell them apart.

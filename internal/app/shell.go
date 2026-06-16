@@ -263,7 +263,9 @@ func TopBar(props topBarProps) uic.Node {
 		Nav(Class("flex items-center gap-2 font-display min-w-0"), Attr("aria-label", uistate.T("topbar.breadcrumb")),
 			If(!onDashboard, Button(Class("text-dim hover:text-fg text-[15px]"), Type("button"), Attr("title", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))),
 			If(!onDashboard, Span(Class("text-faint"), "›")),
-			Span(Class("text-lg font-semibold truncate"), Attr("aria-current", "page"), props.Title),
+			// The current page's title is the screen's single <h1> — so every screen
+			// has exactly one top-level heading for screen-reader heading navigation.
+			H1(Class("text-lg font-semibold truncate"), Attr("aria-current", "page"), props.Title),
 		),
 		Div(Class("ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
 			uic.CreateElement(ResolutionControl),

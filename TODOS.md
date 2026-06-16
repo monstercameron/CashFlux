@@ -401,8 +401,8 @@ one-line a11y item in §1.20.
 
 **Deep analysis — the areas the program must cover (becomes tasks after the spike):**
 - [~] **Semantics & landmarks:** sidebar `<nav>` labelled "Main navigation"; `<main id=main tabindex=-1>`
-      + a **skip-to-content** link added. Still TODO: a single `<h1>` per screen + heading order,
-      `banner`/`contentinfo` roles.
+      + a **skip-to-content** link; the top bar's page title is now the screen's single `<h1>` (dashboard
+      in-canvas header demoted to `<h2>`). Still TODO: `banner`/`contentinfo` roles.
 - [ ] **Keyboard:** everything reachable + operable in a logical tab order; **the bento drag/resize is
       pointer-only — needs a keyboard alternative** (move/resize via arrows; Shift+drag in B2/B8 is
       pointer-only); inline-edit rows manage focus on enter/exit.
