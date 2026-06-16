@@ -90,9 +90,11 @@ type Formula struct {
 }
 
 // AllocationProfile is a saved set of capital-allocation criterion weights — a
-// named mix of how much to favor returns, stability, liquidity, and debt
-// reduction. The Allocate screen maps these to the scoring engine's weights. The
-// weights are plain floats (need not sum to 1; scoring normalizes by their total).
+// named mix of how much to favor returns, stability, liquidity, debt reduction,
+// and goal progress. The Allocate screen maps these to the scoring engine's
+// weights. The weights are plain floats (need not sum to 1; scoring normalizes
+// by their total). GoalProgress is optional — older saved profiles without it
+// load as 0, which simply means goal progress doesn't influence their ranking.
 type AllocationProfile struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
@@ -100,6 +102,7 @@ type AllocationProfile struct {
 	Stability     float64 `json:"stability"`
 	Liquidity     float64 `json:"liquidity"`
 	DebtReduction float64 `json:"debtReduction"`
+	GoalProgress  float64 `json:"goalProgress,omitempty"`
 }
 
 // RecurringCadence is how often a recurring cash flow repeats.

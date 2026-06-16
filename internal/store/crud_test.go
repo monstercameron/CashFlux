@@ -178,12 +178,12 @@ func TestRecurringCRUD(t *testing.T) {
 
 func TestAllocProfileCRUD(t *testing.T) {
 	s := newStore(t)
-	p := domain.AllocationProfile{ID: "ap1", Name: "Growth", Returns: 3, Stability: 1, Liquidity: 1, DebtReduction: 1}
+	p := domain.AllocationProfile{ID: "ap1", Name: "Growth", Returns: 3, Stability: 1, Liquidity: 1, DebtReduction: 1, GoalProgress: 2}
 	if err := s.PutAllocProfile(p); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 	got, ok, err := s.GetAllocProfile("ap1")
-	if err != nil || !ok || got.Name != "Growth" || got.Returns != 3 {
+	if err != nil || !ok || got.Name != "Growth" || got.Returns != 3 || got.GoalProgress != 2 {
 		t.Fatalf("Get: ok=%v err=%v got=%+v", ok, err, got)
 	}
 	if list, _ := s.ListAllocProfiles(); len(list) != 1 {

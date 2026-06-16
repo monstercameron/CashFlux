@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Saved allocation profiles now remember their **goal-progress weight** too (round-trips losslessly
+  through save/load and JSON/CSV export/import; older profiles without it load as 0).
 - Capital allocation now has a **goal-progress criterion**: destinations funding a savings goal score
   by how close that goal is to completion (clamped 0–100%), so a "finish what's almost done"
   weighting can prioritize goals near the finish line. Fully tested and explainable (it shows in the

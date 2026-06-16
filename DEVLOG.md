@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — persistence: goal-progress weight on saved profiles
+
+- Added `GoalProgress float64` (`json:"goalProgress,omitempty"`) to `domain.AllocationProfile`. Because
+  the store serializes each profile as a JSON `data` blob (id + data TEXT), no SQL/schema change is
+  needed — the field round-trips for free, and `omitempty` keeps old rows clean. Extended the CRUD and
+  dataset round-trip tests to assert the weight survives save/load and export/import. Older profiles
+  without the field load as 0 (goal progress simply doesn't influence their ranking). This is the
+  persistence layer beneath the next slice — the Allocate screen's goal-progress weight input/UI.
+
 ## 2026-06-16 — allocate: goal-progress criterion (§2.7)
 
 - Added a fifth allocation criterion, goal progress, to `internal/allocate`: `Candidate.GoalProgress`
