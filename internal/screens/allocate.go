@@ -188,7 +188,7 @@ func Allocate() ui.Node {
 			{Role: ai.RoleUser, Content: "Profile: " + profile.Get() + ". Ranked places to put new money:\n" + b.String()},
 		}
 		ai.SendChat(aiKey, ai.DefaultBaseURL, aiModel, messages, 0.5,
-			func(c string) { aiLoading.Set(false); aiResult.Set(c) },
+			func(c string, _ ai.Usage) { aiLoading.Set(false); aiResult.Set(c) },
 			func(e string) { aiLoading.Set(false); aiErr.Set(e) },
 		)
 	})

@@ -14,6 +14,9 @@ and every commit updates this file under `Unreleased`.
   HTTP-status check in the fetch transport.
 
 ### Added
+- Insights now shows token usage and approximate cost after an AI answer — "Used 1,234 tokens ·
+  about $0.0019" — using the call's reported usage and the model's pricing (just the token count when
+  pricing is unknown). The fetch transport now hands the token usage back alongside the content.
 - A pure AI cost estimator (`ai.EstimateCostUSD` + `ai.FormatCostUSD`): a per-model price table turns
   a response's token usage into an approximate USD cost, with longest-prefix matching for dated model
   variants and sub-cent amounts shown to four decimals. The foundation for surfacing "this used ~N

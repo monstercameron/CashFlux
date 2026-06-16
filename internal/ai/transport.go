@@ -8,11 +8,12 @@ import "syscall/js"
 const DefaultBaseURL = "https://api.openai.com/v1"
 
 // SendChat posts a chat-completions request to baseURL using the user's apiKey,
-// asynchronously. On success it calls onResult with the assistant's content; on
-// any failure (build, network, API, or empty response) it calls onError with a
-// plain-English message. Exactly one of the callbacks runs. This is the only
-// place that talks to the network; the request/response shaping is pure (ai.go).
-func SendChat(apiKey, baseURL, model string, messages []Message, temperature float64, onResult func(string), onError func(string)) {
+// asynchronously. On success it calls onResult with the assistant's content and
+// the call's token usage; on any failure (build, network, API, or empty response)
+// it calls onError with a plain-English message. Exactly one of the callbacks
+// runs. This is the only place that talks to the network; the request/response
+// shaping is pure (ai.go).
+func SendChat(apiKey, baseURL, model string, messages []Message, temperature float64, onResult func(string, Usage), onError func(string)) {
 	body, err := BuildRequest(model, messages, temperature)
 	if err != nil {
 		onError(err.Error())
@@ -24,7 +25,7 @@ func SendChat(apiKey, baseURL, model string, messages []Message, temperature flo
 // SendVisionChat posts a multimodal chat-completions request (a system prompt, a
 // user instruction, and one image as a data/URL) using a vision-capable model.
 // Same async contract as SendChat: exactly one of onResult/onError runs.
-func SendVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL string, temperature float64, onResult func(string), onError func(string)) {
+func SendVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL string, temperature float64, onResult func(string, Usage), onError func(string)) {
 	body, err := BuildVisionRequest(model, systemPrompt, userText, imageURL, temperature)
 	if err != nil {
 		onError(err.Error())
@@ -36,7 +37,7 @@ func SendVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL str
 // postCompletions sends a prebuilt request body to the chat-completions endpoint
 // and routes the parsed result (or a plain-English error) to the callbacks. It
 // owns the fetch promise chain and releases its js.Funcs when done.
-func postCompletions(apiKey, baseURL string, body []byte, onResult func(string), onError func(string)) {
+func postCompletions(apiKey, baseURL string, body []byte, onResult func(string, Usage), onError func(string)) {
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}
@@ -70,7 +71,7 @@ func postCompletions(apiKey, baseURL string, body []byte, onResult func(string),
 			if err != nil {
 				onError(err.Error())
 			} else {
-				onResult(content)
+				onResult(content, ParseUsage(data))
 			}
 		}
 		release()

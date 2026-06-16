@@ -57,6 +57,7 @@ func Insights() ui.Node {
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
 	saved := ui.UseState("")
+	usage := ui.UseState(ai.Usage{})
 	question := ui.UseState("")
 	onQuestion := ui.UseEvent(func(v string) { question.Set(v) })
 
@@ -89,6 +90,7 @@ func Insights() ui.Node {
 		errMsg.Set("")
 		result.Set("")
 		saved.Set("")
+		usage.Set(ai.Usage{})
 		prompt := fmt.Sprintf(
 			"My figures this month — net worth: %s, income: %s, spending: %s. In 3-4 friendly sentences, explain how my month went and one thing I could do next.",
 			fmtMoney(net), fmtMoney(income), fmtMoney(expense),
@@ -98,7 +100,7 @@ func Insights() ui.Node {
 			{Role: ai.RoleUser, Content: prompt},
 		}
 		ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.5,
-			func(content string) { loading.Set(false); result.Set(content) },
+			func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
 			func(e string) { loading.Set(false); errMsg.Set(e) },
 		)
 	})
@@ -117,6 +119,7 @@ func Insights() ui.Node {
 		errMsg.Set("")
 		result.Set("")
 		saved.Set("")
+		usage.Set(ai.Usage{})
 		ctx := fmt.Sprintf("Context — net worth: %s, this month's income: %s, spending: %s, across %d active accounts.",
 			fmtMoney(net), fmtMoney(income), fmtMoney(expense), active)
 		messages := []ai.Message{
@@ -124,12 +127,23 @@ func Insights() ui.Node {
 			{Role: ai.RoleUser, Content: ctx + "\n\nQuestion: " + q},
 		}
 		ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4,
-			func(content string) { loading.Set(false); result.Set(content) },
+			func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
 			func(e string) { loading.Set(false); errMsg.Set(e) },
 		)
 	}))
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates)
+
+	// Show how many tokens the last answer used and (when the model's pricing is
+	// known) its approximate cost — so bring-your-own-key users see what they spend.
+	usageNote := ""
+	if u := usage.Get(); u.TotalTokens > 0 {
+		if cost, ok := ai.EstimateCostUSD(model, u); ok {
+			usageNote = uistate.T("insights.usageCost", u.TotalTokens, ai.FormatCostUSD(cost))
+		} else {
+			usageNote = uistate.T("insights.usageTokens", u.TotalTokens)
+		}
+	}
 
 	var action ui.Node
 	if key == "" {
@@ -162,6 +176,7 @@ func Insights() ui.Node {
 			P(result.Get()),
 			Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(saveAsTask), uistate.T("insights.saveTask")),
 			If(saved.Get() != "", Span(Class("muted"), Style(map[string]string{"margin-left": "0.5rem"}), saved.Get())),
+			If(usageNote != "", P(Class("text-faint text-[11px] mt-2"), usageNote)),
 		)),
 	)
 }

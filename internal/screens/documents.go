@@ -96,7 +96,7 @@ func Documents() ui.Node {
 		aiErr.Set("")
 		ai.SendVisionChat(settings.OpenAIKey, ai.DefaultBaseURL, aiModel, visionSystemPrompt,
 			"Extract every transaction you can read from this image.", imageURL.Get(), 0.1,
-			func(content string) {
+			func(content string, _ ai.Usage) {
 				aiLoading.Set(false)
 				rows, err := extract.ParseRows(content)
 				if err != nil {

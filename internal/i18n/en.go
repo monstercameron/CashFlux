@@ -449,6 +449,8 @@ var english = Catalog{
 	"insights.saveTask":        "Save as task",
 	"insights.saveTaskTitle":   "Save this as a to-do task",
 	"insights.savedToTodo":     "Saved to your to-do list.",
+	"insights.usageCost":       "Used %d tokens · about %s",
+	"insights.usageTokens":     "Used %d tokens",
 	"insights.highlightsTitle": "Spending highlights",
 	"insights.highlightsHint":  "Categories that moved a lot versus your recent average — no AI needed.",
 	"insights.highlightUp":     "%s spending is up %d%% — %s this month vs about %s a month.",

@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — surface AI token usage + cost in Insights
+
+- Threaded `Usage` through the transport: `SendChat`/`SendVisionChat`/`postCompletions` now call
+  `onResult(content, Usage)` (the body is parsed once for content, once via `ParseUsage`). Updated all
+  four callers — allocate + documents ignore it with `func(c string, _ ai.Usage)`, Insights captures
+  it.
+- Insights renders a faint "Used N tokens · about $X" line under the answer, using `EstimateCostUSD`
+  (falls back to tokens-only when the model's pricing is unknown). Usage state resets at the start of
+  each explain/ask. New `insights.usageCost`/`insights.usageTokens` keys.
+- This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
+  explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
+
 ## 2026-06-16 — AI cost estimation (pure)
 
 - Added `ai.EstimateCostUSD(model, usage)` over a small per-1M-token price table, plus `pricingFor`
