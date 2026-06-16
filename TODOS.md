@@ -261,7 +261,7 @@ Shared control components (from mockup):
 
 - [x] List (open/done) with due + priority
 - [~] Add + complete-toggle + delete done; edit + linking later
-- [~] Sort (open first, then due, then title) done; filters later
+- [~] Sort (open first, then due, then title) + hide-done filter done; more filters later
 - [ ] Create-from-nudge and create-from-insight hooks (P2 wires AI source)
 - [ ] Tests: ordering, status transitions
 

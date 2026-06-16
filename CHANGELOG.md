@@ -230,6 +230,7 @@ and every commit updates this file under `Unreleased`.
 - Budgets: a month stepper (‹ month ›) lets you view budget spend for any month, not just the current
   one.
 - To-do: an optional notes field on tasks, shown in the task row.
+- To-do: a "Hide done" / "Show all" toggle to filter completed tasks, with an "All done 🎉" state.
 - Accounts: archive/restore an account from its row — archived accounts move to a separate "Archived"
   section and drop out of the assets/liabilities lists and net-worth totals (already excluded by
   `ledger`).

@@ -30,12 +30,14 @@ func Todo() ui.Node {
 	priority := ui.UseState(string(domain.PriorityMedium))
 	dueStr := ui.UseState("")
 	notes := ui.UseState("")
+	hideDone := ui.UseState(false)
 	errMsg := ui.UseState("")
 
 	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueStr.Set(v) })
 	onNotes := ui.UseEvent(func(v string) { notes.Set(v) })
 	onPriority := ui.UseEvent(func(e ui.Event) { priority.Set(e.GetValue()) })
+	toggleHideDone := ui.UseEvent(func() { hideDone.Set(!hideDone.Get()) })
 
 	add := ui.UseEvent(Prevent(func() {
 		var due time.Time
@@ -125,11 +127,24 @@ func Todo() ui.Node {
 		return ti.Title < tj.Title
 	})
 
+	shown := tasks
+	if hideDone.Get() {
+		shown = make([]domain.Task, 0, len(tasks))
+		for _, t := range tasks {
+			if t.Status != domain.StatusDone {
+				shown = append(shown, t)
+			}
+		}
+	}
+
 	var listBody ui.Node
-	if len(tasks) == 0 {
+	switch {
+	case len(tasks) == 0:
 		listBody = P(Class("empty"), "No tasks yet.")
-	} else {
-		rows := MapKeyed(tasks,
+	case len(shown) == 0:
+		listBody = P(Class("empty"), "All done 🎉")
+	default:
+		rows := MapKeyed(shown,
 			func(t domain.Task) any { return t.ID },
 			func(t domain.Task) ui.Node {
 				return ui.CreateElement(TaskRow, taskRowProps{Task: t, OnToggle: toggleTask, OnDelete: deleteTask})
@@ -138,10 +153,18 @@ func Todo() ui.Node {
 		listBody = Div(Class("rows"), rows)
 	}
 
+	hideLabel := "Hide done"
+	if hideDone.Get() {
+		hideLabel = "Show all"
+	}
+
 	return Div(
 		form,
 		Section(Class("card"),
-			H2(Class("card-title"), "Tasks"),
+			Div(Class("budget-head"),
+				H2(Class("card-title"), "Tasks"),
+				Button(Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
+			),
 			listBody,
 		),
 	)

@@ -314,6 +314,9 @@ problems and fixes, and what's next.
   integer %) computed from `ledger.NetWorthSeries` at this month's start; falls back to the assets
   line when there's no prior figure. Removes the last fabricated "2.4%" placeholder from the mockup.
 
+- Added a **Hide done / Show all** toggle to the To-do list (filters completed tasks; distinct
+  "All done 🎉" state when everything's hidden).
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 
