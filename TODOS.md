@@ -215,7 +215,7 @@ Shared control components (from mockup):
 - [ ] Allocation attributes sub-form (expected return, liquidity, stability, lock-until)
 - [ ] Per-account ledger view (filtered txns + running balance)
 - [ ] "Update balance" action → adjustment txn + set `BalanceAsOf`
-- [ ] Credit utilization indicator; due-date reminder surfacing
+- [~] Credit utilization indicator done (on liability rows); due-date reminder via Upcoming bills widget
 - [x] Net-worth summary header (assets, liabilities, net) in base currency
 - [x] Per-account staleness indicator (Stale badge, from freshness service)
 - [ ] Tests already in services; add UI-state tests where logic leaks

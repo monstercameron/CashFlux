@@ -332,6 +332,9 @@ problems and fixes, and what's next.
 - Added a **budget health summary** line ("N over budget · M near the limit") from the evaluated
   statuses, shown above the budget list when any are over/near.
 
+- Added **credit utilization** to liability account rows (an `accountMeta` helper appends "N% of limit
+  used" when a liability has a credit limit), using the row's already-computed balance.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

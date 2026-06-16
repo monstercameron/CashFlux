@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -188,6 +189,20 @@ func Accounts() ui.Node {
 	)
 }
 
+// accountMeta builds an account row's subtitle: type · currency, plus credit
+// utilization for liability accounts that have a credit limit.
+func accountMeta(a domain.Account, bal money.Money) string {
+	meta := humanizeType(string(a.Type)) + " · " + a.Currency
+	if a.Class == domain.ClassLiability && a.CreditLimit.Amount > 0 {
+		owed := bal.Amount
+		if owed < 0 {
+			owed = -owed
+		}
+		meta += fmt.Sprintf(" · %d%% of limit used", owed*100/a.CreditLimit.Amount)
+	}
+	return meta
+}
+
 type accountRowProps struct {
 	Account   domain.Account
 	Balance   money.Money
@@ -212,7 +227,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			Span(Class("row-desc"), props.Account.Name,
 				If(props.Stale, Span(Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), "Stale")),
 			),
-			Span(Class("row-meta"), humanizeType(string(props.Account.Type))+" · "+props.Account.Currency),
+			Span(Class("row-meta"), accountMeta(props.Account, props.Balance)),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
 		If(!props.Account.Archived, Button(Class("btn"), Type("button"), Title("Mark balance as checked today"), OnClick(refresh), "Mark updated")),
