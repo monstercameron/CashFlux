@@ -29,10 +29,12 @@ func Todo() ui.Node {
 	title := ui.UseState("")
 	priority := ui.UseState(string(domain.PriorityMedium))
 	dueStr := ui.UseState("")
+	notes := ui.UseState("")
 	errMsg := ui.UseState("")
 
 	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueStr.Set(v) })
+	onNotes := ui.UseEvent(func(v string) { notes.Set(v) })
 	onPriority := ui.UseEvent(func(e ui.Event) { priority.Set(e.GetValue()) })
 
 	add := ui.UseEvent(Prevent(func() {
@@ -46,8 +48,8 @@ func Todo() ui.Node {
 			due = d
 		}
 		t := domain.Task{
-			ID: id.New(), Title: strings.TrimSpace(title.Get()), Status: domain.StatusOpen,
-			Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
+			ID: id.New(), Title: strings.TrimSpace(title.Get()), Notes: strings.TrimSpace(notes.Get()),
+			Status: domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
 		}
 		if err := app.PutTask(t); err != nil {
 			errMsg.Set(err.Error())
@@ -55,6 +57,7 @@ func Todo() ui.Node {
 		}
 		title.Set("")
 		dueStr.Set("")
+		notes.Set("")
 		errMsg.Set("")
 		bump()
 	}))
@@ -101,6 +104,7 @@ func Todo() ui.Node {
 			Input(Class("field field-wide"), Type("text"), Placeholder("What needs doing?"), Value(title.Get()), OnInput(onTitle)),
 			Select(Class("field"), OnChange(onPriority), prioOptions),
 			Input(Class("field"), Type("date"), Value(dueStr.Get()), OnInput(onDue)),
+			Input(Class("field field-wide"), Type("text"), Placeholder("Notes (optional)"), Value(notes.Get()), OnInput(onNotes)),
 			Button(Class("btn btn-primary"), Type("submit"), "Add"),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
@@ -167,6 +171,9 @@ func TaskRow(props taskRowProps) ui.Node {
 	meta := []ui.Node{Span(Class("badge badge-prio "+pclass), plabel)}
 	if !t.Due.IsZero() {
 		meta = append(meta, Span(Class("row-meta"), "due "+dateutil.FormatDate(t.Due)))
+	}
+	if t.Notes != "" {
+		meta = append(meta, Span(Class("row-meta"), t.Notes))
 	}
 
 	return Div(Class(rowClass),

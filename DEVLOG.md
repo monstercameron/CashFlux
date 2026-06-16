@@ -300,6 +300,8 @@ problems and fixes, and what's next.
 - Added a **budget month stepper**: a `monthOffset` state + ‹/› pills drive `dateutil.AddMonths` so
   you can review any month's budget spend, not just the current one.
 
+- Added an optional **notes** field to tasks (form input + row display), stored on `Task.Notes`.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 
