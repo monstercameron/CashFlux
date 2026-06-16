@@ -138,6 +138,10 @@ and every commit updates this file under `Unreleased`.
   centered title · gear) and a padded body, props-driven (title, body, grid span, draggable,
   resizable, gear handler) so every dashboard widget is `Widget` + content. Optional edge resize
   handles; gear is its own component for stable hooks in lists.
+- `internal/ui`: reusable `FlipPanel` settings overlay — the candidate-C dimmed/blurred backdrop with
+  a card that lifts and 3D-flips to a settings back face (centered title, close button, scrollable
+  body, dark Save/Cancel footer). Generic (title, body, size, Save/close handlers) and reused by both
+  per-widget and global settings; the open animation runs once on mount via `UseState`/`UseEffect`.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

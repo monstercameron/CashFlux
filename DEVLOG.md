@@ -91,8 +91,19 @@ problems and fixes, and what's next.
   be `Widget` + content, so the chrome is defined once. Grid placement is emitted as inline style per
   axis; the gear is its own component for hook stability in widget lists.
 
-**Next:** a quick browser/DOM sanity check of the new shell via the gwc dev server; then the
-`FlipPanel` primitive (per-widget + global settings) and the bento grid + first widgets.
+- Browser/DOM check: the gwc dev server is up at :8080 serving the current wasm, but the gwc MCP
+  browser-driving tools (`gwc_dom`/`gwc_eval`/`gwc_screenshot`) aren't connected in this headless
+  loop context, and the playwright lane isn't set up — so automated DOM assertions aren't available
+  here. Staying on compile-green + review as the gate; the owner can eyeball the live server.
+- Built the **`FlipPanel`** primitive (`internal/ui`): the candidate-C settings overlay — dimmed/
+  blurred backdrop, a card that lifts and 3D-flips to a settings back face (centered title, close,
+  scrollable body, dark Save/Cancel footer). Generic over title/body/size/handlers and reused by
+  **both** per-widget and global settings (the reusability directive). The open animation runs once
+  on mount: a `shown` `UseState` flipped to true inside a `UseEffect` (stable dep + guard against
+  re-run), so the CSS transition animates from front→back rather than appearing pre-flipped.
+
+**Next:** wire it up — a settings-target atom in `uistate`, `Widget`'s gear opens the `FlipPanel`
+with a per-widget settings form, mounted at the shell root; then the bento grid + first widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
