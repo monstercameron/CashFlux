@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Logged settings-duplication (B4) and collapsed-rail-hover (B5)
+
+- User reported two more items (analysis-only, add to TODOS):
+- **B4 settings duplication:** confirmed two settings surfaces. The `/settings` nav screen
+  (`screens.Settings()`) is just a read-only household summary + the debug log; all real editing lives
+  in the household-card global flip panel (`globalSettingsForm`). So the menu "Settings" item is the
+  emptier duplicate. Logged fix: make the household-card panel the single primary surface — move the
+  debug log viewer into it, then remove the `/settings` route/screen (or repoint the item to open the
+  panel), updating the locked-screens/module-visibility references.
+- **B5 collapsed-rail hover:** the rail already collapses to icon-only (`.collapsed`); the missing
+  piece is a hover/focus flyout revealing each item's label. Logged: add `title` attrs + a CSS flyout
+  pill in collapsed mode (overlay, don't widen the rail), reduced-motion + keyboard-focus aware.
+- Both analysis-only per the user's instruction; no code changes for them this turn.
+
 ## 2026-06-16 — B2 step 1: pure dashboard packing engine
 
 - Started the B2 dashboard-grid rewrite bottom-up: added `internal/dashlayout/pack.go` — an

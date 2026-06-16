@@ -96,6 +96,45 @@ router's dedicated not-found factory, not a stacking pattern.)
   the `gwc` MCP server isn't connected. Diagnosis is from the router source, which is definitive here.
   Installing the Playwright driver (§0) would let `gwc probe`/MCP confirm the DOM directly.
 
+### B4. Settings is duplicated — consolidate into the household-card panel ★
+
+**Symptom:** the "Settings" item in the menu list opens what looks like a duplicate of the settings
+you get from the **Your household** card at the bottom of the rail. The household card should be the
+single, primary settings panel.
+**Root cause:** there are two settings surfaces. (1) The **Settings** nav item → `/settings` route →
+`screens.Settings()`, which only shows a *read-only* Household summary (base currency + member/account/
+category counts) plus the Debug log — so it reads as an emptier duplicate. (2) The **household card**
+(`app.HouseholdCard`, rail bottom) → the global settings flip panel (`globalSettingsForm` in
+`internal/app/settings.go`), which holds all the real editing: members, base currency + FX rates, AI
+key/model, appearance (theme/accent/density/week-start/date), data export/import/sample/wipe, freshness
+overrides, module-visibility toggles.
+**Fix (make the household-card panel the one primary settings surface):**
+- [ ] Move the only thing unique to the `/settings` screen — the **Debug log viewer** (+Refresh) —
+      into the global panel as a "Debug" section/sub-panel (satisfies §1.18 "Debug: open log viewer").
+- [ ] Remove the "Settings" nav item + `/settings` route and delete `screens.Settings()` (or repoint
+      the item to `settings.Set(uistate.Global())` so it just opens the panel). Pick one; prefer
+      removing the route so there's a single entry point.
+- [ ] Update the module-visibility "locked screens" set and sidebar filter that reference `/settings`.
+- [ ] Keep Members/Categories as their own nav screens; ensure the panel's manage-links still navigate.
+- [ ] Verify: one settings entry point, no empty/duplicate page; the debug log is reachable from the
+      panel; nothing else regresses (FX/freshness/modules still editable).
+
+### B5. Collapsed rail should reveal labels on hover ★
+
+**Symptom / want:** the left menu should collapse to icons-only, and hovering an icon should show a
+text label ("text highlight") for quick reference.
+**Current state:** the rail already collapses to a 58px icon-only mode (`.collapsed`, shared
+`rail:collapsed` atom; `internal/app/shell.go`), which hides each item's label `Span`. What's missing
+is the hover affordance — collapsed, there's no quick way to see what an icon is.
+**Fix:**
+- [ ] Add a `title` attr to every nav item (and the household card) — cheap, accessible, immediate
+      native tooltip. (`navItem` in `shell.go`)
+- [ ] Add a CSS flyout: in `.collapsed` mode, `.nv:hover`/`.nv:focus-visible` reveals the label as an
+      absolutely-positioned pill to the right of the icon, so it overlays content instead of widening
+      the rail. Apply to primary nav, My pages, System items, and the household card.
+- [ ] Respect `prefers-reduced-motion`; ensure keyboard focus reveals the label too.
+- [ ] Verify: collapsed rail shows only icons; hover/focus reveals the label without expanding the rail.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)
