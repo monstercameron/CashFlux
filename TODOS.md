@@ -526,7 +526,8 @@ relying on the (already extensive) pure-logic unit tests. Run the suite in CI on
 - [x] ★ `internal/currency`: registry (code, symbol, decimals, name) + `Rates` table type
 - [x] ★ `Rates.Convert` / `ToBase` rounding to target minor units (nearest; float-rate caveat noted)
 - [x] Missing-rate + non-positive-rate error handling; tests for cross-currency + rounding
-- [ ] Helper: format a `Money` in a target/base currency for display
+- [x] Helper: format a `Money` in a target/base currency for display — `Rates.FormatAccounting` +
+      `Rates.FormatInBase` (`internal/currency/format.go`), table-tested
 
 ### 1.3 Pure logic services — ★ (each in its own `internal/*` pkg, table-driven tests)
 

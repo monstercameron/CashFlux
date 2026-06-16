@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Currency display helper (§1.2)
+
+- Closed the §1.2 "format a Money in a target/base currency" checklist item: added
+  `Rates.FormatAccounting(m, toCurrency)` and `Rates.FormatInBase(m)` to `internal/currency` —
+  convert via the rate table, then `money.FormatAccounting` with the target's symbol/decimals.
+  Lives in currency (which already imports money) so the money package stays registry-free.
+- Table-tested: same-currency, negative-parenthesized, cross-currency conversion (€→$ and $→€),
+  missing-rate error. `internal/currency` green.
+- Small decision-free increment between the bigger parked items; screens can adopt it for multi-
+  currency display.
+
 ## 2026-06-16 — B10 foundation: pure period presets
 
 - Shifted off the widget-settings sweep to the B10 resolution-control redesign, starting with the

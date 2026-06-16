@@ -66,6 +66,9 @@ and every commit updates this file under `Unreleased`.
   verbiage is migrated onto it incrementally.
 
 ### Added
+- Pure, table-tested currency display helpers `Rates.FormatAccounting(m, target)` and
+  `Rates.FormatInBase(m)` — convert a Money through the rate table and render it accounting-style in
+  the target/base currency (symbol, decimals, negatives in parentheses).
 - Pure, table-tested time-period presets in `internal/period` (`Previous`, `YearToDate`) plus
   `Window.Shift` (page the whole window as a unit) and `Window.IsCurrent` (is this the current period)
   — the foundation for the planned resolution-control redesign (B10). Not yet wired to the UI.
