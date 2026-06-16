@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Allocation: amount-split UI
+
+- Added two number inputs to the Allocate profile card — amount to allocate and emergency buffer —
+  parsed to minor units via the base currency's decimals. When an amount is present, `Distribute`
+  runs over the current ranking and a `planByID` map feeds each `AllocRow` its suggested dollar
+  figure (shown beside the score). A "Kept back" line surfaces the returned remainder.
+- **Reactive for free.** Everything recomputes from the input states each render, so changing the
+  amount, buffer, profile, or excluding a destination instantly re-splits — no explicit wiring,
+  just the atom/state re-render.
+- **Money discipline held.** All arithmetic is int64 minor units (`money.ParseMinor` in,
+  `money.New`+`fmtMoney` out); the engine owns the only float. Amount column is blank until an
+  amount is entered, so the screen stays clean for users who just want the ranking.
+- Allocation constraints are now meaningfully complete: rank → exclude/restore → split an amount
+  with buffer and (engine-level) per-destination caps.
+- **Next.** A different backlog item — persist-last-transaction-filter, the category-delete reassign
+  flow, or the freshness-window overrides editor.
+
 ## 2026-06-16 — Allocation: amount-split engine
 
 - The ranking told you the *order*; `Distribute` now turns it into *amounts*. Pure function:

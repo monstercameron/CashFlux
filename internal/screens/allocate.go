@@ -9,19 +9,23 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/money"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
 type allocRowProps struct {
 	R         allocate.Ranked
+	Amount    string // suggested dollar amount (empty when no split amount entered)
 	OnExclude func(string)
 }
 
-// AllocRow renders one ranked suggestion with its score, breakdown bar, and an
-// Exclude action. Its own component so the action hook stays at a stable position.
+// AllocRow renders one ranked suggestion with its score, breakdown bar, an
+// optional suggested amount, and an Exclude action. Its own component so the
+// action hook stays at a stable position.
 func AllocRow(props allocRowProps) ui.Node {
 	excl := ui.UseEvent(Prevent(func() { props.OnExclude(props.R.Candidate.ID) }))
 	r := props.R
@@ -29,10 +33,14 @@ func AllocRow(props allocRowProps) ui.Node {
 	if r.Candidate.DebtReduction {
 		debtNote = " · pays debt"
 	}
+	headRight := fmt.Sprintf("%.0f%%", r.Score*100)
+	if props.Amount != "" {
+		headRight = props.Amount + " · " + headRight
+	}
 	return Div(Class("budget"),
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), r.Candidate.Name),
-			Span(Class("budget-amount fig"), fmt.Sprintf("%.0f%%", r.Score*100)),
+			Span(Class("budget-amount fig"), headRight),
 			Button(Class("btn"), Type("button"), Title("Leave this out of the suggestions"), OnClick(excl), "Exclude"),
 		),
 		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", int(r.Score*100))))),
@@ -77,6 +85,10 @@ func Allocate() ui.Node {
 
 	profile := ui.UseState("balanced")
 	onProfile := ui.UseEvent(func(e ui.Event) { profile.Set(e.GetValue()) })
+	amountStr := ui.UseState("")
+	reserveStr := ui.UseState("")
+	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
+	onReserve := ui.UseEvent(func(v string) { reserveStr.Set(v) })
 	excluded := ui.UseState(map[string]bool{})
 	toggleExclude := func(id string) {
 		m := excluded.Get()
@@ -175,6 +187,31 @@ func Allocate() ui.Node {
 		)
 	})
 
+	// Optional amount split: when the user enters an amount, distribute it across
+	// the ranked destinations (holding back any emergency-buffer reserve).
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	dec := currency.Decimals(base)
+	totalMinor, _ := money.ParseMinor(strings.TrimSpace(amountStr.Get()), dec)
+	reserveMinor, _ := money.ParseMinor(strings.TrimSpace(reserveStr.Get()), dec)
+	planByID := map[string]int64{}
+	var remainder int64
+	if totalMinor > 0 {
+		var plans []allocate.Plan
+		plans, remainder = allocate.Distribute(ranked, totalMinor, allocate.SplitOptions{Reserve: reserveMinor})
+		for _, p := range plans {
+			planByID[p.Candidate.ID] = p.Amount
+		}
+	}
+	amountFor := func(id string) string {
+		if totalMinor <= 0 {
+			return ""
+		}
+		return fmtMoney(money.New(planByID[id], base))
+	}
+
 	var listBody ui.Node
 	switch {
 	case len(ranked) == 0 && len(excludedRows) == 0:
@@ -185,7 +222,7 @@ func Allocate() ui.Node {
 		listBody = Div(MapKeyed(ranked,
 			func(r allocate.Ranked) any { return r.Candidate.ID },
 			func(r allocate.Ranked) ui.Node {
-				return ui.CreateElement(AllocRow, allocRowProps{R: r, OnExclude: toggleExclude})
+				return ui.CreateElement(AllocRow, allocRowProps{R: r, Amount: amountFor(r.Candidate.ID), OnExclude: toggleExclude})
 			},
 		))
 	}
@@ -201,7 +238,10 @@ func Allocate() ui.Node {
 					Option(Value("safety"), SelectedIf(profile.Get() == "safety"), "Safety & access"),
 					Option(Value("debt"), SelectedIf(profile.Get() == "debt"), "Pay down debt"),
 				),
+				Input(Class("field"), Type("number"), Placeholder("Amount to allocate ("+base+")"), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
+				Input(Class("field"), Type("number"), Placeholder("Keep back (emergency buffer)"), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve)),
 			),
+			If(totalMinor > 0 && remainder > 0, P(Class("muted"), "Kept back: "+fmtMoney(money.New(remainder, base))+" (buffer plus anything caps or rounding left over).")),
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), "Where to put your money next"),

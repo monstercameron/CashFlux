@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Amount-split in the Allocate screen: enter an amount to allocate and an optional emergency buffer
+  to keep back, and each ranked destination shows its suggested dollar amount (via `Distribute`),
+  with a "Kept back" note for the buffer/leftover. Updates live as the amount, buffer, profile, or
+  exclusions change.
 - Allocation amount split (`internal/allocate`): `Distribute(ranked, total, SplitOptions)` spreads a
   total across ranked destinations in proportion to their scores, holding back an emergency-buffer
   `Reserve` and capping each at `MaxPer`, and returns per-destination `Plan`s plus the unallocated

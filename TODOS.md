@@ -401,8 +401,8 @@ Shared control components (from mockup):
         `Distribute` split engine (tested); amount-split UI next
 - [x] Candidate set assembly (asset accounts + high-interest liabilities + unfinished goals)
 - [x] Ranked output with per-criterion breakdown (no black box)
-- [~] Allocate screen: profile select → ranked suggestions + exclude/restore done; amount-split engine
-      (`Distribute`) done & tested; amount-input UI next
+- [x] Allocate screen: profile select → ranked suggestions + exclude/restore + amount-split input
+      (amount + emergency buffer → per-destination dollar amounts via `Distribute`, with kept-back note)
 - [x] Optional AI narrative ("Explain with AI" on the Allocate screen)
 - [ ] ★ Extensive tests: scoring, weighting, constraints, determinism, custom criteria
 
