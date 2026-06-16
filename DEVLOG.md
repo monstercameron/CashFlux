@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Goals: pace guidance (save $X/mo)
+
+- Added `goals.MonthlyNeeded(goal, from)`: remaining ÷ whole months until the target date, partial
+  final month rounded up, ceil division so a goal is never under-funded. Returns ok=false for
+  no-target-date, already-complete, or past-due goals. Pure, table-tested (incl. the rounding case).
+- `GoalRow` shows "· save $X/mo" alongside the "by <date>" when the goal has a future target and
+  isn't complete — turning a static deadline into an actionable pace. Reused `fmtMoney` and the
+  prefs date format.
+- **Decision — round up, minimum one month.** Better to suggest slightly too much than to land short
+  of the goal by the date; a partial month (target day-of-month past today's) counts as a whole
+  contribution month, and same-month targets floor to one month rather than dividing by zero.
+- **Next.** Remaining backlog is dominated by Phase-3 sync (needs a backend); the local feature set
+  is essentially complete. Will continue with small polish or flag completion.
+
 ## 2026-06-16 — Accounts: inline edit (CRUD-edit fully complete)
 
 - The last CRUD-edit gap: `AccountRow` now edits inline. It mirrors the add form — name, opening

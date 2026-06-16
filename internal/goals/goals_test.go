@@ -19,6 +19,45 @@ func mustDate(s string) time.Time {
 	return t
 }
 
+func TestMonthlyNeeded(t *testing.T) {
+	from := mustDate("2026-01-01")
+
+	// $1200 needed over 12 months (target same day-of-month, Jan→Jan next year) → $100/mo.
+	g := domain.Goal{TargetAmount: usd(120000), CurrentAmount: usd(0), TargetDate: mustDate("2027-01-01")}
+	per, ok, err := MonthlyNeeded(g, from)
+	if err != nil || !ok {
+		t.Fatalf("expected a projection, ok=%v err=%v", ok, err)
+	}
+	if per.Amount != 10000 {
+		t.Errorf("per month = %d, want 10000 ($100)", per.Amount)
+	}
+
+	// No target date → no projection.
+	if _, ok, _ := MonthlyNeeded(domain.Goal{TargetAmount: usd(100), TargetDate: time.Time{}}, from); ok {
+		t.Error("no target date should give ok=false")
+	}
+	// Target in the past → no projection.
+	past := domain.Goal{TargetAmount: usd(100), TargetDate: mustDate("2025-01-01")}
+	if _, ok, _ := MonthlyNeeded(past, from); ok {
+		t.Error("past target should give ok=false")
+	}
+	// Already complete → no projection.
+	done := domain.Goal{TargetAmount: usd(100), CurrentAmount: usd(100), TargetDate: mustDate("2027-01-01")}
+	if _, ok, _ := MonthlyNeeded(done, from); ok {
+		t.Error("complete goal should give ok=false")
+	}
+}
+
+func TestMonthlyNeededRoundsUp(t *testing.T) {
+	from := mustDate("2026-01-01")
+	// $100 over 3 months → ceil(10000/3) = 3334 minor units.
+	g := domain.Goal{TargetAmount: usd(10000), CurrentAmount: usd(0), TargetDate: mustDate("2026-04-01")}
+	per, ok, _ := MonthlyNeeded(g, from)
+	if !ok || per.Amount != 3334 {
+		t.Errorf("per = %d ok=%v, want 3334", per.Amount, ok)
+	}
+}
+
 func goal(target, current int64) domain.Goal {
 	return domain.Goal{TargetAmount: usd(target), CurrentAmount: usd(current)}
 }

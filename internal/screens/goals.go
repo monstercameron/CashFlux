@@ -285,6 +285,11 @@ func GoalRow(props goalRowProps) ui.Node {
 	}
 	if !g.TargetDate.IsZero() {
 		sub += " · by " + pr.FormatDate(g.TargetDate)
+		if !complete {
+			if per, ok, _ := goalsvc.MonthlyNeeded(g, time.Now()); ok {
+				sub += " · save " + fmtMoney(per) + "/mo"
+			}
+		}
 	}
 
 	return Div(Class("budget"),

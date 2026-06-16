@@ -88,6 +88,32 @@ func Project(goal domain.Goal, monthly money.Money, from time.Time) (date time.T
 	return dateutil.AddMonths(from, months), true, nil
 }
 
+// MonthlyNeeded returns the contribution per remaining month required to reach the
+// goal by its TargetDate, counting whole months from `from` (rounding a partial
+// month up, minimum one). It returns ok=false when the goal has no target date, is
+// already complete, or the target date is not in the future.
+func MonthlyNeeded(goal domain.Goal, from time.Time) (money.Money, bool, error) {
+	if goal.TargetDate.IsZero() || !goal.TargetDate.After(from) {
+		return money.Money{}, false, nil
+	}
+	rem, err := Remaining(goal)
+	if err != nil {
+		return money.Money{}, false, err
+	}
+	if rem.IsZero() {
+		return money.Money{}, false, nil
+	}
+	months := (goal.TargetDate.Year()-from.Year())*12 + int(goal.TargetDate.Month()) - int(from.Month())
+	if goal.TargetDate.Day() > from.Day() {
+		months++ // a partial final month still needs a contribution
+	}
+	if months < 1 {
+		months = 1
+	}
+	per := (rem.Amount + int64(months) - 1) / int64(months) // ceil division
+	return money.New(per, rem.Currency), true, nil
+}
+
 // Evaluate returns the full Status for a goal given an assumed monthly
 // contribution and a reference date.
 func Evaluate(goal domain.Goal, monthly money.Money, from time.Time) (Status, error) {

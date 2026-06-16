@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Goal pace guidance: goals with a target date now show how much to save per month to hit it (via a
+  new pure `goals.MonthlyNeeded` — remaining ÷ whole months left, rounded up). Shown only for
+  incomplete goals with a future date.
 - Edit accounts inline: each account row has an Edit button that swaps in a form for the name,
   opening balance, and the type-specific attributes (liabilities: credit limit, APR, minimum
   payment, due day, lender; assets: expected return, liquidity, stability), saving through the
