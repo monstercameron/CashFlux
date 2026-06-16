@@ -186,6 +186,7 @@ func Accounts() ui.Node {
 	markAllUpdated := ui.UseEvent(Prevent(func() {
 		w := app.FreshnessWindows()
 		now := time.Now()
+		n := 0
 		for _, ac := range app.Accounts() {
 			if ac.Archived || !freshness.IsStale(ac, w, now) {
 				continue
@@ -193,9 +194,14 @@ func Accounts() ui.Node {
 			ac.BalanceAsOf = now
 			if err := app.PutAccount(ac); err != nil {
 				notifyErr("Couldn't mark some balances updated: " + err.Error())
+				continue
 			}
+			n++
 		}
 		errMsg.Set("")
+		if n > 0 {
+			noticeAtom.Set(noticeAtom.Get().With(fmt.Sprintf("Marked %s as updated just now.", plural(n, "balance")), false))
+		}
 		bump()
 	}))
 

@@ -15,6 +15,10 @@ and every commit updates this file under `Unreleased`.
 - Two more silent-failure sites now report through the toast: "Mark all updated" on Accounts (per-
   account balance refresh) and the dashboard freshness nudge's "Remind me" (which now skips the jump
   to the to-do list if the reminder couldn't be created).
+- The Settings data actions now confirm their outcome via the toast: Export JSON/CSV, Import, Load
+  sample, and Wipe data each show a success message (or a friendly error) instead of finishing
+  silently — and failures that were previously swallowed now surface. "Mark all updated" also
+  reports how many balances it refreshed.
 
 ### Fixed
 - The dashboard's week resolution now honors the configured week-start (Sunday/Monday) instead of

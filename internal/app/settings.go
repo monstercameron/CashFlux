@@ -131,6 +131,8 @@ func globalSettingsForm() uic.Node {
 	aiOn := uic.UseState(false)
 	prefsAtom := uistate.UsePrefs()
 	periodAtom := uistate.UsePeriod()
+	noticeAtom := uistate.UseNotice()
+	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
 	savePrefs := func(p prefs.Prefs) {
 		p = p.Normalize()
 		prefsAtom.Set(p)
@@ -319,11 +321,11 @@ func globalSettingsForm() uic.Node {
 		),
 		Div(Class("set-label"), "Data"),
 		Div(Class("flex flex-wrap gap-2 py-1"),
-			dataBtn("Export JSON", false, exportJSON),
-			dataBtn("Export CSV", false, exportCSV),
-			dataBtn("Import…", false, func() { importJSON(bump) }),
-			dataBtn("Load sample", false, func() { loadSample(bump) }),
-			dataBtn("Wipe data", true, func() { wipeData(bump) }),
+			dataBtn("Export JSON", false, func() { exportJSON(notify) }),
+			dataBtn("Export CSV", false, func() { exportCSV(notify) }),
+			dataBtn("Import…", false, func() { importJSON(bump, notify) }),
+			dataBtn("Load sample", false, func() { loadSample(bump, notify) }),
+			dataBtn("Wipe data", true, func() { wipeData(bump, notify) }),
 		),
 	)
 
@@ -354,60 +356,68 @@ func rateRow(code string, rate float64, base string) uic.Node {
 
 // exportJSON downloads the full dataset as a JSON file (the portable
 // export/import + sync payload), via the pure appstate export.
-func exportJSON() {
+func exportJSON(notify func(string, bool)) {
 	app := appstate.Default
 	if app == nil {
 		return
 	}
 	data, err := app.ExportJSON()
 	if err != nil {
+		notify("Couldn't export your data: "+err.Error(), true)
 		return
 	}
 	downloadBytes("cashflux.json", "application/json", data)
+	notify("Exported your data as cashflux.json.", false)
 }
 
 // exportCSV downloads all transactions as a CSV file.
-func exportCSV() {
+func exportCSV(notify func(string, bool)) {
 	app := appstate.Default
 	if app == nil {
 		return
 	}
 	data, err := app.ExportCSV()
 	if err != nil {
+		notify("Couldn't export your transactions: "+err.Error(), true)
 		return
 	}
 	downloadBytes("transactions.csv", "text/csv", data)
+	notify("Exported your transactions as transactions.csv.", false)
 }
 
 // importJSON picks a JSON dataset file and replaces all data with it, then
 // bumps the data revision so screens refresh.
-func importJSON(onChange func()) {
+func importJSON(onChange func(), notify func(string, bool)) {
 	pickFile(".json", func(data []byte) {
 		app := appstate.Default
 		if app == nil {
 			return
 		}
 		if err := app.ImportJSON(data); err != nil {
+			notify("Couldn't import that file: "+err.Error(), true)
 			return
 		}
 		onChange()
+		notify("Imported your data.", false)
 	})
 }
 
 // loadSample replaces all data with the built-in sample dataset and refreshes.
-func loadSample(onChange func()) {
+func loadSample(onChange func(), notify func(string, bool)) {
 	app := appstate.Default
 	if app == nil {
 		return
 	}
 	if err := app.LoadSample(); err != nil {
+		notify("Couldn't load the sample data: "+err.Error(), true)
 		return
 	}
 	onChange()
+	notify("Loaded the sample data.", false)
 }
 
 // wipeData clears all data after a confirmation, then refreshes.
-func wipeData(onChange func()) {
+func wipeData(onChange func(), notify func(string, bool)) {
 	if !confirmAction("Erase all CashFlux data on this device? This cannot be undone.") {
 		return
 	}
@@ -416,9 +426,11 @@ func wipeData(onChange func()) {
 		return
 	}
 	if err := app.Wipe(); err != nil {
+		notify("Couldn't erase your data: "+err.Error(), true)
 		return
 	}
 	onChange()
+	notify("Erased all data on this device.", false)
 }
 
 // dataBtnProps configures a data-action button.

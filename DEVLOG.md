@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Toast confirmations for data actions
+
+- Made the toast dual-purpose (it already supported a non-error/info style via `Notice.Err=false`):
+  the Settings data actions — Export JSON/CSV, Import, Load sample, Wipe — now post a success message,
+  and the errors they previously swallowed (`if err != nil { return }`) now surface as error toasts.
+  "Mark all updated" on Accounts reports the count it refreshed via `plural(n, "balance")`.
+- **Plumbing note:** these are package-level funcs (`exportJSON`, …), not components, so they can't
+  call the `UseNotice` hook. The `state` package exposes no non-hook atom setter (only `UseAtom`), so I
+  threaded a `notify func(string, bool)` closure captured in `globalSettingsForm` (where the hook is
+  valid) down into each. Clean and keeps the hook rules intact.
+- Scope check: this is the §1.4 error-surface item, not feature-inference — export/import/wipe
+  failing silently was a real gap; the success confirmations are the natural complement.
+- Verified the wasm build; touched files are js-only (no native target).
+- **Next.** Small polish; comprehensive feature set otherwise (layered config + sync remain
+  deliberately out of scope pending spec agreement / backend).
+
 ## 2026-06-16 — Route remaining swallowed writes through the toast
 
 - Followed up the toast surface by sweeping the last `_ = app.Put…` sites in the screens
