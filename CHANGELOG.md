@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Budget period selector in the UI: the add and inline-edit forms let you choose weekly, monthly, or
+  quarterly, and each budget is now evaluated over its own period window (honoring the week-start
+  preference) rather than a shared month. Each row shows its period.
 - Budget periods (weekly / monthly / quarterly): the `Period` enum gained weekly and quarterly (with
   a `Label`), and `budgeting.PeriodRange` computes the current [start, end) window for a period
   containing a reference date (weekly honors the week-start preference; quarterly snaps to calendar

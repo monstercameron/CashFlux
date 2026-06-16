@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Budget periods: the UI (feature complete)
+
+- Wired periods into the budgets screen. A period `Select` (shared `periodOptions` over
+  `domain.AllPeriods`) on both the add form and `BudgetRow`'s inline editor; `saveBudget` grew a
+  period param (guarded by `Period.Valid()`).
+- **Per-budget evaluation.** Replaced the single `EvaluateAll(start,end)` over one shared month with
+  a loop that calls `budgeting.PeriodRange(b.Period, viewMonth, weekStart)` per budget and
+  `Evaluate`s each in its own window. `weekStart` comes from the prefs atom, so weekly budgets
+  respect the user's Sunday/Monday choice. Each row shows its period label.
+- **Note on the month stepper.** It still navigates a reference date by month; a weekly/quarterly
+  budget shows the period *containing* that reference. Stepping by the budget's own unit would be
+  nicer but means a per-period stepper — deferred; the current behavior is correct and clear with the
+  period label visible.
+- Budget periods are now end-to-end: enum → `PeriodRange` engine (tested) → selector + per-budget
+  evaluation.
+- **Next.** The local feature set is essentially complete; the remaining large item (Phase-3 sync)
+  needs a backend. Will continue with small polish or note completion.
+
 ## 2026-06-16 — Budget periods: enum + range engine
 
 - Lifting budgets beyond monthly, bottom-up. `domain.Period` gains `PeriodWeekly`/`PeriodQuarterly`

@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -56,14 +57,17 @@ func Budgets() ui.Node {
 	}
 	catID := ui.UseState(defaultCat)
 	owner := ui.UseState(domain.GroupOwnerID)
+	period := ui.UseState(string(domain.PeriodMonthly))
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 	monthOffset := ui.UseState(0)
+	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+	onPeriod := ui.UseEvent(func(e ui.Event) { period.Set(e.GetValue()) })
 
 	budgetDefs := app.CustomFieldDefsFor("budget")
 	onCustom := func(key, value string) {
@@ -90,7 +94,7 @@ func Budgets() ui.Node {
 		}
 		b := domain.Budget{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
-			CategoryID: catID.Get(), Period: domain.PeriodMonthly, Limit: money.New(amt, base),
+			CategoryID: catID.Get(), Period: domain.Period(period.Get()), Limit: money.New(amt, base),
 			Custom: customValuesToMap(budgetDefs, customVals.Get()),
 		}
 		if err := app.PutBudget(b); err != nil {
@@ -112,7 +116,7 @@ func Budgets() ui.Node {
 		bump()
 	}
 
-	saveBudget := func(id, newName, limitStr string) {
+	saveBudget := func(id, newName, limitStr, periodStr string) {
 		for _, b := range app.Budgets() {
 			if b.ID != id {
 				continue
@@ -126,6 +130,9 @@ func Budgets() ui.Node {
 				return
 			}
 			b.Limit = money.New(amt, base)
+			if p := domain.Period(periodStr); p.Valid() {
+				b.Period = p
+			}
 			if err := app.PutBudget(b); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -154,7 +161,8 @@ func Budgets() ui.Node {
 				Input(Class("field"), Type("text"), Placeholder("Name"), Value(name.Get()), OnInput(onName)),
 				Select(Class("field"), OnChange(onCat), catOptions),
 				Select(Class("field"), OnChange(onOwner), ownerOptions),
-				Input(Class("field"), Type("number"), Placeholder("Monthly limit ("+base+")"), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
+				Select(Class("field"), Title("Period"), OnChange(onPeriod), periodOptions(period.Get())),
+				Input(Class("field"), Type("number"), Placeholder("Limit ("+base+")"), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
 				MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
@@ -168,8 +176,16 @@ func Budgets() ui.Node {
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	viewMonth := dateutil.AddMonths(time.Now(), monthOffset.Get())
-	start, end := dateutil.MonthRange(viewMonth)
-	statuses, _ := budgeting.EvaluateAll(budgets, txns, start, end, rates, budgeting.DefaultNearThreshold)
+	// Each budget is evaluated over its own period window around the viewed date.
+	statuses := make([]budgeting.Status, 0, len(budgets))
+	for _, b := range budgets {
+		bs, be := budgeting.PeriodRange(b.Period, viewMonth, weekStart)
+		st, err := budgeting.Evaluate(b, txns, bs, be, rates, budgeting.DefaultNearThreshold)
+		if err != nil {
+			continue
+		}
+		statuses = append(statuses, st)
+	}
 
 	overCount, nearCount := 0, 0
 	for _, s := range statuses {
@@ -215,11 +231,20 @@ type budgetRowProps struct {
 	Status   budgeting.Status
 	Category string
 	OnDelete func(string)
-	OnSave   func(id, name, limit string)
+	OnSave   func(id, name, limit, period string)
+}
+
+// periodOptions builds the budget-period <option>s with selected marked.
+func periodOptions(selected string) []ui.Node {
+	opts := make([]ui.Node, 0, len(domain.AllPeriods))
+	for _, p := range domain.AllPeriods {
+		opts = append(opts, Option(Value(string(p)), SelectedIf(selected == string(p)), p.Label()))
+	}
+	return opts
 }
 
 // BudgetRow renders one budget's spend vs limit with a progress bar. Clicking
-// Edit swaps in an inline form for the name and monthly limit. It owns all its
+// Edit swaps in an inline form for the name, limit, and period. It owns all its
 // hooks (declared unconditionally) so the edit toggle never disturbs hook order.
 func BudgetRow(props budgetRowProps) ui.Node {
 	s := props.Status
@@ -229,16 +254,19 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	editing := ui.UseState(false)
 	nameS := ui.UseState(s.Budget.Name)
 	limitS := ui.UseState(limitMajor)
+	periodS := ui.UseState(string(s.Budget.Period))
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
+	onPeriod := ui.UseEvent(func(e ui.Event) { periodS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(s.Budget.Name)
 		limitS.Set(limitMajor)
+		periodS.Set(string(s.Budget.Period))
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get())
+		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get())
 		editing.Set(false)
 	}))
 
@@ -246,7 +274,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		return Div(Class("budget"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
 				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
-				Input(Class("field"), Type("number"), Placeholder("Monthly limit"), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
+				Input(Class("field"), Type("number"), Placeholder("Limit"), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
+				Select(Class("field"), Title("Period"), OnChange(onPeriod), periodOptions(periodS.Get())),
 				Button(Class("btn btn-primary"), Type("submit"), "Save"),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
 			),
@@ -283,6 +312,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Button(Class("btn-del"), Type("button"), Title("Delete budget"), OnClick(del), "✕"),
 		),
 		Div(Class("bar"), Div(Class(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-		Span(Class("budget-sub"), fmt.Sprintf("%s · %d%% · %s left", label, s.Percent, fmtMoney(s.Remaining))),
+		Span(Class("budget-sub"), fmt.Sprintf("%s · %s · %d%% · %s left", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
 	)
 }
