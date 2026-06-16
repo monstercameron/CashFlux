@@ -195,6 +195,9 @@ and every commit updates this file under `Unreleased`.
 - Global settings Data actions wired: Export CSV (download), Import (file picker → replace dataset),
   Load sample, and Wipe (with a confirm dialog). A shared `data:revision` atom is bumped on bulk
   changes so the dashboard re-renders; added `pickFile`/`confirmAction` browser helpers.
+- `internal/dashlayout`: pure bento layout model — `Placement` (column/row + spans with CSS grid
+  string helpers), `Layout` with the candidate-C `Default` arrangement, immutable `Swap` (exchange
+  two widgets' cells) and `Resize` (clamped spans). Table-driven tested; underpins drag-reorder/resize.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

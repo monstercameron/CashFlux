@@ -192,8 +192,14 @@ problems and fixes, and what's next.
   shared `data:revision` atom: bulk actions bump it and `Dashboard` reads it so it re-renders behind
   the still-open panel. Other screens refresh on their own navigation/rev atoms.
 
-**Next:** drag-to-reorder and edge-resize for the bento widgets (pointer/DnD via interop, persisting
-the per-user layout), then restyle the non-dashboard screens (Accounts/Transactions/etc.) to the new shell.
+- Started bento drag/resize **bottom-up**: new pure `internal/dashlayout` holds the grid model —
+  `Placement` (col/row + spans, with `GridColumn`/`GridRow` CSS string helpers), `Layout` with the
+  candidate-C `Default()` (14 widgets), and immutable `Swap`/`Resize`. Table-driven tests cover the
+  CSS strings, swap symmetry + immutability, unknown-id no-ops, and span clamping. The UI will hold a
+  `Layout` in an atom, source each widget's placement from it, and write back swaps/resizes.
+
+**Next:** refactor `Dashboard` to source widget grid placement from a layout atom (no behavior change),
+then the drag-to-swap interaction, then edge-resize, then persist the layout to the store.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
