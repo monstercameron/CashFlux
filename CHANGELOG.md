@@ -203,9 +203,10 @@ and every commit updates this file under `Unreleased`.
   questions using your figures as context.
 - Planning screen (replacing the stub): a **debt-payoff calculator** — enter balance, APR, and
   monthly payment to see months-to-zero, total interest, and total paid, updating live via the
-  `internal/payoff` engine, with a friendly message when the payment can't cover the interest. Plus a
-  **12-month net-worth projection** chart (current net worth + this month's net cash flow, via
-  `internal/forecast` + the area chart).
+  `internal/payoff` engine, with a friendly message when the payment can't cover the interest, and an
+  optional **extra-payment** input that shows how many months sooner it clears and how much interest
+  it saves. Plus a **12-month net-worth projection** chart (current net worth + this month's net cash
+  flow, via `internal/forecast` + the area chart).
 - `internal/allocate`: pure capital-allocation scorer — normalizes each candidate on returns,
   stability, liquidity, and debt-reduction, combines by a user `Weights` profile into an explainable
   `Score` + `Breakdown`, and `Rank`s candidates highest-first. Table-driven tested; deterministic.

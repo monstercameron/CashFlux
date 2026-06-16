@@ -35,10 +35,12 @@ func Planning() ui.Node {
 	balStr := ui.UseState("")
 	aprStr := ui.UseState("")
 	payStr := ui.UseState("")
+	extraStr := ui.UseState("")
 
 	onBal := ui.UseEvent(func(v string) { balStr.Set(v) })
 	onApr := ui.UseEvent(func(v string) { aprStr.Set(v) })
 	onPay := ui.UseEvent(func(v string) { payStr.Set(v) })
+	onExtra := ui.UseEvent(func(v string) { extraStr.Set(v) })
 
 	var resultBody ui.Node
 	switch {
@@ -53,10 +55,22 @@ func Planning() ui.Node {
 			resultBody = P(Class("err"), "Enter valid numbers for balance, APR, and payment.")
 		default:
 			if r, ok := payoff.Project(bal, apr, pay); ok {
-				resultBody = Div(Class("stat-grid"),
-					stat("Months to pay off", fmt.Sprintf("%d", r.Months), ""),
-					stat("Total interest", fmtMoney(money.New(r.TotalInterest, base)), "neg"),
-					stat("Total paid", fmtMoney(money.New(r.TotalPaid, base)), ""),
+				extraNote := Fragment()
+				if extra, eerr := money.ParseMinor(strings.TrimSpace(extraStr.Get()), currency.Decimals(base)); eerr == nil && extra > 0 {
+					if r2, ok2 := payoff.Project(bal, apr, pay+extra); ok2 {
+						extraNote = P(Class("muted"), fmt.Sprintf(
+							"Paying %s more each month clears it %d months sooner and saves %s in interest.",
+							fmtMoney(money.New(extra, base)), r.Months-r2.Months, fmtMoney(money.New(r.TotalInterest-r2.TotalInterest, base)),
+						))
+					}
+				}
+				resultBody = Div(
+					Div(Class("stat-grid"),
+						stat("Months to pay off", fmt.Sprintf("%d", r.Months), ""),
+						stat("Total interest", fmtMoney(money.New(r.TotalInterest, base)), "neg"),
+						stat("Total paid", fmtMoney(money.New(r.TotalPaid, base)), ""),
+					),
+					extraNote,
 				)
 			} else {
 				resultBody = P(Class("err"), "That payment won't cover the interest — the balance would never clear. Try a larger payment.")
@@ -100,6 +114,7 @@ func Planning() ui.Node {
 				Input(Class("field"), Type("number"), Placeholder("Balance owed ("+base+")"), Value(balStr.Get()), Step("0.01"), OnInput(onBal)),
 				Input(Class("field"), Type("number"), Placeholder("APR %"), Value(aprStr.Get()), Step("0.01"), OnInput(onApr)),
 				Input(Class("field"), Type("number"), Placeholder("Monthly payment ("+base+")"), Value(payStr.Get()), Step("0.01"), OnInput(onPay)),
+				Input(Class("field"), Type("number"), Placeholder("Extra payment, optional ("+base+")"), Value(extraStr.Get()), Step("0.01"), OnInput(onExtra)),
 			),
 		),
 		Section(Class("card"),

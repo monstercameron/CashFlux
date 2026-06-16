@@ -463,6 +463,10 @@ problems and fixes, and what's next.
 - Added a **"Net worth by member"** rollup to the Members screen via `ledger.NetByOwner` (each member
   plus a Group (shared) row, base currency, green/red toned), defaulting an absent owner to zero base.
 
+- Added an **extra-payment scenario** to the debt-payoff calculator: an optional extra-monthly input
+  runs `payoff.Project` a second time at `payment + extra` and reports the months saved and interest
+  saved in plain English — the engine's first what-if surfaced.
+
 **Next:** per-row duplicate, persist-last-filter, then Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
