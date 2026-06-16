@@ -387,8 +387,8 @@ Shared control components (from mockup):
 
 ### 2.7 Capital-allocation engine — `internal/allocate`
 
-- [ ] ★ Criterion scorers: returns, stability, liquidity/ease-of-withdrawal, debt reduction, goal progress
-- [ ] ★ Weighted combination by profile; normalization; deterministic
+- [~] ★ Criterion scorers: returns, stability, liquidity, debt reduction done (`internal/allocate`); goal-progress criterion later
+- [x] ★ Weighted combination by profile; normalization; deterministic (`Score`/`Rank`)
 - [ ] `AllocationProfile{ID, Name, Weights, Constraints, CustomCriteria[formulaID]}` + CRUD
 - [ ] Constraints: emergency buffer, max-per-destination, exclusions — applied/clamped
 - [ ] Candidate set assembly (asset accounts, goals, high-interest liabilities as guaranteed return)

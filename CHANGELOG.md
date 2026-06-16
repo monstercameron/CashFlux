@@ -178,6 +178,9 @@ and every commit updates this file under `Unreleased`.
 - Planning screen (replacing the stub): a **debt-payoff calculator** — enter balance, APR, and
   monthly payment to see months-to-zero, total interest, and total paid, updating live via the
   `internal/payoff` engine, with a friendly message when the payment can't cover the interest.
+- `internal/allocate`: pure capital-allocation scorer — normalizes each candidate on returns,
+  stability, liquidity, and debt-reduction, combines by a user `Weights` profile into an explainable
+  `Score` + `Breakdown`, and `Rank`s candidates highest-first. Table-driven tested; deterministic.
 - `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
   the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
   current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.

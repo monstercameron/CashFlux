@@ -349,7 +349,13 @@ problems and fixes, and what's next.
   (balance / APR / monthly payment → months, total interest, total paid) wired to `payoff.Project`,
   recomputing on each keystroke (no submit) with a plain-English non-viable message.
 
-**Next:** extra-payment / payoff-date scenarios, then the allocation-engine scorers and the
+- Built the **allocation engine core** `internal/allocate` (pure, tested): `Candidate` criteria
+  normalized to 0..1 (returns capped at 15% APR, stability/liquidity /100, debt-reduction boolean),
+  combined by a `Weights` profile into a weight-normalized `Score` with a per-criterion `Breakdown`
+  (explainable, no black box), and `Rank` sorting highest-first (stable). Tests cover normalization +
+  capping, equal-weight averaging, zero-weight safety, returns ordering, and debt-priority weighting.
+
+**Next:** an Allocate screen (amount + profile → ranked suggestions with breakdown), then the
 formula-engine tokenizer — continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
