@@ -152,7 +152,12 @@ problems and fixes, and what's next.
   `ledger.PeriodTotals` (confirmed it returns expense as a positive magnitude). Used a tiny div-bar
   approach rather than SVG since the mockup does.
 
-**Next:** the remaining widgets (Upcoming bills, Savings rate, Spending breakdown), then the
+- Added **Savings rate** (period income saved %, big figure + bar) and **Spending breakdown**
+  (segmented bar of period expenses by category — top three + "Other" — with a color-keyed legend,
+  all converted to base currency, sorted desc). Both reuse the `Widget` shell; breakdown reuses the
+  window range already computed in `Dashboard`.
+
+**Next:** the **Upcoming bills** widget (from liability accounts' due day + min payment), then the
 per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

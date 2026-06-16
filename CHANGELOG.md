@@ -173,6 +173,8 @@ and every commit updates this file under `Unreleased`.
   scaled to the largest bar, with the current month's net figure — via `ledger.PeriodTotals`.
 - Savings rate widget (2×1): the share of the period's income that wasn't spent, as a big figure and
   a `ProgressBar` (toned green/red).
+- Spending breakdown widget (2×1): a segmented bar of the period's expenses by category (top three
+  plus "Other") with a color-keyed legend; totals converted to base currency.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

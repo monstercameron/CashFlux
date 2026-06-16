@@ -83,7 +83,87 @@ func Dashboard() ui.Node {
 		netWorthTrendWidget(accounts, txns, rates, net),
 		cashFlowWidget(txns, rates),
 		savingsRateWidget(income, expense),
+		spendingBreakdownWidget(app, txns, rates, start, end),
 	)
+}
+
+// spendingBreakdownWidget is the 2×1 Spending breakdown widget: a segmented bar
+// of the period's expenses by category (top three plus "Other") with a legend.
+func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, start, end time.Time) ui.Node {
+	catName := make(map[string]string)
+	for _, c := range app.Categories() {
+		catName[c.ID] = c.Name
+	}
+
+	totals := make(map[string]int64)
+	var total int64
+	for _, t := range txns {
+		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+			continue
+		}
+		conv, err := rates.Convert(t.Amount, rates.Base)
+		if err != nil {
+			continue
+		}
+		amt := conv.Amount
+		if amt < 0 {
+			amt = -amt
+		}
+		totals[t.CategoryID] += amt
+		total += amt
+	}
+
+	if total == 0 {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: "breakdown", Title: "Spending breakdown", Draggable: true, GridColumn: "3 / span 2", GridRow: "7",
+			Body: P(Class("empty text-dim text-[13px]"), "No spending in this period."),
+		})
+	}
+
+	type seg struct {
+		name string
+		amt  int64
+	}
+	segs := make([]seg, 0, len(totals))
+	for cid, amt := range totals {
+		name := catName[cid]
+		if name == "" {
+			name = "Uncategorized"
+		}
+		segs = append(segs, seg{name: name, amt: amt})
+	}
+	sort.Slice(segs, func(i, j int) bool { return segs[i].amt > segs[j].amt })
+
+	// Top three categories, the rest lumped into "Other".
+	if len(segs) > 4 {
+		var other int64
+		for _, s := range segs[3:] {
+			other += s.amt
+		}
+		segs = append(segs[:3], seg{name: "Other", amt: other})
+	}
+
+	tones := []string{"bg-up", "bg-warn", "bg-dim", "bg-down"}
+	barParts := make([]ui.Node, 0, len(segs))
+	legend := make([]ui.Node, 0, len(segs))
+	for i, s := range segs {
+		tone := tones[i%len(tones)]
+		pct := int(s.amt * 100 / total)
+		barParts = append(barParts, Div(Class(tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
+		legend = append(legend, Span(Class("flex items-center gap-1.5"),
+			Span(Class("w-2 h-2 rounded-full "+tone)),
+			Textf("%s %d%%", s.name, pct),
+		))
+	}
+
+	body := Div(
+		Div(Class("h-2.5 rounded-full overflow-hidden flex"), barParts),
+		Div(Class("flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[12px] text-dim"), legend),
+	)
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "breakdown", Title: "Spending breakdown", Draggable: true, GridColumn: "3 / span 2", GridRow: "7",
+		Body: body,
+	})
 }
 
 // savingsRateWidget is the 2×1 Savings rate widget: the share of the period's
