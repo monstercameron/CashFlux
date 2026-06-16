@@ -50,6 +50,7 @@ func Transactions() ui.Node {
 	accID := ui.UseState(defaultAcc)
 	catID := ui.UseState("")
 	toAccID := ui.UseState("")
+	tagsStr := ui.UseState("")
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	errMsg := ui.UseState("")
 	filterText := ui.UseState("")
@@ -63,6 +64,7 @@ func Transactions() ui.Node {
 	onAcc := ui.UseEvent(func(e ui.Event) { accID.Set(e.GetValue()) })
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
 	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
+	onTags := ui.UseEvent(func(v string) { tagsStr.Set(v) })
 	onFilterText := ui.UseEvent(func(v string) { filterText.Set(v) })
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { filterAcc.Set(e.GetValue()) })
 	onFilterCat := ui.UseEvent(func(e ui.Event) { filterCat.Set(e.GetValue()) })
@@ -134,6 +136,7 @@ func Transactions() ui.Node {
 		t := domain.Transaction{
 			ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
 			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: memberFor(acc),
+			Tags: parseTags(tagsStr.Get()),
 		}
 		if err := app.PutTransaction(t); err != nil {
 			errMsg.Set(err.Error())
@@ -141,6 +144,7 @@ func Transactions() ui.Node {
 		}
 		desc.Set("")
 		amountStr.Set("")
+		tagsStr.Set("")
 		errMsg.Set("")
 		bump()
 	}))
@@ -214,6 +218,7 @@ func Transactions() ui.Node {
 					Select(Class("field"), Title("To account"), OnChange(onToAcc), toAccOptions),
 					Select(Class("field"), OnChange(onCat), catOptions),
 				),
+				If(!isTransfer, Input(Class("field"), Type("text"), Placeholder("Tags (comma-separated)"), Value(tagsStr.Get()), OnInput(onTags))),
 				Input(Class("field"), Type("date"), Value(dateStr.Get()), OnInput(onDate)),
 				Button(Class("btn btn-primary"), Type("submit"), "Add"),
 			),
@@ -291,6 +296,21 @@ type transactionRowProps struct {
 	OnDelete func(string)
 }
 
+// parseTags splits a comma-separated string into trimmed, non-empty tags.
+func parseTags(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // TransactionRow is a per-transaction row with a stable delete-handler hook.
 func TransactionRow(props transactionRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Txn.ID) }))
@@ -305,6 +325,9 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	meta := cat + " · " + dateutil.FormatDate(props.Txn.Date)
 	if props.Account != "" {
 		meta += " · " + props.Account
+	}
+	if len(props.Txn.Tags) > 0 {
+		meta += " · #" + strings.Join(props.Txn.Tags, " #")
 	}
 
 	return Div(Class("row"),

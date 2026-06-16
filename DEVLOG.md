@@ -287,8 +287,12 @@ problems and fixes, and what's next.
   account/category counts) and an in-app **debug log viewer** (the slog `Ring`, newest-first, Refresh
   button). Heavy editing stays in the global panel + dedicated screens to avoid duplication.
 
-**Next:** full edit flows (account/transaction/budget/goal field edit), category-delete reassign,
-then preferences (week-start, formats) — continuing the priority-ordered Phase-1 backlog.
+- Added **transaction tags**: a comma-separated tags field on income/expense entries (`parseTags`
+  trims/drops empties), stored on `Transaction.Tags` and shown on the row as `#tag`. Tag-based
+  filtering is a follow-up.
+
+**Next:** full edit flows (account/transaction/budget/goal field edit), then preferences (week-start,
+formats) and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
