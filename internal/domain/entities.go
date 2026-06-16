@@ -29,7 +29,7 @@ type Account struct {
 	Class          AccountClass `json:"class"`
 	Type           AccountType  `json:"type"`
 	Currency       string       `json:"currency"`
-	OpeningBalance money.Money   `json:"openingBalance"`
+	OpeningBalance money.Money  `json:"openingBalance"`
 	BalanceAsOf    time.Time    `json:"balanceAsOf"`
 
 	// Liability-only fields.

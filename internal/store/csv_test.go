@@ -74,9 +74,9 @@ func TestCSVImportColumnOrderTolerant(t *testing.T) {
 
 func TestCSVImportErrors(t *testing.T) {
 	cases := []string{
-		"date,account_id,amount\n2026-06-03,a1,-4.50\n",       // missing currency column
-		"amount,currency\nnotnumber,USD\n",                    // bad amount
-		"amount,currency,date\n-4.50,USD,nope\n",              // bad date
+		"date,account_id,amount\n2026-06-03,a1,-4.50\n", // missing currency column
+		"amount,currency\nnotnumber,USD\n",              // bad amount
+		"amount,currency,date\n-4.50,USD,nope\n",        // bad date
 	}
 	for i, in := range cases {
 		if _, err := TransactionsFromCSV([]byte(in)); err == nil {

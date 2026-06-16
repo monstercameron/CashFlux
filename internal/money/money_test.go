@@ -17,9 +17,9 @@ func TestNewNormalizesCurrency(t *testing.T) {
 
 func TestPredicates(t *testing.T) {
 	tests := []struct {
-		name             string
-		m                Money
-		zero, pos, neg   bool
+		name           string
+		m              Money
+		zero, pos, neg bool
 	}{
 		{"zero", New(0, "USD"), true, false, false},
 		{"positive", New(5, "USD"), false, true, false},
@@ -54,10 +54,10 @@ func TestNegAndAbs(t *testing.T) {
 
 func TestAddSub(t *testing.T) {
 	tests := []struct {
-		name    string
-		a, b    Money
-		add     int64
-		sub     int64
+		name string
+		a, b Money
+		add  int64
+		sub  int64
 	}{
 		{"simple", New(100, "USD"), New(50, "USD"), 150, 50},
 		{"with negative", New(100, "USD"), New(-30, "USD"), 70, 130},

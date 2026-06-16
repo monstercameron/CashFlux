@@ -24,7 +24,7 @@ func TestSetResolutionResnaps(t *testing.T) {
 
 func TestStepFromClampsTo(t *testing.T) {
 	w := NewWindow(Month, d(2026, time.June, 1), time.Monday) // from=to=Jun
-	w = w.StepFrom(2)                                          // from -> Aug, to pushed to Aug
+	w = w.StepFrom(2)                                         // from -> Aug, to pushed to Aug
 	if !w.From.Equal(d(2026, time.August, 1)) || !w.To.Equal(d(2026, time.August, 1)) {
 		t.Errorf("StepFrom(+2) = %s..%s, want Aug..Aug", w.From.Format("2006-01-02"), w.To.Format("2006-01-02"))
 	}
@@ -32,7 +32,7 @@ func TestStepFromClampsTo(t *testing.T) {
 
 func TestStepToClampsFrom(t *testing.T) {
 	w := NewWindow(Month, d(2026, time.June, 1), time.Monday) // from=to=Jun
-	w = w.StepTo(-1)                                           // to -> May, from pulled to May
+	w = w.StepTo(-1)                                          // to -> May, from pulled to May
 	if !w.From.Equal(d(2026, time.May, 1)) || !w.To.Equal(d(2026, time.May, 1)) {
 		t.Errorf("StepTo(-1) = %s..%s, want May..May", w.From.Format("2006-01-02"), w.To.Format("2006-01-02"))
 	}

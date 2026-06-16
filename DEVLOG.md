@@ -323,6 +323,9 @@ problems and fixes, and what's next.
 - Income/Spending KPI sublines now show the period plus the real deposit/transaction **count** for it
   (a `plural` helper), replacing the bare period label and matching the mockup's "June · 1 deposit".
 
+- Hygiene pass after ~67 features: `go vet ./...` (js/wasm) is clean; `gofmt -w` tidied alignment in
+  seven files (mostly table-comment columns + one entities.go gap). Native tests still green.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

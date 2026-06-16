@@ -54,9 +54,9 @@ func TestWeekStart(t *testing.T) {
 
 func TestFiscalMonthRange(t *testing.T) {
 	tests := []struct {
-		name             string
-		day              string
-		startDay         int
+		name               string
+		day                string
+		startDay           int
 		wantStart, wantEnd string
 	}{
 		{"after start day", "2026-06-20", 15, "2026-06-15", "2026-07-15"},

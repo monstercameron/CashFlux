@@ -36,10 +36,10 @@ func TestSpentIndividualScope(t *testing.T) {
 	rates := currency.Rates{Base: "USD"}
 	budget := domain.Budget{CategoryID: "food", Scope: domain.ScopeIndividual, OwnerID: "m1", Limit: usd(50000)}
 	all := []domain.Transaction{
-		expense(10000, "USD", "food", "m1", "2026-06-03"),       // counts
-		expense(5000, "USD", "food", "m2", "2026-06-04"),        // other member, excluded
-		expense(3000, "USD", "rent", "m1", "2026-06-05"),        // other category, excluded
-		expense(2000, "USD", "food", "m1", "2026-07-02"),        // out of period, excluded
+		expense(10000, "USD", "food", "m1", "2026-06-03"),                                     // counts
+		expense(5000, "USD", "food", "m2", "2026-06-04"),                                      // other member, excluded
+		expense(3000, "USD", "rent", "m1", "2026-06-05"),                                      // other category, excluded
+		expense(2000, "USD", "food", "m1", "2026-07-02"),                                      // out of period, excluded
 		{Amount: usd(9999), CategoryID: "food", MemberID: "m1", Date: mustDate("2026-06-06")}, // income, excluded
 	}
 	spent, err := Spent(budget, all, start, end, rates)
