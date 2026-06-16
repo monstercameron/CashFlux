@@ -22,6 +22,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Budgets summary header: the Budgets screen shows total spent, total budgeted, and amount left for
+  the viewed period across all budgets.
 - Goals summary header: the Goals screen shows combined saved, total target, and overall progress
   percent across all goals.
 - Filtered-transactions summary: the ledger shows "N shown · net $X" for the current filter — the

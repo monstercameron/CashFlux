@@ -194,6 +194,7 @@ func Budgets() ui.Node {
 	}
 
 	overCount, nearCount := 0, 0
+	var totalSpent, totalLimit int64
 	for _, s := range statuses {
 		switch s.State {
 		case budgeting.StateOver:
@@ -201,6 +202,8 @@ func Budgets() ui.Node {
 		case budgeting.StateNear:
 			nearCount++
 		}
+		totalSpent += s.Spent.Amount
+		totalLimit += s.Spent.Amount + s.Remaining.Amount // limit = spent + remaining
 	}
 
 	var listBody ui.Node
@@ -218,6 +221,11 @@ func Budgets() ui.Node {
 
 	return Div(
 		formCard,
+		If(len(statuses) > 0, Div(Class("stat-grid"),
+			stat("Spent", fmtMoney(money.New(totalSpent, base)), "neg"),
+			stat("Budgeted", fmtMoney(money.New(totalLimit, base)), ""),
+			stat("Left", fmtMoney(money.New(totalLimit-totalSpent, base)), accentFor(money.New(totalLimit-totalSpent, base))),
+		)),
 		Section(Class("card"),
 			Div(Class("budget-head"),
 				H2(Class("card-title"), "Budgets"),

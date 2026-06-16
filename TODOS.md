@@ -259,7 +259,7 @@ Shared control components (from mockup):
 - [x] List budgets with spent vs limit + progress bar (current month)
 - [x] Add + delete + inline edit budget (name, limit, period) + weekly/monthly/quarterly periods
       (engine `PeriodRange` + selector + per-budget evaluation honoring week-start)
-- [x] Near/over-limit indicators (gentle, colored bar)
+- [x] Near/over-limit indicators (gentle, colored bar) + summary header (spent/budgeted/left)
 - [x] Period selector (month stepper) — view any month
 - [x] Tests: spent/remaining, scope aggregation, thresholds (in `internal/budgeting`)
 

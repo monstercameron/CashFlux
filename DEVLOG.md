@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Budgets: period summary header
+
+- Added a stat-grid above the budgets list: total spent, total budgeted (sum of each status's
+  spent+remaining), and amount left for the viewed period. Folded the totals into the existing
+  over/near counting loop so it's a single pass. "Left" tone follows its sign via `accentFor`.
+- Parallels the goals summary; both give a one-line "where do I stand" without scanning every row.
+- **Next.** Genuine small polish; the local feature set is comprehensive (sync needs a backend).
+
 ## 2026-06-16 — Goals: combined progress header
 
 - Added a stat-grid above the goals list (when there are goals): total saved, total target, and
