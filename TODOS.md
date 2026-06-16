@@ -226,8 +226,8 @@ Shared control components (from mockup):
 ### 1.10 Categories
 
 - [x] List + add + delete + inline edit (name + kind); income vs expense
-- [x] Sub-categories (parentId) with tree display — engine + parent picker on add & inline edit +
-      indented lists (breakdown rollup-to-parent optional later)
+- [x] Sub-categories (parentId): engine + parent picker (add & inline edit) + indented lists +
+      dashboard breakdown rolls sub-category spend up to the top-level parent
 - [ ] Default scheme + reset; methodology-aware presets (envelope/zero-based)
 - [x] Reassign transactions on category delete (pick replacement) — `appstate.ReassignCategory` +
       Categories reassign panel (moves transactions and budgets, then deletes)

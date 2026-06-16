@@ -207,9 +207,28 @@ func nextDue(now time.Time, day int) time.Time {
 // spendingBreakdownWidget is the 2×1 Spending breakdown widget: a segmented bar
 // of the period's expenses by category (top three plus "Other") with a legend.
 func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, start, end time.Time) ui.Node {
-	catName := make(map[string]string)
-	for _, c := range app.Categories() {
+	cats := app.Categories()
+	catName := make(map[string]string, len(cats))
+	parent := make(map[string]string, len(cats))
+	exists := make(map[string]bool, len(cats))
+	for _, c := range cats {
 		catName[c.ID] = c.Name
+		parent[c.ID] = c.ParentID
+		exists[c.ID] = true
+	}
+	// rootOf walks up to the top-level ancestor so sub-category spend rolls up to
+	// its parent. Cycle/orphan-safe (stops at a missing parent or a repeat).
+	rootOf := func(id string) string {
+		seen := map[string]bool{}
+		for {
+			p := parent[id]
+			if p == "" || !exists[p] || seen[id] {
+				break
+			}
+			seen[id] = true
+			id = p
+		}
+		return id
 	}
 
 	totals := make(map[string]int64)
@@ -226,7 +245,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 		if amt < 0 {
 			amt = -amt
 		}
-		totals[t.CategoryID] += amt
+		totals[rootOf(t.CategoryID)] += amt
 		total += amt
 	}
 

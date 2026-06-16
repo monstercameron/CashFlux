@@ -15,6 +15,10 @@ and every commit updates this file under `Unreleased`.
   format (via `prefs.FormatDate`) instead of always ISO. Each row component reads the preferences
   atom, so changing the format updates every list live.
 
+### Changed
+- The dashboard spending breakdown now rolls sub-category spend up to its top-level parent category,
+  so e.g. Restaurants and Groceries are counted under Food — a cleaner high-level view.
+
 ### Added
 - Re-parent categories: the category inline editor now has a parent picker too (same-kind, self
   excluded), so an existing category can be nested, moved, or promoted to top level.

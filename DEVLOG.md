@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Spending breakdown: roll up to parent categories
+
+- The dashboard breakdown now attributes each expense to its top-level ancestor category, so
+  sub-category spend aggregates under the parent (Food, not Food/Restaurants + Food/Groceries
+  separately). A small cycle/orphan-safe `rootOf` walks `ParentID` up to the root; uncategorized
+  ("") stays its own bucket.
+- Reused the existing top-3-plus-Other rendering — only the bucketing key changed (root ancestor
+  instead of the literal category), so the chart and legend are unaffected.
+- Puts the category hierarchy to work in reporting, completing sub-categories beyond just display.
+- **Next.** Genuine small polish as it arises; the major remaining backlog item (sync) needs a
+  backend.
+
 ## 2026-06-16 — Sub-categories: re-parent on the inline editor
 
 - The inline category editor gains a parent `Select`, so an existing category can be nested under
