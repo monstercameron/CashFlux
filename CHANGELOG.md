@@ -119,6 +119,9 @@ and every commit updates this file under `Unreleased`.
 - Collapsible rail: the top-bar menu button toggles the sidebar into 58px icon-only mode (labels,
   captions, brand text, and household summary hidden), coordinated by a shared `rail:collapsed`
   state atom so the button and rail stay in sync.
+- `internal/ui`: reusable `Segmented` (mutually-exclusive option toggle) and `StepperPill`
+  (label + prev/next chevrons) control primitives — generic and props-driven, each interactive
+  child its own component so click hooks stay stable in lists.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

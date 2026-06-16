@@ -61,8 +61,14 @@ problems and fixes, and what's next.
   switch). No `syscall/js` needed. Collapse persists across navigation (atom is global); persisting
   across reloads waits on the prefs/settings wiring.
 
-**Next:** the time-resolution control (Week/Month/Quarter + From/To steppers); then the `Widget`
-shell, `FlipPanel`, and the bento widgets.
+- Built the first **shared control primitives** in `internal/ui`: `Segmented` and `StepperPill`,
+  both generic and props-driven. Each follows the export-thin-wrapper-over-CreateElement pattern so
+  every call site is its own component instance with isolated hooks, and the per-option `segButton`
+  is itself a component (the On*-in-loops rule). These back the time-resolution control next but are
+  written for reuse anywhere (theme toggle, paging, etc.).
+
+**Next:** wire the time-resolution control (period atom + `dateutil` labels) using these primitives
+and drive the dashboard period from it; then the `Widget` shell, `FlipPanel`, and bento widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
