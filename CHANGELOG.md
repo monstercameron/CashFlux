@@ -63,6 +63,9 @@ and every commit updates this file under `Unreleased`.
   (toggle/number/select fields with defaults and bounds), and reads its values from a persisted
   `Config` via clamping/validating accessors — the bridge between a widget's flip-panel settings and
   its content. Pure and table-tested; savings rate ships the first schema (target rate + show-bar).
+- The sidebar verbiage now flows through the language store: the brand, primary + System nav labels,
+  the "My pages"/"System"/"New page" headers, and the household card all resolve via `uistate.T(key)`
+  against the English catalog (no visible change — first screen migrated onto i18n).
 - A central language store (`internal/i18n`): a pure, table-tested message catalog keyed by stable
   dot-namespaced keys (e.g. `nav.accounts`), with English as the source/fallback language, `%s`/`%d`
   argument formatting, translation-coverage reporting (`MissingKeys`), and whole-bundle JSON

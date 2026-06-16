@@ -42,22 +42,22 @@ func Shell(props ShellProps) uic.Node {
 	)
 }
 
-// railItem is one primary navigation entry: a label, route, and icon name.
+// railItem is one primary navigation entry: an i18n label key, route, and icon.
 type railItem struct {
-	Label string
-	Path  string
-	Icon  string
+	Key  string // i18n key, resolved via uistate.T at render
+	Path string
+	Icon string
 }
 
 // primaryNav is the candidate-C rail's main navigation group.
 func primaryNav() []railItem {
 	return []railItem{
-		{"Dashboard", "/", "dashboard"},
-		{"Accounts", "/accounts", "accounts"},
-		{"Transactions", "/transactions", "transactions"},
-		{"Budgets", "/budgets", "budgets"},
-		{"Goals", "/goals", "goals"},
-		{"To-do", "/todo", "todo"},
+		{"nav.dashboard", "/", "dashboard"},
+		{"nav.accounts", "/accounts", "accounts"},
+		{"nav.transactions", "/transactions", "transactions"},
+		{"nav.budgets", "/budgets", "budgets"},
+		{"nav.goals", "/goals", "goals"},
+		{"nav.todo", "/todo", "todo"},
 	}
 }
 
@@ -102,21 +102,21 @@ func Sidebar() uic.Node {
 	return Aside(Class(cls),
 		Div(Class("railhead h-14 flex items-center gap-2.5 px-5 border-b border-line"),
 			Span(Class("grid place-items-center w-7 h-7 rounded bg-fg text-base font-display font-semibold text-[13px] shrink-0"), "C"),
-			Span(Class("brand-name font-display text-lg font-semibold tracking-tight"), "CashFlux"),
+			Span(Class("brand-name font-display text-lg font-semibold tracking-tight"), uistate.T("app.name")),
 		),
 		Nav(Class("flex-1 overflow-y-auto p-3 flex flex-col gap-0.5 text-dim text-[13.5px]"),
 			MapKeyed(visibleNav,
 				func(it railItem) any { return it.Path },
 				func(it railItem) uic.Node {
 					return uic.CreateElement(navItem, navItemProps{
-						Label:  it.Label,
+						Label:  uistate.T(it.Key),
 						Path:   it.Path,
 						Icon:   it.Icon,
 						Active: current == it.Path,
 					})
 				},
 			),
-			railHeader("My pages"),
+			railHeader(uistate.T("rail.myPages")),
 			MapKeyed(myPages(),
 				func(p customPage) any { return p.Label },
 				func(p customPage) uic.Node {
@@ -127,22 +127,22 @@ func Sidebar() uic.Node {
 					})
 				},
 			),
-			uic.CreateElement(navItem, navItemProps{Label: "New page", Icon: "plus", Muted: true}),
-			railHeader("System"),
+			uic.CreateElement(navItem, navItemProps{Label: uistate.T("rail.newPage"), Icon: "plus", Muted: true}),
+			railHeader(uistate.T("rail.system")),
 			If(!hidden.IsHidden("/members"), uic.CreateElement(navItem, navItemProps{
-				Label:  "Members",
+				Label:  uistate.T("nav.members"),
 				Path:   "/members",
 				Icon:   "users",
 				Active: current == "/members",
 			})),
 			If(!hidden.IsHidden("/categories"), uic.CreateElement(navItem, navItemProps{
-				Label:  "Categories",
+				Label:  uistate.T("nav.categories"),
 				Path:   "/categories",
 				Icon:   "tag",
 				Active: current == "/categories",
 			})),
 			uic.CreateElement(navItem, navItemProps{
-				Label:  "Settings",
+				Label:  uistate.T("nav.settings"),
 				Path:   "/settings",
 				Icon:   "settings",
 				Active: current == "/settings",
@@ -194,8 +194,8 @@ func navItem(props navItemProps) uic.Node {
 // and base currency from app state.
 func HouseholdCard() uic.Node {
 	settings := uistate.UseSettings()
-	name := "Your household"
-	summary := "Settings"
+	name := uistate.T("household.title")
+	summary := uistate.T("household.settings")
 	if app := appstate.Default; app != nil {
 		base := app.Settings().BaseCurrency
 		if base == "" {
@@ -206,7 +206,7 @@ func HouseholdCard() uic.Node {
 		if members == 1 {
 			noun = "member"
 		}
-		summary = fmt.Sprintf("%d %s · %s base · Settings", members, noun, base)
+		summary = fmt.Sprintf("%d %s · %s base · %s", members, noun, base, uistate.T("household.settings"))
 	}
 	return Button(
 		Class("hh mt-auto m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover"),

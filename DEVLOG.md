@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n live wiring + sidebar verbiage migrated
+
+- Wired the language store into the UI: `uistate` holds a shared `i18n.DefaultBundle()`, a `UseLang`
+  atom (default English), and a hook-free `T(key, args…)` helper (resolves against the bundle default).
+  T deliberately takes no hook so it's safe in loops / row components (the nav maps over items).
+- Migrated the first screen's chrome onto it: shell brand, primary + System nav labels, the
+  "My pages"/"System"/"New page" headers, and the household card now call `uistate.T(...)`. All keys
+  already existed in the English catalog and match the old strings, so zero visible change.
+- **Design note:** kept T non-reactive for now (English-only). When a language selector lands (TODOS
+  §1.19), the active lang gets threaded at render edges (read `UseLang` at a component top) rather than
+  inside T — preserving the no-hooks-in-loops rule.
+- wasm build green. **Next:** migrate more screens' verbiage onto T incrementally, or the next feature.
+
 ## 2026-06-16 — Extract bill next-due date into dateutil
 
 - Moved `nextDue` out of the js-only dashboard into pure `dateutil.NextMonthlyDue(now, day)` — the
