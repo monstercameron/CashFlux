@@ -234,7 +234,7 @@ Shared control components (from mockup):
 - [x] ★ Add transaction (desc, amount, income/expense, category, account, date, member)
 - [~] ★ Delete transaction done (per-row component); edit + confirm later
 - [x] ★ Transfers between accounts (paired entries; excluded from income/expense); deleting one leg removes both
-- [~] Tags input + tag display done (income/expense); tag filtering later
+- [x] Tags input + tag display (income/expense); search matches tags
 - [ ] Filters: member, account, category, date range, text; combine + clear; persist last filter
 - [ ] Sort options (date, amount, payee)
 - [ ] Row component for actions; inline category quick-edit

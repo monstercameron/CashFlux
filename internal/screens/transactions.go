@@ -240,7 +240,7 @@ func Transactions() ui.Node {
 		if fc != "" && t.CategoryID != fc {
 			continue
 		}
-		if ft != "" && !strings.Contains(strings.ToLower(t.Desc), ft) {
+		if ft != "" && !matchesText(t, ft) {
 			continue
 		}
 		shown = append(shown, t)
@@ -279,7 +279,7 @@ func Transactions() ui.Node {
 		Section(Class("card"),
 			H2(Class("card-title"), "All transactions"),
 			Form(Class("form-grid"), OnSubmit(clearFilters),
-				Input(Class("field"), Type("search"), Placeholder("Search description"), Value(filterText.Get()), OnInput(onFilterText)),
+				Input(Class("field"), Type("search"), Placeholder("Search description or tag"), Value(filterText.Get()), OnInput(onFilterText)),
 				Select(Class("field"), OnChange(onFilterAcc), filterAccOptions),
 				Select(Class("field"), OnChange(onFilterCat), filterCatOptions),
 				Button(Class("btn"), Type("submit"), "Clear"),
@@ -294,6 +294,20 @@ type transactionRowProps struct {
 	Account  string
 	Category string
 	OnDelete func(string)
+}
+
+// matchesText reports whether the (already-lowercased) query appears in a
+// transaction's description or any of its tags.
+func matchesText(t domain.Transaction, q string) bool {
+	if strings.Contains(strings.ToLower(t.Desc), q) {
+		return true
+	}
+	for _, tag := range t.Tags {
+		if strings.Contains(strings.ToLower(tag), q) {
+			return true
+		}
+	}
+	return false
 }
 
 // parseTags splits a comma-separated string into trimmed, non-empty tags.

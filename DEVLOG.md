@@ -302,6 +302,8 @@ problems and fixes, and what's next.
 
 - Added an optional **notes** field to tasks (form input + row display), stored on `Task.Notes`.
 
+- Extended the transaction search to match **tags** as well as descriptions (`matchesText`).
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

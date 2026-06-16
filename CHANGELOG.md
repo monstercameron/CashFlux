@@ -221,7 +221,7 @@ and every commit updates this file under `Unreleased`.
 - Transactions: a filter bar (description search + account + category pickers, with Clear) narrows the
   ledger list, with a distinct "No matching transactions" empty state.
 - Transactions: a comma-separated tags field on income/expense entries; tags show on the row
-  (`#tag`).
+  (`#tag`) and the search box matches tags as well as descriptions.
 - Goals: a "Contribute" action per goal adds an entered amount to its saved total (advancing the
   progress bar) via a quick prompt.
 - Top bar: the "+ Add" button now navigates to the Transactions screen (was inert).
