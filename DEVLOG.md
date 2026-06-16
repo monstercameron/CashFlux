@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Goals: inline edit
+
+- Same edit pattern as budgets, one entity over: `GoalRow` gets an `editing` toggle and name/target/
+  date field states, with `saveEdit` calling a parent `OnSave(id, name, target, date)` that parses
+  the target to minor units and the date via `dateutil.ParseDate`, saving through `PutGoal`.
+- **Empty date clears the deadline.** A blank date field sets `TargetDate` to the zero time (no
+  deadline) rather than erroring — matching the add form's optional-date behavior. The date input is
+  seeded in ISO (`dateutil.FormatDate`) since `<input type=date>` needs ISO regardless of the user's
+  display format preference.
+- All ~12 hooks declared unconditionally; only the return branches on `editing`. Budgets and goals
+  now both support add / edit / delete (goals also Contribute).
+- **Next.** CRUD-edit parity is close; remaining big items are document vision-AI and Phase-3 sync.
+  Could also do transaction edit, or start the sync groundwork with a pure merge primitive.
+
 ## 2026-06-16 — Budgets: inline edit
 
 - Budgets were add/delete only; added inline editing of the name and monthly limit. `BudgetRow`

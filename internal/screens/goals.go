@@ -110,6 +110,44 @@ func Goals() ui.Node {
 		bump()
 	}
 
+	saveGoal := func(id, newName, targetStr, dateStr string) {
+		for _, g := range app.Goals() {
+			if g.ID != id {
+				continue
+			}
+			if n := strings.TrimSpace(newName); n != "" {
+				g.Name = n
+			}
+			cur := g.TargetAmount.Currency
+			if cur == "" {
+				cur = base
+			}
+			amt, err := money.ParseMinor(strings.TrimSpace(targetStr), currency.Decimals(cur))
+			if err != nil || amt <= 0 {
+				errMsg.Set("Enter a positive target amount.")
+				return
+			}
+			g.TargetAmount = money.New(amt, cur)
+			if ds := strings.TrimSpace(dateStr); ds != "" {
+				d, derr := dateutil.ParseDate(ds)
+				if derr != nil {
+					errMsg.Set("Enter a valid target date (YYYY-MM-DD).")
+					return
+				}
+				g.TargetDate = d
+			} else {
+				g.TargetDate = time.Time{}
+			}
+			if err := app.PutGoal(g); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			break
+		}
+		errMsg.Set("")
+		bump()
+	}
+
 	contribute := func(g domain.Goal, amtStr string) {
 		cur := g.CurrentAmount.Currency
 		if cur == "" {
@@ -166,7 +204,7 @@ func Goals() ui.Node {
 		rows := MapKeyed(goals,
 			func(g domain.Goal) any { return g.ID },
 			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, OnDelete: deleteGoal, OnContribute: contribute})
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal})
 			},
 		)
 		listBody = Div(rows)
@@ -185,19 +223,58 @@ type goalRowProps struct {
 	Goal         domain.Goal
 	OnDelete     func(string)
 	OnContribute func(domain.Goal, string)
+	OnSave       func(id, name, target, date string)
 }
 
-// GoalRow renders one goal's progress toward its target, with a contribute action.
+// GoalRow renders one goal's progress toward its target, with contribute and
+// (inline) edit actions. All hooks are declared unconditionally so the edit
+// toggle never reorders them.
 func GoalRow(props goalRowProps) ui.Node {
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Goal.ID) }))
+	g := props.Goal
+	targetMajor := money.FormatMinor(g.TargetAmount.Amount, currency.Decimals(g.TargetAmount.Currency))
+	dateISO := ""
+	if !g.TargetDate.IsZero() {
+		dateISO = dateutil.FormatDate(g.TargetDate)
+	}
+
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(g.ID) }))
 	contribute := ui.UseEvent(Prevent(func() {
-		if v := promptText("Contribute how much to " + props.Goal.Name + "?"); v != "" {
-			props.OnContribute(props.Goal, v)
+		if v := promptText("Contribute how much to " + g.Name + "?"); v != "" {
+			props.OnContribute(g, v)
 		}
 	}))
 	pr := uistate.UsePrefs().Get()
+	editing := ui.UseState(false)
+	nameS := ui.UseState(g.Name)
+	targetS := ui.UseState(targetMajor)
+	dateS := ui.UseState(dateISO)
+	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onTarget := ui.UseEvent(func(v string) { targetS.Set(v) })
+	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		nameS.Set(g.Name)
+		targetS.Set(targetMajor)
+		dateS.Set(dateISO)
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		props.OnSave(g.ID, nameS.Get(), targetS.Get(), dateS.Get())
+		editing.Set(false)
+	}))
 
-	g := props.Goal
+	if editing.Get() {
+		return Div(Class("budget"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Type("number"), Placeholder("Target"), Value(targetS.Get()), Step("0.01"), OnInput(onTarget)),
+				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
+				Button(Class("btn btn-primary"), Type("submit"), "Save"),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+			),
+		)
+	}
+
 	pct := goalsvc.Percent(g)
 	rem, _ := goalsvc.Remaining(g)
 	complete, _ := goalsvc.IsComplete(g)
@@ -215,6 +292,7 @@ func GoalRow(props goalRowProps) ui.Node {
 			Span(Class("row-desc"), g.Name),
 			Span(Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 			Button(Class("btn"), Type("button"), Title("Add to this goal"), OnClick(contribute), "Contribute"),
+			Button(Class("btn"), Type("button"), Title("Edit goal"), OnClick(startEdit), "Edit"),
 			Button(Class("btn-del"), Type("button"), Title("Delete goal"), OnClick(del), "✕"),
 		),
 		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", pct)))),

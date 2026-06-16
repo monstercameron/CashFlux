@@ -256,7 +256,7 @@ Shared control components (from mockup):
 ### 1.13 Goals
 
 - [x] List with progress bar (% + remaining); projected completion later (needs contribution input)
-- [~] Add + delete goal (scope, target, current, target date) done; edit + linked account later
+- [~] Add + delete + inline edit goal (name, target, target date) + contribute done; linked account later
 - [~] Contribute-to-goal action done (prompt); auto-progress from linked account later
 - [x] Tests: progress + projection (in `internal/goals`)
 
