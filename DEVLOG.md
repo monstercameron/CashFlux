@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Document vision AI: the request codec
+
+- Started the document image-import feature (SPEC document vision) bottom-up with the pure codec.
+  OpenAI vision differs from text chat in one way: the user message's `content` is an array of parts
+  (`{type:"text"}` + `{type:"image_url",image_url:{url}}`) rather than a string.
+- **Decision — a separate `visionRequest` shape, not a looser `Message`.** Rather than change
+  `Message.Content` from `string` to `any` (which would ripple through every existing text call and
+  weaken the type), vision gets its own small request/message/part structs in `ai/vision.go`. The
+  *response* is identical to a text chat, so `ParseResponse` is reused as-is — no new parse path.
+- Images travel as data: URLs, so the bytes go only to OpenAI (same BYO-key, client-side stance as
+  the rest of the ai package). Tested the built JSON's structure (string system content, two-part
+  user content, image url preserved) and that `ParseResponse` reads a vision reply.
+- **Next.** A js/wasm `SendVisionChat` transport (read the picked file → base64 data URL → fetch),
+  then a Documents-screen flow: pick an image, parse the model's JSON into draft transactions to
+  review and import.
+
 ## 2026-06-16 — Transactions: inline edit (non-transfers)
 
 - Completed CRUD-edit parity: income/expense rows now edit inline (description, amount, category,

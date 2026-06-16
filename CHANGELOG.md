@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Vision request codec (`internal/ai`): `BuildVisionRequest` marshals a multimodal OpenAI chat
+  request — a system prompt plus a user message carrying text and an image (data/URL) part — for
+  reading receipts and statements. The reply is plain text, read with the existing `ParseResponse`.
+  Pure, table-tested. Foundation for document image import.
 - Edit transactions inline: income and expense rows get an Edit button that swaps in a form for the
   description, amount, category, and date, saving through the validated path (the original
   income/expense sign and account are preserved). Transfers remain non-editable inline.

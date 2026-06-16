@@ -339,7 +339,7 @@ Shared control components (from mockup):
 
 - [x] Client over `fetch` with user key from settings; base URL configurable — `ai.SendChat`
 - [ ] Chat/Responses call with JSON-schema **structured outputs** → Go structs
-- [ ] Vision input support (images/PDF pages) for document parsing
+- [~] Vision input support (images/PDF pages) for document parsing — `ai.BuildVisionRequest` (pure) done
 - [ ] Model selection; token + cost surfacing; "AI off until key set" state
 - [ ] Error handling: auth, rate limit, network, CORS — plain-English messages
 - [ ] Retry/backoff; request cancellation
@@ -349,7 +349,8 @@ Shared control components (from mockup):
 
 - [ ] Upload UI (PDF / CSV / image); drag-drop
 - [x] Local CSV parse → import transactions (no AI needed) — Documents screen paste-and-import
-- [ ] Send PDF/image to vision model → structured transactions
+- [~] Send PDF/image to vision model → structured transactions — pure `ai.BuildVisionRequest` codec
+      done & tested; js transport + Documents UI next
 - [ ] `Document{ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[]}` lifecycle
 - [ ] Review screen: edit/accept/reject extracted rows → import to ledger; dedupe vs existing
 - [ ] Monthly-spend extraction summary view
