@@ -161,6 +161,9 @@ and every commit updates this file under `Unreleased`.
 - To-do widget (1×1): up to three open tasks, each with a priority-toned dot (high = amber).
 - Accounts widget (2×1): a small grid of up to six active account balances (accounting figures,
   negatives toned red) via `ledger.Balance`.
+- `internal/chart`: pure SVG path geometry for dashboard sparkline/area charts — `Points` (scale a
+  series into a w×h box, y-inverted, padded, flat/single series centered), `LinePath`, and
+  `AreaPath` (closed to a baseline). Table-driven tested; no rendering dependency.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

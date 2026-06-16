@@ -133,8 +133,13 @@ problems and fixes, and what's next.
   six active balances via `ledger.Balance`, negatives toned). All compose the `Widget` shell +
   `ProgressBar`; confirmed `appstate` exposes `Goals()`/`Tasks()`/`Accounts()`.
 
-**Next:** the SVG charts (net-worth trend area chart, cash-flow bars) as reusable helpers, then the
-per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
+- Built chart geometry **bottom-up first**: new pure `internal/chart` package maps a value series to
+  SVG coordinates (`Points`, y-inverted with padding; flat/single series centered) and emits
+  `LinePath`/`AreaPath` strings with fixed precision for stable, testable output. Table-driven tests
+  assert exact path strings. The view (`internal/ui`) will just feed these to an `<svg>`.
+
+**Next:** `ledger.NetWorthSeries` (net worth as of each cutoff, pure + tested), the `AreaChart` ui
+helper + Net-worth-trend widget, the Cash-flow widget (div bars), then per-widget/global settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
