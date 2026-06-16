@@ -425,6 +425,11 @@ problems and fixes, and what's next.
   description keystroke, suggest a category via `rules.Category` only when none is chosen — so it
   helps without fighting the user. A real `Rule` store + management UI (custom patterns/tags) is later.
 
+- Added **natural-language Q&A** to Insights ("Ask about your money"): a question box that sends the
+  user's question plus a figures context (net worth / income / spending / active accounts) to the
+  same `ai.SendChat`, sharing the loading/result/error states with "Explain my month". Shown only
+  when a key is set. Richer data context (per-category, history) is a follow-up.
+
 **Next:** a `Rule` entity + store CRUD and management UI, or custom fields — continuing Phase 2.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

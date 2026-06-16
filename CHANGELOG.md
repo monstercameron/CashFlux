@@ -189,7 +189,8 @@ and every commit updates this file under `Unreleased`.
   `Category`, and `Tags`. Empty matches never fire. Table-driven tested.
 - Insights screen (replacing the stub): an **"Explain my month"** AI narrative generated client-side
   from your live figures via OpenAI with your own key; prompts to add a key in Settings when absent,
-  with loading and error states.
+  with loading and error states. Plus a **natural-language "Ask about your money"** box that answers
+  questions using your figures as context.
 - Planning screen (replacing the stub): a **debt-payoff calculator** — enter balance, APR, and
   monthly payment to see months-to-zero, total interest, and total paid, updating live via the
   `internal/payoff` engine, with a friendly message when the payment can't cover the interest. Plus a

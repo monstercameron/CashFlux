@@ -348,7 +348,7 @@ Shared control components (from mockup):
 ### 2.3 Insights & NL query
 
 - [x] "Explain my month" generated narrative (Insights screen)
-- [ ] Natural-language query over data (household-aware) → answer + supporting figures
+- [~] Natural-language query over data → answer (Insights "Ask about your money"); richer data context later
 - [ ] Trend/anomaly highlights; advice cards
 - [ ] Pin/save insights; show top insight on dashboard
 - [ ] Guardrails: scope data sent, redact where possible

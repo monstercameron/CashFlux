@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
@@ -40,10 +41,18 @@ func Insights() ui.Node {
 	net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
 	mStart, mEnd := dateutil.MonthRange(time.Now())
 	income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
+	active := 0
+	for _, a := range accounts {
+		if !a.Archived {
+			active++
+		}
+	}
 
 	result := ui.UseState("")
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
+	question := ui.UseState("")
+	onQuestion := ui.UseEvent(func(v string) { question.Set(v) })
 
 	explain := ui.UseEvent(func() {
 		if key == "" {
@@ -67,6 +76,31 @@ func Insights() ui.Node {
 		)
 	})
 
+	ask := ui.UseEvent(Prevent(func() {
+		q := strings.TrimSpace(question.Get())
+		if key == "" {
+			errMsg.Set("Add your OpenAI key in Settings first.")
+			return
+		}
+		if q == "" {
+			errMsg.Set("Type a question first.")
+			return
+		}
+		loading.Set(true)
+		errMsg.Set("")
+		result.Set("")
+		ctx := fmt.Sprintf("Context — net worth: %s, this month's income: %s, spending: %s, across %d active accounts.",
+			fmtMoney(net), fmtMoney(income), fmtMoney(expense), active)
+		messages := []ai.Message{
+			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant. Answer using the provided context; if it isn't enough, say what's missing. Plain English, no jargon."},
+			{Role: ai.RoleUser, Content: ctx + "\n\nQuestion: " + q},
+		}
+		ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4,
+			func(content string) { loading.Set(false); result.Set(content) },
+			func(e string) { loading.Set(false); errMsg.Set(e) },
+		)
+	}))
+
 	var action ui.Node
 	if key == "" {
 		action = P(Class("muted"), "Add your OpenAI key in Settings to enable AI insights. Your key stays on this device and is only sent to OpenAI when you ask.")
@@ -85,8 +119,15 @@ func Insights() ui.Node {
 			action,
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 		),
+		If(key != "", Section(Class("card"),
+			H2(Class("card-title"), "Ask about your money"),
+			Form(Class("form-grid"), OnSubmit(ask),
+				Input(Class("field field-wide"), Type("text"), Placeholder("e.g. How much could I save if I cut spending 10%?"), Value(question.Get()), OnInput(onQuestion)),
+				Button(Class("btn btn-primary"), Type("submit"), "Ask"),
+			),
+		)),
 		If(result.Get() != "", Section(Class("card"),
-			H2(Class("card-title"), "Your month"),
+			H2(Class("card-title"), "Answer"),
 			P(result.Get()),
 		)),
 	)
