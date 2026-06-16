@@ -166,7 +166,7 @@ func Transactions() ui.Node {
 				return
 			}
 			if label == "" {
-				label = "Transfer"
+				label = uistate.T("transactions.transfer")
 			}
 			out := domain.Transaction{
 				ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
@@ -598,18 +598,18 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	}))
 
 	if editing.Get() {
-		catOptions := []ui.Node{Option(Value(""), SelectedIf(catS.Get() == ""), "— No category —")}
+		catOptions := []ui.Node{Option(Value(""), SelectedIf(catS.Get() == ""), uistate.T("transactions.noCategory"))}
 		for _, c := range props.Categories {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catS.Get() == c.ID), c.Name))
 		}
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder("Description"), Value(descS.Get()), OnInput(onDesc)),
-				Input(Class("field"), Type("number"), Placeholder("Amount"), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(Class("field"), OnChange(onCat), catOptions),
 				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
-				Button(Class("btn btn-primary"), Type("submit"), "Save"),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -617,9 +617,9 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	cat := props.Category
 	switch {
 	case props.Txn.IsTransfer():
-		cat = "Transfer"
+		cat = uistate.T("transactions.transfer")
 	case cat == "":
-		cat = "Uncategorized"
+		cat = uistate.T("transactions.uncategorized")
 	}
 	meta := cat + " · " + pr.FormatDate(props.Txn.Date)
 	if props.Account != "" {
@@ -633,21 +633,21 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	if props.Selected {
 		selectGlyph = "☑"
 	}
-	clearedLabel := "Mark cleared"
+	clearedLabel := uistate.T("transactions.markCleared")
 	if t.Cleared {
-		clearedLabel = "Cleared ✓"
-		meta += " · cleared"
+		clearedLabel = uistate.T("transactions.clearedCheck")
+		meta += uistate.T("transactions.clearedMeta")
 	}
 	return Div(Class("row"),
-		Button(Class("check"), Type("button"), Title("Select for bulk actions"), OnClick(sel), selectGlyph),
+		Button(Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), props.Txn.Desc),
 			Span(Class("row-meta"), meta),
 		),
-		Button(Class("btn"), Type("button"), Title("Toggle reconciled (cleared) status"), OnClick(clr), clearedLabel),
+		Button(Class("btn"), Type("button"), Title(uistate.T("transactions.toggleClearedTitle")), OnClick(clr), clearedLabel),
 		Span(Class(amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
-		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title("Edit this transaction"), OnClick(startEdit), "Edit")),
-		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title("Copy this transaction to today"), OnClick(dup), "Duplicate")),
-		Button(Class("btn-del"), Type("button"), Title("Delete transaction"), OnClick(del), "✕"),
+		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uistate.T("action.edit"))),
+		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteTitle")), OnClick(del), "✕"),
 	)
 }

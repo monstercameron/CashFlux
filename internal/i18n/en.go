@@ -325,6 +325,9 @@ var english = Catalog{
 	"transactions.duplicate":           "Duplicate",
 	"transactions.duplicateTitle":      "Copy this transaction to today",
 	"transactions.deleteTitle":         "Delete transaction",
+	"transactions.uncategorized":       "Uncategorized",
+	"transactions.clearedMeta":         " · cleared",
+	"transactions.clearedCheck":        "Cleared ✓",
 
 	// Accounts screen
 	"accounts.addTitle":           "Add account",

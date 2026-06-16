@@ -816,8 +816,11 @@ Shared control components (from mockup):
 - [ ] Language selector in the household settings panel (English-only for now; lists `Languages()`)
 - [x] Export/Import language bundle buttons in settings — Settings → Languages; `uistate.ExportLanguages`/
       `ImportLanguages` (merge + persist to localStorage, seeded on boot)
-- [~] **Migrate all page verbiage onto `T`** — screen by screen: sidebar/shell chrome (brand, nav,
-      headers, household card) done; the individual screens remain
+- [x] **Migrate all page verbiage onto `T`** — done across the shell chrome and every screen/component
+      (todo, members, categories, goals, budgets, insights, planning, customize, documents, allocate,
+      dashboard, settings screen + global panel, accounts, transactions, custom-fields). Intentional
+      literals: `humanizeType` account-type names, currency/AI-model display names, date-format
+      examples, OpenAI prompt instructions. A `MissingKeys`-based catalog-completeness test is still TODO.
 - [ ] Tests: a guard that every key used in the UI exists in the English catalog (catalog completeness)
 
 ### 1.20 Phase 1 hardening

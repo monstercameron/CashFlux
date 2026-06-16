@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: TransactionRow — verbiage migration COMPLETE
+
+- Migrated `TransactionRow` (inline edit form, category/transfer/uncategorized labels, cleared
+  status + meta, and all row action buttons/titles) and the transfer-description default. Reused the
+  transactions.* keys already in the catalog + action.*.
+- **Milestone:** every screen and shared component now renders user-facing text through `uistate.T`
+  against the English catalog — the "hook up all the verbiage" request is fulfilled. Intentional
+  literals remain: `humanizeType` account-type names, currency/AI-model display names, date-format
+  example option text, and the OpenAI prompt instructions (sent to the model, not the user).
+- **What's left for full localization** (not English-text changes): a language **selector** in
+  Settings so imported languages actually display (TODOS §1.19), then optionally a CI catalog-
+  completeness test. `i18n` tests + wasm green.
+
 ## 2026-06-16 — i18n: Transactions screen (main function)
 
 - Migrated the `Transactions()` function: add form (kind options reuse category.expense/income +
