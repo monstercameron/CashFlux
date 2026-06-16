@@ -505,6 +505,9 @@ problems and fixes, and what's next.
   commands, the pure-logic-vs-thin-wasm-UI architecture, and links to the other docs — the GitHub
   landing page for when the repo is pushed.
 
+- Expanded the formula calculator's variable set with budget/goal/task counts, broadening what
+  user formulas can reference.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

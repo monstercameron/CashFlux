@@ -62,6 +62,9 @@ func Customize() ui.Node {
 		"accounts":     float64(active),
 		"transactions": float64(len(txns)),
 		"members":      float64(len(app.Members())),
+		"budgets":      float64(len(app.Budgets())),
+		"goals":        float64(len(app.Goals())),
+		"tasks":        float64(len(app.Tasks())),
 	}
 
 	expr := ui.UseState("")
