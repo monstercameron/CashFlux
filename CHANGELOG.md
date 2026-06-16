@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- AI failures now show plain-English, actionable messages instead of a raw error: a rejected key,
+  rate limiting vs. spent quota, an unknown model, and server trouble each get their own guidance
+  (e.g. "OpenAI didn't accept your API key. Check it in Settings."), and a network/CORS failure says
+  to check your connection. Backed by a pure, table-tested `ai.ErrorMessage(status, body)` and an
+  HTTP-status check in the fetch transport.
+
 ### Added
 - The Rules screen has an **Apply to existing** button that retroactively categorizes every
   uncategorized, non-transfer transaction matching a saved rule (first match wins, adding the rule's

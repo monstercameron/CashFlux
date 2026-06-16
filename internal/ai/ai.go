@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Role constants for chat messages.
@@ -83,4 +84,45 @@ func ParseUsage(data []byte) Usage {
 	var r ChatResponse
 	_ = json.Unmarshal(data, &r)
 	return r.Usage
+}
+
+// ErrorMessage turns a failed OpenAI HTTP response (its status code and body)
+// into a concise, plain-English, actionable message for the user. It recognizes
+// the common failure modes — rejected key, rate limit vs. spent quota, missing
+// model, server trouble — and otherwise falls back to OpenAI's own error message
+// or a generic line that names the status code.
+func ErrorMessage(status int, body []byte) string {
+	detail := apiErrorMessage(body)
+	low := strings.ToLower(detail)
+	switch {
+	case status == 401:
+		return "OpenAI didn't accept your API key. Check it in Settings."
+	case status == 403:
+		return "OpenAI refused this request — your key may not have access to this model. Check your plan or pick another model in Settings."
+	case status == 429:
+		if strings.Contains(low, "quota") || strings.Contains(low, "billing") || strings.Contains(low, "insufficient") {
+			return "Your OpenAI account is out of quota. Check your billing, then try again."
+		}
+		return "OpenAI is rate-limiting requests. Wait a few seconds and try again."
+	case status == 404:
+		return "OpenAI couldn't find that model. Pick a different model in Settings."
+	case status >= 500:
+		return "OpenAI is having server trouble. Try again in a moment."
+	case status == 400 && detail != "":
+		return "OpenAI rejected the request: " + detail
+	case detail != "":
+		return detail
+	default:
+		return fmt.Sprintf("OpenAI returned an unexpected error (HTTP %d).", status)
+	}
+}
+
+// apiErrorMessage extracts OpenAI's error.message from a response body, or "" when
+// the body isn't a recognizable error object.
+func apiErrorMessage(body []byte) string {
+	var r ChatResponse
+	if err := json.Unmarshal(body, &r); err == nil && r.Error != nil {
+		return strings.TrimSpace(r.Error.Message)
+	}
+	return ""
 }

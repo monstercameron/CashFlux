@@ -857,7 +857,9 @@ Shared control components (from mockup):
 - [ ] Chat/Responses call with JSON-schema **structured outputs** → Go structs
 - [~] Vision input support (images/PDF pages) for document parsing — `ai.BuildVisionRequest` (pure) done
 - [ ] Model selection; token + cost surfacing; "AI off until key set" state
-- [ ] Error handling: auth, rate limit, network, CORS — plain-English messages
+- [x] Error handling: auth, rate limit, network, CORS — plain-English messages via pure, table-tested
+      `ai.ErrorMessage(status, body)` + an HTTP-status check in the fetch transport (network/CORS
+      handled in the catch). Inherited by Insights + Documents with no screen changes.
 - [ ] Retry/backoff; request cancellation
 - [x] Request build + response decode (pure codec, round-trip tested) — `internal/ai`
 

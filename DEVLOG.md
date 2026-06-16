@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — AI error handling: plain-English messages
+
+- Added pure `ai.ErrorMessage(status, body)`: maps an OpenAI HTTP failure to an actionable message —
+  401 (key rejected), 403 (no model access), 429 split into rate-limit vs. out-of-quota (by sniffing
+  the error body), 404 (unknown model), 5xx (server trouble), 400 (shows OpenAI's own detail), with a
+  status-named fallback. `apiErrorMessage` pulls `error.message` from the body via the existing
+  `ChatResponse.Error`. Table-tested.
+- Wired the fetch transport to capture `response.status` in the first `.then` and route any `>= 400`
+  through `ErrorMessage` (previously a 401/429 body just failed `ParseResponse` with a generic line).
+  Also rewrote the `catch` (network/CORS) message to "Couldn't reach OpenAI. Check your internet
+  connection…" — friendlier than echoing the raw JS error.
+- Both AI surfaces (Insights, Documents image import) already display the transport's `onError`
+  string, so they inherit the better messages with no screen changes. wasm green.
+
 ## 2026-06-16 — retroactive Apply-to-existing for rules
 
 - Added `appstate.ApplyRules() (int, error)`: walks transactions, and for each uncategorized,

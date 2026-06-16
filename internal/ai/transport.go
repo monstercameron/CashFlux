@@ -53,25 +53,32 @@ func postCompletions(apiKey, baseURL string, body []byte, onResult func(string),
 	var onText, onResp, onCatch js.Func
 	release := func() { onText.Release(); onResp.Release(); onCatch.Release() }
 
+	// status is captured from the response in onResp and read in onText, so an
+	// HTTP failure (401/429/5xx/…) becomes a plain-English message via ErrorMessage.
+	status := 0
 	onResp = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		status = args[0].Get("status").Int()
 		return args[0].Call("text") // a promise resolving to the response body
 	})
 	onText = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		content, err := ParseResponse([]byte(args[0].String()))
-		if err != nil {
-			onError(err.Error())
-		} else {
-			onResult(content)
+		data := []byte(args[0].String())
+		switch {
+		case status >= 400:
+			onError(ErrorMessage(status, data))
+		default:
+			content, err := ParseResponse(data)
+			if err != nil {
+				onError(err.Error())
+			} else {
+				onResult(content)
+			}
 		}
 		release()
 		return nil
 	})
 	onCatch = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		msg := "network error"
-		if len(args) > 0 {
-			msg = args[0].Call("toString").String()
-		}
-		onError("ai: couldn't reach OpenAI — " + msg)
+		// fetch rejects on network failure or a blocked cross-origin request.
+		onError("Couldn't reach OpenAI. Check your internet connection and try again.")
 		release()
 		return nil
 	})
