@@ -215,6 +215,7 @@ func navItem(props navItemProps) uic.Node {
 	path := props.Path
 	return A(
 		Class(cls),
+		Title(props.Label), // native tooltip + accessible name, esp. when collapsed to icons
 		OnClick(func() {
 			if path != "" {
 				nav.Navigate(path)
@@ -246,6 +247,7 @@ func HouseholdCard() uic.Node {
 	}
 	return Button(
 		Class("hh mt-auto m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover"),
+		Title(name+" · "+summary), // tooltip + accessible name when the rail is collapsed
 		OnClick(func() { settings.Set(uistate.Global()) }),
 		ui.Icon("settings", Class("w-4 h-4 shrink-0 text-dim")),
 		Span(Class("hh-text leading-tight"),

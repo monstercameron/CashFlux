@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B5: collapsed-rail hover labels
+
+- Added `Title(props.Label)` to `navItem` (and a title on the household card) — a native tooltip that
+  doubles as the accessible name when the rail collapses to icons. Plus a CSS flyout: in
+  `.rail.collapsed`, `.nv:hover/:focus-visible/:focus-within > span` overrides the `display:none` and
+  positions the label as an absolute pill to the right (z-index above content, pointer-events none),
+  with a reduced-motion-gated fade-in. Keyboard focus reveals it via `:focus-within`/`:focus-visible`.
+- Specificity: the reveal selectors carry an extra pseudo-class over the base `.nv span { display:none }`
+  so they win without `!important`. wasm green.
+
 ## 2026-06-16 — B6: display-scale setting
 
 - Now green-lit ("do all the todos"), built B6 — the font/UI scale the user had earlier asked me to

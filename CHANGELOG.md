@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The collapsed sidebar now **reveals each item's label on hover/focus** as a flyout (no rail
+  widening), and every nav item + the household card carry a `title` so the name is available on hover
+  and to screen readers when only the icon shows. The flyout respects `prefers-reduced-motion`.
 - A **Display scale** setting (Settings → Appearance): pick 70%–130% (100% default) to make the whole
   UI larger or smaller — applied live via a `--ui-scale` CSS zoom and persisted across reloads. The
   scale value is a pure, clamped `prefs.Scale` (table-tested). Addresses the "fonts/buttons feel ~30%

@@ -357,9 +357,24 @@
       aside.rail.collapsed .nv span,
       aside.rail.collapsed nav > div,
       aside.rail.collapsed .hh-text { display:none; }
-      aside.rail.collapsed .nv { justify-content:center; gap:0; padding-left:0; padding-right:0; }
+      aside.rail.collapsed .nv { justify-content:center; gap:0; padding-left:0; padding-right:0; position:relative; }
       aside.rail.collapsed .railhead { padding-left:0; padding-right:0; justify-content:center; }
       aside.rail.collapsed .hh { justify-content:center; padding-left:0; padding-right:0; }
+      /* Collapsed rail: reveal the label as a flyout on hover/focus without widening the rail. */
+      aside.rail.collapsed .nv:hover > span,
+      aside.rail.collapsed .nv:focus-visible > span,
+      aside.rail.collapsed .nv:focus-within > span {
+        display:block; position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%);
+        white-space:nowrap; background:var(--bg-elev); color:var(--text);
+        border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.55rem;
+        font-size:13px; line-height:1; box-shadow:0 6px 18px rgba(0,0,0,.28); z-index:60; pointer-events:none;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        aside.rail.collapsed .nv:hover > span,
+        aside.rail.collapsed .nv:focus-visible > span,
+        aside.rail.collapsed .nv:focus-within > span { animation: rail-flyout .12s ease both; }
+      }
+      @keyframes rail-flyout { from { opacity:0; transform:translate(-4px,-50%); } to { opacity:1; transform:translateY(-50%); } }
       .menu-btn { background:transparent; border:0; color:#a6a6ac; cursor:pointer; display:grid; place-items:center; }
       .menu-btn:hover { color:#f4f4f5; }
 

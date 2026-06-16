@@ -132,13 +132,14 @@ text label ("text highlight") for quick reference.
 `rail:collapsed` atom; `internal/app/shell.go`), which hides each item's label `Span`. What's missing
 is the hover affordance — collapsed, there's no quick way to see what an icon is.
 **Fix:**
-- [ ] Add a `title` attr to every nav item (and the household card) — cheap, accessible, immediate
-      native tooltip. (`navItem` in `shell.go`)
-- [ ] Add a CSS flyout: in `.collapsed` mode, `.nv:hover`/`.nv:focus-visible` reveals the label as an
-      absolutely-positioned pill to the right of the icon, so it overlays content instead of widening
-      the rail. Apply to primary nav, My pages, System items, and the household card.
-- [ ] Respect `prefers-reduced-motion`; ensure keyboard focus reveals the label too.
-- [ ] Verify: collapsed rail shows only icons; hover/focus reveals the label without expanding the rail.
+- [x] `title` attr on every nav item (via `navItem`) **and** the household card — native tooltip +
+      accessible name when collapsed.
+- [x] CSS flyout: in `.collapsed`, `.nv:hover/:focus-visible/:focus-within > span` reveals the label as
+      an absolutely-positioned pill to the right (overlays content, doesn't widen the rail). Covers all
+      nav groups (primary/Tools/System/My pages) since they share the `.nv` class.
+- [x] Respects `prefers-reduced-motion` (fade-in gated); keyboard focus reveals via `:focus-visible`/
+      `:focus-within`.
+- [~] Verify: hover/focus reveals the label without expanding the rail (wasm green; browser spot-check pending).
 
 ### B6. Add a UI / font-size scale setting ★
 
