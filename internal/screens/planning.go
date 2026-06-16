@@ -52,10 +52,16 @@ func Planning() ui.Node {
 	rLabel := ui.UseState("")
 	rAmount := ui.UseState("")
 	rCadence := ui.UseState(string(domain.CadenceMonthly))
+	rAccount := ui.UseState("")
+	rCategory := ui.UseState("")
+	rAutopost := ui.UseState(false)
 	rErr := ui.UseState("")
+	postMsg := ui.UseState("")
 	onRLabel := ui.UseEvent(func(v string) { rLabel.Set(v) })
 	onRAmount := ui.UseEvent(func(v string) { rAmount.Set(v) })
 	onRCadence := ui.UseEvent(func(e ui.Event) { rCadence.Set(e.GetValue()) })
+	onRAccount := ui.UseEvent(func(e ui.Event) { rAccount.Set(e.GetValue()) })
+	onRCategory := ui.UseEvent(func(e ui.Event) { rCategory.Set(e.GetValue()) })
 	addRecurring := ui.UseEvent(Prevent(func() {
 		if app == nil {
 			return
@@ -73,6 +79,7 @@ func Planning() ui.Node {
 		r := domain.Recurring{
 			ID: id.New(), Label: label, Amount: money.New(amt, base),
 			Cadence: domain.RecurringCadence(rCadence.Get()), NextDue: time.Now(),
+			AccountID: rAccount.Get(), CategoryID: rCategory.Get(), Autopost: rAutopost.Get(),
 		}
 		if err := app.PutRecurring(r); err != nil {
 			rErr.Set(err.Error())
@@ -89,6 +96,18 @@ func Planning() ui.Node {
 			rev.Set(rev.Get() + 1)
 		}
 	}
+	postDue := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
+		n, err := app.PostDueRecurring(time.Now())
+		if err != nil {
+			postMsg.Set(err.Error())
+			return
+		}
+		postMsg.Set(uistate.T("recurring.posted", plural(n, "transaction")))
+		rev.Set(rev.Get() + 1)
+	}))
 
 	var resultBody ui.Node
 	switch {
@@ -171,6 +190,14 @@ func Planning() ui.Node {
 			Option(Value(string(domain.CadenceQuarterly)), SelectedIf(rCadence.Get() == string(domain.CadenceQuarterly)), uistate.T("recurring.cadenceQuarterly")),
 			Option(Value(string(domain.CadenceYearly)), SelectedIf(rCadence.Get() == string(domain.CadenceYearly)), uistate.T("recurring.cadenceYearly")),
 		}
+		acctOpts := []ui.Node{Option(Value(""), SelectedIf(rAccount.Get() == ""), uistate.T("recurring.noAccount"))}
+		for _, ac := range app.Accounts() {
+			acctOpts = append(acctOpts, Option(Value(ac.ID), SelectedIf(rAccount.Get() == ac.ID), ac.Name))
+		}
+		catOpts := []ui.Node{Option(Value(""), SelectedIf(rCategory.Get() == ""), uistate.T("recurring.noCategory"))}
+		for _, c := range app.Categories() {
+			catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(rCategory.Get() == c.ID), c.Name))
+		}
 		recs := app.Recurring()
 		var monthlyTotal int64
 		for _, r := range recs {
@@ -195,12 +222,19 @@ func Planning() ui.Node {
 			Form(Class("form-grid"), OnSubmit(addRecurring),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("recurring.amountPlaceholder", base)), Value(rAmount.Get()), Step("0.01"), OnInput(onRAmount)),
-				Select(Class("field"), OnChange(onRCadence), cadenceOpts),
+				Select(Class("field"), Title(uistate.T("recurring.cadence")), OnChange(onRCadence), cadenceOpts),
+				Select(Class("field"), Title(uistate.T("recurring.account")), OnChange(onRAccount), acctOpts),
+				Select(Class("field"), Title(uistate.T("recurring.category")), OnChange(onRCategory), catOpts),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
 			),
+			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
 			If(rErr.Get() != "", P(Class("err"), rErr.Get())),
 			totalNote,
 			list,
+			Div(Class("flex items-center gap-2 mt-2"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("recurring.postDueTitle")), OnClick(postDue), uistate.T("recurring.postDue")),
+				If(postMsg.Get() != "", Span(Class("muted"), postMsg.Get())),
+			),
 		)
 	}
 

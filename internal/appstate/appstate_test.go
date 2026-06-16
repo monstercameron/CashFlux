@@ -188,6 +188,58 @@ func TestRecurringRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPostDueRecurring(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutAccount(domain.Account{
+		ID: "a1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+	}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	now := time.Now()
+	due := now.AddDate(0, -3, 0) // ~3 months overdue, monthly
+
+	// Autopost recurring with an account → posts and catches up.
+	if err := a.PutRecurring(domain.Recurring{
+		ID: "r1", Label: "Salary", Amount: money.New(420000, "USD"), Cadence: domain.CadenceMonthly,
+		NextDue: due, AccountID: "a1", CategoryID: "income", Autopost: true,
+	}); err != nil {
+		t.Fatalf("PutRecurring autopost: %v", err)
+	}
+	// Autopost but no account → skipped.
+	if err := a.PutRecurring(domain.Recurring{
+		ID: "r2", Label: "Mystery", Amount: money.New(-1000, "USD"), Cadence: domain.CadenceMonthly,
+		NextDue: due, Autopost: true,
+	}); err != nil {
+		t.Fatalf("PutRecurring no-account: %v", err)
+	}
+	// Not autopost → skipped even though due.
+	if err := a.PutRecurring(domain.Recurring{
+		ID: "r3", Label: "Manual", Amount: money.New(-500, "USD"), Cadence: domain.CadenceMonthly,
+		NextDue: due, AccountID: "a1",
+	}); err != nil {
+		t.Fatalf("PutRecurring manual: %v", err)
+	}
+
+	n, err := a.PostDueRecurring(now)
+	if err != nil {
+		t.Fatalf("PostDueRecurring: %v", err)
+	}
+	if n < 3 {
+		t.Errorf("posted = %d, want at least 3 (caught-up months)", n)
+	}
+	// Every posted transaction is the salary; mystery/manual posted nothing.
+	for _, tx := range a.Transactions() {
+		if tx.Desc != "Salary" || tx.AccountID != "a1" || tx.Amount.Amount != 420000 {
+			t.Errorf("unexpected posted txn: %+v", tx)
+		}
+	}
+	// r1's NextDue is now advanced past now; re-posting does nothing.
+	if again, _ := a.PostDueRecurring(now); again != 0 {
+		t.Errorf("second post = %d, want 0 (already caught up)", again)
+	}
+}
+
 func TestPutAccountValidatesCustomFields(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutCustomFieldDef(customfields.Def{

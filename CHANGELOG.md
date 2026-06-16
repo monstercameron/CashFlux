@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Recurring cash flows can now **auto-post**: pick an account/category and flip "Auto-post", and a
+  **Post due now** button creates real transactions for every due item — catching up any missed
+  periods and advancing each schedule past today. Backed by a table-tested `appstate.PostDueRecurring`.
 - The Recurring cash flows card now shows a **net monthly equivalent** total — every cadence
   normalized to a per-month figure and summed (e.g. a yearly insurance bill counts as 1/12 a month),
   so you can see your true monthly commitment at a glance. Backed by a pure, tested

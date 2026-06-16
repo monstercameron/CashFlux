@@ -945,11 +945,12 @@ Shared control components (from mockup):
 
 ### 2.6 Planning + Forecast
 
-- [~] `Recurring{Label, Amount, Cadence, NextDue, AccountID, CategoryID, Autopost}` + CRUD — model +
-      persistence (`domain.Recurring` w/ `Cadence.Next`/`Advance`, `recurring` table, store CRUD,
-      dataset round-trip, validated appstate accessors; table-tested) **and** a "Recurring cash flows"
-      management card on Planning (add/list/delete). Still TODO: feed into the forecast + autoposting
-      due ones into transactions.
+- [x] `Recurring{Label, Amount, Cadence, NextDue, AccountID, CategoryID, Autopost}` + CRUD — model +
+      persistence (`domain.Recurring` w/ `Cadence.Next`/`Advance`/`MonthlyEquivalent`, store CRUD,
+      dataset round-trip, validated appstate accessors; table-tested), a "Recurring cash flows" card on
+      Planning (add w/ account/category/autopost, list, delete, net-monthly total), and **autoposting**
+      due ones into transactions (`appstate.PostDueRecurring` + "Post due now" button; table-tested).
+      Optional later: feed recurring into the forecast (needs a no-double-count design vs. actuals).
 - [ ] `Plan{ID, Name, HorizonMonths, BaseScenario, Assumptions[]}` + `PlanItem{...}` + CRUD
 - [~] ★ Forecast engine (pure): `internal/forecast.Project` over horizon from start + recurring + one-time items done; actuals-derived recurring later
 - [x] Debt payoff math (`internal/payoff.Project`) + tests + extra-payment scenario (months/interest saved)

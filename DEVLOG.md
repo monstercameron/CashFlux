@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — recurring autopost
+
+- Added `appstate.PostDueRecurring(asOf)`: for each autopost recurring with an account, post a
+  transaction (date = NextDue, amount/label/category from the recurring) and `Advance()` until NextDue
+  is past asOf — a bounded catch-up loop (guard 600) handling multiple missed periods. Skips
+  non-autopost or account-less ones. Returns the count. Table-tested (catch-up count, skip rules,
+  idempotent re-run, posted-txn shape).
+- Extended the Planning recurring form with account/category selects + an Auto-post toggle (so the
+  model's fields are settable), and added a "Post due now" button reporting the count. Used
+  `uiw.ToggleRow` for the toggle.
+- This makes recurring genuinely functional — schedules turn into real ledger entries on demand. (A
+  background/auto trigger on app load could come later; manual "post due now" is the safe explicit
+  version.) New `recurring.*` keys; appstate + i18n + wasm green.
+
 ## 2026-06-16 — recurring monthly-equivalent total
 
 - Added pure `domain.Recurring.MonthlyEquivalent()` (weekly ×52/12, quarterly ÷3, yearly ÷12, monthly

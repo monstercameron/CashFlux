@@ -13,10 +13,12 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/logging"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
@@ -441,6 +443,41 @@ func (a *App) PutRecurring(r domain.Recurring) error {
 // DeleteRecurring removes a recurring cash flow.
 func (a *App) DeleteRecurring(id string) error {
 	return a.del("recurring", id, a.store.DeleteRecurring)
+}
+
+// PostDueRecurring posts a transaction for each autopost recurring whose NextDue
+// is on or before asOf, advancing NextDue past asOf — catching up any missed
+// periods (bounded). A recurring needs an account to post into; ones without one,
+// or without autopost, are skipped. Returns how many transactions were created.
+func (a *App) PostDueRecurring(asOf time.Time) (int, error) {
+	posted := 0
+	for _, r := range a.Recurring() {
+		if !r.Autopost || r.AccountID == "" {
+			continue
+		}
+		changed := false
+		for guard := 0; !r.NextDue.After(asOf) && guard < 600; guard++ {
+			t := domain.Transaction{
+				ID: id.New(), AccountID: r.AccountID, CategoryID: r.CategoryID,
+				Date: r.NextDue, Amount: r.Amount, Desc: r.Label,
+			}
+			if err := a.store.PutTransaction(t); err != nil {
+				return posted, err
+			}
+			posted++
+			r = r.Advance()
+			changed = true
+		}
+		if changed {
+			if err := a.store.PutRecurring(r); err != nil {
+				return posted, err
+			}
+		}
+	}
+	if posted > 0 {
+		a.log.Info("posted due recurring", "count", posted)
+	}
+	return posted, nil
 }
 
 // ApplyRules assigns a category to every currently uncategorized, non-transfer
