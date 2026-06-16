@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: language selector — central language store COMPLETE
+
+- Added a **Display language** `<select>` to Settings → Languages, listing `uistate.Languages()`
+  (every language the bundle carries) with the active one preselected. Picking one calls
+  `uistate.SetActiveLanguage`, which persists the code to `localStorage` (`cashflux:active-lang`) and
+  reloads the page.
+- Reworked `uistate/i18n.go`: dropped the unused `UseLang` atom (T is non-reactive by design, so a
+  reload is the clean way to re-resolve every rendered string at once) and added boot-loaded
+  `activeLang` (`loadActiveLang`), `ActiveLanguage`, `SetActiveLanguage`, and `Languages`. `T` now
+  resolves against `activeLang`, falling back to English then the key for anything untranslated.
+- Decision: reload-to-apply over a reactive re-render. `uistate.T` is deliberately hook-free so it's
+  safe inside loops/row components, which means it can't observe a live language atom; a reload is
+  simpler and guaranteed-correct vs. threading the active language through every render edge.
+- Helper `langDisplay` labels languages (English by name, other codes uppercased) until localized
+  names ship. New key `settings.language`. `go test ./internal/i18n` + wasm build green.
+- **Milestone:** the central-language-store loop is closed — pick, export, import. What's left is
+  optional polish: a CI catalog-completeness test (via `MissingKeys`) and localized language names.
+
 ## 2026-06-16 — i18n: TransactionRow — verbiage migration COMPLETE
 
 - Migrated `TransactionRow` (inline edit form, category/transfer/uncategorized labels, cleared

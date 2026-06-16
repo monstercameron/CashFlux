@@ -250,6 +250,7 @@ var english = Catalog{
 	"settings.loadSample":       "Load sample",
 	"settings.wipe":             "Wipe data",
 	"settings.languages":        "Languages",
+	"settings.language":         "Display language",
 	"settings.exportLangs":      "Export languages",
 	"settings.importLangs":      "Import languages",
 

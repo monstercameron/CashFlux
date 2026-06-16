@@ -810,10 +810,13 @@ Shared control components (from mockup):
 #### Localization (i18n) — central language store
 - [x] Pure `internal/i18n`: dot-namespaced key catalog, `T(lang, key, args…)` with en fallback,
       `MissingKeys` coverage, whole-bundle JSON export/import, English source seed — table-tested
-- [~] Live bundle + active-language atom in `uistate` — shared `i18n.DefaultBundle()` + `UseLang`
-      atom done; persisting imported languages to localStorage + boot load still to do
-- [x] `T(key, args…)` helper for screens/shell — `uistate.T`, hook-free (safe in loops)
-- [ ] Language selector in the household settings panel (English-only for now; lists `Languages()`)
+- [x] Live bundle + active-language in `uistate` — shared `i18n.DefaultBundle()`, imported languages
+      persisted to localStorage and merged on boot, active language persisted + loaded at boot
+      (`ActiveLanguage`/`SetActiveLanguage` reload-applies)
+- [x] `T(key, args…)` helper for screens/shell — `uistate.T`, hook-free (safe in loops), resolves
+      against the active language
+- [x] Language selector in the household settings panel — Settings → Languages "Display language"
+      `<select>` over `uistate.Languages()`; switching persists + reloads to re-resolve all strings
 - [x] Export/Import language bundle buttons in settings — Settings → Languages; `uistate.ExportLanguages`/
       `ImportLanguages` (merge + persist to localStorage, seeded on boot)
 - [x] **Migrate all page verbiage onto `T`** — done across the shell chrome and every screen/component

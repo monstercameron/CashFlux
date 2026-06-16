@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/i18n"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -196,6 +197,7 @@ func globalSettingsForm() uic.Node {
 		p.DateStyle = prefs.DateStyle(e.GetValue())
 		savePrefs(p)
 	})
+	onLang := uic.UseEvent(func(e uic.Event) { uistate.SetActiveLanguage(i18n.Lang(e.GetValue())) })
 	hiddenAtom := uistate.UseHiddenModules()
 	toggleModule := func(path string) {
 		nh := hiddenAtom.Get().Toggle(path)
@@ -312,6 +314,12 @@ func globalSettingsForm() uic.Node {
 		Div(freshnessRows),
 	)
 
+	activeLang := uistate.ActiveLanguage()
+	langOptions := make([]uic.Node, 0)
+	for _, l := range uistate.Languages() {
+		langOptions = append(langOptions, Option(Value(string(l)), SelectedIf(activeLang == l), langDisplay(l)))
+	}
+
 	right := Div(
 		Div(Class("set-label"), uistate.T("settings.aiTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
@@ -375,6 +383,7 @@ func globalSettingsForm() uic.Node {
 			dataBtn(uistate.T("settings.wipe"), true, func() { wipeData(bump, notify) }),
 		),
 		Div(Class("set-label"), uistate.T("settings.languages")),
+		Select(Class("set-input"), Title(uistate.T("settings.language")), OnChange(onLang), langOptions),
 		Div(Class("flex flex-wrap gap-2 py-1"),
 			dataBtn(uistate.T("settings.exportLangs"), false, func() { exportLanguages(notify) }),
 			dataBtn(uistate.T("settings.importLangs"), false, func() { importLanguages(notify) }),
@@ -382,6 +391,15 @@ func globalSettingsForm() uic.Node {
 	)
 
 	return Div(Class("grid grid-cols-2 gap-x-7 content-start"), left, right)
+}
+
+// langDisplay gives a human label for a language code: English by name, any
+// other code uppercased (e.g. "es" → "ES") until it ships a localized name.
+func langDisplay(l i18n.Lang) string {
+	if l == i18n.English {
+		return "English"
+	}
+	return strings.ToUpper(string(l))
 }
 
 // memberChip renders a household member as a colored chip.

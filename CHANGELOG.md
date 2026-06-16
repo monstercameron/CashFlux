@@ -63,6 +63,10 @@ and every commit updates this file under `Unreleased`.
   (toggle/number/select fields with defaults and bounds), and reads its values from a persisted
   `Config` via clamping/validating accessors — the bridge between a widget's flip-panel settings and
   its content. Pure and table-tested; savings rate ships the first schema (target rate + show-bar).
+- Settings → Languages: a **Display language** picker lists every language the bundle carries and
+  switches the whole UI to it. The choice persists to `localStorage` and applies on a reload, so all
+  rendered strings re-resolve in the chosen language (English remains the fallback for any
+  untranslated key). Completes the central-language-store loop: pick, export, import.
 - Settings → Languages: **Export languages** downloads the whole language bundle as JSON (for
   translators) and **Import languages** loads a translated bundle back, merged and persisted across
   reloads — the round-trip for every language the app supports.
