@@ -14,6 +14,10 @@ and every commit updates this file under `Unreleased`.
   HTTP-status check in the fetch transport.
 
 ### Added
+- A pure AI cost estimator (`ai.EstimateCostUSD` + `ai.FormatCostUSD`): a per-model price table turns
+  a response's token usage into an approximate USD cost, with longest-prefix matching for dated model
+  variants and sub-cent amounts shown to four decimals. The foundation for surfacing "this used ~N
+  tokens (~$0.00x)" after a call; table-tested.
 - The Rules screen has an **Apply to existing** button that retroactively categorizes every
   uncategorized, non-transfer transaction matching a saved rule (first match wins, adding the rule's
   tags when a transaction has none) and reports how many it updated. This is the clean way to apply

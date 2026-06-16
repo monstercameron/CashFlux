@@ -86,6 +86,67 @@ func ParseUsage(data []byte) Usage {
 	return r.Usage
 }
 
+// ModelPricing is a model's USD price per 1,000,000 input and output tokens.
+type ModelPricing struct {
+	Input  float64
+	Output float64
+}
+
+// modelPricing maps known models to approximate per-1M-token USD pricing. It's a
+// best-effort table for surfacing rough cost (prices change; treat as an
+// estimate). Dated/variant model names fall back to the longest matching prefix.
+var modelPricing = map[string]ModelPricing{
+	"gpt-4o-mini":  {Input: 0.15, Output: 0.60},
+	"gpt-4o":       {Input: 2.50, Output: 10.00},
+	"gpt-4.1-mini": {Input: 0.40, Output: 1.60},
+	"gpt-4.1-nano": {Input: 0.10, Output: 0.40},
+	"gpt-4.1":      {Input: 2.00, Output: 8.00},
+	"o4-mini":      {Input: 1.10, Output: 4.40},
+}
+
+// pricingFor returns the pricing for a model, matching exactly first, then by the
+// longest known prefix (so "gpt-4o-mini-2024-07-18" resolves to gpt-4o-mini, not
+// gpt-4o). ok is false when no entry matches.
+func pricingFor(model string) (ModelPricing, bool) {
+	if p, ok := modelPricing[model]; ok {
+		return p, true
+	}
+	best := ""
+	for k := range modelPricing {
+		if strings.HasPrefix(model, k) && len(k) > len(best) {
+			best = k
+		}
+	}
+	if best != "" {
+		return modelPricing[best], true
+	}
+	return ModelPricing{}, false
+}
+
+// EstimateCostUSD returns the approximate USD cost of a completion from its token
+// usage and model, with ok=false when the model's pricing isn't known.
+func EstimateCostUSD(model string, u Usage) (float64, bool) {
+	p, ok := pricingFor(model)
+	if !ok {
+		return 0, false
+	}
+	return float64(u.PromptTokens)/1e6*p.Input + float64(u.CompletionTokens)/1e6*p.Output, true
+}
+
+// FormatCostUSD renders an estimated cost compactly: zero as "$0.00", sub-cent
+// amounts with four decimals (so a fraction of a cent is still visible), and
+// larger amounts with the usual two.
+func FormatCostUSD(cost float64) string {
+	switch {
+	case cost <= 0:
+		return "$0.00"
+	case cost < 0.01:
+		return fmt.Sprintf("$%.4f", cost)
+	default:
+		return fmt.Sprintf("$%.2f", cost)
+	}
+}
+
 // ErrorMessage turns a failed OpenAI HTTP response (its status code and body)
 // into a concise, plain-English, actionable message for the user. It recognizes
 // the common failure modes — rejected key, rate limit vs. spent quota, missing

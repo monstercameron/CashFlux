@@ -6,6 +6,37 @@ import (
 	"testing"
 )
 
+func TestEstimateCostUSD(t *testing.T) {
+	// gpt-4o-mini: $0.15/1M in, $0.60/1M out. 1,000,000 in + 1,000,000 out = 0.15 + 0.60 = 0.75.
+	if got, ok := EstimateCostUSD("gpt-4o-mini", Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000}); !ok || got != 0.75 {
+		t.Errorf("gpt-4o-mini cost = %v (ok=%v), want 0.75", got, ok)
+	}
+	// Dated variant resolves to the longest prefix (gpt-4o-mini, not gpt-4o).
+	if got, ok := EstimateCostUSD("gpt-4o-mini-2024-07-18", Usage{PromptTokens: 1_000_000}); !ok || got != 0.15 {
+		t.Errorf("dated variant cost = %v (ok=%v), want 0.15 via gpt-4o-mini prefix", got, ok)
+	}
+	// Unknown model → not ok.
+	if _, ok := EstimateCostUSD("some-future-model", Usage{PromptTokens: 100}); ok {
+		t.Error("unknown model should return ok=false")
+	}
+}
+
+func TestFormatCostUSD(t *testing.T) {
+	cases := map[float64]string{
+		0:      "$0.00",
+		0.0003: "$0.0003",
+		0.009:  "$0.0090",
+		0.01:   "$0.01",
+		1.5:    "$1.50",
+		12.345: "$12.35",
+	}
+	for cost, want := range cases {
+		if got := FormatCostUSD(cost); got != want {
+			t.Errorf("FormatCostUSD(%v) = %q, want %q", cost, got, want)
+		}
+	}
+}
+
 func TestErrorMessage(t *testing.T) {
 	quotaBody := []byte(`{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","code":"insufficient_quota"}}`)
 	rateBody := []byte(`{"error":{"message":"Rate limit reached for requests"}}`)

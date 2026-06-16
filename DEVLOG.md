@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — AI cost estimation (pure)
+
+- Added `ai.EstimateCostUSD(model, usage)` over a small per-1M-token price table, plus `pricingFor`
+  with longest-prefix matching so `gpt-4o-mini-2024-07-18` resolves to gpt-4o-mini (not gpt-4o — that
+  ordering bug is exactly why I avoided map-iteration prefix matching). `FormatCostUSD` shows sub-cent
+  costs to 4 decimals so a fraction of a cent is still visible. Table-tested.
+- Scope: pure logic only this commit. Surfacing it in the UI ("this used ~N tokens, ~$0.000x") needs
+  the response's `Usage` threaded back through the transport's `onResult` callback (currently it only
+  passes the content string) — a transport-signature change touching Insights + Documents callers, so
+  it's a separate follow-up rather than bundled here. The codec already has `ParseUsage`.
+
 ## 2026-06-16 — AI error handling: plain-English messages
 
 - Added pure `ai.ErrorMessage(status, body)`: maps an OpenAI HTTP failure to an actionable message —
