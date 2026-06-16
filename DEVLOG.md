@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Budgets: editable owner
+
+- You could set a budget's owner at creation and reassign it only by deleting a member; now the
+  inline editor has an owner picker. `saveBudget` gained an owner param and sets `OwnerID` + `Scope`
+  (shared for the group, individual otherwise) consistently with the add path and the reassign flow.
+- Added a reusable `ownerSelectOptions(members, selected)` helper (group + members) — the first step
+  toward sharing owner editing across goals and accounts too.
+- **Next.** Same owner picker on goal and account inline edits, then ownership editing is uniform.
+
 ## 2026-06-16 — Budget periods: the UI (feature complete)
 
 - Wired periods into the budgets screen. A period `Select` (shared `periodOptions` over

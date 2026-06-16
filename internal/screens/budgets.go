@@ -116,7 +116,7 @@ func Budgets() ui.Node {
 		bump()
 	}
 
-	saveBudget := func(id, newName, limitStr, periodStr string) {
+	saveBudget := func(id, newName, limitStr, periodStr, ownerID string) {
 		for _, b := range app.Budgets() {
 			if b.ID != id {
 				continue
@@ -132,6 +132,12 @@ func Budgets() ui.Node {
 			b.Limit = money.New(amt, base)
 			if p := domain.Period(periodStr); p.Valid() {
 				b.Period = p
+			}
+			b.OwnerID = ownerID
+			if ownerID == domain.GroupOwnerID {
+				b.Scope = domain.ScopeShared
+			} else {
+				b.Scope = domain.ScopeIndividual
 			}
 			if err := app.PutBudget(b); err != nil {
 				errMsg.Set(err.Error())
@@ -204,7 +210,7 @@ func Budgets() ui.Node {
 		rows := MapKeyed(statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], OnDelete: deleteBudget, OnSave: saveBudget})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), OnDelete: deleteBudget, OnSave: saveBudget})
 			},
 		)
 		listBody = Div(rows)
@@ -230,8 +236,9 @@ func Budgets() ui.Node {
 type budgetRowProps struct {
 	Status   budgeting.Status
 	Category string
+	Members  []domain.Member
 	OnDelete func(string)
-	OnSave   func(id, name, limit, period string)
+	OnSave   func(id, name, limit, period, owner string)
 }
 
 // periodOptions builds the budget-period <option>s with selected marked.
@@ -239,6 +246,16 @@ func periodOptions(selected string) []ui.Node {
 	opts := make([]ui.Node, 0, len(domain.AllPeriods))
 	for _, p := range domain.AllPeriods {
 		opts = append(opts, Option(Value(string(p)), SelectedIf(selected == string(p)), p.Label()))
+	}
+	return opts
+}
+
+// ownerSelectOptions builds owner <option>s (the shared group plus each member)
+// with selected marked — used wherever an entity's owner can be chosen.
+func ownerSelectOptions(members []domain.Member, selected string) []ui.Node {
+	opts := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(selected == domain.GroupOwnerID), "Group (shared)")}
+	for _, m := range members {
+		opts = append(opts, Option(Value(m.ID), SelectedIf(selected == m.ID), m.Name))
 	}
 	return opts
 }
@@ -255,18 +272,21 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	nameS := ui.UseState(s.Budget.Name)
 	limitS := ui.UseState(limitMajor)
 	periodS := ui.UseState(string(s.Budget.Period))
+	ownerS := ui.UseState(s.Budget.OwnerID)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
 	onPeriod := ui.UseEvent(func(e ui.Event) { periodS.Set(e.GetValue()) })
+	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(s.Budget.Name)
 		limitS.Set(limitMajor)
 		periodS.Set(string(s.Budget.Period))
+		ownerS.Set(s.Budget.OwnerID)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get())
+		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get(), ownerS.Get())
 		editing.Set(false)
 	}))
 
@@ -276,6 +296,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
 				Input(Class("field"), Type("number"), Placeholder("Limit"), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
 				Select(Class("field"), Title("Period"), OnChange(onPeriod), periodOptions(periodS.Get())),
+				Select(Class("field"), Title("Owner"), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
 				Button(Class("btn btn-primary"), Type("submit"), "Save"),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
 			),

@@ -202,7 +202,8 @@ Shared control components (from mockup):
 ### 1.8 Members / Household
 
 - [~] List members; add/delete; set default; color done — edit later
-- [ ] Ownership assignment UI (individual vs group) for accounts/budgets/goals
+- [~] Ownership assignment UI (individual vs group) — set at creation everywhere; editable on
+      budgets (inline owner picker); goals + accounts edit pending
 - [ ] Member switcher / filter affecting relevant views
 - [x] Member delete: reassign owned accounts/budgets/goals (+ transactions) to another owner via
       `appstate.ReassignOwner` + Members reassign panel, then delete

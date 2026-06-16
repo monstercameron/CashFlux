@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Change a budget's owner: the budget inline-edit form now has an owner picker (group or a member),
+  updating ownership and scope — so reassigning no longer requires deleting and recreating.
 - Budget period selector in the UI: the add and inline-edit forms let you choose weekly, monthly, or
   quarterly, and each budget is now evaluated over its own period window (honoring the week-start
   preference) rather than a shared month. Each row shows its period.
