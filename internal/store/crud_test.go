@@ -152,6 +152,30 @@ func TestSavedInsightCRUD(t *testing.T) {
 	}
 }
 
+func TestRecurringCRUD(t *testing.T) {
+	s := newStore(t)
+	r := domain.Recurring{
+		ID: "rec1", Label: "Rent", Amount: money.New(-150000, "USD"), Cadence: domain.CadenceMonthly,
+		NextDue: time.Now(), AccountID: "a1", CategoryID: "housing",
+	}
+	if err := s.PutRecurring(r); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, ok, err := s.GetRecurring("rec1")
+	if err != nil || !ok || got.Label != "Rent" || got.Amount.Amount != -150000 || got.Cadence != domain.CadenceMonthly {
+		t.Fatalf("Get: ok=%v err=%v got=%+v", ok, err, got)
+	}
+	if list, _ := s.ListRecurring(); len(list) != 1 {
+		t.Errorf("list len = %d, want 1", len(list))
+	}
+	if deleted, err := s.DeleteRecurring("rec1"); err != nil || !deleted {
+		t.Fatalf("delete: deleted=%v err=%v", deleted, err)
+	}
+	if _, ok, _ := s.GetRecurring("rec1"); ok {
+		t.Error("recurring still present after delete")
+	}
+}
+
 func TestGetAndDeleteMissing(t *testing.T) {
 	s := newStore(t)
 	if _, ok, err := s.GetGoal("nope"); ok || err != nil {

@@ -269,3 +269,18 @@ func (s *SQLiteStore) DeleteSavedInsight(id string) (bool, error) {
 func (s *SQLiteStore) ListSavedInsights() ([]domain.SavedInsight, error) {
 	return loadRows[domain.SavedInsight](s.db, "savedinsights")
 }
+
+// --- Recurring cash flows (scheduled bills / income) ---
+
+func (s *SQLiteStore) PutRecurring(r domain.Recurring) error {
+	return putJSON(s.db, "recurring", r.ID, r)
+}
+func (s *SQLiteStore) GetRecurring(id string) (domain.Recurring, bool, error) {
+	return getJSON[domain.Recurring](s.db, "recurring", id)
+}
+func (s *SQLiteStore) DeleteRecurring(id string) (bool, error) {
+	return deleteRow(s.db, "recurring", id)
+}
+func (s *SQLiteStore) ListRecurring() ([]domain.Recurring, error) {
+	return loadRows[domain.Recurring](s.db, "recurring")
+}

@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A **Recurring** cash-flow model (`domain.Recurring` + store/state): a scheduled bill/paycheck/
+  subscription with a label, signed amount, cadence (weekly/monthly/quarterly/yearly), next-due date,
+  account/category, and an autopost flag. Cadence math (`Cadence.Next`, `Recurring.Advance`) and full
+  persistence (CRUD, export/import round-trip, validated `appstate.Recurring`/`PutRecurring`/
+  `DeleteRecurring`) are table-tested. The data model behind recurring transactions + richer forecasts
+  (management UI + autoposting to follow).
 - Hardened the **forecast** and **debt-payoff** engine tests: forecast now pins one-times outside the
   horizon being ignored, same-month one-times summing, negative-horizon → empty, and balances allowed
   to go negative; payoff pins single-month clearing (final payment capped), payment-equal-to-interest

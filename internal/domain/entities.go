@@ -3,6 +3,7 @@ package domain
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -76,6 +77,54 @@ type Transaction struct {
 	MemberID          string         `json:"memberId,omitempty"`
 	SourceDocID       string         `json:"sourceDocId,omitempty"`
 	Custom            map[string]any `json:"custom,omitempty"`
+}
+
+// RecurringCadence is how often a recurring cash flow repeats.
+type RecurringCadence string
+
+const (
+	CadenceWeekly    RecurringCadence = "weekly"
+	CadenceMonthly   RecurringCadence = "monthly"
+	CadenceQuarterly RecurringCadence = "quarterly"
+	CadenceYearly    RecurringCadence = "yearly"
+)
+
+// Next returns the date one cadence step after from. Month-based cadences use
+// dateutil.AddMonths; weekly adds 7 days. An unknown cadence is treated as
+// monthly.
+func (c RecurringCadence) Next(from time.Time) time.Time {
+	switch c {
+	case CadenceWeekly:
+		return from.AddDate(0, 0, 7)
+	case CadenceQuarterly:
+		return dateutil.AddMonths(from, 3)
+	case CadenceYearly:
+		return dateutil.AddMonths(from, 12)
+	default:
+		return dateutil.AddMonths(from, 1)
+	}
+}
+
+// Recurring is a scheduled cash flow that repeats on a cadence — a bill, a
+// paycheck, a subscription. Amount is signed (negative = money out) and carries
+// its currency, mirroring Transaction; Autopost (later) turns due ones into real
+// transactions. The forecast/planning features read these.
+type Recurring struct {
+	ID         string           `json:"id"`
+	Label      string           `json:"label"`
+	Amount     money.Money      `json:"amount"`
+	Cadence    RecurringCadence `json:"cadence"`
+	NextDue    time.Time        `json:"nextDue"`
+	AccountID  string           `json:"accountId,omitempty"`
+	CategoryID string           `json:"categoryId,omitempty"`
+	Autopost   bool             `json:"autopost,omitempty"`
+}
+
+// Advance returns a copy with NextDue moved one cadence forward — used after a
+// due occurrence is posted.
+func (r Recurring) Advance() Recurring {
+	r.NextDue = r.Cadence.Next(r.NextDue)
+	return r
 }
 
 // SavedInsight is an AI-generated insight the user pinned to revisit later, kept

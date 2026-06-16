@@ -41,6 +41,7 @@ type Dataset struct {
 	Rules         []rules.Rule          `json:"rules,omitempty"`
 	Documents     []domain.Document     `json:"documents,omitempty"`
 	SavedInsights []domain.SavedInsight `json:"savedInsights,omitempty"`
+	Recurring     []domain.Recurring    `json:"recurring,omitempty"`
 	Settings      Settings              `json:"settings"`
 }
 

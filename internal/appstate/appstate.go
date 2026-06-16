@@ -194,6 +194,13 @@ func (a *App) SavedInsights() []domain.SavedInsight {
 	return v
 }
 
+// Recurring returns every scheduled recurring cash flow.
+func (a *App) Recurring() []domain.Recurring {
+	v, err := a.store.ListRecurring()
+	a.logErr("recurring", err)
+	return v
+}
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -407,6 +414,33 @@ func (a *App) PutSavedInsight(si domain.SavedInsight) error {
 // DeleteSavedInsight removes a pinned AI insight.
 func (a *App) DeleteSavedInsight(id string) error {
 	return a.del("saved insight", id, a.store.DeleteSavedInsight)
+}
+
+// PutRecurring saves a recurring cash flow. It needs an ID, a label, a currency
+// on the amount, and a cadence.
+func (a *App) PutRecurring(r domain.Recurring) error {
+	if r.ID == "" {
+		return fmt.Errorf("appstate: recurring needs an id")
+	}
+	if strings.TrimSpace(r.Label) == "" {
+		return fmt.Errorf("appstate: recurring needs a label")
+	}
+	if r.Amount.Currency == "" {
+		return fmt.Errorf("appstate: recurring needs an amount currency")
+	}
+	if r.Cadence == "" {
+		return fmt.Errorf("appstate: recurring needs a cadence")
+	}
+	if err := a.store.PutRecurring(r); err != nil {
+		return err
+	}
+	a.log.Info("recurring saved", "id", r.ID)
+	return nil
+}
+
+// DeleteRecurring removes a recurring cash flow.
+func (a *App) DeleteRecurring(id string) error {
+	return a.del("recurring", id, a.store.DeleteRecurring)
 }
 
 // ApplyRules assigns a category to every currently uncategorized, non-transfer

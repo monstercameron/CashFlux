@@ -160,6 +160,34 @@ func TestSavedInsightRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRecurringRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+	bad := []domain.Recurring{
+		{Label: "x", Amount: money.New(1, "USD"), Cadence: domain.CadenceMonthly}, // no id
+		{ID: "r", Amount: money.New(1, "USD"), Cadence: domain.CadenceMonthly},    // no label
+		{ID: "r", Label: "x", Cadence: domain.CadenceMonthly},                     // no currency
+		{ID: "r", Label: "x", Amount: money.New(1, "USD")},                        // no cadence
+	}
+	for i, r := range bad {
+		if err := a.PutRecurring(r); err == nil {
+			t.Errorf("bad recurring %d accepted: %+v", i, r)
+		}
+	}
+	good := domain.Recurring{ID: "r1", Label: "Netflix", Amount: money.New(-1599, "USD"), Cadence: domain.CadenceMonthly, NextDue: time.Now()}
+	if err := a.PutRecurring(good); err != nil {
+		t.Fatalf("PutRecurring: %v", err)
+	}
+	if got := a.Recurring(); len(got) != 1 || got[0].Label != "Netflix" {
+		t.Fatalf("Recurring() = %+v", got)
+	}
+	if err := a.DeleteRecurring("r1"); err != nil {
+		t.Fatalf("DeleteRecurring: %v", err)
+	}
+	if len(a.Recurring()) != 0 {
+		t.Error("recurring still present after delete")
+	}
+}
+
 func TestPutAccountValidatesCustomFields(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutCustomFieldDef(customfields.Def{

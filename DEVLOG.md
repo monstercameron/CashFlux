@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Recurring cash-flow model + persistence
+
+- Added `domain.Recurring` (label, signed `money.Money` amount, `RecurringCadence`, NextDue,
+  account/category, Autopost) with `Cadence.Next(from)` (weekly = +7d, monthly/quarterly/yearly via
+  `dateutil.AddMonths`, unknown→monthly) and `Recurring.Advance()` (value receiver, returns a copy).
+  Persisted like the other entities (recurring table, store CRUD, dataset round-trip, validated
+  appstate accessors). Table-tested at domain/store/appstate layers.
+- Modeling call: followed Transaction's convention — signed amount + currency carried in
+  `money.Money`, no separate Kind/Currency enum from the spec's field list — so income/expense is the
+  amount sign, consistent with the rest of the domain. domain now imports dateutil for cadence math
+  (acyclic: dateutil is stdlib-only).
+- This is §2.6's `Recurring{...}` + CRUD item. Next: a management UI and (later) autoposting due ones
+  into real transactions; the forecast engine can also read these. wasm + all layers green.
+
 ## 2026-06-16 — forecast + payoff: edge-case tests
 
 - forecast: added tests for one-times outside the horizon (month 0, beyond, negative → ignored),

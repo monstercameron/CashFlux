@@ -31,6 +31,10 @@ func sampleDataset() Dataset {
 			Status: domain.DocImported, Extracted: []domain.DocumentRow{{Date: "2026-06-01", Description: "Coffee", Amount: "-4.50", Category: "Food"}},
 		}},
 		SavedInsights: []domain.SavedInsight{{ID: "si1", Text: "You saved 18% this month.", CreatedAt: asOf}},
+		Recurring: []domain.Recurring{{
+			ID: "rec1", Label: "Salary", Amount: money.New(420000, "USD"), Cadence: domain.CadenceMonthly,
+			NextDue: asOf, AccountID: "a1", CategoryID: "c1",
+		}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
 			FXRates:            map[string]float64{"EUR": 1.1},
@@ -91,6 +95,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if len(imported.SavedInsights) != 1 || imported.SavedInsights[0].Text != "You saved 18% this month." {
 		t.Errorf("saved insights lost: %+v", imported.SavedInsights)
+	}
+	if len(imported.Recurring) != 1 || imported.Recurring[0].Cadence != domain.CadenceMonthly || imported.Recurring[0].Amount.Amount != 420000 {
+		t.Errorf("recurring lost: %+v", imported.Recurring)
 	}
 }
 

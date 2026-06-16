@@ -94,6 +94,37 @@ func TestTransactionClassification(t *testing.T) {
 	}
 }
 
+func TestRecurringCadenceNext(t *testing.T) {
+	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	cases := map[RecurringCadence]time.Time{
+		CadenceWeekly:    time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC),
+		CadenceMonthly:   time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC),
+		CadenceQuarterly: time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC),
+		CadenceYearly:    time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC),
+	}
+	for cad, want := range cases {
+		if got := cad.Next(base); !got.Equal(want) {
+			t.Errorf("%s.Next = %s, want %s", cad, got.Format("2006-01-02"), want.Format("2006-01-02"))
+		}
+	}
+	// Unknown cadence falls back to monthly.
+	if got := RecurringCadence("nope").Next(base); !got.Equal(cases[CadenceMonthly]) {
+		t.Errorf("unknown cadence Next = %s, want monthly", got.Format("2006-01-02"))
+	}
+}
+
+func TestRecurringAdvance(t *testing.T) {
+	r := Recurring{Cadence: CadenceMonthly, NextDue: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
+	next := r.Advance()
+	if !next.NextDue.Equal(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("Advance NextDue = %s, want 2026-07-01", next.NextDue.Format("2006-01-02"))
+	}
+	// Original is unchanged (value receiver).
+	if !r.NextDue.Equal(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Error("Advance mutated the original")
+	}
+}
+
 func TestEntitiesCarryCustomFields(t *testing.T) {
 	// Smoke check that entities compile with the shared shapes we rely on.
 	a := Account{ID: "a1", Type: TypeSavings, Class: ClassAsset, Currency: "USD", BalanceAsOf: time.Now(), Custom: map[string]any{"nickname": "rainy day"}}
