@@ -209,6 +209,55 @@ trail yet.
 - [ ] Verify: every screen shows a correct trail; clicking a crumb navigates; the home crumb returns
       to the dashboard.
 
+### B10. Rethink the time-resolution control (drastic UX improvement) ★
+
+**Current control** (`internal/app/shell.go` `ResolutionControl`, driven by `internal/period.Window`):
+a `Week | Month | Quarter` segmented toggle + **two** independent stepper pills (`From` ‹ › and
+`To` ‹ ›) joined by an em-dash, where each pill steps one unit and the pair defines a range.
+
+**Why it's confusing (deep analysis):**
+1. **Two steppers for a range is the wrong default.** The overwhelmingly common need is *one* period
+   ("this month"). Presenting two anchors forces every user to reason about a range they rarely want,
+   and it's unclear the two pills are even related.
+2. **Redundant when From == To.** In the common single-period case the control reads "Jun 2026 – Jun
+   2026", which looks broken/duplicated rather than "Jun 2026".
+3. **No way back to "now".** Once you step away there's no "This month"/Today reset — you must count
+   clicks back. There's no visual cue that you've left the current period.
+4. **No presets.** The most common selections (This/Last month, This quarter, Year to date, Last 30
+   days) all require stepping; there are no one-tap presets.
+5. **Granularity ↔ range coupling is invisible.** Switching Week→Quarter re-snaps the anchors
+   (correct, via `SetResolution`) but nothing explains the jump.
+6. **Width / competition.** Segmented + two steppers is wide and will crowd the top bar next to "+ Add"
+   and the planned breadcrumb (B9); no responsive/narrow behavior.
+7. **Discoverability of range mode.** Power users *do* want custom ranges, but that shouldn't tax the
+   90% single-period case.
+
+**Proposed redesign (drastic):**
+- **Primary = a single period stepper** ‹ `Jun 2026` › for the common case (From==To), reading as one
+  label. A small **granularity affordance** (Week/Month/Quarter) stays but compact (e.g. a dropdown or
+  the segmented shown only when the period menu is open).
+- **A presets dropdown** ("This month ▾"): This month, Last month, This quarter, Year to date, Last 30
+  days, Custom range… — plus the Week/Month/Quarter choice. One tap for the common ranges.
+- **A "This {period}" / Today reset** that re-anchors to now, with a subtle indicator when the view is
+  off the current period.
+- **Custom range** reveals the From/To steppers (today's behavior) only when chosen — advanced, not
+  default. Show "From – To" only in range mode; a single label otherwise.
+
+**Bottom-up plan (pure logic first):**
+- [ ] `internal/period`: add pure preset constructors over an injected `now` — `ThisPeriod`, `Previous`,
+      `YearToDate`, `LastNDays(n)` (and an `IsCurrent(now)` predicate for the off-now indicator).
+      Table-test them (boundaries, week-start sensitivity, quarter math).
+- [ ] `Window`: a single-period helper (set both anchors to one unit) + a clear "is single period" check
+      so the label collapses correctly. Tests.
+- [ ] UI: rebuild `ResolutionControl` as single-stepper + presets dropdown + reset, with Custom-range
+      revealing the dual steppers. Keep persisting resolution (and now presets/range) per B existing
+      reload-persistence.
+- [ ] Responsive: collapse gracefully in a narrow top bar.
+- [ ] Verify: single-period is one tap and reads cleanly; presets work; "this period" resets to now;
+      custom range still does everything today's control can; persists across reload.
+- _Decision to confirm:_ how far to simplify — keep the full From/To range power behind "Custom range"
+  (recommended), or drop ranges entirely for a single-period-only control.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)

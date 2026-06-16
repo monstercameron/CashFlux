@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Deep-analyzed the time-resolution control (B10)
+
+- User asked for a deep analysis to drastically improve the resolution-control UX. Logged B10.
+- Core finding: the dual From/To stepper makes a *range* the default when ~90% of users want a single
+  period — and it reads "Jun 2026 – Jun 2026" (looks broken) in that common case. Also no presets, no
+  "back to now" reset, no off-current indicator, and it's wide (will crowd +Add and the B9 breadcrumb).
+- Proposed: a single period stepper as the primary, a presets dropdown (This/Last month, This quarter,
+  YTD, Last 30 days, Custom range…), a "this period"/Today reset, and the existing From/To range tucked
+  behind "Custom range". Bottom-up: add pure `period` preset constructors (`ThisPeriod`/`Previous`/
+  `YearToDate`/`LastNDays`/`IsCurrent`) + a single-period helper, table-tested, before the UI rebuild.
+- One decision teed up: keep range power behind Custom range (recommended) vs. drop ranges entirely.
+- Analysis/TODO only.
+
 ## 2026-06-16 — Logged top-bar breadcrumb (B9)
 
 - User wants a clickable breadcrumb on the right of the top-level panel for stepping backwards.
