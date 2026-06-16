@@ -161,8 +161,17 @@ problems and fixes, and what's next.
   payment per liability account (clamped due-day, soonest first, within-a-week dates toned amber),
   via a small `nextDue` helper. The whole candidate-C bento is now live data on the reusable shells.
 
-**Next:** the per-widget settings wiring (settings-target atom + form built from the control
-primitives + `FlipPanel` host mounted at the shell root), then global settings, then drag/resize.
+- Wired **per-widget settings**: new `settings:target` atom in `uistate` (`SettingsTarget{Kind,ID,
+  Title}` — closed/widget/global). The `Widget` gear defaults to opening its own panel (computes the
+  open-closure during render so the `UseSettings` hook stays at a stable position, not in the click
+  handler), overridable via `OnGear`. A `SettingsHost` component mounted at the shell root renders the
+  `FlipPanel` for the active target and nothing (`Fragment()`) when closed — so each open is a fresh
+  mount and the flip animation replays. The widget settings back face (editable title + behavior
+  toggles via `ToggleRow`) holds local state for now; persisting visibility/layout to the store
+  arrives with the layout model. Confirmed `internal/ui` can depend on `uistate` without a cycle.
+
+**Next:** the **global settings** panel body (household members, base currency + FX rows, AI key,
+appearance, data actions) wired to the household card; then drag-reorder, resize, and layout persistence.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

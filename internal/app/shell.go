@@ -37,6 +37,7 @@ func Shell(props ShellProps) uic.Node {
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title}),
 			Div(Class("p-[10px]"), uic.CreateElement(props.View)),
 		),
+		uic.CreateElement(SettingsHost),
 	)
 }
 

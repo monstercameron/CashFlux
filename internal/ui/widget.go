@@ -3,6 +3,7 @@
 package ui
 
 import (
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -34,6 +35,15 @@ func widget(props WidgetProps) uic.Node {
 		bodyClass += " " + props.BodyClass
 	}
 
+	// By default the gear opens this widget's settings panel; callers may
+	// override with an explicit OnGear.
+	settings := uistate.UseSettings()
+	onGear := props.OnGear
+	if onGear == nil {
+		id, title := props.ID, props.Title
+		onGear = func() { settings.Set(uistate.Widget(id, title)) }
+	}
+
 	args := []any{Class("w"), Attr("data-widget", props.ID)}
 	if style := gridStyle(props.GridColumn, props.GridRow); style != nil {
 		args = append(args, Style(style))
@@ -45,7 +55,7 @@ func widget(props WidgetProps) uic.Node {
 		Div(Class("wh"),
 			Span(Class("grip"), "⠿"), // ⠿ drag grip
 			H3(props.Title),
-			uic.CreateElement(gearButton, gearButtonProps{OnClick: props.OnGear}),
+			uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear}),
 		),
 		Div(Class(bodyClass), props.Body),
 	)

@@ -178,6 +178,10 @@ and every commit updates this file under `Unreleased`.
 - Upcoming bills widget (2×1): the next due date and minimum payment for each liability account that
   has them, soonest first, with due dates within a week toned amber. Completes the candidate-C widget
   catalog (12 widgets).
+- Per-widget settings: each widget's gear opens its settings in the `FlipPanel` (driven by a shared
+  `settings:target` atom + a `SettingsHost` mounted at the shell root). The settings back face has an
+  editable title and behavior toggles (show on dashboard, allow moving/resizing, compact), built from
+  the `ToggleRow` primitive. The household card's global panel opens too (body coming next).
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
