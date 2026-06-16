@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — formula engine: security + edge-case tests
+
+- Added `eval_security_test.go` to nail down the §2.5 "extensive tests incl. security (no escape)"
+  item: a blocklist of host/arbitrary function names (and wrong-case allow-list names) all error;
+  undeclared variables error (no silent zero); evaluation only ever produces float64/string/bool (no
+  host type can leak out); 300-deep nesting evaluates; repeated eval is deterministic; numeric edge
+  cases (chained/parenthesized unary, negative modulo via math.Mod, float division, round-half-away);
+  malformed inputs error rather than panic.
+- No engine changes needed — the existing design already enforces the allow-list and scalar-only
+  values; this pins those guarantees with tests so a future change can't regress the sandbox. Whole
+  formula suite green.
+
 ## 2026-06-16 — rules: shadowed-rule detection
 
 - Added pure `rules.Conflicts(rs)`: a rule is shadowed when an earlier rule's match phrase is a

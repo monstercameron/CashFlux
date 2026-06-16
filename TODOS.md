@@ -938,7 +938,10 @@ Shared control components (from mockup):
 - [ ] `Formula{ID, Name, Target, Expr, ResultType, Format, Enabled}` store + CRUD
 - [~] Builder UI: live preview + error messages + example chips done (Customize); guided insert later
 - [ ] Surface results on dashboard / relevant entities
-- [ ] ★ Extensive tests: tokenizer, parser, evaluator, errors, security (no escape), edge cases
+- [x] ★ Extensive tests: tokenizer, parser, evaluator, errors, security (no escape), edge cases —
+      `eval_security_test.go` (sandbox rejects host/non-allowlisted fns, scalar-only results, unknown
+      vars error, deep nesting, determinism, numeric edge cases, malformed→error) + existing token/
+      parser/eval tests.
 
 ### 2.6 Planning + Forecast
 

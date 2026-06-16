@@ -36,13 +36,13 @@ func TestEvalArithmetic(t *testing.T) {
 
 func TestEvalComparisons(t *testing.T) {
 	cases := map[string]bool{
-		"2 > 1":       true,
-		"2 < 1":       false,
-		"3 >= 3":      true,
-		"3 != 4":      true,
-		`"a" == "a"`:  true,
-		`"a" == "b"`:  false,
-		"1 + 1 == 2":  true,
+		"2 > 1":      true,
+		"2 < 1":      false,
+		"3 >= 3":     true,
+		"3 != 4":     true,
+		`"a" == "a"`: true,
+		`"a" == "b"`: false,
+		"1 + 1 == 2": true,
 	}
 	for in, want := range cases {
 		v, err := Eval(in, Env{})

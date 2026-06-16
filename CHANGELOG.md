@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Hardened the sandboxed **formula engine** with security + edge-case tests: non-allow-listed/host-like
+  functions (`exec`, `eval`, `system`, `import`, even `SUM`/`Sum` — the allow-list is case-sensitive)
+  are rejected, undeclared variables never silently resolve, evaluation only ever yields a
+  number/string/bool, deep nesting and determinism hold, and malformed input errors instead of
+  panicking. (`internal/formula` — proves the "no escape" guarantee.)
 - The Rules screen now flags rules that **never run**: if an earlier rule's phrase already matches
   everything a later rule would (first-match-wins), the shadowed rule shows "Never runs — an earlier
   rule (…) already matches it." Backed by a pure, table-tested `rules.Conflicts` detector.
