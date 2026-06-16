@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -59,6 +60,9 @@ func Insights() ui.Node {
 	errMsg := ui.UseState("")
 	saved := ui.UseState("")
 	usage := ui.UseState(ai.Usage{})
+	pinned := ui.UseState("")
+	rev := ui.UseState(0)
+	bump := func() { rev.Set(rev.Get() + 1) }
 	var noCancel func()
 	cancelFn := ui.UseState(noCancel)
 	cancelAI := ui.UseEvent(func() {
@@ -90,6 +94,23 @@ func Insights() ui.Node {
 		saved.Set(uistate.T("insights.savedToTodo"))
 	}))
 
+	pinInsight := ui.UseEvent(Prevent(func() {
+		r := strings.TrimSpace(result.Get())
+		if r == "" {
+			return
+		}
+		if err := app.PutSavedInsight(domain.SavedInsight{ID: id.New(), Text: r, CreatedAt: time.Now()}); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		pinned.Set(uistate.T("insights.pinnedConfirm"))
+		bump()
+	}))
+	deletePinned := func(pid string) {
+		_ = app.DeleteSavedInsight(pid)
+		bump()
+	}
+
 	explain := ui.UseEvent(func() {
 		if key == "" {
 			errMsg.Set(uistate.T("insights.needKey"))
@@ -99,6 +120,7 @@ func Insights() ui.Node {
 		errMsg.Set("")
 		result.Set("")
 		saved.Set("")
+		pinned.Set("")
 		usage.Set(ai.Usage{})
 		prompt := aiCtx.Line() + " In 3-4 friendly sentences, explain how my month went and one thing I could do next."
 		messages := []ai.Message{
@@ -125,6 +147,7 @@ func Insights() ui.Node {
 		errMsg.Set("")
 		result.Set("")
 		saved.Set("")
+		pinned.Set("")
 		usage.Set(ai.Usage{})
 		messages := []ai.Message{
 			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant. Answer using the provided context; if it isn't enough, say what's missing. Plain English, no jargon."},
@@ -162,6 +185,22 @@ func Insights() ui.Node {
 		action = Button(Class("btn btn-primary"), Type("button"), OnClick(explain), uistate.T("insights.explainTitle"))
 	}
 
+	// Pinned insights, newest first.
+	pins := app.SavedInsights()
+	sort.Slice(pins, func(i, j int) bool { return pins[i].CreatedAt.After(pins[j].CreatedAt) })
+	pinnedCard := Fragment()
+	if len(pins) > 0 {
+		pinnedCard = Section(Class("card"),
+			H2(Class("card-title"), uistate.T("insights.pinnedTitle")),
+			Div(Class("rows"), MapKeyed(pins,
+				func(p domain.SavedInsight) any { return p.ID },
+				func(p domain.SavedInsight) ui.Node {
+					return ui.CreateElement(PinnedInsightRow, pinnedInsightRowProps{Insight: p, OnDelete: deletePinned})
+				},
+			)),
+		)
+	}
+
 	return Div(
 		highlights,
 		Section(Class("card"),
@@ -180,10 +219,34 @@ func Insights() ui.Node {
 		If(result.Get() != "", Section(Class("card"),
 			H2(Class("card-title"), uistate.T("insights.answerTitle")),
 			P(result.Get()),
-			Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(saveAsTask), uistate.T("insights.saveTask")),
-			If(saved.Get() != "", Span(Class("muted"), Style(map[string]string{"margin-left": "0.5rem"}), saved.Get())),
+			Div(Class("flex flex-wrap gap-2 items-center"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(saveAsTask), uistate.T("insights.saveTask")),
+				Button(Class("btn"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pinInsight), uistate.T("insights.pin")),
+				If(saved.Get() != "", Span(Class("muted"), saved.Get())),
+				If(pinned.Get() != "", Span(Class("muted"), pinned.Get())),
+			),
 			If(usageNote != "", P(Class("text-faint text-[11px] mt-2"), usageNote)),
 		)),
+		pinnedCard,
+	)
+}
+
+type pinnedInsightRowProps struct {
+	Insight  domain.SavedInsight
+	OnDelete func(string)
+}
+
+// PinnedInsightRow renders one pinned insight with its date and a remove button.
+// It owns its own click handler (per the no-hooks-in-loops rule).
+func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
+	p := props.Insight
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(p.ID) }))
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), p.Text),
+			Span(Class("row-meta"), p.CreatedAt.Format("Jan 2, 2006")),
+		),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("insights.unpinTitle")), OnClick(del), "✕"),
 	)
 }
 

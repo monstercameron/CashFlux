@@ -899,9 +899,9 @@ Shared control components (from mockup):
       (`ledger.CategorySpendSeries`, FX-aware, table-tested), and the offline **Spending highlights**
       card in Insights (`screens.spendingHighlights`, last 4 months, plain-English ↑/↓ rows, no AI key).
       AI-generated "advice cards" remain a separate later enhancement.
-- [~] Pin/save insights; show top insight on dashboard — top insight on dashboard done
-      (`screens.topHighlightWidget`); pinned-insight **storage** done (`domain.SavedInsight` + store/state,
-      table-tested). Still TODO: the Pin button + pinned-insights list UI on the Insights screen.
+- [x] Pin/save insights; show top insight on dashboard — top insight on dashboard
+      (`screens.topHighlightWidget`); pinned-insight storage (`domain.SavedInsight` + store/state,
+      table-tested) **and** a Pin button + "Pinned insights" list (remove) on the Insights screen.
 - [x] Guardrails: scope data sent — insights prompts build from a pure `ai.FinancialContext` that by
       construction carries only aggregates (no payees/account numbers/per-transaction detail), so the
       privacy scope is explicit and reviewable in one place.

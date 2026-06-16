@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Insights answers can now be **pinned**: a Pin button saves the answer to a "Pinned insights" card
+  (newest first, each removable) so you can keep an explanation to revisit without adding it to your
+  to-do list. Backed by the saved-insight store.
 - Pinned-insight storage (`domain.SavedInsight` + store/state): persist an AI insight's text with a
   timestamp, with full CRUD, export/import round-trip, and validated `appstate.SavedInsights`/
   `PutSavedInsight`/`DeleteSavedInsight` (id + non-empty text required). Table-tested. The store behind

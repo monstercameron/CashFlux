@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — pin/save insights: UI
+
+- Added a Pin button beside "Save as task" on the Insights answer (saves the text via
+  `app.PutSavedInsight` with a "Pinned." confirmation) and a "Pinned insights" card listing
+  `app.SavedInsights()` newest-first, each a `PinnedInsightRow` component with a remove button. A local
+  rev counter re-renders the list on pin/unpin.
+- Completes §2.3's pin/save-insights item (storage + UI). New `insights.pin*`/`unpinTitle` keys;
+  catalog + wasm green.
+
 ## 2026-06-16 — pin/save insights: model + persistence
 
 - Added `domain.SavedInsight{ID, Text, CreatedAt}` and persisted it like the other entities
