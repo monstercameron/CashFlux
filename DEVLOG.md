@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12: Net worth trend months setting
+
+- Third widget on the settings API: "trend" schema (`months`, 3–12, default 6); `netWorthTrendWidget`
+  reads it and generalizes the cutoff window (offset `i-(months-2)`, preserving the prior 6-month
+  shape that ends one month ahead). Persisted via `WidgetConfigs`.
+- widgetcfg tests + wasm green. **Next:** spending-breakdown top-N, or move on to another backlog item.
+
 ## 2026-06-16 — B12: Recent transactions row-count setting
 
 - Second widget on the settings API: registered a "recent" schema (`count`, number 3–20, default 6)

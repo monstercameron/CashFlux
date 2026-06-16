@@ -19,4 +19,11 @@ func init() {
 			{Key: "count", Label: "Rows to show", Type: Number, Default: "6", Min: 3, Max: 20},
 		},
 	})
+	register(Schema{
+		WidgetID: "trend",
+		Title:    "Net worth trend",
+		Fields: []Field{
+			{Key: "months", Label: "Months of history", Type: Number, Default: "6", Min: 3, Max: 12},
+		},
+	})
 }

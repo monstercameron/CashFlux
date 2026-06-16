@@ -50,6 +50,7 @@ and every commit updates this file under `Unreleased`.
   (green at/above target, amber when positive but short, red when negative) and shows the target in
   the subline; the progress bar can be hidden.
 - The Recent transactions widget has a "Rows to show" setting (3–20, default 6).
+- The Net worth trend widget has a "Months of history" setting (3–12, default 6).
 - GitHub Pages deployment via Actions (`.github/workflows/deploy-pages.yml`): every push to `main`
   builds the wasm app and publishes it to Pages, so the latest build is reviewable from anywhere. A
   `404.html` app-shell is generated for deep-link routing.

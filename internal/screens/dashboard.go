@@ -126,7 +126,7 @@ func Dashboard() ui.Node {
 		goalsWidget(app),
 		todoWidget(app),
 		accountsWidget(app, txns),
-		netWorthTrendWidget(accounts, txns, rates, net),
+		netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")),
 		cashFlowWidget(txns, rates),
 		savingsRateWidget(income, expense, widgetCfgs.For("savings")),
 		spendingBreakdownWidget(app, txns, rates, start, end),
@@ -429,11 +429,17 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 // netWorthTrendWidget is the 1×2 Net worth trend widget: the current figure over
 // a six-month end-of-month area chart (via ledger.NetWorthSeries + the chart
 // geometry helpers).
-func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, net money.Money) ui.Node {
+func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, net money.Money, cfg widgetcfg.Config) ui.Node {
+	months := 6
+	if sch, ok := widgetcfg.SchemaFor("trend"); ok {
+		if f, ok := sch.FieldByKey("months"); ok {
+			months = f.Int(cfg)
+		}
+	}
 	start := dateutil.MonthStart(time.Now())
-	cutoffs := make([]time.Time, 0, 6)
-	for i := 0; i < 6; i++ {
-		cutoffs = append(cutoffs, dateutil.AddMonths(start, i-4)) // end of month M-5 … current month M
+	cutoffs := make([]time.Time, 0, months)
+	for i := 0; i < months; i++ {
+		cutoffs = append(cutoffs, dateutil.AddMonths(start, i-(months-2))) // window ends at the current month +1
 	}
 	series, _ := ledger.NetWorthSeries(accounts, txns, cutoffs, rates)
 	values := make([]float64, len(series))
