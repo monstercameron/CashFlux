@@ -8,6 +8,12 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
 
+// Span bounds for the resize handles (the bento grid is 4 columns × 7 rows).
+const (
+	maxColSpan = 4
+	maxRowSpan = 3
+)
+
 // WidgetProps configures a bento Widget shell.
 type WidgetProps struct {
 	ID         string   // stable id (drag/reorder/layout key)
@@ -86,9 +92,27 @@ func widget(props WidgetProps) uic.Node {
 		Div(Class(bodyClass), props.Body),
 	)
 	if props.Resizable {
+		id := props.ID
+		cur, _ := layout.Get(id)
 		args = append(args,
-			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", "Scale wide")),
-			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", "Scale tall")),
+			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", "Widen"),
+				OnClick(func() {
+					next := cur.ColSpan + 1
+					if next > maxColSpan {
+						next = 1
+					}
+					layoutAtom.Set(layout.Resize(id, next, cur.RowSpan))
+				}),
+			),
+			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", "Taller"),
+				OnClick(func() {
+					next := cur.RowSpan + 1
+					if next > maxRowSpan {
+						next = 1
+					}
+					layoutAtom.Set(layout.Resize(id, cur.ColSpan, next))
+				}),
+			),
 		)
 	}
 	return Div(args...)

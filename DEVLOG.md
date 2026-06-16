@@ -210,8 +210,14 @@ problems and fixes, and what's next.
   widgets) and clears the source; `OnDragEnd` clears it if dropped outside. The dragged cell dims via
   `.drag`. No `DataTransfer` needed — the atom carries the source id.
 
-**Next:** edge-resize handles (right/bottom) → `dashlayout.Resize` (pointer drag, snap to cells),
-then persist the layout (and per-widget settings) to the store; then restyle the non-dashboard screens.
+- Made the **resize handles functional**: the right/bottom edge handles cycle the widget's col/row
+  span via `dashlayout.Resize` (clamped to the 4×3 grid), re-placing it live through the layout atom.
+  Chose click-to-cycle over pointer-drag for now — it's reliable without browser testing and the math
+  stays in the tested `dashlayout`; smooth pointer-drag resize is a later polish. Only `kpi-networth`
+  currently carries handles (as in the mockup); enabling them across all widgets is the next commit.
+
+**Next:** enable resize handles on all widgets; persist the layout (and per-widget settings) to the
+store Settings so reorg survives reloads; then restyle the non-dashboard screens to the new shell.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
