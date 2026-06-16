@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Edit categories inline: each category row has an Edit button to rename it and switch its kind
+  (expense/income). With this, every entity supports inline edit.
 - Edit members inline: each member row has an Edit button to change the name and color (members
   previously supported only add, delete, and set-default).
 - Export filtered transactions to CSV: an "Export CSV" button on the transaction list downloads

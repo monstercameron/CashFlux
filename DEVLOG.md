@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Categories: inline edit (CRUD-edit fully complete)
+
+- The last edit gap: `CategoryRow` now edits inline (name + kind). `saveCat` guards the kind with
+  `CategoryKind.Valid()` and persists via `PutCategory`.
+- **Every entity is now fully editable inline** — accounts, transactions, budgets, goals, members,
+  categories — each with the same unconditional-hooks + editing-toggle shape. Combined with the
+  reassign-on-delete flows and bulk transaction ops, the CRUD surface is complete.
+- **Next.** No CRUD gaps remain; further work is small UX polish or the out-of-scope sync. Will keep
+  additions genuine and avoid churn.
+
 ## 2026-06-16 — Members: inline edit (name + color)
 
 - Closed a real CRUD gap — members had add / delete / set-default but no edit. `MemberRow` now has

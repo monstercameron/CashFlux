@@ -224,7 +224,7 @@ Shared control components (from mockup):
 
 ### 1.10 Categories
 
-- [~] List + add + delete; income vs expense done; edit + color later
+- [x] List + add + delete + inline edit (name + kind); income vs expense
 - [ ] Sub-categories (parentId) with tree display
 - [ ] Default scheme + reset; methodology-aware presets (envelope/zero-based)
 - [x] Reassign transactions on category delete (pick replacement) — `appstate.ReassignCategory` +

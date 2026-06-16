@@ -129,8 +129,28 @@ func Categories() ui.Node {
 			expenseList = append(expenseList, c)
 		}
 	}
+	saveCat := func(id, newName, kind string) {
+		for _, c := range app.Categories() {
+			if c.ID != id {
+				continue
+			}
+			if n := strings.TrimSpace(newName); n != "" {
+				c.Name = n
+			}
+			if k := domain.CategoryKind(kind); k.Valid() {
+				c.Kind = k
+			}
+			if err := app.PutCategory(c); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			break
+		}
+		errMsg.Set("")
+		bump()
+	}
 	renderRow := func(c domain.Category) ui.Node {
-		return ui.CreateElement(CategoryRow, categoryRowProps{Category: c, OnDelete: deleteCat})
+		return ui.CreateElement(CategoryRow, categoryRowProps{Category: c, OnDelete: deleteCat, OnSave: saveCat})
 	}
 	keyOf := func(c domain.Category) any { return c.ID }
 
@@ -173,16 +193,50 @@ func Categories() ui.Node {
 type categoryRowProps struct {
 	Category domain.Category
 	OnDelete func(string)
+	OnSave   func(id, name, kind string)
 }
 
-// CategoryRow is a per-category row with a stable delete-handler hook.
+// CategoryRow is a per-category row. It can be edited inline (name + kind). All
+// hooks are declared unconditionally so the edit toggle never reorders them.
 func CategoryRow(props categoryRowProps) ui.Node {
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Category.ID) }))
+	c := props.Category
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(c.ID) }))
+	editing := ui.UseState(false)
+	nameS := ui.UseState(c.Name)
+	kindS := ui.UseState(string(c.Kind))
+	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onKind := ui.UseEvent(func(e ui.Event) { kindS.Set(e.GetValue()) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		nameS.Set(c.Name)
+		kindS.Set(string(c.Kind))
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		props.OnSave(c.ID, nameS.Get(), kindS.Get())
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		return Div(Class("row"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
+				Select(Class("field"), OnChange(onKind),
+					Option(Value(string(domain.KindExpense)), SelectedIf(kindS.Get() == string(domain.KindExpense)), "Expense"),
+					Option(Value(string(domain.KindIncome)), SelectedIf(kindS.Get() == string(domain.KindIncome)), "Income"),
+				),
+				Button(Class("btn btn-primary"), Type("submit"), "Save"),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+			),
+		)
+	}
+
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), props.Category.Name),
-			Span(Class("row-meta"), humanizeType(string(props.Category.Kind))),
+			Span(Class("row-desc"), c.Name),
+			Span(Class("row-meta"), humanizeType(string(c.Kind))),
 		),
+		Button(Class("btn"), Type("button"), Title("Edit category"), OnClick(startEdit), "Edit"),
 		Button(Class("btn-del"), Type("button"), Title("Delete category"), OnClick(del), "✕"),
 	)
 }
