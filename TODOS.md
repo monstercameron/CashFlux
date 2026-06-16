@@ -204,7 +204,7 @@ Shared control components (from mockup):
 - [~] List members; add/delete; set default; color done — edit later
 - [ ] Ownership assignment UI (individual vs group) for accounts/budgets/goals
 - [ ] Member switcher / filter affecting relevant views
-- [ ] Guard: prevent deleting a member with owned entities (reassign flow)
+- [~] Guard: prevent deleting a member with owned entities done (blocks with a message); reassign flow later
 - [ ] Tests: member logic, ownership rules
 
 ### 1.9 Accounts (assets + liabilities) ★

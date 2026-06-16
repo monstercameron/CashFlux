@@ -227,6 +227,7 @@ and every commit updates this file under `Unreleased`.
   delete; reachable from a new "Categories" rail item (tag icon) under System.
 - Members screen: add household members (name + color), list with a color swatch, set the default
   member, and per-row delete; reachable from a new "Members" rail item (users icon) under System.
+  Deleting a member who still owns accounts/budgets/goals is blocked with a plain-English message.
 - Freshness nudge widget (full-width, dashboard): a friendly reminder of which account balances look
   stale (via `internal/freshness`) with days since each was last updated; the bento grew to 8 rows.
 - Accounts: a "Mark updated" action per (active) account sets its `BalanceAsOf` to today, clearing the

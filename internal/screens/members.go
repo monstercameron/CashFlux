@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -48,10 +49,32 @@ func Members() ui.Node {
 	}))
 
 	deleteMember := func(memberID string) {
+		// Guard: don't orphan entities this member owns.
+		owned := 0
+		for _, a := range app.Accounts() {
+			if a.OwnerID == memberID {
+				owned++
+			}
+		}
+		for _, b := range app.Budgets() {
+			if b.OwnerID == memberID {
+				owned++
+			}
+		}
+		for _, g := range app.Goals() {
+			if g.OwnerID == memberID {
+				owned++
+			}
+		}
+		if owned > 0 {
+			errMsg.Set(fmt.Sprintf("This member still owns %d account(s), budget(s), or goal(s). Reassign or remove those first.", owned))
+			return
+		}
 		if err := app.DeleteMember(memberID); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
+		errMsg.Set("")
 		bump()
 	}
 

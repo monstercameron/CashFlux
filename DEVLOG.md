@@ -275,8 +275,12 @@ problems and fixes, and what's next.
   staleness the freshness nudge reports. A full "update balance" (enter a new figure → adjustment txn)
   is the richer follow-up.
 
-**Next:** member delete-guard (block deleting a member with owned accounts/budgets/goals), then full
-edit flows (account/transaction/budget/goal) — continuing the priority-ordered Phase-1 backlog.
+- Added a **member delete-guard**: deletion is blocked (with a plain-English count) when the member
+  still owns any account, budget, or goal, so those references can't be orphaned. A reassign flow is
+  the richer follow-up.
+
+**Next:** full edit flows (account/transaction/budget/goal field edit), category delete-reassign,
+then the Settings screen — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
