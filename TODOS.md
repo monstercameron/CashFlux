@@ -370,7 +370,7 @@ Shared control components (from mockup):
 - [~] Variable resolution: live figures (net worth/income/expense/counts) done via `Env`; custom fields + filtered aggregates later
 - [~] Typed results (number/bool/text) done; money/percent typing + formatting later
 - [ ] `Formula{ID, Name, Target, Expr, ResultType, Format, Enabled}` store + CRUD
-- [~] Builder UI: live preview + error messages done (Customize screen); guided insert later
+- [~] Builder UI: live preview + error messages + example chips done (Customize); guided insert later
 - [ ] Surface results on dashboard / relevant entities
 - [ ] ★ Extensive tests: tokenizer, parser, evaluator, errors, security (no escape), edge cases
 

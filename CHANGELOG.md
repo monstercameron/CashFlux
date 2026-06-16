@@ -227,7 +227,7 @@ and every commit updates this file under `Unreleased`.
 - Customize screen (replacing the stub): a live **formula calculator** — write an expression over your
   figures (net worth, assets, liabilities, income, expense, account/transaction/member counts) and
   see the result instantly via the sandboxed engine, with the available variables and their current
-  values listed.
+  values listed, plus one-click example chips (savings rate, spending ratio, etc.).
 - `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
   the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
   current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.

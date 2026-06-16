@@ -472,6 +472,10 @@ problems and fixes, and what's next.
   `trimStr` state at the component top so the hook stays unconditional even though the forecast card
   is built inside `if app != nil`.)
 
+- Added one-click **example chips** to the formula Customize screen (savings rate, spending ratio,
+  gross assets, over-budget bool) that populate the input. Rendered as four explicit buttons (not a
+  loop) so the inline `OnClick` hooks stay at stable positions.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
