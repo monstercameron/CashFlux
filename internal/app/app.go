@@ -47,5 +47,9 @@ func Run() {
 	})
 
 	r.Mount("#app")
+
+	// Reveal the widgets' resize handles only while Shift is held.
+	wireResizeReveal()
+
 	utils.WaitForever()
 }

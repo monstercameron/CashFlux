@@ -31,6 +31,9 @@ and every commit updates this file under `Unreleased`.
   tested `period.Window.WithWeekStart`).
 
 ### Added
+- Dashboard widget resize handles now appear only while you hold **Shift**, keeping the bento grid
+  visually calm the rest of the time (they fade in/out; window-blur clears the state so they never
+  get stuck visible).
 - The dashboard time resolution (Week / Month / Quarter) now persists across reloads. Only the
   resolution is remembered — the view re-anchors to the current period on load, so you keep your
   preferred granularity without landing on a stale week or month.

@@ -57,8 +57,16 @@ ordered reflow + size-aware packing.
 - [ ] UI: live reflow — on drag-over compute the insertion index and re-pack a preview (CSS-transition
       animate the shifts); commit on drop. Prefer pointer events over HTML5 DnD for smooth movement +
       touch support. Respect the On*-hooks-in-loops rule (the cell component owns its handlers).
+- [ ] **Animate reorder**: tiles that shift during a reflow move smoothly, iOS-home-screen style.
+      CSS-grid placement changes don't transition natively → use a FLIP technique (measure old/new
+      rects, transform from old→new, transition the transform to zero) keyed by widget id.
+- [ ] **Animate resize**: growing/shrinking a tile's span scales smoothly rather than snapping
+      (transition the cell, FLIP the neighbors that reflow around it). Pairs with the reorder FLIP.
+- [x] **Resize handles only while holding Shift**: `.rz` hidden by default, revealed when the root has
+      `data-resize` (toggled by a global Shift keydown/keyup listener + window-blur clear in
+      `internal/app/resizereveal.go`), with an opacity fade. Keeps the bento visually calm.
 - [ ] Verify: dragging a 1×1 into a row of 2×2s reflows cleanly; multi-cell tiles never overlap;
-      resize re-packs; layout persists across reload.
+      resize re-packs; reorder/resize animate smoothly; layout persists across reload.
 
 ### B3. Routing sometimes duplicates the whole page ★
 

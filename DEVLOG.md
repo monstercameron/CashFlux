@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Dashboard: Shift-to-reveal resize handles (+ animation reqs → B2)
+
+- User asked for three dashboard-editing refinements: resize handles only while holding Shift,
+  animated size scaling, and smooth animated reorder.
+- Shipped the standalone one now: `.rz` handles are hidden by default and revealed only while Shift
+  is held. A global keydown/keyup listener (`internal/app/resizereveal.go`, wired once in `Run`)
+  toggles `data-resize` on the document root; CSS fades `.rz` in/out off that attribute. A window
+  `blur` handler clears it so the handles can't get stuck visible if focus is lost mid-hold. The
+  callbacks live for the app's lifetime, so they're intentionally not released.
+- The two animation requirements are entangled with the B2 reflow-engine rewrite (CSS-grid placement
+  changes don't transition natively — they need a FLIP technique over the packed layout), so I folded
+  them into B2 rather than bolt on a half-animation that the rewrite would throw away. B2 now lists
+  "animate reorder" and "animate resize" explicitly.
+- Verified the wasm build.
+- **Next.** B2 proper (ordered-sequence packing model + FLIP animation) when picked up.
+
 ## 2026-06-16 — Diagnosed the page-duplication-on-route bug (B3)
 
 - User reported the page sometimes duplicating on navigation and asked me to scan the live DOM with

@@ -259,8 +259,10 @@
       .rstep:hover { color:#f4f4f5; }
       .rlabel { min-width:128px; text-align:center; font-size:.8rem; }
 
-      /* resize handles */
-      .rz { position:absolute; z-index:3; }
+      /* resize handles — hidden until Shift is held (root gets data-resize), to
+         keep the bento visually calm. Toggled by a global key listener in the app. */
+      .rz { position:absolute; z-index:3; opacity:0; pointer-events:none; transition:opacity .15s ease; }
+      [data-resize] .rz { opacity:1; pointer-events:auto; }
       .rz[data-dir="r"] { top:0; right:0; height:100%; width:11px; cursor:ew-resize; }
       .rz[data-dir="b"] { left:0; bottom:0; width:100%; height:11px; cursor:ns-resize; }
       .rz::after { content:""; position:absolute; background:#5a5a64; border-radius:3px; }
