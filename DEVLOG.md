@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — insights: pure spending anomaly/trend engine
+
+- New `internal/insights` package: `Detect(series, opts)` takes per-category spend histories
+  (oldest→newest, positive minor-unit magnitudes), computes a baseline = mean of the prior periods,
+  and flags categories whose current period deviates from that baseline by ≥ a percent threshold.
+  Each `Anomaly` carries Current/Baseline/Delta/PctChange/Direction so the UI can explain *why* it
+  surfaced — no black box, per the determinism rule.
+- Design choices: baseline excludes the current period (compares "this month" to "how it normally
+  behaves"); a `MinBaseline` noise floor avoids the $0.50→$1.00 = "+100%" trap; zero/sub-floor
+  baselines are skipped so the percentage is always meaningful (a from-zero "new category" highlight
+  is a deliberate future addition, not folded in here). Results sort by absolute delta, then name.
+  `DefaultOptions` = 2 baseline periods, 1000-minor-unit floor, 50% threshold.
+- Built bottom-up and pure-first (no `syscall/js`), mirroring `rules`/`payoff`/`allocate`: 7-case
+  table test + option-normalization + helper tests, all green on native. UI wiring (Insights cards /
+  dashboard top-insight) is a separate later feature.
+
 ## 2026-06-16 — README: badges, live-demo link, License section
 
 - The README already covered what/stack/build/architecture/docs; this fills the §0 gaps: a badge row

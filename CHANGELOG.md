@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A pure spending trend/anomaly engine (`internal/insights`): `Detect` compares each category's
+  current-period spend against the trailing average of its prior periods and flags material
+  deviations, returning explainable `Anomaly` records (baseline, signed delta, whole-percent change,
+  up/down direction) sorted most-significant-first. Tunable via `Options` (min baseline periods, a
+  noise floor so tiny baselines don't read as huge percentages, and a percent threshold), with
+  sensible `DefaultOptions`. Table-tested; the data layer behind Phase 2's "trend/anomaly highlights"
+  (Insights UI wiring to follow).
 - The README now opens with status badges (MIT license, Go 1.26+, WebAssembly, live demo) and a
   prominent **Live demo** callout linking to the GitHub Pages build
   (https://monstercameron.github.io/CashFlux/), with a note that it starts empty and changes stay in

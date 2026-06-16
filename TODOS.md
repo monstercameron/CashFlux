@@ -877,7 +877,10 @@ Shared control components (from mockup):
 
 - [x] "Explain my month" generated narrative (Insights screen)
 - [~] Natural-language query over data → answer (Insights "Ask about your money"); richer data context later
-- [ ] Trend/anomaly highlights; advice cards
+- [~] Trend/anomaly highlights; advice cards — pure engine done (`internal/insights.Detect`: per-category
+      current-vs-trailing-average anomaly detection w/ noise floor + threshold, explainable + table-tested).
+      Still TODO: feed per-category monthly spend series into it from the ledger, and render the
+      highlights as Insights/dashboard cards (the "advice cards" UI).
 - [ ] Pin/save insights; show top insight on dashboard
 - [ ] Guardrails: scope data sent, redact where possible
 - [ ] Tests: prompt assembly, data-context selection (pure parts)
