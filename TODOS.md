@@ -333,7 +333,7 @@ Shared control components (from mockup):
 - [ ] Model selection; token + cost surfacing; "AI off until key set" state
 - [ ] Error handling: auth, rate limit, network, CORS — plain-English messages
 - [ ] Retry/backoff; request cancellation
-- [ ] Tests: request build + response decode via mock transport (keep core pure)
+- [x] Request build + response decode (pure codec, round-trip tested) — `internal/ai`
 
 ### 2.2 Documents — AI import
 

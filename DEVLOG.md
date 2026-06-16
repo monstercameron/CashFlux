@@ -398,8 +398,13 @@ problems and fixes, and what's next.
   any spreadsheet export works; AI PDF/receipt parsing is flagged as arriving with the OpenAI client.
   (Reminder logged: don't run native `go test` with `GOOS=js` still set — it silently "fails" fast.)
 
-**Next:** the OpenAI client scaffolding (`internal/ai`: request/response structs over `fetch`), then
-the Insights screen — continuing Phase 2 bottom-up.
+- Built the **AI codec** `internal/ai` (pure, tested): OpenAI chat request/response shapes plus
+  `BuildRequest` (marshal a chat body), `ParseResponse` (assistant content, surfacing API errors and
+  empty responses), and `ParseUsage` (token counts). Round-trip tests stand in for a mock transport;
+  the browser `fetch` layer (sending with the user's key) is a thin js/wasm file added next.
+
+**Next:** the js `fetch` transport + an Insights screen ("Explain my month" / NL query) wired to the
+codec with the BYO key from Settings — continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
