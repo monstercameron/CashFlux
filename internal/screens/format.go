@@ -19,6 +19,26 @@ func fmtMoney(m money.Money) string {
 	return sym + s
 }
 
+// fmtAccounting renders a Money in the candidate-C accounting figure style:
+// "$1,234.56" for positives and "($240.55)" for negatives, with thousands
+// grouping and the currency's symbol.
+func fmtAccounting(m money.Money) string {
+	return money.FormatAccounting(m.Amount, currency.Decimals(m.Currency), currency.Symbol(m.Currency))
+}
+
+// figTone returns the candidate-C figure color class for a signed value:
+// up (green) for positive, down (red) for negative, empty for zero.
+func figTone(m money.Money) string {
+	switch {
+	case m.IsNegative():
+		return "text-down"
+	case m.Amount > 0:
+		return "text-up"
+	default:
+		return ""
+	}
+}
+
 // amountClass picks the green/red amount class for a money value.
 func amountClass(m money.Money) string {
 	if m.IsNegative() {

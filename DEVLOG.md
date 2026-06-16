@@ -107,9 +107,16 @@ problems and fixes, and what's next.
   element is its own component (hook stability), and `SwatchPicker` keys each chip by color. These
   complete the shared-control set the settings forms compose.
 
-**Next:** wire it up — a settings-target atom in `uistate`, `Widget`'s gear opens the `FlipPanel`
-with a per-widget settings form built from these primitives, mounted at the shell root; then the
-bento grid + first widgets.
+- Re-sequenced: built a **real bento dashboard** before the settings wiring, so the gear has a live
+  widget to open. `Dashboard` now renders the `.bento` grid — a full-width header cell + four KPI
+  widgets (Net worth, Income, Spending, Liabilities) composed from the `Widget` shell with
+  accounting figures via new `fmtAccounting`/`figTone` helpers (`money.FormatAccounting` +
+  `currency`). Income/Spending honor the shared time window; Net worth/Liabilities read
+  `ledger.NetWorth`. Aliased `internal/ui` as `uiw` in screens (framework `ui` keeps the bare name).
+  `recentTransactions` stays for the next widget (unused package funcs are legal Go; build confirms).
+
+**Next:** more bento widgets (Recent transactions, Budgets, Goals, To-do, Accounts, charts), then the
+per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

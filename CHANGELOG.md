@@ -145,6 +145,10 @@ and every commit updates this file under `Unreleased`.
 - `internal/ui`: reusable `Toggle` (pill switch) + `ToggleRow` (labeled settings row), `Swatch`
   (color chip) + `SwatchPicker` (accent row) control primitives — the building blocks of the settings
   forms, generic and props-driven, each interactive element its own component.
+- Dashboard rebuilt as the candidate-C **bento grid**: a full-width header cell plus four KPI widgets
+  (Net worth, Income, Spending, Liabilities) built from the live ledger and shown as accounting
+  figures (`$1,234.56` / `($240.55)`, green/red tone). Each KPI is the reusable `Widget` shell +
+  content; Income/Spending follow the time-resolution window. New `fmtAccounting`/`figTone` helpers.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
