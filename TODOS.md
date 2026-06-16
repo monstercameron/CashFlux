@@ -463,6 +463,18 @@ Shared control components (from mockup):
 - [ ] Per-member preferences (formatting, default account/member)
 - [ ] Tests: config layering/resolution
 
+#### Localization (i18n) — central language store
+- [x] Pure `internal/i18n`: dot-namespaced key catalog, `T(lang, key, args…)` with en fallback,
+      `MissingKeys` coverage, whole-bundle JSON export/import, English source seed — table-tested
+- [ ] Live bundle + active-language atom in `uistate` (default English); persist imported languages
+      to localStorage; `ApplyPrefs`-style boot load
+- [ ] `t(key, args…)` helper for screens/shell (reads the active language) — thin wrapper over the bundle
+- [ ] Language selector in the household settings panel (English-only for now; lists `Languages()`)
+- [ ] Export/Import language bundle buttons in settings (round-trip all langs via `ExportJSON`/`ImportJSON`)
+- [ ] **Migrate all page verbiage onto `T`** — screen by screen (shell/nav already seeded): replace
+      hardcoded strings with keys, growing the English catalog; track coverage with `MissingKeys`
+- [ ] Tests: a guard that every key used in the UI exists in the English catalog (catalog completeness)
+
 ### 1.20 Phase 1 hardening
 
 - [ ] Accessibility pass (labels, focus order, keyboard nav, ARIA) via framework a11y

@@ -38,6 +38,13 @@ and every commit updates this file under `Unreleased`.
   resolution is remembered — the view re-anchors to the current period on load, so you keep your
   preferred granularity without landing on a stale week or month.
 
+### Added
+- A central language store (`internal/i18n`): a pure, table-tested message catalog keyed by stable
+  dot-namespaced keys (e.g. `nav.accounts`), with English as the source/fallback language, `%s`/`%d`
+  argument formatting, translation-coverage reporting (`MissingKeys`), and whole-bundle JSON
+  export/import so every supported language round-trips for translators. English-only for now; screen
+  verbiage is migrated onto it incrementally.
+
 ### Changed
 - Added a pure, table-tested ordered-sequence + bin-packing model to `internal/dashlayout` (`Item`,
   `Pack`, `Move`, `ResizeItem`) — the foundation for iOS-home-screen-style dashboard reflow (drag =

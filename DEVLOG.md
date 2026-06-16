@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Localization foundation: central language store (i18n)
+
+- User wants all page verbiage localizable via a central store with easy export/import of all langs
+  (English-only for now). Confirmed the one consequential fork first (asked): **dot-namespaced keys**
+  (`nav.accounts`) over English-source-as-key — stable keys, copy edits don't orphan translations,
+  cleaner export files.
+- Built the bottom-up foundation: pure `internal/i18n` — `Bundle`/`Catalog`, `T(lang, key, args…)`
+  with an en→key fallback chain and `fmt.Sprintf` formatting, `Set`, `Languages` (default first),
+  `MissingKeys` (coverage gap), and `ExportJSON`/`ImportJSON` of the whole multi-language bundle
+  (the translator round-trip the user asked for). `DefaultBundle()` seeds the English source catalog,
+  starting with the shell/nav. Table-tested (fallback chain, empty-as-missing, arg formatting,
+  missing-keys, export/import round-trip, merge/overwrite, bad-JSON, languages ordering).
+- This is the store only — no UI wiring yet. "Hook up all verbiage" is a large per-screen migration,
+  so it's tracked as a multi-commit task (see TODOS §1.19): active-language atom + localStorage of
+  imported langs + a language selector (English-only now) + converting each screen's strings to `T`.
+- Verified `internal/i18n` green.
+- **Next.** Wire the live bundle + active-language atom and a `t()` helper, then migrate verbiage
+  screen by screen (start with the shell/nav already seeded).
+
 ## 2026-06-16 — Logged settings-duplication (B4) and collapsed-rail-hover (B5)
 
 - User reported two more items (analysis-only, add to TODOS):
