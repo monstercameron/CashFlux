@@ -460,6 +460,9 @@ problems and fixes, and what's next.
   (description, account, category, kind from the amount sign / transfer, abs amount formatted in the
   account currency), so logging a recurring purchase is one click + Add.
 
+- Added a **"Net worth by member"** rollup to the Members screen via `ledger.NetByOwner` (each member
+  plus a Group (shared) row, base currency, green/red toned), defaulting an absent owner to zero base.
+
 **Next:** per-row duplicate, persist-last-filter, then Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

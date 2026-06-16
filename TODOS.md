@@ -284,7 +284,7 @@ Shared control components (from mockup):
 
 ### 1.17 Dashboard
 
-- [~] Net worth (done) + per-member/group rollups (later)
+- [x] Net worth + per-member/group rollups (Members screen "Net worth by member")
 - [~] This-month income/expense (done); balance trend snapshot (later)
 - [ ] Budget health summary; next goal; overdue tasks
 - [ ] Freshness nudges block

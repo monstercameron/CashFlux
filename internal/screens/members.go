@@ -7,8 +7,11 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -99,6 +102,34 @@ func Members() ui.Node {
 	}
 	keyOf := func(m domain.Member) any { return m.ID }
 
+	// Net worth per owner (member + group-shared), in base currency.
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	byOwner, _ := ledger.NetByOwner(app.Accounts(), app.Transactions(), rates)
+	ownerDisp := func(ownerID string) money.Money {
+		v := byOwner[ownerID]
+		if v.Currency == "" {
+			return money.New(0, base)
+		}
+		return v
+	}
+	ownerRows := make([]ui.Node, 0, len(members)+1)
+	for _, m := range members {
+		v := ownerDisp(m.ID)
+		ownerRows = append(ownerRows, Div(Class("row"),
+			Span(Class("row-desc"), m.Name),
+			Span(Class(accentFor(v)), fmtMoney(v)),
+		))
+	}
+	grp := ownerDisp(domain.GroupOwnerID)
+	ownerRows = append(ownerRows, Div(Class("row"),
+		Span(Class("row-desc"), "Group (shared)"),
+		Span(Class(accentFor(grp)), fmtMoney(grp)),
+	))
+
 	return Div(
 		Section(Class("card"),
 			H2(Class("card-title"), "Add member"),
@@ -113,6 +144,10 @@ func Members() ui.Node {
 			H2(Class("card-title"), "Household members"),
 			IfElse(len(members) == 0, P(Class("empty"), "No members yet."), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),
 		),
+		If(len(members) > 0, Section(Class("card"),
+			H2(Class("card-title"), "Net worth by member"),
+			Div(Class("rows"), ownerRows),
+		)),
 	)
 }
 

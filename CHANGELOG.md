@@ -305,6 +305,7 @@ and every commit updates this file under `Unreleased`.
 - Members screen: add household members (name + color), list with a color swatch, set the default
   member, and per-row delete; reachable from a new "Members" rail item (users icon) under System.
   Deleting a member who still owns accounts/budgets/goals is blocked with a plain-English message.
+  Also shows a "Net worth by member" rollup (each member + group-shared) via `ledger.NetByOwner`.
 - Freshness nudge widget (full-width, dashboard): a friendly reminder of which account balances look
   stale (via `internal/freshness`) with days since each was last updated; the bento grew to 8 rows.
 - Settings screen (replacing the stub): a household summary (base currency, member/account/category
