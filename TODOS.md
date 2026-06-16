@@ -365,7 +365,7 @@ Shared control components (from mockup):
 ### 2.5 Formula builder + sandboxed engine — `internal/formula`
 
 - [x] ★ Tokenizer (numbers, strings, idents, operators, parens, commas) — `internal/formula.Tokenize`
-- [ ] ★ Parser → AST (precedence, unary, function calls)
+- [x] ★ Parser → AST (precedence, unary, function calls) — `internal/formula.Parse`
 - [ ] ★ Evaluator with allow-list functions (`sum/avg/min/max/count/if/round/abs`) + arithmetic/compare
 - [ ] Variable resolution: core fields, custom fields, filtered aggregates over transactions
 - [ ] Typed results (number/money/percent/bool/text) + formatting
