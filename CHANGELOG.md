@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the dashboard To-do widget's priority markers no longer rely on color alone — high,
+  medium, and low now use distinct shapes (▲ / ● / ○) and each carries an accessible name
+  ("High priority", etc.), so colorblind users and screen readers can tell them apart.
 - Accessibility: the app-wide notice (toast) is now a **persistent live region** — it stays in the
   DOM while idle so screen readers reliably announce each new notice, and error notices are now
   `assertive`/`role="alert"` (they interrupt) while ordinary notices stay polite. So async outcomes

@@ -518,15 +518,18 @@ func todoWidget(app *appstate.App) ui.Node {
 		}
 		rows := make([]ui.Node, 0, len(open))
 		for _, t := range open {
-			dotTone, dot := "text-faint", "○"
+			// Distinguish priority by shape as well as color (▲/●/○), and give the
+			// marker an accessible name — so it doesn't rely on color alone and
+			// isn't a silent glyph to screen readers.
+			dotTone, dot, prio := "text-faint", "○", "Low priority"
 			switch t.Priority {
 			case domain.PriorityHigh:
-				dotTone, dot = "text-warn", "●"
+				dotTone, dot, prio = "text-warn", "▲", "High priority"
 			case domain.PriorityMedium:
-				dotTone, dot = "text-dim", "●"
+				dotTone, dot, prio = "text-dim", "●", "Medium priority"
 			}
-			rows = append(rows, Div(Class("flex gap-2"),
-				Span(Class(dotTone), dot),
+			rows = append(rows, Div(Class("flex gap-2 items-center"),
+				Span(Class(dotTone), Attr("title", prio), Attr("aria-label", prio), dot),
 				Span(t.Title),
 			))
 		}

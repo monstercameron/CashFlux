@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B15 (slice): color-not-only-cue audit
+
+- Audited the UI for status conveyed by color alone. Most spots already pair color with text/shape:
+  budget bars carry "On track / Near limit / Over budget" labels, the net-worth and highlight widgets
+  use ▲/▼ arrows, stale accounts show a "Stale" badge. The one offender was the dashboard To-do
+  widget, where high and medium priority were both `●` differing only by tone (and the dot was a
+  silent glyph). Fixed: high/medium/low now use distinct shapes (▲/●/○) plus a `title`/`aria-label`
+  naming the priority. Closes the B15 color-only-cue item.
+
 ## 2026-06-16 — B15 (slice): persistent live region for notices
 
 - Reworked `Toast` so the live region is always mounted: when idle it renders an empty `.sr-only`

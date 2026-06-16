@@ -418,8 +418,10 @@ one-line a11y item in §1.20.
       stays mounted; errors are `assertive`/`role=alert`, normal notices polite) so async outcomes are
       announced. Still TODO: announce filtered-result counts / balance updates inline; associate form
       errors via `aria-describedby`; mark required fields.
-- [ ] **Color is never the only cue:** up/down, over-budget, stale, cleared must carry a non-color
-      signal (arrows/sign/parentheses/text) — audit every color-coded state.
+- [x] **Color is never the only cue:** audited every color-coded state. Budget bars carry
+      "On track/Near limit/Over budget" text, net-worth/highlights use ▲/▼ arrows, stale accounts show
+      a "Stale" badge, cleared shows a ✓; the one offender — the To-do widget's priority dots (high vs
+      medium were both `●`) — now uses distinct shapes ▲/●/○ plus accessible names.
 - [ ] **Contrast:** verify AA (4.5:1 text / 3:1 large+UI) for both themes — `text-faint` and accent-on-
       surface are suspect; bake checked values into the token set.
 - [ ] **Motion:** `prefers-reduced-motion` for the dashboard reorder/resize animations (B2) and the
