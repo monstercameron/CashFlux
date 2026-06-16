@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12: Recent transactions row-count setting
+
+- Second widget on the settings API: registered a "recent" schema (`count`, number 3–20, default 6)
+  and had `recentWidget` read it (`widgetCfgs.For("recent")`) to size the list instead of the
+  hardcoded 6. Same pattern as savings — schema in `widgetcfg`, consumption in the screen, persisted
+  via the `WidgetConfigs` atom.
+- widgetcfg tests + wasm build green.
+- **Next:** keep extending — net-worth-trend range (months), spending-breakdown top-N, etc.
+
 ## 2026-06-16 — B12: savings widget consumes its settings
 
 - Closed the loop on the per-widget settings example: `savingsRateWidget` now reads its persisted

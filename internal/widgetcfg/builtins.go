@@ -12,4 +12,11 @@ func init() {
 			{Key: "showBar", Label: "Show progress bar", Type: Toggle, Default: "true"},
 		},
 	})
+	register(Schema{
+		WidgetID: "recent",
+		Title:    "Recent transactions",
+		Fields: []Field{
+			{Key: "count", Label: "Rows to show", Type: Number, Default: "6", Min: 3, Max: 20},
+		},
+	})
 }

@@ -121,7 +121,7 @@ func Dashboard() ui.Node {
 			GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
 			Body: kpiBody(fmtAccounting(liabilities), "", fmt.Sprintf("%d accounts", active), "text-dim"),
 		}),
-		recentWidget(txns),
+		recentWidget(txns, widgetCfgs.For("recent")),
 		budgetsWidget(app, txns, rates),
 		goalsWidget(app),
 		todoWidget(app),
@@ -600,8 +600,14 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 
 // recentWidget is the 2×2 Recent transactions widget: newest activity as a
 // compact table with accounting amounts. Display-only, so rows build in a loop.
-func recentWidget(txns []domain.Transaction) ui.Node {
-	recent := recentTransactions(txns, 6)
+func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
+	count := 6
+	if sch, ok := widgetcfg.SchemaFor("recent"); ok {
+		if f, ok := sch.FieldByKey("count"); ok {
+			count = f.Int(cfg)
+		}
+	}
+	recent := recentTransactions(txns, count)
 	var body ui.Node
 	if len(recent) == 0 {
 		body = P(Class("empty text-dim text-[13px]"), "No transactions yet.")
