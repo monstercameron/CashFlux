@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Logged "+ Add" flip-panel of add actions (B11)
+
+- User wants "+ Add" to open a centered flip panel (settings-style) with add options: transaction,
+  bills to scan, docs to scan, custom workflows, etc. Logged B11.
+- Reuse note: the flip animation already exists as `ui.FlipPanel` via the `UseSettings` atom +
+  `SettingsHost`; add an "add" target kind and an `addMenu` back face rather than a parallel overlay.
+- Flagged the one scope question: what "custom workflows" maps to (existing Customize/formula vs. a
+  new concept). Analysis/TODO only.
+
 ## 2026-06-16 — Deep-analyzed the time-resolution control (B10)
 
 - User asked for a deep analysis to drastically improve the resolution-control UX. Logged B10.
