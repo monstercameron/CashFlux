@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — App-wide accessibility spike + program (B15)
+
+- User: think deeply about app-wide accessibility and log it as a spike (it's extensive). Added B15.
+- Framed it as a **spike first** (axe/keyboard/SR audit → catalogue framework a11y primitives → decide
+  reusable patterns → output a prioritized plan), then a deep area checklist that becomes the tasks:
+  semantics/landmarks, keyboard (flagging the pointer-only bento drag/resize as a real gap needing a
+  keyboard alternative), dialog focus-trap for FlipPanel, correct ARIA for the custom controls
+  (Segmented/ToggleRow/icon-buttons that rely on `title` today), focus-visible, live regions, color-
+  not-the-only-cue, AA contrast (text-faint/accent suspect), reduced-motion, 200% zoom/reflow (ties to
+  B6's px-heavy concern), forms, SPA route focus/title (ties B3/B9), chart alt-text (ties B14), touch
+  targets, i18n'd labels, and CI axe once Playwright is in (§0).
+- Pointed the §1.20 one-line a11y item at B15 (subsumed). Planning-only.
+
 ## 2026-06-16 — Designed Lucide (B13) + D3 (B14) integrations (planning)
 
 - User: integrate Lucide (glyphs) and D3 (charts) with strong Go interfaces. Per planning mode, logged

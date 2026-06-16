@@ -379,6 +379,58 @@ which chart kinds first (line/area/bar/donut)?
 - [ ] Migrate one widget (e.g. net-worth trend) to `ui.Chart` as the proof; keep others until parity.
 - [ ] Verify: chart renders + updates on data change, survives hot-reload, works offline, matches theme.
 
+### B15. App-wide accessibility — spike + program ★
+
+**Goal:** make CashFlux usable with a keyboard and a screen reader, at high zoom, and without relying
+on color — to WCAG 2.1 AA as the bar. This is large and cross-cutting, so it starts as a **spike**
+(time-boxed audit → prioritized plan) before the implementation tasks it spawns. Supersedes the
+one-line a11y item in §1.20.
+
+**B15.0 — Spike (do first):**
+- [ ] Audit current state: run an automated pass (axe-core via the `gwc` browser oracle / Playwright
+      once installed — see §0), plus a manual keyboard-only pass and a screen-reader pass (NVDA on
+      Windows / VoiceOver). Inventory concrete gaps per screen + shared component.
+- [ ] Catalogue what the framework already provides: GoWebComponents a11y primitives (CLAUDE.md says
+      "use the framework a11y primitives") — which roles/focus/live-region helpers exist and how to
+      apply them, so we build on them rather than hand-rolling ARIA.
+- [ ] Decide reusable patterns: dialog/focus-trap for `FlipPanel`, ARIA for each custom control,
+      chart alt-text strategy, focus-on-route-change, a contrast-checked token set.
+- [ ] Output: a findings note + prioritized follow-up tasks (the checklist below becomes concrete,
+      assigned items). Spike is done when the plan is actionable, not when a11y is "finished".
+
+**Deep analysis — the areas the program must cover (becomes tasks after the spike):**
+- [ ] **Semantics & landmarks:** `banner`/`navigation`/`main`/`contentinfo` roles; a single `<h1>` per
+      screen + sane heading order; a "skip to content" link.
+- [ ] **Keyboard:** everything reachable + operable in a logical tab order; **the bento drag/resize is
+      pointer-only — needs a keyboard alternative** (move/resize via arrows; Shift+drag in B2/B8 is
+      pointer-only); inline-edit rows manage focus on enter/exit.
+- [ ] **Dialogs (`FlipPanel`, the B11 add panel, confirms):** `role="dialog"` + `aria-modal`, focus
+      trap, Esc to close, restore focus to the trigger on close.
+- [ ] **Custom controls → correct ARIA:** Segmented = radiogroup/tablist; ToggleRow = `role="switch"` +
+      `aria-checked`; StepperPill, Swatch, gear/menu/grip icon-buttons get real `aria-label`s (today
+      several rely on `title` only, which SRs don't reliably announce).
+- [ ] **Focus visibility:** clear `:focus-visible` rings in both themes (custom styling must not
+      suppress outlines).
+- [ ] **Screen-reader / live regions:** announce dynamic changes — filtered-result counts, balance
+      updates, toast errors (toast is `role=status` polite; consider assertive for errors); associate
+      form errors via `aria-describedby`; mark required fields.
+- [ ] **Color is never the only cue:** up/down, over-budget, stale, cleared must carry a non-color
+      signal (arrows/sign/parentheses/text) — audit every color-coded state.
+- [ ] **Contrast:** verify AA (4.5:1 text / 3:1 large+UI) for both themes — `text-faint` and accent-on-
+      surface are suspect; bake checked values into the token set.
+- [ ] **Motion:** `prefers-reduced-motion` for the dashboard reorder/resize animations (B2) and the
+      flip panel (boot loader + settle already do).
+- [ ] **Zoom / reflow:** usable at 200% browser zoom and with enlarged browser font sizes — the
+      px-heavy styling (see B6) is the risk; pairs with the B6 UI-scale work.
+- [ ] **Forms:** correct input types (number/date), every field labelled, inline validation announced.
+- [ ] **Route changes (SPA):** update `document.title` and move focus to the new screen's `<h1>`/main on
+      navigation (intersects B3 routing + B9 breadcrumb).
+- [ ] **Charts:** SVG charts need `role="img"` + `aria-label` summaries (or a data-table fallback) —
+      especially the D3 charts (B14).
+- [ ] **Touch targets:** ≥44×44px hit areas (watch compact density + small icon buttons).
+- [ ] **i18n:** route `aria-label`s/announcements through the language store (B i18n) so they translate.
+- [ ] **Tooling:** wire an automated a11y check into CI (axe via the browser lane) once Playwright is in.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)
@@ -732,7 +784,8 @@ Shared control components (from mockup):
 
 ### 1.20 Phase 1 hardening
 
-- [ ] Accessibility pass (labels, focus order, keyboard nav, ARIA) via framework a11y
+- [ ] Accessibility pass (labels, focus order, keyboard nav, ARIA) via framework a11y — **see B15**
+      (app-wide a11y spike + program; this line is subsumed there)
 - [ ] Empty/error/loading states on every screen
 - [ ] Plain-English copy review (labels, nudges, errors, confirmations)
 - [ ] Performance: large dataset (10k+ txns) virtualization + memoization
