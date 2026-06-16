@@ -17,7 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -260,6 +262,15 @@ func Accounts() ui.Node {
 		bump()
 	}
 
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	viewTransactions := func(accountID string) {
+		f := uistate.TxFilter{Account: accountID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate("/transactions")
+	}
+
 	windows := app.FreshnessWindows()
 	now := time.Now()
 	staleCount := 0
@@ -273,7 +284,7 @@ func Accounts() ui.Node {
 		cleared, _ := ledger.ClearedBalance(ac, txns)
 		return ui.CreateElement(AccountRow, accountRowProps{
 			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), Members: app.Members(),
-			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount, OnSave: saveAccount,
+			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount, OnSave: saveAccount, OnView: viewTransactions,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
@@ -333,6 +344,7 @@ type accountRowProps struct {
 	OnArchive func(domain.Account)
 	OnRefresh func(domain.Account)
 	OnSave    func(domain.Account)
+	OnView    func(string)
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -369,6 +381,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(a.ID) }))
 	arch := ui.UseEvent(Prevent(func() { props.OnArchive(a) }))
 	refresh := ui.UseEvent(Prevent(func() { props.OnRefresh(a) }))
+	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
 	editing := ui.UseState(false)
 	nameS := ui.UseState(a.Name)
 	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
@@ -486,6 +499,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
+		Button(Class("btn"), Type("button"), Title("View this account's transactions"), OnClick(view), "Transactions"),
 		If(!a.Archived, Button(Class("btn"), Type("button"), Title("Mark balance as checked today"), OnClick(refresh), "Mark updated")),
 		Button(Class("btn"), Type("button"), Title("Edit account"), OnClick(startEdit), "Edit"),
 		Button(Class("btn"), Type("button"), Title(archLabel+" account"), OnClick(arch), archLabel),

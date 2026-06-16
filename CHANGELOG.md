@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Per-account "Transactions" drill-down: each account row has a button that filters the ledger to
+  that account and jumps to it (sets the persisted transaction filter, then navigates).
 - "Mark all updated" on the Accounts screen: when any balances are stale, a one-click action stamps
   every stale account as checked today, clearing the stale badges (and the dashboard freshness
   nudge) at once.

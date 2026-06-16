@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Accounts → ledger drill-down
+
+- Each account row gets a "Transactions" button that sets the persisted `TxFilter` to that account
+  (normalized, other filters cleared) and navigates to `/transactions` — a quick way to see one
+  account's activity. The transactions screen already renders from the filter atom, so it just works
+  on arrival.
+- Did it with a parent-owned `viewTransactions` closure (router + filter atom live in `Accounts`),
+  passed as `OnView`, keeping `AccountRow` from importing router/uistate directly.
+- A near-equivalent of the "per-account ledger view" backlog item, reusing the existing filtered
+  ledger instead of a separate screen (running-balance series could still be a future dedicated view).
+- **Next.** Genuine small polish; sync is the only large item left and needs a backend.
+
 ## 2026-06-16 — Accounts: Mark all updated
 
 - Added a bulk "Mark all updated (N stale)" button (shown only when something's stale) that stamps

@@ -217,7 +217,8 @@ Shared control components (from mockup):
 - [x] ★ Add + delete + archive/restore + inline edit account (name, opening balance, type attributes)
 - [x] Liability sub-form (credit limit, APR, min payment, due day, lender) — shown for liability types
 - [x] Allocation attributes sub-form (expected return, liquidity, stability, lock-until) on add + edit
-- [ ] Per-account ledger view (filtered txns + running balance)
+- [~] Per-account ledger view — account row "Transactions" button filters the ledger to that account
+      and navigates; dedicated running-balance view optional later
 - [ ] "Update balance" action → adjustment txn + set `BalanceAsOf`
 - [~] Credit utilization indicator done (on liability rows); due-date reminder via Upcoming bills widget
 - [x] Net-worth summary header (assets, liabilities, net) in base currency
