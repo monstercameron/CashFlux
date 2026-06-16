@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Vision chat transport (`internal/ai`): `SendVisionChat` posts a multimodal request (system prompt
+  + user text + one image) to OpenAI client-side with the user's key, same async one-callback
+  contract as `SendChat`. The fetch promise chain is now shared via an internal `postCompletions`.
 - Vision request codec (`internal/ai`): `BuildVisionRequest` marshals a multimodal OpenAI chat
   request — a system prompt plus a user message carrying text and an image (data/URL) part — for
   reading receipts and statements. The reply is plain text, read with the existing `ParseResponse`.

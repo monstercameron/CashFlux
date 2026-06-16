@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Document vision AI: the transport
+
+- Added `SendVisionChat` and, while there, factored the fetch promise chain out of `SendChat` into a
+  shared `postCompletions(apiKey, baseURL, body, onResult, onError)`. Both senders now just build
+  their body (text or vision) and hand it to the same network code — no duplicated js.Func juggling
+  or release logic.
+- Same contract preserved: exactly one of `onResult`/`onError` fires, errors are plain English, and
+  the js.Funcs are released on completion. The vision reply parses through `ParseResponse` like any
+  chat.
+- **Next.** The Documents-screen flow: pick an image, base64 it into a data URL, call
+  `SendVisionChat` with a "return JSON transactions" prompt, parse the JSON into draft rows, and let
+  the user review and import. The JSON→transactions mapping should be a pure, tested helper.
+
 ## 2026-06-16 — Document vision AI: the request codec
 
 - Started the document image-import feature (SPEC document vision) bottom-up with the pure codec.

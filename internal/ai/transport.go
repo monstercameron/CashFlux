@@ -18,6 +18,25 @@ func SendChat(apiKey, baseURL, model string, messages []Message, temperature flo
 		onError(err.Error())
 		return
 	}
+	postCompletions(apiKey, baseURL, body, onResult, onError)
+}
+
+// SendVisionChat posts a multimodal chat-completions request (a system prompt, a
+// user instruction, and one image as a data/URL) using a vision-capable model.
+// Same async contract as SendChat: exactly one of onResult/onError runs.
+func SendVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL string, temperature float64, onResult func(string), onError func(string)) {
+	body, err := BuildVisionRequest(model, systemPrompt, userText, imageURL, temperature)
+	if err != nil {
+		onError(err.Error())
+		return
+	}
+	postCompletions(apiKey, baseURL, body, onResult, onError)
+}
+
+// postCompletions sends a prebuilt request body to the chat-completions endpoint
+// and routes the parsed result (or a plain-English error) to the callbacks. It
+// owns the fetch promise chain and releases its js.Funcs when done.
+func postCompletions(apiKey, baseURL string, body []byte, onResult func(string), onError func(string)) {
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}
