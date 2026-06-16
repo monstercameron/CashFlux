@@ -229,7 +229,7 @@ and every commit updates this file under `Unreleased`.
   progress bar) via a quick prompt. The list now sorts incomplete goals first, then alphabetically.
 - Top bar: the "+ Add" button now navigates to the Transactions screen (was inert).
 - Budgets: a month stepper (‹ month ›) lets you view budget spend for any month, not just the current
-  one.
+  one. A health line summarizes how many budgets are over or near their limit.
 - To-do: an optional notes field on tasks, shown in the task row.
 - To-do: a "Hide done" / "Show all" toggle to filter completed tasks, with an "All done 🎉" state.
 - Accounts: archive/restore an account from its row — archived accounts move to a separate "Archived"

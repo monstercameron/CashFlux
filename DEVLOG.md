@@ -329,6 +329,9 @@ problems and fixes, and what's next.
 - Added a **per-account "Stale" badge** (amber) on the Accounts screen via `freshness.IsStale`,
   closing the loop with the dashboard freshness nudge and the per-row "Mark updated" action.
 
+- Added a **budget health summary** line ("N over budget · M near the limit") from the evaluated
+  statuses, shown above the budget list when any are over/near.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

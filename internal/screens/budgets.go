@@ -129,6 +129,16 @@ func Budgets() ui.Node {
 	start, end := dateutil.MonthRange(viewMonth)
 	statuses, _ := budgeting.EvaluateAll(budgets, txns, start, end, rates, budgeting.DefaultNearThreshold)
 
+	overCount, nearCount := 0, 0
+	for _, s := range statuses {
+		switch s.State {
+		case budgeting.StateOver:
+			overCount++
+		case budgeting.StateNear:
+			nearCount++
+		}
+	}
+
 	var listBody ui.Node
 	if len(statuses) == 0 {
 		listBody = P(Class("empty"), "No budgets yet.")
@@ -153,6 +163,7 @@ func Budgets() ui.Node {
 					Button(Class("rstep"), Type("button"), Title("Next month"), OnClick(nextMonth), "›"),
 				),
 			),
+			If(overCount > 0 || nearCount > 0, P(Class("budget-sub"), fmt.Sprintf("%d over budget · %d near the limit", overCount, nearCount))),
 			listBody,
 		),
 	)
