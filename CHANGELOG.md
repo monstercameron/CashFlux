@@ -151,6 +151,8 @@ and every commit updates this file under `Unreleased`.
   content; Income/Spending follow the time-resolution window. New `fmtAccounting`/`figTone` helpers.
 - Recent transactions widget (2×2) on the dashboard: newest activity as a compact table with short
   dates and accounting amounts (green/red), in the reusable `Widget` shell.
+- `internal/ui`: reusable `ProgressBar` primitive — the candidate-C thin rounded track + colored fill
+  (clamped percent, tone class, extra spacing), reused by budgets, goals, and savings-rate widgets.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

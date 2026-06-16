@@ -119,8 +119,12 @@ problems and fixes, and what's next.
   payee, accounting amount with green/red tone) in the `Widget` shell. Display-only, so rows build in
   a plain loop (no per-row hooks needed). Reuses the existing `recentTransactions` helper.
 
-**Next:** remaining bento widgets (Budgets, Goals, To-do, Accounts, charts), then the per-widget
-settings wiring (target atom + form + FlipPanel host) and global settings.
+- Added the `ProgressBar` primitive (`internal/ui`): a display-only helper (no hooks → plain
+  function, not a component) rendering the candidate-C track + fill with a clamped percent and tone
+  class. Reused by budgets/goals/savings-rate widgets next.
+
+**Next:** Budgets, Goals, To-do, Accounts widgets (reusing `budgeting`/`goals`/`ledger`), then
+charts, then the per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
