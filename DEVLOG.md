@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Transactions screen (main function)
+
+- Migrated the `Transactions()` function: add form (kind options reuse category.expense/income +
+  transactions.transfer; account/category/transfer pickers + placeholders), all filter controls
+  (search, account/category/member, date range, cleared status, sort) + their option labels, the
+  bulk-action bar, validation + paired-transfer/bulk error notices, empty states, and the shown-count
+  summary — all via `uistate.T`.
+- Kept the `kind`/`f.Sort`/`f.Cleared` *values* literal (they're internal identifiers compared in
+  code); only the option *labels* are localized. The `label = "Transfer"` stored-desc default stays
+  literal (persisted data).
+- `i18n` tests + wasm green. **Last chunk: `TransactionRow`** (inline edit + per-row buttons), then the
+  entire UI verbiage is migrated.
+
 ## 2026-06-16 — i18n: AccountRow (Accounts screen complete)
 
 - Migrated the `AccountRow` component: inline edit form (reusing the accounts.* field keys + common.name/

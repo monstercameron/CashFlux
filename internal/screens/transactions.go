@@ -25,7 +25,7 @@ import (
 func Transactions() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:transactions", 0)
@@ -120,7 +120,7 @@ func Transactions() ui.Node {
 	exportFiltered := ui.UseEvent(Prevent(func() {
 		rows := txnfilter.Apply(app.Transactions(), filterAtom.Get())
 		if len(rows) == 0 {
-			errMsg.Set("No transactions match to export.")
+			errMsg.Set(uistate.T("transactions.noExport"))
 			return
 		}
 		data, err := app.TransactionsCSV(rows)
@@ -134,17 +134,17 @@ func Transactions() ui.Node {
 	add := ui.UseEvent(Prevent(func() {
 		acc, ok := accByID[accID.Get()]
 		if !ok {
-			errMsg.Set("Choose an account.")
+			errMsg.Set(uistate.T("transactions.chooseAccount"))
 			return
 		}
 		amt, err := money.ParseMinor(strings.TrimSpace(amountStr.Get()), currency.Decimals(acc.Currency))
 		if err != nil || amt <= 0 {
-			errMsg.Set("Enter a positive amount.")
+			errMsg.Set(uistate.T("transactions.positiveAmount"))
 			return
 		}
 		date, derr := dateutil.ParseDate(strings.TrimSpace(dateStr.Get()))
 		if derr != nil {
-			errMsg.Set("Enter a valid date (YYYY-MM-DD).")
+			errMsg.Set(uistate.T("transactions.invalidDate"))
 			return
 		}
 		memberFor := func(a domain.Account) string {
@@ -158,11 +158,11 @@ func Transactions() ui.Node {
 		if kind.Get() == "Transfer" {
 			toAcc, ok := accByID[toAccID.Get()]
 			if !ok || toAcc.ID == acc.ID {
-				errMsg.Set("Choose a different destination account.")
+				errMsg.Set(uistate.T("transactions.diffDestination"))
 				return
 			}
 			if toAcc.Currency != acc.Currency {
-				errMsg.Set("Transfers between different currencies aren't supported yet.")
+				errMsg.Set(uistate.T("transactions.transferCurrency"))
 				return
 			}
 			if label == "" {
@@ -241,7 +241,7 @@ func Transactions() ui.Node {
 		acc := accByID[orig.AccountID]
 		amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(acc.Currency))
 		if err != nil || amt <= 0 {
-			errMsg.Set("Enter a positive amount.")
+			errMsg.Set(uistate.T("transactions.positiveAmount"))
 			return
 		}
 		if orig.Amount.IsNegative() {
@@ -249,7 +249,7 @@ func Transactions() ui.Node {
 		}
 		date, derr := dateutil.ParseDate(strings.TrimSpace(dateStr))
 		if derr != nil {
-			errMsg.Set("Enter a valid date (YYYY-MM-DD).")
+			errMsg.Set(uistate.T("transactions.invalidDate"))
 			return
 		}
 		orig.Desc = strings.TrimSpace(newDesc)
@@ -289,7 +289,7 @@ func Transactions() ui.Node {
 					t.Amount.Amount == -target.Amount.Amount &&
 					t.Date.Equal(target.Date) {
 					if err := app.DeleteTransaction(t.ID); err != nil {
-						notifyErr("Couldn't remove the paired transfer: " + err.Error())
+						notifyErr(uistate.T("transactions.pairedTransferErr", err.Error()))
 					}
 					break
 				}
@@ -328,7 +328,7 @@ func Transactions() ui.Node {
 			}
 			t.Cleared = val
 			if err := app.PutTransaction(t); err != nil {
-				notifyErr("Couldn't update some transactions: " + err.Error())
+				notifyErr(uistate.T("transactions.bulkClearErr", err.Error()))
 			}
 		}
 		selected.Set(map[string]bool{})
@@ -346,7 +346,7 @@ func Transactions() ui.Node {
 			}
 			t.CategoryID = cid
 			if err := app.PutTransaction(t); err != nil {
-				notifyErr("Couldn't recategorize some transactions: " + err.Error())
+				notifyErr(uistate.T("transactions.bulkRecatErr", err.Error()))
 			}
 		}
 		selected.Set(map[string]bool{})
@@ -386,29 +386,29 @@ func Transactions() ui.Node {
 
 	var formCard ui.Node
 	if len(accounts) == 0 {
-		formCard = Section(Class("card"), P(Class("empty"), "Add an account first, then you can record transactions."))
+		formCard = Section(Class("card"), P(Class("empty"), uistate.T("transactions.needAccount")))
 	} else {
 		isTransfer := kind.Get() == "Transfer"
 		kindOptions := []ui.Node{
-			Option(Value("Expense"), SelectedIf(kind.Get() == "Expense"), "Expense"),
-			Option(Value("Income"), SelectedIf(kind.Get() == "Income"), "Income"),
-			Option(Value("Transfer"), SelectedIf(isTransfer), "Transfer"),
+			Option(Value("Expense"), SelectedIf(kind.Get() == "Expense"), uistate.T("category.expense")),
+			Option(Value("Income"), SelectedIf(kind.Get() == "Income"), uistate.T("category.income")),
+			Option(Value("Transfer"), SelectedIf(isTransfer), uistate.T("transactions.transfer")),
 		}
 		accOptions := make([]ui.Node, 0, len(accounts))
 		for _, a := range accounts {
 			accOptions = append(accOptions, Option(Value(a.ID), SelectedIf(accID.Get() == a.ID), a.Name))
 		}
-		catOptions := []ui.Node{Option(Value(""), SelectedIf(catID.Get() == ""), "— No category —")}
+		catOptions := []ui.Node{Option(Value(""), SelectedIf(catID.Get() == ""), uistate.T("transactions.noCategory"))}
 		for _, c := range categories {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
 		}
-		toAccOptions := []ui.Node{Option(Value(""), SelectedIf(toAccID.Get() == ""), "— To account —")}
+		toAccOptions := []ui.Node{Option(Value(""), SelectedIf(toAccID.Get() == ""), uistate.T("transactions.toAccountOpt"))}
 		for _, a := range accounts {
 			toAccOptions = append(toAccOptions, Option(Value(a.ID), SelectedIf(toAccID.Get() == a.ID), a.Name))
 		}
-		accLabel := "Account"
+		accLabel := uistate.T("transactions.account")
 		if isTransfer {
-			accLabel = "From account"
+			accLabel = uistate.T("transactions.fromAccount")
 		}
 		// Custom fields apply to income/expense entries, not transfer legs.
 		formTxnDefs := txnDefs
@@ -416,23 +416,23 @@ func Transactions() ui.Node {
 			formTxnDefs = nil
 		}
 		formCard = Section(Class("card"),
-			H2(Class("card-title"), "Add transaction"),
+			H2(Class("card-title"), uistate.T("transactions.addTitle")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(Class("field"), Type("text"), Placeholder("Description"), Value(desc.Get()), OnInput(onDesc)),
-				Input(Class("field"), Type("number"), Placeholder("Amount"), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(Class("field"), OnChange(onKind), kindOptions),
 				Select(Class("field"), Title(accLabel), OnChange(onAcc), accOptions),
 				IfElse(isTransfer,
-					Select(Class("field"), Title("To account"), OnChange(onToAcc), toAccOptions),
+					Select(Class("field"), Title(uistate.T("transactions.toAccount")), OnChange(onToAcc), toAccOptions),
 					Select(Class("field"), OnChange(onCat), catOptions),
 				),
-				If(!isTransfer, Input(Class("field"), Type("text"), Placeholder("Tags (comma-separated)"), Value(tagsStr.Get()), OnInput(onTags))),
+				If(!isTransfer, Input(Class("field"), Type("text"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsStr.Get()), OnInput(onTags))),
 				Input(Class("field"), Type("date"), Value(dateStr.Get()), OnInput(onDate)),
 				MapKeyed(formTxnDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
-				Button(Class("btn btn-primary"), Type("submit"), "Add"),
-				Button(Class("btn"), Type("button"), Title("Copy the most recent transaction"), OnClick(repeatLast), "Repeat last"),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.repeatLastTitle")), OnClick(repeatLast), uistate.T("transactions.repeatLast")),
 			),
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 		)
@@ -457,9 +457,9 @@ func Transactions() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(txns) == 0:
-		listBody = P(Class("empty"), "No transactions yet.")
+		listBody = P(Class("empty"), uistate.T("transactions.empty"))
 	case len(shown) == 0:
-		listBody = P(Class("empty"), "No matching transactions.")
+		listBody = P(Class("empty"), uistate.T("transactions.noMatch"))
 	default:
 		rows := MapKeyed(shown,
 			func(t domain.Transaction) any { return t.ID },
@@ -475,19 +475,19 @@ func Transactions() ui.Node {
 		listBody = Div(Class("rows"), rows)
 	}
 
-	filterAccOptions := []ui.Node{Option(Value(""), SelectedIf(f.Account == ""), "— All accounts —")}
+	filterAccOptions := []ui.Node{Option(Value(""), SelectedIf(f.Account == ""), uistate.T("transactions.allAccounts"))}
 	for _, a := range accounts {
 		filterAccOptions = append(filterAccOptions, Option(Value(a.ID), SelectedIf(f.Account == a.ID), a.Name))
 	}
-	filterCatOptions := []ui.Node{Option(Value(""), SelectedIf(f.Category == ""), "— All categories —")}
+	filterCatOptions := []ui.Node{Option(Value(""), SelectedIf(f.Category == ""), uistate.T("transactions.allCategories"))}
 	for _, c := range categories {
 		filterCatOptions = append(filterCatOptions, Option(Value(c.ID), SelectedIf(f.Category == c.ID), c.Name))
 	}
-	filterMemberOptions := []ui.Node{Option(Value(""), SelectedIf(f.Member == ""), "— All members —")}
+	filterMemberOptions := []ui.Node{Option(Value(""), SelectedIf(f.Member == ""), uistate.T("transactions.allMembers"))}
 	for _, m := range app.Members() {
 		filterMemberOptions = append(filterMemberOptions, Option(Value(m.ID), SelectedIf(f.Member == m.ID), m.Name))
 	}
-	bulkCatOptions := []ui.Node{Option(Value(""), SelectedIf(bulkCat.Get() == ""), "No category")}
+	bulkCatOptions := []ui.Node{Option(Value(""), SelectedIf(bulkCat.Get() == ""), uistate.T("transactions.bulkNoCategory"))}
 	for _, c := range categories {
 		bulkCatOptions = append(bulkCatOptions, Option(Value(c.ID), SelectedIf(bulkCat.Get() == c.ID), c.Name))
 	}
@@ -495,37 +495,37 @@ func Transactions() ui.Node {
 	return Div(
 		formCard,
 		Section(Class("card"),
-			H2(Class("card-title"), "All transactions"),
+			H2(Class("card-title"), uistate.T("transactions.listTitle")),
 			Form(Class("form-grid"), OnSubmit(clearFilters),
-				Input(Class("field"), Type("search"), Placeholder("Search description or tag"), Value(f.Text), OnInput(onFilterText)),
+				Input(Class("field"), Type("search"), Placeholder(uistate.T("transactions.searchPlaceholder")), Value(f.Text), OnInput(onFilterText)),
 				Select(Class("field"), OnChange(onFilterAcc), filterAccOptions),
 				Select(Class("field"), OnChange(onFilterCat), filterCatOptions),
-				Select(Class("field"), Title("Member"), OnChange(onFilterMember), filterMemberOptions),
-				Input(Class("field"), Type("date"), Title("From date"), Value(f.From), OnInput(onFilterFrom)),
-				Input(Class("field"), Type("date"), Title("To date"), Value(f.To), OnInput(onFilterTo)),
-				Select(Class("field"), Title("Cleared status"), OnChange(onFilterCleared),
-					Option(Value(""), SelectedIf(f.Cleared == ""), "Cleared & not"),
-					Option(Value("no"), SelectedIf(f.Cleared == "no"), "Not cleared"),
-					Option(Value("yes"), SelectedIf(f.Cleared == "yes"), "Cleared"),
+				Select(Class("field"), Title(uistate.T("transactions.member")), OnChange(onFilterMember), filterMemberOptions),
+				Input(Class("field"), Type("date"), Title(uistate.T("transactions.fromDate")), Value(f.From), OnInput(onFilterFrom)),
+				Input(Class("field"), Type("date"), Title(uistate.T("transactions.toDate")), Value(f.To), OnInput(onFilterTo)),
+				Select(Class("field"), Title(uistate.T("transactions.clearedStatus")), OnChange(onFilterCleared),
+					Option(Value(""), SelectedIf(f.Cleared == ""), uistate.T("transactions.clearedAll")),
+					Option(Value("no"), SelectedIf(f.Cleared == "no"), uistate.T("transactions.notCleared")),
+					Option(Value("yes"), SelectedIf(f.Cleared == "yes"), uistate.T("transactions.cleared")),
 				),
-				Select(Class("field"), Title("Sort by"), OnChange(onSortBy),
-					Option(Value("date"), SelectedIf(f.Sort == "date"), "Newest first"),
-					Option(Value("amount"), SelectedIf(f.Sort == "amount"), "Largest amount"),
-					Option(Value("payee"), SelectedIf(f.Sort == "payee"), "Payee A–Z"),
+				Select(Class("field"), Title(uistate.T("transactions.sortBy")), OnChange(onSortBy),
+					Option(Value("date"), SelectedIf(f.Sort == "date"), uistate.T("transactions.sortDate")),
+					Option(Value("amount"), SelectedIf(f.Sort == "amount"), uistate.T("transactions.sortAmount")),
+					Option(Value("payee"), SelectedIf(f.Sort == "payee"), uistate.T("transactions.sortPayee")),
 				),
-				Button(Class("btn"), Type("submit"), "Clear"),
-				Button(Class("btn"), Type("button"), Title("Download the shown transactions as CSV"), OnClick(exportFiltered), "Export CSV"),
+				Button(Class("btn"), Type("submit"), uistate.T("transactions.clear")),
+				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
 			),
 			If(len(selected.Get()) > 0, Div(Class("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
-				Span(Class("muted"), plural(len(selected.Get()), "transaction")+" selected"),
-				Select(Class("field"), Title("Category to apply"), OnChange(onBulkCat), bulkCatOptions),
-				Button(Class("btn"), Type("button"), Title("Set this category on the selected transactions"), OnClick(bulkRecategorize), "Apply category"),
-				Button(Class("btn"), Type("button"), Title("Mark the selected transactions cleared"), OnClick(bulkMarkCleared), "Mark cleared"),
-				Button(Class("btn"), Type("button"), Title("Mark the selected transactions not cleared"), OnClick(bulkMarkUncleared), "Mark uncleared"),
-				Button(Class("btn-del"), Type("button"), Title("Delete the selected transactions"), OnClick(bulkDelete), "Delete selected"),
-				Button(Class("btn"), Type("button"), OnClick(clearSelection), "Clear selection"),
+				Span(Class("muted"), uistate.T("transactions.selected", plural(len(selected.Get()), "transaction"))),
+				Select(Class("field"), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
+				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.applyCategoryTitle")), OnClick(bulkRecategorize), uistate.T("transactions.applyCategory")),
+				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.markClearedTitle")), OnClick(bulkMarkCleared), uistate.T("transactions.markCleared")),
+				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.markUnclearedTitle")), OnClick(bulkMarkUncleared), uistate.T("transactions.markUncleared")),
+				Button(Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
+				Button(Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
 			)),
-			If(len(shown) > 0, P(Class("muted"), Textf("%s shown · net %s", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base))))),
+			If(len(shown) > 0, P(Class("muted"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))))),
 			listBody,
 		),
 	)

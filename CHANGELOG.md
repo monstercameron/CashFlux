@@ -77,6 +77,9 @@ and every commit updates this file under `Unreleased`.
 - The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
   panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
   with a shared `owner.group` key.
+- The Transactions screen's main view is now on the language store (add form incl. kind/account/
+  category/transfer pickers, all filter + sort controls, the bulk-action bar, validation/notice
+  messages, empty states, and the shown-count summary). The per-row controls follow next.
 - The Accounts screen is now fully on the language store: the main view plus each account row's inline
   edit form, the update-balance prompt, the stale badge, the cleared-balance meta, and all row actions
   (view / update balance / mark updated / edit / archive·restore / delete).
