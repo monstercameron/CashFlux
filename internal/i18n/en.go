@@ -113,6 +113,26 @@ var english = Catalog{
 	"goals.saveSuffix":        " · save %s/mo",
 	"goals.linkedSuffix":      " · linked to %s",
 
+	// Planning screen
+	"planning.forecastTitle":      "Net worth in 12 months",
+	"planning.forecastHint":       "If this month's net cash flow (%s) continues, projected to %s.",
+	"planning.trimPlaceholder":    "What if I trim monthly spending by… (%s)",
+	"planning.trimNote":           "With %s/month less spending, projected to %s — %s more.",
+	"planning.payoffTitle":        "Debt payoff calculator",
+	"planning.payoffDesc":         "See how long a debt takes to clear and how much interest it costs.",
+	"planning.balancePlaceholder": "Balance owed (%s)",
+	"planning.aprPlaceholder":     "APR %",
+	"planning.paymentPlaceholder": "Monthly payment (%s)",
+	"planning.extraPlaceholder":   "Extra payment, optional (%s)",
+	"planning.projectionTitle":    "Projection",
+	"planning.payoffHint":         "Enter a balance, APR, and monthly payment to see the payoff.",
+	"planning.invalidNumbers":     "Enter valid numbers for balance, APR, and payment.",
+	"planning.paymentTooLow":      "That payment won't cover the interest — the balance would never clear. Try a larger payment.",
+	"planning.extraNote":          "Paying %s more each month clears it %d months sooner and saves %s in interest.",
+	"planning.months":             "Months to pay off",
+	"planning.totalInterest":      "Total interest",
+	"planning.totalPaid":          "Total paid",
+
 	// Insights screen
 	"insights.explainTitle":   "Explain my month",
 	"insights.explainHint":    "A friendly summary of your month, generated from your live figures.",

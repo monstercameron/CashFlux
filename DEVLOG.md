@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Planning screen migrated
+
+- Seventh screen onto i18n: `planning.go` — debt-payoff calculator (inputs, stat labels, hint/invalid/
+  too-low messages, the extra-payment note via T args), and the 12-month forecast card (title, the
+  cash-flow projection hint, trim-spending placeholder + note) all via `uistate.T`. Added uistate import.
+- The `%d` months stat value stays as `fmt.Sprintf` (a number, not text), so `fmt` remains. `i18n`
+  tests + wasm green.
+- 7 screens + chrome migrated. Remaining: Accounts, Transactions (the giants), Dashboard, Documents,
+  Allocate, Customize, Settings.
+
 ## 2026-06-16 — i18n: Insights screen migrated
 
 - Sixth screen onto i18n: `insights.go` UI strings (explain/ask cards, the key hint, placeholders,

@@ -77,6 +77,8 @@ and every commit updates this file under `Unreleased`.
 - The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
   panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
   with a shared `owner.group` key.
+- The Planning screen's verbiage is now on the language store (debt-payoff calculator inputs/results,
+  12-month forecast card + trim what-if, and all the projection/result notes).
 - The Insights (AI) screen's verbiage is now on the language store (explain/ask cards, key hint,
   prompts' UI labels, answer + save-as-task, status messages); the AI model instructions stay English
   as they're sent to the model, not shown to the user.

@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -47,35 +48,34 @@ func Planning() ui.Node {
 	var resultBody ui.Node
 	switch {
 	case strings.TrimSpace(balStr.Get()) == "" || strings.TrimSpace(payStr.Get()) == "":
-		resultBody = P(Class("muted"), "Enter a balance, APR, and monthly payment to see the payoff.")
+		resultBody = P(Class("muted"), uistate.T("planning.payoffHint"))
 	default:
 		bal, errB := money.ParseMinor(strings.TrimSpace(balStr.Get()), currency.Decimals(base))
 		pay, errP := money.ParseMinor(strings.TrimSpace(payStr.Get()), currency.Decimals(base))
 		apr, errA := strconv.ParseFloat(strings.TrimSpace(aprStr.Get()), 64)
 		switch {
 		case errB != nil || errP != nil || errA != nil:
-			resultBody = P(Class("err"), "Enter valid numbers for balance, APR, and payment.")
+			resultBody = P(Class("err"), uistate.T("planning.invalidNumbers"))
 		default:
 			if r, ok := payoff.Project(bal, apr, pay); ok {
 				extraNote := Fragment()
 				if extra, eerr := money.ParseMinor(strings.TrimSpace(extraStr.Get()), currency.Decimals(base)); eerr == nil && extra > 0 {
 					if r2, ok2 := payoff.Project(bal, apr, pay+extra); ok2 {
-						extraNote = P(Class("muted"), fmt.Sprintf(
-							"Paying %s more each month clears it %d months sooner and saves %s in interest.",
+						extraNote = P(Class("muted"), uistate.T("planning.extraNote",
 							fmtMoney(money.New(extra, base)), r.Months-r2.Months, fmtMoney(money.New(r.TotalInterest-r2.TotalInterest, base)),
 						))
 					}
 				}
 				resultBody = Div(
 					Div(Class("stat-grid"),
-						stat("Months to pay off", fmt.Sprintf("%d", r.Months), ""),
-						stat("Total interest", fmtMoney(money.New(r.TotalInterest, base)), "neg"),
-						stat("Total paid", fmtMoney(money.New(r.TotalPaid, base)), ""),
+						stat(uistate.T("planning.months"), fmt.Sprintf("%d", r.Months), ""),
+						stat(uistate.T("planning.totalInterest"), fmtMoney(money.New(r.TotalInterest, base)), "neg"),
+						stat(uistate.T("planning.totalPaid"), fmtMoney(money.New(r.TotalPaid, base)), ""),
 					),
 					extraNote,
 				)
 			} else {
-				resultBody = P(Class("err"), "That payment won't cover the interest — the balance would never clear. Try a larger payment.")
+				resultBody = P(Class("err"), uistate.T("planning.paymentTooLow"))
 			}
 		}
 	}
@@ -104,15 +104,15 @@ func Planning() ui.Node {
 		if trim, terr := money.ParseMinor(strings.TrimSpace(trimStr.Get()), currency.Decimals(base)); terr == nil && trim > 0 {
 			series2 := forecast.Project(net.Amount, []forecast.Recurring{{Monthly: monthlyNet + trim}}, nil, 12)
 			end2 := series2[len(series2)-1]
-			trimNote = P(Class("muted"), fmt.Sprintf("With %s/month less spending, projected to %s — %s more.",
+			trimNote = P(Class("muted"), uistate.T("planning.trimNote",
 				fmtMoney(money.New(trim, base)), fmtMoney(money.New(end2, base)), fmtMoney(money.New(end2-series[len(series)-1], base))))
 		}
 		forecastCard = Section(Class("card"),
-			H2(Class("card-title"), "Net worth in 12 months"),
-			P(Class("muted"), fmt.Sprintf("If this month's net cash flow (%s) continues, projected to %s.", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
+			H2(Class("card-title"), uistate.T("planning.forecastTitle")),
+			P(Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
 			uiw.AreaChart(uiw.AreaChartProps{Values: values, Stroke: stroke, GradientID: "cf-forecast"}),
 			Form(Class("form-grid"),
-				Input(Class("field"), Type("number"), Placeholder("What if I trim monthly spending by… ("+base+")"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.trimPlaceholder", base)), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim)),
 			),
 			trimNote,
 		)
@@ -121,17 +121,17 @@ func Planning() ui.Node {
 	return Div(
 		forecastCard,
 		Section(Class("card"),
-			H2(Class("card-title"), "Debt payoff calculator"),
-			P(Class("muted"), "See how long a debt takes to clear and how much interest it costs."),
+			H2(Class("card-title"), uistate.T("planning.payoffTitle")),
+			P(Class("muted"), uistate.T("planning.payoffDesc")),
 			Form(Class("form-grid"),
-				Input(Class("field"), Type("number"), Placeholder("Balance owed ("+base+")"), Value(balStr.Get()), Step("0.01"), OnInput(onBal)),
-				Input(Class("field"), Type("number"), Placeholder("APR %"), Value(aprStr.Get()), Step("0.01"), OnInput(onApr)),
-				Input(Class("field"), Type("number"), Placeholder("Monthly payment ("+base+")"), Value(payStr.Get()), Step("0.01"), OnInput(onPay)),
-				Input(Class("field"), Type("number"), Placeholder("Extra payment, optional ("+base+")"), Value(extraStr.Get()), Step("0.01"), OnInput(onExtra)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.balancePlaceholder", base)), Value(balStr.Get()), Step("0.01"), OnInput(onBal)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.aprPlaceholder")), Value(aprStr.Get()), Step("0.01"), OnInput(onApr)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.paymentPlaceholder", base)), Value(payStr.Get()), Step("0.01"), OnInput(onPay)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.extraPlaceholder", base)), Value(extraStr.Get()), Step("0.01"), OnInput(onExtra)),
 			),
 		),
 		Section(Class("card"),
-			H2(Class("card-title"), "Projection"),
+			H2(Class("card-title"), uistate.T("planning.projectionTitle")),
 			resultBody,
 		),
 	)
