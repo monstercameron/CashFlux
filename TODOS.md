@@ -877,11 +877,11 @@ Shared control components (from mockup):
 
 - [x] "Explain my month" generated narrative (Insights screen)
 - [~] Natural-language query over data → answer (Insights "Ask about your money"); richer data context later
-- [~] Trend/anomaly highlights; advice cards — pure engine done (`internal/insights.Detect`: per-category
-      current-vs-trailing-average anomaly detection w/ noise floor + threshold, explainable + table-tested)
-      and its feeder done (`ledger.CategorySpendSeries`: transactions → per-category per-period spend,
-      FX-aware, table-tested). Still TODO: render the highlights as Insights/dashboard cards (the
-      "advice cards" UI), mapping the spend map → `insights.CategorySeries` with category names.
+- [x] Trend/anomaly highlights — done end-to-end: pure engine (`internal/insights.Detect`,
+      current-vs-trailing-average w/ noise floor + threshold, explainable + table-tested), feeder
+      (`ledger.CategorySpendSeries`, FX-aware, table-tested), and the offline **Spending highlights**
+      card in Insights (`screens.spendingHighlights`, last 4 months, plain-English ↑/↓ rows, no AI key).
+      AI-generated "advice cards" remain a separate later enhancement.
 - [ ] Pin/save insights; show top insight on dashboard
 - [ ] Guardrails: scope data sent, redact where possible
 - [ ] Tests: prompt assembly, data-context selection (pure parts)

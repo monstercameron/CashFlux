@@ -139,6 +139,10 @@
         background: var(--bg-card); border: 1px solid var(--border);
         border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem;
       }
+      /* Spending highlights (Insights anomaly cards) */
+      .insight-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+      .insight-row { display: flex; align-items: flex-start; gap: 0.6rem; margin: 0; line-height: 1.45; }
+      .insight-dot { flex: none; font-weight: 800; font-size: 1.05rem; line-height: 1.35; }
       /* Compact density: tighter cards, rows, and fields (set via data-density on <html>). */
       [data-density="compact"] .card { padding: 0.7rem 0.8rem; margin-bottom: 0.6rem; }
       [data-density="compact"] .card-title { margin-bottom: 0.45rem; }

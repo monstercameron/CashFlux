@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — insights UI: offline Spending highlights card
+
+- Wired the anomaly engine into the Insights screen: `spendingHighlights` builds the last four
+  monthly boundaries, runs `ledger.CategorySpendSeries` → maps category IDs to names (uncategorized
+  grouped under a localized label) → `insights.Detect` with `DefaultOptions`, and renders each
+  anomaly as a plain-English row with a green/red ↑/↓ marker. Rendered first in the screen and
+  needing no API key, so it's useful even with AI off; returns an empty `Fragment()` when nothing is
+  notable so the card just doesn't show.
+- Kept the row rendering loop hook-free (display-only spans, no `On*`), per the framework gotcha. New
+  i18n keys (`insights.highlightsTitle/Hint/highlightUp/highlightDown/uncategorized`) and matching
+  CSS (`.insight-list/.insight-row/.insight-dot`) reusing the existing `text-up`/`text-down` Tailwind
+  colors. Catalog-quality test + wasm build green.
+- This completes the §2.3 "trend/anomaly highlights" line end-to-end (engine + feeder + UI). The
+  remaining §2.3 items (pin/save insights, top insight on dashboard, advice from AI) stay open.
+
 ## 2026-06-16 — ledger: per-category spend-series feeder for anomalies
 
 - Added `ledger.CategorySpendSeries(all, bounds, rates)`: buckets non-transfer expense into the

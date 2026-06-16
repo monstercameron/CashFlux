@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Insights now shows an offline **Spending highlights** card: it detects categories whose spend this
+  month deviates materially from their recent average (via `ledger.CategorySpendSeries` →
+  `insights.Detect` over the last four months) and explains each in plain English — "Dining spending
+  is up 90% — $90.00 this month vs about $47.00 a month" — with a green/red up/down marker, most
+  significant first. No AI key required; the card simply doesn't appear when nothing is notable.
 - `ledger.CategorySpendSeries` buckets non-transfer expense into consecutive periods (defined by a
   list of boundaries) and returns each category's per-period spend in base-currency minor units,
   oldest first — the feeder that turns transactions into the per-category histories `internal/insights`

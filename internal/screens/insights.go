@@ -13,7 +13,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -127,6 +129,8 @@ func Insights() ui.Node {
 		)
 	}))
 
+	highlights := spendingHighlights(txns, app.Categories(), base, rates)
+
 	var action ui.Node
 	if key == "" {
 		action = P(Class("muted"), uistate.T("insights.keyHint"))
@@ -139,6 +143,7 @@ func Insights() ui.Node {
 	}
 
 	return Div(
+		highlights,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("insights.explainTitle")),
 			P(Class("muted"), uistate.T("insights.explainHint")),
@@ -158,5 +163,68 @@ func Insights() ui.Node {
 			Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(saveAsTask), uistate.T("insights.saveTask")),
 			If(saved.Get() != "", Span(Class("muted"), Style(map[string]string{"margin-left": "0.5rem"}), saved.Get())),
 		)),
+	)
+}
+
+// spendingHighlights renders an offline "what changed" card: it detects
+// categories whose spend this month deviates materially from their recent
+// average and explains each in plain English. It needs no AI key. Returns an
+// empty node when there's nothing notable, so the card simply doesn't appear.
+// The card is non-interactive, so its rows are safe to render in a loop.
+func spendingHighlights(txns []domain.Transaction, categories []domain.Category, base string, rates currency.Rates) ui.Node {
+	curStart, _ := dateutil.MonthRange(time.Now())
+	// Four monthly periods (three baseline + the current month) → five boundaries.
+	bounds := []time.Time{
+		dateutil.AddMonths(curStart, -3),
+		dateutil.AddMonths(curStart, -2),
+		dateutil.AddMonths(curStart, -1),
+		curStart,
+		dateutil.AddMonths(curStart, 1),
+	}
+	spendByCat, err := ledger.CategorySpendSeries(txns, bounds, rates)
+	if err != nil || len(spendByCat) == 0 {
+		return Fragment()
+	}
+
+	names := make(map[string]string, len(categories))
+	for _, c := range categories {
+		names[c.ID] = c.Name
+	}
+	series := make([]insights.CategorySeries, 0, len(spendByCat))
+	for catID, spend := range spendByCat {
+		name := names[catID]
+		if name == "" {
+			name = uistate.T("insights.uncategorized")
+		}
+		series = append(series, insights.CategorySeries{Category: name, Spend: spend})
+	}
+
+	anomalies := insights.Detect(series, insights.DefaultOptions())
+	if len(anomalies) == 0 {
+		return Fragment()
+	}
+
+	rows := make([]ui.Node, 0, len(anomalies))
+	for _, a := range anomalies {
+		pct := a.PctChange
+		if pct < 0 {
+			pct = -pct
+		}
+		current := fmtMoney(money.New(a.Current, base))
+		baseline := fmtMoney(money.New(a.Baseline, base))
+		tone, key := "text-up", "insights.highlightDown"
+		if a.Direction == insights.Up {
+			tone, key = "text-down", "insights.highlightUp"
+		}
+		rows = append(rows, P(Class("insight-row"),
+			Span(Class("insight-dot "+tone), If(a.Direction == insights.Up, Text("↑")), If(a.Direction == insights.Down, Text("↓"))),
+			Span(uistate.T(key, a.Category, pct, current, baseline)),
+		))
+	}
+
+	return Section(Class("card"),
+		H2(Class("card-title"), uistate.T("insights.highlightsTitle")),
+		P(Class("muted"), uistate.T("insights.highlightsHint")),
+		Div(Class("insight-list"), rows),
 	)
 }
