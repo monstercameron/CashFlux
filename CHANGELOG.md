@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Duplicate detection on document import: rows already present in the chosen account (same date and
+  amount) are skipped, and the result reports how many duplicates were left out — so re-reading the
+  same receipt won't double-enter transactions. Backed by `extract.Row.Signature`/`FilterNew` (tested).
 - Edit rows in the document review list before importing: each extracted transaction has an Edit
   button to fix its date, description, amount, or category (e.g. correct a misread) prior to import.
 - Remove rows from the document review list before importing: each extracted transaction has a ✕ to

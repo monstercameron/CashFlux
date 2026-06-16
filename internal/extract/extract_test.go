@@ -54,6 +54,37 @@ func TestParseRowsSkipsEmpty(t *testing.T) {
 	}
 }
 
+func TestSignatureNormalizesAmount(t *testing.T) {
+	a := Row{Date: "2026-06-01", Amount: "-4.5"}
+	b := Row{Date: "2026-06-01", Amount: "-4.50"}
+	c := Row{Date: "2026-06-01", Amount: "$4.50"}
+	if a.Signature() != b.Signature() {
+		t.Errorf("-4.5 and -4.50 should match: %q vs %q", a.Signature(), b.Signature())
+	}
+	if a.Signature() == c.Signature() {
+		t.Error("-4.50 and 4.50 (different sign) should not match")
+	}
+	// Description is excluded from the signature.
+	d := Row{Date: "2026-06-01", Amount: "-4.5", Description: "Coffee"}
+	if a.Signature() != d.Signature() {
+		t.Error("description should not affect the signature")
+	}
+}
+
+func TestFilterNew(t *testing.T) {
+	rows := []Row{
+		{Date: "2026-06-01", Amount: "-4.50", Description: "Coffee"},
+		{Date: "2026-06-02", Amount: "-10", Description: "Lunch"},
+	}
+	seen := map[string]bool{
+		(Row{Date: "2026-06-01", Amount: "-4.5"}).Signature(): true,
+	}
+	got := FilterNew(rows, seen)
+	if len(got) != 1 || got[0].Description != "Lunch" {
+		t.Errorf("expected only Lunch to survive, got %+v", got)
+	}
+}
+
 func TestParseRowsBadJSON(t *testing.T) {
 	if _, err := ParseRows("not json at all"); err == nil {
 		t.Error("expected an error for non-JSON")

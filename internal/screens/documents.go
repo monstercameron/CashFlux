@@ -119,11 +119,24 @@ func Documents() ui.Node {
 			aiErr.Set("Choose an account to import into.")
 			return
 		}
+		dec := currency.Decimals(acc.Currency)
+		// Skip rows that already exist in the chosen account (same date + amount).
+		seen := map[string]bool{}
+		for _, t := range app.Transactions() {
+			if t.AccountID != acc.ID {
+				continue
+			}
+			sig := extract.Row{Date: dateutil.FormatDate(t.Date), Amount: money.FormatMinor(t.Amount.Amount, dec)}.Signature()
+			seen[sig] = true
+		}
+		fresh := extract.FilterNew(rows, seen)
+		skipped := len(rows) - len(fresh)
+		rows = fresh
+
 		catByName := map[string]string{}
 		for _, c := range app.Categories() {
 			catByName[strings.ToLower(c.Name)] = c.ID
 		}
-		dec := currency.Decimals(acc.Currency)
 		n := 0
 		for _, r := range rows {
 			amt, err := money.ParseMinor(strings.TrimSpace(r.Amount), dec)
@@ -145,7 +158,11 @@ func Documents() ui.Node {
 		draft.Set([]extract.Row{})
 		imageURL.Set("")
 		aiErr.Set("")
-		msg.Set(fmt.Sprintf("Imported %s from the image.", plural(n, "transaction")))
+		summary := fmt.Sprintf("Imported %s from the image.", plural(n, "transaction"))
+		if skipped > 0 {
+			summary += fmt.Sprintf(" Skipped %s already in this account.", plural(skipped, "duplicate"))
+		}
+		msg.Set(summary)
 		rev.Set(rev.Get() + 1)
 	}))
 

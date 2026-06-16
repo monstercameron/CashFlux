@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Document import: dedupe vs existing (review TODO closed)
+
+- Added duplicate detection so re-importing the same receipt doesn't double-enter rows. Pure side:
+  `Row.Signature()` (date + normalized amount; description deliberately excluded) and `FilterNew`,
+  with a `normalizeAmount` that strips `$`/commas/leading-`+` and formats to two decimals so "-4.5",
+  "-4.50", and "$4.50" compare correctly.
+- **Same Signature for both sides.** The screen builds the seen-set by rendering each existing
+  transaction in the chosen account as a `Row{Date: FormatDate, Amount: FormatMinor}` and taking its
+  `Signature()` — so the row-side and txn-side normalize identically. That sidesteps the earlier
+  worry about "-4.5" vs "-4.50" mismatches: both go through the one normalizer.
+- Scoped to the chosen account and to date+amount (not description), which is the right
+  conservativeness — it won't suppress two genuinely-different same-day same-amount entries across
+  accounts, and the user still sees and can re-add anything via the review list. Skips are reported.
+- Closes the §2.2 review TODO (list, edit, remove, import, dedupe all done). Tests: signature
+  normalization (incl. sign + description-excluded) and FilterNew.
+- **Next.** Remaining large item is Phase-3 sync; otherwise smaller polish (bulk transaction ops,
+  empty-state/a11y).
+
 ## 2026-06-16 — Document review: per-row edit (review complete)
 
 - `DraftRow` now also edits inline: an Edit button reveals date/description/amount/category fields;

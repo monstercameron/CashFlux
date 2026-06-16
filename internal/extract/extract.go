@@ -69,6 +69,40 @@ func ParseRows(reply string) ([]Row, error) {
 	return rows, nil
 }
 
+// Signature is a loose dedupe key for a row: its date plus a normalized amount.
+// Two rows (or a row and an existing transaction rendered as a row) with the same
+// signature are treated as the same entry. Description is intentionally excluded —
+// wording varies between a statement and a prior manual entry.
+func (r Row) Signature() string {
+	return strings.TrimSpace(r.Date) + "|" + normalizeAmount(r.Amount)
+}
+
+// FilterNew returns the rows whose Signature is not present in seen. Build seen
+// from existing data using the same Signature so formats match.
+func FilterNew(rows []Row, seen map[string]bool) []Row {
+	out := make([]Row, 0, len(rows))
+	for _, r := range rows {
+		if !seen[r.Signature()] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// normalizeAmount canonicalizes an amount string for comparison: drop currency
+// symbols, grouping commas, and a leading plus, then format to two decimals so
+// "-4.5", "-4.50", and "$4.50" compare equal where appropriate.
+func normalizeAmount(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, ",", "")
+	s = strings.TrimPrefix(s, "$")
+	s = strings.TrimPrefix(s, "+")
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return strconv.FormatFloat(f, 'f', 2, 64)
+	}
+	return s
+}
+
 // stripFence removes a leading/trailing Markdown code fence (```json … ```), which
 // models often add despite being told not to.
 func stripFence(s string) string {
