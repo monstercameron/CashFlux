@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Logged sidebar menu management (B8)
+
+- User (analysis/TODO-only): menu items should Shift+drag-reorder, the "My pages" segment should be
+  removed (custom pages integrate into the page), and there should be settings for which menu items
+  are visible. Logged as B8.
+- Noted overlaps: the Shift-gating mirrors the dashboard resize-handle pattern (B-section) and the
+  reorder can reuse the `dashlayout` ordered-sequence/`Move` model; the visibility piece already has a
+  base in `internal/modules` + `hideableScreens` + Settings toggles, so B8 is mostly extending that to
+  cover all nav items (incl. B7's additions) and exposing it as menu management.
+- No code this turn (per the user's instruction).
+
 ## 2026-06-16 — Polished boot loader + app settle-in animation
 
 - Replaced the plain "Loading CashFlux…" boot text with an on-brand animated loader: a spinning

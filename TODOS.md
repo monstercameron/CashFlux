@@ -166,6 +166,25 @@ typing the URL: **Planning** (`/planning`), **Allocate** (`/allocate`), **Insigh
       Group field on Route) so a new screen can't silently miss the menu again.
 - [ ] Verify: every routed main-line screen has a menu entry; module toggles cover them.
 
+### B8. Sidebar menu management: reorder, drop "My pages", visibility settings ★
+
+Three related sidebar changes (relates to B5 collapsed-hover, B7 missing items):
+- [ ] **Shift+drag reorder.** Holding Shift turns nav items draggable; drag-reorder the menu (same
+      Shift-gating idea as the dashboard resize handles). Persist the order to localStorage (a
+      `uistate` nav-order atom) and apply it when rendering `primaryNav`/System. Reuse the
+      `internal/dashlayout` ordered-sequence/`Move` approach or a small pure `navorder` helper +
+      table tests. Respect the On*-hooks-in-loops rule (each item already its own `navItem` component).
+- [ ] **Remove the "My pages" segment.** Drop the `myPages()` example section + "New page" affordance
+      from the rail (`internal/app/shell.go`) — custom pages integrate directly into the page rather
+      than living as a separate rail group.
+- [ ] **Menu visibility settings.** Add settings to choose which menu items are shown/hidden. Note a
+      base already exists: `internal/modules` + `hideableScreens` + the Settings module-visibility
+      toggles drive the sidebar filter. Extend it to cover *all* nav items (including the B7 additions
+      — Planning/Allocate/Insights/Documents/Customize) and surface it clearly as "menu items"
+      management; decide which items (if any) stay locked (Dashboard/Settings today).
+- [ ] Verify: Shift+drag reorders and persists; no "My pages" group; every nav item can be toggled
+      from settings; locked items can't be hidden.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)
