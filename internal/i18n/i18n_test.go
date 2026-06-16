@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -119,5 +120,30 @@ func TestDefaultBundleSeedsEnglish(t *testing.T) {
 	}
 	if got := b.MissingKeys(English); len(got) != 0 {
 		t.Errorf("English has missing keys against itself: %v", got)
+	}
+}
+
+// TestDefaultCatalogQuality is the CI guard for the source-of-truth English
+// catalog: every key must be dot-namespaced with no surrounding/embedded
+// whitespace, and every key must define a non-empty string (a blank English
+// value would silently surface the raw key in the UI, since lookup treats empty
+// as missing). Values may legitimately carry leading/trailing spaces (suffix
+// fragments like " · by %s") and literal "%", so those are intentionally not
+// constrained here.
+func TestDefaultCatalogQuality(t *testing.T) {
+	cat := DefaultBundle().Langs[English]
+	if len(cat) == 0 {
+		t.Fatal("English catalog is empty")
+	}
+	for key, msg := range cat {
+		switch {
+		case key != strings.TrimSpace(key) || strings.ContainsAny(key, " \t\r\n"):
+			t.Errorf("key %q contains whitespace", key)
+		case !strings.Contains(key, "."):
+			t.Errorf("key %q is not dot-namespaced", key)
+		}
+		if msg == "" {
+			t.Errorf("key %q has an empty English value", key)
+		}
 	}
 }

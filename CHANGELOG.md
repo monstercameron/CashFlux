@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A CI guard for the source-of-truth English message catalog (`internal/i18n` `TestDefaultCatalogQuality`):
+  every key must be dot-namespaced with no whitespace, and every key must define a non-empty string —
+  so a blank or malformed entry (which would silently surface the raw key in the UI) fails `go test`
+  in CI instead of shipping. Suffix fragments and literal `%` are intentionally left unconstrained.
+- A Phase 0 backlog item to set the project up under the **MIT license** (`TODOS.md` §0): add a
+  top-level `LICENSE` file, light SPDX (`// SPDX-License-Identifier: MIT`) references per repo
+  convention, and a "License" section + badge in the README.
 - A new "Future / nice-to-have (post-core)" backlog section (`TODOS.md` §5) for enhancements to pick
   up only after the core product (Phases 0–3) is complete. First item: **standalone desktop app via
   Electron** (§5.1) — wrap the existing Go→wasm / PWA build as a native installable desktop app,

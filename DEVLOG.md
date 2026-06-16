@@ -3,6 +3,30 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: CI catalog-quality guard
+
+- Added `TestDefaultCatalogQuality` to `internal/i18n`: asserts the seeded English catalog is
+  non-empty, every key is dot-namespaced with no embedded/surrounding whitespace, and every key
+  maps to a non-empty string. Since `lookup` treats an empty value as missing, a blank English entry
+  would silently render the raw key in the UI — this catches that at `go test` time (ci.yml runs
+  `go test ./...`).
+- Scoped deliberately: values are NOT checked for trimming or format-verb validity. Several catalog
+  strings legitimately carry leading/trailing spaces (suffix fragments like " · by %s") or a literal
+  `%` ("APR %", "...cut spending 10%?"), and format strings are only Sprintf'd when args are passed —
+  so a blanket fmt-validity assertion would false-fail. Key shape + non-empty value are the
+  invariants that are always true.
+- This is the optional "CI completeness test" noted as the last i18n item; the central language
+  store (catalog + T + export/import + selector) is now fully done and guarded.
+
+## 2026-06-16 — Backlog: MIT licensing setup (§0)
+
+- Logged a Phase 0 project-setup item to put CashFlux under the MIT license: a top-level `LICENSE`
+  file (standard MIT text, current year + copyright holder), license references where the repo
+  convention calls for them, and a README "License" section + badge.
+- Decided on light SPDX references (`// SPDX-License-Identifier: MIT`) over a full per-file header —
+  idiomatic for Go and keeps source files clean. Placed alongside the README item in §0 since it's
+  foundational repo setup. Docs-only change; no code/tests affected.
+
 ## 2026-06-16 — i18n: language selector — central language store COMPLETE
 
 - Added a **Display language** `<select>` to Settings → Languages, listing `uistate.Languages()`
