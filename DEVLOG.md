@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — apply rules on image import
+
+- The image-review import loop now builds the same `autoRules` (user rules ++ implicit category-name
+  rules) and uses it as a fallback: an imported row keeps its own category when the name matches one
+  of yours; otherwise `rules.FirstMatch` against the description fills the category and tags. Explicit
+  beats inferred, which is the right precedence for AI/vision-provided categories.
+- Scope: the vision/AI image-import path (where UI code turns rows into transactions). The CSV-paste
+  path goes through `app.ImportTransactionsCSV` → the pure `store` CSV parser, which has no rules
+  dependency; routing that through rules would mean a store-layer or post-import pass — left as a
+  separate follow-up. wasm green.
+
 ## 2026-06-16 — apply saved rules on transaction entry
 
 - Wired the persisted rules into the add-transaction form: built `autoRules` = user rules (priority)

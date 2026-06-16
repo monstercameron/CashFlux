@@ -897,9 +897,10 @@ Shared control components (from mockup):
 - [x] Rule-based category suggestion on entry — saved rules (priority) + implicit category-name match
       auto-fill category **and tags** as you type the description, never overriding a manual choice
 - [ ] AI-proposed rules from history (review + accept)
-- [~] Apply rules on import/entry; conflict handling — **entry done** (add form via `autoRules`,
-      first-match-wins). Still TODO: route CSV/image import rows through the same `autoRules` (they
-      match category by name today), and conflict handling beyond first-match.
+- [~] Apply rules on import/entry; conflict handling — **entry + image-import done** (add form and
+      the vision image-review import both run rows through `autoRules`, first-match-wins, explicit
+      category beats inferred). Still TODO: the CSV-paste path (goes through the pure `store` parser,
+      needs a store-layer or post-import pass), and conflict handling beyond first-match.
 
 ### 2.5 Formula builder + sandboxed engine — `internal/formula`
 

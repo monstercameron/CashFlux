@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -133,9 +134,14 @@ func Documents() ui.Node {
 		skipped := len(rows) - len(fresh)
 		rows = fresh
 
+		// Category resolution: prefer the row's own category (matched by name); when
+		// it's missing or unknown, fall back to the user's saved rules + implicit
+		// category-name rules against the description (a rule can add tags too).
 		catByName := map[string]string{}
+		autoRules := app.Rules()
 		for _, c := range app.Categories() {
 			catByName[strings.ToLower(c.Name)] = c.ID
+			autoRules = append(autoRules, rules.Rule{Match: c.Name, SetCategoryID: c.ID})
 		}
 		n := 0
 		for _, r := range rows {
@@ -147,9 +153,18 @@ func Documents() ui.Node {
 			if derr != nil {
 				date = time.Now()
 			}
+			desc := strings.TrimSpace(r.Description)
+			cid := catByName[strings.ToLower(r.Category)]
+			var tags []string
+			if cid == "" {
+				if mr := rules.FirstMatch(autoRules, desc); mr != nil {
+					cid = mr.SetCategoryID
+					tags = mr.SetTags
+				}
+			}
 			t := domain.Transaction{
-				ID: id.New(), AccountID: acc.ID, Date: date, Desc: strings.TrimSpace(r.Description),
-				CategoryID: catByName[strings.ToLower(r.Category)], Amount: money.New(amt, acc.Currency),
+				ID: id.New(), AccountID: acc.ID, Date: date, Desc: desc,
+				CategoryID: cid, Tags: tags, Amount: money.New(amt, acc.Currency),
 			}
 			if err := app.PutTransaction(t); err == nil {
 				n++

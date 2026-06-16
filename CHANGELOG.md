@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Importing transactions from a receipt/statement image now applies your auto-categorization rules:
+  when an imported row has no category (or its name doesn't match one of yours), the saved rules and
+  implicit category-name matching fill the category and tags from the description. Rows that already
+  carry a recognized category keep it.
 - Saved auto-categorization rules now apply as you type a transaction's description: the matching
   rule's category (and any tags) auto-fill the add form, never overriding a choice you've already
   made. Your saved rules take priority over the implicit category-name matching, and a rule's tags
