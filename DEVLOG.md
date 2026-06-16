@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Allocate screen migrated
+
+- Tenth screen onto i18n: `allocate.go` — profile picker + amount/reserve inputs, ranked rows (the
+  breakdown via `T` args, exclude/restore), candidate name prefixes ("Pay down %s", "Goal · %s"),
+  empty states, kept-back note, and the AI-explanation card. Kept the numeric `%.0f%%` score
+  formatting and the AI prompt builder (`fmt.Fprintf`) literal, so `fmt` stays.
+- `i18n` tests + wasm green. 10 screens + chrome. Remaining: Accounts, Transactions, Dashboard,
+  Settings (+ CustomFieldsManager/CustomFieldInput).
+
 ## 2026-06-16 — i18n: Documents screen migrated
 
 - Ninth screen onto i18n: `documents.go` — vision-import + CSV-import cards, the review/edit draft
