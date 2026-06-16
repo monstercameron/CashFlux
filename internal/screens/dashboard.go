@@ -331,10 +331,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 // savingsRateWidget is the 2×1 Savings rate widget: the share of the period's
 // income that wasn't spent, as a big figure and a bar.
 func savingsRateWidget(income, expense money.Money, cfg widgetcfg.Config) ui.Node {
-	pct := 0
-	if income.Amount > 0 {
-		pct = int((income.Amount - expense.Amount) * 100 / income.Amount)
-	}
+	pct := ledger.SavingsRate(income.Amount, expense.Amount)
 
 	// Widget settings (gear → flip): target savings rate and whether to show the bar.
 	target, showBar := 20, true

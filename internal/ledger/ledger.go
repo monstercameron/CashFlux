@@ -208,6 +208,17 @@ func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates curre
 	return out, nil
 }
 
+// SavingsRate returns the share of income that wasn't spent, as a whole percent
+// (income and expense in the same minor units). It returns 0 when income is
+// non-positive (no meaningful rate), can go negative when spending exceeds
+// income, and truncates toward zero — matching the dashboard's KPI.
+func SavingsRate(income, expense int64) int {
+	if income <= 0 {
+		return 0
+	}
+	return int((income - expense) * 100 / income)
+}
+
 // PercentChange returns the whole-percent change from prev to curr (both in the
 // same minor units), with ok=false when prev is zero (no meaningful baseline).
 // It divides by the magnitude of prev so the sign always reflects the real

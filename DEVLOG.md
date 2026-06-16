@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Extract savings-rate calc into ledger
+
+- Moved the dashboard's inline `(income-expense)*100/income` into pure `ledger.SavingsRate` (0 when
+  income ≤ 0, negative when overspent, truncates toward zero). Same "no math in view code" + trust
+  pattern as the earlier `PercentChange` extraction; the savings widget now calls it.
+- Table-tested (no-income, negative-income, saved/overspent, spent-nothing, truncation). `internal/ledger`
+  + wasm green.
+- (Minor: the in-place edit briefly scrambled the SavingsRate/PercentChange doc comments; fixed.)
+
 ## 2026-06-16 — Default category scheme (§1.10, pure)
 
 - Added `internal/catscheme.Default()` — a starter set of income/expense categories plus a few

@@ -203,6 +203,28 @@ func TestNetByOwner(t *testing.T) {
 	}
 }
 
+func TestSavingsRate(t *testing.T) {
+	cases := []struct {
+		name            string
+		income, expense int64
+		want            int
+	}{
+		{"no income is zero", 0, 500, 0},
+		{"negative income is zero", -100, 50, 0},
+		{"saved 20pct", 1000, 800, 20},
+		{"overspent is negative", 1000, 1200, -20},
+		{"spent nothing is 100", 1000, 0, 100},
+		{"truncates toward zero", 300, 100, 66},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := SavingsRate(c.income, c.expense); got != c.want {
+				t.Errorf("SavingsRate(%d, %d) = %d, want %d", c.income, c.expense, got, c.want)
+			}
+		})
+	}
+}
+
 func TestPercentChange(t *testing.T) {
 	cases := []struct {
 		name       string

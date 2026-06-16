@@ -81,6 +81,9 @@ and every commit updates this file under `Unreleased`.
   — the foundation for the planned resolution-control redesign (B10). Not yet wired to the UI.
 
 ### Changed
+- Extracted the dashboard's inline savings-rate calculation into a pure, table-tested
+  `ledger.SavingsRate(income, expense)` (0 when income is non-positive; negative when overspent) —
+  one more KPI computation moved out of view code.
 - Added a pure, table-tested ordered-sequence + bin-packing model to `internal/dashlayout` (`Item`,
   `Pack`, `Move`, `ResizeItem`) — the foundation for iOS-home-screen-style dashboard reflow (drag =
   reorder + re-pack, multi-cell tiles never overlap). Not yet wired to the UI; the legacy
