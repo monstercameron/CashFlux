@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Extract (and fix) the net-worth percent-change calc
+
+- The dashboard KPI computed `(net - prev) * 100 / prev` inline — both a "no computation in view
+  code" violation and a latent bug: dividing by the *signed* baseline flips the arrow when net worth
+  is negative (−1000 → −500 is a +50% improvement but rendered as ▼50%). Liability-heavy households
+  hit this.
+- Added pure, table-tested `ledger.PercentChange(curr, prev) (pct, ok)`: `ok=false` for a zero
+  baseline, and division by `|prev|` so the sign tracks the real direction (cases cover increase,
+  decrease, negative-baseline improving/worsening, crossing zero, and toward-zero truncation). The
+  dashboard now calls it and only renders the delta when `ok`.
+- **Why ledger and not a UI helper?** It's a money-derivation, same family as `NetWorth`/`PeriodTotals`
+  — keeping it there means it's covered by the package's table tests and reusable by other KPIs.
+- Verified `internal/ledger` green and the wasm build.
+- **Next.** Keep extracting inline view computations into tested helpers, or other small polish.
+
 ## 2026-06-16 — Toast confirmations for data actions
 
 - Made the toast dual-purpose (it already supported a non-error/info style via `Notice.Err=false`):

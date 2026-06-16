@@ -21,6 +21,10 @@ and every commit updates this file under `Unreleased`.
   reports how many balances it refreshed.
 
 ### Fixed
+- The dashboard's net-worth "this month" change percentage was computed inline and divided by the
+  signed baseline, so it showed the wrong direction when net worth was negative (a move from −$1,000
+  to −$500 read as a decline). Extracted into a pure, tested `ledger.PercentChange` that divides by
+  the baseline's magnitude, so the sign always reflects the real direction.
 - The dashboard's week resolution now honors the configured week-start (Sunday/Monday) instead of
   always starting weeks on Monday. The window is seeded from the saved preference on boot, and
   changing the week-start in Settings re-snaps the dashboard's week boundaries live (new pure,

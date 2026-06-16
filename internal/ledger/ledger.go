@@ -207,3 +207,20 @@ func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates curre
 	}
 	return out, nil
 }
+
+// PercentChange returns the whole-percent change from prev to curr (both in the
+// same minor units), with ok=false when prev is zero (no meaningful baseline).
+// It divides by the magnitude of prev so the sign always reflects the real
+// direction even when the baseline is negative — e.g. a net worth moving from
+// -100 to -50 is a +50% improvement, not a decline. The result truncates toward
+// zero, matching integer division.
+func PercentChange(curr, prev int64) (pct int64, ok bool) {
+	if prev == 0 {
+		return 0, false
+	}
+	mag := prev
+	if mag < 0 {
+		mag = -mag
+	}
+	return (curr - prev) * 100 / mag, true
+}

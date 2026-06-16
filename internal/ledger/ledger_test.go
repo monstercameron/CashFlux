@@ -202,3 +202,29 @@ func TestNetByOwner(t *testing.T) {
 		t.Errorf("group net = %v, want 30000 USD", got[domain.GroupOwnerID])
 	}
 }
+
+func TestPercentChange(t *testing.T) {
+	cases := []struct {
+		name       string
+		curr, prev int64
+		wantPct    int64
+		wantOK     bool
+	}{
+		{"zero baseline has no change", 500, 0, 0, false},
+		{"increase", 150, 100, 50, true},
+		{"decrease", 50, 100, -50, true},
+		{"no movement", 100, 100, 0, true},
+		{"negative baseline improving is positive", -50, -100, 50, true},
+		{"negative baseline worsening is negative", -150, -100, -50, true},
+		{"crossing zero upward", 50, -100, 150, true},
+		{"truncates toward zero", 133, 100, 33, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			pct, ok := PercentChange(c.curr, c.prev)
+			if ok != c.wantOK || pct != c.wantPct {
+				t.Errorf("PercentChange(%d, %d) = (%d, %v), want (%d, %v)", c.curr, c.prev, pct, ok, c.wantPct, c.wantOK)
+			}
+		})
+	}
+}

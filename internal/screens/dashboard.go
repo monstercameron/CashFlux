@@ -87,12 +87,13 @@ func Dashboard() ui.Node {
 
 	// Net-worth change since the start of this month (end of last month).
 	nwSub, nwTone := fmt.Sprintf("Assets %s", fmtAccounting(assets)), "text-dim"
-	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 && prev[0].Amount != 0 {
-		d := (net.Amount - prev[0].Amount) * 100 / prev[0].Amount
-		if d < 0 {
-			nwTone, nwSub = "text-down", fmt.Sprintf("▼ %d%% this month", -d)
-		} else {
-			nwTone, nwSub = "text-up", fmt.Sprintf("▲ %d%% this month", d)
+	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
+		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
+			if d < 0 {
+				nwTone, nwSub = "text-down", fmt.Sprintf("▼ %d%% this month", -d)
+			} else {
+				nwTone, nwSub = "text-up", fmt.Sprintf("▲ %d%% this month", d)
+			}
 		}
 	}
 
