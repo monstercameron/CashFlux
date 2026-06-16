@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — forecast + payoff: edge-case tests
+
+- forecast: added tests for one-times outside the horizon (month 0, beyond, negative → ignored),
+  multiple one-times in the same month summing, negative horizon → nil, and balances going negative
+  (reported truthfully, no flooring).
+- payoff: added single-month clear (final payment capped → TotalPaid = principal + one month
+  interest), payment-exactly-equals-interest is non-viable (the `payment <= interest` boundary),
+  negative balance treated as already paid, and a TotalPaid = principal + interest invariant over a
+  table of viable inputs.
+- Completes §2.6 "Tests: forecast projection, payoff math"; both already had happy-path coverage, this
+  pins the boundaries. No engine changes; both suites green.
+
 ## 2026-06-16 — allocate: determinism + clamping tests
 
 - Filled the §2.7 "extensive tests" gap that mattered most: an explicit determinism test (Rank +

@@ -952,7 +952,10 @@ Shared control components (from mockup):
 - [~] What-if scenarios: extra debt payment + trim-spending forecast done; add-recurring/rate-change later
 - [ ] Planning screen: build scenario, compare vs actuals, push to forecast
 - [~] Forecast visualization (net-worth curve) done on Planning; scenario comparison later
-- [ ] ★ Tests: forecast projection, payoff math, scenario application
+- [x] ★ Tests: forecast projection, payoff math — forecast (recurring/one-time/flat + out-of-horizon
+      ignored, same-month sum, negative horizon, negative balances) and payoff (zero/interest payoff,
+      payment-too-small, single-month clear, payment==interest boundary, negative balance, TotalPaid
+      invariant). Scenario application (extra-payment/trim what-ifs) is exercised via the Planning UI.
 
 ### 2.7 Capital-allocation engine — `internal/allocate`
 

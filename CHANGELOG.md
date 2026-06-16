@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Hardened the **forecast** and **debt-payoff** engine tests: forecast now pins one-times outside the
+  horizon being ignored, same-month one-times summing, negative-horizon → empty, and balances allowed
+  to go negative; payoff pins single-month clearing (final payment capped), payment-equal-to-interest
+  being non-viable, negative balance treated as paid, and the TotalPaid = principal + interest
+  invariant across inputs.
 - Hardened the **capital-allocation engine** tests: explicit determinism (Rank + Distribute give
   identical results across repeated runs), tie-stability (equal scores keep input order), and
   breakdown clamping (out-of-range APR/stability/liquidity normalize into [0,1]) — pinning the

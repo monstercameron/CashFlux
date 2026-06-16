@@ -56,3 +56,47 @@ func TestProjectNonPositivePayment(t *testing.T) {
 		t.Error("zero payment on a positive balance should be non-viable")
 	}
 }
+
+func TestProjectLargePaymentClearsInOneMonth(t *testing.T) {
+	// Paying far more than balance+interest clears it in a single month; the final
+	// payment is capped at what's owed, so TotalPaid = principal + one month interest.
+	r, ok := Project(100000, 12, 1000000)
+	if !ok || r.Months != 1 {
+		t.Fatalf("expected a 1-month payoff, got ok=%v months=%d", ok, r.Months)
+	}
+	if r.TotalInterest != 1000 || r.TotalPaid != 101000 {
+		t.Errorf("interest/paid = %d/%d, want 1000/101000", r.TotalInterest, r.TotalPaid)
+	}
+}
+
+func TestProjectPaymentEqualsInterestNotViable(t *testing.T) {
+	// $1000 at 12% → first interest exactly $10; a $10 payment never reduces the balance.
+	if _, ok := Project(100000, 12, 1000); ok {
+		t.Error("a payment equal to the monthly interest should be non-viable")
+	}
+}
+
+func TestProjectNegativeBalanceAlreadyPaid(t *testing.T) {
+	if r, ok := Project(-500, 20, 100); !ok || r != (Result{}) {
+		t.Errorf("negative balance should be already paid, got ok=%v r=%+v", ok, r)
+	}
+}
+
+func TestProjectTotalPaidInvariant(t *testing.T) {
+	// Across a range of viable inputs, TotalPaid must equal principal + interest.
+	for _, tc := range []struct {
+		bal int64
+		apr float64
+		pay int64
+	}{
+		{50000, 0, 5000}, {250000, 18, 15000}, {100000, 6, 9000}, {1, 5, 100},
+	} {
+		r, ok := Project(tc.bal, tc.apr, tc.pay)
+		if !ok {
+			t.Fatalf("expected viable payoff for %+v", tc)
+		}
+		if r.TotalPaid != tc.bal+r.TotalInterest {
+			t.Errorf("%+v: TotalPaid %d != principal %d + interest %d", tc, r.TotalPaid, tc.bal, r.TotalInterest)
+		}
+	}
+}
