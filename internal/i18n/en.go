@@ -169,6 +169,7 @@ var english = Catalog{
 	"recurring.amountPlaceholder": "Amount (%s)",
 	"recurring.add":               "Add",
 	"recurring.empty":             "No recurring cash flows yet.",
+	"recurring.monthlyTotal":      "Net monthly equivalent: %s",
 	"recurring.labelRequired":     "Enter a label.",
 	"recurring.amountRequired":    "Enter a non-zero amount.",
 	"recurring.deleteTitle":       "Delete recurring",

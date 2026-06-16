@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Recurring cash flows card now shows a **net monthly equivalent** total — every cadence
+  normalized to a per-month figure and summed (e.g. a yearly insurance bill counts as 1/12 a month),
+  so you can see your true monthly commitment at a glance. Backed by a pure, tested
+  `domain.Recurring.MonthlyEquivalent`.
 - The Planning screen now has a **Recurring cash flows** card: add a bill/paycheck/subscription
   (label, signed amount, cadence) and see/remove the list — amounts colored by sign, each showing its
   cadence and next-due date. Backed by the recurring store.

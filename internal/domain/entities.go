@@ -127,6 +127,23 @@ func (r Recurring) Advance() Recurring {
 	return r
 }
 
+// MonthlyEquivalent normalizes the amount to a per-month figure (minor units) so
+// cadences can be summed or compared: weekly is scaled by 52/12, quarterly by
+// 1/3, yearly by 1/12; monthly is unchanged. Integer math truncates.
+func (r Recurring) MonthlyEquivalent() int64 {
+	a := r.Amount.Amount
+	switch r.Cadence {
+	case CadenceWeekly:
+		return a * 52 / 12
+	case CadenceQuarterly:
+		return a / 3
+	case CadenceYearly:
+		return a / 12
+	default:
+		return a
+	}
+}
+
 // SavedInsight is an AI-generated insight the user pinned to revisit later, kept
 // separate from to-do tasks so saving an explanation doesn't clutter the list.
 type SavedInsight struct {

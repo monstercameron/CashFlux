@@ -172,6 +172,14 @@ func Planning() ui.Node {
 			Option(Value(string(domain.CadenceYearly)), SelectedIf(rCadence.Get() == string(domain.CadenceYearly)), uistate.T("recurring.cadenceYearly")),
 		}
 		recs := app.Recurring()
+		var monthlyTotal int64
+		for _, r := range recs {
+			monthlyTotal += r.MonthlyEquivalent()
+		}
+		totalNote := Fragment()
+		if len(recs) > 0 {
+			totalNote = P(Class("muted"), uistate.T("recurring.monthlyTotal", fmtMoney(money.New(monthlyTotal, base))))
+		}
 		list := IfElse(len(recs) == 0,
 			P(Class("empty"), uistate.T("recurring.empty")),
 			Div(Class("rows"), MapKeyed(recs,
@@ -191,6 +199,7 @@ func Planning() ui.Node {
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
 			),
 			If(rErr.Get() != "", P(Class("err"), rErr.Get())),
+			totalNote,
 			list,
 		)
 	}

@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — recurring monthly-equivalent total
+
+- Added pure `domain.Recurring.MonthlyEquivalent()` (weekly ×52/12, quarterly ÷3, yearly ÷12, monthly
+  as-is; integer truncation) and showed the summed net monthly equivalent in the Planning recurring
+  card. Table-tested.
+- Chose a display-only summary over wiring recurring into the 12-month forecast: the forecast's
+  monthlyNet is derived from this month's actuals, so adding recurring there would double-count a
+  salary/bill that already shows in actuals — a semantic decision worth leaving for explicit design.
+  The monthly-equivalent total is unambiguous and useful on its own. domain + i18n + wasm green.
+
 ## 2026-06-16 — Recurring management UI on Planning
 
 - Added a "Recurring cash flows" card to the Planning screen (no new route — avoids the gated nav

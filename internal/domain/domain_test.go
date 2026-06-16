@@ -125,6 +125,27 @@ func TestRecurringAdvance(t *testing.T) {
 	}
 }
 
+func TestRecurringMonthlyEquivalent(t *testing.T) {
+	mk := func(amount int64, c RecurringCadence) Recurring {
+		return Recurring{Amount: money.New(amount, "USD"), Cadence: c}
+	}
+	cases := []struct {
+		r    Recurring
+		want int64
+	}{
+		{mk(10000, CadenceMonthly), 10000},
+		{mk(12000, CadenceQuarterly), 4000}, // /3
+		{mk(120000, CadenceYearly), 10000},  // /12
+		{mk(12000, CadenceWeekly), 52000},   // *52/12 = 4.333× → 52000
+		{mk(-150000, CadenceMonthly), -150000},
+	}
+	for _, tc := range cases {
+		if got := tc.r.MonthlyEquivalent(); got != tc.want {
+			t.Errorf("%s %d → MonthlyEquivalent %d, want %d", tc.r.Cadence, tc.r.Amount.Amount, got, tc.want)
+		}
+	}
+}
+
 func TestEntitiesCarryCustomFields(t *testing.T) {
 	// Smoke check that entities compile with the shared shapes we rely on.
 	a := Account{ID: "a1", Type: TypeSavings, Class: ClassAsset, Currency: "USD", BalanceAsOf: time.Now(), Custom: map[string]any{"nickname": "rainy day"}}
