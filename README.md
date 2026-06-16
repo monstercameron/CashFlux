@@ -1,9 +1,18 @@
 # CashFlux
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8.svg?logo=go&logoColor=white)](https://go.dev)
+[![WebAssembly](https://img.shields.io/badge/WebAssembly-654FF0.svg?logo=webassembly&logoColor=white)](https://webassembly.org)
+[![Live demo](https://img.shields.io/badge/demo-GitHub_Pages-181717.svg?logo=github)](https://monstercameron.github.io/CashFlux/)
+
 A **local-first, household-aware budgeting suite** — budgeting, planning, goals, a to-do list, and
 optional AI insights — written in **pure Go compiled to WebAssembly** on the
 [GoWebComponents](https://github.com/monstercameron/GoWebComponents) framework. Your data lives on
 your device; nothing leaves it except an explicit AI call to OpenAI with your own key.
+
+**▶ Live demo:** [monstercameron.github.io/CashFlux](https://monstercameron.github.io/CashFlux/) —
+the latest `main` build, redeployed on every push. (It starts empty; use Settings → "Load sample" to
+explore with realistic data. Your changes stay in your browser's local storage.)
 
 ## Highlights
 
@@ -69,3 +78,8 @@ single validated read/write seam between UI and store.
 - [`CLAUDE.md`](./CLAUDE.md) — engineering rules and quick reference
 - [`docs/GOWEBCOMPONENTS.md`](./docs/GOWEBCOMPONENTS.md) — framework notes
 - [`CHANGELOG.md`](./CHANGELOG.md) / [`DEVLOG.md`](./DEVLOG.md) — history and decisions
+
+## License
+
+Released under the [MIT License](./LICENSE) — © 2026 monstercameron. Do what you like with it;
+keep the copyright notice.

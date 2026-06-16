@@ -482,16 +482,17 @@ relying on the (already extensive) pure-logic unit tests. Run the suite in CI on
 - [x] ★ `.gitattributes` (normalize LF; mark `*.wasm` binary) — fixes CRLF warnings
 - [x] Create GitHub repo `monstercameron/CashFlux` + push (remote `origin`; `main` tracks `origin/main`)
 - [x] CI: GitHub Actions — `go vet` + `go test` (logic pkgs) + wasm build on push/PR (`.github/workflows/ci.yml`)
-- [ ] **README.md** — what CashFlux is, screenshots/GIF, the stack (Go→wasm on GoWebComponents),
-      local dev (`gwc dev`), build/test commands, the local-first + BYO-AI-key model, link to the live
-      GitHub Pages demo, and a pointer to SPEC/DEVLOG/TODOS. First-impression doc for the repo.
+- [~] **README.md** — what CashFlux is, the stack (Go→wasm on GoWebComponents), local dev (`gwc dev`),
+      build/test commands, the local-first + BYO-AI-key model, badges, a **Live demo** link to the
+      GitHub Pages build, a License section, and pointers to SPEC/DEVLOG/TODOS — all present.
+      - [ ] Still TODO: screenshots/GIF (needs a browser capture + image assets; do deliberately).
 - [~] **MIT licensing.** Set the project up under the MIT license.
       - [x] Top-level `LICENSE` file (standard MIT text, 2026, copyright holder `monstercameron`).
       - [x] Establish the lightweight convention: one-line `// SPDX-License-Identifier: MIT` in the
             `main.go` entrypoint (above the `//go:build` constraint; wasm build verified unaffected).
       - [ ] Optional: sweep the SPDX one-liner across the remaining Go files (deferred — mechanical,
             and fragile around build-tagged files; do deliberately).
-      - [ ] Note the license in `README.md` ("License" section + badge) — ships with the README item below.
+      - [x] Note the license in `README.md` ("License" section + MIT badge) — done with the README pass.
 - [x] **Host the app on GitHub Pages.** Done via Actions instead of a committed `/docs` folder:
       `.github/workflows/deploy-pages.yml` builds the wasm site on every push to `main` and deploys it
       as a Pages artifact (`upload-pages-artifact` + `deploy-pages`) — relative asset paths (already

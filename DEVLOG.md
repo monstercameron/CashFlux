@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — README: badges, live-demo link, License section
+
+- The README already covered what/stack/build/architecture/docs; this fills the §0 gaps: a badge row
+  (MIT / Go 1.26+ / WebAssembly / live demo via shields.io), a **Live demo** callout to the GitHub
+  Pages URL with the "starts empty, Load sample, local-storage" caveat, and a **License** section
+  linking `LICENSE`. That also closes the MIT item's "note the license in README" follow-up.
+- Skipped screenshots/GIF for now — capturing them needs a browser session and image assets; the live
+  demo link is the better first-impression substitute until those are produced deliberately.
+
 ## 2026-06-16 — MIT licensing: LICENSE file + SPDX convention
 
 - Added a top-level `LICENSE` (standard MIT text, 2026, copyright holder `monstercameron` — the

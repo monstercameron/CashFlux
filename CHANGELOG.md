@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The README now opens with status badges (MIT license, Go 1.26+, WebAssembly, live demo) and a
+  prominent **Live demo** callout linking to the GitHub Pages build
+  (https://monstercameron.github.io/CashFlux/), with a note that it starts empty and changes stay in
+  local storage. Added a **License** section pointing at `LICENSE` — closing the README's live-demo
+  link and the MIT item's README follow-up.
 - The project is now licensed under the **MIT License**: added a top-level `LICENSE` file (standard
   MIT text, 2026, monstercameron) and established the lightweight per-file convention with a one-line
   `// SPDX-License-Identifier: MIT` marker in the `main.go` entrypoint (placed above the `//go:build`
