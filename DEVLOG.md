@@ -415,7 +415,12 @@ problems and fixes, and what's next.
   `app.PutSettings`. Insights now has a real key to use. (In-memory store, so it survives the session;
   reload-persistence rides on the broader settings/storage work.)
 
-**Next:** NL query over the data (Insights), auto-categorization rules, or document AI parsing —
+- Added the pure **auto-categorization engine** `internal/rules`: a `Rule{Match, SetCategoryID,
+  SetTags}` matched case-insensitively as a substring of payee+description, first-match-wins, with
+  `Category`/`Tags`/`FirstMatch` helpers; empty matches never fire. Table-driven tested (case folding,
+  ordering, tags, empty-match). The transaction entry/import flows can apply it to auto-fill category.
+
+**Next:** apply rules on transaction entry (suggest category from payee), then a rules management UI —
 continuing Phase 2.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

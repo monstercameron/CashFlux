@@ -184,6 +184,9 @@ and every commit updates this file under `Unreleased`.
   transport is a separate js layer).
 - `internal/ai`: browser `fetch` transport (`SendChat`) — posts a chat request with the user's key
   asynchronously and calls back with the content or a plain-English error; the only network spot.
+- `internal/rules`: pure auto-categorization engine — `Rule{Match, SetCategoryID, SetTags}` with
+  case-insensitive substring matching over payee+description, first-match-wins `FirstMatch`,
+  `Category`, and `Tags`. Empty matches never fire. Table-driven tested.
 - Insights screen (replacing the stub): an **"Explain my month"** AI narrative generated client-side
   from your live figures via OpenAI with your own key; prompts to add a key in Settings when absent,
   with loading and error states.
