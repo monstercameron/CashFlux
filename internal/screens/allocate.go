@@ -33,9 +33,14 @@ type allocRowProps struct {
 func AllocRow(props allocRowProps) ui.Node {
 	excl := ui.UseEvent(Prevent(func() { props.OnExclude(props.R.Candidate.ID) }))
 	r := props.R
-	debtNote := ""
+	// The breakdown's trailing note carries any non-numeric criteria: that this
+	// pays debt, and how complete a funded goal is.
+	note := ""
 	if r.Candidate.DebtReduction {
-		debtNote = uistate.T("allocate.paysDebt")
+		note += uistate.T("allocate.paysDebt")
+	}
+	if r.Breakdown.GoalProgress > 0 {
+		note += uistate.T("allocate.goalNote", r.Breakdown.GoalProgress*100)
 	}
 	headRight := fmt.Sprintf("%.0f%%", r.Score*100)
 	if props.Amount != "" {
@@ -49,7 +54,7 @@ func AllocRow(props allocRowProps) ui.Node {
 		),
 		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", int(r.Score*100))))),
 		Span(Class("budget-sub"), uistate.T("allocate.breakdown",
-			r.Breakdown.Returns*100, r.Breakdown.Stability*100, r.Breakdown.Liquidity*100, debtNote)),
+			r.Breakdown.Returns*100, r.Breakdown.Stability*100, r.Breakdown.Liquidity*100, note)),
 	)
 }
 
@@ -84,10 +89,11 @@ func trimWeight(f float64) string {
 // allocProfiles maps a profile key to its criterion weights.
 func allocProfiles() map[string]allocate.Weights {
 	return map[string]allocate.Weights{
-		"balanced": {Returns: 1, Stability: 1, Liquidity: 1, DebtReduction: 1},
+		"balanced": {Returns: 1, Stability: 1, Liquidity: 1, DebtReduction: 1, GoalProgress: 1},
 		"returns":  {Returns: 3, Stability: 1, Liquidity: 1, DebtReduction: 1},
 		"safety":   {Stability: 3, Liquidity: 2, Returns: 1, DebtReduction: 1},
 		"debt":     {DebtReduction: 4, Returns: 1, Stability: 1, Liquidity: 1},
+		"goals":    {GoalProgress: 4, Returns: 1, Stability: 1, Liquidity: 1, DebtReduction: 1},
 	}
 }
 
@@ -108,6 +114,7 @@ func Allocate() ui.Node {
 	wStability := ui.UseState("1")
 	wLiquidity := ui.UseState("1")
 	wDebt := ui.UseState("1")
+	wGoal := ui.UseState("1")
 	profName := ui.UseState("")
 	profMsg := ui.UseState("")
 	setWeights := func(w allocate.Weights) {
@@ -115,12 +122,13 @@ func Allocate() ui.Node {
 		wStability.Set(trimWeight(w.Stability))
 		wLiquidity.Set(trimWeight(w.Liquidity))
 		wDebt.Set(trimWeight(w.DebtReduction))
+		wGoal.Set(trimWeight(w.GoalProgress))
 	}
 	resolveWeights := func(sel string) allocate.Weights {
 		if strings.HasPrefix(sel, "saved:") {
 			for _, p := range app.AllocProfiles() {
 				if "saved:"+p.ID == sel {
-					return allocate.Weights{Returns: p.Returns, Stability: p.Stability, Liquidity: p.Liquidity, DebtReduction: p.DebtReduction}
+					return allocate.Weights{Returns: p.Returns, Stability: p.Stability, Liquidity: p.Liquidity, DebtReduction: p.DebtReduction, GoalProgress: p.GoalProgress}
 				}
 			}
 		}
@@ -139,6 +147,7 @@ func Allocate() ui.Node {
 	onWStability := ui.UseEvent(func(v string) { wStability.Set(v) })
 	onWLiquidity := ui.UseEvent(func(v string) { wLiquidity.Set(v) })
 	onWDebt := ui.UseEvent(func(v string) { wDebt.Set(v) })
+	onWGoal := ui.UseEvent(func(v string) { wGoal.Set(v) })
 	onProfName := ui.UseEvent(func(v string) { profName.Set(v) })
 	amountStr := ui.UseState("")
 	reserveStr := ui.UseState("")
@@ -192,6 +201,7 @@ func Allocate() ui.Node {
 		cands = append(cands, allocate.Candidate{
 			ID: "goal:" + g.ID, Name: uistate.T("allocate.goalPrefix", g.Name),
 			StabilityScore: 80, LiquidityScore: 60,
+			GoalProgress: float64(goalsvc.Percent(g)) / 100,
 		})
 	}
 
@@ -200,6 +210,7 @@ func Allocate() ui.Node {
 		Stability:     parseWeight(wStability.Get()),
 		Liquidity:     parseWeight(wLiquidity.Get()),
 		DebtReduction: parseWeight(wDebt.Get()),
+		GoalProgress:  parseWeight(wGoal.Get()),
 	}
 	ranked := allocate.RankWith(cands, weights, allocate.Constraints{Exclude: excluded.Get()})
 
@@ -211,7 +222,7 @@ func Allocate() ui.Node {
 		}
 		p := domain.AllocationProfile{
 			ID: id.New(), Name: name, Returns: weights.Returns, Stability: weights.Stability,
-			Liquidity: weights.Liquidity, DebtReduction: weights.DebtReduction,
+			Liquidity: weights.Liquidity, DebtReduction: weights.DebtReduction, GoalProgress: weights.GoalProgress,
 		}
 		if err := app.PutAllocProfile(p); err != nil {
 			profMsg.Set(err.Error())
@@ -336,6 +347,7 @@ func Allocate() ui.Node {
 					Option(Value("returns"), SelectedIf(profile.Get() == "returns"), uistate.T("allocate.maxReturns")),
 					Option(Value("safety"), SelectedIf(profile.Get() == "safety"), uistate.T("allocate.safety")),
 					Option(Value("debt"), SelectedIf(profile.Get() == "debt"), uistate.T("allocate.debt")),
+					Option(Value("goals"), SelectedIf(profile.Get() == "goals"), uistate.T("allocate.goals")),
 					savedOpts,
 				),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
@@ -347,6 +359,7 @@ func Allocate() ui.Node {
 				Input(Class("field"), Type("number"), Title(uistate.T("allocate.wStability")), Placeholder(uistate.T("allocate.wStability")), Value(wStability.Get()), Step("0.5"), OnInput(onWStability)),
 				Input(Class("field"), Type("number"), Title(uistate.T("allocate.wLiquidity")), Placeholder(uistate.T("allocate.wLiquidity")), Value(wLiquidity.Get()), Step("0.5"), OnInput(onWLiquidity)),
 				Input(Class("field"), Type("number"), Title(uistate.T("allocate.wDebt")), Placeholder(uistate.T("allocate.wDebt")), Value(wDebt.Get()), Step("0.5"), OnInput(onWDebt)),
+				Input(Class("field"), Type("number"), Title(uistate.T("allocate.wGoal")), Placeholder(uistate.T("allocate.wGoal")), Value(wGoal.Get()), Step("0.5"), OnInput(onWGoal)),
 			),
 			Form(Class("form-grid"), OnSubmit(saveProfile),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("allocate.profileNamePlaceholder")), Value(profName.Get()), OnInput(onProfName)),

@@ -969,10 +969,10 @@ Shared control components (from mockup):
 
 ### 2.7 Capital-allocation engine — `internal/allocate`
 
-- [~] ★ Criterion scorers: returns, stability, liquidity, debt reduction, **goal progress** done
-      (`internal/allocate`, tested) and persisted on saved profiles (`AllocationProfile.GoalProgress`,
-      round-trip-tested). Goal-progress UI wiring (weight input + populate `GoalProgress` from goal
-      pace + breakdown line) is the next slice.
+- [x] ★ Criterion scorers: returns, stability, liquidity, debt reduction, **goal progress** — all done
+      (`internal/allocate`, tested), persisted on saved profiles (`AllocationProfile.GoalProgress`,
+      round-trip-tested), and wired through the Allocate UI (weight input, "Finish goals" preset,
+      `GoalProgress` populated from goal pace, breakdown "· goal N%" note).
 - [x] ★ Weighted combination by profile; normalization; deterministic (`Score`/`Rank`)
 - [x] `AllocationProfile{ID, Name, Weights}` + CRUD — model + persistence (`domain.AllocationProfile`,
       `allocprofiles` table, store CRUD, dataset round-trip, validated appstate accessors; table-tested)

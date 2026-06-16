@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Allocate screen now exposes the **goal-progress criterion** end to end: a "Goal-progress weight"
+  input and a new **"Finish goals"** profile, each goal candidate carries its real completion
+  percentage (so weighting it ranks goals nearest the finish line first), and the per-suggestion
+  breakdown shows the goal's progress (e.g. "· goal 85%"). Saved profiles keep the new weight.
 - Saved allocation profiles now remember their **goal-progress weight** too (round-trips losslessly
   through save/load and JSON/CSV export/import; older profiles without it load as 0).
 - Capital allocation now has a **goal-progress criterion**: destinations funding a savings goal score

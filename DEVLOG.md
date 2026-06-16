@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — allocate UI: goal-progress weight wired end-to-end
+
+- Final (UI-last) slice of the goal-progress criterion. The Allocate screen now: populates each goal
+  candidate's `GoalProgress` from `goals.Percent(g)/100`; adds a "Goal-progress weight" number input
+  and a "Finish goals" preset (GoalProgress 4); threads the weight through setWeights / resolveWeights
+  (saved profiles) / the live `weights` struct / saveProfile; and the breakdown line appends a "· goal
+  N%" note for goal candidates (built alongside the existing pays-debt note, so the i18n arg count is
+  unchanged). New keys: `allocate.wGoal`, `allocate.goals`, `allocate.goalNote` (literal `%%`). i18n
+  catalog + wasm green. Completes §2.7's goal-progress criterion across all layers.
+
 ## 2026-06-16 — persistence: goal-progress weight on saved profiles
 
 - Added `GoalProgress float64` (`json:"goalProgress,omitempty"`) to `domain.AllocationProfile`. Because
