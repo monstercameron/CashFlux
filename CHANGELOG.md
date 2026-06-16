@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- README "Hosting (SPA history fallback)" → a **Local development** note documenting that `gwc dev`
+  does not yet serve the app shell for history routes (deep link / hard refresh at `/accounts` 404s;
+  only built assets serve), with the workaround (start from `/` and navigate in-app, or run a
+  production build behind a rewrite). Empirically confirmed this session; the deployed PWA is
+  unaffected. Pins the last open B1 item as a framework-side gap.
 - README "Hosting (SPA history fallback)" section documenting the rewrite rule static hosts need
   (unknown non-asset paths → `index.html`) so deep links/refreshes work, with concrete snippets for
   GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.

@@ -74,6 +74,12 @@ covered: the service worker serves the cached shell for navigations.)
 - **nginx:** `try_files $uri $uri/ /index.html;`.
 - **Caddy / `caddy file-server`:** `try_files {path} /index.html`.
 
+**Local development:** the `gwc dev` server does not yet serve the app shell for history routes (a
+deep link / hard refresh at e.g. `/accounts` returns 404; only built assets like `/bin/main.wasm` are
+served). Until the framework grows an SPA history fallback, start from the root (`/`) and navigate
+in-app, or run a production build behind one of the rewrite rules above. The deployed PWA is unaffected
+(the GitHub Pages `404.html` shell and the service-worker navigation fallback both cover deep links).
+
 ## Architecture
 
 Business logic is **platform-independent and table-driven tested** — `internal/money`, `currency`,

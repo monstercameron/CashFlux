@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B1 triage: deep-link 404 is now framework-side only
+
+- Worked the Section-B bug backlog starting at B1 (deep-link refresh 404). The CashFlux-side fixes
+  were already landed in prior sessions and are marked done: the service worker serves the cached app
+  shell for `navigate` requests (`web/sw.js`, cache `cashflux-v2`), and the GitHub Pages deploy
+  generates a `404.html` shell — so the **deployed/offline PWA already routes deep links correctly**.
+- Verified the current build: `GOOS=js GOARCH=wasm go build` is green and `go test ./...` passes.
+- Empirically probed the dev server (`gwc dev -port 8099`): `/` → **404**, `/index.html` → **404**,
+  `/accounts` → **404**, but `/bin/main.wasm` → **200**. So `gwc dev` isn't serving the HTML shell at
+  *any* route — this is the §0 "`gwc dev -html` resolution" bug, and on top of it there's no SPA
+  history fallback. Both gaps live in the **GoWebComponents framework** (the dev tool), not in this
+  repo. Documented the dev-server caveat + workaround in the README hosting section.
+- **Decision needed before B1 can fully close:** the only remaining buildable piece is the framework
+  dev-server fix (serve `index.html` for the root + unknown non-asset history paths), which is a commit
+  in the GoWebComponents sibling repo + a `.tools/gwc.exe` rebuild — a separate repo, so flagging it
+  rather than assuming scope. Until then, browser end-to-end verification also waits on Playwright (§0,
+  not installed). Next: B2 (dashboard reflow) is fully in-repo and unblocked.
+
 ## 2026-06-16 — model picker + AI-off-until-key hint
 
 - Expanded the Settings → AI model `<select>` from two options to the six the cost table knows

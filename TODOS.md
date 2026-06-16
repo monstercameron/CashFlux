@@ -29,6 +29,10 @@ passes through. It's a server/SW history-fallback gap, not a router bug.
       on repeat / installed / offline visits. (`web/sw.js`, CACHE bumped to v2)
 - [ ] Server (dev): make `gwc dev` serve `index.html` for unknown non-asset paths (SPA history
       fallback). Resolve the known `gwc dev -html` issue (see §0) — framework-side change.
+      _(2026-06-16: confirmed empirically — `gwc dev` returns 404 for `/`, `/index.html`, **and**
+      `/accounts` while `/bin/main.wasm` serves 200, so the HTML shell isn't served at any route. Both
+      the HTML-resolution bug and the missing SPA fallback live in the GoWebComponents dev tool, not
+      this repo. README now documents the caveat + workaround.)_
 - [x] Server (prod/static hosting): document the SPA rewrite rule (all non-asset routes → `index.html`)
       — README "Hosting (SPA history fallback)" covers GitHub Pages (404.html), Netlify, Vercel, nginx, Caddy.
 - [ ] Verify: hard-refresh at `/accounts`, `/transactions`, `/budgets`, … lands on the correct screen
