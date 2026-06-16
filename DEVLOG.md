@@ -128,7 +128,12 @@ problems and fixes, and what's next.
   month-scoped on purpose (budgets are monthly) rather than following the dashboard window, so the
   percentages stay meaningful. Confirmed `appstate.Default` is `*appstate.App` (build passes).
 
-**Next:** Goals, To-do, Accounts widgets, then charts (net-worth trend, cash flow), then the
+- Added three more bento widgets reusing tested services: **Goals** (first goal's progress via
+  `goals.Percent`), **To-do** (up to three open tasks, priority-toned dots), and **Accounts** (up to
+  six active balances via `ledger.Balance`, negatives toned). All compose the `Widget` shell +
+  `ProgressBar`; confirmed `appstate` exposes `Goals()`/`Tasks()`/`Accounts()`.
+
+**Next:** the SVG charts (net-worth trend area chart, cash-flow bars) as reusable helpers, then the
 per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

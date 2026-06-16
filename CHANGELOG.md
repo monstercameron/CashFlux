@@ -159,6 +159,8 @@ and every commit updates this file under `Unreleased`.
 - Goals widget (1×1): the first goal's progress (saved / target + percent and target date) via
   `internal/goals`, in the reusable `Widget` shell with a `ProgressBar`.
 - To-do widget (1×1): up to three open tasks, each with a priority-toned dot (high = amber).
+- Accounts widget (2×1): a small grid of up to six active account balances (accounting figures,
+  negatives toned red) via `ledger.Balance`.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

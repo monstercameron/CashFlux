@@ -78,7 +78,41 @@ func Dashboard() ui.Node {
 		budgetsWidget(app, txns, rates),
 		goalsWidget(app),
 		todoWidget(app),
+		accountsWidget(app, txns),
 	)
+}
+
+// accountsWidget is the 2×1 Accounts widget: a small grid of up to six active
+// account balances (accounting figures, negatives toned red) via ledger.Balance.
+func accountsWidget(app *appstate.App, txns []domain.Transaction) ui.Node {
+	cells := make([]ui.Node, 0, 6)
+	for _, a := range app.Accounts() {
+		if a.Archived {
+			continue
+		}
+		bal, _ := ledger.Balance(a, txns)
+		tone := ""
+		if bal.IsNegative() {
+			tone = "text-down"
+		}
+		cells = append(cells, Div(
+			Div(Class("text-dim"), a.Name),
+			Div(Class("font-display fig mt-0.5 "+tone), fmtAccounting(bal)),
+		))
+		if len(cells) >= 6 {
+			break
+		}
+	}
+	var body ui.Node
+	if len(cells) == 0 {
+		body = P(Class("empty text-dim text-[13px]"), "No accounts yet.")
+	} else {
+		body = Div(Class("grid grid-cols-3 gap-4 text-[13px]"), cells)
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "accounts", Title: "Accounts", Draggable: true, GridColumn: "3 / span 2", GridRow: "5",
+		Body: body,
+	})
 }
 
 // todoWidget is the 1×1 To-do widget: up to three open tasks, dot-toned by
