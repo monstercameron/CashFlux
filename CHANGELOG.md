@@ -16,8 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
-- Account "locked until" date (assets): set on the add form, and the Allocate screen excludes an
-  account locked until a future date from its suggestions (you can't add money to it yet).
+- Account "locked until" date (assets): set on the add form and the inline editor (blank unlocks),
+  and the Allocate screen excludes an account locked until a future date from its suggestions (you
+  can't add money to it yet).
 
 ### Changed
 - The dashboard spending breakdown now rolls sub-category spend up to its top-level parent category,

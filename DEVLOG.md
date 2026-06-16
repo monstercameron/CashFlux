@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Accounts: edit lock-until inline (lock-until complete)
+
+- Added the "Locked until" date to the account inline editor's asset branch (seeded from
+  `LockUntil`; a blank value clears it, unlocking the account). `saveEdit` parses it into `cp`.
+- Lock-until is now fully manageable: set on add, change/clear on edit, and it gates allocation
+  suggestions. Existing accounts can be locked (e.g. when you open a CD) or unlocked when it matures.
+- **Next.** Genuine small polish; major remaining backlog (sync) needs a backend.
+
 ## 2026-06-16 — Allocation: honor account lock-until
 
 - Put the long-unused `Account.LockUntil` to work. The Allocate screen now skips an asset account

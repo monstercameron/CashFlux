@@ -357,6 +357,11 @@ func AccountRow(props accountRowProps) ui.Node {
 	retS := ui.UseState(floatOrEmpty(a.ExpectedReturnAPR))
 	liqS := ui.UseState(intOrEmpty(a.LiquidityScore))
 	stabS := ui.UseState(intOrEmpty(a.StabilityScore))
+	lockISO := ""
+	if !a.LockUntil.IsZero() {
+		lockISO = dateutil.FormatDate(a.LockUntil)
+	}
+	lockS := ui.UseState(lockISO)
 	ownerS := ui.UseState(a.OwnerID)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
@@ -368,6 +373,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	onRet := ui.UseEvent(func(v string) { retS.Set(v) })
 	onLiq := ui.UseEvent(func(v string) { liqS.Set(v) })
 	onStab := ui.UseEvent(func(v string) { stabS.Set(v) })
+	onLock := ui.UseEvent(func(v string) { lockS.Set(v) })
 	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(a.Name)
@@ -380,6 +386,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		retS.Set(floatOrEmpty(a.ExpectedReturnAPR))
 		liqS.Set(intOrEmpty(a.LiquidityScore))
 		stabS.Set(intOrEmpty(a.StabilityScore))
+		lockS.Set(lockISO)
 		ownerS.Set(a.OwnerID)
 		editing.Set(true)
 	}))
@@ -406,6 +413,13 @@ func AccountRow(props accountRowProps) ui.Node {
 			cp.ExpectedReturnAPR = parseFloatOrZero(retS.Get())
 			cp.LiquidityScore = parseIntOrZero(liqS.Get())
 			cp.StabilityScore = parseIntOrZero(stabS.Get())
+			if lu := strings.TrimSpace(lockS.Get()); lu != "" {
+				if d, err := dateutil.ParseDate(lu); err == nil {
+					cp.LockUntil = d
+				}
+			} else {
+				cp.LockUntil = time.Time{}
+			}
 		}
 		props.OnSave(cp)
 		editing.Set(false)
@@ -426,6 +440,7 @@ func AccountRow(props accountRowProps) ui.Node {
 				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Expected return APR %"), Value(retS.Get()), Step("0.01"), OnInput(onRet))),
 				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Liquidity 0–100"), Value(liqS.Get()), OnInput(onLiq))),
 				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Stability 0–100"), Value(stabS.Get()), OnInput(onStab))),
+				If(!isLiab, Input(Class("field"), Type("date"), Title("Locked until"), Value(lockS.Get()), OnInput(onLock))),
 				Button(Class("btn btn-primary"), Type("submit"), "Save"),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
 			),
