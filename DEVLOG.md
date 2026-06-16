@@ -78,9 +78,15 @@ problems and fixes, and what's next.
   with the from ≤ to clamp, `Range`, labels). This is the value the UI will store in a single atom,
   so the top-bar control and dashboard share one source of truth and the view stays logic-free.
 
-**Next:** a small `uistate` atom wrapping `period.Window`, the top-bar resolution control
-(`Segmented` + two `StepperPill`s), and feeding the window's range into the dashboard; then the
-`Widget` shell, `FlipPanel`, and bento widgets.
+- Wired the **time-resolution control**: new `internal/uistate` package holds the shared dashboard
+  window in one atom over `period.Window` (a neutral home so neither the app shell nor screens own
+  it and there's no import cycle). The top-bar `ResolutionControl` composes `Segmented` +
+  two `StepperPill`s; each action just stores the next immutable `Window` (no date math in the view).
+  `Dashboard` now reads the same atom for its period range and re-renders on change — first proof the
+  shared-state plumbing works end to end. Full js/wasm build green.
+
+**Next:** a quick browser/DOM sanity check of the new shell via the gwc dev server, then the
+`Widget` shell + `FlipPanel` primitives and the bento widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

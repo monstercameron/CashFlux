@@ -5,13 +5,13 @@ package screens
 import (
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -32,7 +32,8 @@ func Dashboard() ui.Node {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
 	net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
-	start, end := dateutil.MonthRange(time.Now())
+	w := uistate.UsePeriod().Get()
+	start, end := w.Range()
 	income, expense, _ := ledger.PeriodTotals(txns, start, end, rates)
 
 	active := 0
@@ -63,8 +64,8 @@ func Dashboard() ui.Node {
 	return Div(
 		Div(Class("stat-grid"),
 			stat("Net worth", fmtMoney(net), accentFor(net)),
-			stat("This month in", fmtMoney(income), "pos"),
-			stat("This month out", fmtMoney(expense), "neg"),
+			stat("Income", fmtMoney(income), "pos"),
+			stat("Spending", fmtMoney(expense), "neg"),
 			stat("Accounts", fmt.Sprintf("%d", active), ""),
 		),
 		Section(Class("card"),

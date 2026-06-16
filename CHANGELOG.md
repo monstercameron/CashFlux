@@ -130,6 +130,10 @@ and every commit updates this file under `Unreleased`.
   control's stepping rules — `SetResolution` (re-snaps anchors), `StepFrom`/`StepTo` (move one
   anchor, clamping the other so from ≤ to), `Range`, and from/to labels. Drops straight into UI
   state; clamp behavior table-driven tested.
+- Time-resolution control in the top bar: a Week/Month/Quarter `Segmented` toggle plus From/To
+  `StepperPill`s, backed by a shared `internal/uistate` window atom over `period.Window`. The
+  dashboard now derives its income/spending period from this control (re-rendering on change) instead
+  of a hardcoded current-month range; stat labels are now period-relative ("Income"/"Spending").
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

@@ -6,7 +6,9 @@ import (
 	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -209,9 +211,41 @@ func TopBar(props topBarProps) uic.Node {
 		),
 		Div(Class("font-display text-lg font-semibold"), props.Title),
 		Div(Class("ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
+			uic.CreateElement(ResolutionControl),
 			Button(Class("px-3 py-1.5 border border-line text-fg hover:bg-hover"), Style(map[string]string{"border-radius": "4px"}),
 				"+ Add",
 			),
 		),
+	)
+}
+
+// ResolutionControl is the top bar's time-resolution control: a Week/Month/
+// Quarter segmented toggle and From/To stepper pills, all driven by the shared
+// dashboard window (internal/uistate + internal/period). It owns no date math —
+// every action just stores the next immutable Window.
+func ResolutionControl() uic.Node {
+	atom := uistate.UsePeriod()
+	w := atom.Get()
+	return Span(Class("flex items-center gap-2.5"),
+		ui.Segmented(ui.SegmentedProps{
+			Options: []ui.SegOption{
+				{Value: string(period.Week), Label: "Week"},
+				{Value: string(period.Month), Label: "Month"},
+				{Value: string(period.Quarter), Label: "Quarter"},
+			},
+			Selected: string(w.Res),
+			OnSelect: func(v string) { atom.Set(w.SetResolution(period.Resolution(v))) },
+		}),
+		ui.StepperPill(ui.StepperPillProps{
+			Label:  w.FromLabel(),
+			OnPrev: func() { atom.Set(w.StepFrom(-1)) },
+			OnNext: func() { atom.Set(w.StepFrom(1)) },
+		}),
+		Span(Class("text-faint"), "–"),
+		ui.StepperPill(ui.StepperPillProps{
+			Label:  w.ToLabel(),
+			OnPrev: func() { atom.Set(w.StepTo(-1)) },
+			OnNext: func() { atom.Set(w.StepTo(1)) },
+		}),
 	)
 }
