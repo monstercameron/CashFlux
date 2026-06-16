@@ -245,8 +245,13 @@ problems and fixes, and what's next.
   swapped, amount negated, same date) so balances don't drift. Heuristic match (no schema change /
   migration); a shared transfer-group id would be more robust if duplicate transfers collide — noted.
 
-**Next:** more Phase-1 — account edit/archive, transaction filters (member/account/category/date/
-text), then the Members and Categories screens, continuing the priority-ordered backlog.
+- Added **transaction filters**: a filter bar (case-insensitive description search + account picker,
+  Clear button) narrows the in-memory list before render, with a separate "No matching transactions"
+  empty state distinct from "No transactions yet". Date-range/category/member filters + persistence
+  can follow.
+
+**Next:** account edit/archive, then category/member filters + date range, then the Members and
+Categories screens, continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

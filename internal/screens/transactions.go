@@ -52,6 +52,8 @@ func Transactions() ui.Node {
 	toAccID := ui.UseState("")
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	errMsg := ui.UseState("")
+	filterText := ui.UseState("")
+	filterAcc := ui.UseState("")
 
 	onDesc := ui.UseEvent(func(v string) { desc.Set(v) })
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
@@ -60,6 +62,9 @@ func Transactions() ui.Node {
 	onAcc := ui.UseEvent(func(e ui.Event) { accID.Set(e.GetValue()) })
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
 	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
+	onFilterText := ui.UseEvent(func(v string) { filterText.Set(v) })
+	onFilterAcc := ui.UseEvent(func(e ui.Event) { filterAcc.Set(e.GetValue()) })
+	clearFilters := ui.UseEvent(Prevent(func() { filterText.Set(""); filterAcc.Set("") }))
 
 	add := ui.UseEvent(Prevent(func() {
 		acc, ok := accByID[accID.Get()]
@@ -217,11 +222,27 @@ func Transactions() ui.Node {
 	txns := app.Transactions()
 	sort.Slice(txns, func(i, j int) bool { return txns[i].Date.After(txns[j].Date) })
 
+	ft := strings.ToLower(strings.TrimSpace(filterText.Get()))
+	fa := filterAcc.Get()
+	shown := make([]domain.Transaction, 0, len(txns))
+	for _, t := range txns {
+		if fa != "" && t.AccountID != fa {
+			continue
+		}
+		if ft != "" && !strings.Contains(strings.ToLower(t.Desc), ft) {
+			continue
+		}
+		shown = append(shown, t)
+	}
+
 	var listBody ui.Node
-	if len(txns) == 0 {
+	switch {
+	case len(txns) == 0:
 		listBody = P(Class("empty"), "No transactions yet.")
-	} else {
-		rows := MapKeyed(txns,
+	case len(shown) == 0:
+		listBody = P(Class("empty"), "No matching transactions.")
+	default:
+		rows := MapKeyed(shown,
 			func(t domain.Transaction) any { return t.ID },
 			func(t domain.Transaction) ui.Node {
 				acc := accByID[t.AccountID]
@@ -233,10 +254,20 @@ func Transactions() ui.Node {
 		listBody = Div(Class("rows"), rows)
 	}
 
+	filterAccOptions := []ui.Node{Option(Value(""), SelectedIf(fa == ""), "— All accounts —")}
+	for _, a := range accounts {
+		filterAccOptions = append(filterAccOptions, Option(Value(a.ID), SelectedIf(fa == a.ID), a.Name))
+	}
+
 	return Div(
 		formCard,
 		Section(Class("card"),
 			H2(Class("card-title"), "All transactions"),
+			Form(Class("form-grid"), OnSubmit(clearFilters),
+				Input(Class("field"), Type("search"), Placeholder("Search description"), Value(filterText.Get()), OnInput(onFilterText)),
+				Select(Class("field"), OnChange(onFilterAcc), filterAccOptions),
+				Button(Class("btn"), Type("submit"), "Clear"),
+			),
 			listBody,
 		),
 	)

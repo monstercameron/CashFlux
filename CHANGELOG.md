@@ -218,6 +218,8 @@ and every commit updates this file under `Unreleased`.
   "To account" picker and creates paired entries (debit + credit, each with `TransferAccountID`) that
   move both balances and are excluded from income/expense. Same-currency only for now; rows labelled
   "Transfer". Deleting either leg removes the reciprocal so balances stay consistent.
+- Transactions: a filter bar (description search + account picker, with Clear) narrows the ledger
+  list, with a distinct "No matching transactions" empty state.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
