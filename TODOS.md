@@ -248,7 +248,7 @@ Shared control components (from mockup):
 ### 1.12 Budgets (individual + group)
 
 - [x] List budgets with spent vs limit + progress bar (current month)
-- [~] Add + delete budget (scope, category, limit) done; edit + period selector later
+- [~] Add + delete + inline edit budget (name + limit) done; period selector later
 - [x] Near/over-limit indicators (gentle, colored bar)
 - [x] Period selector (month stepper) — view any month
 - [x] Tests: spent/remaining, scope aggregation, thresholds (in `internal/budgeting`)

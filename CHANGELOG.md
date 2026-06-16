@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Edit budgets inline: each budget row has an Edit button that swaps in a form for the name and
+  monthly limit, saving through the validated path. (Previously budgets could only be added or
+  deleted.)
 - Member delete now offers reassignment: deleting a member who owns accounts, budgets, or goals
   opens a panel to move everything to another owner (or the shared group) and then deletes them,
   instead of just refusing. Scope follows the new owner and transactions attributed to the member

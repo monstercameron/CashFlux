@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Budgets: inline edit
+
+- Budgets were add/delete only; added inline editing of the name and monthly limit. `BudgetRow`
+  gained an `editing` toggle plus name/limit field states and a `saveEdit` that calls a parent
+  `OnSave(id, name, limit)`; the parent finds the budget, parses the limit to minor units, and saves
+  through `PutBudget`.
+- **Hook discipline.** All the row's hooks (`del`, `editing`, two field states, five event hooks)
+  are declared unconditionally at the top; only the *return* branches on `editing`. So toggling edit
+  mode never reorders hooks — the trap that bites when you wrap hooks in an `if`.
+- Seeds the edit fields from the budget on each `startEdit` (not just initial mount), so reopening
+  the editor always reflects the current values; the limit is shown in major units via
+  `money.FormatMinor`.
+- **Next.** Goal edit (same pattern) would round out CRUD-edit parity, or move to a larger item
+  (document vision AI / Phase-3 sync groundwork).
+
 ## 2026-06-16 — Members: reassign-before-delete
 
 - Mirrored the category reassign flow for members. `appstate.ReassignOwner(old, new)` moves owned

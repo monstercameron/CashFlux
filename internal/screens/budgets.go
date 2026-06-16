@@ -112,6 +112,30 @@ func Budgets() ui.Node {
 		bump()
 	}
 
+	saveBudget := func(id, newName, limitStr string) {
+		for _, b := range app.Budgets() {
+			if b.ID != id {
+				continue
+			}
+			if n := strings.TrimSpace(newName); n != "" {
+				b.Name = n
+			}
+			amt, err := money.ParseMinor(strings.TrimSpace(limitStr), currency.Decimals(base))
+			if err != nil || amt <= 0 {
+				errMsg.Set("Enter a positive limit.")
+				return
+			}
+			b.Limit = money.New(amt, base)
+			if err := app.PutBudget(b); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			break
+		}
+		errMsg.Set("")
+		bump()
+	}
+
 	var formCard ui.Node
 	if len(expenseCats) == 0 {
 		formCard = Section(Class("card"), P(Class("empty"), "Add an expense category first, then create budgets."))
@@ -164,7 +188,7 @@ func Budgets() ui.Node {
 		rows := MapKeyed(statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], OnDelete: deleteBudget})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], OnDelete: deleteBudget, OnSave: saveBudget})
 			},
 		)
 		listBody = Div(rows)
@@ -191,13 +215,44 @@ type budgetRowProps struct {
 	Status   budgeting.Status
 	Category string
 	OnDelete func(string)
+	OnSave   func(id, name, limit string)
 }
 
-// BudgetRow renders one budget's spend vs limit with a progress bar.
+// BudgetRow renders one budget's spend vs limit with a progress bar. Clicking
+// Edit swaps in an inline form for the name and monthly limit. It owns all its
+// hooks (declared unconditionally) so the edit toggle never disturbs hook order.
 func BudgetRow(props budgetRowProps) ui.Node {
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Status.Budget.ID) }))
-
 	s := props.Status
+	limitMajor := money.FormatMinor(s.Budget.Limit.Amount, currency.Decimals(s.Budget.Limit.Currency))
+
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(s.Budget.ID) }))
+	editing := ui.UseState(false)
+	nameS := ui.UseState(s.Budget.Name)
+	limitS := ui.UseState(limitMajor)
+	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		nameS.Set(s.Budget.Name)
+		limitS.Set(limitMajor)
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get())
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		return Div(Class("budget"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Type("number"), Placeholder("Monthly limit"), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
+				Button(Class("btn btn-primary"), Type("submit"), "Save"),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+			),
+		)
+	}
+
 	limit, _ := s.Spent.Add(s.Remaining) // limit in base currency
 
 	width := s.Percent
@@ -224,6 +279,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), title),
 			Span(Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
+			Button(Class("btn"), Type("button"), Title("Edit budget"), OnClick(startEdit), "Edit"),
 			Button(Class("btn-del"), Type("button"), Title("Delete budget"), OnClick(del), "✕"),
 		),
 		Div(Class("bar"), Div(Class(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
