@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Category hierarchy engine (`internal/categorytree`): `Build` organizes a flat category list into a
+  parent/child forest (siblings sorted by name) and `Flatten` returns a depth-tagged list for
+  indented display, using the existing `Category.ParentID`. Defensive — orphans become roots and
+  cycles are dropped rather than looping. Table-tested. Foundation for sub-categories.
 - Cleared balance on accounts: a pure `ledger.ClearedBalance` (opening balance + only cleared
   transactions) is shown on each account row when it differs from the live balance — the figure to
   reconcile against a statement. Tested.

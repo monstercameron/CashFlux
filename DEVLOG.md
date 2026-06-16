@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Sub-categories: the tree engine
+
+- `Category.ParentID` has existed in the schema but was unused. Started sub-categories bottom-up with
+  a pure `internal/categorytree`: `Build` → forest of `Node`s (siblings name-sorted), `Flatten` →
+  depth-tagged list for an indented picker/list.
+- **Defensive by construction.** Bad parent data shouldn't break the UI: an orphan (parent missing)
+  or self-reference becomes a root, and a mutual cycle (a↔b) yields no roots rather than recursing
+  forever (a shared `visited` set stops re-emission). Tested all three: nesting+sort, orphan-as-root,
+  and cycle/self-reference safety, plus flatten depth.
+- **Next.** A parent selector on the category add/edit forms (using `Flatten` for the indented
+  options, excluding self/descendants to keep it acyclic), then indented display on the Categories
+  screen. Spending breakdown rollup-to-parent could follow.
+
 ## 2026-06-16 — Ledger: cleared balance
 
 - Added pure `ledger.ClearedBalance` (opening balance + only `Cleared` transactions) — the
