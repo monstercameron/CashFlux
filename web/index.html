@@ -181,6 +181,25 @@
       .btn-del:hover { color: var(--danger); }
       .err { color: #fca5a5; margin: 0.6rem 0 0; font-size: 0.88rem; }
 
+      /* App-wide toast notice (bottom-center) */
+      .toast {
+        position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%);
+        z-index: 60; max-width: min(92vw, 32rem); display: flex; align-items: center;
+        gap: 0.75rem; padding: 0.7rem 0.9rem; border-radius: 10px;
+        background: var(--bg-elev); color: var(--text);
+        border: 1px solid var(--border); box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+        font-size: 0.9rem; animation: toast-in 160ms ease-out;
+      }
+      .toast-err { border-color: var(--danger); }
+      .toast-err .toast-msg { color: var(--danger); }
+      .toast-msg { flex: 1; }
+      .toast-x {
+        flex: none; border: 0; background: transparent; color: inherit; cursor: pointer;
+        font-size: 1.2rem; line-height: 1; opacity: 0.7; padding: 0 0.15rem;
+      }
+      .toast-x:hover { opacity: 1; }
+      @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 0.5rem); } to { opacity: 1; transform: translate(-50%, 0); } }
+
       /* Budgets */
       .budget { padding: 0.7rem 0; border-top: 1px solid var(--border); }
       .budget:first-child { border-top: 0; }

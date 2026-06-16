@@ -110,7 +110,8 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] Single persist path: every write goes through validated `appstate.Put*` → store (+ slog)
 - [x] Reactive refresh per screen (`state.UseAtom` revision bumped after `appstate.Put*`) — Accounts add form
 - [ ] Derived/computed selectors (net worth, totals, budget health) via `state.UseComputed` — with screens
-- [ ] Error/toast surface for failed persistence — with UI primitives
+- [x] Error/toast surface for failed persistence — `uistate.Notice` atom + `app.Toast` (auto-dismiss);
+      wired the ledger bulk recategorize / mark-cleared / paired-transfer-delete sites (more to route)
 
 ### 1.7 Design system / UI primitives — `internal/ui`
 

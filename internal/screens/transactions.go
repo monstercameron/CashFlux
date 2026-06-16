@@ -65,6 +65,8 @@ func Transactions() ui.Node {
 	selected := ui.UseState(map[string]bool{})
 	bulkCat := ui.UseState("")
 	errMsg := ui.UseState("")
+	noticeAtom := uistate.UseNotice()
+	notifyErr := func(text string) { noticeAtom.Set(noticeAtom.Get().With(text, true)) }
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
 	setFilter := func(mut func(*uistate.TxFilter)) {
@@ -286,7 +288,9 @@ func Transactions() ui.Node {
 					t.TransferAccountID == target.AccountID &&
 					t.Amount.Amount == -target.Amount.Amount &&
 					t.Date.Equal(target.Date) {
-					_ = app.DeleteTransaction(t.ID)
+					if err := app.DeleteTransaction(t.ID); err != nil {
+						notifyErr("Couldn't remove the paired transfer: " + err.Error())
+					}
 					break
 				}
 			}
@@ -323,7 +327,9 @@ func Transactions() ui.Node {
 				continue
 			}
 			t.Cleared = val
-			_ = app.PutTransaction(t)
+			if err := app.PutTransaction(t); err != nil {
+				notifyErr("Couldn't update some transactions: " + err.Error())
+			}
 		}
 		selected.Set(map[string]bool{})
 		bump()
@@ -339,7 +345,9 @@ func Transactions() ui.Node {
 				continue
 			}
 			t.CategoryID = cid
-			_ = app.PutTransaction(t)
+			if err := app.PutTransaction(t); err != nil {
+				notifyErr("Couldn't recategorize some transactions: " + err.Error())
+			}
 		}
 		selected.Set(map[string]bool{})
 		bulkCat.Set("")

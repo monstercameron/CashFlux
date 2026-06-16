@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — App-wide toast surface for silent failures
+
+- Picked up TODOS §1.4 "Error/toast surface for failed persistence." Several bulk paths in the
+  ledger screen swallowed errors with `_ = app.Put…` (bulk recategorize, bulk mark cleared/uncleared,
+  and the paired-transfer delete) — so a failed write left the UI looking successful.
+- Added `uistate.Notice` (a tiny `{Seq, Text, Err}` atom; `Seq` bumps per post so identical text
+  still re-fires, `With`/`Cleared` helpers) and `app.Toast`, a single bottom-center toast mounted in
+  the Shell. It auto-dismisses via `UseEffect` keyed on `Seq` (a `setTimeout` whose cleanup clears the
+  timer and releases the `js.Func` exactly once — `Cleared()` preserves `Seq` so the fire doesn't
+  re-trigger the effect). Wired the three swallowed sites to post friendly errors.
+- **Why an atom + global component rather than per-screen error state?** Bulk/delete actions often
+  have no visible error slot (unlike the add form's `errMsg`), and the surface should be reusable by
+  any screen. One shared atom keeps it DRY and lets future call sites opt in with a one-liner.
+- **Trade-off:** kept the add form's inline `errMsg` (validation feedback belongs next to the form);
+  the toast is for incidental/background failures. Auto-dismiss timeout is a fixed 4.5s for now.
+- Verified the wasm build and native suite (toast/notice are js-only, so no native target — expected).
+- **Next.** Route more swallowed `_ = app.Put…` sites (other screens' bulk/delete) through the toast,
+  or further small polish.
+
 ## 2026-06-16 — Dashboard week boundaries honor the week-start preference
 
 - Closed the nit flagged in the previous entry: `defaultWindow` hardcoded `time.Monday`, so the

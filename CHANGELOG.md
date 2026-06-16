@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- An app-wide toast surface for transient notices, pinned to the bottom of the screen with a
+  dismiss button and a ~4.5s auto-dismiss (`uistate.Notice` atom + `app.Toast`). Bulk actions that
+  previously failed silently now report problems through it: bulk recategorize, bulk mark
+  cleared/uncleared, and removing a transfer's paired side all surface a friendly error instead of
+  swallowing it.
+
 ### Fixed
 - The dashboard's week resolution now honors the configured week-start (Sunday/Monday) instead of
   always starting weeks on Monday. The window is seeded from the saved preference on boot, and
