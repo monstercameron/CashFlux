@@ -304,6 +304,9 @@ problems and fixes, and what's next.
 
 - Extended the transaction search to match **tags** as well as descriptions (`matchesText`).
 
+- Added an **onboarding** welcome card on the Accounts screen (shown when there are no accounts) with
+  a "Load sample data" button wired to `appstate.LoadSample` + the screen's revision bump.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

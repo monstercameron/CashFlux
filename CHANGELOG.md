@@ -243,6 +243,8 @@ and every commit updates this file under `Unreleased`.
   counts) and an in-app **debug log viewer** (newest first, with Refresh) reading the slog ring buffer.
 - Accounts: a "Mark updated" action per (active) account sets its `BalanceAsOf` to today, clearing the
   staleness flag the freshness nudge surfaces.
+- Accounts: a welcome card with a "Load sample data" button when there are no accounts yet
+  (onboarding) — seeds the store via `appstate.LoadSample`.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

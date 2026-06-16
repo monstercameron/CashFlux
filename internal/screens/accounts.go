@@ -96,6 +96,14 @@ func Accounts() ui.Node {
 		bump()
 	}
 
+	loadSample := ui.UseEvent(Prevent(func() {
+		if err := app.LoadSample(); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		bump()
+	}))
+
 	typeOptions := make([]ui.Node, 0, len(domain.AllAccountTypes))
 	for _, t := range domain.AllAccountTypes {
 		typeOptions = append(typeOptions, Option(Value(string(t)), SelectedIf(accType.Get() == string(t)), humanizeType(string(t))))
@@ -148,6 +156,11 @@ func Accounts() ui.Node {
 	keyOf := func(ac domain.Account) any { return ac.ID }
 
 	return Div(
+		If(len(accounts) == 0, Section(Class("card"),
+			H2(Class("card-title"), "Welcome to CashFlux"),
+			P(Class("muted"), "No accounts yet. Add one below, or load some sample data to explore."),
+			Button(Class("btn btn-primary"), Type("button"), OnClick(loadSample), "Load sample data"),
+		)),
 		Div(Class("stat-grid"),
 			stat("Net worth", fmtMoney(net), accentFor(net)),
 			stat("Assets", fmtMoney(assets), "pos"),
