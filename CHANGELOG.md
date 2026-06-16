@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Exclude destinations in the Allocate screen: each ranked suggestion has an "Exclude" button that
+  drops it from the ranking (via the new `RankWith` constraint), and an "Excluded" section lists the
+  left-out destinations with "Restore". Updates live as you toggle.
 - Allocation exclusion constraint (`internal/allocate`): a `Constraints` struct (currently an
   `Exclude` set of candidate IDs) with `Eligible`, plus `RankWith(candidates, weights, constraints)`
   that filters ineligible candidates before ranking. Zero-value constraints make it identical to

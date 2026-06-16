@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Allocation: exclusion UI
+
+- Wired the engine constraint into the Allocate screen. An `excluded` map state feeds
+  `allocate.Constraints{Exclude: …}` into `RankWith`; excluded destinations drop out of the ranked
+  list and surface in a new "Excluded" card with Restore.
+- **Component split for hooks.** The ranked list was a plain `for`-loop of `Div`s; adding an Exclude
+  button there would put an `OnClick` hook in a loop — the cardinal sin. So the row became its own
+  `AllocRow` component (rendered via `MapKeyed`), and excluded entries are `ExcludedChip`
+  components, each owning its action hook.
+- **One toggle for both directions.** `toggleExclude(id)` adds or removes the id (cloning the map so
+  the atom gets a fresh value), so the same handler powers Exclude and Restore. Added an empty-state
+  for "everything excluded" so the list never looks mysteriously blank.
+- **Next.** Either the remaining allocation constraints (emergency buffer / max-per-destination,
+  starting again at the engine) or a different backlog item like persist-last-filter.
+
 ## 2026-06-16 — Allocation: exclusion constraint (engine)
 
 - New backlog area (allocation constraints), started bottom-up with the pure engine. Added a

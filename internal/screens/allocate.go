@@ -15,6 +15,46 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+type allocRowProps struct {
+	R         allocate.Ranked
+	OnExclude func(string)
+}
+
+// AllocRow renders one ranked suggestion with its score, breakdown bar, and an
+// Exclude action. Its own component so the action hook stays at a stable position.
+func AllocRow(props allocRowProps) ui.Node {
+	excl := ui.UseEvent(Prevent(func() { props.OnExclude(props.R.Candidate.ID) }))
+	r := props.R
+	debtNote := ""
+	if r.Candidate.DebtReduction {
+		debtNote = " · pays debt"
+	}
+	return Div(Class("budget"),
+		Div(Class("budget-head"),
+			Span(Class("row-desc"), r.Candidate.Name),
+			Span(Class("budget-amount fig"), fmt.Sprintf("%.0f%%", r.Score*100)),
+			Button(Class("btn"), Type("button"), Title("Leave this out of the suggestions"), OnClick(excl), "Exclude"),
+		),
+		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", int(r.Score*100))))),
+		Span(Class("budget-sub"), fmt.Sprintf("returns %.0f · stability %.0f · liquidity %.0f%s",
+			r.Breakdown.Returns*100, r.Breakdown.Stability*100, r.Breakdown.Liquidity*100, debtNote)),
+	)
+}
+
+type excludedChipProps struct {
+	ID, Name  string
+	OnRestore func(string)
+}
+
+// ExcludedChip is one excluded destination with a Restore action.
+func ExcludedChip(props excludedChipProps) ui.Node {
+	restore := ui.UseEvent(Prevent(func() { props.OnRestore(props.ID) }))
+	return Div(Class("row"),
+		Span(Class("row-desc"), props.Name),
+		Button(Class("btn"), Type("button"), Title("Bring this back into the suggestions"), OnClick(restore), "Restore"),
+	)
+}
+
 // allocProfiles maps a profile key to its criterion weights.
 func allocProfiles() map[string]allocate.Weights {
 	return map[string]allocate.Weights{
@@ -37,6 +77,22 @@ func Allocate() ui.Node {
 
 	profile := ui.UseState("balanced")
 	onProfile := ui.UseEvent(func(e ui.Event) { profile.Set(e.GetValue()) })
+	excluded := ui.UseState(map[string]bool{})
+	toggleExclude := func(id string) {
+		m := excluded.Get()
+		nm := make(map[string]bool, len(m)+1)
+		for k, v := range m {
+			if v {
+				nm[k] = v
+			}
+		}
+		if nm[id] {
+			delete(nm, id)
+		} else {
+			nm[id] = true
+		}
+		excluded.Set(nm)
+	}
 
 	var cands []allocate.Candidate
 	for _, a := range app.Accounts() {
@@ -69,7 +125,17 @@ func Allocate() ui.Node {
 	}
 
 	weights := allocProfiles()[profile.Get()]
-	ranked := allocate.Rank(cands, weights)
+	ranked := allocate.RankWith(cands, weights, allocate.Constraints{Exclude: excluded.Get()})
+
+	// Excluded candidates (shown in a restore list below).
+	var excludedRows []ui.Node
+	for _, c := range cands {
+		if excluded.Get()[c.ID] {
+			excludedRows = append(excludedRows, ui.CreateElement(ExcludedChip, excludedChipProps{
+				ID: c.ID, Name: c.Name, OnRestore: toggleExclude,
+			}))
+		}
+	}
 
 	// Optional AI narrative explaining the ranking (bring-your-own-key).
 	settings := app.Settings()
@@ -110,26 +176,18 @@ func Allocate() ui.Node {
 	})
 
 	var listBody ui.Node
-	if len(ranked) == 0 {
+	switch {
+	case len(ranked) == 0 && len(excludedRows) == 0:
 		listBody = P(Class("empty"), "Add asset accounts (with expected return, stability, and liquidity) or high-interest debts to get suggestions.")
-	} else {
-		rows := make([]ui.Node, 0, len(ranked))
-		for _, r := range ranked {
-			debtNote := ""
-			if r.Candidate.DebtReduction {
-				debtNote = " · pays debt"
-			}
-			rows = append(rows, Div(Class("budget"),
-				Div(Class("budget-head"),
-					Span(Class("row-desc"), r.Candidate.Name),
-					Span(Class("budget-amount fig"), fmt.Sprintf("%.0f%%", r.Score*100)),
-				),
-				Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", int(r.Score*100))))),
-				Span(Class("budget-sub"), fmt.Sprintf("returns %.0f · stability %.0f · liquidity %.0f%s",
-					r.Breakdown.Returns*100, r.Breakdown.Stability*100, r.Breakdown.Liquidity*100, debtNote)),
-			))
-		}
-		listBody = Div(rows)
+	case len(ranked) == 0:
+		listBody = P(Class("empty"), "Every destination is excluded. Restore one below to see suggestions.")
+	default:
+		listBody = Div(MapKeyed(ranked,
+			func(r allocate.Ranked) any { return r.Candidate.ID },
+			func(r allocate.Ranked) ui.Node {
+				return ui.CreateElement(AllocRow, allocRowProps{R: r, OnExclude: toggleExclude})
+			},
+		))
 	}
 
 	return Div(
@@ -149,6 +207,11 @@ func Allocate() ui.Node {
 			H2(Class("card-title"), "Where to put your money next"),
 			listBody,
 		),
+		If(len(excludedRows) > 0, Section(Class("card"),
+			H2(Class("card-title"), "Excluded"),
+			P(Class("muted"), "These are left out of the suggestions. Restore any to bring it back."),
+			Div(Class("rows"), excludedRows),
+		)),
 		If(len(ranked) > 0, Section(Class("card"),
 			H2(Class("card-title"), "Why this order?"),
 			Button(Class("btn"), Type("button"), OnClick(explain), IfElse(aiLoading.Get(), Text("Thinking…"), Text("Explain with AI"))),
