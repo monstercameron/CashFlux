@@ -34,6 +34,7 @@ func All() []Route {
 		{Path: "/insights", Label: "Insights", Title: "Insights", Subtitle: "AI analysis and advice", Phase: 2, View: Insights},
 		{Path: "/documents", Label: "Documents", Title: "Documents", Subtitle: "Import statements and receipts with AI", Phase: 2, View: Documents},
 		{Path: "/customize", Label: "Customize", Title: "Customize", Subtitle: "Custom fields and formulas", Phase: 2, View: Customize},
+		{Path: "/members", Label: "Members", Title: "Members", Subtitle: "Your household", Phase: 1, View: Members},
 		{Path: "/categories", Label: "Categories", Title: "Categories", Subtitle: "Income and expense categories", Phase: 1, View: Categories},
 		{Path: "/settings", Label: "Settings", Title: "Settings", Subtitle: "Members, currency, AI, and preferences", Phase: 1, View: Settings},
 	}

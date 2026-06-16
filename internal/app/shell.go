@@ -120,6 +120,12 @@ func Sidebar() uic.Node {
 			uic.CreateElement(navItem, navItemProps{Label: "New page", Icon: "plus", Muted: true}),
 			railHeader("System"),
 			uic.CreateElement(navItem, navItemProps{
+				Label:  "Members",
+				Path:   "/members",
+				Icon:   "users",
+				Active: current == "/members",
+			}),
+			uic.CreateElement(navItem, navItemProps{
 				Label:  "Categories",
 				Path:   "/categories",
 				Icon:   "tag",

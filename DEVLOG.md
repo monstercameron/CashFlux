@@ -261,8 +261,13 @@ problems and fixes, and what's next.
   `CategoryRow`), registered `/categories`, and surfaced it in the rail's System group with a new
   `tag` icon. Category edit + color + delete-reassignment are follow-ups.
 
-**Next:** the Members management screen, then account/transaction/budget/goal edit flows, then
-category color + sub-categories — continuing the priority-ordered Phase-1 backlog.
+- Added the **Members screen**: add (name + color picker), list with a color swatch + Default badge,
+  Make-default (flips `IsDefault` across members through the validated put path), and per-row delete
+  (`MemberRow`). Registered `/members` with a new `users` rail icon under System. Delete-guard for
+  members with owned entities is a follow-up.
+
+**Next:** edit flows (account/transaction/budget/goal full edit), member delete-guard, category
+color/sub-categories — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

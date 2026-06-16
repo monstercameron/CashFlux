@@ -225,6 +225,8 @@ and every commit updates this file under `Unreleased`.
   `ledger`).
 - Categories screen: add categories (name + income/expense), listed grouped by kind with per-row
   delete; reachable from a new "Categories" rail item (tag icon) under System.
+- Members screen: add household members (name + color), list with a color swatch, set the default
+  member, and per-row delete; reachable from a new "Members" rail item (users icon) under System.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
