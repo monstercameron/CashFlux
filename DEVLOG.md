@@ -449,7 +449,10 @@ problems and fixes, and what's next.
 - Completed the transaction **filter set** with a member picker (combines with search/account/
   category/sort and the shared Clear). Date-range filter + persisting the last filter remain.
 
-**Next:** PWA install prompt, date-range transaction filter, then Phase 2 polish — as the loop continues.
+- Added a **From/To date-range** to the transaction filters (parsed via `dateutil.ParseDate`,
+  inclusive bounds, ignored when blank/invalid), combining with the other filters and Clear.
+
+**Next:** PWA install prompt, persist-last-filter, then Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

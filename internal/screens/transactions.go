@@ -64,6 +64,8 @@ func Transactions() ui.Node {
 	filterAcc := ui.UseState("")
 	filterCat := ui.UseState("")
 	filterMember := ui.UseState("")
+	filterFrom := ui.UseState("")
+	filterTo := ui.UseState("")
 	sortBy := ui.UseState("date")
 
 	onDesc := ui.UseEvent(func(v string) {
@@ -87,11 +89,15 @@ func Transactions() ui.Node {
 	onFilterCat := ui.UseEvent(func(e ui.Event) { filterCat.Set(e.GetValue()) })
 	onSortBy := ui.UseEvent(func(e ui.Event) { sortBy.Set(e.GetValue()) })
 	onFilterMember := ui.UseEvent(func(e ui.Event) { filterMember.Set(e.GetValue()) })
+	onFilterFrom := ui.UseEvent(func(v string) { filterFrom.Set(v) })
+	onFilterTo := ui.UseEvent(func(v string) { filterTo.Set(v) })
 	clearFilters := ui.UseEvent(Prevent(func() {
 		filterText.Set("")
 		filterAcc.Set("")
 		filterCat.Set("")
 		filterMember.Set("")
+		filterFrom.Set("")
+		filterTo.Set("")
 		sortBy.Set("date")
 	}))
 
@@ -258,6 +264,17 @@ func Transactions() ui.Node {
 	fa := filterAcc.Get()
 	fc := filterCat.Get()
 	fm := filterMember.Get()
+	var fromT, toT time.Time
+	if s := strings.TrimSpace(filterFrom.Get()); s != "" {
+		if d, err := dateutil.ParseDate(s); err == nil {
+			fromT = d
+		}
+	}
+	if s := strings.TrimSpace(filterTo.Get()); s != "" {
+		if d, err := dateutil.ParseDate(s); err == nil {
+			toT = d
+		}
+	}
 	shown := make([]domain.Transaction, 0, len(txns))
 	for _, t := range txns {
 		if fa != "" && t.AccountID != fa {
@@ -267,6 +284,12 @@ func Transactions() ui.Node {
 			continue
 		}
 		if fm != "" && t.MemberID != fm {
+			continue
+		}
+		if !fromT.IsZero() && t.Date.Before(fromT) {
+			continue
+		}
+		if !toT.IsZero() && t.Date.After(toT) {
 			continue
 		}
 		if ft != "" && !matchesText(t, ft) {
@@ -324,6 +347,8 @@ func Transactions() ui.Node {
 				Select(Class("field"), OnChange(onFilterAcc), filterAccOptions),
 				Select(Class("field"), OnChange(onFilterCat), filterCatOptions),
 				Select(Class("field"), Title("Member"), OnChange(onFilterMember), filterMemberOptions),
+				Input(Class("field"), Type("date"), Title("From date"), Value(filterFrom.Get()), OnInput(onFilterFrom)),
+				Input(Class("field"), Type("date"), Title("To date"), Value(filterTo.Get()), OnInput(onFilterTo)),
 				Select(Class("field"), Title("Sort by"), OnChange(onSortBy),
 					Option(Value("date"), SelectedIf(sortBy.Get() == "date"), "Newest first"),
 					Option(Value("amount"), SelectedIf(sortBy.Get() == "amount"), "Largest amount"),
