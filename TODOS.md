@@ -366,7 +366,7 @@ Shared control components (from mockup):
 
 - [x] ★ Tokenizer (numbers, strings, idents, operators, parens, commas) — `internal/formula.Tokenize`
 - [x] ★ Parser → AST (precedence, unary, function calls) — `internal/formula.Parse`
-- [ ] ★ Evaluator with allow-list functions (`sum/avg/min/max/count/if/round/abs`) + arithmetic/compare
+- [x] ★ Evaluator with allow-list functions (`sum/avg/min/max/count/if/round/abs`) + arithmetic/compare — `internal/formula.Eval`
 - [ ] Variable resolution: core fields, custom fields, filtered aggregates over transactions
 - [ ] Typed results (number/money/percent/bool/text) + formatting
 - [ ] `Formula{ID, Name, Target, Expr, ResultType, Format, Enabled}` store + CRUD

@@ -190,6 +190,10 @@ and every commit updates this file under `Unreleased`.
 - `internal/formula`: recursive-descent `Parse` → AST (NumberLit/StringLit/Ident/Unary/Binary/Call)
   with correct precedence (comparison < additive < multiplicative < unary), left-associativity,
   parens, and function calls. Errors on malformed input. Table-driven tested via a canonical s-expr.
+- `internal/formula`: allow-list `Eval` (completes the sandboxed engine) — arithmetic, comparisons
+  (numeric + string equality), variable resolution from an `Env`, and the functions `sum/avg/min/max/
+  count/abs/round/if`. Errors on unknown var/function, arity, division/modulo by zero, and type
+  mismatch; no host access. Table-driven tested.
 - `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
   the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
   current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.

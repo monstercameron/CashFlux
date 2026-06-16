@@ -370,8 +370,15 @@ problems and fixes, and what's next.
   function calls (incl. empty/nested args). AST nodes are NumberLit/StringLit/Ident/Unary/Binary/Call.
   Tested via a canonical s-expr renderer covering precedence, calls, and malformed-input errors.
 
-**Next:** the allow-list **evaluator** (arithmetic/compare + `sum/avg/min/max/count/if/round/abs`,
-variable resolution, no escape), then `Formula` storage + the builder UI — Phase 2 bottom-up.
+- Completed the formula engine with the **evaluator** (`Eval`): `Value` is only float64/string/bool
+  (no host references); arithmetic + comparisons (numeric, plus string equality), variables resolved
+  from `Env.Vars`, and the allow-list functions `sum/avg/min/max/count/abs/round/if` (variadic where
+  apt, arity-checked otherwise; `if` truthiness over bool/number/string). Errors on unknown
+  var/function, division/modulo by zero, and type mismatch. Tests: arithmetic, comparisons, every
+  function, variable formulas (a savings-rate expression), and the error cases.
+
+**Next:** `Formula` entity + store CRUD, then surface formulas (a calculator/builder), then planning
+forecast/recurring — continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
