@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- "Save as task" on Insights: turn an AI answer/explanation into a to-do (full text in notes, source
+  tagged AI) — wiring the create-from-insight hook so suggestions become actionable.
 - Per-account "Transactions" drill-down: each account row has a button that filters the ledger to
   that account and jumps to it (sets the persisted transaction filter, then navigates).
 - "Mark all updated" on the Accounts screen: when any balances are stale, a one-click action stamps

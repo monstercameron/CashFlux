@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Insights → to-do (create-from-insight)
+
+- The Answer card now has "Save as task": it creates a `domain.Task` from the AI result (rune-safe
+  80-char title, full text in notes, `Source: SourceAI`, medium priority, open) via `PutTask`, with
+  an inline "Saved to your to-do list." confirmation that clears when a new answer is requested.
+- Wires the §1.14 "create-from-insight" backlog hook — AI advice becomes an actionable, tracked
+  to-do instead of disappearing when you leave the screen. The AI `Source` tag (long defined) now has
+  a real producer.
+- **Next.** Genuine small polish; the only large remaining item (multi-device sync) needs a backend.
+
 ## 2026-06-16 — Accounts → ledger drill-down
 
 - Each account row gets a "Transactions" button that sets the persisted `TxFilter` to that account

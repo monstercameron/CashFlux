@@ -11,6 +11,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -51,8 +53,29 @@ func Insights() ui.Node {
 	result := ui.UseState("")
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
+	saved := ui.UseState("")
 	question := ui.UseState("")
 	onQuestion := ui.UseEvent(func(v string) { question.Set(v) })
+
+	saveAsTask := ui.UseEvent(Prevent(func() {
+		r := strings.TrimSpace(result.Get())
+		if r == "" {
+			return
+		}
+		title := r
+		if rs := []rune(title); len(rs) > 80 { // rune-safe truncation for the title
+			title = strings.TrimSpace(string(rs[:80])) + "…"
+		}
+		t := domain.Task{
+			ID: id.New(), Title: title, Notes: r,
+			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceAI,
+		}
+		if err := app.PutTask(t); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		saved.Set("Saved to your to-do list.")
+	}))
 
 	explain := ui.UseEvent(func() {
 		if key == "" {
@@ -62,6 +85,7 @@ func Insights() ui.Node {
 		loading.Set(true)
 		errMsg.Set("")
 		result.Set("")
+		saved.Set("")
 		prompt := fmt.Sprintf(
 			"My figures this month — net worth: %s, income: %s, spending: %s. In 3-4 friendly sentences, explain how my month went and one thing I could do next.",
 			fmtMoney(net), fmtMoney(income), fmtMoney(expense),
@@ -89,6 +113,7 @@ func Insights() ui.Node {
 		loading.Set(true)
 		errMsg.Set("")
 		result.Set("")
+		saved.Set("")
 		ctx := fmt.Sprintf("Context — net worth: %s, this month's income: %s, spending: %s, across %d active accounts.",
 			fmtMoney(net), fmtMoney(income), fmtMoney(expense), active)
 		messages := []ai.Message{
@@ -129,6 +154,8 @@ func Insights() ui.Node {
 		If(result.Get() != "", Section(Class("card"),
 			H2(Class("card-title"), "Answer"),
 			P(result.Get()),
+			Button(Class("btn"), Type("button"), Title("Save this as a to-do task"), OnClick(saveAsTask), "Save as task"),
+			If(saved.Get() != "", Span(Class("muted"), Style(map[string]string{"margin-left": "0.5rem"}), saved.Get())),
 		)),
 	)
 }

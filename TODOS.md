@@ -273,7 +273,7 @@ Shared control components (from mockup):
 - [x] List (open/done) with due + priority
 - [x] Add + complete-toggle + delete + inline edit (title, priority, due, notes); linking later
 - [~] Sort (open first, then due, then title) + hide-done filter done; more filters later
-- [ ] Create-from-nudge and create-from-insight hooks (P2 wires AI source)
+- [~] Create-from-insight hook done (Insights "Save as task" → AI-sourced to-do); create-from-nudge later
 - [ ] Tests: ordering, status transitions
 
 ### 1.15 Freshness & friendly nudges
