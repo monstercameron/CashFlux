@@ -26,6 +26,16 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — AI guardrails: explicit FinancialContext
+
+- Added pure `ai.FinancialContext{NetWorth, Income, Spending, Accounts}` + `Line()`, and routed both
+  Insights prompts (explain + ask) through it. The guardrail is structural: the only thing that can go
+  into the prompt's context is those four aggregate fields — there's no field for payees, account
+  numbers, or per-transaction rows, so a future edit can't accidentally widen what's sent. The scope
+  now lives in one reviewable, tested place instead of two inline Sprintf strings.
+- Dropped the now-unused `fmt` import from insights.go. ai test (incl. a no-leak assertion) + wasm
+  green. This is the §2.3 "guardrails + pure prompt-assembly tests" item.
+
 ## 2026-06-16 — documents import-history list UI
 
 - Added an "Import history" card to the Documents screen: `app.Documents()` sorted newest-first,

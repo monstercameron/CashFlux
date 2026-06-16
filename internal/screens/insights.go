@@ -3,7 +3,6 @@
 package screens
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -52,6 +51,8 @@ func Insights() ui.Node {
 			active++
 		}
 	}
+	// The only financial data sent to the model: aggregates, no PII (see ai.FinancialContext).
+	aiCtx := ai.FinancialContext{NetWorth: fmtMoney(net), Income: fmtMoney(income), Spending: fmtMoney(expense), Accounts: active}
 
 	result := ui.UseState("")
 	loading := ui.UseState(false)
@@ -91,10 +92,7 @@ func Insights() ui.Node {
 		result.Set("")
 		saved.Set("")
 		usage.Set(ai.Usage{})
-		prompt := fmt.Sprintf(
-			"My figures this month — net worth: %s, income: %s, spending: %s. In 3-4 friendly sentences, explain how my month went and one thing I could do next.",
-			fmtMoney(net), fmtMoney(income), fmtMoney(expense),
-		)
+		prompt := aiCtx.Line() + " In 3-4 friendly sentences, explain how my month went and one thing I could do next."
 		messages := []ai.Message{
 			{Role: ai.RoleSystem, Content: "You are a concise, encouraging personal-finance assistant. Plain English, no jargon."},
 			{Role: ai.RoleUser, Content: prompt},
@@ -120,11 +118,9 @@ func Insights() ui.Node {
 		result.Set("")
 		saved.Set("")
 		usage.Set(ai.Usage{})
-		ctx := fmt.Sprintf("Context — net worth: %s, this month's income: %s, spending: %s, across %d active accounts.",
-			fmtMoney(net), fmtMoney(income), fmtMoney(expense), active)
 		messages := []ai.Message{
 			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant. Answer using the provided context; if it isn't enough, say what's missing. Plain English, no jargon."},
-			{Role: ai.RoleUser, Content: ctx + "\n\nQuestion: " + q},
+			{Role: ai.RoleUser, Content: "Context — " + aiCtx.Line() + "\n\nQuestion: " + q},
 		}
 		ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4,
 			func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },

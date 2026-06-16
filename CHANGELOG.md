@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- The data CashFlux sends to OpenAI for insights is now a single explicit, tested
+  `ai.FinancialContext` — by construction only aggregate totals and an account count, never payees,
+  account numbers, or per-transaction detail. Both "Explain my month" and "Ask about your money" build
+  their prompt from it, so the privacy scope is reviewable in one place rather than inlined per call.
+
 ### Added
 - The Documents screen now has an **Import history** card listing every recorded import (newest
   first) — kind, date, status, row count, and target account — each removable. Completes the document

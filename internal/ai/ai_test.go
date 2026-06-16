@@ -122,6 +122,22 @@ func TestBuildRequestRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFinancialContextLine(t *testing.T) {
+	c := FinancialContext{NetWorth: "$12,000.00", Income: "$4,200.00", Spending: "$2,600.00", Accounts: 5}
+	got := c.Line()
+	want := "Net worth $12,000.00, this month's income $4,200.00, spending $2,600.00, across 5 active accounts."
+	if got != want {
+		t.Errorf("Line() = %q, want %q", got, want)
+	}
+	// Guardrail: the rendered line carries only the four aggregate fields we set —
+	// no extra detail can leak through a struct with no other text fields.
+	for _, leak := range []string{"payee", "account #", "transaction"} {
+		if strings.Contains(strings.ToLower(got), leak) {
+			t.Errorf("context line unexpectedly contains %q: %q", leak, got)
+		}
+	}
+}
+
 func TestBuildStructuredRequest(t *testing.T) {
 	schema := json.RawMessage(`{"type":"object","properties":{"total":{"type":"number"}},"required":["total"]}`)
 	msgs := []Message{{Role: RoleUser, Content: "How much did I spend?"}}

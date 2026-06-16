@@ -62,6 +62,24 @@ func BuildRequest(model string, messages []Message, temperature float64) ([]byte
 	return json.Marshal(ChatRequest{Model: model, Messages: messages, Temperature: temperature})
 }
 
+// FinancialContext is the minimal, aggregate snapshot sent to the model for
+// insights. By construction it holds only pre-formatted totals and an account
+// count — never account names/numbers, payees, or any per-transaction detail —
+// so an insights prompt can't leak identifying data. Callers format the money at
+// the edge and hand over only these aggregates.
+type FinancialContext struct {
+	NetWorth string
+	Income   string
+	Spending string
+	Accounts int
+}
+
+// Line renders the context as one plain-English sentence for a prompt.
+func (c FinancialContext) Line() string {
+	return fmt.Sprintf("Net worth %s, this month's income %s, spending %s, across %d active accounts.",
+		c.NetWorth, c.Income, c.Spending, c.Accounts)
+}
+
 // JSONSchema names a JSON Schema for an OpenAI structured-output request. Strict
 // constrains the model to match the schema exactly.
 type JSONSchema struct {

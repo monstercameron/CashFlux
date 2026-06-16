@@ -897,8 +897,11 @@ Shared control components (from mockup):
 - [~] Pin/save insights; show top insight on dashboard — **top insight on dashboard done**
       (`screens.topHighlightWidget`: the #1 spending anomaly as a bento tile, shared detection/wording
       with the Insights card). Still TODO: pinning/saving an AI-generated insight for later.
-- [ ] Guardrails: scope data sent, redact where possible
-- [ ] Tests: prompt assembly, data-context selection (pure parts)
+- [x] Guardrails: scope data sent — insights prompts build from a pure `ai.FinancialContext` that by
+      construction carries only aggregates (no payees/account numbers/per-transaction detail), so the
+      privacy scope is explicit and reviewable in one place.
+- [x] Tests: prompt assembly, data-context selection (pure parts) — `ai.FinancialContext.Line()` is
+      table-tested (incl. a no-leak assertion).
 
 ### 2.4 Auto-categorization & Rules
 
