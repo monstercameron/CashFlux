@@ -490,6 +490,10 @@ problems and fixes, and what's next.
   ranked candidates + profile and runs `ai.SendChat`, reusing the loading/result/error pattern. Hooks
   (states + handler) are placed after the unconditional `ranked` so their order stays stable.
 
+- Refreshed the **`CLAUDE.md` status** line (was stuck at "Phase 0 … Phase 1 not yet started") to
+  reflect reality for future sessions: Phase 1 complete, Phase 2 engines+screens live, Phase 3 PWA +
+  CI in, with the remaining work (sync, custom fields, vision AI, reload-persistent prefs) noted.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

@@ -24,7 +24,17 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
 - **Entry point:** `main.go` (currently a Phase 0 smoke shell). App is mounted via the `router`.
 - **Top gotcha:** never call `On*` prop options inside a variable-length loop — wrap per-row
   interactive elements in their own component (see framework notes §"CRITICAL gotchas").
-- **Status:** Phase 0 (toolchain + wiring done, wasm builds). Phase 1 not yet started.
+- **Status:** Phases 1–3 substantially built. **Phase 1 complete**: pure tested logic
+  (`money`/`currency`/`ledger`/`budgeting`/`goals`/`freshness`/`validate`/`dateutil`/`id`), SQLite
+  store + JSON/CSV import-export, `appstate` seam, the **candidate-C bento UI** (reconfigurable +
+  `localStorage`-persistent), and all screens (Accounts incl. liability sub-form/archive/stale,
+  Transactions incl. transfers/filters/sort/tags/repeat, Budgets, Goals, To-do, Members, Categories,
+  Settings w/ log viewer). **Phase 2**: tested engines `payoff`/`allocate`/`forecast`/`formula`(lexer
+  +parser+evaluator)/`rules`/`ai`(codec+fetch) behind live screens (Planning w/ payoff + forecast
+  what-ifs, Allocate w/ ranking + AI narrative, Customize formula calculator, Documents CSV import,
+  Insights "explain my month" + NL Q&A). **Phase 3 (PWA)**: manifest + offline service worker +
+  install prompt; GitHub Actions CI. Remaining: sync server/client (Phase 3), custom-field defs,
+  document vision AI, reload-persistent prefs. See `TODOS.md` for the live checklist.
 - **Hard rules:** build **bottom-up** (data model → services/logic with tests → persistence → state
   → UI last; never UI-first); one feature per commit; update CHANGELOG + DEVLOG each commit; pure
   idiomatic Go; logic packages have no `syscall/js` and are unit-tested; `log/slog` only;
