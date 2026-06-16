@@ -242,7 +242,7 @@ func Accounts() ui.Node {
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
 		return ui.CreateElement(AccountRow, accountRowProps{
-			Account: ac, Balance: bal, Stale: freshness.IsStale(ac, windows, now),
+			Account: ac, Balance: bal, Stale: freshness.IsStale(ac, windows, now), Members: app.Members(),
 			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount, OnSave: saveAccount,
 		})
 	}
@@ -293,6 +293,7 @@ type accountRowProps struct {
 	Account   domain.Account
 	Balance   money.Money
 	Stale     bool
+	Members   []domain.Member
 	OnDelete  func(string)
 	OnArchive func(domain.Account)
 	OnRefresh func(domain.Account)
@@ -344,6 +345,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	retS := ui.UseState(floatOrEmpty(a.ExpectedReturnAPR))
 	liqS := ui.UseState(intOrEmpty(a.LiquidityScore))
 	stabS := ui.UseState(intOrEmpty(a.StabilityScore))
+	ownerS := ui.UseState(a.OwnerID)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
 	onClim := ui.UseEvent(func(v string) { climS.Set(v) })
@@ -354,6 +356,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	onRet := ui.UseEvent(func(v string) { retS.Set(v) })
 	onLiq := ui.UseEvent(func(v string) { liqS.Set(v) })
 	onStab := ui.UseEvent(func(v string) { stabS.Set(v) })
+	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(a.Name)
 		balS.Set(money.FormatMinor(a.OpeningBalance.Amount, dec))
@@ -365,12 +368,19 @@ func AccountRow(props accountRowProps) ui.Node {
 		retS.Set(floatOrEmpty(a.ExpectedReturnAPR))
 		liqS.Set(intOrEmpty(a.LiquidityScore))
 		stabS.Set(intOrEmpty(a.StabilityScore))
+		ownerS.Set(a.OwnerID)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
 		cp := a
 		cp.Name = strings.TrimSpace(nameS.Get())
+		cp.OwnerID = ownerS.Get()
+		if ownerS.Get() == domain.GroupOwnerID {
+			cp.Scope = domain.ScopeShared
+		} else {
+			cp.Scope = domain.ScopeIndividual
+		}
 		if amt, err := money.ParseMinor(strings.TrimSpace(balS.Get()), dec); err == nil {
 			cp.OpeningBalance = money.New(amt, a.Currency)
 		}
@@ -394,6 +404,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
 				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
+				Select(Class("field"), Title("Owner"), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
 				Input(Class("field"), Type("number"), Placeholder("Opening balance"), Value(balS.Get()), Step("0.01"), OnInput(onBal)),
 				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Credit limit"), Value(climS.Get()), Step("0.01"), OnInput(onClim))),
 				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Interest APR %"), Value(aprS.Get()), Step("0.01"), OnInput(onApr))),

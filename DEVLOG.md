@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Accounts: editable owner (ownership editing uniform)
+
+- Added the owner picker to the account inline editor. Since `AccountRow` already builds a `cp` copy
+  on save, this just sets `cp.OwnerID`/`cp.Scope` from the new `ownerS` and adds the select (reusing
+  `ownerSelectOptions`).
+- Ownership is now editable inline everywhere it can be owned — accounts, budgets, goals — closing
+  the "ownership assignment UI" gap beyond the create-time selectors and the member-delete reassign.
+- **Next.** The local, single-device feature set is now effectively complete (every entity: create /
+  edit / delete / reassign; full budgeting/goals/planning/allocation/AI/documents/customization/
+  preferences/PWA). The one remaining large backlog item, Phase-3 multi-device sync, needs a hosted
+  backend and per-entity version metadata — out of scope for this local-first build to implement
+  meaningfully. Will keep doing contained polish where it adds real value.
+
 ## 2026-06-16 — Goals: editable owner
 
 - Added the owner picker to the goal inline editor too, reusing `ownerSelectOptions`. `saveGoal`
