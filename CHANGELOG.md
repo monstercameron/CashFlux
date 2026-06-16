@@ -77,6 +77,9 @@ and every commit updates this file under `Unreleased`.
 - The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
   panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
   with a shared `owner.group` key.
+- The Budgets screen's verbiage is now on the language store (add form, period picker, month stepper,
+  spent/budgeted/left stats, over/near summary, and budget rows incl. on-track/near/over labels), and
+  the shared `ownerSelectOptions` owner picker now localizes "Group (shared)".
 - The Goals screen's verbiage is now on the language store (add form, owner/linked-account pickers,
   combined-progress stats, the progress sub-line incl. complete/by-date/save-per-month/linked
   fragments, contribute prompt, and row actions).

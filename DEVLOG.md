@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Budgets screen migrated (+ shared owner picker)
+
+- Fifth screen onto i18n: `budgets.go` — add form (incl. `Limit (%s)` via T args), period picker, month
+  stepper titles, spent/budgeted/left stats, the over/near summary, and budget rows (on-track/near/over
+  labels, the `%s · %s · %d%% · %s left` sub via T args, edit/delete).
+- Also localized the **shared** `ownerSelectOptions` helper ("Group (shared)" → `owner.group`), which
+  the budgets add-form now uses (replaced its inline duplicate) and which goals' edit row also calls —
+  so two screens' owner pickers are covered at once. Added shared `common.owner`.
+- Period option labels still come from `domain.Period.Label()` (enum-level), left as-is. `fmt` stays
+  for the CSS bar width. `i18n` tests + wasm green.
+- **Next:** Accounts (the largest) or Transactions screen.
+
 ## 2026-06-16 — i18n: Goals screen migrated
 
 - Fourth screen onto i18n: `goals.go` — add form (incl. `Target (%s)` placeholder via T args), owner +

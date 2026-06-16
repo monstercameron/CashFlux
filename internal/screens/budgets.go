@@ -26,7 +26,7 @@ import (
 func Budgets() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:budgets", 0)
@@ -85,7 +85,7 @@ func Budgets() ui.Node {
 	add := ui.UseEvent(Prevent(func() {
 		amt, err := money.ParseMinor(strings.TrimSpace(limit.Get()), currency.Decimals(base))
 		if err != nil || amt <= 0 {
-			errMsg.Set("Enter a positive limit.")
+			errMsg.Set(uistate.T("budgets.limitRequired"))
 			return
 		}
 		scope := domain.ScopeIndividual
@@ -126,7 +126,7 @@ func Budgets() ui.Node {
 			}
 			amt, err := money.ParseMinor(strings.TrimSpace(limitStr), currency.Decimals(base))
 			if err != nil || amt <= 0 {
-				errMsg.Set("Enter a positive limit.")
+				errMsg.Set(uistate.T("budgets.limitRequired"))
 				return
 			}
 			b.Limit = money.New(amt, base)
@@ -151,28 +151,25 @@ func Budgets() ui.Node {
 
 	var formCard ui.Node
 	if len(expenseCats) == 0 {
-		formCard = Section(Class("card"), P(Class("empty"), "Add an expense category first, then create budgets."))
+		formCard = Section(Class("card"), P(Class("empty"), uistate.T("budgets.needCategory")))
 	} else {
 		catOptions := make([]ui.Node, 0, len(expenseCats))
 		for _, c := range expenseCats {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
 		}
-		ownerOptions := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), "Group (shared)")}
-		for _, m := range app.Members() {
-			ownerOptions = append(ownerOptions, Option(Value(m.ID), SelectedIf(owner.Get() == m.ID), m.Name))
-		}
+		ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 		formCard = Section(Class("card"),
-			H2(Class("card-title"), "Add budget"),
+			H2(Class("card-title"), uistate.T("budgets.add")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(Class("field"), Type("text"), Placeholder("Name"), Value(name.Get()), OnInput(onName)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
 				Select(Class("field"), OnChange(onCat), catOptions),
 				Select(Class("field"), OnChange(onOwner), ownerOptions),
-				Select(Class("field"), Title("Period"), OnChange(onPeriod), periodOptions(period.Get())),
-				Input(Class("field"), Type("number"), Placeholder("Limit ("+base+")"), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
+				Select(Class("field"), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get())),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
 				MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
-				Button(Class("btn btn-primary"), Type("submit"), "Add"),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 			),
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 		)
@@ -208,7 +205,7 @@ func Budgets() ui.Node {
 
 	var listBody ui.Node
 	if len(statuses) == 0 {
-		listBody = P(Class("empty"), "No budgets yet.")
+		listBody = P(Class("empty"), uistate.T("budgets.empty"))
 	} else {
 		rows := MapKeyed(statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
@@ -222,20 +219,20 @@ func Budgets() ui.Node {
 	return Div(
 		formCard,
 		If(len(statuses) > 0, Div(Class("stat-grid"),
-			stat("Spent", fmtMoney(money.New(totalSpent, base)), "neg"),
-			stat("Budgeted", fmtMoney(money.New(totalLimit, base)), ""),
-			stat("Left", fmtMoney(money.New(totalLimit-totalSpent, base)), accentFor(money.New(totalLimit-totalSpent, base))),
+			stat(uistate.T("budgets.spent"), fmtMoney(money.New(totalSpent, base)), "neg"),
+			stat(uistate.T("budgets.budgeted"), fmtMoney(money.New(totalLimit, base)), ""),
+			stat(uistate.T("budgets.left"), fmtMoney(money.New(totalLimit-totalSpent, base)), accentFor(money.New(totalLimit-totalSpent, base))),
 		)),
 		Section(Class("card"),
 			Div(Class("budget-head"),
-				H2(Class("card-title"), "Budgets"),
+				H2(Class("card-title"), uistate.T("nav.budgets")),
 				Span(Class("rpill"),
-					Button(Class("rstep"), Type("button"), Title("Previous month"), OnClick(prevMonth), "‹"),
+					Button(Class("rstep"), Type("button"), Title(uistate.T("budgets.prevMonth")), OnClick(prevMonth), "‹"),
 					Span(Class("rlabel fig"), viewMonth.Format("January 2006")),
-					Button(Class("rstep"), Type("button"), Title("Next month"), OnClick(nextMonth), "›"),
+					Button(Class("rstep"), Type("button"), Title(uistate.T("budgets.nextMonth")), OnClick(nextMonth), "›"),
 				),
 			),
-			If(overCount > 0 || nearCount > 0, P(Class("budget-sub"), fmt.Sprintf("%d over budget · %d near the limit", overCount, nearCount))),
+			If(overCount > 0 || nearCount > 0, P(Class("budget-sub"), uistate.T("budgets.overNear", overCount, nearCount))),
 			listBody,
 		),
 	)
@@ -261,7 +258,7 @@ func periodOptions(selected string) []ui.Node {
 // ownerSelectOptions builds owner <option>s (the shared group plus each member)
 // with selected marked — used wherever an entity's owner can be chosen.
 func ownerSelectOptions(members []domain.Member, selected string) []ui.Node {
-	opts := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(selected == domain.GroupOwnerID), "Group (shared)")}
+	opts := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(selected == domain.GroupOwnerID), uistate.T("owner.group"))}
 	for _, m := range members {
 		opts = append(opts, Option(Value(m.ID), SelectedIf(selected == m.ID), m.Name))
 	}
@@ -301,12 +298,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	if editing.Get() {
 		return Div(Class("budget"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
-				Input(Class("field"), Type("number"), Placeholder("Limit"), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
-				Select(Class("field"), Title("Period"), OnChange(onPeriod), periodOptions(periodS.Get())),
-				Select(Class("field"), Title("Owner"), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
-				Button(Class("btn btn-primary"), Type("submit"), "Save"),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
+				Select(Class("field"), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(periodS.Get())),
+				Select(Class("field"), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -318,14 +315,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		width = 100
 	}
 	fillClass := "bar-fill"
-	label := "On track"
+	label := uistate.T("budgets.onTrack")
 	switch s.State {
 	case budgeting.StateNear:
 		fillClass = "bar-fill near"
-		label = "Near limit"
+		label = uistate.T("budgets.nearLimit")
 	case budgeting.StateOver:
 		fillClass = "bar-fill over"
-		label = "Over budget"
+		label = uistate.T("budgets.overBudget")
 	}
 
 	title := s.Budget.Name
@@ -337,10 +334,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), title),
 			Span(Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
-			Button(Class("btn"), Type("button"), Title("Edit budget"), OnClick(startEdit), "Edit"),
-			Button(Class("btn-del"), Type("button"), Title("Delete budget"), OnClick(del), "✕"),
+			Button(Class("btn"), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+			Button(Class("btn-del"), Type("button"), Title(uistate.T("budgets.deleteTitle")), OnClick(del), "✕"),
 		),
 		Div(Class("bar"), Div(Class(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-		Span(Class("budget-sub"), fmt.Sprintf("%s · %s · %d%% · %s left", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
+		Span(Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
 	)
 }

@@ -65,6 +65,29 @@ var english = Catalog{
 	"categories.editTitle":      "Edit category",
 	"categories.deleteTitle":    "Delete category",
 
+	"common.owner": "Owner",
+
+	// Budgets screen
+	"budgets.add":              "Add budget",
+	"budgets.needCategory":     "Add an expense category first, then create budgets.",
+	"budgets.limitRequired":    "Enter a positive limit.",
+	"budgets.limitPlaceholder": "Limit (%s)",
+	"budgets.limitLabel":       "Limit",
+	"budgets.period":           "Period",
+	"budgets.empty":            "No budgets yet.",
+	"budgets.spent":            "Spent",
+	"budgets.budgeted":         "Budgeted",
+	"budgets.left":             "Left",
+	"budgets.prevMonth":        "Previous month",
+	"budgets.nextMonth":        "Next month",
+	"budgets.overNear":         "%d over budget · %d near the limit",
+	"budgets.onTrack":          "On track",
+	"budgets.nearLimit":        "Near limit",
+	"budgets.overBudget":       "Over budget",
+	"budgets.editTitle":        "Edit budget",
+	"budgets.deleteTitle":      "Delete budget",
+	"budgets.rowSub":           "%s · %s · %d%% · %s left",
+
 	// Goals screen
 	"goals.add":               "Add goal",
 	"goals.targetPlaceholder": "Target (%s)",
