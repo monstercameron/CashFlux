@@ -39,7 +39,31 @@ var english = Catalog{
 	"action.close":  "Close",
 
 	// Shared
-	"common.notReady": "App state is not ready yet.",
+	"common.notReady":      "App state is not ready yet.",
+	"common.name":          "Name",
+	"common.reassignTitle": "Reassign before deleting",
+	"common.moveAndDelete": "Move and delete",
+
+	// Category kind (shared)
+	"category.expense": "Expense",
+	"category.income":  "Income",
+
+	// Categories screen
+	"categories.add":            "Add category",
+	"categories.nameRequired":   "Enter a category name.",
+	"categories.pickDifferent":  "Pick a different category to move these into.",
+	"categories.noParentTop":    "— No parent (top level) —",
+	"categories.noParent":       "— No parent —",
+	"categories.chooseCategory": "— Choose category —",
+	"categories.parentOptional": "Parent category (optional)",
+	"categories.parent":         "Parent category",
+	"categories.reassignDesc":   "%q is used by %d transaction(s) or budget(s). Move them to another category, then it will be deleted.",
+	"categories.expenseTitle":   "Expense categories",
+	"categories.incomeTitle":    "Income categories",
+	"categories.expenseEmpty":   "No expense categories yet.",
+	"categories.incomeEmpty":    "No income categories yet.",
+	"categories.editTitle":      "Edit category",
+	"categories.deleteTitle":    "Delete category",
 
 	// Priority (shared)
 	"priority.high":   "High",

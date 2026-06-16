@@ -3,13 +3,13 @@
 package screens
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -20,7 +20,7 @@ import (
 func Categories() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:categories", 0)
@@ -44,7 +44,7 @@ func Categories() ui.Node {
 	add := ui.UseEvent(Prevent(func() {
 		n := strings.TrimSpace(name.Get())
 		if n == "" {
-			errMsg.Set("Enter a category name.")
+			errMsg.Set(uistate.T("categories.nameRequired"))
 			return
 		}
 		c := domain.Category{ID: id.New(), Name: n, Kind: domain.CategoryKind(kind.Get()), ParentID: parentID.Get()}
@@ -94,7 +94,7 @@ func Categories() ui.Node {
 		from := reassignID.Get()
 		to := reassignTo.Get()
 		if to == "" || to == from {
-			errMsg.Set("Pick a different category to move these into.")
+			errMsg.Set(uistate.T("categories.pickDifferent"))
 			return
 		}
 		if _, err := app.ReassignCategory(from, to); err != nil {
@@ -111,8 +111,8 @@ func Categories() ui.Node {
 	}))
 
 	kindOptions := []ui.Node{
-		Option(Value(string(domain.KindExpense)), SelectedIf(kind.Get() == string(domain.KindExpense)), "Expense"),
-		Option(Value(string(domain.KindIncome)), SelectedIf(kind.Get() == string(domain.KindIncome)), "Income"),
+		Option(Value(string(domain.KindExpense)), SelectedIf(kind.Get() == string(domain.KindExpense)), uistate.T("category.expense")),
+		Option(Value(string(domain.KindIncome)), SelectedIf(kind.Get() == string(domain.KindIncome)), uistate.T("category.income")),
 	}
 
 	// Parent options: existing categories of the chosen kind, indented by depth.
@@ -122,18 +122,18 @@ func Categories() ui.Node {
 			kindCats = append(kindCats, c)
 		}
 	}
-	parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentID.Get() == ""), "— No parent (top level) —")}
+	parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentID.Get() == ""), uistate.T("categories.noParentTop"))}
 	for _, f := range categorytree.Flatten(kindCats) {
 		parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentID.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
 	}
 
 	form := Section(Class("card"),
-		H2(Class("card-title"), "Add category"),
+		H2(Class("card-title"), uistate.T("categories.add")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Placeholder("Name"), Value(name.Get()), OnInput(onName)),
+			Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
 			Select(Class("field"), OnChange(onKind), kindOptions),
-			Select(Class("field"), Title("Parent category (optional)"), OnChange(onParent), parentOpts),
-			Button(Class("btn btn-primary"), Type("submit"), "Add"),
+			Select(Class("field"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
+			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 	)
@@ -179,7 +179,7 @@ func Categories() ui.Node {
 	reassignPanel := Fragment()
 	if rid := reassignID.Get(); rid != "" {
 		target := catByID[rid]
-		opts := []ui.Node{Option(Value(""), SelectedIf(reassignTo.Get() == ""), "— Choose category —")}
+		opts := []ui.Node{Option(Value(""), SelectedIf(reassignTo.Get() == ""), uistate.T("categories.chooseCategory"))}
 		for _, c := range cats {
 			if c.ID == rid {
 				continue
@@ -187,12 +187,12 @@ func Categories() ui.Node {
 			opts = append(opts, Option(Value(c.ID), SelectedIf(reassignTo.Get() == c.ID), c.Name))
 		}
 		reassignPanel = Section(Class("card"),
-			H2(Class("card-title"), "Reassign before deleting"),
-			P(Class("muted"), fmt.Sprintf("%q is used by %d transaction(s) or budget(s). Move them to another category, then it will be deleted.", target.Name, categoryUsage(rid))),
+			H2(Class("card-title"), uistate.T("common.reassignTitle")),
+			P(Class("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
 			Form(Class("form-grid"), OnSubmit(confirmReassign),
 				Select(Class("field"), OnChange(onReassignTo), opts),
-				Button(Class("btn btn-primary"), Type("submit"), "Move and delete"),
-				Button(Class("btn"), Type("button"), OnClick(cancelReassign), "Cancel"),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
+				Button(Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -201,12 +201,12 @@ func Categories() ui.Node {
 		form,
 		reassignPanel,
 		Section(Class("card"),
-			H2(Class("card-title"), "Expense categories"),
-			IfElse(len(expenseList) == 0, P(Class("empty"), "No expense categories yet."), Div(Class("rows"), MapKeyed(categorytree.Flatten(expenseList), flatKey, renderFlat))),
+			H2(Class("card-title"), uistate.T("categories.expenseTitle")),
+			IfElse(len(expenseList) == 0, P(Class("empty"), uistate.T("categories.expenseEmpty")), Div(Class("rows"), MapKeyed(categorytree.Flatten(expenseList), flatKey, renderFlat))),
 		),
 		Section(Class("card"),
-			H2(Class("card-title"), "Income categories"),
-			IfElse(len(incomeList) == 0, P(Class("empty"), "No income categories yet."), Div(Class("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
+			H2(Class("card-title"), uistate.T("categories.incomeTitle")),
+			IfElse(len(incomeList) == 0, P(Class("empty"), uistate.T("categories.incomeEmpty")), Div(Class("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
 		),
 	)
 }
@@ -259,20 +259,20 @@ func CategoryRow(props categoryRowProps) ui.Node {
 				sameKind = append(sameKind, cc)
 			}
 		}
-		parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentS.Get() == ""), "— No parent —")}
+		parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentS.Get() == ""), uistate.T("categories.noParent"))}
 		for _, f := range categorytree.Flatten(sameKind) {
 			parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentS.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
 		}
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
 				Select(Class("field"), OnChange(onKind),
-					Option(Value(string(domain.KindExpense)), SelectedIf(kindS.Get() == string(domain.KindExpense)), "Expense"),
-					Option(Value(string(domain.KindIncome)), SelectedIf(kindS.Get() == string(domain.KindIncome)), "Income"),
+					Option(Value(string(domain.KindExpense)), SelectedIf(kindS.Get() == string(domain.KindExpense)), uistate.T("category.expense")),
+					Option(Value(string(domain.KindIncome)), SelectedIf(kindS.Get() == string(domain.KindIncome)), uistate.T("category.income")),
 				),
-				Select(Class("field"), Title("Parent category"), OnChange(onParent), parentOpts),
-				Button(Class("btn btn-primary"), Type("submit"), "Save"),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+				Select(Class("field"), Title(uistate.T("categories.parent")), OnChange(onParent), parentOpts),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -281,12 +281,16 @@ func CategoryRow(props categoryRowProps) ui.Node {
 	if props.Depth > 0 {
 		desc = indentLabel(props.Depth) + c.Name // visually nest sub-categories
 	}
+	kindLabel := uistate.T("category.expense")
+	if c.Kind == domain.KindIncome {
+		kindLabel = uistate.T("category.income")
+	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), desc),
-			Span(Class("row-meta"), humanizeType(string(c.Kind))),
+			Span(Class("row-meta"), kindLabel),
 		),
-		Button(Class("btn"), Type("button"), Title("Edit category"), OnClick(startEdit), "Edit"),
-		Button(Class("btn-del"), Type("button"), Title("Delete category"), OnClick(del), "✕"),
+		Button(Class("btn"), Type("button"), Title(uistate.T("categories.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("categories.deleteTitle")), OnClick(del), "✕"),
 	)
 }

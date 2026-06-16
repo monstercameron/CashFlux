@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Categories screen migrated
+
+- Third screen onto i18n: `categories.go` fully migrated — add form, kind + parent pickers (incl. the
+  inline-edit ones), reassign-before-delete panel (templated description via `T` args), income/expense
+  list cards + empty states, and row edit/delete + the kind meta (replaced the `humanizeType` call with
+  `category.income`/`category.expense`).
+- Introduced shared keys to curb sprawl: `common.name`, `common.reassignTitle`, `common.moveAndDelete`,
+  and `category.expense`/`category.income`. (Members still has its own reassign/name keys — a tiny
+  later convergence; not worth churn now.)
+- Dropped the unused `fmt` import; added the missing `uistate` import. `i18n` tests + wasm green.
+- **Next:** Goals or Budgets screen. 5 screens migrated after this (shell, todo, members, categories;
+  + chrome).
+
 ## 2026-06-16 — i18n: Members screen migrated
 
 - Second screen onto i18n: `members.go` fully migrated — add form, the reassign-before-delete panel
