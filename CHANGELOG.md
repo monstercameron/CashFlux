@@ -175,6 +175,9 @@ and every commit updates this file under `Unreleased`.
   a `ProgressBar` (toned green/red).
 - Spending breakdown widget (2×1): a segmented bar of the period's expenses by category (top three
   plus "Other") with a color-keyed legend; totals converted to base currency.
+- Upcoming bills widget (2×1): the next due date and minimum payment for each liability account that
+  has them, soonest first, with due dates within a week toned amber. Completes the candidate-C widget
+  catalog (12 widgets).
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

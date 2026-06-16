@@ -157,8 +157,12 @@ problems and fixes, and what's next.
   all converted to base currency, sorted desc). Both reuse the `Widget` shell; breakdown reuses the
   window range already computed in `Dashboard`.
 
-**Next:** the **Upcoming bills** widget (from liability accounts' due day + min payment), then the
-per-widget settings wiring (target atom + form + FlipPanel host) and global settings.
+- Added the **Upcoming bills** widget (2×1), completing the 12-widget catalog: next due date + min
+  payment per liability account (clamped due-day, soonest first, within-a-week dates toned amber),
+  via a small `nextDue` helper. The whole candidate-C bento is now live data on the reusable shells.
+
+**Next:** the per-widget settings wiring (settings-target atom + form built from the control
+primitives + `FlipPanel` host mounted at the shell root), then global settings, then drag/resize.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

@@ -84,7 +84,68 @@ func Dashboard() ui.Node {
 		cashFlowWidget(txns, rates),
 		savingsRateWidget(income, expense),
 		spendingBreakdownWidget(app, txns, rates, start, end),
+		upcomingBillsWidget(app),
 	)
+}
+
+// upcomingBillsWidget is the 2×1 Upcoming bills widget: the next due date and
+// minimum payment for each liability account that has them, soonest first.
+func upcomingBillsWidget(app *appstate.App) ui.Node {
+	now := time.Now()
+	type bill struct {
+		name   string
+		due    time.Time
+		amount money.Money
+	}
+	var bills []bill
+	for _, a := range app.Accounts() {
+		if a.Archived || a.Class != domain.ClassLiability || a.MinPayment.Amount <= 0 || a.DueDayOfMonth <= 0 {
+			continue
+		}
+		bills = append(bills, bill{name: a.Name, due: nextDue(now, a.DueDayOfMonth), amount: a.MinPayment})
+	}
+	sort.Slice(bills, func(i, j int) bool { return bills[i].due.Before(bills[j].due) })
+
+	var body ui.Node
+	if len(bills) == 0 {
+		body = P(Class("empty text-dim text-[13px]"), "No upcoming bills.")
+	} else {
+		if len(bills) > 4 {
+			bills = bills[:4]
+		}
+		rows := make([]ui.Node, 0, len(bills))
+		for _, b := range bills {
+			dueTone := "text-faint"
+			if dateutil.DaysBetween(now, b.due) <= 7 {
+				dueTone = "text-warn"
+			}
+			rows = append(rows, Div(Class("flex justify-between"),
+				Span(b.name),
+				Span(Class(dueTone), b.due.Format("Jan 2")),
+				Span(Class("font-display fig text-down w-24 text-right"), fmtAccounting(b.amount.Neg())),
+			))
+		}
+		body = Div(Class("text-[13px] space-y-2.5"), rows)
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "bills", Title: "Upcoming bills", Draggable: true, GridColumn: "3 / span 2", GridRow: "6",
+		Body: body,
+	})
+}
+
+// nextDue returns the next occurrence of a monthly due-day on or after today
+// (the day is clamped to 28 to stay valid in every month).
+func nextDue(now time.Time, day int) time.Time {
+	if day > 28 {
+		day = 28
+	}
+	y, m, _ := now.Date()
+	due := time.Date(y, m, day, 0, 0, 0, 0, now.Location())
+	today := time.Date(y, m, now.Day(), 0, 0, 0, 0, now.Location())
+	if due.Before(today) {
+		due = dateutil.AddMonths(due, 1)
+	}
+	return due
 }
 
 // spendingBreakdownWidget is the 2×1 Spending breakdown widget: a segmented bar
