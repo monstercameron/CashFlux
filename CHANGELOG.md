@@ -231,6 +231,8 @@ and every commit updates this file under `Unreleased`.
   Deleting a member who still owns accounts/budgets/goals is blocked with a plain-English message.
 - Freshness nudge widget (full-width, dashboard): a friendly reminder of which account balances look
   stale (via `internal/freshness`) with days since each was last updated; the bento grew to 8 rows.
+- Settings screen (replacing the stub): a household summary (base currency, member/account/category
+  counts) and an in-app **debug log viewer** (newest first, with Refresh) reading the slog ring buffer.
 - Accounts: a "Mark updated" action per (active) account sets its `BalanceAsOf` to today, clearing the
   staleness flag the freshness nudge surfaces.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

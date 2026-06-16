@@ -283,8 +283,12 @@ problems and fixes, and what's next.
   transaction or budget still references the category. A pick-a-replacement reassign flow is the
   richer follow-up.
 
-**Next:** full edit flows (account/transaction/budget/goal field edit), then category-delete reassign
-and the Settings screen — continuing the priority-ordered Phase-1 backlog.
+- Replaced the **Settings** stub with a real page: a household summary (base currency + member/
+  account/category counts) and an in-app **debug log viewer** (the slog `Ring`, newest-first, Refresh
+  button). Heavy editing stays in the global panel + dedicated screens to avoid duplication.
+
+**Next:** full edit flows (account/transaction/budget/goal field edit), category-delete reassign,
+then preferences (week-start, formats) — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

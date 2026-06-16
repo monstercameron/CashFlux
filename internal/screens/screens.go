@@ -82,8 +82,3 @@ func Documents() ui.Node {
 func Customize() ui.Node {
 	return stub(2, "Extend the app without code: define custom fields on any entity and build your own calculations with the formula builder.")
 }
-
-// Settings holds configuration.
-func Settings() ui.Node {
-	return stub(1, "Members, base currency and exchange-rate table, categories, freshness windows, your OpenAI key and model, data import/export, and more.")
-}
