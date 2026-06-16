@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Logged UI-scale (B6) and missing-menu-items (B7); reverted a premature impl
+
+- User asked for a font/UI-scale setting and to update the menu with all main-line features, then
+  clarified they want these **logged as TODOs, not implemented** right now. I had started building the
+  scale feature (prefs field + ApplyPrefs + CSS + settings control) — reverted those uncommitted
+  changes back to HEAD and captured both as backlog items instead.
+- **B6 (UI scale):** design is px-heavy, so a rem scale won't catch buttons — logged a `--ui-scale`
+  zoom on `#app` driven by a `prefs.Scale` percent (70–130). Analysis kept for when it's picked up.
+- **B7 (menu gaps):** confirmed via `screens.All()` that Planning, Allocate, Insights, Documents, and
+  Customize are routed but absent from the rail (URL-only). Logged adding them as a nav group + module
+  toggles, and deriving nav from the routed set so screens can't silently miss the menu again.
+- **Process note:** when the user is rapidly reporting issues/requests, default to logging them as
+  TODOs unless they explicitly say implement.
+
 ## 2026-06-16 — Localization foundation: central language store (i18n)
 
 - User wants all page verbiage localizable via a central store with easy export/import of all langs

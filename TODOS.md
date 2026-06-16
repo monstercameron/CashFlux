@@ -135,6 +135,37 @@ is the hover affordance — collapsed, there's no quick way to see what an icon 
 - [ ] Respect `prefers-reduced-motion`; ensure keyboard focus reveals the label too.
 - [ ] Verify: collapsed rail shows only icons; hover/focus reveals the label without expanding the rail.
 
+### B6. Add a UI / font-size scale setting ★
+
+**Want:** fonts and buttons feel ~30% too large for some users (e.g. on `/accounts`), though others
+find them fine — add a setting to scale the whole interface up or down.
+**Approach (analysis):** the design is px-heavy (Tailwind arbitrary px like `text-[13px]`), so a
+rem-based root-font scale would NOT resize buttons/spacing. Use a **whole-UI zoom**: a `--ui-scale`
+CSS variable applied via `zoom` on `#app` (Chromium target; `zoom` reflows and scales fonts + buttons
++ spacing together).
+- [ ] `internal/prefs`: add a `Scale` percent field (e.g. range 70–130, default 100) + `Normalize`
+      clamp (treat 0/unset as 100) + a `ScaleFraction()` helper; table tests.
+- [ ] `uistate.ApplyPrefs`: set `--ui-scale` from the scale; CSS `#app { zoom: var(--ui-scale, 1); }`.
+- [ ] Settings → Appearance: a "Display scale" select (70%–130%, 100% marked default); persists with
+      prefs (reload-persistent, like theme/accent/density).
+- [ ] Verify: changing scale resizes the whole UI live and survives reload; 100% == current.
+
+### B7. Menu is missing main-line features ★
+
+**Symptom:** the sidebar lists fewer items than the app implements. Primary nav has Dashboard /
+Accounts / Transactions / Budgets / Goals / To-do; System has Members / Categories / Settings. But
+`screens.All()` also routes five Phase-2 screens that are **not in the rail** — reachable only by
+typing the URL: **Planning** (`/planning`), **Allocate** (`/allocate`), **Insights** (`/insights`),
+**Documents** (`/documents`), **Customize** (`/customize`).
+**Fix:**
+- [ ] Add the five missing screens to the sidebar — likely a "Tools" / Phase-2 nav group (or extend
+      primary nav) with icons (`internal/app/shell.go` `primaryNav`/`Sidebar`).
+- [ ] Add them to the module-visibility set (`hideableScreens` + `internal/modules`) so they can be
+      shown/hidden like the others; decide which (if any) are locked.
+- [ ] Keep the nav in sync with `screens.All()` — ideally derive nav groups from the routed set (or a
+      Group field on Route) so a new screen can't silently miss the menu again.
+- [ ] Verify: every routed main-line screen has a menu entry; module toggles cover them.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)
