@@ -142,8 +142,13 @@ problems and fixes, and what's next.
   transactions strictly before it and reusing `NetWorth`, so first-of-month cutoffs give an
   end-of-month trend. Test walks a single account across Jan/Feb with a deposit and a withdrawal.
 
-**Next:** the `AreaChart` ui helper (feeds `chart` paths to an `<svg>`) + Net-worth-trend widget, the
-Cash-flow widget (div bars from `PeriodTotals`), then per-widget/global settings wiring.
+- Added the `AreaChart` ui helper (feeds `chart` paths into an `<svg>` with a gradient fill, built
+  from generic `Tag("defs"/"linearGradient"/"stop")` SVG nodes) and the **Net worth trend** widget
+  (1×2): current figure + a six-month end-of-month area chart from `ledger.NetWorthSeries`. Cutoffs
+  are first-of-month from M-5 to M (AddMonths(start, i-4)).
+
+**Next:** the Cash-flow widget (div bars from `PeriodTotals` over recent months), then the remaining
+widgets (Upcoming bills, Savings rate, Spending breakdown), then per-widget/global settings wiring.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

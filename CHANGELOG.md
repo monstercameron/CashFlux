@@ -166,6 +166,9 @@ and every commit updates this file under `Unreleased`.
   `AreaPath` (closed to a baseline). Table-driven tested; no rendering dependency.
 - `internal/ledger`: `NetWorthSeries` — net worth as of each cutoff time (transactions strictly
   before the cutoff counted), in base currency, for the net-worth trend chart. Table-driven tested.
+- `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
+  the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
+  current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

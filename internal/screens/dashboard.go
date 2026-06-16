@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -79,7 +80,32 @@ func Dashboard() ui.Node {
 		goalsWidget(app),
 		todoWidget(app),
 		accountsWidget(app, txns),
+		netWorthTrendWidget(accounts, txns, rates, net),
 	)
+}
+
+// netWorthTrendWidget is the 1×2 Net worth trend widget: the current figure over
+// a six-month end-of-month area chart (via ledger.NetWorthSeries + the chart
+// geometry helpers).
+func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, net money.Money) ui.Node {
+	start := dateutil.MonthStart(time.Now())
+	cutoffs := make([]time.Time, 0, 6)
+	for i := 0; i < 6; i++ {
+		cutoffs = append(cutoffs, dateutil.AddMonths(start, i-4)) // end of month M-5 … current month M
+	}
+	series, _ := ledger.NetWorthSeries(accounts, txns, cutoffs, rates)
+	values := make([]float64, len(series))
+	for i, m := range series {
+		values[i] = float64(m.Amount)
+	}
+	body := Div(Class("flex flex-col h-full"),
+		Div(Class("font-display fig text-[22px]"), fmtAccounting(net)),
+		uiw.AreaChart(uiw.AreaChartProps{Values: values, GradientID: "cf-networth"}),
+	)
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "trend", Title: "Net worth", Draggable: true, GridColumn: "4", GridRow: "3 / span 2",
+		BodyClass: "flex flex-col", Body: body,
+	})
 }
 
 // accountsWidget is the 2×1 Accounts widget: a small grid of up to six active
