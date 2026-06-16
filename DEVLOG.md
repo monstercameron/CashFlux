@@ -382,8 +382,13 @@ problems and fixes, and what's next.
   units by base-currency decimals) and account/transaction/member counts — with the result (or the
   engine's error message) updating per keystroke and an available-variables reference table.
 
-**Next:** the `Formula` entity + store CRUD (save named formulas), then planning forecast/recurring —
-continuing Phase 2 bottom-up.
+- Added the **forecast engine** `internal/forecast` (pure, tested): `Project(start, recurring,
+  oneTimes, months)` walks the horizon applying the recurring monthly net (`MonthlyNet`) plus any
+  one-time events scheduled in each month, returning the end-of-month balance series; empty for a
+  non-positive horizon. Tests cover recurring-only, a mid-horizon one-time, flat, and zero-horizon.
+
+**Next:** surface the forecast in the Planning screen (net-worth projection from current net worth +
+recurring estimate), then a `Recurring`/`Formula` entity + store CRUD — continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

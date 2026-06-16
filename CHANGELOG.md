@@ -175,6 +175,9 @@ and every commit updates this file under `Unreleased`.
   payment)` simulates monthly APR accrual and a fixed payment, returning months-to-zero, total
   interest, and total paid, with `ok=false` when the payment can't cover the interest. Table-driven
   tested.
+- `internal/forecast`: pure balance/net-worth projection over a horizon — `Project(start, recurring,
+  oneTimes, months)` applies the recurring monthly net plus any one-time events each month and
+  returns the end-of-month balance series; `MonthlyNet` sums the recurring flows. Table-driven tested.
 - Planning screen (replacing the stub): a **debt-payoff calculator** — enter balance, APR, and
   monthly payment to see months-to-zero, total interest, and total paid, updating live via the
   `internal/payoff` engine, with a friendly message when the payment can't cover the interest.
