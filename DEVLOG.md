@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Documents screen migrated
+
+- Ninth screen onto i18n: `documents.go` — vision-import + CSV-import cards, the review/edit draft
+  list, and all status/error messages (several via `T` args with `plural(...)`). Kept the vision
+  *system prompt* (model instruction) and the CSV-format example placeholder literal.
+- All `fmt.Sprintf`s became `T(key, args…)`, so the `fmt` import was dropped. `i18n` tests + wasm green.
+- 9 screens + chrome. Remaining: Accounts, Transactions, Dashboard, Allocate, Settings (+ the
+  CustomFieldsManager/CustomFieldInput shared components).
+
 ## 2026-06-16 — i18n: Customize screen migrated
 
 - Eighth screen onto i18n: `customize.go` — formula-calculator title/desc, expression placeholder, the

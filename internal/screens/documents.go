@@ -3,7 +3,6 @@
 package screens
 
 import (
-	"fmt"
 	"strings"
 	"syscall/js"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -33,7 +33,7 @@ const visionSystemPrompt = "You extract transactions from receipt and bank-state
 func Documents() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:documents", 0)
@@ -57,15 +57,15 @@ func Documents() ui.Node {
 	importCSV := ui.UseEvent(Prevent(func() {
 		data := strings.TrimSpace(csvText.Get())
 		if data == "" {
-			msg.Set("Paste some CSV first.")
+			msg.Set(uistate.T("documents.csvEmpty"))
 			return
 		}
 		n, err := app.ImportTransactionsCSV([]byte(data))
 		if err != nil {
-			msg.Set("Couldn't read that CSV: " + err.Error())
+			msg.Set(uistate.T("documents.csvError", err.Error()))
 			return
 		}
-		msg.Set(fmt.Sprintf("Imported %s.", plural(n, "transaction")))
+		msg.Set(uistate.T("documents.importedCsv", plural(n, "transaction")))
 		rev.Set(rev.Get() + 1)
 	}))
 
@@ -84,11 +84,11 @@ func Documents() ui.Node {
 	}
 	readAI := ui.UseEvent(func() {
 		if settings.OpenAIKey == "" {
-			aiErr.Set("Add your OpenAI key in Settings to read images.")
+			aiErr.Set(uistate.T("documents.needKey"))
 			return
 		}
 		if imageURL.Get() == "" {
-			aiErr.Set("Choose an image first.")
+			aiErr.Set(uistate.T("documents.chooseImageFirst"))
 			return
 		}
 		aiLoading.Set(true)
@@ -103,7 +103,7 @@ func Documents() ui.Node {
 					return
 				}
 				if len(rows) == 0 {
-					aiErr.Set("No transactions were found in that image.")
+					aiErr.Set(uistate.T("documents.noneFound"))
 					return
 				}
 				draft.Set(rows)
@@ -116,7 +116,7 @@ func Documents() ui.Node {
 		rows := draft.Get()
 		acc, ok := accByIDFrom(accounts, importAcct.Get())
 		if !ok {
-			aiErr.Set("Choose an account to import into.")
+			aiErr.Set(uistate.T("documents.chooseAccount"))
 			return
 		}
 		dec := currency.Decimals(acc.Currency)
@@ -158,9 +158,9 @@ func Documents() ui.Node {
 		draft.Set([]extract.Row{})
 		imageURL.Set("")
 		aiErr.Set("")
-		summary := fmt.Sprintf("Imported %s from the image.", plural(n, "transaction"))
+		summary := uistate.T("documents.importedImage", plural(n, "transaction"))
 		if skipped > 0 {
-			summary += fmt.Sprintf(" Skipped %s already in this account.", plural(skipped, "duplicate"))
+			summary += uistate.T("documents.skipped", plural(skipped, "duplicate"))
 		}
 		msg.Set(summary)
 		rev.Set(rev.Get() + 1)
@@ -200,38 +200,38 @@ func Documents() ui.Node {
 			acctOptions = append(acctOptions, Option(Value(a.ID), SelectedIf(importAcct.Get() == a.ID), a.Name))
 		}
 		draftBody = Section(Class("card"),
-			H2(Class("card-title"), fmt.Sprintf("Review %s", plural(len(rows), "transaction"))),
-			P(Class("muted"), "Check these look right, choose the account, then import. Categories are matched by name."),
+			H2(Class("card-title"), uistate.T("documents.reviewTitle", plural(len(rows), "transaction"))),
+			P(Class("muted"), uistate.T("documents.reviewDesc")),
 			Div(Class("rows"), items),
 			Form(Class("form-grid"), OnSubmit(importDraft),
 				Select(Class("field"), OnChange(onAcct), acctOptions),
-				Button(Class("btn btn-primary"), Type("submit"), "Import these"),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
 			),
 		)
 	}
 
 	return Div(
 		Section(Class("card"),
-			H2(Class("card-title"), "Read a receipt or statement image"),
-			P(Class("muted"), "Pick a photo or screenshot of a receipt or statement; the OpenAI vision model reads it into transactions you can review before importing. Needs your OpenAI key in Settings."),
+			H2(Class("card-title"), uistate.T("documents.imageTitle")),
+			P(Class("muted"), uistate.T("documents.imageDesc")),
 			Div(Class("flex flex-wrap gap-2 items-center"),
-				Button(Class("btn"), Type("button"), OnClick(chooseImage), "Choose image"),
-				If(imageURL.Get() != "", Span(Class("muted"), "Image ready.")),
-				Button(Class("btn btn-primary"), Type("button"), OnClick(readAI), IfElse(aiLoading.Get(), Text("Reading…"), Text("Read with AI"))),
+				Button(Class("btn"), Type("button"), OnClick(chooseImage), uistate.T("documents.chooseImage")),
+				If(imageURL.Get() != "", Span(Class("muted"), uistate.T("documents.imageReady"))),
+				Button(Class("btn btn-primary"), Type("button"), OnClick(readAI), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
 			),
 			If(aiErr.Get() != "", P(Class("err"), aiErr.Get())),
 		),
 		draftBody,
 		Section(Class("card"),
-			H2(Class("card-title"), "Import transactions from CSV"),
-			P(Class("muted"), "Paste rows with a header line. Columns are matched by name (date, payee/desc, amount, account, category, member); extra columns are ignored. Amounts are decimal — negative for expenses."),
+			H2(Class("card-title"), uistate.T("documents.csvTitle")),
+			P(Class("muted"), uistate.T("documents.csvDesc")),
 			Form(OnSubmit(importCSV),
 				Textarea(Class("field field-wide"), Attr("rows", "8"),
 					Placeholder("date,payee,amount,account\n2026-06-01,Salary,4200.00,Checking\n2026-06-02,Groceries,-86.40,Checking"),
 					OnInput(onCsv),
 				),
 				Div(Style(map[string]string{"margin-top": "0.6rem"}),
-					Button(Class("btn btn-primary"), Type("submit"), "Import"),
+					Button(Class("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
 				),
 			),
 			If(msg.Get() != "", P(Class("muted"), msg.Get())),
@@ -280,11 +280,11 @@ func DraftRow(props draftRowProps) ui.Node {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
 				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
-				Input(Class("field"), Type("text"), Placeholder("Description"), Value(descS.Get()), OnInput(onDesc)),
-				Input(Class("field"), Type("text"), Placeholder("Amount"), Value(amtS.Get()), OnInput(onAmt)),
-				Input(Class("field"), Type("text"), Placeholder("Category"), Value(catS.Get()), OnInput(onCat)),
-				Button(Class("btn btn-primary"), Type("submit"), "Save"),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), Value(amtS.Get()), OnInput(onAmt)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.categoryPlaceholder")), Value(catS.Get()), OnInput(onCat)),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -295,12 +295,12 @@ func DraftRow(props draftRowProps) ui.Node {
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), firstNonEmpty(r.Description, "(no description)")),
+			Span(Class("row-desc"), firstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class("amount fig"), r.Amount),
-		Button(Class("btn"), Type("button"), Title("Edit this row"), OnClick(startEdit), "Edit"),
-		Button(Class("btn-del"), Type("button"), Title("Remove this row"), OnClick(rm), "✕"),
+		Button(Class("btn"), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uistate.T("action.edit")),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("documents.removeRow")), OnClick(rm), "✕"),
 	)
 }
 
