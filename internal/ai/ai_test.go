@@ -122,6 +122,35 @@ func TestBuildRequestRoundTrip(t *testing.T) {
 	}
 }
 
+func TestBuildStructuredRequest(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"total":{"type":"number"}},"required":["total"]}`)
+	msgs := []Message{{Role: RoleUser, Content: "How much did I spend?"}}
+	data, err := BuildStructuredRequest("gpt-4o-mini", msgs, 0, "spend", schema)
+	if err != nil {
+		t.Fatalf("BuildStructuredRequest: %v", err)
+	}
+	var got struct {
+		Model          string         `json:"model"`
+		Messages       []Message      `json:"messages"`
+		ResponseFormat ResponseFormat `json:"response_format"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Model != "gpt-4o-mini" || len(got.Messages) != 1 {
+		t.Errorf("request body wrong: %+v", got)
+	}
+	rf := got.ResponseFormat
+	if rf.Type != "json_schema" || rf.JSONSchema.Name != "spend" || !rf.JSONSchema.Strict {
+		t.Errorf("response_format = %+v, want json_schema/spend/strict", rf)
+	}
+	// The schema must round-trip intact (decodable as the object we passed).
+	var sch map[string]any
+	if err := json.Unmarshal(rf.JSONSchema.Schema, &sch); err != nil || sch["type"] != "object" {
+		t.Errorf("schema not preserved: %s (err %v)", rf.JSONSchema.Schema, err)
+	}
+}
+
 func TestParseResponseContent(t *testing.T) {
 	body := `{"choices":[{"message":{"role":"assistant","content":"You saved 64% this month."}}],"usage":{"total_tokens":42}}`
 	got, err := ParseResponse([]byte(body))

@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A pure codec for OpenAI **structured outputs** (`ai.BuildStructuredRequest`): builds a chat request
+  with a `response_format` JSON-schema so the model returns JSON matching a given schema, decodable
+  straight into a Go struct instead of parsed out of prose. Round-trip tested. The building block for
+  reliable AI extraction (e.g. document parsing) going forward.
 - The Rules screen now shows a **Suggested rules** card driven by the suggester: each proposal reads
   "Categorize "Starbucks" as Cafe · Seen in 6 transactions" with an **Add** button that creates the
   rule in one click. Suggestions a rule already covers don't appear, and the card hides itself when

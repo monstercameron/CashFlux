@@ -62,6 +62,47 @@ func BuildRequest(model string, messages []Message, temperature float64) ([]byte
 	return json.Marshal(ChatRequest{Model: model, Messages: messages, Temperature: temperature})
 }
 
+// JSONSchema names a JSON Schema for an OpenAI structured-output request. Strict
+// constrains the model to match the schema exactly.
+type JSONSchema struct {
+	Name   string          `json:"name"`
+	Schema json.RawMessage `json:"schema"`
+	Strict bool            `json:"strict,omitempty"`
+}
+
+// ResponseFormat is the OpenAI response_format that requests schema-constrained
+// JSON output ("structured outputs").
+type ResponseFormat struct {
+	Type       string     `json:"type"` // "json_schema"
+	JSONSchema JSONSchema `json:"json_schema"`
+}
+
+// structuredRequest is a chat request that constrains the reply to a JSON schema.
+type structuredRequest struct {
+	Model          string         `json:"model"`
+	Messages       []Message      `json:"messages"`
+	Temperature    float64        `json:"temperature,omitempty"`
+	ResponseFormat ResponseFormat `json:"response_format"`
+}
+
+// BuildStructuredRequest marshals a chat request that asks the model to return
+// JSON conforming to the given JSON Schema (OpenAI "structured outputs"), so the
+// reply can be decoded straight into a Go struct instead of being coaxed out of
+// prose. schemaName is a short identifier OpenAI echoes back; schema is the raw
+// JSON Schema. The reply's content is a JSON string — read it with ParseResponse,
+// then json.Unmarshal into your target type.
+func BuildStructuredRequest(model string, messages []Message, temperature float64, schemaName string, schema json.RawMessage) ([]byte, error) {
+	return json.Marshal(structuredRequest{
+		Model:       model,
+		Messages:    messages,
+		Temperature: temperature,
+		ResponseFormat: ResponseFormat{
+			Type:       "json_schema",
+			JSONSchema: JSONSchema{Name: schemaName, Schema: schema, Strict: true},
+		},
+	})
+}
+
 // ParseResponse decodes a chat response and returns the assistant's first
 // message content. It surfaces an API error (with its message) and reports an
 // empty/garbled response as an error.

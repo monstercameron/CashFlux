@@ -26,6 +26,20 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — AI structured-outputs codec
+
+- Added `ai.BuildStructuredRequest(model, messages, temp, schemaName, schema)` + `ResponseFormat`/
+  `JSONSchema` types: emits a chat request with `response_format: {type: json_schema, json_schema:
+  {name, schema, strict: true}}`, so the reply is schema-constrained JSON decodable into a Go struct.
+  Round-trip tested (response_format shape + schema preserved as RawMessage).
+- Decision: pure codec only, consistent with how the rest of `ai` separates request/response shaping
+  (pure, tested) from the js fetch transport. The obvious first consumer is document extraction
+  (replace the free-form-JSON-then-`extract.ParseRows` path with a strict schema) — left as a
+  follow-up so this stays a focused, low-risk building block. Scope note: I'm staying on spec-backed
+  Phase 2 backend and avoiding the user's analysis-only UX items (animations, display scale, route/nav
+  redesign, breadcrumb) per their "these are analysis and todo adding" / "stop implementing" feedback.
+- ai tests + wasm green.
+
 ## 2026-06-16 — suggested-rules review UI
 
 - Wired `rulesuggest.Suggest(transactions, existingRules, 3)` into the Rules screen as a "Suggested
