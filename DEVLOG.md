@@ -320,6 +320,9 @@ problems and fixes, and what's next.
 - Sorted the **goals list incomplete-first** (then alphabetical) via a stable sort using
   `goals.IsComplete`, so active goals stay on top.
 
+- Income/Spending KPI sublines now show the period plus the real deposit/transaction **count** for it
+  (a `plural` helper), replacing the bare period label and matching the mockup's "June · 1 deposit".
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

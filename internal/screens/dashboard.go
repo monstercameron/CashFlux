@@ -49,6 +49,19 @@ func Dashboard() ui.Node {
 		periodLabel += " – " + w.ToLabel()
 	}
 
+	incCount, expCount := 0, 0
+	for _, t := range txns {
+		if !dateutil.InRange(t.Date, start, end) {
+			continue
+		}
+		switch {
+		case t.IsIncome():
+			incCount++
+		case t.IsExpense():
+			expCount++
+		}
+	}
+
 	active := 0
 	for _, a := range accounts {
 		if !a.Archived {
@@ -77,12 +90,12 @@ func Dashboard() ui.Node {
 		uiw.Widget(uiw.WidgetProps{
 			ID: "kpi-income", Title: "Income", Draggable: true, Resizable: true,
 			GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtAccounting(income), "text-up", periodLabel, "text-dim"),
+			Body: kpiBody(fmtAccounting(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
 			ID: "kpi-spending", Title: "Spending", Draggable: true, Resizable: true,
 			GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtAccounting(expense), "text-down", periodLabel, "text-dim"),
+			Body: kpiBody(fmtAccounting(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
 			ID: "kpi-liabilities", Title: "Liabilities", Draggable: true, Resizable: true,
@@ -569,6 +582,15 @@ func dashboardHeaderCell() ui.Node {
 			Button(Class("data-btn"), Type("button"), OnClick(reset), "Reset layout"),
 		),
 	)
+}
+
+// plural renders a count with a singular/plural noun, e.g. "1 deposit" or
+// "3 deposits".
+func plural(n int, singular string) string {
+	if n == 1 {
+		return "1 " + singular
+	}
+	return fmt.Sprintf("%d %ss", n, singular)
 }
 
 // kpiBody renders a KPI tile's body: a large accounting figure with a small
