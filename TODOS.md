@@ -24,9 +24,9 @@ visit to `/accounts` makes the browser request `/accounts` from the server, whic
 cache on a thrown network error — not on a non-ok response — and `/accounts` isn't cached, so the 404
 passes through. It's a server/SW history-fallback gap, not a router bug.
 **Fix (layered; clean paths must keep working — no hash router):**
-- [ ] Service worker: for navigation requests (`event.request.mode === "navigate"`), serve the cached
+- [x] Service worker: for navigation requests (`event.request.mode === "navigate"`), serve the cached
       app shell (`./index.html`) when the network returns non-ok or throws, so deep-link refresh works
-      on repeat / installed / offline visits. (`web/sw.js`)
+      on repeat / installed / offline visits. (`web/sw.js`, CACHE bumped to v2)
 - [ ] Server (dev): make `gwc dev` serve `index.html` for unknown non-asset paths (SPA history
       fallback). Resolve the known `gwc dev -html` issue (see §0) — framework-side change.
 - [ ] Server (prod/static hosting): document the SPA rewrite rule (all non-asset routes → `index.html`).

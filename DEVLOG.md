@@ -26,6 +26,20 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — service-worker SPA navigation fallback
+
+- The SW was network-first with `.catch(() => caches.match(req))` — but `.catch` only fires on a
+  network *failure*, not a resolved 404. So a deep-link refresh at `/accounts` (which has no file on a
+  static host) served the 404. Added a dedicated `req.mode === "navigate"` branch: on a non-ok
+  response or a network error, serve the cached app shell (`appShell()` = index.html, then `./`), which
+  boots and lets the router resolve the path.
+- Successful navigations cache their document under the `./index.html` key (every SPA navigation is the
+  shell), so the offline shell stays fresh. Bumped CACHE to v2 so the new logic + a clean cache
+  activate on next load.
+- This is the SW half of deep-link refresh (B1); the deploy workflow's generated 404.html covers the
+  cold first load on GitHub Pages. JS-only; can't unit-test the SW here, but it's the standard SPA
+  navigation-fallback shape.
+
 ## 2026-06-16 — AI guardrails: explicit FinancialContext
 
 - Added pure `ai.FinancialContext{NetWorth, Income, Spending, Accounts}` + `Line()`, and routed both

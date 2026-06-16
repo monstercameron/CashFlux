@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- Deep-link refresh in the installed/offline PWA: the service worker now serves the cached app shell
+  for navigation requests, so hard-refreshing a client-side route like `/accounts` boots the app (which
+  then routes to that screen) instead of failing on a 404 or while offline. Complements the static
+  `404.html` shell that covers the first load on GitHub Pages. (Cache bumped to `cashflux-v2`.)
+
 ### Changed
 - The data CashFlux sends to OpenAI for insights is now a single explicit, tested
   `ai.FinancialContext` — by construction only aggregate totals and an account count, never payees,
