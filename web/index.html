@@ -110,6 +110,39 @@
       [data-density="compact"] .card-title { margin-bottom: 0.45rem; }
       [data-density="compact"] .row { padding-top: 0.3rem; padding-bottom: 0.3rem; }
       [data-density="compact"] .field, [data-density="compact"] .btn { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+
+      /* Light theme (set via data-theme="light" on <html>). Overrides the legacy
+         palette variables, the shell's Tailwind utility colors, and the widgets'
+         hardcoded surface hexes. The user accent (--accent) is left untouched. */
+      [data-theme="light"] {
+        --bg: #f7f6f3; --bg-elev: #efede8; --bg-card: #ffffff;
+        --border: #e4e2dd; --text: #1c1c1e; --text-dim: #56565c; --text-faint: #8a8a90;
+        --accent-dim: #e4f3ea;
+      }
+      [data-theme="light"] .bg-base { background-color: #f7f6f3; }
+      [data-theme="light"] .bg-tile { background-color: #ffffff; }
+      [data-theme="light"] .bg-hover, [data-theme="light"] .hover\:bg-hover:hover { background-color: #efede8; }
+      [data-theme="light"] .text-fg { color: #1c1c1e; }
+      [data-theme="light"] .text-dim { color: #56565c; }
+      [data-theme="light"] .text-faint { color: #8a8a90; }
+      [data-theme="light"] .border-line, [data-theme="light"] .border-r, [data-theme="light"] .border-b { border-color: #e4e2dd; }
+      [data-theme="light"] .bg-\[\#1c1c1e\] { background-color: #ececec; color: #1c1c1e; }
+      [data-theme="light"] .bg-fg { background-color: #1c1c1e; }
+      [data-theme="light"] .text-base { color: #f7f6f3; }
+      /* Widget shell, segmented + stepper pills, nav hover */
+      [data-theme="light"] .w { background: #ffffff; border-color: #e4e2dd; }
+      [data-theme="light"] .nav:hover { background: #efede8; color: #1c1c1e; }
+      [data-theme="light"] .seg, [data-theme="light"] .rpill { background: #efede8; border-color: #e4e2dd; }
+      [data-theme="light"] .seg-btn, [data-theme="light"] .rstep { color: #56565c; }
+      [data-theme="light"] .seg-btn.active { background: #ffffff; color: #1c1c1e; }
+      [data-theme="light"] .gear-inline, [data-theme="light"] .gear-abs, [data-theme="light"] .menu-btn { color: #8a8a90; }
+      /* Flip panel + settings controls */
+      [data-theme="light"] .flip-face, [data-theme="light"] .set-face { background: #ffffff; border-color: #e4e2dd; }
+      [data-theme="light"] .set-input, [data-theme="light"] .member-chip, [data-theme="light"] .rate-row .rate-in, [data-theme="light"] .data-btn { background: #ffffff; border-color: #e4e2dd; color: #1c1c1e; }
+      [data-theme="light"] .switch { background: #d4d2cc; }
+      [data-theme="light"] .switch::after { background: #ffffff; }
+      /* Scrollbars */
+      [data-theme="light"] main.cf-scroll::-webkit-scrollbar-thumb { background: #cfcdc7; border-color: #f7f6f3; }
       .card-title { margin: 0 0 0.75rem; font-size: 1.05rem; }
       .muted { color: var(--text-dim); margin: 0.25rem 0; }
       .empty { color: var(--text-faint); font-style: italic; }

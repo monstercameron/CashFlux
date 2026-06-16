@@ -16,6 +16,11 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Light theme: a `[data-theme="light"]` stylesheet that overrides the legacy palette variables, the
+  shell's Tailwind utility colors (base/tile/hover/fg/dim/faint/line, the active-nav surface), and
+  the widgets' hardcoded surface hexes (bento tiles, segmented/stepper pills, flip panel, settings
+  inputs, switches, scrollbars). Choosing Light (or System on a light OS) in Settings now actually
+  lightens the whole app, while the user accent stays applied on top. Completes the theme preference.
 - Appearance preferences now apply to the page: `uistate.ApplyPrefs` writes `data-theme`
   (resolving "system" to the OS color scheme), `data-density`, and the `--accent` CSS variable onto
   the document root — applied on boot (before first paint) and on every change. The accent color

@@ -302,8 +302,9 @@ Shared control components (from mockup):
 - [x] OpenAI key + model fields persist to Settings (global panel) — used by Insights
 - [ ] Data: export JSON, export CSV, import JSON, import CSV, load sample, wipe (confirm)
 - [~] Preferences: theme/density, week-start, fiscal-month start, number/date formats
-      — week-start + date format + accent + density complete & reload-persistent (applied via
-        `ApplyPrefs`); theme attribute applied but full light-theme skin pending; fiscal-month start later
+      — theme (dark/light/system) + accent + density + week-start + date format all complete &
+        reload-persistent (engine + atom + Settings UI + `ApplyPrefs` + light/dark skins);
+        only fiscal-month start remains
 - [ ] Budgeting methodology selector (envelope / zero-based / simple tracking)
 - [x] Module visibility toggles (show/hide screens) — end-to-end: pure `internal/modules` +
       localStorage atom + sidebar filter + Settings per-screen toggles, reload-persistent

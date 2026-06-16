@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Appearance prefs: the light theme (feature complete)
+
+- Authored the `[data-theme="light"]` skin deferred last commit. Three layers needed overriding,
+  because the candidate-C styling mixes three coloring strategies: (1) the legacy `:root` CSS vars
+  (one block flip covers all the screen components — cards, stats, fields, buttons, bars, badges);
+  (2) the shell's Tailwind utility classes (`.bg-base`, `.text-fg`, `.border-line`, the
+  arbitrary-value `.bg-[#1c1c1e]` active-nav surface — escaped as `.bg-\[\#1c1c1e\]`); (3) the
+  widgets' hardcoded hexes (`.w`, `.seg`, `.rpill`, flip panel, `.set-input`, `.switch`, scrollbars).
+- **Verified the one risky override.** `text-base` is also a Tailwind font-size utility, so blindly
+  coloring it could turn body text invisible — grep showed it's used in exactly one place (the brand
+  badge, alongside `bg-fg`), so inverting both there is correct and contained.
+- The accent var is deliberately left out of the theme block: it is user-chosen and reads fine on
+  both backgrounds, so it stays applied on top of whichever theme is active.
+- Appearance preferences are now complete end-to-end: engine (week-start/date/theme/accent/density)
+  → localStorage atom → Settings UI → `ApplyPrefs` to the DOM → working light/dark skins, all
+  reload-persistent. Only fiscal-month start remains from the original preferences line.
+- **Next.** A fresh backlog item — likely persist-last-transaction-filter or a per-row transaction
+  duplicate action (both small, contained), or an allocation constraint.
+
 ## 2026-06-16 — Appearance prefs: apply to the DOM
 
 - `uistate.ApplyPrefs(p)` reflects prefs onto `document.documentElement`: `data-theme` (with
