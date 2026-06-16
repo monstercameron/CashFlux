@@ -374,6 +374,11 @@ func globalSettingsForm() uic.Node {
 			dataBtn("Load sample", false, func() { loadSample(bump, notify) }),
 			dataBtn("Wipe data", true, func() { wipeData(bump, notify) }),
 		),
+		Div(Class("set-label"), "Languages"),
+		Div(Class("flex flex-wrap gap-2 py-1"),
+			dataBtn("Export languages", false, func() { exportLanguages(notify) }),
+			dataBtn("Import languages", false, func() { importLanguages(notify) }),
+		),
 	)
 
 	return Div(Class("grid grid-cols-2 gap-x-7 content-start"), left, right)
@@ -430,6 +435,30 @@ func exportCSV(notify func(string, bool)) {
 	}
 	downloadBytes("transactions.csv", "text/csv", data)
 	notify("Exported your transactions as transactions.csv.", false)
+}
+
+// exportLanguages downloads the whole language bundle (every supported language)
+// as JSON — the file translators edit and re-import.
+func exportLanguages(notify func(string, bool)) {
+	data, err := uistate.ExportLanguages()
+	if err != nil {
+		notify("Couldn't export languages: "+err.Error(), true)
+		return
+	}
+	downloadBytes("cashflux-languages.json", "application/json", data)
+	notify("Exported the language bundle.", false)
+}
+
+// importLanguages picks a language-bundle JSON file and merges it into the app,
+// persisting it for next launch.
+func importLanguages(notify func(string, bool)) {
+	pickFile(".json", func(data []byte) {
+		if err := uistate.ImportLanguages(data); err != nil {
+			notify("Couldn't import languages: "+err.Error(), true)
+			return
+		}
+		notify("Imported languages — reload to apply.", false)
+	})
 }
 
 // importJSON picks a JSON dataset file and replaces all data with it, then

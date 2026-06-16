@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Language bundle export/import in Settings
+
+- Made the language store's round-trip user-accessible (the user's "easy to export/import all langs"
+  ask): `uistate.ExportLanguages()`/`ImportLanguages()` wrap the bundle's JSON codec; import merges and
+  persists to localStorage (`cashflux:languages`), and `loadBundle()` seeds those on boot. Added
+  Settings → Languages "Export languages" / "Import languages" buttons, wired through the toast.
+- Note: with T still non-reactive (English-only display), an imported language is stored/ready but not
+  shown until the language selector lands — the notice says "reload to apply" and the selector is the
+  remaining §1.19 piece. Export gives translators the English source + any existing langs.
+- wasm build green; pure `i18n` codec already tested. **Next:** the language selector (then imported
+  languages actually display), or continue migrating screen verbiage.
+
 ## 2026-06-16 — i18n live wiring + sidebar verbiage migrated
 
 - Wired the language store into the UI: `uistate` holds a shared `i18n.DefaultBundle()`, a `UseLang`

@@ -814,7 +814,8 @@ Shared control components (from mockup):
       atom done; persisting imported languages to localStorage + boot load still to do
 - [x] `T(key, args…)` helper for screens/shell — `uistate.T`, hook-free (safe in loops)
 - [ ] Language selector in the household settings panel (English-only for now; lists `Languages()`)
-- [ ] Export/Import language bundle buttons in settings (round-trip all langs via `ExportJSON`/`ImportJSON`)
+- [x] Export/Import language bundle buttons in settings — Settings → Languages; `uistate.ExportLanguages`/
+      `ImportLanguages` (merge + persist to localStorage, seeded on boot)
 - [~] **Migrate all page verbiage onto `T`** — screen by screen: sidebar/shell chrome (brand, nav,
       headers, household card) done; the individual screens remain
 - [ ] Tests: a guard that every key used in the UI exists in the English catalog (catalog completeness)
