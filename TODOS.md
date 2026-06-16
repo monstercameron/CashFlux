@@ -305,8 +305,8 @@ Shared control components (from mockup):
       — week-start + date format complete end-to-end (engine + localStorage atom + Settings UI +
         live date rendering, reload-persistent); theme/density + fiscal-month start still to do
 - [ ] Budgeting methodology selector (envelope / zero-based / simple tracking)
-- [~] Module visibility toggles (show/hide screens) — pure `internal/modules` + localStorage atom
-      + sidebar nav filter done; Settings show/hide toggles next
+- [x] Module visibility toggles (show/hide screens) — end-to-end: pure `internal/modules` +
+      localStorage atom + sidebar filter + Settings per-screen toggles, reload-persistent
 - [ ] Debug: open log viewer
 
 ### 1.19 Configuration & modalities

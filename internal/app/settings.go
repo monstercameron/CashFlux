@@ -73,6 +73,19 @@ func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 	)
 }
 
+// hideableScreens lists the screens a user can show or hide from the sidebar.
+// The dashboard and settings are intentionally omitted — they are locked visible
+// in internal/modules.
+var hideableScreens = []struct{ Label, Path string }{
+	{"Accounts", "/accounts"},
+	{"Transactions", "/transactions"},
+	{"Budgets", "/budgets"},
+	{"Goals", "/goals"},
+	{"To-do", "/todo"},
+	{"Members", "/members"},
+	{"Categories", "/categories"},
+}
+
 // globalSettingsForm is the two-column household/global settings back face:
 // members, base currency and FX rows (left) and AI, appearance, and data
 // actions (right). Members, base currency, and rates are read live from app
@@ -94,6 +107,12 @@ func globalSettingsForm() uic.Node {
 		p.DateStyle = prefs.DateStyle(e.GetValue())
 		savePrefs(p)
 	})
+	hiddenAtom := uistate.UseHiddenModules()
+	toggleModule := func(path string) {
+		nh := hiddenAtom.Get().Toggle(path)
+		hiddenAtom.Set(nh)
+		uistate.PersistHiddenModules(nh)
+	}
 	dataRev := uistate.UseDataRevision()
 	bump := func() { dataRev.Update(func(n int) int { return n + 1 }) }
 	nav := router.UseNavigate()
@@ -149,6 +168,17 @@ func globalSettingsForm() uic.Node {
 
 	pr := prefsAtom.Get().Normalize()
 
+	hidden := hiddenAtom.Get()
+	screenToggles := make([]uic.Node, 0, len(hideableScreens))
+	for _, sc := range hideableScreens {
+		path := sc.Path
+		screenToggles = append(screenToggles, ui.ToggleRow(ui.ToggleRowProps{
+			Label:    "Show " + sc.Label,
+			On:       !hidden.IsHidden(path),
+			OnChange: func(bool) { toggleModule(path) },
+		}))
+	}
+
 	left := Div(
 		Div(Class("set-label"), "Household members"),
 		Div(Class("flex flex-wrap gap-2 py-1"), memberChips),
@@ -161,6 +191,9 @@ func globalSettingsForm() uic.Node {
 		Div(Class("set-label"), "Exchange rates"),
 		If(len(fxRows) == 0, P(Class("text-faint text-[12px]"), "No custom rates.")),
 		Div(fxRows),
+		Div(Class("set-label"), "Screens"),
+		P(Class("text-faint text-[12px]"), "Hide screens you don't use. Dashboard and Settings always stay."),
+		Div(screenToggles),
 	)
 
 	right := Div(

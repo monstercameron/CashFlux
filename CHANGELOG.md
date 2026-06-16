@@ -16,6 +16,11 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Screen show/hide toggles in the global Settings panel: a "Screens" section with a Show toggle per
+  hideable screen (Accounts, Transactions, Budgets, Goals, To-do, Members, Categories). Flipping a
+  toggle updates the hidden-modules atom and persists to localStorage, hiding or restoring the
+  screen in the sidebar immediately. Dashboard and Settings are omitted (locked visible). This
+  completes module visibility end-to-end.
 - localStorage-backed hidden-modules atom (`uistate.UseHiddenModules`/`PersistHiddenModules`): seeds
   the hidden-screen set from localStorage on boot and writes it back on change, so show/hide choices
   survive reloads. Loads are normalized (false/locked/stale entries dropped).

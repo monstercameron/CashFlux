@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Module visibility: Settings toggles (feature complete)
+
+- Final step: a "Screens" section in the global settings left column. A package-level
+  `hideableScreens` list (label + path, excluding the locked dashboard/settings) drives a
+  `ui.ToggleRow` per screen. Because `ToggleRow` is a `CreateElement` component owning its own hook,
+  the per-row toggles render safely in a plain loop — no parent hook-ordering worry.
+- Each toggle's `OnChange` calls `toggleModule(path)` → `Toggle` (immutable) → atom `Set` →
+  `PersistHiddenModules`. Both the form (subscribed via `UseHiddenModules`) and the sidebar
+  re-render, so a hidden screen vanishes from the rail the instant you flip it, and the choice
+  survives reload.
+- Module visibility is now end-to-end: pure engine (locked + toggle) → localStorage atom → sidebar
+  filter → Settings toggles. Closes §1.18's show/hide-screens item.
+- **Next.** Other §1.18 items remain (theme/density, fiscal-month start, budgeting methodology
+  selector), or move to a contained Phase-3 sync primitive. Will pick the next granular increment.
+
 ## 2026-06-16 — Module visibility: sidebar filtering
 
 - `Sidebar` now reads `uistate.UseHiddenModules().Get()` and filters: the primary nav is built into a
