@@ -24,6 +24,54 @@ func TestScoreNormalizesAndWeights(t *testing.T) {
 	}
 }
 
+func TestGoalProgressCriterion(t *testing.T) {
+	// The goal-progress breakdown is the clamped completion fraction; non-goal
+	// candidates (and out-of-range values) behave sensibly.
+	cases := []struct {
+		name     string
+		progress float64
+		want     float64
+	}{
+		{"unset/non-goal", 0, 0},
+		{"half done", 0.5, 0.5},
+		{"almost done", 0.9, 0.9},
+		{"complete", 1, 1},
+		{"over-range clamps", 1.4, 1},
+		{"negative clamps", -0.2, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, b := Score(Candidate{GoalProgress: tc.progress}, Weights{GoalProgress: 1})
+			if !approx(b.GoalProgress, tc.want) {
+				t.Errorf("GoalProgress breakdown = %g, want %g", b.GoalProgress, tc.want)
+			}
+		})
+	}
+
+	// Goal-progress-only weighting ranks the goal nearest completion first.
+	cands := []Candidate{
+		{ID: "far", GoalProgress: 0.2},
+		{ID: "near", GoalProgress: 0.85},
+		{ID: "mid", GoalProgress: 0.5},
+	}
+	got := Rank(cands, Weights{GoalProgress: 1})
+	if got[0].Candidate.ID != "near" || got[1].Candidate.ID != "mid" || got[2].Candidate.ID != "far" {
+		t.Errorf("order = %s,%s,%s; want near,mid,far",
+			got[0].Candidate.ID, got[1].Candidate.ID, got[2].Candidate.ID)
+	}
+}
+
+func TestGoalProgressZeroWeightDoesNotChangeScore(t *testing.T) {
+	// Adding the criterion is backward-compatible: with zero goal-progress weight,
+	// a candidate's score is identical regardless of its GoalProgress value.
+	w := Weights{Returns: 1, Stability: 1}
+	a, _ := Score(Candidate{ExpectedReturnAPR: 9, StabilityScore: 60, GoalProgress: 0}, w)
+	b, _ := Score(Candidate{ExpectedReturnAPR: 9, StabilityScore: 60, GoalProgress: 0.9}, w)
+	if !approx(a, b) {
+		t.Errorf("zero-weighted goal progress changed score: %g vs %g", a, b)
+	}
+}
+
 func TestRankWithExcludes(t *testing.T) {
 	cands := []Candidate{
 		{ID: "a", ExpectedReturnAPR: 10},

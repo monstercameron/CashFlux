@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Capital allocation now has a **goal-progress criterion**: destinations funding a savings goal score
+  by how close that goal is to completion (clamped 0–100%), so a "finish what's almost done"
+  weighting can prioritize goals near the finish line. Fully tested and explainable (it shows in the
+  per-criterion breakdown); the Allocate screen's weight control wires up next.
 - Accessibility: every screen now has exactly one top-level `<h1>` — the page title in the top bar
   is now a real heading (the dashboard's in-canvas title dropped to `<h2>` to match) — so
   screen-reader users can jump to the page heading and the heading order is valid.

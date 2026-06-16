@@ -21,6 +21,11 @@ type Candidate struct {
 	StabilityScore    int     // 0..100, how stable/safe the destination is
 	LiquidityScore    int     // 0..100, how easily funds can be withdrawn
 	DebtReduction     bool    // true when this is paying down a liability (guaranteed return)
+	// GoalProgress is how complete a linked savings goal is, 0..1. It powers the
+	// goal-progress criterion: destinations funding goals nearest completion
+	// score highest, favouring finishing what's almost done over starting anew.
+	// Non-goal destinations leave it 0 and so score 0 on that criterion.
+	GoalProgress float64
 }
 
 // Weights expresses how much a user cares about each criterion. They need not
@@ -30,6 +35,7 @@ type Weights struct {
 	Stability     float64
 	Liquidity     float64
 	DebtReduction float64
+	GoalProgress  float64
 }
 
 // Breakdown holds each criterion's normalized score (0..1) for a candidate, so
@@ -39,6 +45,7 @@ type Breakdown struct {
 	Stability     float64
 	Liquidity     float64
 	DebtReduction float64
+	GoalProgress  float64
 }
 
 // Ranked is a candidate with its overall score (0..1) and breakdown.
@@ -62,19 +69,21 @@ func clamp01(f float64) float64 {
 // of its criteria) and the per-criterion breakdown.
 func Score(c Candidate, w Weights) (float64, Breakdown) {
 	b := Breakdown{
-		Returns:   clamp01(c.ExpectedReturnAPR / returnsCap),
-		Stability: clamp01(float64(c.StabilityScore) / 100),
-		Liquidity: clamp01(float64(c.LiquidityScore) / 100),
+		Returns:      clamp01(c.ExpectedReturnAPR / returnsCap),
+		Stability:    clamp01(float64(c.StabilityScore) / 100),
+		Liquidity:    clamp01(float64(c.LiquidityScore) / 100),
+		GoalProgress: clamp01(c.GoalProgress),
 	}
 	if c.DebtReduction {
 		b.DebtReduction = 1
 	}
 
-	total := w.Returns + w.Stability + w.Liquidity + w.DebtReduction
+	total := w.Returns + w.Stability + w.Liquidity + w.DebtReduction + w.GoalProgress
 	if total <= 0 {
 		total = 1
 	}
-	score := (w.Returns*b.Returns + w.Stability*b.Stability + w.Liquidity*b.Liquidity + w.DebtReduction*b.DebtReduction) / total
+	score := (w.Returns*b.Returns + w.Stability*b.Stability + w.Liquidity*b.Liquidity +
+		w.DebtReduction*b.DebtReduction + w.GoalProgress*b.GoalProgress) / total
 	return score, b
 }
 

@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — allocate: goal-progress criterion (§2.7)
+
+- Added a fifth allocation criterion, goal progress, to `internal/allocate`: `Candidate.GoalProgress`
+  (0..1 completion of a linked goal), a `Weights.GoalProgress` knob, and a `Breakdown.GoalProgress`
+  term. The score is the clamped completion fraction, so a goal-progress weighting ranks goals nearest
+  done first ("finish what's almost finished"). Deliberately additive and backward-compatible: with
+  zero weight the normalized score is byte-identical to before (proven by a dedicated test), so all
+  existing allocate tests stay green. Table tests cover clamping, ordering, and the zero-weight
+  invariant.
+- Bottom-up split: this is the tested logic only. The Allocate screen still needs a weight input, a
+  profile-preset entry, populating `GoalProgress` from each goal's pace, and a breakdown line — that
+  UI wiring is the next slice (UI last, per the SDLC rule).
+
 ## 2026-06-16 — B15 (slice): single h1 per screen
 
 - Promoted the top bar's current-page breadcrumb title from a `Span` to an `<h1>`, so every screen
