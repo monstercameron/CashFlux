@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Module visibility: the pure engine
+
+- New backlog item (§1.18 module-visibility toggles). Same reload-persistent shape as preferences,
+  so same approach: pure logic first, then a localStorage atom, then sidebar filtering + settings
+  toggles. Pure package `internal/modules`.
+- **Decision — lock the home and settings screens.** Hiding the dashboard or the settings screen
+  (which is where you'd un-hide things) would be a footgun, so `IsLocked` makes them permanently
+  visible and `Toggle`/`Normalize`/`IsHidden` all respect that. Cheap guard, big safety win.
+- **Decision — immutable Toggle returning a minimal set.** `Toggle` clones rather than mutating
+  (the atom value should be replaced, not edited in place) and the set only ever stores `true`
+  entries, so it serializes compactly and `Normalize` can clean stale/false/locked keys on load.
+- **Next.** `uistate` localStorage atom for the hidden set, then filter the sidebar nav by it and
+  add per-screen toggles to Settings. (Routes themselves stay registered; hiding is a nav concern,
+  and a hidden screen reached by URL still works.)
+
 ## 2026-06-16 — Reload-persistent preferences: wiring dates through (feature complete)
 
 - Final step: the three user-facing date displays (TransactionRow, GoalRow, TaskRow) now format via

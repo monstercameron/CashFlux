@@ -12,6 +12,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Module-visibility engine (`internal/modules`): a `Hidden` set of hidden screen paths with
+  `IsHidden`/`Toggle`/`Normalize`, plus locked core screens (home and settings) that can never be
+  hidden. Toggle is immutable (returns a new minimal set) and a no-op for locked paths. Table-tested.
+  Foundation for show/hide-screen settings.
 - Preferences section in the global Settings panel: choose the week start (Sunday/Monday segmented
   control) and the date format (ISO / US / European / long), each showing a live example. Changes
   write the `UsePrefs` atom and persist to localStorage immediately, so they survive reloads.
