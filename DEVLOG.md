@@ -170,8 +170,15 @@ problems and fixes, and what's next.
   toggles via `ToggleRow`) holds local state for now; persisting visibility/layout to the store
   arrives with the layout model. Confirmed `internal/ui` can depend on `uistate` without a cycle.
 
-**Next:** the **global settings** panel body (household members, base currency + FX rows, AI key,
-appearance, data actions) wired to the household card; then drag-reorder, resize, and layout persistence.
+- Built the **global settings** panel body: a two-column form inside the `FlipPanel` (760×560) with
+  live household member chips, base currency, and sorted editable FX rate rows on the left; AI
+  (BYO-key toggle + key + model), Appearance (theme `Segmented` + accent `SwatchPicker` + compact),
+  and Data action buttons on the right. Reuses every shared control primitive. Members/base/FX are
+  real reads from `appstate`; appearance is local state for now; the Data buttons are present but
+  wired in the next feature (export/import/wipe need js download + store mutation + refresh).
+
+**Next:** wire the Data actions (Export JSON/CSV, Import, Load sample, Wipe), then persist
+appearance/theme prefs; then drag-reorder, resize, and layout persistence for the bento.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

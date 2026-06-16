@@ -3,6 +3,11 @@
 package app
 
 import (
+	"sort"
+	"strconv"
+
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -22,12 +27,11 @@ func SettingsHost() uic.Node {
 
 	switch target.Kind {
 	case "global":
-		// The global-settings body lands in a later feature; show the shell now.
 		return ui.FlipPanel(ui.FlipPanelProps{
 			Title:   "Settings",
 			Width:   "760px",
 			Height:  "560px",
-			Back:    P(Class("text-dim text-[13px]"), "Household settings are coming soon."),
+			Back:    uic.CreateElement(globalSettingsForm),
 			OnClose: closePanel,
 		})
 	default: // "widget"
@@ -65,4 +69,122 @@ func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Allow resizing", On: allowResizing.Get(), OnChange: func(v bool) { allowResizing.Set(v) }}),
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact", On: compact.Get(), OnChange: func(v bool) { compact.Set(v) }}),
 	)
+}
+
+// globalSettingsForm is the two-column household/global settings back face:
+// members, base currency and FX rows (left) and AI, appearance, and data
+// actions (right). Members, base currency, and rates are read live from app
+// state; appearance controls hold local state for now (persisting preferences
+// and wiring data actions land in their own features).
+func globalSettingsForm() uic.Node {
+	theme := uic.UseState("dark")
+	accent := uic.UseState("#54b884")
+	compact := uic.UseState(false)
+	aiOn := uic.UseState(false)
+
+	var members []domain.Member
+	base := "USD"
+	var fxRows []uic.Node
+	if app := appstate.Default; app != nil {
+		members = app.Members()
+		s := app.Settings()
+		if s.BaseCurrency != "" {
+			base = s.BaseCurrency
+		}
+		codes := make([]string, 0, len(s.FXRates))
+		for code := range s.FXRates {
+			codes = append(codes, code)
+		}
+		sort.Strings(codes)
+		for _, code := range codes {
+			fxRows = append(fxRows, rateRow(code, s.FXRates[code], base))
+		}
+	}
+
+	memberChips := make([]uic.Node, 0, len(members)+1)
+	for _, m := range members {
+		memberChips = append(memberChips, memberChip(m))
+	}
+	memberChips = append(memberChips, Button(Class("member-add"), Type("button"), "+ Add member"))
+
+	left := Div(
+		Div(Class("set-label"), "Household members"),
+		Div(Class("flex flex-wrap gap-2 py-1"), memberChips),
+		Div(Class("set-label"), "Base currency"),
+		Select(Class("set-input"),
+			Option(Value("USD"), SelectedIf(base == "USD"), "USD — US Dollar"),
+			Option(Value("EUR"), SelectedIf(base == "EUR"), "EUR — Euro"),
+			Option(Value("GBP"), SelectedIf(base == "GBP"), "GBP — British Pound"),
+		),
+		Div(Class("set-label"), "Exchange rates"),
+		If(len(fxRows) == 0, P(Class("text-faint text-[12px]"), "No custom rates.")),
+		Div(fxRows),
+	)
+
+	right := Div(
+		Div(Class("set-label"), "AI (OpenAI · bring your own key)"),
+		ui.ToggleRow(ui.ToggleRowProps{Label: "Enable AI features", On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
+		Input(Class("set-input mt-[0.45rem]"), Type("password"), Placeholder("OpenAI API key (sk-…)")),
+		Select(Class("set-input mt-[0.45rem]"),
+			Option("Model — latest"),
+			Option("Model — mini"),
+		),
+		Div(Class("set-label"), "Appearance"),
+		ui.Segmented(ui.SegmentedProps{
+			Options:  []ui.SegOption{{Value: "dark", Label: "Dark"}, {Value: "light", Label: "Light"}, {Value: "system", Label: "System"}},
+			Selected: theme.Get(),
+			OnSelect: func(v string) { theme.Set(v) },
+		}),
+		Div(Class("toggle-row"),
+			Span("Accent"),
+			ui.SwatchPicker(ui.SwatchPickerProps{
+				Colors:   []string{"#54b884", "#cfa14e", "#7c83ff", "#d8716f"},
+				Selected: accent.Get(),
+				OnSelect: func(c string) { accent.Set(c) },
+			}),
+		),
+		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact density", On: compact.Get(), OnChange: func(v bool) { compact.Set(v) }}),
+		Div(Class("set-label"), "Data"),
+		Div(Class("flex flex-wrap gap-2 py-1"),
+			dataBtn("Export JSON", false),
+			dataBtn("Export CSV", false),
+			dataBtn("Import…", false),
+			dataBtn("Load sample", false),
+			dataBtn("Wipe data", true),
+		),
+	)
+
+	return Div(Class("grid grid-cols-2 gap-x-7 content-start"), left, right)
+}
+
+// memberChip renders a household member as a colored chip.
+func memberChip(m domain.Member) uic.Node {
+	color := m.Color
+	if color == "" {
+		color = "#7c83ff"
+	}
+	return Span(Class("member-chip"),
+		Span(Style(map[string]string{"width": "9px", "height": "9px", "border-radius": "50%", "background": color})),
+		m.Name,
+	)
+}
+
+// rateRow renders one editable FX rate row (1 <code> = <rate> <base>).
+func rateRow(code string, rate float64, base string) uic.Node {
+	return Div(Class("rate-row"),
+		Span(Style(map[string]string{"width": "40px"}), code),
+		Span(Class("text-faint"), "1 "+code+" ="),
+		Input(Class("rate-in"), Value(strconv.FormatFloat(rate, 'f', -1, 64))),
+		Span(Class("text-faint"), base),
+	)
+}
+
+// dataBtn renders a data-action button (danger variant for destructive actions).
+// The actions themselves are wired in a later feature.
+func dataBtn(label string, danger bool) uic.Node {
+	args := []any{Class("data-btn"), Type("button")}
+	if danger {
+		args = append(args, Style(map[string]string{"color": "#d8716f", "border-color": "#5a2a2a"}))
+	}
+	return Button(append(args, label)...)
 }

@@ -184,6 +184,10 @@ and every commit updates this file under `Unreleased`.
   the `ToggleRow` primitive. The household card's global panel opens too (body coming next).
 - The rail's household card now opens the global settings flip panel (via the shared settings atom)
   instead of navigating to the Settings route.
+- Global settings panel body: a two-column flip-panel form with live household member chips, base
+  currency, and editable FX rate rows (left) and AI (BYO key toggle + key + model), Appearance (theme
+  `Segmented` + accent `SwatchPicker` + compact), and Data action buttons (right). Built from the
+  shared control primitives; appearance controls hold local state and data actions are wired next.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
