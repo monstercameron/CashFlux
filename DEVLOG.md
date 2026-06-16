@@ -446,8 +446,10 @@ problems and fixes, and what's next.
   excluded packages silently), so the workflow is green-by-construction. Activates once the repo is
   pushed to GitHub (the create-repo step is still pending — needs the owner's `gh` auth).
 
-**Next:** PWA install prompt / update flow, then back to Phase 2 polish (Rule store, custom fields)
-as the loop continues.
+- Completed the transaction **filter set** with a member picker (combines with search/account/
+  category/sort and the shared Clear). Date-range filter + persisting the last filter remain.
+
+**Next:** PWA install prompt, date-range transaction filter, then Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

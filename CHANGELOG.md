@@ -278,8 +278,8 @@ and every commit updates this file under `Unreleased`.
   "To account" picker and creates paired entries (debit + credit, each with `TransferAccountID`) that
   move both balances and are excluded from income/expense. Same-currency only for now; rows labelled
   "Transfer". Deleting either leg removes the reciprocal so balances stay consistent.
-- Transactions: a filter bar (description search + account + category pickers, with Clear) narrows the
-  ledger list, with a distinct "No matching transactions" empty state.
+- Transactions: a filter bar (description search + account + category + member pickers, with Clear)
+  narrows the ledger list, with a distinct "No matching transactions" empty state.
 - Transactions: a comma-separated tags field on income/expense entries; tags show on the row
   (`#tag`) and the search box matches tags as well as descriptions.
 - Transactions: a sort selector (newest first / largest amount / payee A–Z).

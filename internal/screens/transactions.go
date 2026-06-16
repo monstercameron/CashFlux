@@ -63,6 +63,7 @@ func Transactions() ui.Node {
 	filterText := ui.UseState("")
 	filterAcc := ui.UseState("")
 	filterCat := ui.UseState("")
+	filterMember := ui.UseState("")
 	sortBy := ui.UseState("date")
 
 	onDesc := ui.UseEvent(func(v string) {
@@ -85,7 +86,14 @@ func Transactions() ui.Node {
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { filterAcc.Set(e.GetValue()) })
 	onFilterCat := ui.UseEvent(func(e ui.Event) { filterCat.Set(e.GetValue()) })
 	onSortBy := ui.UseEvent(func(e ui.Event) { sortBy.Set(e.GetValue()) })
-	clearFilters := ui.UseEvent(Prevent(func() { filterText.Set(""); filterAcc.Set(""); filterCat.Set(""); sortBy.Set("date") }))
+	onFilterMember := ui.UseEvent(func(e ui.Event) { filterMember.Set(e.GetValue()) })
+	clearFilters := ui.UseEvent(Prevent(func() {
+		filterText.Set("")
+		filterAcc.Set("")
+		filterCat.Set("")
+		filterMember.Set("")
+		sortBy.Set("date")
+	}))
 
 	add := ui.UseEvent(Prevent(func() {
 		acc, ok := accByID[accID.Get()]
@@ -249,12 +257,16 @@ func Transactions() ui.Node {
 	ft := strings.ToLower(strings.TrimSpace(filterText.Get()))
 	fa := filterAcc.Get()
 	fc := filterCat.Get()
+	fm := filterMember.Get()
 	shown := make([]domain.Transaction, 0, len(txns))
 	for _, t := range txns {
 		if fa != "" && t.AccountID != fa {
 			continue
 		}
 		if fc != "" && t.CategoryID != fc {
+			continue
+		}
+		if fm != "" && t.MemberID != fm {
 			continue
 		}
 		if ft != "" && !matchesText(t, ft) {
@@ -298,6 +310,10 @@ func Transactions() ui.Node {
 	for _, c := range categories {
 		filterCatOptions = append(filterCatOptions, Option(Value(c.ID), SelectedIf(fc == c.ID), c.Name))
 	}
+	filterMemberOptions := []ui.Node{Option(Value(""), SelectedIf(fm == ""), "— All members —")}
+	for _, m := range app.Members() {
+		filterMemberOptions = append(filterMemberOptions, Option(Value(m.ID), SelectedIf(fm == m.ID), m.Name))
+	}
 
 	return Div(
 		formCard,
@@ -307,6 +323,7 @@ func Transactions() ui.Node {
 				Input(Class("field"), Type("search"), Placeholder("Search description or tag"), Value(filterText.Get()), OnInput(onFilterText)),
 				Select(Class("field"), OnChange(onFilterAcc), filterAccOptions),
 				Select(Class("field"), OnChange(onFilterCat), filterCatOptions),
+				Select(Class("field"), Title("Member"), OnChange(onFilterMember), filterMemberOptions),
 				Select(Class("field"), Title("Sort by"), OnChange(onSortBy),
 					Option(Value("date"), SelectedIf(sortBy.Get() == "date"), "Newest first"),
 					Option(Value("amount"), SelectedIf(sortBy.Get() == "amount"), "Largest amount"),
