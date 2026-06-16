@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Allocation: exclusion constraint (engine)
+
+- New backlog area (allocation constraints), started bottom-up with the pure engine. Added a
+  `Constraints` struct to `internal/allocate` rather than a bare `exclude map` parameter, so the
+  obvious follow-ups (max-per-destination, required/emergency buffer, min-balance) slot in as more
+  fields without breaking call sites. First field: `Exclude` (candidate-ID set) with an `Eligible`
+  predicate.
+- `RankWith(candidates, weights, constraints)` filters ineligible candidates, then delegates to the
+  existing `Rank`. Kept `Rank` untouched and proved `RankWith(_, _, Constraints{})` is identical to
+  it, so existing callers and tests are unaffected.
+- Tests cover exclusion (excluded id absent, survivors correctly ordered), the zero-constraint
+  equivalence, and the `Eligible` predicate including the zero-value-accepts-all case.
+- **Next.** Wire it into the Allocate screen: per-candidate exclude toggles that build the `Exclude`
+  set and call `RankWith`, so the user can park destinations they don't want recommended.
+
 ## 2026-06-16 — Transactions: per-row Duplicate
 
 - Small, self-contained quality-of-life feature: a Duplicate button on each transaction row. The

@@ -24,6 +24,61 @@ func TestScoreNormalizesAndWeights(t *testing.T) {
 	}
 }
 
+func TestRankWithExcludes(t *testing.T) {
+	cands := []Candidate{
+		{ID: "a", ExpectedReturnAPR: 10},
+		{ID: "b", ExpectedReturnAPR: 5},
+		{ID: "c", ExpectedReturnAPR: 8},
+	}
+	w := Weights{Returns: 1}
+
+	// Excluding "a" leaves b and c, ranked by return (c before b).
+	got := RankWith(cands, w, Constraints{Exclude: map[string]bool{"a": true}})
+	if len(got) != 2 {
+		t.Fatalf("expected 2 ranked, got %d", len(got))
+	}
+	if got[0].Candidate.ID != "c" || got[1].Candidate.ID != "b" {
+		t.Errorf("order = %s,%s; want c,b", got[0].Candidate.ID, got[1].Candidate.ID)
+	}
+	for _, r := range got {
+		if r.Candidate.ID == "a" {
+			t.Error("excluded candidate a should not appear")
+		}
+	}
+}
+
+func TestRankWithZeroConstraintsEqualsRank(t *testing.T) {
+	cands := []Candidate{
+		{ID: "a", ExpectedReturnAPR: 3},
+		{ID: "b", ExpectedReturnAPR: 9},
+	}
+	w := Weights{Returns: 1}
+	a := Rank(cands, w)
+	b := RankWith(cands, w, Constraints{})
+	if len(a) != len(b) {
+		t.Fatalf("lengths differ: %d vs %d", len(a), len(b))
+	}
+	for i := range a {
+		if a[i].Candidate.ID != b[i].Candidate.ID || !approx(a[i].Score, b[i].Score) {
+			t.Errorf("index %d differs: %+v vs %+v", i, a[i], b[i])
+		}
+	}
+}
+
+func TestConstraintsEligible(t *testing.T) {
+	c := Constraints{Exclude: map[string]bool{"x": true}}
+	if c.Eligible(Candidate{ID: "x"}) {
+		t.Error("x should be ineligible")
+	}
+	if !c.Eligible(Candidate{ID: "y"}) {
+		t.Error("y should be eligible")
+	}
+	// Zero-value constraints accept everything.
+	if !(Constraints{}).Eligible(Candidate{ID: "x"}) {
+		t.Error("zero constraints should accept all")
+	}
+}
+
 func TestScoreEqualWeights(t *testing.T) {
 	c := Candidate{ExpectedReturnAPR: 0, StabilityScore: 100, LiquidityScore: 0, DebtReduction: true}
 	// Equal weights over [0, 1, 0, 1] → 0.5.

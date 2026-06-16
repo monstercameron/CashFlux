@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Allocation exclusion constraint (`internal/allocate`): a `Constraints` struct (currently an
+  `Exclude` set of candidate IDs) with `Eligible`, plus `RankWith(candidates, weights, constraints)`
+  that filters ineligible candidates before ranking. Zero-value constraints make it identical to
+  `Rank`. Table-tested. Lets the user leave specific destinations out of the recommendation.
 - Per-row "Duplicate" action on transactions: copies a transaction to today with a fresh id (tags
   and custom fields included), saving it through the validated path. Offered for income/expense rows
   only — a duplicate drops any transfer link, so it becomes a standalone entry rather than a broken

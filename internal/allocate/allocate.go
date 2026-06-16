@@ -89,3 +89,27 @@ func Rank(candidates []Candidate, w Weights) []Ranked {
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
 	return out
 }
+
+// Constraints narrows which candidates are eligible before ranking. It is a
+// struct (not a bare set) so future constraints — caps, required destinations —
+// can be added without changing call sites.
+type Constraints struct {
+	Exclude map[string]bool // candidate IDs to leave out of the ranking entirely
+}
+
+// Eligible reports whether a candidate passes the constraints.
+func (c Constraints) Eligible(cand Candidate) bool {
+	return !c.Exclude[cand.ID]
+}
+
+// RankWith filters the candidates by the constraints, then ranks the survivors.
+// With zero-value constraints it is identical to Rank.
+func RankWith(candidates []Candidate, w Weights, cons Constraints) []Ranked {
+	filtered := make([]Candidate, 0, len(candidates))
+	for _, c := range candidates {
+		if cons.Eligible(c) {
+			filtered = append(filtered, c)
+		}
+	}
+	return Rank(filtered, w)
+}

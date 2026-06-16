@@ -396,7 +396,8 @@ Shared control components (from mockup):
 - [~] ★ Criterion scorers: returns, stability, liquidity, debt reduction done (`internal/allocate`); goal-progress criterion later
 - [x] ★ Weighted combination by profile; normalization; deterministic (`Score`/`Rank`)
 - [ ] `AllocationProfile{ID, Name, Weights, Constraints, CustomCriteria[formulaID]}` + CRUD
-- [ ] Constraints: emergency buffer, max-per-destination, exclusions — applied/clamped
+- [~] Constraints: emergency buffer, max-per-destination, exclusions — applied/clamped
+      — `Constraints{Exclude}` + `RankWith` done & tested (engine); buffer/max-per-destination + UI later
 - [x] Candidate set assembly (asset accounts + high-interest liabilities + unfinished goals)
 - [x] Ranked output with per-criterion breakdown (no black box)
 - [~] Allocate screen: profile select → ranked suggestions done; amount input + constraints later
