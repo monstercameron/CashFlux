@@ -38,11 +38,13 @@ func Goals() ui.Node {
 		base = "USD"
 	}
 
+	accounts := app.Accounts()
 	name := ui.UseState("")
 	target := ui.UseState("")
 	current := ui.UseState("0")
 	owner := ui.UseState(domain.GroupOwnerID)
 	dateStr := ui.UseState("")
+	linkAcct := ui.UseState("")
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 
@@ -51,6 +53,7 @@ func Goals() ui.Node {
 	onCurrent := ui.UseEvent(func(v string) { current.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateStr.Set(v) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+	onLinkAcct := ui.UseEvent(func(e ui.Event) { linkAcct.Set(e.GetValue()) })
 
 	goalDefs := app.CustomFieldDefsFor("goal")
 	onCustom := func(key, value string) {
@@ -87,7 +90,7 @@ func Goals() ui.Node {
 		g := domain.Goal{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			TargetAmount: money.New(tgt, base), CurrentAmount: money.New(cur, base), TargetDate: targetDate,
-			Custom: customValuesToMap(goalDefs, customVals.Get()),
+			AccountID: linkAcct.Get(), Custom: customValuesToMap(goalDefs, customVals.Get()),
 		}
 		if err := app.PutGoal(g); err != nil {
 			errMsg.Set(err.Error())
@@ -97,6 +100,7 @@ func Goals() ui.Node {
 		target.Set("")
 		current.Set("0")
 		dateStr.Set("")
+		linkAcct.Set("")
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		bump()
@@ -110,7 +114,7 @@ func Goals() ui.Node {
 		bump()
 	}
 
-	saveGoal := func(id, newName, targetStr, dateStr string) {
+	saveGoal := func(id, newName, targetStr, dateStr, accountID string) {
 		for _, g := range app.Goals() {
 			if g.ID != id {
 				continue
@@ -118,6 +122,7 @@ func Goals() ui.Node {
 			if n := strings.TrimSpace(newName); n != "" {
 				g.Name = n
 			}
+			g.AccountID = accountID
 			cur := g.TargetAmount.Currency
 			if cur == "" {
 				cur = base
@@ -169,6 +174,7 @@ func Goals() ui.Node {
 	for _, m := range app.Members() {
 		ownerOptions = append(ownerOptions, Option(Value(m.ID), SelectedIf(owner.Get() == m.ID), m.Name))
 	}
+	linkOptions := goalAccountOptions(accounts, linkAcct.Get())
 
 	form := Section(Class("card"),
 		H2(Class("card-title"), "Add goal"),
@@ -177,6 +183,7 @@ func Goals() ui.Node {
 			Input(Class("field"), Type("number"), Placeholder("Target ("+base+")"), Value(target.Get()), Step("0.01"), OnInput(onTarget)),
 			Input(Class("field"), Type("number"), Placeholder("Saved so far"), Value(current.Get()), Step("0.01"), OnInput(onCurrent)),
 			Select(Class("field"), OnChange(onOwner), ownerOptions),
+			Select(Class("field"), Title("Linked account (optional)"), OnChange(onLinkAcct), linkOptions),
 			Input(Class("field"), Type("date"), Value(dateStr.Get()), OnInput(onDate)),
 			MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
@@ -204,7 +211,7 @@ func Goals() ui.Node {
 		rows := MapKeyed(goals,
 			func(g domain.Goal) any { return g.ID },
 			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal})
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal})
 			},
 		)
 		listBody = Div(rows)
@@ -221,9 +228,30 @@ func Goals() ui.Node {
 
 type goalRowProps struct {
 	Goal         domain.Goal
+	Accounts     []domain.Account
 	OnDelete     func(string)
 	OnContribute func(domain.Goal, string)
-	OnSave       func(id, name, target, date string)
+	OnSave       func(id, name, target, date, accountID string)
+}
+
+// goalAccountOptions builds the linked-account <option>s for a goal, with a
+// leading "no link" choice; selected matches the current AccountID.
+func goalAccountOptions(accounts []domain.Account, selected string) []ui.Node {
+	opts := []ui.Node{Option(Value(""), SelectedIf(selected == ""), "— No linked account —")}
+	for _, a := range accounts {
+		opts = append(opts, Option(Value(a.ID), SelectedIf(selected == a.ID), a.Name))
+	}
+	return opts
+}
+
+// accountName returns an account's name by id, or "" when not found.
+func accountName(accounts []domain.Account, id string) string {
+	for _, a := range accounts {
+		if a.ID == id {
+			return a.Name
+		}
+	}
+	return ""
 }
 
 // GoalRow renders one goal's progress toward its target, with contribute and
@@ -248,18 +276,21 @@ func GoalRow(props goalRowProps) ui.Node {
 	nameS := ui.UseState(g.Name)
 	targetS := ui.UseState(targetMajor)
 	dateS := ui.UseState(dateISO)
+	acctS := ui.UseState(g.AccountID)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onTarget := ui.UseEvent(func(v string) { targetS.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
+	onAcct := ui.UseEvent(func(e ui.Event) { acctS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(g.Name)
 		targetS.Set(targetMajor)
 		dateS.Set(dateISO)
+		acctS.Set(g.AccountID)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(g.ID, nameS.Get(), targetS.Get(), dateS.Get())
+		props.OnSave(g.ID, nameS.Get(), targetS.Get(), dateS.Get(), acctS.Get())
 		editing.Set(false)
 	}))
 
@@ -269,6 +300,7 @@ func GoalRow(props goalRowProps) ui.Node {
 				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
 				Input(Class("field"), Type("number"), Placeholder("Target"), Value(targetS.Get()), Step("0.01"), OnInput(onTarget)),
 				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
+				Select(Class("field"), Title("Linked account"), OnChange(onAcct), goalAccountOptions(props.Accounts, acctS.Get())),
 				Button(Class("btn btn-primary"), Type("submit"), "Save"),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
 			),
@@ -290,6 +322,9 @@ func GoalRow(props goalRowProps) ui.Node {
 				sub += " · save " + fmtMoney(per) + "/mo"
 			}
 		}
+	}
+	if n := accountName(props.Accounts, g.AccountID); n != "" {
+		sub += " · linked to " + n
 	}
 
 	return Div(Class("budget"),

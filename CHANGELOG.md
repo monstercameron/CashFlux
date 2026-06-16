@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Link a goal to an account: the goal add and edit forms now have an optional "linked account"
+  picker (populating `Goal.AccountID`), and the goal row shows "linked to <account>". Records which
+  account a goal is funded from.
 - Goal pace guidance: goals with a target date now show how much to save per month to hit it (via a
   new pure `goals.MonthlyNeeded` — remaining ÷ whole months left, rounded up). Shown only for
   incomplete goals with a future date.

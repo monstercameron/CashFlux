@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Goals: linked account
+
+- Put the long-defined-but-unused `Goal.AccountID` to work. Added an optional "linked account"
+  select to both the add form and the inline editor (shared `goalAccountOptions` helper with a
+  leading "no link" choice), threaded the account id through `add` and `saveGoal` (its signature
+  grew a param), and the row now shows "· linked to <name>" via an `accountName` lookup.
+- **Scope — record the link, don't auto-sync the balance (yet).** Linking captures *which* account
+  funds the goal; it doesn't override `CurrentAmount` from the account balance. That keeps the
+  contribute flow and progress semantics intact while making the relationship explicit and editable.
+  Auto-funding from the linked account could be a later opt-in.
+- **Next.** Local feature set is essentially complete; remaining substantial item is Phase-3 sync
+  (needs a backend). Will continue with small polish (e.g. owner editing on existing entities) or
+  note completion.
+
 ## 2026-06-16 — Goals: pace guidance (save $X/mo)
 
 - Added `goals.MonthlyNeeded(goal, from)`: remaining ÷ whole months until the target date, partial
