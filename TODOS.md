@@ -11,6 +11,57 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ---
 
+## B. Bug fixes (active, high priority) ★
+
+### B1. Deep-link refresh 404 on non-root paths ★
+
+**Symptom:** visiting/refreshing a non-root URL (e.g. `http://127.0.0.1:8080/accounts`) returns a
+404 instead of routing to the screen.
+**Root cause:** the app uses `router.NewHistoryRouter` (clean pushState URLs; `internal/app/app.go`).
+The client-side `*` fallback (`app.go`) only runs *after* the wasm app boots. A hard refresh / direct
+visit to `/accounts` makes the browser request `/accounts` from the server, which has no such file and
+404s before `index.html` (and thus the SPA) loads. The service worker (`web/sw.js`) only falls back to
+cache on a thrown network error — not on a non-ok response — and `/accounts` isn't cached, so the 404
+passes through. It's a server/SW history-fallback gap, not a router bug.
+**Fix (layered; clean paths must keep working — no hash router):**
+- [ ] Service worker: for navigation requests (`event.request.mode === "navigate"`), serve the cached
+      app shell (`./index.html`) when the network returns non-ok or throws, so deep-link refresh works
+      on repeat / installed / offline visits. (`web/sw.js`)
+- [ ] Server (dev): make `gwc dev` serve `index.html` for unknown non-asset paths (SPA history
+      fallback). Resolve the known `gwc dev -html` issue (see §0) — framework-side change.
+- [ ] Server (prod/static hosting): document the SPA rewrite rule (all non-asset routes → `index.html`).
+- [ ] Verify: hard-refresh at `/accounts`, `/transactions`, `/budgets`, … lands on the correct screen
+      online and offline; the `*` route still catches genuinely unknown paths.
+
+### B2. Dashboard drag should reflow like an iOS app grid (respect multi-cell tiles) ★
+
+**Symptom:** dragging a dashboard widget swaps it 1:1 with the drop target instead of inserting it and
+letting the other tiles reflow; multi-cell (multi-span) widgets aren't handled and can overlap.
+**Root cause:** `ui.Widget` (`internal/ui/widget.go`) handles `OnDrop` by calling
+`dashlayout.Layout.Swap(src, target)`, which exchanges the two widgets' absolute `Col/Row` **and**
+spans. So (a) only the two tiles move — the rest don't reflow; (b) no live displacement during the
+drag (acts only on drop); (c) swapping spans between differently-sized tiles overlaps neighbors and
+corrupts the bento packing. The model is absolute-placement + pairwise-swap; iOS-grid behavior needs
+ordered reflow + size-aware packing.
+**Fix (bottom-up per SDLC):**
+- [ ] Model: change `internal/dashlayout` from absolute placement+`Swap` to an **ordered sequence** of
+      tiles (`ID` + `ColSpan` + `RowSpan`) plus a pure **`Pack`** that flows tiles into the N-column
+      grid (first-fit/dense bin-packing, top→bottom, no overlap, honoring each tile's spans) and derives
+      `Col/Row`. Keep the `GridColumn()/GridRow()` rendering.
+- [ ] Ops: replace `Swap` with `Move(id, toIndex)` (reorder the sequence) then re-`Pack`; keep
+      `Resize` (re-`Pack` after a span change). **Table tests:** mixed-span packing has no overlaps,
+      wraps to the next row, `Move` reflows the rest, determinism, no-mutation, clamp oversized spans
+      to the column count.
+- [ ] State: persist the ordered sequence + spans; migrate the existing localStorage layout and
+      tolerate the old absolute format.
+- [ ] UI: live reflow — on drag-over compute the insertion index and re-pack a preview (CSS-transition
+      animate the shifts); commit on drop. Prefer pointer events over HTML5 DnD for smooth movement +
+      touch support. Respect the On*-hooks-in-loops rule (the cell component owns its handlers).
+- [ ] Verify: dragging a 1×1 into a row of 2×2s reflows cleanly; multi-cell tiles never overlap;
+      resize re-packs; layout persists across reload.
+
+---
+
 ## 0. Foundation & tooling (Phase 0)
 
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH

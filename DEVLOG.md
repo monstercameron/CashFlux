@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Logged two bugs (deep-link 404, dashboard drag) to the backlog
+
+- User reported two bugs; analyzed both and added a high-priority **§B Bug fixes** section to TODOS.
+- **B1 — deep-link 404:** not a router bug. `NewHistoryRouter` gives clean pushState URLs and its `*`
+  fallback only runs after the wasm boots; a hard refresh at `/accounts` hits the server first, which
+  404s before `index.html` loads. `sw.js` only cache-falls-back on a thrown error (not a non-ok
+  response) and doesn't cache `/accounts`. Fix is layered: SW navigation fallback to the cached shell
+  + a server SPA history rewrite (ties into the existing `gwc dev -html` item). Keep clean paths — no
+  hash router.
+- **B2 — dashboard drag:** `ui.Widget`'s drop calls `dashlayout.Swap`, a pairwise exchange of absolute
+  Col/Row + spans, so nothing reflows, there's no live displacement, and span-swaps overlap neighbors.
+  Logged the real fix: re-model `dashlayout` as an ordered sequence + pure size-aware `Pack`
+  (bin-packing), `Move(id, toIndex)` + re-pack for drag, persisted/migrated, with pointer-based live
+  reflow in the UI — iOS-home-screen behavior that respects multi-cell tiles.
+- Analysis only this turn (user asked to add to TODOS, not implement). Both are bottom-up: B2 starts
+  with the pure packing model + table tests before any UI.
+- **Next.** Implement when picked up — B1 is the smaller/safer (SW + serve config); B2 is a real
+  layout-engine rewrite (pure model + tests first).
+
 ## 2026-06-16 — Extract to-do ordering into a tested package
 
 - Knocked off part of TODOS §1.14 "Tests: ordering, status transitions": the list ordering was a
