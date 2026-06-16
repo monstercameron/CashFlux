@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Ledger: cleared balance
+
+- Added pure `ledger.ClearedBalance` (opening balance + only `Cleared` transactions) — the
+  reconciliation figure — mirroring `Balance` but skipping uncleared rows. Tested against a mix of
+  cleared/uncleared/other-account transactions.
+- Surfaced on the account row: when the cleared balance differs from the live balance, the meta line
+  shows "· cleared $X", so the gap (uncleared activity) is visible at a glance and the cleared figure
+  can be matched to a statement. Computed per row in the accounts screen.
+- Reconciliation is now complete: per-row + bulk cleared toggles, a cleared filter, and the cleared
+  balance to check against.
+- **Next.** Genuine small polish as it arises; sync remains out of scope without a backend.
+
 ## 2026-06-16 — Transactions: bulk mark cleared
 
 - Added "Mark cleared"/"Mark uncleared" to the selection bar. One `bulkSetCleared(val)` closure sets

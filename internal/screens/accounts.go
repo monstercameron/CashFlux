@@ -241,8 +241,9 @@ func Accounts() ui.Node {
 	now := time.Now()
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
+		cleared, _ := ledger.ClearedBalance(ac, txns)
 		return ui.CreateElement(AccountRow, accountRowProps{
-			Account: ac, Balance: bal, Stale: freshness.IsStale(ac, windows, now), Members: app.Members(),
+			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), Members: app.Members(),
 			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount, OnSave: saveAccount,
 		})
 	}
@@ -292,6 +293,7 @@ func accountMeta(a domain.Account, bal money.Money) string {
 type accountRowProps struct {
 	Account   domain.Account
 	Balance   money.Money
+	Cleared   money.Money
 	Stale     bool
 	Members   []domain.Member
 	OnDelete  func(string)
@@ -424,12 +426,16 @@ func AccountRow(props accountRowProps) ui.Node {
 	if a.Archived {
 		archLabel = "Restore"
 	}
+	meta := accountMeta(a, props.Balance)
+	if props.Cleared.Amount != props.Balance.Amount {
+		meta += " · cleared " + fmtMoney(props.Cleared)
+	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), a.Name,
 				If(props.Stale, Span(Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), "Stale")),
 			),
-			Span(Class("row-meta"), accountMeta(a, props.Balance)),
+			Span(Class("row-meta"), meta),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
 		If(!a.Archived, Button(Class("btn"), Type("button"), Title("Mark balance as checked today"), OnClick(refresh), "Mark updated")),

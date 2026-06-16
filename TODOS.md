@@ -66,6 +66,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] `internal/dateutil`: month boundaries, fiscal-month start, week-start, period ranges
 - [x] ★ `internal/ledger`: account balance from opening balance + transactions
 - [x] `internal/ledger`: running balance series for an account
+- [x] `internal/ledger`: cleared balance (opening + cleared txns) for reconciliation
 - [x] `internal/ledger`: income/expense totals for a period (exclude transfers)
 - [x] `internal/ledger`: net worth (assets − liabilities) with multi-currency → base
 - [x] `internal/ledger`: per-member and group rollups

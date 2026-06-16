@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Cleared balance on accounts: a pure `ledger.ClearedBalance` (opening balance + only cleared
+  transactions) is shown on each account row when it differs from the live balance — the figure to
+  reconcile against a statement. Tested.
 - Bulk mark transactions cleared/uncleared: the selection bar now has "Mark cleared" and "Mark
   uncleared" actions, so you can reconcile many at once.
 - Filter transactions by cleared status (cleared / not cleared / both), persisted with the rest of

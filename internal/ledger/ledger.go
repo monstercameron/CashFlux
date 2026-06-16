@@ -50,6 +50,27 @@ func Balance(account domain.Account, all []domain.Transaction) (money.Money, err
 	return bal, nil
 }
 
+// ClearedBalance returns an account's opening balance plus only its cleared
+// transactions — the figure to reconcile against a statement. Uncleared
+// transactions are excluded.
+func ClearedBalance(account domain.Account, all []domain.Transaction) (money.Money, error) {
+	bal, err := openingBalance(account)
+	if err != nil {
+		return money.Money{}, err
+	}
+	for _, t := range all {
+		if t.AccountID != account.ID || !t.Cleared {
+			continue
+		}
+		next, err := bal.Add(t.Amount)
+		if err != nil {
+			return money.Money{}, fmt.Errorf("ledger: account %s: %w", account.ID, err)
+		}
+		bal = next
+	}
+	return bal, nil
+}
+
 // RunningBalances returns the cumulative balance after each of the account's
 // transactions, in the order given. Sort by date beforehand for a chronological
 // series.

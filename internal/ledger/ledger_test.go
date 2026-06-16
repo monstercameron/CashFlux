@@ -37,6 +37,29 @@ func TestBalance(t *testing.T) {
 	}
 }
 
+func TestClearedBalance(t *testing.T) {
+	acc := domain.Account{ID: "a1", Currency: "USD", OpeningBalance: usd(10000)}
+	all := []domain.Transaction{
+		{ID: "t1", AccountID: "a1", Amount: usd(5000), Cleared: true},
+		{ID: "t2", AccountID: "a1", Amount: usd(-3000)}, // not cleared → excluded
+		{ID: "t3", AccountID: "a1", Amount: usd(-1000), Cleared: true},
+		{ID: "t4", AccountID: "other", Amount: usd(9999), Cleared: true}, // other account → ignored
+	}
+	cleared, err := ClearedBalance(acc, all)
+	if err != nil {
+		t.Fatalf("ClearedBalance error: %v", err)
+	}
+	// 10000 + 5000 - 1000 = 14000 (the uncleared -3000 is excluded).
+	if !cleared.Equal(usd(14000)) {
+		t.Errorf("ClearedBalance = %v, want 14000 USD", cleared)
+	}
+	// Full balance includes the uncleared txn: 11000.
+	full, _ := Balance(acc, all[:3])
+	if !full.Equal(usd(11000)) {
+		t.Errorf("Balance = %v, want 11000 USD", full)
+	}
+}
+
 func TestBalanceZeroOpening(t *testing.T) {
 	acc := domain.Account{ID: "a1", Currency: "USD"} // no opening balance
 	bal, err := Balance(acc, []domain.Transaction{{AccountID: "a1", Amount: usd(250)}})
