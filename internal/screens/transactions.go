@@ -114,6 +114,19 @@ func Transactions() ui.Node {
 		filterAtom.Set(cleared)
 		uistate.PersistTxFilter(cleared)
 	}))
+	exportFiltered := ui.UseEvent(Prevent(func() {
+		rows := applyTxFilter(app.Transactions(), filterAtom.Get())
+		if len(rows) == 0 {
+			errMsg.Set("No transactions match to export.")
+			return
+		}
+		data, err := app.TransactionsCSV(rows)
+		if err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		downloadBytes("transactions.csv", "text/csv", data)
+	}))
 
 	add := ui.UseEvent(Prevent(func() {
 		acc, ok := accByID[accID.Get()]
@@ -393,53 +406,7 @@ func Transactions() ui.Node {
 	}
 
 	txns := app.Transactions()
-	sort.Slice(txns, func(i, j int) bool { return txns[i].Date.After(txns[j].Date) })
-
-	ft := strings.ToLower(strings.TrimSpace(f.Text))
-	fa := f.Account
-	fc := f.Category
-	fm := f.Member
-	var fromT, toT time.Time
-	if s := strings.TrimSpace(f.From); s != "" {
-		if d, err := dateutil.ParseDate(s); err == nil {
-			fromT = d
-		}
-	}
-	if s := strings.TrimSpace(f.To); s != "" {
-		if d, err := dateutil.ParseDate(s); err == nil {
-			toT = d
-		}
-	}
-	shown := make([]domain.Transaction, 0, len(txns))
-	for _, t := range txns {
-		if fa != "" && t.AccountID != fa {
-			continue
-		}
-		if fc != "" && t.CategoryID != fc {
-			continue
-		}
-		if fm != "" && t.MemberID != fm {
-			continue
-		}
-		if !fromT.IsZero() && t.Date.Before(fromT) {
-			continue
-		}
-		if !toT.IsZero() && t.Date.After(toT) {
-			continue
-		}
-		if ft != "" && !matchesText(t, ft) {
-			continue
-		}
-		shown = append(shown, t)
-	}
-
-	switch f.Sort {
-	case "amount":
-		sort.Slice(shown, func(i, j int) bool { return absAmount(shown[i]) > absAmount(shown[j]) })
-	case "payee":
-		sort.Slice(shown, func(i, j int) bool { return strings.ToLower(shown[i].Desc) < strings.ToLower(shown[j].Desc) })
-	}
-	// "date" keeps the newest-first order already applied above.
+	shown := applyTxFilter(txns, f)
 
 	var listBody ui.Node
 	switch {
@@ -462,17 +429,17 @@ func Transactions() ui.Node {
 		listBody = Div(Class("rows"), rows)
 	}
 
-	filterAccOptions := []ui.Node{Option(Value(""), SelectedIf(fa == ""), "— All accounts —")}
+	filterAccOptions := []ui.Node{Option(Value(""), SelectedIf(f.Account == ""), "— All accounts —")}
 	for _, a := range accounts {
-		filterAccOptions = append(filterAccOptions, Option(Value(a.ID), SelectedIf(fa == a.ID), a.Name))
+		filterAccOptions = append(filterAccOptions, Option(Value(a.ID), SelectedIf(f.Account == a.ID), a.Name))
 	}
-	filterCatOptions := []ui.Node{Option(Value(""), SelectedIf(fc == ""), "— All categories —")}
+	filterCatOptions := []ui.Node{Option(Value(""), SelectedIf(f.Category == ""), "— All categories —")}
 	for _, c := range categories {
-		filterCatOptions = append(filterCatOptions, Option(Value(c.ID), SelectedIf(fc == c.ID), c.Name))
+		filterCatOptions = append(filterCatOptions, Option(Value(c.ID), SelectedIf(f.Category == c.ID), c.Name))
 	}
-	filterMemberOptions := []ui.Node{Option(Value(""), SelectedIf(fm == ""), "— All members —")}
+	filterMemberOptions := []ui.Node{Option(Value(""), SelectedIf(f.Member == ""), "— All members —")}
 	for _, m := range app.Members() {
-		filterMemberOptions = append(filterMemberOptions, Option(Value(m.ID), SelectedIf(fm == m.ID), m.Name))
+		filterMemberOptions = append(filterMemberOptions, Option(Value(m.ID), SelectedIf(f.Member == m.ID), m.Name))
 	}
 	bulkCatOptions := []ui.Node{Option(Value(""), SelectedIf(bulkCat.Get() == ""), "No category")}
 	for _, c := range categories {
@@ -496,6 +463,7 @@ func Transactions() ui.Node {
 					Option(Value("payee"), SelectedIf(f.Sort == "payee"), "Payee A–Z"),
 				),
 				Button(Class("btn"), Type("submit"), "Clear"),
+				Button(Class("btn"), Type("button"), Title("Download the shown transactions as CSV"), OnClick(exportFiltered), "Export CSV"),
 			),
 			If(len(selected.Get()) > 0, Div(Class("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
 				Span(Class("muted"), plural(len(selected.Get()), "transaction")+" selected"),
@@ -529,6 +497,57 @@ func absAmount(t domain.Transaction) int64 {
 		return -a
 	}
 	return a
+}
+
+// applyTxFilter returns the transactions matching the filter f, sorted per
+// f.Sort (newest-first by default). Shared by the ledger view and CSV export so
+// "export these" matches exactly what's shown.
+func applyTxFilter(txns []domain.Transaction, f uistate.TxFilter) []domain.Transaction {
+	sorted := append([]domain.Transaction(nil), txns...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Date.After(sorted[j].Date) })
+
+	ft := strings.ToLower(strings.TrimSpace(f.Text))
+	var fromT, toT time.Time
+	if s := strings.TrimSpace(f.From); s != "" {
+		if d, err := dateutil.ParseDate(s); err == nil {
+			fromT = d
+		}
+	}
+	if s := strings.TrimSpace(f.To); s != "" {
+		if d, err := dateutil.ParseDate(s); err == nil {
+			toT = d
+		}
+	}
+	shown := make([]domain.Transaction, 0, len(sorted))
+	for _, t := range sorted {
+		if f.Account != "" && t.AccountID != f.Account {
+			continue
+		}
+		if f.Category != "" && t.CategoryID != f.Category {
+			continue
+		}
+		if f.Member != "" && t.MemberID != f.Member {
+			continue
+		}
+		if !fromT.IsZero() && t.Date.Before(fromT) {
+			continue
+		}
+		if !toT.IsZero() && t.Date.After(toT) {
+			continue
+		}
+		if ft != "" && !matchesText(t, ft) {
+			continue
+		}
+		shown = append(shown, t)
+	}
+
+	switch f.Sort {
+	case "amount":
+		sort.Slice(shown, func(i, j int) bool { return absAmount(shown[i]) > absAmount(shown[j]) })
+	case "payee":
+		sort.Slice(shown, func(i, j int) bool { return strings.ToLower(shown[i].Desc) < strings.ToLower(shown[j].Desc) })
+	}
+	return shown
 }
 
 // matchesText reports whether the (already-lowercased) query appears in a

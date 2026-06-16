@@ -241,6 +241,7 @@ Shared control components (from mockup):
 - [x] Filters: member, account, category, text, date range + sort (combine + clear) + persist last
       filter across reloads (`uistate.UseTxFilter` localStorage atom)
 - [x] Sort options (date, amount, payee)
+- [x] Export the filtered/sorted view to CSV (`applyTxFilter` shared with the list)
 - [x] Row component for actions; inline edit (incl. category) — `TransactionRow` edit mode
 - [x] Bulk select + bulk delete (transfer-aware) + bulk recategorize (select toggle + action bar)
 - [x] Repeat-last helper (pre-fills form from newest txn) + per-row duplicate (copies row to today)

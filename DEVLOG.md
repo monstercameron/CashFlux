@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: export the filtered view to CSV
+
+- Added an "Export CSV" button to the ledger filter bar that downloads exactly what's shown. To
+  guarantee export==view, I extracted the inline filter+sort into a pure `applyTxFilter(txns, f)`
+  used by both the render and the export handler — no duplicated predicate logic to drift.
+- `appstate.TransactionsCSV(txns)` wraps `store.TransactionsToCSV` for an arbitrary subset (the
+  existing `ExportCSV` does all), and a screens-local `downloadBytes` mirrors the app-package one
+  (Blob + transient anchor) so the screens layer can trigger egress without reaching into app.
+- **Caught my own refactor fallout:** removing the inline `fa/fc/fm` locals left the filter-option
+  builders referencing them; pointed those at `f.Account/.Category/.Member`. Also re-ran the native
+  suite in a clean shell — a stray `GOOS=js` from the combined build command had made the first
+  `go test` falsely FAIL (the known lingering-env gotcha), green once isolated.
+- **Next.** The feature set is comprehensive; I'll keep making small, genuinely-useful additions
+  (export ergonomics, empty states) and avoid inventing churn — the major remaining item (sync)
+  needs a backend.
+
 ## 2026-06-16 — Accounts: editable owner (ownership editing uniform)
 
 - Added the owner picker to the account inline editor. Since `AccountRow` already builds a `cp` copy

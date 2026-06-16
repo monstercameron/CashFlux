@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Export filtered transactions to CSV: an "Export CSV" button on the transaction list downloads
+  exactly the currently filtered and sorted set (shared `applyTxFilter` ensures the export matches
+  the view), complementing the export-all in Settings.
 - Change an account's owner: the account inline-edit form now has an owner picker (group or a
   member), updating ownership and scope. Ownership is now editable inline on accounts, budgets, and
   goals.

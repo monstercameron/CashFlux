@@ -99,6 +99,12 @@ func (a *App) ExportCSV() ([]byte, error) {
 	return store.TransactionsToCSV(a.Transactions())
 }
 
+// TransactionsCSV renders an arbitrary set of transactions as CSV — e.g. a
+// filtered subset from the ledger view.
+func (a *App) TransactionsCSV(txns []domain.Transaction) ([]byte, error) {
+	return store.TransactionsToCSV(txns)
+}
+
 // ImportTransactionsCSV parses CSV transaction rows and stores each via the
 // validated write path (best-effort: invalid rows are skipped), returning how
 // many were imported. A parse error (malformed CSV) is returned as-is.
