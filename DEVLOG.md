@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Reload-persistent preferences: the pure engine
+
+- New backlog area: preferences that survive a reload (week start, date format). Established first
+  that store-backed `Settings` do *not* survive reload — `app.Run` calls `appstate.Init(nil, true)`,
+  which re-seeds the in-memory SQLite store on every boot. The only durable channel is localStorage
+  (that is how the dashboard layout persists). So preferences will follow the layout pattern: a
+  localStorage-backed atom, seeded on boot, written on change — separate from the dataset.
+- Per the SDLC rule, started with the pure logic: `internal/prefs`. `Prefs{WeekStart, DateStyle}`
+  plus `FormatDate`, `WeekStartWeekday`, `WeekStartOf`, and `Normalize`. Keeping the display logic in
+  a platform-free package means it is unit-tested on native Go and the wasm layer stays a thin
+  localStorage + form shell.
+- **Decision — `Normalize` everywhere a value is read.** Persisted prefs may be partial or from an
+  older build, so every accessor normalizes first; blanks/unknowns fall back to defaults rather than
+  producing an empty layout string. Same forward-compatibility stance as the custom-field defs.
+- **Next.** Wrap `prefs` in a `uistate` localStorage atom (`UsePrefs`/`PersistPrefs`), then a
+  Settings form to edit it, then route date rendering in the screens through it.
+
 ## 2026-06-16 — Custom fields: Goals, Budgets, Members (rollout complete)
 
 - Applied the now-proven pattern to the last three entity forms in one pass: each gets a

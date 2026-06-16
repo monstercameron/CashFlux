@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Display-preferences engine (`internal/prefs`): a pure `Prefs` type (week start + date style) with
+  `FormatDate` (ISO/US/EU/long), `WeekStartWeekday`, `WeekStartOf` (start-of-week honoring the
+  configured first day), and `Normalize` (fills blank/unknown fields with defaults for forward
+  compatibility). Table-tested. Foundation for reload-persistent user preferences.
 - Custom fields on the Goals, Budgets, and Members forms — completing the rollout across all five
   entity types. Each add-form renders its registered custom fields via `CustomFieldInput`, types the
   values into the entity's `custom{}` map on save, and validates them through the matching appstate
