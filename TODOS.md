@@ -935,9 +935,10 @@ Shared control components (from mockup):
 - [x] ★ Evaluator with allow-list functions (`sum/avg/min/max/count/if/round/abs`) + arithmetic/compare — `internal/formula.Eval`
 - [~] Variable resolution: live figures (net worth/income/expense/counts) done via `Env`; custom fields + filtered aggregates later
 - [~] Typed results (number/bool/text) done; money/percent typing + formatting later
-- [~] `Formula{ID, Name, Expr, Enabled}` store + CRUD — model + persistence done (`domain.Formula`,
-      `formulas` table, store CRUD, dataset round-trip, validated appstate accessors; table-tested).
-      Target/ResultType/Format deferred. Still TODO: save/list/delete UI on Customize.
+- [x] `Formula{ID, Name, Expr, Enabled}` store + CRUD — model + persistence (`domain.Formula`,
+      `formulas` table, store CRUD, dataset round-trip, validated appstate accessors; table-tested)
+      **and** save/list/edit/delete UI on Customize (live result per saved formula). Target/ResultType/
+      Format deferred.
 - [~] Builder UI: live preview + error messages + example chips done (Customize); guided insert later
 - [ ] Surface results on dashboard / relevant entities
 - [x] ★ Extensive tests: tokenizer, parser, evaluator, errors, security (no escape), edge cases —

@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — saved formulas: Customize UI
+
+- Added save/list/edit/delete to the Customize screen: a name input + Save below the calculator, and a
+  "Saved formulas" card (`savedFormulasCard`) listing each formula via a `SavedFormulaRow` component
+  (own handlers) showing name, expression, and its live-evaluated result, with Edit (loads back into
+  the editor) and delete. `evalFormulaDisplay` evaluates each against the current vars.
+- §2.5's remaining piece is now just surfacing enabled formulas' results on the dashboard (a widget) —
+  the harder design call. The Customize save/list loop is complete. New `customize.*` keys; catalog +
+  wasm green.
+
 ## 2026-06-16 — saved formulas: model + persistence
 
 - User said "do all the todos" — scope opened up to the full backlog (gated UX items included). Picked

@@ -495,6 +495,15 @@ var english = Catalog{
 	"customize.exOverBudget":    "Over budget?",
 	"customize.resultTitle":     "Result",
 	"customize.varsTitle":       "Available variables",
+	"customize.savePlaceholder": "Name this formula…",
+	"customize.save":            "Save formula",
+	"customize.saveNeedsBoth":   "Enter a name and a formula first.",
+	"customize.saved":           "Saved.",
+	"customize.savedTitle":      "Saved formulas",
+	"customize.evalError":       "—",
+	"customize.load":            "Edit",
+	"customize.loadTitle":       "Load this formula into the editor",
+	"customize.deleteTitle":     "Delete formula",
 
 	// Insights screen
 	"insights.explainTitle":    "Explain my month",

@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Customize screen can now **save formulas**: name the current expression and save it; saved
+  formulas appear in a list with their **live result**, an Edit button (loads it back into the editor),
+  and delete. So a custom KPI you build once can be kept and revisited.
 - Saved **formulas** (`domain.Formula` + store/state): persist a named custom calculation (expression
   + enabled flag) with full CRUD, export/import round-trip, and validated `appstate.Formulas`/
   `PutFormula`/`DeleteFormula` (id + name + expr required). Table-tested. The store behind reusable
