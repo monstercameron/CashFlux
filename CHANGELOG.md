@@ -156,6 +156,8 @@ and every commit updates this file under `Unreleased`.
 - Budgets widget (1×2) on the dashboard: current-month spend per budget with an ok/near/over
   `ProgressBar` and percent (green/amber/red), via `internal/budgeting`. Always month-scoped since
   budgets are monthly.
+- Goals widget (1×1): the first goal's progress (saved / target + percent and target date) via
+  `internal/goals`, in the reusable `Widget` shell with a `ProgressBar`.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

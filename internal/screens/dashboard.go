@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -75,7 +76,38 @@ func Dashboard() ui.Node {
 		}),
 		recentWidget(txns),
 		budgetsWidget(app, txns, rates),
+		goalsWidget(app),
 	)
+}
+
+// goalsWidget is the 1×1 Goals widget: the first goal's progress (% + saved /
+// target) via internal/goals.
+func goalsWidget(app *appstate.App) ui.Node {
+	list := app.Goals()
+	if len(list) == 0 {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: "goals", Title: "Goals", Draggable: true, GridColumn: "1", GridRow: "5",
+			Body: P(Class("empty text-dim text-[13px]"), "No goals yet."),
+		})
+	}
+	g := list[0]
+	pct := goals.Percent(g)
+	caption := fmt.Sprintf("%d%%", pct)
+	if !g.TargetDate.IsZero() {
+		caption += " · by " + g.TargetDate.Format("Jan 2")
+	}
+	body := Div(
+		Div(Class("flex justify-between text-[13px]"),
+			Span(Class("text-dim"), "saved"),
+			Span(Class("font-display fig"), fmtAccounting(g.CurrentAmount)+" / "+fmtAccounting(g.TargetAmount)),
+		),
+		uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: "bg-fg", Class: "mt-2"}),
+		Div(Class("text-[12px] text-dim mt-1.5"), caption),
+	)
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "goals", Title: "Goal · " + g.Name, Draggable: true, GridColumn: "1", GridRow: "5",
+		Body: body,
+	})
 }
 
 // budgetsWidget is the 1×2 Budgets widget: current-month spend vs limit per
