@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- New `spendsummary` package: turns extracted document rows into a **per-month spend summary**
+  (money out vs. money in, with net), tolerant of varied date formats and currency symbols, surfacing
+  undated rows rather than dropping them. Fully table-tested; the Documents screen view comes next.
 - The Allocate screen now exposes the **goal-progress criterion** end to end: a "Goal-progress weight"
   input and a new **"Finish goals"** profile, each goal candidate carries its real completion
   percentage (so weighting it ranks goals nearest the finish line first), and the per-suggestion

@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — spendsummary: monthly-spend summary logic (§2.2)
+
+- New pure package `internal/spendsummary`: `Summarize([]extract.Row, decimals) []MonthSpend` buckets
+  rows by "YYYY-MM" and totals Out (spend = negative amounts) vs In (positive), matching the import
+  flow's sign convention (vision prompt: negative = expense). Design choices: tolerant date parsing
+  across ~10 layouts; reuses `money.ParseMinor` for exact minor-unit amounts (after stripping $ and
+  commas) — no float rounding; undated rows collect under an empty Month sorted last (surfaced, not
+  dropped); a row with an unparseable amount still counts toward Count but adds 0 (honest totals).
+  Seven table tests (buckets/totals/Net, ordering, mixed formats, undated+garbage, currency symbols,
+  empty). Kept `extract` slim by putting this in its own package rather than extending Row's package.
+- Next (UI last): a Documents-screen summary view over the current extracted rows.
+
 ## 2026-06-16 — allocate UI: goal-progress weight wired end-to-end
 
 - Final (UI-last) slice of the goal-progress criterion. The Allocate screen now: populates each goal
