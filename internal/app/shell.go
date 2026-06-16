@@ -280,15 +280,19 @@ func ResolutionControl() uic.Node {
 			},
 		}),
 		ui.StepperPill(ui.StepperPillProps{
-			Label:  w.FromLabel(),
-			OnPrev: func() { atom.Set(w.StepFrom(-1)) },
-			OnNext: func() { atom.Set(w.StepFrom(1)) },
+			Label:     w.FromLabel(),
+			OnPrev:    func() { atom.Set(w.StepFrom(-1)) },
+			OnNext:    func() { atom.Set(w.StepFrom(1)) },
+			PrevLabel: uistate.T("resolution.fromEarlier"),
+			NextLabel: uistate.T("resolution.fromLater"),
 		}),
 		Span(Class("text-faint"), "–"),
 		ui.StepperPill(ui.StepperPillProps{
-			Label:  w.ToLabel(),
-			OnPrev: func() { atom.Set(w.StepTo(-1)) },
-			OnNext: func() { atom.Set(w.StepTo(1)) },
+			Label:     w.ToLabel(),
+			OnPrev:    func() { atom.Set(w.StepTo(-1)) },
+			OnNext:    func() { atom.Set(w.StepTo(1)) },
+			PrevLabel: uistate.T("resolution.toEarlier"),
+			NextLabel: uistate.T("resolution.toLater"),
 		}),
 	)
 }

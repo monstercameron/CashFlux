@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B15 (slice): stepper + swatch labels
+
+- `StepperPill` gained `PrevLabel`/`NextLabel` props (default "Previous"/"Next"), wired to the
+  resolution control's from/to steppers with localized labels ("Move start earlier", …) so the bare
+  ‹/› buttons announce. `SwatchPicker` is now a `role="radiogroup"` (aria-label "Accent color") of
+  `role="radio"` swatches, each `aria-label`led by its hex with `aria-checked` for the selection.
+- Same as the Toggle decision: didn't add tabindex to the div-based swatches (focusable-but-not-operable
+  trap) — keyboard ops is the separate item. Closes the icon-button-label part of B15's "Custom
+  controls". New `resolution.*` keys; catalog + wasm green.
+
 ## 2026-06-16 — B15 (slice): central control ARIA
 
 - Roles/state on the shared controls (one edit → every usage): `Toggle` gets `aria-checked` + an

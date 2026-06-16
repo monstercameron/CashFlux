@@ -408,10 +408,10 @@ one-line a11y item in §1.20.
       pointer-only); inline-edit rows manage focus on enter/exit.
 - [ ] **Dialogs (`FlipPanel`, the B11 add panel, confirms):** `role="dialog"` + `aria-modal`, focus
       trap, Esc to close, restore focus to the trigger on close.
-- [~] **Custom controls → correct ARIA:** Segmented is now `role="radiogroup"` of `role="radio"` +
-      `aria-checked`; Toggle/ToggleRow is `role="switch"` + `aria-checked` + accessible name. Still
-      TODO: StepperPill ‹›, Swatch, and the gear/menu/grip icon-buttons need `aria-label`s (and real
-      keyboard operability for the div-based Toggle/Swatch — the Keyboard item).
+- [~] **Custom controls → correct ARIA:** Segmented = `role="radiogroup"`/`role="radio"`/`aria-checked`;
+      Toggle/ToggleRow = `role="switch"` + `aria-checked` + name; StepperPill ‹/› have `aria-label`s;
+      SwatchPicker = labelled `role="radiogroup"` of `role="radio"` chips. Still TODO: the gear/menu/grip
+      icon-buttons' `aria-label`s, and real keyboard operability for the div-based Toggle/Swatch.
 - [ ] **Focus visibility:** clear `:focus-visible` rings in both themes (custom styling must not
       suppress outlines).
 - [ ] **Screen-reader / live regions:** announce dynamic changes — filtered-result counts, balance

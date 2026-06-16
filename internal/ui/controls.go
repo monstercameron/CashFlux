@@ -84,9 +84,11 @@ func segButton(props segButtonProps) uic.Node {
 
 // StepperPillProps configures a StepperPill.
 type StepperPillProps struct {
-	Label  string
-	OnPrev func()
-	OnNext func()
+	Label     string
+	OnPrev    func()
+	OnNext    func()
+	PrevLabel string // accessible name for the ‹ button; default "Previous"
+	NextLabel string // accessible name for the › button; default "Next"
 }
 
 // StepperPill renders the candidate-C range pill (`.rpill`): a centered label
@@ -98,14 +100,21 @@ func StepperPill(props StepperPillProps) uic.Node {
 
 func stepperPill(props StepperPillProps) uic.Node {
 	onPrev, onNext := props.OnPrev, props.OnNext
+	prevLabel, nextLabel := props.PrevLabel, props.NextLabel
+	if prevLabel == "" {
+		prevLabel = "Previous"
+	}
+	if nextLabel == "" {
+		nextLabel = "Next"
+	}
 	return Div(Class("rpill"),
-		Button(Class("rstep"), Type("button"), OnClick(func() {
+		Button(Class("rstep"), Type("button"), Attr("aria-label", prevLabel), OnClick(func() {
 			if onPrev != nil {
 				onPrev()
 			}
 		}), "‹"),
 		Span(Class("rlabel fig"), props.Label),
-		Button(Class("rstep"), Type("button"), OnClick(func() {
+		Button(Class("rstep"), Type("button"), Attr("aria-label", nextLabel), OnClick(func() {
 			if onNext != nil {
 				onNext()
 			}
@@ -183,9 +192,16 @@ func swatch(props SwatchProps) uic.Node {
 	if props.Selected {
 		cls += " sel"
 	}
+	checked := "false"
+	if props.Selected {
+		checked = "true"
+	}
 	onSelect := props.OnSelect
 	return Div(
 		Class(cls),
+		Attr("role", "radio"),
+		Attr("aria-checked", checked),
+		Attr("aria-label", props.Color),
 		Style(map[string]string{"background": props.Color}),
 		OnClick(func() {
 			if onSelect != nil {
@@ -210,7 +226,7 @@ func SwatchPicker(props SwatchPickerProps) uic.Node {
 
 func swatchPicker(props SwatchPickerProps) uic.Node {
 	onSelect := props.OnSelect
-	return Div(Class("flex gap-2 items-center"),
+	return Div(Class("flex gap-2 items-center"), Attr("role", "radiogroup"), Attr("aria-label", "Accent color"),
 		MapKeyed(props.Colors,
 			func(c string) any { return c },
 			func(c string) uic.Node {

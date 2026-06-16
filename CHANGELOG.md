@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the time-resolution stepper's ‹/› arrows now have `aria-label`s ("Move start
+  earlier", etc.) and the accent **color swatches** are a labelled `role="radiogroup"` of `role="radio"`
+  chips (each labelled by its hex, `aria-checked` reflecting the selection) — so these icon/color-only
+  controls are no longer silent to screen readers.
 - Accessibility: the shared **Toggle** switch now exposes `role="switch"` + `aria-checked` + an
   accessible name (from its row label), and the **Segmented** control is a `role="radiogroup"` of
   `role="radio"` buttons with `aria-checked` — so every theme/week-start/density/resolution toggle and
