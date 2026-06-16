@@ -67,7 +67,13 @@ problems and fixes, and what's next.
   is itself a component (the On*-in-loops rule). These back the time-resolution control next but are
   written for reuse anywhere (theme toggle, paging, etc.).
 
-**Next:** wire the time-resolution control (period atom + `dateutil` labels) using these primitives
+- Modeled the time-resolution control **bottom-up first**: new pure `internal/period` package wraps
+  `dateutil` with a `Resolution` (week/month/quarter) and anchor math — `Truncate` (snap to unit
+  start), `Step` (move by whole units), `Label` ("Jun 2026" / "Q3 2026" / "Jun 15 – Jun 21"), and
+  `Range` (from/to anchors → half-open reporting range, with a to<from clamp). Table-driven tests
+  green on native Go. The UI will just hold the resolution + two anchors in state and call this.
+
+**Next:** wire the control into the top bar (resolution + from/to atoms, `Segmented`/`StepperPill`)
 and drive the dashboard period from it; then the `Widget` shell, `FlipPanel`, and bento widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
