@@ -177,13 +177,8 @@ func Sidebar() uic.Node {
 				Icon:   "tag",
 				Active: current == "/rules",
 			})),
-			uic.CreateElement(navItem, navItemProps{
-				Label:  uistate.T("nav.settings"),
-				Path:   "/settings",
-				Icon:   "settings",
-				Active: current == "/settings",
-			}),
 		),
+		// The household card is the single Settings entry point (opens the global panel).
 		uic.CreateElement(HouseholdCard),
 	)
 }

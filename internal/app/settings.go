@@ -181,6 +181,8 @@ func globalSettingsForm() uic.Node {
 	periodAtom := uistate.UsePeriod()
 	noticeAtom := uistate.UseNotice()
 	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
+	logRev := uic.UseState(0)
+	refreshLog := func() { logRev.Set(logRev.Get() + 1) }
 	savePrefs := func(p prefs.Prefs) {
 		p = p.Normalize()
 		prefsAtom.Set(p)
@@ -406,7 +408,39 @@ func globalSettingsForm() uic.Node {
 		),
 	)
 
-	return Div(Class("grid grid-cols-2 gap-x-7 content-start"), left, right)
+	// Debug log viewer (moved here from the old /settings screen): the last entries
+	// of the in-app log ring, newest first, with a refresh.
+	_ = logRev.Get() // re-render when refreshed
+	var logBody uic.Node = P(Class("empty"), uistate.T("settings.noLog"))
+	if app := appstate.Default; app != nil {
+		entries := app.LogRing().Entries()
+		if n := len(entries); n > 0 {
+			const maxShown = 25
+			rows := make([]uic.Node, 0, maxShown)
+			for i := n - 1; i >= 0 && len(rows) < maxShown; i-- {
+				e := entries[i]
+				rows = append(rows, Div(Class("row"),
+					Div(Class("row-main"),
+						Span(Class("row-desc"), e.Message),
+						Span(Class("row-meta"), e.Level.String()),
+					),
+				))
+			}
+			logBody = Div(Class("rows"), rows)
+		}
+	}
+	debugLog := Div(Class("mt-5"),
+		Div(Class("flex items-center justify-between"),
+			Div(Class("set-label"), uistate.T("settings.debugLog")),
+			dataBtn(uistate.T("settings.refresh"), false, refreshLog),
+		),
+		logBody,
+	)
+
+	return Div(
+		Div(Class("grid grid-cols-2 gap-x-7 content-start"), left, right),
+		debugLog,
+	)
 }
 
 // scaleOptions builds the Display-scale <option>s (70%–130% in 10% steps), with

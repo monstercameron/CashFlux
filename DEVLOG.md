@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B4: consolidate the duplicate Settings
+
+- There were two settings entry points: the household-card → global panel (the real editor) and a
+  `/settings` screen (just a household summary + the debug-log viewer). Folded the debug-log viewer
+  into the global panel (`globalSettingsForm`: last 25 ring entries, newest first, refresh button) and
+  deleted `screens/settings.go`, the `/settings` route, and the Settings sidebar item. The household
+  card is now the single way into settings.
+- Cleanup: removed `/settings` from `modules.locked` (only `/` stays locked now) and repointed the
+  modules tests' locked-path example to `/`. The dropped household-summary card was redundant with the
+  panel's own currency/members editors, so not worth re-homing. Full `go test ./...` + wasm green.
+- The `nav.settings` i18n key is now unused but left in place (harmless). This is B4.
+
 ## 2026-06-16 — B9: top-bar breadcrumb
 
 - Replaced the plain title in `TopBar` with a `<nav aria-label="Breadcrumb">`: a Dashboard crumb

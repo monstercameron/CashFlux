@@ -4,11 +4,10 @@
 // localStorage persistence and the settings toggles.
 package modules
 
-// locked lists route paths that must always stay visible: the dashboard (home)
-// and settings (where visibility itself is configured).
+// locked lists route paths that must always stay visible: the dashboard (home).
+// Settings is no longer a routed screen — it lives in the household-card panel.
 var locked = map[string]bool{
-	"/":         true,
-	"/settings": true,
+	"/": true,
 }
 
 // IsLocked reports whether a path must always be visible.

@@ -85,6 +85,12 @@ and every commit updates this file under `Unreleased`.
   (unknown non-asset paths → `index.html`) so deep links/refreshes work, with concrete snippets for
   GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.
 
+### Changed
+- **One settings entry point** now: the duplicate `/settings` screen is gone — its only unique piece,
+  the debug-log viewer, moved into the household-card settings panel (where currency/AI/appearance/
+  data already live). The "Settings" sidebar item is removed; the household card at the bottom of the
+  rail is the single way in. (Module-visibility's locked set is now just the dashboard.)
+
 ### Fixed
 - The sidebar was missing five routed main-line screens — Planning, Allocate, Insights, Documents, and
   Customize were only reachable by typing the URL. Added a **Tools** nav group for them (each with an

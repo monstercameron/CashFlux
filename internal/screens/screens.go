@@ -37,7 +37,6 @@ func All() []Route {
 		{Path: "/members", Label: "Members", Title: "Members", Subtitle: "Your household", Phase: 1, View: Members},
 		{Path: "/categories", Label: "Categories", Title: "Categories", Subtitle: "Income and expense categories", Phase: 1, View: Categories},
 		{Path: "/rules", Label: "Rules", Title: "Rules", Subtitle: "Auto-categorize transactions by keyword", Phase: 2, View: Rules},
-		{Path: "/settings", Label: "Settings", Title: "Settings", Subtitle: "Members, currency, AI, and preferences", Phase: 1, View: Settings},
 	}
 }
 

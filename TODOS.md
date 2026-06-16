@@ -113,16 +113,15 @@ category counts) plus the Debug log — so it reads as an emptier duplicate. (2)
 `internal/app/settings.go`), which holds all the real editing: members, base currency + FX rates, AI
 key/model, appearance (theme/accent/density/week-start/date), data export/import/sample/wipe, freshness
 overrides, module-visibility toggles.
-**Fix (make the household-card panel the one primary settings surface):**
-- [ ] Move the only thing unique to the `/settings` screen — the **Debug log viewer** (+Refresh) —
-      into the global panel as a "Debug" section/sub-panel (satisfies §1.18 "Debug: open log viewer").
-- [ ] Remove the "Settings" nav item + `/settings` route and delete `screens.Settings()` (or repoint
-      the item to `settings.Set(uistate.Global())` so it just opens the panel). Pick one; prefer
-      removing the route so there's a single entry point.
-- [ ] Update the module-visibility "locked screens" set and sidebar filter that reference `/settings`.
-- [ ] Keep Members/Categories as their own nav screens; ensure the panel's manage-links still navigate.
-- [ ] Verify: one settings entry point, no empty/duplicate page; the debug log is reachable from the
-      panel; nothing else regresses (FX/freshness/modules still editable).
+**Fix (make the household-card panel the one primary settings surface):** — done.
+- [x] Moved the **Debug log viewer** (+Refresh, last 25 entries) into the global panel
+      (`globalSettingsForm`). Satisfies §1.18 "Debug: open log viewer".
+- [x] Removed the "Settings" nav item + `/settings` route and deleted `screens.Settings()`. Single
+      entry point = the household card.
+- [x] Updated the module-visibility locked set (only `/` now) + the modules tests.
+- [x] Members/Categories remain their own nav screens; the panel's manage-links are unchanged.
+- [~] Verify: one settings entry point, debug log in the panel, nothing regresses (full `go test ./...`
+      + wasm green; browser spot-check pending).
 
 ### B5. Collapsed rail should reveal labels on hover ★
 
