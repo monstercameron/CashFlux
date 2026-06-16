@@ -206,6 +206,9 @@ and every commit updates this file under `Unreleased`.
 - Resize handles: a widget's right/bottom edge handles now cycle its column/row span
   (`dashlayout.Resize`, clamped to the 4×3 grid bounds) and re-place it live. Every dashboard widget
   is now both draggable and resizable.
+- Bento layout persistence: the arrangement is saved to `localStorage` after every reorder/resize and
+  reseeds the layout atom on load, so a customized dashboard survives reloads (falls back to the
+  default arrangement when absent or invalid).
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

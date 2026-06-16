@@ -216,8 +216,15 @@ problems and fixes, and what's next.
   stays in the tested `dashlayout`; smooth pointer-drag resize is a later polish. Only `kpi-networth`
   currently carries handles (as in the mockup); enabling them across all widgets is the next commit.
 
-**Next:** enable resize handles on all widgets; persist the layout (and per-widget settings) to the
-store Settings so reorg survives reloads; then restyle the non-dashboard screens to the new shell.
+- Enabled drag+resize on **all** widgets (normalized the net-worth widget then `Resizable`-stamped
+  every call), and added **layout persistence to `localStorage`**: `PersistLayout` marshals the layout
+  after each drag/resize and `loadLayout` seeds `UseLayout`'s initial value (falling back to
+  `Default()` when absent/invalid). Chose `localStorage` over the store because the SQLite store is
+  in-memory and re-seeded on boot — only browser storage actually survives a reload. Missing widgets
+  fall back to their default placement, so adding widgets later degrades gracefully.
+
+**Next:** a "reset layout" affordance, then restyle the non-dashboard screens (Accounts, Transactions,
+Budgets, Goals, To-do) to the candidate-C shell so they're not the old top-nav theme inside the new rail.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

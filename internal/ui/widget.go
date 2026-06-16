@@ -76,7 +76,9 @@ func widget(props WidgetProps) uic.Node {
 			OnDragOver(Prevent(func() {})), // allow drop
 			OnDrop(Prevent(func() {
 				if src := dragSrc.Get(); src != "" && src != id {
-					layoutAtom.Set(layout.Swap(src, id))
+					next := layout.Swap(src, id)
+					layoutAtom.Set(next)
+					uistate.PersistLayout(next)
 				}
 				dragSrc.Set("")
 			})),
@@ -97,20 +99,24 @@ func widget(props WidgetProps) uic.Node {
 		args = append(args,
 			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", "Widen"),
 				OnClick(func() {
-					next := cur.ColSpan + 1
-					if next > maxColSpan {
-						next = 1
+					span := cur.ColSpan + 1
+					if span > maxColSpan {
+						span = 1
 					}
-					layoutAtom.Set(layout.Resize(id, next, cur.RowSpan))
+					next := layout.Resize(id, span, cur.RowSpan)
+					layoutAtom.Set(next)
+					uistate.PersistLayout(next)
 				}),
 			),
 			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", "Taller"),
 				OnClick(func() {
-					next := cur.RowSpan + 1
-					if next > maxRowSpan {
-						next = 1
+					span := cur.RowSpan + 1
+					if span > maxRowSpan {
+						span = 1
 					}
-					layoutAtom.Set(layout.Resize(id, cur.ColSpan, next))
+					next := layout.Resize(id, cur.ColSpan, span)
+					layoutAtom.Set(next)
+					uistate.PersistLayout(next)
 				}),
 			),
 		)
