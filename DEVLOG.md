@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Customize screen migrated
+
+- Eighth screen onto i18n: `customize.go` — formula-calculator title/desc, expression placeholder, the
+  example chips ("Savings rate %", etc. — `%` is literal since T only Sprintf's with args), and the
+  Result/Available-variables sections. The formula example *expressions* set on click stay literal
+  (they're code), as do the `true`/`false` result values. Added uistate import; `fmt` stays for the
+  `%v` value fallback.
+- `CustomFieldsManager` (rendered here, defined elsewhere) still has its own strings — a later screen.
+- `i18n` tests + wasm green. 8 screens + chrome. Remaining: Accounts, Transactions, Dashboard,
+  Documents, Allocate, Settings (+ CustomFieldsManager + CustomFieldInput components).
+
 ## 2026-06-16 — i18n: Planning screen migrated
 
 - Seventh screen onto i18n: `planning.go` — debt-payoff calculator (inputs, stat labels, hint/invalid/

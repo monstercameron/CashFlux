@@ -77,6 +77,8 @@ and every commit updates this file under `Unreleased`.
 - The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
   panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
   with a shared `owner.group` key.
+- The Customize (formula) screen's verbiage is now on the language store (calculator title/desc,
+  placeholder, example chips, result/variables sections).
 - The Planning screen's verbiage is now on the language store (debt-payoff calculator inputs/results,
   12-month forecast card + trim what-if, and all the projection/result notes).
 - The Insights (AI) screen's verbiage is now on the language store (explain/ask cards, key hint,

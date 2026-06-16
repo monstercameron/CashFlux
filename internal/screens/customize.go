@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -25,7 +26,7 @@ import (
 func Customize() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	accounts := app.Accounts()
@@ -73,7 +74,7 @@ func Customize() ui.Node {
 	var resultBody ui.Node
 	switch e := strings.TrimSpace(expr.Get()); {
 	case e == "":
-		resultBody = P(Class("muted"), "Type a formula above — e.g. round((income - expense) / income * 100)")
+		resultBody = P(Class("muted"), uistate.T("customize.formulaHint"))
 	default:
 		if val, err := formula.Eval(e, formula.Env{Vars: vars}); err != nil {
 			resultBody = P(Class("err"), err.Error())
@@ -99,25 +100,25 @@ func Customize() ui.Node {
 	return Div(
 		CustomFieldsManager(),
 		Section(Class("card"),
-			H2(Class("card-title"), "Formula calculator"),
-			P(Class("muted"), "Build your own calculation from your live figures. Functions: sum, avg, min, max, count, abs, round, if."),
+			H2(Class("card-title"), uistate.T("customize.calcTitle")),
+			P(Class("muted"), uistate.T("customize.calcDesc")),
 			Form(Class("form-grid"),
-				Input(Class("field field-wide"), Type("text"), Placeholder("e.g. round((income - expense) / income * 100)"), Value(expr.Get()), OnInput(onExpr)),
+				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
 			),
 			Div(Class("flex flex-wrap gap-2 mt-2 items-center"),
-				Span(Class("muted"), "Try:"),
-				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round((income - expense) / income * 100)") }), "Savings rate %"),
-				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round(expense / income * 100)") }), "Spending ratio %"),
-				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("net_worth + liabilities") }), "Gross assets"),
-				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("if(expense > income, 1, 0)") }), "Over budget?"),
+				Span(Class("muted"), uistate.T("customize.try")),
+				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round((income - expense) / income * 100)") }), uistate.T("customize.exSavings")),
+				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round(expense / income * 100)") }), uistate.T("customize.exSpending")),
+				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("net_worth + liabilities") }), uistate.T("customize.exGross")),
+				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("if(expense > income, 1, 0)") }), uistate.T("customize.exOverBudget")),
 			),
 		),
 		Section(Class("card"),
-			H2(Class("card-title"), "Result"),
+			H2(Class("card-title"), uistate.T("customize.resultTitle")),
 			resultBody,
 		),
 		Section(Class("card"),
-			H2(Class("card-title"), "Available variables"),
+			H2(Class("card-title"), uistate.T("customize.varsTitle")),
 			Div(Class("rows"), varRows),
 		),
 	)

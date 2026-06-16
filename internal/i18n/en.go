@@ -133,6 +133,19 @@ var english = Catalog{
 	"planning.totalInterest":      "Total interest",
 	"planning.totalPaid":          "Total paid",
 
+	// Customize screen
+	"customize.formulaHint":     "Type a formula above — e.g. round((income - expense) / income * 100)",
+	"customize.calcTitle":       "Formula calculator",
+	"customize.calcDesc":        "Build your own calculation from your live figures. Functions: sum, avg, min, max, count, abs, round, if.",
+	"customize.exprPlaceholder": "e.g. round((income - expense) / income * 100)",
+	"customize.try":             "Try:",
+	"customize.exSavings":       "Savings rate %",
+	"customize.exSpending":      "Spending ratio %",
+	"customize.exGross":         "Gross assets",
+	"customize.exOverBudget":    "Over budget?",
+	"customize.resultTitle":     "Result",
+	"customize.varsTitle":       "Available variables",
+
 	// Insights screen
 	"insights.explainTitle":   "Explain my month",
 	"insights.explainHint":    "A friendly summary of your month, generated from your live figures.",
