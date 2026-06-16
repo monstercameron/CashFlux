@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Backlog: Electron desktop app as a post-core item (§5.1)
+
+- Added a new `TODOS.md` §5 "Future / nice-to-have (post-core)" tier and logged **standalone
+  desktop app via Electron** as its first item. Placed at the very bottom of the priority-ordered
+  file, after Phase 3 / sync and the continuous Cross-cutting section, to mark it explicitly as
+  lower-priority and post-core — not part of the spec.
+- Scoped it as a thin wrapper that reuses the *exact* production `web/` build (wasm bundle +
+  `wasm_exec.js` + `sw.js` + manifest) as the renderer, so there's no second UI codebase and the
+  wasm stays the single source of truth. Sub-tasks cover wrapper choice (Electron vs. Tauri/Wails —
+  to be decided), scaffold, window chrome, per-OS packaging, a CI artifact job, and verification.
+- Docs-only change; no code or tests affected.
+
 ## 2026-06-16 — Currency display helper (§1.2)
 
 - Closed the §1.2 "format a Money in a target/base currency" checklist item: added

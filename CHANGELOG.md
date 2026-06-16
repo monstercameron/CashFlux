@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A new "Future / nice-to-have (post-core)" backlog section (`TODOS.md` §5) for enhancements to pick
+  up only after the core product (Phases 0–3) is complete. First item: **standalone desktop app via
+  Electron** (§5.1) — wrap the existing Go→wasm / PWA build as a native installable desktop app,
+  reusing the same `web/` shell and wasm bundle, sequenced after the Phase 3 / sync work.
 - An app-wide toast surface for transient notices, pinned to the bottom of the screen with a
   dismiss button and a ~4.5s auto-dismiss (`uistate.Notice` atom + `app.Toast`). Bulk actions that
   previously failed silently now report problems through it: bulk recategorize, bulk mark

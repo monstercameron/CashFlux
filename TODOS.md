@@ -946,3 +946,28 @@ Shared control components (from mockup):
 - [ ] CI green (tests + wasm build) before merge
 - [ ] Periodic bundle-size check (`gwc wasm measure`)
 - [ ] Security review before any data leaves the device (AI calls): scope + redaction
+
+---
+
+## 5. Future / nice-to-have (post-core)
+
+Lower-priority items to pick up **only after the core product (Phases 0–3) is complete**. These are
+enhancements, not part of the core spec; sequence them after the Phase 3 / sync work.
+
+### 5.1 Standalone desktop app via Electron
+
+Wrap the existing WASM/PWA build as a native, installable desktop app (Windows/macOS/Linux) so
+CashFlux can be distributed and launched outside the browser while reusing the exact same Go→wasm
+bundle and `web/` shell. Local-first; no behavior change — just a native window + installer.
+
+- [ ] Decide the wrapper: Electron shell loading the existing `web/` build (vs. evaluate a lighter
+      alternative like Tauri/Wails) — record the choice and trade-offs in DEVLOG
+- [ ] Electron scaffold: `main` process that serves/loads `index.html` + `bin/main.wasm` +
+      `wasm_exec.js` + `sw.js` + `manifest` (correct MIME for `.wasm`; relative asset paths)
+- [ ] Reuse the production `web/` build as the renderer payload — no separate UI codebase; keep the
+      wasm bundle the single source of truth
+- [ ] App window chrome: title, icon, sensible default size, native menu (minimal)
+- [ ] Packaging/installers per OS (e.g. `electron-builder`): Windows installer, macOS `.dmg`, Linux
+      AppImage/deb
+- [ ] Build script / CI job to produce the desktop artifacts from the same wasm build (don't hand-copy)
+- [ ] Verify: app installs and launches natively, loads offline, and matches the PWA behavior
