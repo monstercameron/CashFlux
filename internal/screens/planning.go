@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/forecast"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -59,7 +64,35 @@ func Planning() ui.Node {
 		}
 	}
 
+	forecastCard := Fragment()
+	if app != nil {
+		accounts := app.Accounts()
+		txns := app.Transactions()
+		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
+		mStart, mEnd := dateutil.MonthRange(time.Now())
+		income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
+		monthlyNet := income.Amount - expense.Amount
+
+		series := forecast.Project(net.Amount, []forecast.Recurring{{Label: "net cash flow", Monthly: monthlyNet}}, nil, 12)
+		values := make([]float64, len(series))
+		for i, s := range series {
+			values[i] = float64(s)
+		}
+		endVal := money.New(series[len(series)-1], base)
+		stroke := "#54b884"
+		if monthlyNet < 0 {
+			stroke = "#d8716f"
+		}
+		forecastCard = Section(Class("card"),
+			H2(Class("card-title"), "Net worth in 12 months"),
+			P(Class("muted"), fmt.Sprintf("If this month's net cash flow (%s) continues, projected to %s.", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
+			uiw.AreaChart(uiw.AreaChartProps{Values: values, Stroke: stroke, GradientID: "cf-forecast"}),
+		)
+	}
+
 	return Div(
+		forecastCard,
 		Section(Class("card"),
 			H2(Class("card-title"), "Debt payoff calculator"),
 			P(Class("muted"), "See how long a debt takes to clear and how much interest it costs."),

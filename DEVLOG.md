@@ -387,8 +387,13 @@ problems and fixes, and what's next.
   one-time events scheduled in each month, returning the end-of-month balance series; empty for a
   non-positive horizon. Tests cover recurring-only, a mid-horizon one-time, flat, and zero-horizon.
 
-**Next:** surface the forecast in the Planning screen (net-worth projection from current net worth +
-recurring estimate), then a `Recurring`/`Formula` entity + store CRUD — continuing Phase 2 bottom-up.
+- Surfaced the forecast on **Planning**: a 12-month net-worth projection chart seeded from current
+  `ledger.NetWorth` and this month's net cash flow (income − expense) as the recurring monthly figure,
+  fed through `forecast.Project` into the `AreaChart` (toned red when the monthly net is negative),
+  with a plain-English caption of the projected end value.
+
+**Next:** explicit recurring-items entry / scenarios, then a `Recurring`/`Formula` entity + store
+CRUD — continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

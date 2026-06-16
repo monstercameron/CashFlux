@@ -180,7 +180,9 @@ and every commit updates this file under `Unreleased`.
   returns the end-of-month balance series; `MonthlyNet` sums the recurring flows. Table-driven tested.
 - Planning screen (replacing the stub): a **debt-payoff calculator** — enter balance, APR, and
   monthly payment to see months-to-zero, total interest, and total paid, updating live via the
-  `internal/payoff` engine, with a friendly message when the payment can't cover the interest.
+  `internal/payoff` engine, with a friendly message when the payment can't cover the interest. Plus a
+  **12-month net-worth projection** chart (current net worth + this month's net cash flow, via
+  `internal/forecast` + the area chart).
 - `internal/allocate`: pure capital-allocation scorer — normalizes each candidate on returns,
   stability, liquidity, and debt-reduction, combines by a user `Weights` profile into an explainable
   `Score` + `Breakdown`, and `Rank`s candidates highest-first. Table-driven tested; deterministic.

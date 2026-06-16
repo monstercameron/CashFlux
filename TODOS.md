@@ -382,7 +382,7 @@ Shared control components (from mockup):
 - [~] Debt payoff math (`internal/payoff.Project`: APR accrual, months-to-zero, interest paid) + tests; extra-payment scenarios later
 - [ ] What-if scenarios (add recurring, change spend, extra debt payment, rate change)
 - [ ] Planning screen: build scenario, compare vs actuals, push to forecast
-- [ ] Forecast visualization (balance/net-worth curve)
+- [~] Forecast visualization (net-worth curve) done on Planning; scenario comparison later
 - [ ] ★ Tests: forecast projection, payoff math, scenario application
 
 ### 2.7 Capital-allocation engine — `internal/allocate`
