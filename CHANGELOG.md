@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- AI requests now retry transient failures automatically: a rate limit (429), server error (5xx), or
+  network blip is retried up to three times with exponential backoff (0.5s → 1s → 2s) before giving
+  up with the plain-English message. Client errors (bad key, unknown model) aren't retried. The
+  decision logic (`ai.IsRetryable`, `ai.RetryDelayMS`) is pure and table-tested.
 - AI failures now show plain-English, actionable messages instead of a raw error: a rejected key,
   rate limiting vs. spent quota, an unknown model, and server trouble each get their own guidance
   (e.g. "OpenAI didn't accept your API key. Check it in Settings."), and a network/CORS failure says

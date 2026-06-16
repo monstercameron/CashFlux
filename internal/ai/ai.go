@@ -147,6 +147,27 @@ func FormatCostUSD(cost float64) string {
 	}
 }
 
+// MaxRetries is how many times a transient OpenAI failure is retried before
+// giving up (so up to MaxRetries+1 total attempts).
+const MaxRetries = 3
+
+// IsRetryable reports whether a failure is worth retrying: rate limiting (429),
+// server errors (5xx), or a network-level failure (status 0). Client errors like
+// 400/401/404 are not retried — they won't succeed on a repeat.
+func IsRetryable(status int) bool {
+	return status == 0 || status == 429 || status >= 500
+}
+
+// RetryDelayMS returns the backoff delay in milliseconds before retry attempt n
+// (0-indexed) and whether another attempt should be made at all. Delays grow
+// exponentially from 500ms (500, 1000, 2000) up to MaxRetries.
+func RetryDelayMS(attempt int) (ms int, retry bool) {
+	if attempt < 0 || attempt >= MaxRetries {
+		return 0, false
+	}
+	return 500 << attempt, true
+}
+
 // ErrorMessage turns a failed OpenAI HTTP response (its status code and body)
 // into a concise, plain-English, actionable message for the user. It recognizes
 // the common failure modes — rejected key, rate limit vs. spent quota, missing

@@ -862,7 +862,9 @@ Shared control components (from mockup):
 - [x] Error handling: auth, rate limit, network, CORS — plain-English messages via pure, table-tested
       `ai.ErrorMessage(status, body)` + an HTTP-status check in the fetch transport (network/CORS
       handled in the catch). Inherited by Insights + Documents with no screen changes.
-- [ ] Retry/backoff; request cancellation
+- [~] Retry/backoff; request cancellation — **retry/backoff done**: transient failures (429/5xx/network)
+      retry up to 3× with exponential backoff via pure, tested `ai.IsRetryable`/`ai.RetryDelayMS` +
+      transport wiring. Still TODO: request cancellation (AbortController + a caller cancel handle).
 - [x] Request build + response decode (pure codec, round-trip tested) — `internal/ai`
 
 ### 2.2 Documents — AI import

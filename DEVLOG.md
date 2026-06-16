@@ -26,6 +26,19 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — AI retry with backoff
+
+- Added pure `ai.IsRetryable(status)` (429/5xx/0) and `ai.RetryDelayMS(attempt)` (500ms doubling, up
+  to `MaxRetries`=3), table-tested. Rewrote `postCompletions` into a self-recursive `attempt(n)`: on a
+  retryable HTTP status or a network reject it schedules `attempt(n+1)` via `setTimeout` after the
+  backoff, releasing that attempt's js.Funcs first; otherwise it finalizes via onResult/onError.
+- Care points: each attempt allocates its own onResp/onText/onCatch and releases them before
+  retrying (so funcs don't leak across attempts), and the retry timer func releases itself. Client
+  errors (400/401/404) short-circuit to onError — no point retrying a bad key.
+- Request cancellation (the other half of the §2.1 line) is still open; it needs an AbortController
+  wired to a caller-held cancel handle, which is a bigger surface. Retry/backoff stands alone. Pure
+  tests + wasm green.
+
 ## 2026-06-16 — AI cost estimation (pure)
 
 - Added `ai.EstimateCostUSD(model, usage)` over a small per-1M-token price table, plus `pricingFor`

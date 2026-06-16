@@ -6,6 +6,36 @@ import (
 	"testing"
 )
 
+func TestIsRetryable(t *testing.T) {
+	retryable := []int{0, 429, 500, 502, 503}
+	for _, s := range retryable {
+		if !IsRetryable(s) {
+			t.Errorf("status %d should be retryable", s)
+		}
+	}
+	for _, s := range []int{400, 401, 403, 404} {
+		if IsRetryable(s) {
+			t.Errorf("status %d should not be retryable", s)
+		}
+	}
+}
+
+func TestRetryDelayMS(t *testing.T) {
+	want := []int{500, 1000, 2000}
+	for i, w := range want {
+		ms, retry := RetryDelayMS(i)
+		if !retry || ms != w {
+			t.Errorf("RetryDelayMS(%d) = (%d, %v), want (%d, true)", i, ms, retry, w)
+		}
+	}
+	if _, retry := RetryDelayMS(MaxRetries); retry {
+		t.Errorf("RetryDelayMS(%d) should stop retrying", MaxRetries)
+	}
+	if _, retry := RetryDelayMS(-1); retry {
+		t.Error("RetryDelayMS(-1) should not retry")
+	}
+}
+
 func TestEstimateCostUSD(t *testing.T) {
 	// gpt-4o-mini: $0.15/1M in, $0.60/1M out. 1,000,000 in + 1,000,000 out = 0.15 + 0.60 = 0.75.
 	if got, ok := EstimateCostUSD("gpt-4o-mini", Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000}); !ok || got != 0.75 {

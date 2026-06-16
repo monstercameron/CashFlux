@@ -36,7 +36,9 @@ func SendVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL str
 
 // postCompletions sends a prebuilt request body to the chat-completions endpoint
 // and routes the parsed result (or a plain-English error) to the callbacks. It
-// owns the fetch promise chain and releases its js.Funcs when done.
+// owns the fetch promise chain, releases its js.Funcs per attempt, and retries
+// transient failures (429/5xx/network) with exponential backoff (see
+// IsRetryable / RetryDelayMS), giving up with the last error after MaxRetries.
 func postCompletions(apiKey, baseURL string, body []byte, onResult func(string, Usage), onError func(string)) {
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
@@ -51,41 +53,63 @@ func postCompletions(apiKey, baseURL string, body []byte, onResult func(string, 
 		"body": string(body),
 	}
 
-	var onText, onResp, onCatch js.Func
-	release := func() { onText.Release(); onResp.Release(); onCatch.Release() }
+	var attempt func(n int)
+	attempt = func(n int) {
+		var onText, onResp, onCatch js.Func
+		release := func() { onText.Release(); onResp.Release(); onCatch.Release() }
 
-	// status is captured from the response in onResp and read in onText, so an
-	// HTTP failure (401/429/5xx/…) becomes a plain-English message via ErrorMessage.
-	status := 0
-	onResp = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		status = args[0].Get("status").Int()
-		return args[0].Call("text") // a promise resolving to the response body
-	})
-	onText = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		data := []byte(args[0].String())
-		switch {
-		case status >= 400:
-			onError(ErrorMessage(status, data))
-		default:
-			content, err := ParseResponse(data)
-			if err != nil {
-				onError(err.Error())
-			} else {
-				onResult(content, ParseUsage(data))
+		// retryOrFail schedules another attempt after a backoff when the failure is
+		// transient and attempts remain; otherwise it reports msg. Returns true when
+		// a retry was scheduled (so the caller stops).
+		retryOrFail := func(status int, msg string) {
+			ms, ok := RetryDelayMS(n)
+			if !IsRetryable(status) || !ok {
+				onError(msg)
+				return
 			}
+			var timer js.Func
+			timer = js.FuncOf(func(js.Value, []js.Value) any {
+				timer.Release()
+				attempt(n + 1)
+				return nil
+			})
+			js.Global().Call("setTimeout", timer, ms)
 		}
-		release()
-		return nil
-	})
-	onCatch = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		// fetch rejects on network failure or a blocked cross-origin request.
-		onError("Couldn't reach OpenAI. Check your internet connection and try again.")
-		release()
-		return nil
-	})
 
-	js.Global().Call("fetch", baseURL+"/chat/completions", opts).
-		Call("then", onResp).
-		Call("then", onText).
-		Call("catch", onCatch)
+		// status is captured from the response in onResp and read in onText.
+		status := 0
+		onResp = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			status = args[0].Get("status").Int()
+			return args[0].Call("text") // a promise resolving to the response body
+		})
+		onText = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			data := []byte(args[0].String())
+			release()
+			switch {
+			case status >= 400:
+				retryOrFail(status, ErrorMessage(status, data))
+			default:
+				content, err := ParseResponse(data)
+				if err != nil {
+					onError(err.Error())
+				} else {
+					onResult(content, ParseUsage(data))
+				}
+			}
+			return nil
+		})
+		onCatch = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			// fetch rejects on network failure or a blocked cross-origin request;
+			// treat as status 0 (retryable).
+			release()
+			retryOrFail(0, "Couldn't reach OpenAI. Check your internet connection and try again.")
+			return nil
+		})
+
+		js.Global().Call("fetch", baseURL+"/chat/completions", opts).
+			Call("then", onResp).
+			Call("then", onText).
+			Call("catch", onCatch)
+	}
+	attempt(0)
 }
