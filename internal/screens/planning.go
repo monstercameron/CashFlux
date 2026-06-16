@@ -174,7 +174,7 @@ func Planning() ui.Node {
 		forecastCard = Section(Class("card"),
 			H2(Class("card-title"), uistate.T("planning.forecastTitle")),
 			P(Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
-			uiw.AreaChart(uiw.AreaChartProps{Values: values, Stroke: stroke, GradientID: "cf-forecast"}),
+			uiw.AreaChart(uiw.AreaChartProps{Values: values, Stroke: stroke, GradientID: "cf-forecast", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
 			Form(Class("form-grid"),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.trimPlaceholder", base)), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim)),
 			),

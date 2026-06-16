@@ -17,6 +17,7 @@ type AreaChartProps struct {
 	GradientID string  // unique gradient id when several charts share a page; default "cf-area"
 	Width      float64 // viewBox width, default 180
 	Height     float64 // viewBox height, default 90
+	Label      string  // accessible description (the SVG is role="img"); default "Trend chart"
 }
 
 // AreaChart renders a filled area sparkline from a value series using the pure
@@ -38,6 +39,10 @@ func AreaChart(props AreaChartProps) uic.Node {
 	if gid == "" {
 		gid = "cf-area"
 	}
+	label := props.Label
+	if label == "" {
+		label = "Trend chart"
+	}
 
 	pts := chart.Points(props.Values, w, h, 6)
 	area := chart.AreaPath(pts, h)
@@ -45,6 +50,8 @@ func AreaChart(props AreaChartProps) uic.Node {
 
 	return Svg(
 		Class("w-full mt-auto"),
+		Attr("role", "img"),
+		Attr("aria-label", label),
 		Attr("viewBox", fmt.Sprintf("0 0 %g %g", w, h)),
 		Attr("preserveAspectRatio", "none"),
 		Attr("height", "120"),

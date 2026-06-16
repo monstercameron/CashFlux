@@ -459,7 +459,7 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 	}
 	body := Div(Class("flex flex-col h-full"),
 		Div(Class("font-display fig text-[22px]"), fmtAccounting(net)),
-		uiw.AreaChart(uiw.AreaChartProps{Values: values, GradientID: "cf-networth"}),
+		uiw.AreaChart(uiw.AreaChartProps{Values: values, GradientID: "cf-networth", Label: uistate.T("dashboard.netWorthChartLabel", fmtAccounting(net))}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "trend", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",

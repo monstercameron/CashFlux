@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the SVG trend/forecast charts are now `role="img"` with a descriptive `aria-label`
+  (e.g. "Net worth trend, currently $X"), and the sidebar's navigation landmark is labelled "Main
+  navigation" (distinct from the breadcrumb nav) — so screen readers announce them meaningfully.
 - The top bar now shows a **breadcrumb**: off the dashboard it reads "Dashboard › <screen>", with the
   Dashboard crumb a keyboard-operable button that navigates home; the current screen is marked
   `aria-current="page"`. On the dashboard it's just the title.

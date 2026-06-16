@@ -400,8 +400,9 @@ one-line a11y item in §1.20.
       assigned items). Spike is done when the plan is actionable, not when a11y is "finished".
 
 **Deep analysis — the areas the program must cover (becomes tasks after the spike):**
-- [ ] **Semantics & landmarks:** `banner`/`navigation`/`main`/`contentinfo` roles; a single `<h1>` per
-      screen + sane heading order; a "skip to content" link.
+- [~] **Semantics & landmarks:** the sidebar `<nav>` is now labelled "Main navigation" (distinct from
+      the breadcrumb nav); `<main>`/`<aside>`/`<nav>` provide implicit landmarks. Still TODO: a single
+      `<h1>` per screen + heading order, a "skip to content" link, `banner`/`contentinfo` roles.
 - [ ] **Keyboard:** everything reachable + operable in a logical tab order; **the bento drag/resize is
       pointer-only — needs a keyboard alternative** (move/resize via arrows; Shift+drag in B2/B8 is
       pointer-only); inline-edit rows manage focus on enter/exit.
@@ -426,8 +427,8 @@ one-line a11y item in §1.20.
 - [ ] **Forms:** correct input types (number/date), every field labelled, inline validation announced.
 - [ ] **Route changes (SPA):** update `document.title` and move focus to the new screen's `<h1>`/main on
       navigation (intersects B3 routing + B9 breadcrumb).
-- [ ] **Charts:** SVG charts need `role="img"` + `aria-label` summaries (or a data-table fallback) —
-      especially the D3 charts (B14).
+- [~] **Charts:** `ui.AreaChart` is now `role="img"` + `aria-label` with a live-figure summary (net-worth
+      trend, forecast). Remaining: the div-based bar charts + any future D3 charts (B14).
 - [ ] **Touch targets:** ≥44×44px hit areas (watch compact density + small icon buttons).
 - [ ] **i18n:** route `aria-label`s/announcements through the language store (B i18n) so they translate.
 - [ ] **Tooling:** wire an automated a11y check into CI (axe via the browser lane) once Playwright is in.

@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B15 (slice): chart + landmark labels
+
+- Started the accessibility program with low-risk wins: `ui.AreaChart` gained a `Label` prop and now
+  renders `role="img"` + `aria-label` (an SVG without it is an unlabeled graphic to AT). The two
+  callers (dashboard net-worth trend, planning forecast) pass a summary with the live figure. Labelled
+  the sidebar `<nav>` landmark ("Main navigation") so it's distinct from the breadcrumb nav.
+- These are the "Charts: role=img + aria-label" and part of the "Semantics & landmarks" B15 items.
+  More slices to come (icon-button aria-labels, dialog focus-trap, segmented=radiogroup, live regions)
+  — each its own small commit, no big-bang. New i18n keys; catalog + wasm green.
+
 ## 2026-06-16 — B8: menu visibility covers all nav items
 
 - Extended `hideableScreens` (Settings → Screens toggles) to the Tools group (Planning/Allocate/
