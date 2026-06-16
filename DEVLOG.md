@@ -138,8 +138,12 @@ problems and fixes, and what's next.
   `LinePath`/`AreaPath` strings with fixed precision for stable, testable output. Table-driven tests
   assert exact path strings. The view (`internal/ui`) will just feed these to an `<svg>`.
 
-**Next:** `ledger.NetWorthSeries` (net worth as of each cutoff, pure + tested), the `AreaChart` ui
-helper + Net-worth-trend widget, the Cash-flow widget (div bars), then per-widget/global settings.
+- Added `ledger.NetWorthSeries` (pure + tested): net worth as of each cutoff time by counting
+  transactions strictly before it and reusing `NetWorth`, so first-of-month cutoffs give an
+  end-of-month trend. Test walks a single account across Jan/Feb with a deposit and a withdrawal.
+
+**Next:** the `AreaChart` ui helper (feeds `chart` paths to an `<svg>`) + Net-worth-trend widget, the
+Cash-flow widget (div bars from `PeriodTotals`), then per-widget/global settings wiring.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

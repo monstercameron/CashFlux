@@ -112,6 +112,32 @@ func TestPeriodTotals(t *testing.T) {
 	}
 }
 
+func TestNetWorthSeries(t *testing.T) {
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{}}
+	accounts := []domain.Account{
+		{ID: "a", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(10000)}, // $100 opening
+	}
+	all := []domain.Transaction{
+		{AccountID: "a", Date: mustDate("2026-01-15"), Amount: usd(5000)},  // +$50 in Jan
+		{AccountID: "a", Date: mustDate("2026-02-20"), Amount: usd(-2000)}, // -$20 in Feb
+	}
+	// Cutoffs at the first of Feb, Mar, Apr → end-of-Jan, end-of-Feb, end-of-Mar.
+	cutoffs := []time.Time{mustDate("2026-02-01"), mustDate("2026-03-01"), mustDate("2026-04-01")}
+	got, err := NetWorthSeries(accounts, all, cutoffs, rates)
+	if err != nil {
+		t.Fatalf("NetWorthSeries: %v", err)
+	}
+	want := []money.Money{usd(15000), usd(13000), usd(13000)} // $150, $130, $130
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if !got[i].Equal(want[i]) {
+			t.Errorf("series[%d] = %s, want %s", i, got[i].Format(2), want[i].Format(2))
+		}
+	}
+}
+
 func TestNetWorth(t *testing.T) {
 	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.20}}
 	accounts := []domain.Account{

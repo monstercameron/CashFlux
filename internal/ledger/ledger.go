@@ -136,6 +136,28 @@ func NetWorth(accounts []domain.Account, all []domain.Transaction, rates currenc
 	return net, assets, liabilities, nil
 }
 
+// NetWorthSeries returns net worth as of each cutoff time, all in the base
+// currency. Transactions strictly before a cutoff are counted, so passing the
+// first day of successive months yields an end-of-month net-worth trend.
+// Archived accounts are excluded, as in NetWorth.
+func NetWorthSeries(accounts []domain.Account, all []domain.Transaction, cutoffs []time.Time, rates currency.Rates) ([]money.Money, error) {
+	out := make([]money.Money, len(cutoffs))
+	for i, c := range cutoffs {
+		upto := make([]domain.Transaction, 0, len(all))
+		for _, t := range all {
+			if t.Date.Before(c) {
+				upto = append(upto, t)
+			}
+		}
+		net, _, _, err := NetWorth(accounts, upto, rates)
+		if err != nil {
+			return nil, fmt.Errorf("ledger: net worth as of %s: %w", c.Format(dateutil.Layout), err)
+		}
+		out[i] = net
+	}
+	return out, nil
+}
+
 // NetByOwner returns each owner's net worth (sum of their account balances in
 // base currency) keyed by owner ID — member IDs plus domain.GroupOwnerID for
 // shared accounts. Archived accounts are excluded.
