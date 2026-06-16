@@ -15,11 +15,13 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -69,6 +71,16 @@ func Dashboard() ui.Node {
 		}
 	}
 
+	// "Remind me" on the freshness nudge → create a to-do and jump to the list.
+	nav := router.UseNavigate()
+	remindToUpdate := ui.UseEvent(func() {
+		_ = app.PutTask(domain.Task{
+			ID: id.New(), Title: "Update stale account balances",
+			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceNudge,
+		})
+		nav.Navigate("/todo")
+	})
+
 	// Net-worth change since the start of this month (end of last month).
 	nwSub, nwTone := fmt.Sprintf("Assets %s", fmtAccounting(assets)), "text-dim"
 	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 && prev[0].Amount != 0 {
@@ -112,14 +124,14 @@ func Dashboard() ui.Node {
 		savingsRateWidget(income, expense),
 		spendingBreakdownWidget(app, txns, rates, start, end),
 		upcomingBillsWidget(app),
-		freshnessWidget(accounts, app.FreshnessWindows()),
+		freshnessWidget(accounts, app.FreshnessWindows(), remindToUpdate),
 	)
 }
 
 // freshnessWidget is the full-width Freshness nudge: a friendly reminder of which
 // account balances look stale (via internal/freshness), with how long since each
 // was last updated.
-func freshnessWidget(accounts []domain.Account, windows freshness.Windows) ui.Node {
+func freshnessWidget(accounts []domain.Account, windows freshness.Windows, onRemind ui.Handler) ui.Node {
 	now := time.Now()
 	stale := freshness.StaleAccounts(accounts, windows, now)
 	var body ui.Node
@@ -135,7 +147,8 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows) ui.No
 		}
 		body = Div(
 			P(Class("text-dim text-[13px] mb-2"), fmt.Sprintf("%d balances could use a refresh.", len(stale))),
-			Div(Class("flex flex-wrap gap-2"), chips),
+			Div(Class("flex flex-wrap gap-2 items-center"), chips),
+			Button(Class("btn mt-2"), Type("button"), Title("Add a to-do to update these"), OnClick(onRemind), "Remind me"),
 		)
 	}
 	return uiw.Widget(uiw.WidgetProps{

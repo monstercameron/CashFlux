@@ -273,7 +273,8 @@ Shared control components (from mockup):
 - [x] List (open/done) with due + priority
 - [x] Add + complete-toggle + delete + inline edit (title, priority, due, notes); linking later
 - [~] Sort (open first, then due, then title) + hide-done filter done; more filters later
-- [~] Create-from-insight hook done (Insights "Save as task" → AI-sourced to-do); create-from-nudge later
+- [x] Create-from-insight (Insights "Save as task" → AI task) + create-from-nudge (freshness
+      "Remind me" → nudge task) hooks
 - [ ] Tests: ordering, status transitions
 
 ### 1.15 Freshness & friendly nudges

@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- "Remind me" on the dashboard freshness nudge: when balances are stale, one click adds a
+  Nudge-sourced to-do ("Update stale account balances") and jumps to the list — the create-from-nudge
+  hook, completing both AI/nudge → to-do paths.
 - "Save as task" on Insights: turn an AI answer/explanation into a to-do (full text in notes, source
   tagged AI) — wiring the create-from-insight hook so suggestions become actionable.
 - Per-account "Transactions" drill-down: each account row has a button that filters the ledger to

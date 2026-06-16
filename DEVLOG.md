@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Freshness nudge → to-do (create-from-nudge)
+
+- The dashboard freshness widget's stale state now has a "Remind me" button that creates a
+  Nudge-sourced task ("Update stale account balances") and navigates to /todo for confirmation. The
+  handler is a `ui.UseEvent` created at the top of `Dashboard` (stable hook) and threaded into the
+  widget as a `ui.Handler` param — keeping the widget a plain function while keeping the hook order
+  safe.
+- **Gotcha:** `ui.UseEvent` returns `ui.Handler`, not `func()`; the widget param had to be typed
+  `ui.Handler` for `OnClick` to accept it.
+- Both create-from hooks are now done: AI insight → task (Insights) and freshness nudge → task
+  (dashboard). The `SourceNudge`/`SourceAI` task sources both have real producers.
+- **Next.** Genuine small polish; multi-device sync is the only large remaining item and needs a
+  backend.
+
 ## 2026-06-16 — Insights → to-do (create-from-insight)
 
 - The Answer card now has "Save as task": it creates a `domain.Task` from the AI result (rune-safe
