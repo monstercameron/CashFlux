@@ -212,6 +212,36 @@ func Transactions() ui.Node {
 		bump()
 	}
 
+	repeatLast := ui.UseEvent(func() {
+		all := app.Transactions()
+		if len(all) == 0 {
+			return
+		}
+		newest := all[0]
+		for _, t := range all[1:] {
+			if t.Date.After(newest.Date) {
+				newest = t
+			}
+		}
+		desc.Set(newest.Desc)
+		accID.Set(newest.AccountID)
+		catID.Set(newest.CategoryID)
+		switch {
+		case newest.IsTransfer():
+			kind.Set("Transfer")
+			toAccID.Set(newest.TransferAccountID)
+		case newest.Amount.IsNegative():
+			kind.Set("Expense")
+		default:
+			kind.Set("Income")
+		}
+		amt := newest.Amount.Amount
+		if amt < 0 {
+			amt = -amt
+		}
+		amountStr.Set(money.FormatMinor(amt, currency.Decimals(accByID[newest.AccountID].Currency)))
+	})
+
 	var formCard ui.Node
 	if len(accounts) == 0 {
 		formCard = Section(Class("card"), P(Class("empty"), "Add an account first, then you can record transactions."))
@@ -252,6 +282,7 @@ func Transactions() ui.Node {
 				If(!isTransfer, Input(Class("field"), Type("text"), Placeholder("Tags (comma-separated)"), Value(tagsStr.Get()), OnInput(onTags))),
 				Input(Class("field"), Type("date"), Value(dateStr.Get()), OnInput(onDate)),
 				Button(Class("btn btn-primary"), Type("submit"), "Add"),
+				Button(Class("btn"), Type("button"), Title("Copy the most recent transaction"), OnClick(repeatLast), "Repeat last"),
 			),
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 		)

@@ -456,8 +456,11 @@ problems and fixes, and what's next.
   button (dark-themed, fixed bottom-right), call `prompt()` on click, and hide it after the choice or
   on `appinstalled`. With the manifest + service worker, the PWA install path is complete.
 
-**Next:** persist-last-filter, an update-available flow for the service worker, then Phase 2 polish —
-as the loop continues.
+- Added a **"Repeat last"** transaction helper: finds the newest transaction and pre-fills the form
+  (description, account, category, kind from the amount sign / transfer, abs amount formatted in the
+  account currency), so logging a recurring purchase is one click + Add.
+
+**Next:** per-row duplicate, persist-last-filter, then Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

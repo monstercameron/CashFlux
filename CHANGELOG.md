@@ -287,6 +287,8 @@ and every commit updates this file under `Unreleased`.
 - Transactions: a sort selector (newest first / largest amount / payee A–Z).
 - Transactions: auto-suggests a category as you type the description (matching against category names
   via `internal/rules`), without overriding a category you've already chosen.
+- Transactions: a "Repeat last" button pre-fills the form from the most recent transaction (kind,
+  amount, account, category, transfer destination).
 - Goals: a "Contribute" action per goal adds an entered amount to its saved total (advancing the
   progress bar) via a quick prompt. The list now sorts incomplete goals first, then alphabetically.
 - Top bar: the "+ Add" button now navigates to the Transactions screen (was inert).
