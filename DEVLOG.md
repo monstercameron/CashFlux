@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — To-do: inline edit (CRUD-edit complete across all entities)
+
+- Added inline edit to `TaskRow` (title, priority, due, notes), the last entity without it.
+  `saveTask` guards the priority with `TaskPriority.Valid()`, clears the due date when blank, and
+  persists via `PutTask` — mirroring the goal date-clearing behavior.
+- Now genuinely every entity — accounts, transactions, budgets, goals, members, categories, tasks —
+  has inline edit, alongside add, delete, reassign-on-delete (categories/members), and bulk ops
+  (transactions). The local CRUD surface is fully complete.
+- **Next.** No edit gaps remain. Further work is optional UX polish (e.g. a member view filter,
+  sub-categories) or the out-of-scope sync; I'll only add what's genuinely useful.
+
 ## 2026-06-16 — Categories: inline edit (CRUD-edit fully complete)
 
 - The last edit gap: `CategoryRow` now edits inline (name + kind). `saveCat` guards the kind with

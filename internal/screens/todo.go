@@ -94,6 +94,35 @@ func Todo() ui.Node {
 		}
 		bump()
 	}
+	saveTask := func(taskID, newTitle, prio, dueStr, newNotes string) {
+		t, ok := byID[taskID]
+		if !ok {
+			return
+		}
+		if n := strings.TrimSpace(newTitle); n != "" {
+			t.Title = n
+		}
+		if p := domain.TaskPriority(prio); p.Valid() {
+			t.Priority = p
+		}
+		if ds := strings.TrimSpace(dueStr); ds != "" {
+			d, err := dateutil.ParseDate(ds)
+			if err != nil {
+				errMsg.Set("Enter a valid due date (YYYY-MM-DD).")
+				return
+			}
+			t.Due = d
+		} else {
+			t.Due = time.Time{}
+		}
+		t.Notes = strings.TrimSpace(newNotes)
+		if err := app.PutTask(t); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
 
 	prioOptions := []ui.Node{
 		Option(Value(string(domain.PriorityHigh)), SelectedIf(priority.Get() == string(domain.PriorityHigh)), "High"),
@@ -148,7 +177,7 @@ func Todo() ui.Node {
 		rows := MapKeyed(shown,
 			func(t domain.Task) any { return t.ID },
 			func(t domain.Task) ui.Node {
-				return ui.CreateElement(TaskRow, taskRowProps{Task: t, OnToggle: toggleTask, OnDelete: deleteTask})
+				return ui.CreateElement(TaskRow, taskRowProps{Task: t, OnToggle: toggleTask, OnDelete: deleteTask, OnSave: saveTask})
 			},
 		)
 		listBody = Div(Class("rows"), rows)
@@ -175,15 +204,61 @@ type taskRowProps struct {
 	Task     domain.Task
 	OnToggle func(string)
 	OnDelete func(string)
+	OnSave   func(id, title, priority, due, notes string)
 }
 
-// TaskRow renders one task with a complete toggle and delete.
+// TaskRow renders one task with complete/edit/delete. It can be edited inline
+// (title, priority, due, notes). All hooks are declared unconditionally so the
+// edit toggle never reorders them.
 func TaskRow(props taskRowProps) ui.Node {
-	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(props.Task.ID) }))
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Task.ID) }))
-	pr := uistate.UsePrefs().Get()
-
 	t := props.Task
+	dueISO := ""
+	if !t.Due.IsZero() {
+		dueISO = dateutil.FormatDate(t.Due)
+	}
+
+	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t.ID) }))
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
+	pr := uistate.UsePrefs().Get()
+	editing := ui.UseState(false)
+	titleS := ui.UseState(t.Title)
+	prioS := ui.UseState(string(t.Priority))
+	dueS := ui.UseState(dueISO)
+	notesS := ui.UseState(t.Notes)
+	onTitle := ui.UseEvent(func(v string) { titleS.Set(v) })
+	onPrio := ui.UseEvent(func(e ui.Event) { prioS.Set(e.GetValue()) })
+	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
+	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		titleS.Set(t.Title)
+		prioS.Set(string(t.Priority))
+		dueS.Set(dueISO)
+		notesS.Set(t.Notes)
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		props.OnSave(t.ID, titleS.Get(), prioS.Get(), dueS.Get(), notesS.Get())
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		return Div(Class("row"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field field-wide"), Type("text"), Placeholder("Task"), Value(titleS.Get()), OnInput(onTitle)),
+				Select(Class("field"), OnChange(onPrio),
+					Option(Value(string(domain.PriorityHigh)), SelectedIf(prioS.Get() == string(domain.PriorityHigh)), "High"),
+					Option(Value(string(domain.PriorityMedium)), SelectedIf(prioS.Get() == string(domain.PriorityMedium)), "Medium"),
+					Option(Value(string(domain.PriorityLow)), SelectedIf(prioS.Get() == string(domain.PriorityLow)), "Low"),
+				),
+				Input(Class("field"), Type("date"), Value(dueS.Get()), OnInput(onDue)),
+				Input(Class("field field-wide"), Type("text"), Placeholder("Notes"), Value(notesS.Get()), OnInput(onNotes)),
+				Button(Class("btn btn-primary"), Type("submit"), "Save"),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+			),
+		)
+	}
+
 	done := t.Status == domain.StatusDone
 	rowClass := "row"
 	glyph := "☐"
@@ -207,6 +282,7 @@ func TaskRow(props taskRowProps) ui.Node {
 			Span(Class("row-desc"), t.Title),
 			Div(Class("task-meta"), meta),
 		),
+		Button(Class("btn"), Type("button"), Title("Edit task"), OnClick(startEdit), "Edit"),
 		Button(Class("btn-del"), Type("button"), Title("Delete task"), OnClick(del), "✕"),
 	)
 }

@@ -266,7 +266,7 @@ Shared control components (from mockup):
 ### 1.14 To-do (budgeting tasks)
 
 - [x] List (open/done) with due + priority
-- [~] Add + complete-toggle + delete done; edit + linking later
+- [x] Add + complete-toggle + delete + inline edit (title, priority, due, notes); linking later
 - [~] Sort (open first, then due, then title) + hide-done filter done; more filters later
 - [ ] Create-from-nudge and create-from-insight hooks (P2 wires AI source)
 - [ ] Tests: ordering, status transitions
