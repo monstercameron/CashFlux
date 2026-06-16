@@ -26,6 +26,13 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — docs: static-hosting SPA rewrite
+
+- Added a README "Hosting (SPA history fallback)" section: explains why clean (non-hash) routes need
+  the host to rewrite unknown non-asset paths to index.html, and gives the snippet for GitHub Pages
+  (404.html, auto), Netlify (_redirects), Vercel (rewrite), nginx (try_files), Caddy. Closes the
+  prod-hosting layer of B1; the SW + 404.html layers were already done. Docs-only.
+
 ## 2026-06-16 — service-worker SPA navigation fallback
 
 - The SW was network-first with `.catch(() => caches.match(req))` — but `.catch` only fires on a

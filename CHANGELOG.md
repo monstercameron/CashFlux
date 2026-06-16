@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- README "Hosting (SPA history fallback)" section documenting the rewrite rule static hosts need
+  (unknown non-asset paths → `index.html`) so deep links/refreshes work, with concrete snippets for
+  GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.
+
 ### Fixed
 - Deep-link refresh in the installed/offline PWA: the service worker now serves the cached app shell
   for navigation requests, so hard-refreshing a client-side route like `/accounts` boots the app (which

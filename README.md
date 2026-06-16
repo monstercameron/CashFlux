@@ -60,6 +60,20 @@ go test ./...
 Serve `web/` (it contains `index.html`, the manifest, and the service worker) with the wasm bundle in
 `web/bin/`.
 
+### Hosting (SPA history fallback)
+
+CashFlux uses clean (non-hash) client-side routes, so any static host must **rewrite unknown
+non-asset paths to `index.html`** — otherwise a deep link or refresh at e.g. `/accounts` 404s before
+the app loads. The app itself then routes to the right screen. (The installed/offline PWA is already
+covered: the service worker serves the cached shell for navigations.)
+
+- **GitHub Pages** (no rewrite support): the deploy workflow generates a `404.html` copy of the shell,
+  which Pages serves for unknown paths — handled automatically here.
+- **Netlify:** add `/* /index.html 200` to a `_redirects` file.
+- **Vercel:** a rewrite of `/(.*)` → `/index.html` in `vercel.json`.
+- **nginx:** `try_files $uri $uri/ /index.html;`.
+- **Caddy / `caddy file-server`:** `try_files {path} /index.html`.
+
 ## Architecture
 
 Business logic is **platform-independent and table-driven tested** — `internal/money`, `currency`,
