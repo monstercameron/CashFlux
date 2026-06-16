@@ -476,6 +476,12 @@ problems and fixes, and what's next.
   gross assets, over-budget bool) that populate the input. Rendered as four explicit buttons (not a
   loop) so the inline `OnClick` hooks stay at stable positions.
 
+- Added the **liability sub-form** to the Accounts add form: when the selected type is a liability
+  (`AccountType.Class() == ClassLiability`), it reveals credit-limit / APR / min-payment / due-day /
+  lender inputs (each a conditional `If(isLiab, …)` so hooks stay stable) and the add handler parses
+  them onto the `Account`. This finally gives the Upcoming-bills widget and credit-utilization a real
+  data source.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

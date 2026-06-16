@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,11 @@ func Accounts() ui.Node {
 	amount := ui.UseState("0")
 	accType := ui.UseState(string(domain.TypeChecking))
 	owner := ui.UseState(domain.GroupOwnerID)
+	creditLimit := ui.UseState("")
+	apr := ui.UseState("")
+	minPayment := ui.UseState("")
+	dueDay := ui.UseState("")
+	lender := ui.UseState("")
 	errMsg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
@@ -42,6 +48,11 @@ func Accounts() ui.Node {
 	onAmount := ui.UseEvent(func(v string) { amount.Set(v) })
 	onType := ui.UseEvent(func(e ui.Event) { accType.Set(e.GetValue()) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+	onCreditLimit := ui.UseEvent(func(v string) { creditLimit.Set(v) })
+	onApr := ui.UseEvent(func(v string) { apr.Set(v) })
+	onMinPayment := ui.UseEvent(func(v string) { minPayment.Set(v) })
+	onDueDay := ui.UseEvent(func(v string) { dueDay.Set(v) })
+	onLender := ui.UseEvent(func(v string) { lender.Set(v) })
 
 	bump := func() { rev.Set(rev.Get() + 1) }
 
@@ -62,12 +73,32 @@ func Accounts() ui.Node {
 			Class: typ.Class(), Type: typ, Currency: c,
 			OpeningBalance: money.New(amt, c), BalanceAsOf: time.Now(),
 		}
+		if typ.Class() == domain.ClassLiability {
+			if cl, e := money.ParseMinor(strings.TrimSpace(creditLimit.Get()), currency.Decimals(c)); e == nil && cl > 0 {
+				acc.CreditLimit = money.New(cl, c)
+			}
+			if a, e := strconv.ParseFloat(strings.TrimSpace(apr.Get()), 64); e == nil {
+				acc.InterestRateAPR = a
+			}
+			if mp, e := money.ParseMinor(strings.TrimSpace(minPayment.Get()), currency.Decimals(c)); e == nil && mp > 0 {
+				acc.MinPayment = money.New(mp, c)
+			}
+			if dd, e := strconv.Atoi(strings.TrimSpace(dueDay.Get())); e == nil {
+				acc.DueDayOfMonth = dd
+			}
+			acc.Lender = strings.TrimSpace(lender.Get())
+		}
 		if err := app.PutAccount(acc); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		name.Set("")
 		amount.Set("0")
+		creditLimit.Set("")
+		apr.Set("")
+		minPayment.Set("")
+		dueDay.Set("")
+		lender.Set("")
 		errMsg.Set("")
 		bump()
 	}))
@@ -117,6 +148,7 @@ func Accounts() ui.Node {
 		ownerOptions = append(ownerOptions, Option(Value(m.ID), SelectedIf(owner.Get() == m.ID), m.Name))
 	}
 
+	isLiab := domain.AccountType(accType.Get()).Class() == domain.ClassLiability
 	form := Section(Class("card"),
 		H2(Class("card-title"), "Add account"),
 		Form(Class("form-grid"), OnSubmit(add),
@@ -125,6 +157,11 @@ func Accounts() ui.Node {
 			Select(Class("field"), OnChange(onOwner), ownerOptions),
 			Input(Class("field"), Type("text"), Placeholder("Currency"), Value(curr.Get()), OnInput(onCurr)),
 			Input(Class("field"), Type("number"), Placeholder("Opening balance"), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
+			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Credit limit"), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit))),
+			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Interest APR %"), Value(apr.Get()), Step("0.01"), OnInput(onApr))),
+			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Minimum payment"), Value(minPayment.Get()), Step("0.01"), OnInput(onMinPayment))),
+			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Due day (1–28)"), Value(dueDay.Get()), OnInput(onDueDay))),
+			If(isLiab, Input(Class("field"), Type("text"), Placeholder("Lender"), Value(lender.Get()), OnInput(onLender))),
 			Button(Class("btn btn-primary"), Type("submit"), "Add account"),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),

@@ -319,6 +319,9 @@ and every commit updates this file under `Unreleased`.
 - Accounts: a "Stale" badge on accounts whose balance is overdue for a refresh (via
   `freshness.IsStale`), complementing the dashboard nudge and the per-row "Mark updated" action.
 - Accounts: liability rows with a credit limit show their credit utilization ("N% of limit used").
+- Accounts: the add form reveals a **liability sub-form** (credit limit, interest APR, minimum
+  payment, due day, lender) when a liability type is selected — feeding the Upcoming-bills widget and
+  credit-utilization display, which previously had no data entry path.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
