@@ -44,8 +44,15 @@ func widget(props WidgetProps) uic.Node {
 		onGear = func() { settings.Set(uistate.Widget(id, title)) }
 	}
 
+	// Grid placement comes from the shared layout when present (so drag-reorder
+	// and resize take effect), falling back to the caller-provided defaults.
+	gridCol, gridRow := props.GridColumn, props.GridRow
+	if p, ok := uistate.UseLayout().Get().Get(props.ID); ok {
+		gridCol, gridRow = p.GridColumn(), p.GridRow()
+	}
+
 	args := []any{Class("w"), Attr("data-widget", props.ID)}
-	if style := gridStyle(props.GridColumn, props.GridRow); style != nil {
+	if style := gridStyle(gridCol, gridRow); style != nil {
 		args = append(args, Style(style))
 	}
 	if props.Draggable {

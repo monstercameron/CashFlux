@@ -198,8 +198,14 @@ problems and fixes, and what's next.
   CSS strings, swap symmetry + immutability, unknown-id no-ops, and span clamping. The UI will hold a
   `Layout` in an atom, source each widget's placement from it, and write back swaps/resizes.
 
-**Next:** refactor `Dashboard` to source widget grid placement from a layout atom (no behavior change),
-then the drag-to-swap interaction, then edge-resize, then persist the layout to the store.
+- Wired placement through state: new `uistate.UseLayout()` atom (default `dashlayout.Default()`); the
+  `Widget` shell looks up its own `Placement` by ID and uses its CSS grid strings when present, else
+  the caller's `GridColumn`/`GridRow`. No visual change (default == the hardcoded positions) but now a
+  single `layout.Swap`/`Resize` written to the atom re-places every widget. Widgets already subscribe
+  to the atom via the hook, so reorder/resize will re-render the whole grid.
+
+**Next:** the drag-to-swap interaction (`OnDragStart`/`OnDrop` on the widget cell → `layout.Swap`),
+then edge-resize handles → `layout.Resize`, then persist the layout to the store Settings.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

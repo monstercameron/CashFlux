@@ -198,6 +198,8 @@ and every commit updates this file under `Unreleased`.
 - `internal/dashlayout`: pure bento layout model — `Placement` (column/row + spans with CSS grid
   string helpers), `Layout` with the candidate-C `Default` arrangement, immutable `Swap` (exchange
   two widgets' cells) and `Resize` (clamped spans). Table-driven tested; underpins drag-reorder/resize.
+- The `Widget` shell now sources its grid placement from a shared `dashboard:layout` atom (falling
+  back to caller defaults), so reorder/resize changes flow to every widget via state.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
