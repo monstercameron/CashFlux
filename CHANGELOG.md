@@ -218,8 +218,8 @@ and every commit updates this file under `Unreleased`.
   "To account" picker and creates paired entries (debit + credit, each with `TransferAccountID`) that
   move both balances and are excluded from income/expense. Same-currency only for now; rows labelled
   "Transfer". Deleting either leg removes the reciprocal so balances stay consistent.
-- Transactions: a filter bar (description search + account picker, with Clear) narrows the ledger
-  list, with a distinct "No matching transactions" empty state.
+- Transactions: a filter bar (description search + account + category pickers, with Clear) narrows the
+  ledger list, with a distinct "No matching transactions" empty state.
 - Accounts: archive/restore an account from its row — archived accounts move to a separate "Archived"
   section and drop out of the assets/liabilities lists and net-worth totals (already excluded by
   `ledger`).

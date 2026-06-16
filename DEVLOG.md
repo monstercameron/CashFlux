@@ -255,8 +255,10 @@ problems and fixes, and what's next.
   assets/liabilities lists and net-worth totals (`ledger` already excludes them). Toggling just flips
   `Archived` and re-puts through the validated `appstate` path.
 
-**Next:** category/member transaction filters + date range, then the Members and Categories screens,
-then account edit (full field edit) — continuing the priority-ordered Phase-1 backlog.
+- Extended the transaction filter bar with a **category** picker (combines with search + account).
+
+**Next:** date-range + member filters, then the Members and Categories screens, then account edit
+(full field edit) — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

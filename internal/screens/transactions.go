@@ -54,6 +54,7 @@ func Transactions() ui.Node {
 	errMsg := ui.UseState("")
 	filterText := ui.UseState("")
 	filterAcc := ui.UseState("")
+	filterCat := ui.UseState("")
 
 	onDesc := ui.UseEvent(func(v string) { desc.Set(v) })
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
@@ -64,7 +65,8 @@ func Transactions() ui.Node {
 	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
 	onFilterText := ui.UseEvent(func(v string) { filterText.Set(v) })
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { filterAcc.Set(e.GetValue()) })
-	clearFilters := ui.UseEvent(Prevent(func() { filterText.Set(""); filterAcc.Set("") }))
+	onFilterCat := ui.UseEvent(func(e ui.Event) { filterCat.Set(e.GetValue()) })
+	clearFilters := ui.UseEvent(Prevent(func() { filterText.Set(""); filterAcc.Set(""); filterCat.Set("") }))
 
 	add := ui.UseEvent(Prevent(func() {
 		acc, ok := accByID[accID.Get()]
@@ -224,9 +226,13 @@ func Transactions() ui.Node {
 
 	ft := strings.ToLower(strings.TrimSpace(filterText.Get()))
 	fa := filterAcc.Get()
+	fc := filterCat.Get()
 	shown := make([]domain.Transaction, 0, len(txns))
 	for _, t := range txns {
 		if fa != "" && t.AccountID != fa {
+			continue
+		}
+		if fc != "" && t.CategoryID != fc {
 			continue
 		}
 		if ft != "" && !strings.Contains(strings.ToLower(t.Desc), ft) {
@@ -258,6 +264,10 @@ func Transactions() ui.Node {
 	for _, a := range accounts {
 		filterAccOptions = append(filterAccOptions, Option(Value(a.ID), SelectedIf(fa == a.ID), a.Name))
 	}
+	filterCatOptions := []ui.Node{Option(Value(""), SelectedIf(fc == ""), "— All categories —")}
+	for _, c := range categories {
+		filterCatOptions = append(filterCatOptions, Option(Value(c.ID), SelectedIf(fc == c.ID), c.Name))
+	}
 
 	return Div(
 		formCard,
@@ -266,6 +276,7 @@ func Transactions() ui.Node {
 			Form(Class("form-grid"), OnSubmit(clearFilters),
 				Input(Class("field"), Type("search"), Placeholder("Search description"), Value(filterText.Get()), OnInput(onFilterText)),
 				Select(Class("field"), OnChange(onFilterAcc), filterAccOptions),
+				Select(Class("field"), OnChange(onFilterCat), filterCatOptions),
 				Button(Class("btn"), Type("submit"), "Clear"),
 			),
 			listBody,
