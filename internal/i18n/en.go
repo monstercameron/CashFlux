@@ -85,6 +85,12 @@ var english = Catalog{
 	"rules.applyExistingTitle": "Categorize uncategorized transactions using these rules",
 	"rules.applied":            "Categorized %s.",
 	"rules.appliedNone":        "No uncategorized transactions matched your rules.",
+	"rules.suggestedTitle":     "Suggested rules",
+	"rules.suggestedHint":      "Based on how you've categorized past transactions. Add the ones that look right.",
+	"rules.suggestionDesc":     "Categorize \"%s\" as %s",
+	"rules.suggestionMeta":     "Seen in %d transactions",
+	"rules.accept":             "Add",
+	"rules.acceptTitle":        "Add this as a rule",
 
 	"common.owner": "Owner",
 

@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/rulesuggest"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -127,8 +128,37 @@ func Rules() ui.Node {
 		)),
 	)
 
+	acceptSuggestion := func(r rules.Rule) {
+		r.ID = id.New()
+		if err := app.PutRule(r); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
+
+	// Suggested rules from past categorizations (excluding ones a rule already covers).
+	suggestions := rulesuggest.Suggest(app.Transactions(), rs, 3)
+	suggestCard := Fragment()
+	if len(suggestions) > 0 {
+		suggestCard = Section(Class("card"),
+			H2(Class("card-title"), uistate.T("rules.suggestedTitle")),
+			P(Class("muted"), uistate.T("rules.suggestedHint")),
+			Div(Class("rows"), MapKeyed(suggestions,
+				func(s rulesuggest.Suggestion) any { return s.Rule.Match },
+				func(s rulesuggest.Suggestion) ui.Node {
+					return ui.CreateElement(SuggestionRow, suggestionRowProps{
+						Suggestion: s, CategoryName: catName[s.Rule.SetCategoryID], OnAdd: acceptSuggestion,
+					})
+				},
+			)),
+		)
+	}
+
 	return Div(
 		form,
+		suggestCard,
 		Section(Class("card"),
 			Div(Class("flex items-center justify-between"),
 				H2(Class("card-title"), uistate.T("rules.listTitle")),
@@ -160,6 +190,31 @@ func categoryOptions(cats []domain.Category, selected string) []ui.Node {
 		opts = append(opts, Option(Value(c.ID), SelectedIf(selected == c.ID), c.Name))
 	}
 	return opts
+}
+
+type suggestionRowProps struct {
+	Suggestion   rulesuggest.Suggestion
+	CategoryName string
+	OnAdd        func(rules.Rule)
+}
+
+// SuggestionRow renders one suggested rule with its supporting evidence and an
+// Add button that accepts it. It owns its own click handler (per the no-hooks-in-
+// loops rule).
+func SuggestionRow(props suggestionRowProps) ui.Node {
+	s := props.Suggestion
+	add := ui.UseEvent(Prevent(func() { props.OnAdd(s.Rule) }))
+	cat := props.CategoryName
+	if cat == "" {
+		cat = uistate.T("rules.unknownCategory")
+	}
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), uistate.T("rules.suggestionDesc", s.Rule.Match, cat)),
+			Span(Class("row-meta"), uistate.T("rules.suggestionMeta", s.Total)),
+		),
+		Button(Class("btn btn-primary"), Type("button"), Title(uistate.T("rules.acceptTitle")), OnClick(add), uistate.T("rules.accept")),
+	)
 }
 
 type ruleRowProps struct {

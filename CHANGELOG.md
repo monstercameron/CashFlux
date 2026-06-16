@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Rules screen now shows a **Suggested rules** card driven by the suggester: each proposal reads
+  "Categorize "Starbucks" as Cafe · Seen in 6 transactions" with an **Add** button that creates the
+  rule in one click. Suggestions a rule already covers don't appear, and the card hides itself when
+  there's nothing to propose.
 - A pure, deterministic rule suggester (`internal/rulesuggest`): it studies how you've already
   categorized transactions and proposes auto-categorization rules where a payee/description reliably
   maps to one category — appearing often enough, agreeing ≥80% of the time, and not already covered by

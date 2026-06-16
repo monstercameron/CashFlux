@@ -26,6 +26,17 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — suggested-rules review UI
+
+- Wired `rulesuggest.Suggest(transactions, existingRules, 3)` into the Rules screen as a "Suggested
+  rules" card (above the rules list, hidden when empty). Each suggestion is a `SuggestionRow` component
+  (owns its own Add handler, per the no-hooks-in-loops rule) showing "Categorize X as Y · Seen in N
+  transactions" and an Add button that assigns an id and `PutRule`s it.
+- After accepting, `bump()` re-renders: the new rule appears in the list and that suggestion drops off
+  (Suggest skips keys an existing rule already covers) — a satisfying review-and-accept loop with no
+  extra bookkeeping. New `rules.suggested*`/`rules.accept*` i18n keys. Catalog + wasm green.
+- Completes the review-and-accept half of §2.4's "rules from history".
+
 ## 2026-06-16 — rulesuggest: deterministic rule suggestions
 
 - New pure `internal/rulesuggest.Suggest(txns, existing, minCount)`: groups categorized non-transfer

@@ -902,11 +902,10 @@ Shared control components (from mockup):
 - [x] Rule matching engine (pure) + tests — `internal/rules` (Category/Tags/FirstMatch)
 - [x] Rule-based category suggestion on entry — saved rules (priority) + implicit category-name match
       auto-fill category **and tags** as you type the description, never overriding a manual choice
-- [~] AI-proposed rules from history (review + accept) — done as a pure, deterministic suggester
-      (`internal/rulesuggest.Suggest`: payee/desc → consistent category, support-ranked, skips covered
-      keys; table-tested) rather than an AI round-trip (free, instant, explainable). Still TODO: a
-      "suggested rules" review-and-accept UI on the Rules screen; optionally AI proposals for fuzzier
-      patterns.
+- [x] Rules from history (review + accept) — pure deterministic suggester (`internal/rulesuggest`,
+      payee/desc → consistent category, support-ranked, skips covered keys; table-tested) **and** a
+      "Suggested rules" card on the Rules screen with one-click Add (accepted rules drop off the list).
+      (Optional later: AI proposals for fuzzier patterns beyond exact payee/desc keys.)
 - [x] Apply rules on import/entry — entry (add form) + image import run rows through `autoRules`
       (first-match-wins, explicit category beats inferred), and a retroactive `appstate.ApplyRules`
       with an "Apply to existing" button on the Rules screen covers the CSV-paste path and any
