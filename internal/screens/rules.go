@@ -1,0 +1,207 @@
+//go:build js && wasm
+
+package screens
+
+import (
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/state"
+	"github.com/monstercameron/GoWebComponents/ui"
+)
+
+// Rules manages auto-categorization rules: a match phrase assigns a category
+// (and optional tags) to transactions whose payee/description contains it. Add,
+// list, inline-edit, and delete; the first matching rule wins at entry/import.
+func Rules() ui.Node {
+	app := appstate.Default
+	if app == nil {
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+	}
+
+	rev := state.UseAtom("rev:rules", 0)
+	bump := func() { rev.Set(rev.Get() + 1) }
+
+	match := ui.UseState("")
+	categoryID := ui.UseState("")
+	tags := ui.UseState("")
+	errMsg := ui.UseState("")
+
+	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
+	onCategory := ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })
+	onTags := ui.UseEvent(func(v string) { tags.Set(v) })
+
+	cats := app.Categories()
+	catName := make(map[string]string, len(cats))
+	for _, c := range cats {
+		catName[c.ID] = c.Name
+	}
+
+	add := ui.UseEvent(Prevent(func() {
+		if errKey := validateRuleInput(match.Get(), categoryID.Get()); errKey != "" {
+			errMsg.Set(uistate.T(errKey))
+			return
+		}
+		r := rules.Rule{
+			ID:            id.New(),
+			Match:         strings.TrimSpace(match.Get()),
+			SetCategoryID: categoryID.Get(),
+			SetTags:       parseTags(tags.Get()),
+		}
+		if err := app.PutRule(r); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		match.Set("")
+		categoryID.Set("")
+		tags.Set("")
+		errMsg.Set("")
+		bump()
+	}))
+
+	deleteRule := func(ruleID string) {
+		if err := app.DeleteRule(ruleID); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
+	saveRule := func(ruleID, m, cat, tagStr string) {
+		if errKey := validateRuleInput(m, cat); errKey != "" {
+			errMsg.Set(uistate.T(errKey))
+			return
+		}
+		r := rules.Rule{ID: ruleID, Match: strings.TrimSpace(m), SetCategoryID: cat, SetTags: parseTags(tagStr)}
+		if err := app.PutRule(r); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
+
+	form := Section(Class("card"),
+		H2(Class("card-title"), uistate.T("rules.add")),
+		P(Class("muted"), uistate.T("rules.hint")),
+		Form(Class("form-grid"), OnSubmit(add),
+			Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)),
+			Select(Class("field"), OnChange(onCategory), categoryOptions(cats, categoryID.Get())),
+			Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
+			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+		),
+		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
+	)
+
+	rs := app.Rules()
+	list := IfElse(len(rs) == 0,
+		P(Class("empty"), uistate.T("rules.empty")),
+		Div(Class("rows"), MapKeyed(rs,
+			func(r rules.Rule) any { return r.ID },
+			func(r rules.Rule) ui.Node {
+				return ui.CreateElement(RuleRow, ruleRowProps{
+					Rule: r, Categories: cats, CategoryName: catName[r.SetCategoryID],
+					OnDelete: deleteRule, OnSave: saveRule,
+				})
+			},
+		)),
+	)
+
+	return Div(
+		form,
+		Section(Class("card"),
+			H2(Class("card-title"), uistate.T("rules.listTitle")),
+			list,
+		),
+	)
+}
+
+// validateRuleInput returns the i18n key of the first problem with a rule's
+// match/category, or "" when both are present. Keeps the raw appstate error out
+// of the UI by checking the same invariants client-side first.
+func validateRuleInput(match, categoryID string) string {
+	if strings.TrimSpace(match) == "" {
+		return "rules.matchRequired"
+	}
+	if categoryID == "" {
+		return "rules.categoryRequired"
+	}
+	return ""
+}
+
+// categoryOptions builds <option>s for a category picker (a leading "choose"
+// placeholder, then every category by name), marking selected as current.
+func categoryOptions(cats []domain.Category, selected string) []ui.Node {
+	opts := []ui.Node{Option(Value(""), SelectedIf(selected == ""), uistate.T("rules.chooseCategory"))}
+	for _, c := range cats {
+		opts = append(opts, Option(Value(c.ID), SelectedIf(selected == c.ID), c.Name))
+	}
+	return opts
+}
+
+type ruleRowProps struct {
+	Rule         rules.Rule
+	Categories   []domain.Category
+	CategoryName string
+	OnDelete     func(string)
+	OnSave       func(id, match, category, tags string)
+}
+
+// RuleRow is a per-rule row, editable inline (match + category + tags). All hooks
+// are declared unconditionally so the edit toggle never reorders them.
+func RuleRow(props ruleRowProps) ui.Node {
+	r := props.Rule
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
+	editing := ui.UseState(false)
+	matchS := ui.UseState(r.Match)
+	catS := ui.UseState(r.SetCategoryID)
+	tagsS := ui.UseState(strings.Join(r.SetTags, ", "))
+	onMatch := ui.UseEvent(func(v string) { matchS.Set(v) })
+	onCat := ui.UseEvent(func(e ui.Event) { catS.Set(e.GetValue()) })
+	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		matchS.Set(r.Match)
+		catS.Set(r.SetCategoryID)
+		tagsS.Set(strings.Join(r.SetTags, ", "))
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		props.OnSave(r.ID, matchS.Get(), catS.Get(), tagsS.Get())
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		return Div(Class("row"),
+			Form(Class("form-grid"), OnSubmit(saveEdit),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch)),
+				Select(Class("field"), OnChange(onCat), categoryOptions(props.Categories, catS.Get())),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags)),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+			),
+		)
+	}
+
+	target := props.CategoryName
+	if target == "" {
+		target = uistate.T("rules.unknownCategory")
+	}
+	meta := uistate.T("rules.appliesTo", target)
+	if len(r.SetTags) > 0 {
+		meta += " · " + strings.Join(r.SetTags, ", ")
+	}
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), uistate.T("rules.matchLabel", r.Match)),
+			Span(Class("row-meta"), meta),
+		),
+		Button(Class("btn"), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("rules.deleteTitle")), OnClick(del), "✕"),
+	)
+}

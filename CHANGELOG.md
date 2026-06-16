@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A **Rules** screen (System nav, `/rules`) to manage auto-categorization rules: add a rule (match
+  phrase → category, with optional comma-separated tags), see all rules, edit any rule inline, and
+  delete. Client-side validation shows friendly messages (match phrase + category required), and the
+  hint explains first-match-wins. Built on the persisted rule store.
 - Auto-categorization rules are now persisted: a `rules` table in the store with full CRUD
   (`PutRule`/`GetRule`/`DeleteRule`/`ListRules`), inclusion in the export/import dataset (lossless
   round-trip), and validated `appstate` accessors (`Rules`/`PutRule`/`DeleteRule` — a rule needs an

@@ -141,6 +141,12 @@ func Sidebar() uic.Node {
 				Icon:   "tag",
 				Active: current == "/categories",
 			})),
+			If(!hidden.IsHidden("/rules"), uic.CreateElement(navItem, navItemProps{
+				Label:  uistate.T("nav.rules"),
+				Path:   "/rules",
+				Icon:   "tag",
+				Active: current == "/rules",
+			})),
 			uic.CreateElement(navItem, navItemProps{
 				Label:  uistate.T("nav.settings"),
 				Path:   "/settings",

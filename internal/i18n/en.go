@@ -23,6 +23,7 @@ var english = Catalog{
 	"nav.todo":         "To-do",
 	"nav.members":      "Members",
 	"nav.categories":   "Categories",
+	"nav.rules":        "Rules",
 	"nav.settings":     "Settings",
 
 	// Rail sections
@@ -64,6 +65,22 @@ var english = Catalog{
 	"categories.incomeEmpty":    "No income categories yet.",
 	"categories.editTitle":      "Edit category",
 	"categories.deleteTitle":    "Delete category",
+
+	// Rules screen (auto-categorization)
+	"rules.add":              "Add rule",
+	"rules.hint":             "When a transaction's payee or description contains the phrase, it's assigned this category (and any tags). The first matching rule wins.",
+	"rules.matchPlaceholder": "If text contains… (e.g. uber)",
+	"rules.tagsPlaceholder":  "Tags, comma-separated (optional)",
+	"rules.chooseCategory":   "— Choose category —",
+	"rules.listTitle":        "Your rules",
+	"rules.empty":            "No rules yet. Add one above to auto-categorize transactions.",
+	"rules.matchLabel":       "Contains \"%s\"",
+	"rules.appliesTo":        "→ %s",
+	"rules.unknownCategory":  "(deleted category)",
+	"rules.matchRequired":    "Enter a phrase to match.",
+	"rules.categoryRequired": "Choose a category to assign.",
+	"rules.editTitle":        "Edit rule",
+	"rules.deleteTitle":      "Delete rule",
 
 	"common.owner": "Owner",
 

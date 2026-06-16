@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Rules management screen
+
+- Added the `/rules` screen (Rules view) mirroring the Categories management pattern: an add form
+  (match phrase, category select, optional comma-separated tags), a list of rules, inline edit via a
+  per-row `RuleRow` component (hooks declared unconditionally so the edit toggle never reorders
+  them), and delete. Registered the route in `screens.All()` and a nav entry in the shell's System
+  group next to Categories.
+- Validation: client-side `validateRuleInput` shows localized messages (match + category required)
+  so the raw `appstate:` error never reaches the UI — same approach as Categories' `nameRequired`.
+- Reused the existing `parseTags` helper from transactions.go (caught a redeclare at build — they
+  were identical) rather than duplicating it. Added `rules.*` + `nav.rules` i18n keys.
+- This is the management-UI half of §2.4. Remaining: apply rules automatically on entry/import (the
+  engine + store are ready; just needs to be invoked at those write paths).
+
 ## 2026-06-16 — store/state: persist auto-categorization rules
 
 - Added persistence for the existing `rules` engine (which had no storage): a `rules` table, store
