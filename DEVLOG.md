@@ -270,8 +270,13 @@ problems and fixes, and what's next.
   placement, test count 14→15): friendly "N balances could use a refresh" with per-account days-since
   via `freshness.StaleAccounts`/`DaysSinceUpdate`. One-tap update + dismissal are follow-ups.
 
-**Next:** edit flows (account/transaction/budget/goal full edit), member delete-guard, then a
-one-tap "update balance" from the freshness nudge — continuing the priority-ordered Phase-1 backlog.
+- Added a one-tap **"Mark updated"** action per active account (`AccountRow` grows a third hook,
+  rendered only when not archived): sets `BalanceAsOf` to now via the validated put, clearing the
+  staleness the freshness nudge reports. A full "update balance" (enter a new figure → adjustment txn)
+  is the richer follow-up.
+
+**Next:** member delete-guard (block deleting a member with owned accounts/budgets/goals), then full
+edit flows (account/transaction/budget/goal) — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

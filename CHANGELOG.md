@@ -229,6 +229,8 @@ and every commit updates this file under `Unreleased`.
   member, and per-row delete; reachable from a new "Members" rail item (users icon) under System.
 - Freshness nudge widget (full-width, dashboard): a friendly reminder of which account balances look
   stale (via `internal/freshness`) with days since each was last updated; the bento grew to 8 rows.
+- Accounts: a "Mark updated" action per (active) account sets its `BalanceAsOf` to today, clearing the
+  staleness flag the freshness nudge surfaces.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

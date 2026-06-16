@@ -87,6 +87,15 @@ func Accounts() ui.Node {
 		bump()
 	}
 
+	refreshAccount := func(ac domain.Account) {
+		ac.BalanceAsOf = time.Now()
+		if err := app.PutAccount(ac); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		bump()
+	}
+
 	typeOptions := make([]ui.Node, 0, len(domain.AllAccountTypes))
 	for _, t := range domain.AllAccountTypes {
 		typeOptions = append(typeOptions, Option(Value(string(t)), SelectedIf(accType.Get() == string(t)), humanizeType(string(t))))
@@ -134,7 +143,7 @@ func Accounts() ui.Node {
 
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
-		return ui.CreateElement(AccountRow, accountRowProps{Account: ac, Balance: bal, OnDelete: deleteAccount, OnArchive: archiveAccount})
+		return ui.CreateElement(AccountRow, accountRowProps{Account: ac, Balance: bal, OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
 
@@ -165,6 +174,7 @@ type accountRowProps struct {
 	Balance   money.Money
 	OnDelete  func(string)
 	OnArchive func(domain.Account)
+	OnRefresh func(domain.Account)
 }
 
 // AccountRow is a per-account row component; it owns its action-handler hooks so
@@ -172,6 +182,7 @@ type accountRowProps struct {
 func AccountRow(props accountRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Account.ID) }))
 	arch := ui.UseEvent(Prevent(func() { props.OnArchive(props.Account) }))
+	refresh := ui.UseEvent(Prevent(func() { props.OnRefresh(props.Account) }))
 	archLabel := "Archive"
 	if props.Account.Archived {
 		archLabel = "Restore"
@@ -182,6 +193,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			Span(Class("row-meta"), humanizeType(string(props.Account.Type))+" · "+props.Account.Currency),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
+		If(!props.Account.Archived, Button(Class("btn"), Type("button"), Title("Mark balance as checked today"), OnClick(refresh), "Mark updated")),
 		Button(Class("btn"), Type("button"), Title(archLabel+" account"), OnClick(arch), archLabel),
 		Button(Class("btn-del"), Type("button"), Title("Delete account"), OnClick(del), "✕"),
 	)
