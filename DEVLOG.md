@@ -403,8 +403,15 @@ problems and fixes, and what's next.
   empty responses), and `ParseUsage` (token counts). Round-trip tests stand in for a mock transport;
   the browser `fetch` layer (sending with the user's key) is a thin js/wasm file added next.
 
-**Next:** the js `fetch` transport + an Insights screen ("Explain my month" / NL query) wired to the
-codec with the BYO key from Settings — continuing Phase 2 bottom-up.
+- Wired AI end to end: a js `fetch` **transport** (`ai.SendChat`) that POSTs a chat request with the
+  user's key and resolves the promise chain (`then(text) → ParseResponse`), releasing its `js.Func`s
+  on both success and catch paths; and an **Insights** screen with "Explain my month" that builds a
+  system+user prompt from live figures (`fmtMoney(net/income/expense)`), shows a Thinking…/error/
+  result state, and prompts to add a key in Settings when absent. `Settings.OpenAIKey/OpenAIModel`
+  already exist in the store; the codec stays pure/native-tested, the transport is js-only.
+
+**Next:** wire the global-settings AI key/model inputs to persist to `Settings`, then NL query /
+auto-categorization — continuing Phase 2.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

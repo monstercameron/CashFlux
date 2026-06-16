@@ -58,8 +58,3 @@ func stat(label, value, accent string) ui.Node {
 	)
 }
 
-// Insights is AI analysis.
-func Insights() ui.Node {
-	return stub(2, "AI-generated analysis and advice (OpenAI, using your own key): explain your month, spot trends, and answer plain-language questions about your money.")
-}
-

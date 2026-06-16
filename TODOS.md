@@ -327,7 +327,7 @@ Shared control components (from mockup):
 
 ### 2.1 OpenAI client — `internal/ai`
 
-- [ ] Client over `fetch` with user key from settings; base URL configurable
+- [x] Client over `fetch` with user key from settings; base URL configurable — `ai.SendChat`
 - [ ] Chat/Responses call with JSON-schema **structured outputs** → Go structs
 - [ ] Vision input support (images/PDF pages) for document parsing
 - [ ] Model selection; token + cost surfacing; "AI off until key set" state
@@ -347,7 +347,7 @@ Shared control components (from mockup):
 
 ### 2.3 Insights & NL query
 
-- [ ] "Explain my month" generated narrative
+- [x] "Explain my month" generated narrative (Insights screen)
 - [ ] Natural-language query over data (household-aware) → answer + supporting figures
 - [ ] Trend/anomaly highlights; advice cards
 - [ ] Pin/save insights; show top insight on dashboard

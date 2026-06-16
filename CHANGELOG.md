@@ -182,6 +182,11 @@ and every commit updates this file under `Unreleased`.
   chat-completions body; `ParseResponse` extracts the assistant content and surfaces API errors /
   empty responses; `ParseUsage` reads token counts. Round-trip tested (no network; the fetch
   transport is a separate js layer).
+- `internal/ai`: browser `fetch` transport (`SendChat`) — posts a chat request with the user's key
+  asynchronously and calls back with the content or a plain-English error; the only network spot.
+- Insights screen (replacing the stub): an **"Explain my month"** AI narrative generated client-side
+  from your live figures via OpenAI with your own key; prompts to add a key in Settings when absent,
+  with loading and error states.
 - Planning screen (replacing the stub): a **debt-payoff calculator** — enter balance, APR, and
   monthly payment to see months-to-zero, total interest, and total paid, updating live via the
   `internal/payoff` engine, with a friendly message when the payment can't cover the interest. Plus a
