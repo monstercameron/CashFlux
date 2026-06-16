@@ -93,6 +93,11 @@ func iconBody(name string) []any {
 			Rect(Attr("x", "3"), Attr("y", "4"), Attr("width", "18"), Attr("height", "16"), Attr("rx", "2")),
 			Path(Attr("d", "M9 4v16")),
 		}
+	case "tag":
+		return []any{
+			Path(Attr("d", "M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z")),
+			Circle(Attr("cx", "7"), Attr("cy", "7"), Attr("r", "1.4")),
+		}
 	default:
 		return nil
 	}

@@ -222,7 +222,7 @@ Shared control components (from mockup):
 
 ### 1.10 Categories
 
-- [ ] List; add/edit/delete; income vs expense; color
+- [~] List + add + delete; income vs expense done; edit + color later
 - [ ] Sub-categories (parentId) with tree display
 - [ ] Default scheme + reset; methodology-aware presets (envelope/zero-based)
 - [ ] Reassign transactions on category delete (pick replacement)

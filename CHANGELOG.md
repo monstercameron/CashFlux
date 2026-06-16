@@ -223,6 +223,8 @@ and every commit updates this file under `Unreleased`.
 - Accounts: archive/restore an account from its row — archived accounts move to a separate "Archived"
   section and drop out of the assets/liabilities lists and net-worth totals (already excluded by
   `ledger`).
+- Categories screen: add categories (name + income/expense), listed grouped by kind with per-row
+  delete; reachable from a new "Categories" rail item (tag icon) under System.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

@@ -257,8 +257,12 @@ problems and fixes, and what's next.
 
 - Extended the transaction filter bar with a **category** picker (combines with search + account).
 
-**Next:** date-range + member filters, then the Members and Categories screens, then account edit
-(full field edit) — continuing the priority-ordered Phase-1 backlog.
+- Added the **Categories screen** (add name + income/expense kind, grouped lists, per-row delete via
+  `CategoryRow`), registered `/categories`, and surfaced it in the rail's System group with a new
+  `tag` icon. Category edit + color + delete-reassignment are follow-ups.
+
+**Next:** the Members management screen, then account/transaction/budget/goal edit flows, then
+category color + sub-categories — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
