@@ -145,59 +145,59 @@ settings-form renderer driven by a field schema, and shared primitives (`Toggle`
 component should serve many call sites.
 
 Design tokens & foundation:
-- [ ] `internal/ui` tokens (mirror mockup `<style>`): palette (base `#0e0e0f`, tile `#121214`, cell border `#34343a`, divider `#2a2a2c`, fg/dim/faint, up/down/warn), radii (cards squared, controls 4px, bars 2px)
-- [ ] Fonts: Fraunces (display headings + figures) + Inter (UI); `.fig` tabular lining figures helper
-- [ ] Accounting money display in UI (`$` + thousands + 2dp, **negatives in parentheses**, red/green) — wire `money.FormatMinor` + `currency`
-- [ ] Dark modern scrollbar styling for the scroll pane
+- [x] `internal/ui` tokens (mirror mockup `<style>`): palette + radii — Tailwind config + design-system CSS in host page; legacy screens retargeted to match
+- [x] Fonts: Fraunces (display headings + figures) + Inter (UI); `.fig` tabular lining figures helper
+- [x] Accounting money display in UI (`$` + thousands + 2dp, **negatives in parentheses**, red/green) — `money.FormatAccounting` + `fmtAccounting`/`figTone`
+- [x] Dark modern scrollbar styling for the scroll pane (`main.cf-scroll`)
 
 App shell & navigation:
-- [ ] App shell: fixed left rail + independently scrolling `main`; sticky top bar (`h-screen`/overflow)
-- [ ] Sidebar rail: brand header; nav items each with an SVG icon (Dashboard/Accounts/Transactions/Budgets/Goals/To-do/Settings)
-- [ ] "My pages" section: list of user **custom pages** (+ colored page icons) and a "New page" action
-- [ ] Collapsible rail: toggle → 58px icon-only mode (hide labels/captions/brand/household text); persist collapsed state
-- [ ] Household card (rail bottom) → opens global settings (see below)
-- [ ] Top bar: menu toggle, page title, time-resolution control, `+ Add`
+- [x] App shell: fixed left rail + independently scrolling `main`; sticky top bar
+- [x] Sidebar rail: brand header; nav items each with an SVG icon — `internal/ui.Icon` + `navItem`
+- [x] "My pages" section: example custom pages (+ colored page icons) and a "New page" action
+- [x] Collapsible rail: toggle → 58px icon-only mode (shared `rail:collapsed` atom); reload-persist later
+- [x] Household card (rail bottom) → opens global settings
+- [x] Top bar: menu toggle, page title, time-resolution control, `+ Add`
 
 Time-resolution control (top bar):
-- [ ] Segmented **Week / Month / Quarter** toggle
-- [ ] **From / To** stepper pills that relabel per resolution (week ranges / months / quarters); clamp From ≤ To
-- [ ] Drive dashboard period from this control (feeds `ledger`/`budgeting` period range)
+- [x] Segmented **Week / Month / Quarter** toggle (`ui.Segmented`)
+- [x] **From / To** stepper pills that relabel per resolution; clamp From ≤ To (`period.Window`)
+- [x] Drive dashboard period from this control (`uistate` window → `ledger.PeriodTotals`)
 
 Bento grid system:
-- [ ] Grid engine: base cell unit `--cell` (152px), N equal columns, uniform gap = outer margin, integer cell spans
-- [ ] Visible squared cell borders; full-width header cell (1×N)
-- [ ] Widget shell: unified header — **grip (left) · title (center) · gear (right)** + body
-- [ ] Drag-to-reorder / swap widgets (pointer/HTML5 DnD via interop), keyed by widget id
-- [ ] Resize: scale-wide (right edge) + scale-tall (bottom edge) handles → change col/row span, snap to cells
-- [ ] Persist per-user layout (order, spans, hidden, page) to the store
+- [x] Grid engine: base cell unit `--cell` (152px), equal columns, uniform gap, integer cell spans
+- [x] Visible squared cell borders; full-width header cell (1×N)
+- [x] Widget shell: unified header — **grip · title · gear** + body (`ui.Widget`)
+- [x] Drag-to-reorder / swap widgets (HTML5 DnD), keyed by widget id (`dashlayout.Swap`)
+- [x] Resize: right/bottom handles → change col/row span (`dashlayout.Resize`; click-cycle for now, pointer-drag later)
+- [~] Persist per-user layout — order + spans saved to `localStorage`; hidden/per-page + store persistence later
 
 Per-widget settings (gear → flip):
-- [ ] Flip primitive: card lifts to center, dim/blur backdrop, 3D `rotateY` to settings back face (reuse for global)
-- [ ] Settings back: centered title + right ✕ close; scrollable body; dark Save/Cancel footer
-- [ ] Settings fields: editable Title; toggles (allow moving, allow resizing, show header, show on dashboard, compact, show last-updated); accent swatches; default size; refresh; Remove
+- [x] Flip primitive: card lifts to center, dim/blur backdrop, 3D `rotateY` (`ui.FlipPanel`, reused for global)
+- [x] Settings back: centered title + right ✕ close; scrollable body; dark Save/Cancel footer
+- [~] Settings fields: editable Title + behavior toggles done; accent swatches/default size/refresh/Remove + persistence later
 
 Widget catalog (each backed by tested logic; see mockup):
-- [ ] KPI tile — Net worth / Income / Spending / Liabilities (figure + delta/subline)
-- [ ] Recent transactions (table, accounting amounts)
-- [ ] Budgets (progress bars, ok/near/over) — `internal/budgeting`
-- [ ] Net worth trend (SVG area chart) — `internal/ledger` series
-- [ ] Goals (progress) — `internal/goals`
-- [ ] To-do (task list)
-- [ ] Accounts (mini balances)
-- [ ] Cash flow (in/out bar chart per period) — `ledger.PeriodTotals`
-- [ ] Upcoming bills (from recurring/liabilities)
-- [ ] Savings rate (figure + bar)
-- [ ] Spending breakdown (segmented bar + legend by category)
-- [ ] Reusable SVG chart helpers (area/sparkline, bars, segmented bar, donut)
+- [x] KPI tile — Net worth / Income / Spending / Liabilities (figure + subline)
+- [x] Recent transactions (table, accounting amounts)
+- [x] Budgets (progress bars, ok/near/over) — `internal/budgeting`
+- [x] Net worth trend (SVG area chart) — `ledger.NetWorthSeries` + `chart`/`ui.AreaChart`
+- [x] Goals (progress) — `internal/goals`
+- [x] To-do (task list)
+- [x] Accounts (mini balances)
+- [x] Cash flow (in/out bar chart per period) — `ledger.PeriodTotals`
+- [x] Upcoming bills (from liabilities' due day + min payment)
+- [x] Savings rate (figure + bar)
+- [x] Spending breakdown (segmented bar + legend by category)
+- [~] Reusable SVG chart helpers — area/sparkline (`chart` + `ui.AreaChart`) done; bars are div-based; donut later
 
 Global settings (household card → large flip panel):
-- [ ] Large centered flip panel (2-column scrollable body), dark Save/Cancel
-- [ ] Household members (chips + add); Base currency; editable FX rate rows
-- [ ] AI (OpenAI BYO key toggle + key + model); Appearance (theme seg + accent + density)
-- [ ] Data: export JSON/CSV, import, load sample, wipe (confirm)
+- [x] Large centered flip panel (2-column scrollable body), dark Save/Cancel
+- [x] Household members (chips + add); Base currency; editable FX rate rows (live reads)
+- [x] AI (OpenAI BYO key toggle + key + model); Appearance (theme seg + accent + density) — UI (local state)
+- [x] Data: export JSON/CSV, import, load sample, wipe (confirm) — wired via `appstate`
 
 Shared control components (from mockup):
-- [ ] Switch/toggle, swatch picker, segmented control, stepper pill, member chip, ghost/data buttons, dashed "add" button
+- [x] Switch/toggle, swatch picker, segmented control, stepper pill, member chip, data buttons, dashed "add" button (`internal/ui` + settings)
 
 ### 1.8 Members / Household
 
