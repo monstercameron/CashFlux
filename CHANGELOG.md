@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Remove rows from the document review list before importing: each extracted transaction has a ✕ to
+  drop a misread, so only the rows you keep are imported.
 - Document image import on the Documents screen: choose a receipt or statement image, "Read with
   AI" sends it to the OpenAI vision model (bring-your-own-key, client-side), and the extracted
   transactions appear in a review list — pick an account and import them through the validated path

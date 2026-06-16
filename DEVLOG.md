@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Document review: per-row remove
+
+- Small polish on the just-shipped import: the review list rows are now `DraftRow` components with a
+  ✕ that removes that row from the draft slice (`removeDraft(i)` rebuilds the slice without index i).
+  So a misread line can be dropped before importing instead of importing everything or starting over.
+- The row owns only an event hook (no state), so reusing instances across a removal is harmless; a
+  plain index loop building `CreateElement` nodes is enough — no MapKeyed needed.
+- That covers the "reject" half of the review TODO; per-row *editing* and dedupe-vs-existing remain
+  as future polish.
+- **Next.** Likely dedupe extracted rows against existing transactions, or shift to Phase-3 sync
+  groundwork.
+
 ## 2026-06-16 — Document vision AI: the Documents UI (feature complete)
 
 - Wired the three pieces into a working flow: Choose image → `pickImageDataURL` (a small js helper

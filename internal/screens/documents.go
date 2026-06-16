@@ -149,23 +149,24 @@ func Documents() ui.Node {
 		rev.Set(rev.Get() + 1)
 	}))
 
-	// Draft review list (read-only; the user picks the account and imports).
+	removeDraft := func(i int) {
+		cur := draft.Get()
+		if i < 0 || i >= len(cur) {
+			return
+		}
+		next := make([]extract.Row, 0, len(cur)-1)
+		next = append(next, cur[:i]...)
+		next = append(next, cur[i+1:]...)
+		draft.Set(next)
+	}
+
+	// Draft review list: each row can be removed before importing.
 	rows := draft.Get()
 	draftBody := ui.Node(nil)
 	if len(rows) > 0 {
 		items := make([]ui.Node, 0, len(rows))
-		for _, r := range rows {
-			meta := r.Date
-			if r.Category != "" {
-				meta += " · " + r.Category
-			}
-			items = append(items, Div(Class("row"),
-				Div(Class("row-main"),
-					Span(Class("row-desc"), firstNonEmpty(r.Description, "(no description)")),
-					Span(Class("row-meta"), meta),
-				),
-				Span(Class("amount fig"), r.Amount),
-			))
+		for i, r := range rows {
+			items = append(items, ui.CreateElement(DraftRow, draftRowProps{Index: i, Row: r, OnRemove: removeDraft}))
 		}
 		acctOptions := make([]ui.Node, 0, len(accounts))
 		for _, a := range accounts {
@@ -208,6 +209,31 @@ func Documents() ui.Node {
 			),
 			If(msg.Get() != "", P(Class("muted"), msg.Get())),
 		),
+	)
+}
+
+type draftRowProps struct {
+	Index    int
+	Row      extract.Row
+	OnRemove func(int)
+}
+
+// DraftRow renders one extracted transaction in the review list with a Remove
+// action. Its own component so the remove hook stays at a stable position.
+func DraftRow(props draftRowProps) ui.Node {
+	rm := ui.UseEvent(Prevent(func() { props.OnRemove(props.Index) }))
+	r := props.Row
+	meta := r.Date
+	if r.Category != "" {
+		meta += " · " + r.Category
+	}
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), firstNonEmpty(r.Description, "(no description)")),
+			Span(Class("row-meta"), meta),
+		),
+		Span(Class("amount fig"), r.Amount),
+		Button(Class("btn-del"), Type("button"), Title("Remove this row"), OnClick(rm), "✕"),
 	)
 }
 

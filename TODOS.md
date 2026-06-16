@@ -352,7 +352,8 @@ Shared control components (from mockup):
 - [x] Send PDF/image to vision model → structured transactions — `ai.BuildVisionRequest` +
       `ai.SendVisionChat` + `extract.ParseRows` + Documents image-import UI (choose → read → review → import)
 - [ ] `Document{ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[]}` lifecycle
-- [~] Review screen: list extracted rows → import to ledger (account-pick) done; per-row edit/reject + dedupe later
+- [~] Review screen: list extracted rows + per-row remove → import to ledger (account-pick) done;
+      per-row edit + dedupe vs existing later
 - [ ] Monthly-spend extraction summary view
 - [ ] Tests: CSV parsing, extraction-to-transaction mapping, dedupe
 
