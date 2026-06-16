@@ -890,7 +890,9 @@ Shared control components (from mockup):
 
 ### 2.4 Auto-categorization & Rules
 
-- [ ] `Rule{ID, Match, SetCategoryID, SetTags}` store + management UI
+- [~] `Rule{ID, Match, SetCategoryID, SetTags}` store + management UI — **store + state done**
+      (`rules` table + CRUD, dataset export/import, validated `appstate.Rules/PutRule/DeleteRule`,
+      table-tested). Still TODO: the management UI screen to create/edit/delete rules.
 - [x] Rule matching engine (pure) + tests — `internal/rules` (Category/Tags/FirstMatch)
 - [~] Rule-based category suggestion on entry (category-name match) done; AI suggestion + import rows later
 - [ ] AI-proposed rules from history (review + accept)

@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
 func newApp(t *testing.T, seed bool) *App {
@@ -36,6 +37,37 @@ func TestNewEmpty(t *testing.T) {
 	a := newApp(t, false)
 	if len(a.Accounts()) != 0 {
 		t.Errorf("expected empty store, got %d accounts", len(a.Accounts()))
+	}
+}
+
+func TestRuleValidationAndRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+
+	// Validation: id, match phrase, and category are all required.
+	bad := []rules.Rule{
+		{Match: "x", SetCategoryID: "c1"}, // no id
+		{ID: "r", SetCategoryID: "c1"},    // no match
+		{ID: "r", Match: "   "},           // blank match
+		{ID: "r", Match: "x"},             // no category
+	}
+	for i, r := range bad {
+		if err := a.PutRule(r); err == nil {
+			t.Errorf("bad rule %d accepted: %+v", i, r)
+		}
+	}
+
+	if err := a.PutRule(rules.Rule{ID: "r1", Match: "coffee", SetCategoryID: "cafe"}); err != nil {
+		t.Fatalf("PutRule: %v", err)
+	}
+	got := a.Rules()
+	if len(got) != 1 || got[0].Match != "coffee" {
+		t.Fatalf("Rules() = %+v", got)
+	}
+	if err := a.DeleteRule("r1"); err != nil {
+		t.Fatalf("DeleteRule: %v", err)
+	}
+	if len(a.Rules()) != 0 {
+		t.Error("rule still present after delete")
 	}
 }
 

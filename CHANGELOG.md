@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Auto-categorization rules are now persisted: a `rules` table in the store with full CRUD
+  (`PutRule`/`GetRule`/`DeleteRule`/`ListRules`), inclusion in the export/import dataset (lossless
+  round-trip), and validated `appstate` accessors (`Rules`/`PutRule`/`DeleteRule` — a rule needs an
+  id, a non-empty match phrase, and a target category). The store/state foundation for the rules
+  management UI and apply-on-entry; table-tested at both the store and appstate layers.
 - The dashboard now has a **Spending highlight** widget: it surfaces the single most significant
   spending change this month (reusing the same anomaly detection as the Insights card) as a one-line
   plain-English highlight with a green/red marker, or a calm "no big changes" message. Draggable and

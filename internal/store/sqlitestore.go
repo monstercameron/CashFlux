@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go "sqlite3" driver (embeds SQLite via wazero)
 )
 
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS budgets      (id TEXT PRIMARY KEY, data TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS goals        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS tasks        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS customfielddefs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS rules        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 `
 
@@ -105,6 +107,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "customfielddefs", ds.CustomFields, func(d customfields.Def) string { return d.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "rules", ds.Rules, func(r rules.Rule) string { return r.ID }); err != nil {
+		return err
+	}
 
 	settingsData, err := json.Marshal(ds.Settings)
 	if err != nil {
@@ -145,6 +150,9 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.CustomFields, err = loadRows[customfields.Def](s.db, "customfielddefs"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.Rules, err = loadRows[rules.Rule](s.db, "rules"); err != nil {
 		return Dataset{}, err
 	}
 

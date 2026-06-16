@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
 // --- generic helpers ---
@@ -222,4 +223,19 @@ func (s *SQLiteStore) ListCustomFieldDefs() ([]customfields.Def, error) {
 func (s *SQLiteStore) CustomFieldDefsByEntity(entityType string) ([]customfields.Def, error) {
 	return queryRows[customfields.Def](s.db,
 		"SELECT data FROM customfielddefs WHERE json_extract(data, '$.entityType') = ? ORDER BY id", entityType)
+}
+
+// --- Auto-categorization rules ---
+
+func (s *SQLiteStore) PutRule(r rules.Rule) error {
+	return putJSON(s.db, "rules", r.ID, r)
+}
+func (s *SQLiteStore) GetRule(id string) (rules.Rule, bool, error) {
+	return getJSON[rules.Rule](s.db, "rules", id)
+}
+func (s *SQLiteStore) DeleteRule(id string) (bool, error) {
+	return deleteRow(s.db, "rules", id)
+}
+func (s *SQLiteStore) ListRules() ([]rules.Rule, error) {
+	return loadRows[rules.Rule](s.db, "rules")
 }

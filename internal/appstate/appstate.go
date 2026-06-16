@@ -8,14 +8,17 @@
 package appstate
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/logging"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/validate"
 )
@@ -174,6 +177,9 @@ func (a *App) Budgets() []domain.Budget {
 func (a *App) Goals() []domain.Goal { v, err := a.store.ListGoals(); a.logErr("goals", err); return v }
 func (a *App) Tasks() []domain.Task { v, err := a.store.ListTasks(); a.logErr("tasks", err); return v }
 
+// Rules returns every auto-categorization rule.
+func (a *App) Rules() []rules.Rule { v, err := a.store.ListRules(); a.logErr("rules", err); return v }
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -331,6 +337,28 @@ func (a *App) PutCategory(c domain.Category) error {
 	return nil
 }
 func (a *App) DeleteCategory(id string) error { return a.del("category", id, a.store.DeleteCategory) }
+
+// PutRule saves an auto-categorization rule. A rule needs an ID, a non-empty
+// match phrase, and a target category to be useful.
+func (a *App) PutRule(r rules.Rule) error {
+	if r.ID == "" {
+		return fmt.Errorf("appstate: rule needs an id")
+	}
+	if strings.TrimSpace(r.Match) == "" {
+		return fmt.Errorf("appstate: rule needs a match phrase")
+	}
+	if r.SetCategoryID == "" {
+		return fmt.Errorf("appstate: rule needs a category")
+	}
+	if err := a.store.PutRule(r); err != nil {
+		return err
+	}
+	a.log.Info("rule saved", "id", r.ID)
+	return nil
+}
+
+// DeleteRule removes an auto-categorization rule.
+func (a *App) DeleteRule(id string) error { return a.del("rule", id, a.store.DeleteRule) }
 
 // ReassignCategory moves every transaction and budget referencing oldID to newID,
 // returning how many records were moved. Use it before deleting a category that

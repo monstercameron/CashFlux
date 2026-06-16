@@ -7,6 +7,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
 func sampleDataset() Dataset {
@@ -24,6 +25,7 @@ func sampleDataset() Dataset {
 		Budgets:      []domain.Budget{{ID: "b1", Name: "Food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: "c1", Period: domain.PeriodMonthly, Limit: money.New(50000, "USD")}},
 		Goals:        []domain.Goal{{ID: "g1", Name: "Trip", Scope: domain.ScopeIndividual, OwnerID: "m1", TargetAmount: money.New(200000, "USD"), CurrentAmount: money.New(50000, "USD"), TargetDate: asOf}},
 		Tasks:        []domain.Task{{ID: "k1", Title: "Pay rent", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Source: domain.SourceManual}},
+		Rules:        []rules.Rule{{ID: "r1", Match: "coffee", SetCategoryID: "c1", SetTags: []string{"treats"}}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
 			FXRates:            map[string]float64{"EUR": 1.1},
@@ -75,6 +77,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if imported.Settings.BaseCurrency != "USD" || imported.Settings.FXRates["EUR"] != 1.1 {
 		t.Errorf("settings lost: %+v", imported.Settings)
+	}
+	if len(imported.Rules) != 1 || imported.Rules[0].Match != "coffee" || len(imported.Rules[0].SetTags) != 1 {
+		t.Errorf("rules lost: %+v", imported.Rules)
 	}
 }
 

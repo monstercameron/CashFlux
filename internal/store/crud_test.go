@@ -7,6 +7,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
 func newStore(t *testing.T) *SQLiteStore {
@@ -53,6 +54,42 @@ func TestAccountCRUD(t *testing.T) {
 	}
 	if _, ok, _ := s.GetAccount("a1"); ok {
 		t.Error("account still present after delete")
+	}
+}
+
+func TestRuleCRUD(t *testing.T) {
+	s := newStore(t)
+
+	if err := s.PutRule(rules.Rule{ID: "r1", Match: "uber", SetCategoryID: "transport", SetTags: []string{"travel"}}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, ok, err := s.GetRule("r1")
+	if err != nil || !ok {
+		t.Fatalf("Get: ok=%v err=%v", ok, err)
+	}
+	if got.SetCategoryID != "transport" || len(got.SetTags) != 1 || got.SetTags[0] != "travel" {
+		t.Errorf("rule round-trip wrong: %+v", got)
+	}
+
+	// Upsert.
+	if err := s.PutRule(rules.Rule{ID: "r1", Match: "uber eats", SetCategoryID: "food"}); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got, _, _ = s.GetRule("r1")
+	if got.Match != "uber eats" || got.SetCategoryID != "food" {
+		t.Errorf("after update = %+v", got)
+	}
+
+	if list, _ := s.ListRules(); len(list) != 1 {
+		t.Errorf("list len = %d, want 1", len(list))
+	}
+
+	deleted, err := s.DeleteRule("r1")
+	if err != nil || !deleted {
+		t.Fatalf("delete: deleted=%v err=%v", deleted, err)
+	}
+	if _, ok, _ := s.GetRule("r1"); ok {
+		t.Error("rule still present after delete")
 	}
 }
 

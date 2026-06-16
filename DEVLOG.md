@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — store/state: persist auto-categorization rules
+
+- Added persistence for the existing `rules` engine (which had no storage): a `rules` table, store
+  CRUD, dataset export/import inclusion, and validated `appstate` accessors. This is the bottom-up
+  foundation for §2.4 — the management UI and apply-on-entry come next, on top of this.
+- Architecture decision: persisted `rules.Rule` directly rather than introducing a `domain.Rule` +
+  engine refactor. Precedent already exists — the store persists `customfields.Def` (also a
+  non-domain type) the same way — so this stays consistent and fully additive (no churn to the
+  engine or its one caller in transactions.go).
+- Schema decision: added `Rules []rules.Rule json:"rules,omitempty"` to the Dataset without bumping
+  SchemaVersion, matching how `CustomFields` was added — an additive optional field is backward
+  compatible (old exports with no `rules` key import as empty), and the migrate() guard still rejects
+  newer-than-supported data.
+- Validation: `appstate.PutRule` requires id + non-empty match + category (done inline rather than in
+  `validate`, which is oriented around domain types). Tests: store CRUD + upsert + delete, dataset
+  round-trip now carries a rule, and appstate validation + round-trip. Full native `go test` + wasm
+  green.
+
 ## 2026-06-16 — dashboard: top Spending highlight widget
 
 - Added `topHighlightWidget` to the bento: shows the #1 spending anomaly this month as a one-line
