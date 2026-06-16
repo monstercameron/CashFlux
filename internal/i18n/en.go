@@ -81,6 +81,8 @@ var english = Catalog{
 	"rules.categoryRequired":   "Choose a category to assign.",
 	"rules.editTitle":          "Edit rule",
 	"rules.deleteTitle":        "Delete rule",
+	"rules.shadowed":           "Never runs — an earlier rule (%q) already matches it.",
+	"rules.noMatch":            "Never runs — no match phrase.",
 	"rules.applyExisting":      "Apply to existing",
 	"rules.applyExistingTitle": "Categorize uncategorized transactions using these rules",
 	"rules.applied":            "Categorized %s.",

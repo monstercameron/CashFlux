@@ -34,6 +34,36 @@ func FirstMatch(rs []Rule, text string) *Rule {
 	return nil
 }
 
+// Conflict reports a rule that can never fire under first-match-wins.
+type Conflict struct {
+	Index      int // the shadowed rule's index
+	ShadowedBy int // the earlier rule that shadows it, or -1 if the rule has no match phrase
+}
+
+// Conflicts returns rules that never run. A rule is shadowed when an earlier
+// rule's match phrase is a substring of its own (case-insensitive): any text that
+// matches the later rule already matched the earlier one, which wins. A rule with
+// an empty match phrase matches nothing and is reported with ShadowedBy -1. Only
+// the first shadower found is reported per rule.
+func Conflicts(rs []Rule) []Conflict {
+	var out []Conflict
+	for j := range rs {
+		later := strings.ToLower(strings.TrimSpace(rs[j].Match))
+		if later == "" {
+			out = append(out, Conflict{Index: j, ShadowedBy: -1})
+			continue
+		}
+		for i := 0; i < j; i++ {
+			earlier := strings.ToLower(strings.TrimSpace(rs[i].Match))
+			if earlier != "" && strings.Contains(later, earlier) {
+				out = append(out, Conflict{Index: j, ShadowedBy: i})
+				break
+			}
+		}
+	}
+	return out
+}
+
 // Category returns the category id assigned by the first rule matching the
 // payee/description, or "" if none match.
 func Category(rs []Rule, payee, desc string) string {

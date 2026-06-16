@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Rules screen now flags rules that **never run**: if an earlier rule's phrase already matches
+  everything a later rule would (first-match-wins), the shadowed rule shows "Never runs — an earlier
+  rule (…) already matches it." Backed by a pure, table-tested `rules.Conflicts` detector.
 - Insights answers can now be **pinned**: a Pin button saves the answer to a "Pinned insights" card
   (newest first, each removable) so you can keep an explanation to revisit without adding it to your
   to-do list. Backed by the saved-insight store.

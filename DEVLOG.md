@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — rules: shadowed-rule detection
+
+- Added pure `rules.Conflicts(rs)`: a rule is shadowed when an earlier rule's match phrase is a
+  substring of its own (case-insensitive) — first-match-wins means the later one can never fire.
+  Empty-phrase rules report ShadowedBy -1. Returns the first shadower per rule. Table-tested.
+- Surfaced it on the Rules screen: each row carries a `Warning` (computed via `Conflicts` keyed by
+  rule ID) shown as a `text-warn` meta line — "Never runs — an earlier rule (…) already matches it."
+  This is the "conflict handling beyond first-match" piece of §2.4. Catalog + rules tests + wasm green.
+
 ## 2026-06-16 — pin/save insights: UI
 
 - Added a Pin button beside "Save as task" on the Insights answer (saves the text via

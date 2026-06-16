@@ -115,6 +115,15 @@ func Rules() ui.Node {
 	}))
 
 	rs := app.Rules()
+	// Flag rules that never fire because an earlier rule already matches them.
+	warnByID := map[string]string{}
+	for _, c := range rules.Conflicts(rs) {
+		if c.ShadowedBy >= 0 {
+			warnByID[rs[c.Index].ID] = uistate.T("rules.shadowed", rs[c.ShadowedBy].Match)
+		} else {
+			warnByID[rs[c.Index].ID] = uistate.T("rules.noMatch")
+		}
+	}
 	list := IfElse(len(rs) == 0,
 		P(Class("empty"), uistate.T("rules.empty")),
 		Div(Class("rows"), MapKeyed(rs,
@@ -122,7 +131,7 @@ func Rules() ui.Node {
 			func(r rules.Rule) ui.Node {
 				return ui.CreateElement(RuleRow, ruleRowProps{
 					Rule: r, Categories: cats, CategoryName: catName[r.SetCategoryID],
-					OnDelete: deleteRule, OnSave: saveRule,
+					Warning: warnByID[r.ID], OnDelete: deleteRule, OnSave: saveRule,
 				})
 			},
 		)),
@@ -221,6 +230,7 @@ type ruleRowProps struct {
 	Rule         rules.Rule
 	Categories   []domain.Category
 	CategoryName string
+	Warning      string // non-empty when this rule never fires (shadowed)
 	OnDelete     func(string)
 	OnSave       func(id, match, category, tags string)
 }
@@ -273,6 +283,7 @@ func RuleRow(props ruleRowProps) ui.Node {
 		Div(Class("row-main"),
 			Span(Class("row-desc"), uistate.T("rules.matchLabel", r.Match)),
 			Span(Class("row-meta"), meta),
+			If(props.Warning != "", Span(Class("row-meta text-warn"), props.Warning)),
 		),
 		Button(Class("btn"), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("rules.deleteTitle")), OnClick(del), "✕"),

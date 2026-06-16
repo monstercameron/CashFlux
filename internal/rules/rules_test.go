@@ -50,3 +50,32 @@ func TestEmptyMatchNeverFires(t *testing.T) {
 		t.Error("empty Match should never fire")
 	}
 }
+
+func TestConflicts(t *testing.T) {
+	rs := []Rule{
+		{ID: "a", Match: "shop"},        // fires
+		{ID: "b", Match: "coffee shop"}, // shadowed by a (contains "shop")
+		{ID: "c", Match: "uber"},        // fires
+		{ID: "d", Match: "COFFEE Shop"}, // shadowed by a too (case-insensitive)
+		{ID: "e", Match: ""},            // dead: no match phrase
+	}
+	got := Conflicts(rs)
+	want := []Conflict{
+		{Index: 1, ShadowedBy: 0},
+		{Index: 3, ShadowedBy: 0},
+		{Index: 4, ShadowedBy: -1},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("Conflicts = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("Conflicts[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	// No conflicts among distinct, non-overlapping phrases.
+	if c := Conflicts([]Rule{{Match: "uber"}, {Match: "lyft"}}); len(c) != 0 {
+		t.Errorf("expected no conflicts, got %+v", c)
+	}
+}

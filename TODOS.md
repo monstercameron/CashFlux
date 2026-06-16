@@ -920,6 +920,9 @@ Shared control components (from mockup):
       payee/desc → consistent category, support-ranked, skips covered keys; table-tested) **and** a
       "Suggested rules" card on the Rules screen with one-click Add (accepted rules drop off the list).
       (Optional later: AI proposals for fuzzier patterns beyond exact payee/desc keys.)
+- [x] Conflict handling — `rules.Conflicts` flags rules that never fire (shadowed by an earlier
+      substring-matching rule, or empty-phrase), surfaced as a per-row warning on the Rules screen.
+      Table-tested.
 - [x] Apply rules on import/entry — entry (add form) + image import run rows through `autoRules`
       (first-match-wins, explicit category beats inferred), and a retroactive `appstate.ApplyRules`
       with an "Apply to existing" button on the Rules screen covers the CSV-paste path and any
