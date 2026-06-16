@@ -35,6 +35,7 @@ func sampleDataset() Dataset {
 			ID: "rec1", Label: "Salary", Amount: money.New(420000, "USD"), Cadence: domain.CadenceMonthly,
 			NextDue: asOf, AccountID: "a1", CategoryID: "c1",
 		}},
+		AllocProfiles: []domain.AllocationProfile{{ID: "ap1", Name: "Aggressive", Returns: 3, Stability: 1, Liquidity: 1, DebtReduction: 2}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
 			FXRates:            map[string]float64{"EUR": 1.1},
@@ -98,6 +99,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if len(imported.Recurring) != 1 || imported.Recurring[0].Cadence != domain.CadenceMonthly || imported.Recurring[0].Amount.Amount != 420000 {
 		t.Errorf("recurring lost: %+v", imported.Recurring)
+	}
+	if len(imported.AllocProfiles) != 1 || imported.AllocProfiles[0].Name != "Aggressive" || imported.AllocProfiles[0].Returns != 3 {
+		t.Errorf("alloc profiles lost: %+v", imported.AllocProfiles)
 	}
 }
 

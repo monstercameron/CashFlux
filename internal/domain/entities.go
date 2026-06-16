@@ -79,6 +79,19 @@ type Transaction struct {
 	Custom            map[string]any `json:"custom,omitempty"`
 }
 
+// AllocationProfile is a saved set of capital-allocation criterion weights — a
+// named mix of how much to favor returns, stability, liquidity, and debt
+// reduction. The Allocate screen maps these to the scoring engine's weights. The
+// weights are plain floats (need not sum to 1; scoring normalizes by their total).
+type AllocationProfile struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Returns       float64 `json:"returns"`
+	Stability     float64 `json:"stability"`
+	Liquidity     float64 `json:"liquidity"`
+	DebtReduction float64 `json:"debtReduction"`
+}
+
 // RecurringCadence is how often a recurring cash flow repeats.
 type RecurringCadence string
 

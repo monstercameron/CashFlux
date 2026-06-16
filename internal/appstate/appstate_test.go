@@ -188,6 +188,28 @@ func TestRecurringRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAllocProfileRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutAllocProfile(domain.AllocationProfile{Name: "x"}); err == nil {
+		t.Error("expected error for profile with no id")
+	}
+	if err := a.PutAllocProfile(domain.AllocationProfile{ID: "p"}); err == nil {
+		t.Error("expected error for profile with no name")
+	}
+	if err := a.PutAllocProfile(domain.AllocationProfile{ID: "p1", Name: "Safety", Stability: 3, Liquidity: 2}); err != nil {
+		t.Fatalf("PutAllocProfile: %v", err)
+	}
+	if got := a.AllocProfiles(); len(got) != 1 || got[0].Name != "Safety" {
+		t.Fatalf("AllocProfiles() = %+v", got)
+	}
+	if err := a.DeleteAllocProfile("p1"); err != nil {
+		t.Fatalf("DeleteAllocProfile: %v", err)
+	}
+	if len(a.AllocProfiles()) != 0 {
+		t.Error("alloc profile still present after delete")
+	}
+}
+
 func TestPostDueRecurring(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutAccount(domain.Account{

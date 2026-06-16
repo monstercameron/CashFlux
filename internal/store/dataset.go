@@ -29,20 +29,21 @@ type Settings struct {
 // Dataset is the complete CashFlux dataset: every entity plus settings. It is
 // the unit of export, import, and (later) sync.
 type Dataset struct {
-	SchemaVersion int                   `json:"schemaVersion"`
-	Members       []domain.Member       `json:"members"`
-	Accounts      []domain.Account      `json:"accounts"`
-	Categories    []domain.Category     `json:"categories"`
-	Transactions  []domain.Transaction  `json:"transactions"`
-	Budgets       []domain.Budget       `json:"budgets"`
-	Goals         []domain.Goal         `json:"goals"`
-	Tasks         []domain.Task         `json:"tasks"`
-	CustomFields  []customfields.Def    `json:"customFieldDefs,omitempty"`
-	Rules         []rules.Rule          `json:"rules,omitempty"`
-	Documents     []domain.Document     `json:"documents,omitempty"`
-	SavedInsights []domain.SavedInsight `json:"savedInsights,omitempty"`
-	Recurring     []domain.Recurring    `json:"recurring,omitempty"`
-	Settings      Settings              `json:"settings"`
+	SchemaVersion int                        `json:"schemaVersion"`
+	Members       []domain.Member            `json:"members"`
+	Accounts      []domain.Account           `json:"accounts"`
+	Categories    []domain.Category          `json:"categories"`
+	Transactions  []domain.Transaction       `json:"transactions"`
+	Budgets       []domain.Budget            `json:"budgets"`
+	Goals         []domain.Goal              `json:"goals"`
+	Tasks         []domain.Task              `json:"tasks"`
+	CustomFields  []customfields.Def         `json:"customFieldDefs,omitempty"`
+	Rules         []rules.Rule               `json:"rules,omitempty"`
+	Documents     []domain.Document          `json:"documents,omitempty"`
+	SavedInsights []domain.SavedInsight      `json:"savedInsights,omitempty"`
+	Recurring     []domain.Recurring         `json:"recurring,omitempty"`
+	AllocProfiles []domain.AllocationProfile `json:"allocProfiles,omitempty"`
+	Settings      Settings                   `json:"settings"`
 }
 
 // Export serializes the dataset to indented JSON, stamping the current schema

@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Saved **allocation profiles** (`domain.AllocationProfile` + store/state): persist a named mix of
+  capital-allocation weights (returns/stability/liquidity/debt) with full CRUD, export/import
+  round-trip, and validated `appstate.AllocProfiles`/`PutAllocProfile`/`DeleteAllocProfile`.
+  Table-tested. The store behind custom Allocate profiles beyond the built-in presets (picker UI to
+  follow).
 - Recurring cash flows can now **auto-post**: pick an account/category and flip "Auto-post", and a
   **Post due now** button creates real transactions for every due item — catching up any missed
   periods and advancing each schedule past today. Backed by a table-tested `appstate.PostDueRecurring`.

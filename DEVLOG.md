@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — saved allocation profiles: model + persistence
+
+- Added `domain.AllocationProfile` (name + four float weights) persisted like the other entities
+  (allocprofiles table, store CRUD, dataset round-trip, validated appstate accessors). Table-tested.
+- Kept domain a leaf: the weights are inline floats, not `allocate.Weights`, so domain doesn't import
+  the scoring engine; the Allocate UI maps profile → `allocate.Weights` at the call site (it already
+  builds Weights from its presets). Fits the "highly configurable" project value — custom profiles
+  beyond the four presets.
+- This is §2.7's `AllocationProfile + CRUD`. Next: a profile picker/manager on the Allocate screen
+  (merge saved profiles with the presets). all layers + wasm green.
+
 ## 2026-06-16 — recurring autopost
 
 - Added `appstate.PostDueRecurring(asOf)`: for each autopost recurring with an account, post a

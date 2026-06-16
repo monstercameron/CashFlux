@@ -284,3 +284,18 @@ func (s *SQLiteStore) DeleteRecurring(id string) (bool, error) {
 func (s *SQLiteStore) ListRecurring() ([]domain.Recurring, error) {
 	return loadRows[domain.Recurring](s.db, "recurring")
 }
+
+// --- Allocation profiles (saved capital-allocation weight mixes) ---
+
+func (s *SQLiteStore) PutAllocProfile(p domain.AllocationProfile) error {
+	return putJSON(s.db, "allocprofiles", p.ID, p)
+}
+func (s *SQLiteStore) GetAllocProfile(id string) (domain.AllocationProfile, bool, error) {
+	return getJSON[domain.AllocationProfile](s.db, "allocprofiles", id)
+}
+func (s *SQLiteStore) DeleteAllocProfile(id string) (bool, error) {
+	return deleteRow(s.db, "allocprofiles", id)
+}
+func (s *SQLiteStore) ListAllocProfiles() ([]domain.AllocationProfile, error) {
+	return loadRows[domain.AllocationProfile](s.db, "allocprofiles")
+}

@@ -203,6 +203,13 @@ func (a *App) Recurring() []domain.Recurring {
 	return v
 }
 
+// AllocProfiles returns every saved capital-allocation weight profile.
+func (a *App) AllocProfiles() []domain.AllocationProfile {
+	v, err := a.store.ListAllocProfiles()
+	a.logErr("alloc profiles", err)
+	return v
+}
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -443,6 +450,26 @@ func (a *App) PutRecurring(r domain.Recurring) error {
 // DeleteRecurring removes a recurring cash flow.
 func (a *App) DeleteRecurring(id string) error {
 	return a.del("recurring", id, a.store.DeleteRecurring)
+}
+
+// PutAllocProfile saves a capital-allocation weight profile (needs an ID and a name).
+func (a *App) PutAllocProfile(p domain.AllocationProfile) error {
+	if p.ID == "" {
+		return fmt.Errorf("appstate: allocation profile needs an id")
+	}
+	if strings.TrimSpace(p.Name) == "" {
+		return fmt.Errorf("appstate: allocation profile needs a name")
+	}
+	if err := a.store.PutAllocProfile(p); err != nil {
+		return err
+	}
+	a.log.Info("allocation profile saved", "id", p.ID)
+	return nil
+}
+
+// DeleteAllocProfile removes a saved allocation profile.
+func (a *App) DeleteAllocProfile(id string) error {
+	return a.del("alloc profile", id, a.store.DeleteAllocProfile)
 }
 
 // PostDueRecurring posts a transaction for each autopost recurring whose NextDue
