@@ -18,6 +18,10 @@ and every commit updates this file under `Unreleased`.
   `404.html` shell that covers the first load on GitHub Pages. (Cache bumped to `cashflux-v2`.)
 
 ### Changed
+- Reading transactions from a receipt/statement image now uses OpenAI **structured outputs**: the
+  vision request carries a strict JSON schema, so the model returns a well-formed transactions array
+  instead of free-form text coaxed by prompt wording. More reliable extraction; the tolerant parser
+  still handles the result. (`ai.BuildStructuredVisionRequest` / `SendStructuredVisionChat`.)
 - The data CashFlux sends to OpenAI for insights is now a single explicit, tested
   `ai.FinancialContext` — by construction only aggregate totals and an account count, never payees,
   account numbers, or per-transaction detail. Both "Explain my month" and "Ask about your money" build

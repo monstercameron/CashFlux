@@ -26,9 +26,22 @@ type visionMessage struct {
 
 // visionRequest is a chat-completions request whose user message carries an image.
 type visionRequest struct {
-	Model       string          `json:"model"`
-	Messages    []visionMessage `json:"messages"`
-	Temperature float64         `json:"temperature,omitempty"`
+	Model          string          `json:"model"`
+	Messages       []visionMessage `json:"messages"`
+	Temperature    float64         `json:"temperature,omitempty"`
+	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
+}
+
+// visionMessages builds the system + multimodal-user message pair (text + one
+// image) shared by the plain and structured vision requests.
+func visionMessages(systemPrompt, userText, imageURL string) []visionMessage {
+	return []visionMessage{
+		{Role: RoleSystem, Content: systemPrompt},
+		{Role: RoleUser, Content: []visionContentPart{
+			{Type: "text", Text: userText},
+			{Type: "image_url", ImageURL: &visionImageURL{URL: imageURL}},
+		}},
+	}
 }
 
 // BuildVisionRequest marshals a multimodal chat request: a system prompt, a user
@@ -36,12 +49,21 @@ type visionRequest struct {
 // plain text and is read with ParseResponse, exactly like a text chat. Use a
 // vision-capable model (e.g. gpt-4o).
 func BuildVisionRequest(model, systemPrompt, userText, imageURL string, temperature float64) ([]byte, error) {
-	msgs := []visionMessage{
-		{Role: RoleSystem, Content: systemPrompt},
-		{Role: RoleUser, Content: []visionContentPart{
-			{Type: "text", Text: userText},
-			{Type: "image_url", ImageURL: &visionImageURL{URL: imageURL}},
-		}},
-	}
-	return json.Marshal(visionRequest{Model: model, Messages: msgs, Temperature: temperature})
+	return json.Marshal(visionRequest{Model: model, Messages: visionMessages(systemPrompt, userText, imageURL), Temperature: temperature})
+}
+
+// BuildStructuredVisionRequest is BuildVisionRequest plus a JSON-schema
+// response_format, so the vision model returns JSON matching schema (decodable
+// directly) instead of free-form text. schemaName is a short identifier; schema
+// is the raw JSON Schema.
+func BuildStructuredVisionRequest(model, systemPrompt, userText, imageURL string, temperature float64, schemaName string, schema []byte) ([]byte, error) {
+	return json.Marshal(visionRequest{
+		Model:       model,
+		Messages:    visionMessages(systemPrompt, userText, imageURL),
+		Temperature: temperature,
+		ResponseFormat: &ResponseFormat{
+			Type:       "json_schema",
+			JSONSchema: JSONSchema{Name: schemaName, Schema: json.RawMessage(schema), Strict: true},
+		},
+	})
 }

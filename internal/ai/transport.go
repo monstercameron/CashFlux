@@ -34,6 +34,19 @@ func SendVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL str
 	postCompletions(apiKey, baseURL, body, onResult, onError)
 }
 
+// SendStructuredVisionChat is SendVisionChat that additionally constrains the
+// reply to the given JSON schema (structured outputs). The reply's content is a
+// JSON string matching the schema — decode it with json.Unmarshal. Same async
+// contract: exactly one of onResult/onError runs.
+func SendStructuredVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL string, temperature float64, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) {
+	body, err := BuildStructuredVisionRequest(model, systemPrompt, userText, imageURL, temperature, schemaName, schema)
+	if err != nil {
+		onError(err.Error())
+		return
+	}
+	postCompletions(apiKey, baseURL, body, onResult, onError)
+}
+
 // postCompletions sends a prebuilt request body to the chat-completions endpoint
 // and routes the parsed result (or a plain-English error) to the callbacks. It
 // owns the fetch promise chain, releases its js.Funcs per attempt, and retries

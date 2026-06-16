@@ -24,9 +24,34 @@ import (
 )
 
 const visionSystemPrompt = "You extract transactions from receipt and bank-statement images. " +
-	"Reply with ONLY a JSON array of objects with keys: date (YYYY-MM-DD), description, " +
-	"amount (a number, negative for money out / expenses, positive for money in), and category. " +
-	"No prose, no explanation, no Markdown code fence."
+	"Return each transaction with: date (YYYY-MM-DD), description, amount (negative for money out / " +
+	"expenses, positive for money in, as a string), and category."
+
+// visionExtractionSchema constrains the vision reply to a transactions array
+// (OpenAI structured outputs, strict). All fields required + additionalProperties
+// false, as strict mode demands; the parser (extract.ParseRows) reads the
+// resulting {"transactions":[…]} object.
+const visionExtractionSchema = `{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["transactions"],
+  "properties": {
+    "transactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "description", "amount", "category"],
+        "properties": {
+          "date": {"type": "string"},
+          "description": {"type": "string"},
+          "amount": {"type": "string"},
+          "category": {"type": "string"}
+        }
+      }
+    }
+  }
+}`
 
 // Documents imports transactions two ways: paste CSV (no AI), or read a receipt/
 // statement image with the OpenAI vision model (bring-your-own-key). Extracted
@@ -107,8 +132,9 @@ func Documents() ui.Node {
 		}
 		aiLoading.Set(true)
 		aiErr.Set("")
-		ai.SendVisionChat(settings.OpenAIKey, ai.DefaultBaseURL, aiModel, visionSystemPrompt,
+		ai.SendStructuredVisionChat(settings.OpenAIKey, ai.DefaultBaseURL, aiModel, visionSystemPrompt,
 			"Extract every transaction you can read from this image.", imageURL.Get(), 0.1,
+			"transactions", []byte(visionExtractionSchema),
 			func(content string, _ ai.Usage) {
 				aiLoading.Set(false)
 				rows, err := extract.ParseRows(content)

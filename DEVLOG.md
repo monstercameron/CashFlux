@@ -93,6 +93,17 @@ problems and fixes, and what's next.
 - This is the model/persistence half of §2.2's lifecycle item; recording a Document when the user
   imports (CSV or image) and a documents history list are the UI follow-ups. wasm green.
 
+## 2026-06-16 — vision extraction via structured outputs
+
+- Gave the structured-outputs codec a real consumer: `BuildStructuredVisionRequest` (extracted shared
+  `visionMessages` so plain + structured vision builds don't duplicate the multimodal message) +
+  `SendStructuredVisionChat`, and switched the Documents image read to send a strict `transactions`
+  JSON schema. The system prompt no longer has to beg for "ONLY a JSON array, no code fence" — the
+  schema enforces shape — though `extract.ParseRows` still parses the `{"transactions":[…]}` result
+  (and remains the fallback for non-structured replies).
+- Schema follows strict-mode rules (every property required, additionalProperties:false). Round-trip
+  test asserts the image part survives alongside response_format. ai tests + wasm green.
+
 ## 2026-06-16 — AI structured-outputs codec
 
 - Added `ai.BuildStructuredRequest(model, messages, temp, schemaName, schema)` + `ResponseFormat`/

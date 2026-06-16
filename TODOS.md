@@ -855,9 +855,9 @@ Shared control components (from mockup):
 ### 2.1 OpenAI client — `internal/ai`
 
 - [x] Client over `fetch` with user key from settings; base URL configurable — `ai.SendChat`
-- [~] Chat/Responses call with JSON-schema **structured outputs** → Go structs — pure codec done
-      (`ai.BuildStructuredRequest` + `ResponseFormat`/`JSONSchema`, round-trip tested). Still TODO:
-      a transport variant that sends it, and switching document extraction onto a strict schema.
+- [x] Chat/Responses call with JSON-schema **structured outputs** → Go structs — codec
+      (`ai.BuildStructuredRequest`/`BuildStructuredVisionRequest`), transport (`SendStructuredVisionChat`),
+      and document image extraction switched onto a strict `transactions` schema. Round-trip tested.
 - [~] Vision input support (images/PDF pages) for document parsing — `ai.BuildVisionRequest` (pure) done
 - [x] Model selection; token + cost surfacing; "AI off until key set" state — cost surfacing
       (`ai.EstimateCostUSD`/`FormatCostUSD` + `Usage` through the transport, shown in Insights), a

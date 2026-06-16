@@ -5,6 +5,35 @@ import (
 	"testing"
 )
 
+func TestBuildStructuredVisionRequest(t *testing.T) {
+	schema := []byte(`{"type":"object","properties":{"transactions":{"type":"array"}},"required":["transactions"],"additionalProperties":false}`)
+	raw, err := BuildStructuredVisionRequest("gpt-4o", "sys", "extract", "data:image/png;base64,AAAA", 0.1, "transactions", schema)
+	if err != nil {
+		t.Fatalf("BuildStructuredVisionRequest: %v", err)
+	}
+	var got struct {
+		Messages []struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+		ResponseFormat ResponseFormat `json:"response_format"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	// The image part must still be present (multimodal user message).
+	if len(got.Messages) != 2 || !json.Valid(got.Messages[1].Content) {
+		t.Fatalf("messages malformed: %+v", got.Messages)
+	}
+	rf := got.ResponseFormat
+	if rf.Type != "json_schema" || rf.JSONSchema.Name != "transactions" || !rf.JSONSchema.Strict {
+		t.Errorf("response_format = %+v, want json_schema/transactions/strict", rf)
+	}
+	var sch map[string]any
+	if err := json.Unmarshal(rf.JSONSchema.Schema, &sch); err != nil || sch["type"] != "object" {
+		t.Errorf("schema not preserved: %s (err %v)", rf.JSONSchema.Schema, err)
+	}
+}
+
 func TestBuildVisionRequest(t *testing.T) {
 	const dataURL = "data:image/png;base64,AAAA"
 	raw, err := BuildVisionRequest("gpt-4o", "You read receipts.", "Extract the transactions.", dataURL, 0.2)
