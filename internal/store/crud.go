@@ -299,3 +299,18 @@ func (s *SQLiteStore) DeleteAllocProfile(id string) (bool, error) {
 func (s *SQLiteStore) ListAllocProfiles() ([]domain.AllocationProfile, error) {
 	return loadRows[domain.AllocationProfile](s.db, "allocprofiles")
 }
+
+// --- Saved formulas (custom calculations) ---
+
+func (s *SQLiteStore) PutFormula(f domain.Formula) error {
+	return putJSON(s.db, "formulas", f.ID, f)
+}
+func (s *SQLiteStore) GetFormula(id string) (domain.Formula, bool, error) {
+	return getJSON[domain.Formula](s.db, "formulas", id)
+}
+func (s *SQLiteStore) DeleteFormula(id string) (bool, error) {
+	return deleteRow(s.db, "formulas", id)
+}
+func (s *SQLiteStore) ListFormulas() ([]domain.Formula, error) {
+	return loadRows[domain.Formula](s.db, "formulas")
+}

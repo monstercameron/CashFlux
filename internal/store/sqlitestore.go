@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS documents    (id TEXT PRIMARY KEY, data TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS savedinsights (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS recurring    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS allocprofiles (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS formulas     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 `
 
@@ -126,6 +127,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "allocprofiles", ds.AllocProfiles, func(p domain.AllocationProfile) string { return p.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "formulas", ds.Formulas, func(f domain.Formula) string { return f.ID }); err != nil {
+		return err
+	}
 
 	settingsData, err := json.Marshal(ds.Settings)
 	if err != nil {
@@ -181,6 +185,9 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.AllocProfiles, err = loadRows[domain.AllocationProfile](s.db, "allocprofiles"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.Formulas, err = loadRows[domain.Formula](s.db, "formulas"); err != nil {
 		return Dataset{}, err
 	}
 

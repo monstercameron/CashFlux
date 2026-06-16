@@ -79,6 +79,16 @@ type Transaction struct {
 	Custom            map[string]any `json:"custom,omitempty"`
 }
 
+// Formula is a saved sandboxed-formula calculation the user named to reuse — a
+// custom KPI over their live figures. Expr is evaluated by internal/formula
+// against the live Env; Enabled lets the user keep one without surfacing it.
+type Formula struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Expr    string `json:"expr"`
+	Enabled bool   `json:"enabled,omitempty"`
+}
+
 // AllocationProfile is a saved set of capital-allocation criterion weights — a
 // named mix of how much to favor returns, stability, liquidity, and debt
 // reduction. The Allocate screen maps these to the scoring engine's weights. The

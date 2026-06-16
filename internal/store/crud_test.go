@@ -197,6 +197,27 @@ func TestAllocProfileCRUD(t *testing.T) {
 	}
 }
 
+func TestFormulaCRUD(t *testing.T) {
+	s := newStore(t)
+	f := domain.Formula{ID: "f1", Name: "Net", Expr: "income - expense", Enabled: true}
+	if err := s.PutFormula(f); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, ok, err := s.GetFormula("f1")
+	if err != nil || !ok || got.Expr != "income - expense" || !got.Enabled {
+		t.Fatalf("Get: ok=%v err=%v got=%+v", ok, err, got)
+	}
+	if list, _ := s.ListFormulas(); len(list) != 1 {
+		t.Errorf("list len = %d, want 1", len(list))
+	}
+	if deleted, err := s.DeleteFormula("f1"); err != nil || !deleted {
+		t.Fatalf("delete: deleted=%v err=%v", deleted, err)
+	}
+	if _, ok, _ := s.GetFormula("f1"); ok {
+		t.Error("formula still present after delete")
+	}
+}
+
 func TestGetAndDeleteMissing(t *testing.T) {
 	s := newStore(t)
 	if _, ok, err := s.GetGoal("nope"); ok || err != nil {

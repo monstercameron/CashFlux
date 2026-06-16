@@ -210,6 +210,13 @@ func (a *App) AllocProfiles() []domain.AllocationProfile {
 	return v
 }
 
+// Formulas returns every saved custom formula.
+func (a *App) Formulas() []domain.Formula {
+	v, err := a.store.ListFormulas()
+	a.logErr("formulas", err)
+	return v
+}
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -471,6 +478,27 @@ func (a *App) PutAllocProfile(p domain.AllocationProfile) error {
 func (a *App) DeleteAllocProfile(id string) error {
 	return a.del("alloc profile", id, a.store.DeleteAllocProfile)
 }
+
+// PutFormula saves a custom formula (needs an ID, a name, and an expression).
+func (a *App) PutFormula(f domain.Formula) error {
+	if f.ID == "" {
+		return fmt.Errorf("appstate: formula needs an id")
+	}
+	if strings.TrimSpace(f.Name) == "" {
+		return fmt.Errorf("appstate: formula needs a name")
+	}
+	if strings.TrimSpace(f.Expr) == "" {
+		return fmt.Errorf("appstate: formula needs an expression")
+	}
+	if err := a.store.PutFormula(f); err != nil {
+		return err
+	}
+	a.log.Info("formula saved", "id", f.ID)
+	return nil
+}
+
+// DeleteFormula removes a saved formula.
+func (a *App) DeleteFormula(id string) error { return a.del("formula", id, a.store.DeleteFormula) }
 
 // PostDueRecurring posts a transaction for each autopost recurring whose NextDue
 // is on or before asOf, advancing NextDue past asOf — catching up any missed

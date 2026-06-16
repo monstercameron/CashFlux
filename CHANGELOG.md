@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Saved **formulas** (`domain.Formula` + store/state): persist a named custom calculation (expression
+  + enabled flag) with full CRUD, export/import round-trip, and validated `appstate.Formulas`/
+  `PutFormula`/`DeleteFormula` (id + name + expr required). Table-tested. The store behind reusable
+  custom KPIs on the Customize screen / dashboard (UI to follow).
 - The Allocate screen now has **editable criterion weights** and **saved profiles**: tweak the
   returns/stability/liquidity/debt weights directly (the ranking updates live), pick a built-in preset
   or one of your saved profiles to load its weights, and **Save profile** persists the current mix

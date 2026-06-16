@@ -43,6 +43,7 @@ type Dataset struct {
 	SavedInsights []domain.SavedInsight      `json:"savedInsights,omitempty"`
 	Recurring     []domain.Recurring         `json:"recurring,omitempty"`
 	AllocProfiles []domain.AllocationProfile `json:"allocProfiles,omitempty"`
+	Formulas      []domain.Formula           `json:"formulas,omitempty"`
 	Settings      Settings                   `json:"settings"`
 }
 

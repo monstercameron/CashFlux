@@ -210,6 +210,32 @@ func TestAllocProfileRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFormulaRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+	bad := []domain.Formula{
+		{Name: "x", Expr: "1"}, // no id
+		{ID: "f", Expr: "1"},   // no name
+		{ID: "f", Name: "x"},   // no expr
+	}
+	for i, f := range bad {
+		if err := a.PutFormula(f); err == nil {
+			t.Errorf("bad formula %d accepted: %+v", i, f)
+		}
+	}
+	if err := a.PutFormula(domain.Formula{ID: "f1", Name: "Savings", Expr: "income - expense", Enabled: true}); err != nil {
+		t.Fatalf("PutFormula: %v", err)
+	}
+	if got := a.Formulas(); len(got) != 1 || got[0].Name != "Savings" {
+		t.Fatalf("Formulas() = %+v", got)
+	}
+	if err := a.DeleteFormula("f1"); err != nil {
+		t.Fatalf("DeleteFormula: %v", err)
+	}
+	if len(a.Formulas()) != 0 {
+		t.Error("formula still present after delete")
+	}
+}
+
 func TestPostDueRecurring(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutAccount(domain.Account{

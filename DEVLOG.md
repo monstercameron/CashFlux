@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — saved formulas: model + persistence
+
+- User said "do all the todos" — scope opened up to the full backlog (gated UX items included). Picked
+  up §2.5's `Formula{...}` + CRUD first: `domain.Formula{ID, Name, Expr, Enabled}` persisted like the
+  other entities (formulas table, store CRUD, dataset round-trip, validated appstate accessors;
+  table-tested). Kept it minimal (Target/ResultType/Format from the spec deferred — ResultType is
+  computed at eval, the rest are display extras).
+- Next on §2.5: a save/list/delete UI on the Customize screen and surfacing enabled formulas' results
+  on the dashboard. all layers + wasm green.
+
 ## 2026-06-16 — nav: Tools group for the missing main-line screens (B7)
 
 - Planning, Allocate, Insights, Documents, Customize were routed but absent from the sidebar — only
