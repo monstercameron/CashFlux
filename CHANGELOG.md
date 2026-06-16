@@ -21,6 +21,8 @@ and every commit updates this file under `Unreleased`.
 - Routed app shell (`internal/app`) with top navigation and stub screens for every feature
   (`internal/screens`).
 - Master feature backlog (`TODOS.md`), ordered by implementation priority.
+- `.gitattributes`: normalize text to LF in the repo and on checkout (ends the Windows CRLF/LF
+  warnings) and mark `*.wasm` and common asset types as binary.
 
 - `internal/money`: precise integer-minor-unit `Money` value type with safe, currency-checked
   arithmetic (`Add`/`Sub`/`Neg`/`Abs`/`Cmp`/`Sum`) and table-driven tests (backlog §1.1).

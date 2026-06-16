@@ -22,7 +22,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] Spec, CLAUDE rules, CHANGELOG, DEVLOG, framework notes, this backlog
 - [x] Routed app shell + nav + stub screens, served on live view
 - [x] Clean standard layout (`main.go`, `internal/`, `web/`, `docs/`)
-- [ ] ★ `.gitattributes` (normalize LF; mark `*.wasm` binary) — fixes CRLF warnings
+- [x] ★ `.gitattributes` (normalize LF; mark `*.wasm` binary) — fixes CRLF warnings
 - [ ] Create GitHub repo `monstercameron/CashFlux` + push
 - [ ] CI: GitHub Actions — `go test` (logic pkgs) + wasm build on push/PR
 - [ ] Fix framework `gwc dev -html` resolution (commit in GoWebComponents, rebuild + recopy `gwc`)

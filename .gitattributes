@@ -1,0 +1,15 @@
+# Normalize line endings: store text as LF in the repo and check out LF on every
+# platform, so Go source, configs, and docs stay consistent and stop triggering
+# CRLF<->LF warnings on Windows.
+* text=auto eol=lf
+
+# Treat compiled WebAssembly and common asset binaries as binary (no diff, no
+# line-ending munging).
+*.wasm binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
