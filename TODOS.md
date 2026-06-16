@@ -185,6 +185,30 @@ Three related sidebar changes (relates to B5 collapsed-hover, B7 missing items):
 - [ ] Verify: Shift+drag reorders and persists; no "My pages" group; every nav item can be toggled
       from settings; locked items can't be hidden.
 
+### B9. Clickable breadcrumb in the top bar ★
+
+**Want:** an easy-to-read, clickable breadcrumb on the right side of the top-level panel so users can
+see where they are and step backwards.
+**Context:** the top bar (`internal/app/shell.go` `TopBar`) shows the page title on the left and the
+resolution control + "+ Add" on the right (`ml-auto`). Routing is **flat** — Dashboard, Accounts,
+Transactions, … are siblings with no nesting (`screens.All()`), so there's no natural multi-level
+trail yet.
+**Open decision (resolve before building) — what does the trail contain?**
+  1. *Home-rooted* (simplest, recommended): `Dashboard / {Current Page}`, with "Dashboard" clickable to
+     go home. Static, derived from the current route — no history needed.
+  2. *Visited history*: last N visited pages as crumbs (browser-like back trail). Needs a small
+     nav-history atom.
+  3. *Logical hierarchy*: e.g. `Dashboard / Accounts / {account} transactions` once drill-downs carry
+     context (account→ledger filter already exists). Richest but needs per-drill-down context.
+**Fix (assuming option 1 unless told otherwise):**
+- [ ] Derive crumbs from the current route via `router.InspectCurrentRoute()` + `screens.All()` labels;
+      render a clickable `Dashboard / {page}` breadcrumb (last crumb non-link). Place per the request
+      (right side); reconcile with the existing left-aligned title (likely replace the title or move it).
+- [ ] Each crumb navigates via `router.UseNavigate()`; readable styling (muted separators, hover).
+- [ ] Keyboard-accessible + labelled; respects light/dark.
+- [ ] Verify: every screen shows a correct trail; clicking a crumb navigates; the home crumb returns
+      to the dashboard.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)

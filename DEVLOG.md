@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Logged top-bar breadcrumb (B9)
+
+- User wants a clickable breadcrumb on the right of the top-level panel for stepping backwards.
+  Logged as B9. Flagged the real design decision: routing is flat (no nesting), so the trail needs a
+  defined meaning — home-rooted `Dashboard / {page}` (recommended, no history needed), a visited-
+  history trail, or a logical hierarchy once drill-downs carry context. Build once the trail behavior
+  is confirmed.
+- Analysis/TODO only (consistent with the user's recent review-and-queue mode).
+
 ## 2026-06-16 — Logged sidebar menu management (B8)
 
 - User (analysis/TODO-only): menu items should Shift+drag-reorder, the "My pages" segment should be
