@@ -12,6 +12,9 @@ and every commit updates this file under `Unreleased`.
   previously failed silently now report problems through it: bulk recategorize, bulk mark
   cleared/uncleared, and removing a transfer's paired side all surface a friendly error instead of
   swallowing it.
+- Two more silent-failure sites now report through the toast: "Mark all updated" on Accounts (per-
+  account balance refresh) and the dashboard freshness nudge's "Remind me" (which now skips the jump
+  to the to-do list if the reminder couldn't be created).
 
 ### Fixed
 - The dashboard's week resolution now honors the configured week-start (Sunday/Monday) instead of

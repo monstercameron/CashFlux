@@ -73,11 +73,15 @@ func Dashboard() ui.Node {
 
 	// "Remind me" on the freshness nudge → create a to-do and jump to the list.
 	nav := router.UseNavigate()
+	noticeAtom := uistate.UseNotice()
 	remindToUpdate := ui.UseEvent(func() {
-		_ = app.PutTask(domain.Task{
+		if err := app.PutTask(domain.Task{
 			ID: id.New(), Title: "Update stale account balances",
 			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceNudge,
-		})
+		}); err != nil {
+			noticeAtom.Set(noticeAtom.Get().With("Couldn't create the reminder: "+err.Error(), true))
+			return
+		}
 		nav.Navigate("/todo")
 	})
 

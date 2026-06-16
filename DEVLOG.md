@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Route remaining swallowed writes through the toast
+
+- Followed up the toast surface by sweeping the last `_ = app.Put…` sites in the screens
+  (`grep _ = app\.(Put|Delete|…)`): Accounts' "Mark all updated" bulk balance refresh, and the
+  dashboard freshness nudge's "Remind me" task creation. Both now surface a friendly toast on failure.
+- The nudge additionally **gates navigation on success** — previously it jumped to /todo regardless,
+  so a failed `PutTask` left the user staring at a list missing the task they just "created." Now it
+  stays put and explains.
+- Screens-wide grep is clean of swallowed entity writes after this. Verified the wasm build; the
+  touched files are js-only so there's no native target (native suite remains green from before).
+- **Next.** Small polish; the local-first feature set is comprehensive (sync stays out of scope).
+
 ## 2026-06-16 — App-wide toast surface for silent failures
 
 - Picked up TODOS §1.4 "Error/toast surface for failed persistence." Several bulk paths in the

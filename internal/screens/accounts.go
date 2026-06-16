@@ -51,6 +51,8 @@ func Accounts() ui.Node {
 	lockUntil := ui.UseState("")
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
+	noticeAtom := uistate.UseNotice()
+	notifyErr := func(text string) { noticeAtom.Set(noticeAtom.Get().With(text, true)) }
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onCurr := ui.UseEvent(func(v string) { curr.Set(strings.ToUpper(v)) })
@@ -189,7 +191,9 @@ func Accounts() ui.Node {
 				continue
 			}
 			ac.BalanceAsOf = now
-			_ = app.PutAccount(ac)
+			if err := app.PutAccount(ac); err != nil {
+				notifyErr("Couldn't mark some balances updated: " + err.Error())
+			}
 		}
 		errMsg.Set("")
 		bump()
