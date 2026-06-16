@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/logging"
 	"github.com/monstercameron/CashFlux/internal/store"
@@ -166,6 +167,21 @@ func (a *App) Budgets() []domain.Budget {
 func (a *App) Goals() []domain.Goal { v, err := a.store.ListGoals(); a.logErr("goals", err); return v }
 func (a *App) Tasks() []domain.Task { v, err := a.store.ListTasks(); a.logErr("tasks", err); return v }
 
+// CustomFieldDefs returns every registered custom-field definition.
+func (a *App) CustomFieldDefs() []customfields.Def {
+	v, err := a.store.ListCustomFieldDefs()
+	a.logErr("customFieldDefs", err)
+	return v
+}
+
+// CustomFieldDefsFor returns the custom-field definitions for one entity type
+// (e.g. "account", "transaction").
+func (a *App) CustomFieldDefsFor(entityType string) []customfields.Def {
+	v, err := a.store.CustomFieldDefsByEntity(entityType)
+	a.logErr("customFieldDefs", err)
+	return v
+}
+
 // Settings returns the stored settings.
 func (a *App) Settings() store.Settings {
 	s, err := a.store.GetSettings()
@@ -266,6 +282,28 @@ func (a *App) PutTask(t domain.Task) error {
 	return nil
 }
 func (a *App) DeleteTask(id string) error { return a.del("task", id, a.store.DeleteTask) }
+
+// PutCustomFieldDef validates and saves a custom-field definition. The Def must
+// be sound (id, entity type, key, label, known type; choice fields need options).
+func (a *App) PutCustomFieldDef(d customfields.Def) error {
+	if issues := d.Validate(); len(issues) > 0 {
+		var is validate.Issues
+		for _, m := range issues {
+			is = append(is, validate.Issue{Field: "customField", Message: m})
+		}
+		return is
+	}
+	if err := a.store.PutCustomFieldDef(d); err != nil {
+		return err
+	}
+	a.log.Info("custom field saved", "id", d.ID, "entity", d.EntityType)
+	return nil
+}
+
+// DeleteCustomFieldDef removes a custom-field definition by id.
+func (a *App) DeleteCustomFieldDef(id string) error {
+	return a.del("customFieldDef", id, a.store.DeleteCustomFieldDef)
+}
 
 // PutSettings saves settings.
 func (a *App) PutSettings(s store.Settings) error {

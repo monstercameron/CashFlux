@@ -53,6 +53,21 @@ func TestValidateIgnoresUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestDefValidate(t *testing.T) {
+	good := Def{ID: "f1", EntityType: "account", Key: "tier", Label: "Tier", Type: TypeSelect, Options: []string{"gold"}}
+	if issues := good.Validate(); len(issues) != 0 {
+		t.Errorf("expected sound def, got %v", issues)
+	}
+	bad := Def{} // missing everything; type invalid
+	if issues := bad.Validate(); len(issues) != 5 {
+		t.Errorf("expected 5 issues for empty def, got %d: %v", len(issues), issues)
+	}
+	selNoOpts := Def{ID: "f2", EntityType: "account", Key: "tier", Label: "Tier", Type: TypeSelect}
+	if issues := selNoOpts.Validate(); len(issues) != 1 {
+		t.Errorf("expected 1 issue (choice needs options), got %v", issues)
+	}
+}
+
 func TestFieldTypeValid(t *testing.T) {
 	for _, ty := range []FieldType{TypeText, TypeNumber, TypeDate, TypeBool, TypeSelect} {
 		if !ty.Valid() {

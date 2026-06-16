@@ -22,13 +22,39 @@ const (
 
 // Def defines one custom field for an entity type.
 type Def struct {
-	ID         string
-	EntityType string // e.g. "account", "transaction"
-	Key        string // map key in the entity's custom{} map
-	Label      string // human label for forms and errors
-	Type       FieldType
-	Options    []string // allowed values for TypeSelect
-	Required   bool
+	ID         string    `json:"id"`
+	EntityType string    `json:"entityType"` // e.g. "account", "transaction"
+	Key        string    `json:"key"`        // map key in the entity's custom{} map
+	Label      string    `json:"label"`      // human label for forms and errors
+	Type       FieldType `json:"type"`
+	Options    []string  `json:"options,omitempty"` // allowed values for TypeSelect
+	Required   bool      `json:"required,omitempty"`
+}
+
+// Validate reports problems with the definition itself (not its values): a Def
+// needs an id, entity type, key, label, and a known type; a select field needs
+// at least one option. Returns plain-English issues, empty when the Def is sound.
+func (d Def) Validate() []string {
+	var issues []string
+	if d.ID == "" {
+		issues = append(issues, "Field id is required.")
+	}
+	if d.EntityType == "" {
+		issues = append(issues, "Entity type is required.")
+	}
+	if d.Key == "" {
+		issues = append(issues, "Field key is required.")
+	}
+	if d.Label == "" {
+		issues = append(issues, "Field label is required.")
+	}
+	if !d.Type.Valid() {
+		issues = append(issues, "Field type is not recognized.")
+	}
+	if d.Type == TypeSelect && len(d.Options) == 0 {
+		issues = append(issues, "A choice field needs at least one option.")
+	}
+	return issues
 }
 
 // Valid reports whether the field type is recognized.

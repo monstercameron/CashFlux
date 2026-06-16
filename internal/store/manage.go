@@ -8,7 +8,8 @@ import (
 
 // allTables lists every entity table plus settings, in dependency-free order.
 var allTables = []string{
-	"members", "accounts", "categories", "transactions", "budgets", "goals", "tasks", "settings",
+	"members", "accounts", "categories", "transactions", "budgets", "goals", "tasks",
+	"customfielddefs", "settings",
 }
 
 // GetSettings returns the stored settings, or the zero value if none are saved.

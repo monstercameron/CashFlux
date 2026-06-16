@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -35,6 +36,7 @@ type Dataset struct {
 	Budgets       []domain.Budget      `json:"budgets"`
 	Goals         []domain.Goal        `json:"goals"`
 	Tasks         []domain.Task        `json:"tasks"`
+	CustomFields  []customfields.Def   `json:"customFieldDefs,omitempty"`
 	Settings      Settings             `json:"settings"`
 }
 

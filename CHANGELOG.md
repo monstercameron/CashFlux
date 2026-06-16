@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Persist custom-field definitions: `customfields.Def` now carries JSON tags and a `Validate`
+  method (sound definition needs id/entity-type/key/label/known-type; choice fields need options);
+  the store gains a `customfielddefs` table with full CRUD, a `CustomFieldDefsByEntity` query, and
+  dataset Load/Snapshot + export/import round-trip; `appstate` exposes `CustomFieldDefs`,
+  `CustomFieldDefsFor`, validated `PutCustomFieldDef`, and `DeleteCustomFieldDef`. Wipe clears the
+  new table. Tested (store CRUD, dataset + export/import round-trip, wipe, Def validation).
 - Custom-field definitions and validation engine (`internal/customfields`): typed `Def`
   (text/number/date/bool/select, required, select options) plus `Validate`, which checks an
   entity's `custom{}` value map against its definitions — flagging missing required fields, type

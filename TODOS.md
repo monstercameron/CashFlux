@@ -275,12 +275,12 @@ Shared control components (from mockup):
 
 ### 1.16 Custom fields (extensibility)
 
-- [~] `CustomFieldDef{ID, EntityType, Key, Label, Type, Options, Required, DefaultValue}` + store CRUD
-      — type modelled as `customfields.Def` (pure); store CRUD still pending
+- [x] `CustomFieldDef{ID, EntityType, Key, Label, Type, Options, Required}` + store CRUD
+      — `customfields.Def` (pure) + `customfielddefs` table CRUD + `CustomFieldDefsByEntity`; appstate accessors
 - [x] Validate `custom{}` map against defs for the entity type — `customfields.Validate`, table-tested
 - [ ] Forms render core + custom fields by type (text/number/date/bool/select/money)
 - [ ] Custom field management UI (per entity type)
-- [ ] Export/import round-trips custom fields + defs
+- [x] Export/import round-trips custom field defs — dataset + Export/Import covered by tests
 - [ ] Tests: validation, defaulting, round-trip
 
 ### 1.17 Dashboard

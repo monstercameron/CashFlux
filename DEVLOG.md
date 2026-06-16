@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Custom fields: persistence layer
+
+- Step 3 of the SDLC for §1.16: persist `CustomFieldDef`s. Added a `customfielddefs` table to the
+  SQLite store (same id+JSON-document shape as every other entity), full CRUD, a
+  `CustomFieldDefsByEntity` query (via `json_extract` on `$.entityType`, mirroring the
+  transactions-by-account pattern), and wired the new entity through `Load`/`Snapshot`, `Wipe`'s
+  `allTables`, and the `Dataset` aggregate so export/import round-trips it.
+- **Decision — keep `Def` in `internal/customfields`, not `internal/domain`.** The type and its
+  validation are inseparable, so the package that validates owns the type. `store` and `appstate`
+  importing `customfields` is a clean one-way dependency (it only pulls in `dateutil`). Added JSON
+  tags to `Def` so the persisted shape is stable and lowercase like the rest of the dataset.
+- **No schema-version bump.** The new `customFieldDefs` array is additive and `omitempty`; old
+  exports decode fine (nil slice), so `SchemaVersion` stays at 1 — the migration guard is reserved
+  for shape changes that actually break old data.
+- `appstate.PutCustomFieldDef` runs `Def.Validate()` and adapts the plain-English messages into the
+  existing `validate.Issues` error type, so the write path behaves like every other entity.
+- **Next.** State seam is thin here (defs are read directly), so the remaining work is UI: a
+  management screen to add/edit/remove defs per entity type, then rendering the inputs on entity
+  forms and validating `custom{}` on save.
+
 ## 2026-06-16 — Custom fields: the validation core first
 
 - Started SPEC §1.16 (user-defined custom fields) bottom-up, per the SDLC rule: model + validate

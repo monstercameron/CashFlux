@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
@@ -200,4 +201,25 @@ func (s *SQLiteStore) ListTasks() ([]domain.Task, error) {
 func (s *SQLiteStore) TasksByStatus(status domain.TaskStatus) ([]domain.Task, error) {
 	return queryRows[domain.Task](s.db,
 		"SELECT data FROM tasks WHERE json_extract(data, '$.status') = ? ORDER BY id", string(status))
+}
+
+// --- Custom field definitions ---
+
+func (s *SQLiteStore) PutCustomFieldDef(d customfields.Def) error {
+	return putJSON(s.db, "customfielddefs", d.ID, d)
+}
+func (s *SQLiteStore) GetCustomFieldDef(id string) (customfields.Def, bool, error) {
+	return getJSON[customfields.Def](s.db, "customfielddefs", id)
+}
+func (s *SQLiteStore) DeleteCustomFieldDef(id string) (bool, error) {
+	return deleteRow(s.db, "customfielddefs", id)
+}
+func (s *SQLiteStore) ListCustomFieldDefs() ([]customfields.Def, error) {
+	return loadRows[customfields.Def](s.db, "customfielddefs")
+}
+
+// CustomFieldDefsByEntity returns the definitions registered for one entity type.
+func (s *SQLiteStore) CustomFieldDefsByEntity(entityType string) ([]customfields.Def, error) {
+	return queryRows[customfields.Def](s.db,
+		"SELECT data FROM customfielddefs WHERE json_extract(data, '$.entityType') = ? ORDER BY id", entityType)
 }
