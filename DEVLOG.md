@@ -182,8 +182,12 @@ problems and fixes, and what's next.
   `cashflux.json`. Generalized `dataBtn` into its own `dataButton` component taking an `OnClick` so
   the remaining actions slot in cleanly.
 
-**Next:** the rest of the Data actions (Export CSV, Import via file picker, Load sample, Wipe with
-confirm — these need store accessors/refresh), then drag-reorder, resize, and bento layout persistence.
+- Added the data-action seams to `appstate`: `ExportCSV` (via `store.TransactionsToCSV`), `LoadSample`
+  (replace with `store.SampleDataset` — `store.Load` replaces, as the import path proves), and `Wipe`.
+  Native test loads sample → asserts populated → wipes → asserts empty, plus a CSV smoke test.
+
+**Next:** wire these into the global-settings Data buttons (Export CSV download, Import via file
+picker, Load sample, Wipe with confirm) with an in-app refresh; then drag-reorder, resize, persistence.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

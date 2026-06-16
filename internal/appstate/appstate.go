@@ -91,6 +91,33 @@ func (a *App) ImportJSON(data []byte) error {
 	return nil
 }
 
+// ExportCSV renders all transactions as CSV bytes (human-readable, stable
+// columns) — the spreadsheet-friendly export.
+func (a *App) ExportCSV() ([]byte, error) {
+	return store.TransactionsToCSV(a.Transactions())
+}
+
+// LoadSample replaces all data with the built-in sample dataset (the "load
+// sample" action), giving a new household something to explore.
+func (a *App) LoadSample() error {
+	if err := a.store.Load(store.SampleDataset()); err != nil {
+		a.log.Error("load sample", "err", err)
+		return err
+	}
+	a.log.Info("loaded sample data")
+	return nil
+}
+
+// Wipe removes all data from the store (the "wipe data" action).
+func (a *App) Wipe() error {
+	if err := a.store.Wipe(); err != nil {
+		a.log.Error("wipe", "err", err)
+		return err
+	}
+	a.log.Info("wiped all data")
+	return nil
+}
+
 // --- read accessors (errors are logged and swallowed; UI shows empty) ---
 
 func (a *App) Members() []domain.Member {

@@ -90,6 +90,38 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 }
 
+func TestLoadSampleAndWipe(t *testing.T) {
+	a := newApp(t, false)
+	if len(a.Accounts()) != 0 {
+		t.Fatalf("expected empty store, got %d accounts", len(a.Accounts()))
+	}
+
+	if err := a.LoadSample(); err != nil {
+		t.Fatalf("LoadSample: %v", err)
+	}
+	if len(a.Accounts()) == 0 || len(a.Transactions()) == 0 {
+		t.Error("LoadSample should populate accounts and transactions")
+	}
+
+	if err := a.Wipe(); err != nil {
+		t.Fatalf("Wipe: %v", err)
+	}
+	if len(a.Accounts()) != 0 || len(a.Transactions()) != 0 || len(a.Members()) != 0 {
+		t.Error("Wipe should leave the store empty")
+	}
+}
+
+func TestExportCSV(t *testing.T) {
+	a := newApp(t, true)
+	data, err := a.ExportCSV()
+	if err != nil {
+		t.Fatalf("ExportCSV: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("ExportCSV should produce output for seeded data")
+	}
+}
+
 func TestInitSetsDefault(t *testing.T) {
 	if err := Init(&bytes.Buffer{}, true); err != nil {
 		t.Fatalf("Init: %v", err)
