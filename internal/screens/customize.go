@@ -97,6 +97,7 @@ func Customize() ui.Node {
 	}
 
 	return Div(
+		CustomFieldsManager(),
 		Section(Class("card"),
 			H2(Class("card-title"), "Formula calculator"),
 			P(Class("muted"), "Build your own calculation from your live figures. Functions: sum, avg, min, max, count, abs, round, if."),

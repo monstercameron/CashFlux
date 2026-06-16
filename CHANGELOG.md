@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Custom-field management UI on the Customize screen (`CustomFieldsManager`): add a field by picking
+  the entity type (accounts/transactions/budgets/goals/members), a key and label, a data type
+  (text/number/date/yes-no/choice), comma-separated options for choice fields, and optional vs
+  required; saved through the validated `appstate.PutCustomFieldDef` path. Existing definitions list
+  grouped by entity with type/required/options shown and per-row delete (own-component delete hook,
+  honouring the loop-hook rule). Fulfils the Customize screen's "custom fields and formulas" promise.
 - Persist custom-field definitions: `customfields.Def` now carries JSON tags and a `Validate`
   method (sound definition needs id/entity-type/key/label/known-type; choice fields need options);
   the store gains a `customfielddefs` table with full CRUD, a `CustomFieldDefsByEntity` query, and

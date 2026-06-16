@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Custom fields: management UI
+
+- Step 5 (UI last) for §1.16: `CustomFieldsManager`, a thin shell over the now-tested persistence.
+  Add-field form (entity type, key, label, type, options, required) + grouped list with per-row
+  delete. Per-row delete is its own component (`CustomFieldRow`) so its `OnClick` hook sits at a
+  stable render position — the cardinal framework rule.
+- **Decision — host it on the existing Customize screen, not a new route.** That screen is already
+  subtitled "Custom fields and formulas" but only did formulas; dropping the manager above the
+  calculator fulfils the promise and keeps the nav uncluttered. No routing changes.
+- **UI choices.** The choice-field options input only appears when the type is "Choice"
+  (`If(isChoice, …)`); required is a plain Optional/Required select rather than a checkbox to match
+  the other dropdown-driven forms. Validation errors from `Def.Validate()` surface inline via the
+  shared `validate.Issues` error string. Entity list is curated (the five entities users actually
+  annotate) rather than reflected, so the labels read in plain English.
+- **Next.** The defs exist and persist; the remaining step is rendering these fields as inputs on
+  the actual entity forms (accounts/transactions/…) and validating `custom{}` on save — a per-form
+  integration I'll do entity by entity.
+
 ## 2026-06-16 — Custom fields: persistence layer
 
 - Step 3 of the SDLC for §1.16: persist `CustomFieldDef`s. Added a `customfielddefs` table to the

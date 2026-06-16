@@ -279,7 +279,7 @@ Shared control components (from mockup):
       — `customfields.Def` (pure) + `customfielddefs` table CRUD + `CustomFieldDefsByEntity`; appstate accessors
 - [x] Validate `custom{}` map against defs for the entity type — `customfields.Validate`, table-tested
 - [ ] Forms render core + custom fields by type (text/number/date/bool/select/money)
-- [ ] Custom field management UI (per entity type)
+- [x] Custom field management UI (per entity type) — `CustomFieldsManager` on the Customize screen
 - [x] Export/import round-trips custom field defs — dataset + Export/Import covered by tests
 - [ ] Tests: validation, defaulting, round-trip
 
