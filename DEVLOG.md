@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — README + Pages-hosting TODOs; background pushes
+
+- Logged two §0 items: a proper **README.md**, and **hosting the app on GitHub Pages from `/docs`**
+  (production build committed to `docs/`, relative paths for the `/CashFlux/` subpath, a `404.html`
+  shell for deep-link routing — the static-host side of B1 — and a build script so `/docs` is
+  regenerated, not hand-copied). Ticked the now-stale "create repo + push" §0 item.
+- Per user: run `git push` in the **background** (fire-and-forget) so a credential/elevation prompt or
+  UI button can't hang the non-interactive shell. Updated the CLAUDE.md push rule accordingly.
+
 ## 2026-06-16 — Logged "+ Add" flip-panel of add actions (B11)
 
 - User wants "+ Add" to open a centered flip panel (settings-style) with add options: transaction,

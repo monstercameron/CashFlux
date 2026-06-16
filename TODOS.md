@@ -297,8 +297,19 @@ cleanest path is to **reuse that mechanism** rather than build a parallel overla
 - [x] Routed app shell + nav + stub screens, served on live view
 - [x] Clean standard layout (`main.go`, `internal/`, `web/`, `docs/`)
 - [x] ★ `.gitattributes` (normalize LF; mark `*.wasm` binary) — fixes CRLF warnings
-- [ ] Create GitHub repo `monstercameron/CashFlux` + push
+- [x] Create GitHub repo `monstercameron/CashFlux` + push (remote `origin`; `main` tracks `origin/main`)
 - [x] CI: GitHub Actions — `go vet` + `go test` (logic pkgs) + wasm build on push/PR (`.github/workflows/ci.yml`)
+- [ ] **README.md** — what CashFlux is, screenshots/GIF, the stack (Go→wasm on GoWebComponents),
+      local dev (`gwc dev`), build/test commands, the local-first + BYO-AI-key model, link to the live
+      GitHub Pages demo, and a pointer to SPEC/DEVLOG/TODOS. First-impression doc for the repo.
+- [ ] **Host the app on GitHub Pages from `/docs`.** Produce a production build into `docs/` (via
+      `gwc release`/`prerender` or a scripted copy of `index.html` + `bin/main.wasm` + `wasm_exec.js` +
+      `sw.js` + `manifest`), commit it (these artifacts are normally gitignored — `/docs` build output
+      must be *tracked*), and enable Pages → "Deploy from branch: main /docs".
+      - Use **relative asset paths** (already `./…`) so it works under the `/CashFlux/` Pages subpath.
+      - Add a `docs/404.html` that serves the app shell so deep-link refreshes route correctly on Pages
+        (the static-host side of bug B1).
+      - Add a build script / Make-style task (or a CI job) so `/docs` is rebuilt on release, not hand-copied.
 - [ ] Fix framework `gwc dev -html` resolution (commit in GoWebComponents, rebuild + recopy `gwc`)
 - [ ] `playwrightgo`-tagged `gwc` + Chromium for automated DOM verification (optional)
 - [ ] Install Claude Code design skills (`frontend-design`, `playground`) — user action
