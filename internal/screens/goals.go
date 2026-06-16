@@ -17,6 +17,7 @@ import (
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -194,6 +195,7 @@ func GoalRow(props goalRowProps) ui.Node {
 			props.OnContribute(props.Goal, v)
 		}
 	}))
+	pr := uistate.UsePrefs().Get()
 
 	g := props.Goal
 	pct := goalsvc.Percent(g)
@@ -205,7 +207,7 @@ func GoalRow(props goalRowProps) ui.Node {
 		sub = "Complete 🎉"
 	}
 	if !g.TargetDate.IsZero() {
-		sub += " · by " + dateutil.FormatDate(g.TargetDate)
+		sub += " · by " + pr.FormatDate(g.TargetDate)
 	}
 
 	return Div(Class("budget"),

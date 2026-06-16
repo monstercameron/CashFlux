@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -180,6 +181,7 @@ type taskRowProps struct {
 func TaskRow(props taskRowProps) ui.Node {
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(props.Task.ID) }))
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Task.ID) }))
+	pr := uistate.UsePrefs().Get()
 
 	t := props.Task
 	done := t.Status == domain.StatusDone
@@ -193,7 +195,7 @@ func TaskRow(props taskRowProps) ui.Node {
 
 	meta := []ui.Node{Span(Class("badge badge-prio "+pclass), plabel)}
 	if !t.Due.IsZero() {
-		meta = append(meta, Span(Class("row-meta"), "due "+dateutil.FormatDate(t.Due)))
+		meta = append(meta, Span(Class("row-meta"), "due "+pr.FormatDate(t.Due)))
 	}
 	if t.Notes != "" {
 		meta = append(meta, Span(Class("row-meta"), t.Notes))

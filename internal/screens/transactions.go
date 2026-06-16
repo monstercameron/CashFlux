@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -463,6 +464,7 @@ func parseTags(s string) []string {
 // TransactionRow is a per-transaction row with a stable delete-handler hook.
 func TransactionRow(props transactionRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Txn.ID) }))
+	pr := uistate.UsePrefs().Get()
 
 	cat := props.Category
 	switch {
@@ -471,7 +473,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	case cat == "":
 		cat = "Uncategorized"
 	}
-	meta := cat + " · " + dateutil.FormatDate(props.Txn.Date)
+	meta := cat + " · " + pr.FormatDate(props.Txn.Date)
 	if props.Account != "" {
 		meta += " · " + props.Account
 	}

@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- User-facing dates in the Transactions, Goals, and To-do lists now render using the chosen date
+  format (via `prefs.FormatDate`) instead of always ISO. Each row component reads the preferences
+  atom, so changing the format updates every list live.
+
 ### Added
 - Preferences section in the global Settings panel: choose the week start (Sunday/Monday segmented
   control) and the date format (ISO / US / European / long), each showing a live example. Changes

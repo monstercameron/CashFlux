@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Reload-persistent preferences: wiring dates through (feature complete)
+
+- Final step: the three user-facing date displays (TransactionRow, GoalRow, TaskRow) now format via
+  `prefs.FormatDate` instead of `dateutil.FormatDate`. Each row reads `uistate.UsePrefs().Get()` at
+  the top of its component — unconditionally, because GoalRow's date sits inside an
+  `if !TargetDate.IsZero()` and a hook there would be conditional. Reading the atom also subscribes
+  the row, so flipping the format in Settings re-renders every list immediately.
+- Left `dateutil.FormatDate` in place for machine/edit contexts (date `<input>` values, parsing)
+  where ISO is required — preferences only change *display*, not the canonical storage/parse format.
+- §1.18 week-start + date-format preference is now end-to-end: pure engine → localStorage atom →
+  Settings UI → live rendering, all surviving reload. Theme/density and fiscal-month start remain as
+  separate future prefs.
+- **Next.** Move to the next backlog area — likely module-visibility toggles (show/hide screens,
+  also a reload-persistent preference) or a contained Phase-3 sync primitive.
+
 ## 2026-06-16 — Reload-persistent preferences: the Settings UI
 
 - Step 5 (UI): a "Preferences" block in the global settings back-face. Week start is a `Segmented`

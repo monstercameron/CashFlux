@@ -302,8 +302,8 @@ Shared control components (from mockup):
 - [x] OpenAI key + model fields persist to Settings (global panel) — used by Insights
 - [ ] Data: export JSON, export CSV, import JSON, import CSV, load sample, wipe (confirm)
 - [~] Preferences: theme/density, week-start, fiscal-month start, number/date formats
-      — week-start + date format: pure `internal/prefs` + localStorage atom + Settings UI done;
-        screens still need to render dates via `prefs.FormatDate`; theme/density/fiscal-month later
+      — week-start + date format complete end-to-end (engine + localStorage atom + Settings UI +
+        live date rendering, reload-persistent); theme/density + fiscal-month start still to do
 - [ ] Budgeting methodology selector (envelope / zero-based / simple tracking)
 - [ ] Module visibility toggles (show/hide screens)
 - [ ] Debug: open log viewer
