@@ -213,11 +213,37 @@ func (a *App) PutAccount(ac domain.Account) error {
 	if is := validate.ValidateAccount(ac); !is.OK() {
 		return is
 	}
+	if err := a.validateCustom("account", ac.Custom); err != nil {
+		return err
+	}
 	if err := a.store.PutAccount(ac); err != nil {
 		return err
 	}
 	a.log.Info("account saved", "id", ac.ID)
 	return nil
+}
+
+// validateCustom checks an entity's custom-field values against the definitions
+// registered for its type. A definition read error never blocks a save (logged
+// and ignored); only genuine value problems are returned, as validate.Issues.
+func (a *App) validateCustom(entityType string, custom map[string]any) error {
+	defs, err := a.store.CustomFieldDefsByEntity(entityType)
+	if err != nil {
+		a.log.Error("load custom defs", "entity", entityType, "err", err)
+		return nil
+	}
+	if len(defs) == 0 {
+		return nil
+	}
+	issues := customfields.Validate(defs, custom)
+	if len(issues) == 0 {
+		return nil
+	}
+	var is validate.Issues
+	for _, m := range issues {
+		is = append(is, validate.Issue{Field: "customField", Message: m})
+	}
+	return is
 }
 func (a *App) DeleteAccount(id string) error { return a.del("account", id, a.store.DeleteAccount) }
 

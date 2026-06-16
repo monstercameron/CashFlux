@@ -10,6 +10,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -44,6 +45,7 @@ func Accounts() ui.Node {
 	expReturn := ui.UseState("")
 	liquidity := ui.UseState("")
 	stability := ui.UseState("")
+	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
@@ -61,6 +63,17 @@ func Accounts() ui.Node {
 	onStability := ui.UseEvent(func(v string) { stability.Set(v) })
 
 	bump := func() { rev.Set(rev.Get() + 1) }
+
+	accDefs := app.CustomFieldDefsFor("account")
+	onCustom := func(key, value string) {
+		m := customVals.Get()
+		nm := make(map[string]string, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[key] = value
+		customVals.Set(nm)
+	}
 
 	add := ui.UseEvent(Prevent(func() {
 		c := strings.ToUpper(strings.TrimSpace(curr.Get()))
@@ -104,6 +117,7 @@ func Accounts() ui.Node {
 				acc.StabilityScore = s
 			}
 		}
+		acc.Custom = customValuesToMap(accDefs, customVals.Get())
 		if err := app.PutAccount(acc); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -118,6 +132,7 @@ func Accounts() ui.Node {
 		expReturn.Set("")
 		liquidity.Set("")
 		stability.Set("")
+		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		bump()
 	}))
@@ -184,6 +199,9 @@ func Accounts() ui.Node {
 			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Expected return APR %"), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn))),
 			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Liquidity 0–100"), Value(liquidity.Get()), OnInput(onLiquidity))),
 			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Stability 0–100"), Value(stability.Get()), OnInput(onStability))),
+			MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+			}),
 			Button(Class("btn btn-primary"), Type("submit"), "Add account"),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),

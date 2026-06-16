@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Custom fields on the Accounts form: any custom-field definitions registered for accounts now
+  render as the right input (text/number/date box, yes-no or choice dropdown) in the add-account
+  form via a reusable `CustomFieldInput` component (own event hook, safe in keyed lists). Values are
+  typed into the account's `custom{}` map on save, and `appstate.PutAccount` validates them against
+  the definitions (rejecting missing-required and wrong-typed values). Tested.
 - Custom-field management UI on the Customize screen (`CustomFieldsManager`): add a field by picking
   the entity type (accounts/transactions/budgets/goals/members), a key and label, a data type
   (text/number/date/yes-no/choice), comma-separated options for choice fields, and optional vs

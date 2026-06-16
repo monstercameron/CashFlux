@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Custom fields: rendering on entity forms (Accounts first)
+
+- The defs now drive real inputs. `CustomFieldInput` is a reusable component that picks the control
+  for a field's type and reports `(key, value)` up to the parent form, which owns a
+  `map[string]string` value state. Both event hooks (`onText` for inputs, `onSel` for selects) are
+  declared unconditionally at the top so hook order is stable whatever the field type — the
+  component is then safe to render from a `MapKeyed` list.
+- **Decision — push values up, don't pull them down.** Each input is controlled and emits changes to
+  a single parent map rather than holding its own state, so the submit handler can read every value
+  at once and build the typed `custom{}` map (`customValuesToMap`: numbers→float64, yes/no→bool,
+  else string; empties omitted so optional fields stay unset).
+- **Validation lives in `appstate.PutAccount`, not the view.** Added `validateCustom`, which loads
+  the account defs and runs `customfields.Validate`, returning `validate.Issues` — so any save path
+  (not just this form) enforces required/typed custom fields. A defs *read* error never blocks a
+  save (logged and ignored); only real value problems reject.
+- **Framework gotcha hit:** `If(cond, MapKeyed(...))` doesn't compile — `MapKeyed` returns
+  `[]ui.Node` and `If` wants a single `ui.Node`. The fix is to drop the `If`: an empty def list
+  yields an empty slice that flattens to nothing, same as `Div(..., MapKeyed(...))`.
+- **Next.** Repeat the integration for Transactions (and other entities) so custom fields are
+  available everywhere they're defined.
+
 ## 2026-06-16 — Custom fields: management UI
 
 - Step 5 (UI last) for §1.16: `CustomFieldsManager`, a thin shell over the now-tested persistence.
