@@ -7,17 +7,24 @@
 package uistate
 
 import (
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/GoWebComponents/state"
 )
 
-const periodAtomID = "dashboard:period"
+const (
+	periodAtomID  = "dashboard:period"
+	periodStoreID = "cashflux:period-res"
+)
 
-// defaultWindow is the initial dashboard selection: the current month.
+// defaultWindow is the initial dashboard selection: the current period at the
+// last-used resolution (restored from localStorage), re-anchored to today. Only
+// the resolution persists — the From/To anchors are transient navigation, so a
+// reload always lands on the current period rather than a stale one.
 func defaultWindow() period.Window {
-	return period.NewWindow(period.Month, time.Now(), time.Monday)
+	return period.NewWindow(loadResolution(), time.Now(), time.Monday)
 }
 
 // UsePeriod returns the shared dashboard time-window atom. Every component that
@@ -25,4 +32,26 @@ func defaultWindow() period.Window {
 // dashboard widgets stay in lockstep.
 func UsePeriod() state.Atom[period.Window] {
 	return state.UseAtom(periodAtomID, defaultWindow())
+}
+
+// PersistResolution saves the dashboard resolution so the user's preferred
+// granularity survives reloads.
+func PersistResolution(r period.Resolution) {
+	if !r.Valid() {
+		return
+	}
+	js.Global().Get("localStorage").Call("setItem", periodStoreID, string(r))
+}
+
+// loadResolution reads the saved resolution, defaulting to Month when absent or
+// invalid.
+func loadResolution() period.Resolution {
+	v := js.Global().Get("localStorage").Call("getItem", periodStoreID)
+	if v.IsNull() || v.IsUndefined() {
+		return period.Month
+	}
+	if r := period.Resolution(v.String()); r.Valid() {
+		return r
+	}
+	return period.Month
 }

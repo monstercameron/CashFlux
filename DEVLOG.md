@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Dashboard resolution persists across reloads
+
+- The top-bar Week/Month/Quarter toggle now survives reloads. `uistate.PersistResolution` stores the
+  chosen `period.Resolution` in localStorage; `defaultWindow()` seeds `UsePeriod` from it via
+  `loadResolution()` and re-anchors to `time.Now()`. The `ResolutionControl`'s `OnSelect` persists
+  before setting the atom.
+- **Why persist only the resolution, not the whole window?** The From/To anchors are transient
+  navigation — restoring last session's anchored week/month would dump the user on a stale period.
+  Remembering just the granularity keeps their preference (e.g. "I think in quarters") while always
+  landing on the current period. Stepping the pills stays in-memory by design.
+- Pre-existing nit noted for later: `defaultWindow` still hardcodes `time.Monday` for week-start
+  rather than reading the prefs week-start atom, so the dashboard week resolution may not match the
+  user's configured first-day-of-week. Left as a separate, orthogonal fix (one feature per commit).
+- Verified the wasm build and the native suite (`internal/period` green); `uistate` is js-only so it
+  has no native target, as expected.
+- **Next.** Reconcile the dashboard window's week-start with the prefs atom, or further small polish.
+
 ## 2026-06-16 — Refactor: transaction filtering → pure tested package
 
 - Moved the ledger's filter+sort out of the js-only `transactions.go` (untestable) into pure

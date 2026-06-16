@@ -259,7 +259,11 @@ func ResolutionControl() uic.Node {
 				{Value: string(period.Quarter), Label: "Quarter"},
 			},
 			Selected: string(w.Res),
-			OnSelect: func(v string) { atom.Set(w.SetResolution(period.Resolution(v))) },
+			OnSelect: func(v string) {
+				r := period.Resolution(v)
+				uistate.PersistResolution(r)
+				atom.Set(w.SetResolution(r))
+			},
 		}),
 		ui.StepperPill(ui.StepperPillProps{
 			Label:  w.FromLabel(),

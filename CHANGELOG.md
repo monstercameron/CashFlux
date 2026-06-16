@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- The dashboard time resolution (Week / Month / Quarter) now persists across reloads. Only the
+  resolution is remembered — the view re-anchors to the current period on load, so you keep your
+  preferred granularity without landing on a stale week or month.
+
 ### Changed
 - Extracted transaction filtering/sorting into a pure, table-tested `internal/txnfilter` package
   (`Criteria` + `Apply` + `AbsAmount`); `uistate.TxFilter` now aliases `txnfilter.Criteria` and the

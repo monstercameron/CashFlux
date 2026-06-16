@@ -164,6 +164,8 @@ Time-resolution control (top bar):
 - [x] Segmented **Week / Month / Quarter** toggle (`ui.Segmented`)
 - [x] **From / To** stepper pills that relabel per resolution; clamp From ≤ To (`period.Window`)
 - [x] Drive dashboard period from this control (`uistate` window → `ledger.PeriodTotals`)
+- [x] Persist the chosen resolution across reloads (`uistate.PersistResolution` localStorage; re-anchor
+      to the current period on load — From/To stepping stays transient by design)
 
 Bento grid system:
 - [x] Grid engine: base cell unit `--cell` (152px), equal columns, uniform gap, integer cell spans
