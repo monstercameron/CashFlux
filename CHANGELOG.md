@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Importing transactions (CSV paste or receipt/statement image) now records a **Document** in the
+  history — kind, time, target account, status, and (for image imports) the rows read — so every
+  import leaves an auditable trail. Recorded best-effort, only when at least one transaction lands.
 - An imported-**Document** record (`domain.Document` + store/state): filename, kind (CSV/image),
   upload time, target account/member, a lifecycle status (pending → extracted → imported / failed),
   and the rows read from it — persisted with full CRUD, export/import round-trip, and validated

@@ -55,6 +55,15 @@ func Documents() ui.Node {
 	onCsv := ui.UseEvent(func(v string) { csvText.Set(v) })
 	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
 
+	// recordDocument saves a best-effort audit record of an import (logged by
+	// appstate on failure). Declared before the import handlers that call it.
+	recordDocument := func(kind domain.DocumentKind, accountID string, rows []extract.Row) {
+		_ = app.PutDocument(domain.Document{
+			ID: id.New(), Kind: kind, UploadedAt: time.Now(), AccountID: accountID,
+			Status: domain.DocImported, Extracted: toDocumentRows(rows),
+		})
+	}
+
 	importCSV := ui.UseEvent(Prevent(func() {
 		data := strings.TrimSpace(csvText.Get())
 		if data == "" {
@@ -65,6 +74,9 @@ func Documents() ui.Node {
 		if err != nil {
 			msg.Set(uistate.T("documents.csvError", err.Error()))
 			return
+		}
+		if n > 0 {
+			recordDocument(domain.DocCSV, "", nil)
 		}
 		msg.Set(uistate.T("documents.importedCsv", plural(n, "transaction")))
 		rev.Set(rev.Get() + 1)
@@ -169,6 +181,9 @@ func Documents() ui.Node {
 			if err := app.PutTransaction(t); err == nil {
 				n++
 			}
+		}
+		if n > 0 {
+			recordDocument(domain.DocImage, acc.ID, rows)
 		}
 		draft.Set([]extract.Row{})
 		imageURL.Set("")
@@ -317,6 +332,18 @@ func DraftRow(props draftRowProps) ui.Node {
 		Button(Class("btn"), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uistate.T("action.edit")),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("documents.removeRow")), OnClick(rm), "✕"),
 	)
+}
+
+// toDocumentRows maps reviewed extract rows to the persisted document-row shape.
+func toDocumentRows(rows []extract.Row) []domain.DocumentRow {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]domain.DocumentRow, len(rows))
+	for i, r := range rows {
+		out[i] = domain.DocumentRow{Date: r.Date, Description: r.Description, Amount: r.Amount, Category: r.Category}
+	}
+	return out
 }
 
 // accByIDFrom finds an account by id in a slice.

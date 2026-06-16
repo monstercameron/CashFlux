@@ -26,6 +26,18 @@ problems and fixes, and what's next.
 - This completes the "token + cost surfacing" half of §2.1's model/cost item; the model picker and the
   explicit "AI off until key set" state remain. ai + i18n tests + wasm green.
 
+## 2026-06-16 — record Documents on import
+
+- Wired the Document model into the Documents screen: both import paths now call a `recordDocument`
+  helper (declared before the handlers, since Go closures can't reference a later same-scope var) that
+  PutDocuments a `DocImported` record when ≥1 transaction lands. Image imports carry the rows (mapped
+  extract.Row → domain.DocumentRow via `toDocumentRows`); CSV records the metadata (the store parses
+  CSV, so the rows aren't surfaced to the UI).
+- Best-effort: the audit record's error is ignored (appstate logs it) so a history hiccup never blocks
+  the actual import the user cares about.
+- Now the §2.2 lifecycle has a real producer. Remaining: a documents history/audit list UI to view
+  them (the records persist + export already). wasm green.
+
 ## 2026-06-16 — Document lifecycle model + persistence
 
 - Added `domain.Document` (ID, Filename, Kind, UploadedAt, AccountID, MemberID, Status, Extracted[])
