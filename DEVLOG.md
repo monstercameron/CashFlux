@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12 wiring: schema-driven, persisted widget settings panel
+
+- Loop back in implement mode; resumed B12 (the widget-settings wiring paused earlier). Picked it as
+  the highest-value self-contained item with no blocking decision and no external deps.
+- Re-added `uistate.WidgetConfigs` (localStorage-backed atom; `For` + copy-on-write `WithField`), and
+  rewrote `app.widgetSettingsForm` to be schema-driven: it looks up `widgetcfg.SchemaFor(id)` (ID now
+  threaded from `SettingsHost`) and renders each field via a dedicated `widgetFieldRow` component
+  (toggle→ToggleRow, number→numeric input, select→Select) bound to the persisted config; placeholder
+  for widgets without a schema. The old fake title/behavior toggles are gone.
+- `widgetFieldRow` is its own component so each input's hook stays at a stable position (On*-in-loops
+  rule); the row's branch is fixed per field type, so hook order is stable.
+- Savings rate now shows real, persisted settings (target rate %, show-bar). **Next (next cooldown):**
+  the savings widget *consumes* those values (compare actual vs target, optional bar), then register
+  schemas for more widgets.
+- wasm build green; native suite clean; `widgetcfg` unit tests already cover the accessors.
+
 ## 2026-06-16 — Pages deploy workflow (built); E2E test stories logged (B16)
 
 - User: build a CI workflow that redeploys the build on every push so they can review from anywhere,

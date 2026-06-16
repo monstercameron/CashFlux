@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -40,38 +41,84 @@ func SettingsHost() uic.Node {
 	default: // "widget"
 		return ui.FlipPanel(ui.FlipPanelProps{
 			Title:   target.Title,
-			Back:    uic.CreateElement(widgetSettingsForm, widgetSettingsFormProps{Title: target.Title}),
+			Back:    uic.CreateElement(widgetSettingsForm, widgetSettingsFormProps{ID: target.ID, Title: target.Title}),
 			OnClose: closePanel,
 		})
 	}
 }
 
 type widgetSettingsFormProps struct {
+	ID    string
 	Title string
 }
 
-// widgetSettingsForm is the per-widget settings back face: an editable title and
-// the behavior toggles. State is local for now (persisting layout/visibility to
-// the store arrives with the layout model); Save simply closes.
+// widgetSettingsForm is the per-widget settings back face. It renders the
+// widget's registered widgetcfg.Schema generically (toggle/number/select),
+// bound to the persisted WidgetConfigs atom so changes survive reloads. Widgets
+// with no schema yet show a friendly placeholder.
 func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
-	title := uic.UseState(props.Title)
-	onDashboard := uic.UseState(true)
-	allowMoving := uic.UseState(true)
-	allowResizing := uic.UseState(true)
-	compact := uic.UseState(false)
+	cfgAtom := uistate.UseWidgetConfigs()
+	schema, ok := widgetcfg.SchemaFor(props.ID)
+	if !ok {
+		return Div(
+			Div(Class("set-label"), props.Title),
+			P(Class("muted"), "This widget doesn't have any settings yet."),
+		)
+	}
+	all := cfgAtom.Get()
+	cfg := all.For(props.ID)
+	set := func(key, val string) {
+		next := all.WithField(props.ID, key, val)
+		cfgAtom.Set(next)
+		uistate.PersistWidgetConfigs(next)
+	}
+	rows := make([]any, 0, len(schema.Fields)+1)
+	rows = append(rows, Div(Class("set-label"), schema.Title))
+	for _, f := range schema.Fields {
+		rows = append(rows, uic.CreateElement(widgetFieldRow, widgetFieldRowProps{Field: f, Cfg: cfg, OnSet: set}))
+	}
+	return Div(rows...)
+}
 
-	onTitle := uic.UseEvent(func(v string) { title.Set(v) })
+type widgetFieldRowProps struct {
+	Field widgetcfg.Field
+	Cfg   widgetcfg.Config
+	OnSet func(key, val string)
+}
 
-	return Div(
-		Div(Class("set-label"), "Title"),
-		Input(Class("set-input"), Type("text"), Value(title.Get()), OnInput(onTitle)),
-
-		Div(Class("set-label"), "Behavior"),
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Show on dashboard", On: onDashboard.Get(), OnChange: func(v bool) { onDashboard.Set(v) }}),
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Allow moving", On: allowMoving.Get(), OnChange: func(v bool) { allowMoving.Set(v) }}),
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Allow resizing", On: allowResizing.Get(), OnChange: func(v bool) { allowResizing.Set(v) }}),
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact", On: compact.Get(), OnChange: func(v bool) { compact.Set(v) }}),
-	)
+// widgetFieldRow renders one schema field as the right control. Its own
+// component so each field's input hook stays at a stable position (the
+// On*-hooks-in-loops rule).
+func widgetFieldRow(props widgetFieldRowProps) uic.Node {
+	f := props.Field
+	switch f.Type {
+	case widgetcfg.Toggle:
+		return ui.ToggleRow(ui.ToggleRowProps{
+			Label: f.Label, On: f.Bool(props.Cfg),
+			OnChange: func(v bool) { props.OnSet(f.Key, strconv.FormatBool(v)) },
+		})
+	case widgetcfg.Number:
+		on := uic.UseEvent(func(v string) { props.OnSet(f.Key, strings.TrimSpace(v)) })
+		label := f.Label
+		if f.Unit != "" {
+			label += " (" + f.Unit + ")"
+		}
+		return Div(Class("toggle-row"),
+			Span(label),
+			Input(Class("rate-in"), Type("number"), Value(strconv.Itoa(f.Int(props.Cfg))), OnInput(on)),
+		)
+	case widgetcfg.Select:
+		on := uic.UseEvent(func(e uic.Event) { props.OnSet(f.Key, e.GetValue()) })
+		cur := f.Str(props.Cfg)
+		opts := make([]any, 0, len(f.Options)+2)
+		opts = append(opts, Class("set-input"), OnChange(on))
+		for _, o := range f.Options {
+			opts = append(opts, Option(Value(o.Value), SelectedIf(cur == o.Value), o.Label))
+		}
+		return Div(Class("toggle-row"), Span(f.Label), Select(opts...))
+	default:
+		return Fragment()
+	}
 }
 
 // freshnessTypes lists the account types whose staleness window is editable, with

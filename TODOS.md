@@ -265,13 +265,11 @@ rate → savings settings), with values persisted, and the widget renders accord
 **Done (foundation, committed):** pure `internal/widgetcfg` — typed `Field`/`Schema`/`Config` +
 registry + accessors; savings rate schema (target rate %, show-bar toggle). Table-tested.
 **Remaining (the wiring — was started then deferred back to planning):**
-- [ ] `uistate` persisted atom `WidgetConfigs` (`map[widgetID]widgetcfg.Config`) backed by
+- [x] `uistate` persisted atom `WidgetConfigs` (`map[widgetID]widgetcfg.Config`) backed by
       localStorage (load/persist + a copy-on-write `WithField` setter), mirroring the layout/filter atoms.
-- [ ] Rebuild `app.widgetSettingsForm` to be **schema-driven**: pass the widget `ID` through from
-      `SettingsHost` (currently only Title is passed), look up `widgetcfg.SchemaFor(id)`, and render a
-      control per field — toggle / number / select — bound to the persisted config, saving on change.
-      Each field row must be its own component (On*-hooks-in-loops rule). Show a friendly placeholder
-      for widgets with no schema yet.
+- [x] Rebuilt `app.widgetSettingsForm` schema-driven: ID threaded from `SettingsHost`, looks up
+      `widgetcfg.SchemaFor(id)`, renders a control per field (toggle/number/select) via a dedicated
+      `widgetFieldRow` component bound to the persisted config; placeholder for widgets with no schema.
 - [ ] Savings widget consumes its config: read the target rate + show-bar from `WidgetConfigs.For("savings")`
       and reflect them (e.g. compare actual vs target, tint, optional bar).
 - [ ] Register feasible schemas for the other widgets incrementally (recent-transactions count,

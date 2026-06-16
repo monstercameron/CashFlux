@@ -42,6 +42,10 @@ and every commit updates this file under `Unreleased`.
   preferred granularity without landing on a stale week or month.
 
 ### Added
+- The per-widget settings panel (gear → flip) is now **schema-driven and persisted**: it renders the
+  widget's registered `widgetcfg.Schema` (toggle / number / select) bound to a localStorage-backed
+  `WidgetConfigs` atom, so changes survive reloads. Savings rate is the first widget with real
+  settings (target rate %, show progress bar); widgets without a schema show a friendly placeholder.
 - GitHub Pages deployment via Actions (`.github/workflows/deploy-pages.yml`): every push to `main`
   builds the wasm app and publishes it to Pages, so the latest build is reviewable from anywhere. A
   `404.html` app-shell is generated for deep-link routing.
