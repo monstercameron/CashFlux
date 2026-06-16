@@ -360,6 +360,39 @@ func (a *App) PutRule(r rules.Rule) error {
 // DeleteRule removes an auto-categorization rule.
 func (a *App) DeleteRule(id string) error { return a.del("rule", id, a.store.DeleteRule) }
 
+// ApplyRules assigns a category to every currently uncategorized, non-transfer
+// transaction whose payee/description matches a saved rule (first match wins),
+// also adding the rule's tags when the transaction has none. Already-categorized
+// transactions are left untouched. It returns how many transactions were updated.
+// This is the retroactive counterpart to applying rules at entry/import — handy
+// after adding a rule or importing via a path that doesn't auto-apply (e.g. CSV).
+func (a *App) ApplyRules() (int, error) {
+	rs := a.Rules()
+	if len(rs) == 0 {
+		return 0, nil
+	}
+	updated := 0
+	for _, t := range a.Transactions() {
+		if t.CategoryID != "" || t.IsTransfer() {
+			continue
+		}
+		r := rules.FirstMatch(rs, t.Payee+" "+t.Desc)
+		if r == nil {
+			continue
+		}
+		t.CategoryID = r.SetCategoryID
+		if len(t.Tags) == 0 && len(r.SetTags) > 0 {
+			t.Tags = r.SetTags
+		}
+		if err := a.store.PutTransaction(t); err != nil {
+			return updated, err
+		}
+		updated++
+	}
+	a.log.Info("applied rules to existing transactions", "updated", updated)
+	return updated, nil
+}
+
 // ReassignCategory moves every transaction and budget referencing oldID to newID,
 // returning how many records were moved. Use it before deleting a category that
 // is still in use. The category itself is not deleted here.

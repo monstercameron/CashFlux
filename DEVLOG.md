@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — retroactive Apply-to-existing for rules
+
+- Added `appstate.ApplyRules() (int, error)`: walks transactions, and for each uncategorized,
+  non-transfer one runs `rules.FirstMatch` over payee+desc, assigning the matched category (and tags
+  when the txn has none). Leaves categorized transactions alone; returns the count updated. Uses only
+  the user's saved rules (not the implicit category-name rules) — this is an explicit user action, so
+  it should do exactly what the rules say.
+- Wired an "Apply to existing" button into the Rules screen list card (shown only when rules exist),
+  reporting the count via the toast. This is the clean answer to the CSV-import gap: rather than
+  reaching into the pure store CSV parser, the user (or a future post-import hook) runs the rules over
+  whatever's uncategorized.
+- Table-tested at the appstate layer (match→update, already-categorized untouched, no-match left
+  alone, tags applied). New `rules.applyExisting*`/`rules.applied*` i18n keys. wasm green.
+
 ## 2026-06-16 — apply rules on image import
 
 - The image-review import loop now builds the same `autoRules` (user rules ++ implicit category-name

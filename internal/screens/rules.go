@@ -31,6 +31,7 @@ func Rules() ui.Node {
 	categoryID := ui.UseState("")
 	tags := ui.UseState("")
 	errMsg := ui.UseState("")
+	notice := uistate.UseNotice()
 
 	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
 	onCategory := ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })
@@ -98,6 +99,20 @@ func Rules() ui.Node {
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 	)
 
+	applyExisting := ui.UseEvent(Prevent(func() {
+		n, err := app.ApplyRules()
+		if err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		if n == 0 {
+			notice.Set(notice.Get().With(uistate.T("rules.appliedNone"), false))
+		} else {
+			notice.Set(notice.Get().With(uistate.T("rules.applied", plural(n, "transaction")), false))
+		}
+		bump()
+	}))
+
 	rs := app.Rules()
 	list := IfElse(len(rs) == 0,
 		P(Class("empty"), uistate.T("rules.empty")),
@@ -115,7 +130,10 @@ func Rules() ui.Node {
 	return Div(
 		form,
 		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("rules.listTitle")),
+			Div(Class("flex items-center justify-between"),
+				H2(Class("card-title"), uistate.T("rules.listTitle")),
+				If(len(rs) > 0, Button(Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
+			),
 			list,
 		),
 	)

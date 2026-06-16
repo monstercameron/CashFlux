@@ -897,10 +897,10 @@ Shared control components (from mockup):
 - [x] Rule-based category suggestion on entry — saved rules (priority) + implicit category-name match
       auto-fill category **and tags** as you type the description, never overriding a manual choice
 - [ ] AI-proposed rules from history (review + accept)
-- [~] Apply rules on import/entry; conflict handling — **entry + image-import done** (add form and
-      the vision image-review import both run rows through `autoRules`, first-match-wins, explicit
-      category beats inferred). Still TODO: the CSV-paste path (goes through the pure `store` parser,
-      needs a store-layer or post-import pass), and conflict handling beyond first-match.
+- [x] Apply rules on import/entry — entry (add form) + image import run rows through `autoRules`
+      (first-match-wins, explicit category beats inferred), and a retroactive `appstate.ApplyRules`
+      with an "Apply to existing" button on the Rules screen covers the CSV-paste path and any
+      pre-existing uncategorized transactions. (Conflict handling beyond first-match is still open.)
 
 ### 2.5 Formula builder + sandboxed engine — `internal/formula`
 

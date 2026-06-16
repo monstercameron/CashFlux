@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Rules screen has an **Apply to existing** button that retroactively categorizes every
+  uncategorized, non-transfer transaction matching a saved rule (first match wins, adding the rule's
+  tags when a transaction has none) and reports how many it updated. This is the clean way to apply
+  rules to transactions added via the CSV-paste path or imported before a rule existed —
+  `appstate.ApplyRules`, table-tested.
 - Importing transactions from a receipt/statement image now applies your auto-categorization rules:
   when an imported row has no category (or its name doesn't match one of yours), the saved rules and
   implicit category-name matching fill the category and tags from the description. Rows that already

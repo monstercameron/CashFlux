@@ -71,6 +71,53 @@ func TestRuleValidationAndRoundTrip(t *testing.T) {
 	}
 }
 
+func TestApplyRules(t *testing.T) {
+	a := newApp(t, false)
+	acc := domain.Account{
+		ID: "a1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+	}
+	if err := a.PutAccount(acc); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	if err := a.PutRule(rules.Rule{ID: "r1", Match: "uber", SetCategoryID: "transport", SetTags: []string{"travel"}}); err != nil {
+		t.Fatalf("PutRule: %v", err)
+	}
+	mk := func(id, desc, cat string) domain.Transaction {
+		return domain.Transaction{ID: id, AccountID: "a1", Desc: desc, CategoryID: cat, Date: time.Now(), Amount: money.New(-500, "USD")}
+	}
+	for _, tx := range []domain.Transaction{
+		mk("t1", "Uber ride home", ""),       // matches, uncategorized → updated
+		mk("t2", "Uber Eats dinner", "food"), // matches but already categorized → untouched
+		mk("t3", "Grocery store", ""),        // no match → stays uncategorized
+	} {
+		if err := a.PutTransaction(tx); err != nil {
+			t.Fatalf("PutTransaction %s: %v", tx.ID, err)
+		}
+	}
+
+	n, err := a.ApplyRules()
+	if err != nil {
+		t.Fatalf("ApplyRules: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("updated = %d, want 1", n)
+	}
+	byID := map[string]domain.Transaction{}
+	for _, tx := range a.Transactions() {
+		byID[tx.ID] = tx
+	}
+	if got := byID["t1"]; got.CategoryID != "transport" || len(got.Tags) != 1 || got.Tags[0] != "travel" {
+		t.Errorf("t1 not categorized by rule: %+v", got)
+	}
+	if byID["t2"].CategoryID != "food" {
+		t.Errorf("t2 should keep its category, got %q", byID["t2"].CategoryID)
+	}
+	if byID["t3"].CategoryID != "" {
+		t.Errorf("t3 should stay uncategorized, got %q", byID["t3"].CategoryID)
+	}
+}
+
 func TestPutAccountValidatesCustomFields(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutCustomFieldDef(customfields.Def{
