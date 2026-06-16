@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Members screen migrated
+
+- Second screen onto i18n: `members.go` fully migrated — add form, the reassign-before-delete panel
+  (incl. the `%q owns %d…` description via `T(key, args…)`), member rows (make-default, view
+  transactions, edit, delete, default badge, role meta), net-worth-by-member, and validation messages.
+- Reused shared keys: `common.notReady`, `action.save/cancel/edit`, `nav.transactions` (row button),
+  and added `owner.group` ("Group (shared)") which the owner pickers elsewhere can adopt next.
+- Dropped the now-unused `fmt` import (the only `fmt.Sprintf` became a `T(...)` call).
+- `i18n` tests + wasm green. **Next:** Categories or Goals screen.
+
 ## 2026-06-16 — i18n: To-do screen migrated (first full screen)
 
 - First full screen onto the language store: every user-facing string in `todo.go` now resolves via

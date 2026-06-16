@@ -74,6 +74,9 @@ and every commit updates this file under `Unreleased`.
 - The To-do screen's verbiage is now fully on the language store (form labels/placeholders, priority
   options, empty/all-done states, hide-done toggle, row actions, validation message), with shared
   `priority.*` and `common.notReady` keys other screens can reuse.
+- The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
+  panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
+  with a shared `owner.group` key.
 - A central language store (`internal/i18n`): a pure, table-tested message catalog keyed by stable
   dot-namespaced keys (e.g. `nav.accounts`), with English as the source/fallback language, `%s`/`%d`
   argument formatting, translation-coverage reporting (`MissingKeys`), and whole-bundle JSON

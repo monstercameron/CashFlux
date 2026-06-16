@@ -46,6 +46,29 @@ var english = Catalog{
 	"priority.medium": "Medium",
 	"priority.low":    "Low",
 
+	// Ownership (shared)
+	"owner.group": "Group (shared)",
+
+	// Members screen
+	"members.add":                "Add member",
+	"members.name":               "Name",
+	"members.nameRequired":       "Enter a member name.",
+	"members.listTitle":          "Household members",
+	"members.empty":              "No members yet.",
+	"members.netWorthTitle":      "Net worth by member",
+	"members.roleMember":         "Member",
+	"members.roleDefault":        "Default member",
+	"members.defaultBadge":       "Default",
+	"members.makeDefault":        "Make default",
+	"members.makeDefaultTitle":   "Make default member",
+	"members.viewTitle":          "View this member's transactions",
+	"members.editTitle":          "Edit member",
+	"members.deleteTitle":        "Delete member",
+	"members.reassignTitle":      "Reassign before deleting",
+	"members.reassignDesc":       "%q owns %d account(s), budget(s), or goal(s). Move them to another owner, then this member will be deleted.",
+	"members.moveAndDelete":      "Move and delete",
+	"members.pickDifferentOwner": "Pick a different owner to move these to.",
+
 	// To-do screen
 	"todo.addTitle":         "Add task",
 	"todo.titlePlaceholder": "What needs doing?",

@@ -3,7 +3,6 @@
 package screens
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -25,7 +24,7 @@ import (
 func Members() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:members", 0)
@@ -56,7 +55,7 @@ func Members() ui.Node {
 	add := ui.UseEvent(Prevent(func() {
 		n := strings.TrimSpace(name.Get())
 		if n == "" {
-			errMsg.Set("Enter a member name.")
+			errMsg.Set(uistate.T("members.nameRequired"))
 			return
 		}
 		m := domain.Member{
@@ -114,7 +113,7 @@ func Members() ui.Node {
 		from := reassignID.Get()
 		to := reassignTo.Get()
 		if to == from {
-			errMsg.Set("Pick a different owner to move these to.")
+			errMsg.Set(uistate.T("members.pickDifferentOwner"))
 			return
 		}
 		if _, err := app.ReassignOwner(from, to); err != nil {
@@ -203,7 +202,7 @@ func Members() ui.Node {
 	}
 	grp := ownerDisp(domain.GroupOwnerID)
 	ownerRows = append(ownerRows, Div(Class("row"),
-		Span(Class("row-desc"), "Group (shared)"),
+		Span(Class("row-desc"), uistate.T("owner.group")),
 		Span(Class(accentFor(grp)), fmtMoney(grp)),
 	))
 
@@ -211,7 +210,7 @@ func Members() ui.Node {
 	reassignPanel := Fragment()
 	if rid := reassignID.Get(); rid != "" {
 		var targetName string
-		opts := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(reassignTo.Get() == domain.GroupOwnerID), "Group (shared)")}
+		opts := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(reassignTo.Get() == domain.GroupOwnerID), uistate.T("owner.group"))}
 		for _, m := range members {
 			if m.ID == rid {
 				targetName = m.Name
@@ -220,36 +219,36 @@ func Members() ui.Node {
 			opts = append(opts, Option(Value(m.ID), SelectedIf(reassignTo.Get() == m.ID), m.Name))
 		}
 		reassignPanel = Section(Class("card"),
-			H2(Class("card-title"), "Reassign before deleting"),
-			P(Class("muted"), fmt.Sprintf("%q owns %d account(s), budget(s), or goal(s). Move them to another owner, then this member will be deleted.", targetName, ownedCount(rid))),
+			H2(Class("card-title"), uistate.T("members.reassignTitle")),
+			P(Class("muted"), uistate.T("members.reassignDesc", targetName, ownedCount(rid))),
 			Form(Class("form-grid"), OnSubmit(confirmReassign),
 				Select(Class("field"), OnChange(onReassignTo), opts),
-				Button(Class("btn btn-primary"), Type("submit"), "Move and delete"),
-				Button(Class("btn"), Type("button"), OnClick(cancelReassign), "Cancel"),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.moveAndDelete")),
+				Button(Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),
 		)
 	}
 
 	return Div(
 		Section(Class("card"),
-			H2(Class("card-title"), "Add member"),
+			H2(Class("card-title"), uistate.T("members.add")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(Class("field"), Type("text"), Placeholder("Name"), Value(name.Get()), OnInput(onName)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)),
 				Input(Class("field"), Type("color"), Value(color.Get()), OnInput(onColor)),
 				MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
-				Button(Class("btn btn-primary"), Type("submit"), "Add member"),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.add")),
 			),
 			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 		),
 		reassignPanel,
 		Section(Class("card"),
-			H2(Class("card-title"), "Household members"),
-			IfElse(len(members) == 0, P(Class("empty"), "No members yet."), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),
+			H2(Class("card-title"), uistate.T("members.listTitle")),
+			IfElse(len(members) == 0, P(Class("empty"), uistate.T("members.empty")), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),
 		),
 		If(len(members) > 0, Section(Class("card"),
-			H2(Class("card-title"), "Net worth by member"),
+			H2(Class("card-title"), uistate.T("members.netWorthTitle")),
 			Div(Class("rows"), ownerRows),
 		)),
 	)
@@ -294,17 +293,17 @@ func MemberRow(props memberRowProps) ui.Node {
 	if editing.Get() {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName)),
 				Input(Class("field"), Type("color"), Value(colorS.Get()), OnInput(onColor)),
-				Button(Class("btn btn-primary"), Type("submit"), "Save"),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
 
-	meta := "Member"
+	meta := uistate.T("members.roleMember")
 	if m.IsDefault {
-		meta = "Default member"
+		meta = uistate.T("members.roleDefault")
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
@@ -315,11 +314,11 @@ func MemberRow(props memberRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 		),
 		IfElse(m.IsDefault,
-			Span(Class("badge badge-soon"), "Default"),
-			Button(Class("btn"), Type("button"), Title("Make default member"), OnClick(mkDefault), "Make default"),
+			Span(Class("badge badge-soon"), uistate.T("members.defaultBadge")),
+			Button(Class("btn"), Type("button"), Title(uistate.T("members.makeDefaultTitle")), OnClick(mkDefault), uistate.T("members.makeDefault")),
 		),
-		Button(Class("btn"), Type("button"), Title("View this member's transactions"), OnClick(view), "Transactions"),
-		Button(Class("btn"), Type("button"), Title("Edit member"), OnClick(startEdit), "Edit"),
-		Button(Class("btn-del"), Type("button"), Title("Delete member"), OnClick(del), "✕"),
+		Button(Class("btn"), Type("button"), Title(uistate.T("members.viewTitle")), OnClick(view), uistate.T("nav.transactions")),
+		Button(Class("btn"), Type("button"), Title(uistate.T("members.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("members.deleteTitle")), OnClick(del), "✕"),
 	)
 }
