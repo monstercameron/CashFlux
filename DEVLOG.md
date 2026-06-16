@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: AccountRow (Accounts screen complete)
+
+- Migrated the `AccountRow` component: inline edit form (reusing the accounts.* field keys + common.name/
+  owner + action.save/cancel), the update-balance prompt (`%s (%s)` via T args), the stale badge, the
+  cleared-balance suffix, and all row action buttons + titles (view→nav.transactions, update balance,
+  mark updated, edit, archive/restore, delete). Accounts is now fully localized.
+- Left `humanizeType` (a generic enum title-caser) as-is — localizing account-type display names is a
+  separate domain-enum task. `i18n` tests + wasm green.
+- **Last remaining UI verbiage: the Transactions screen** (the other giant).
+
 ## 2026-06-16 — i18n: Accounts screen (main function)
 
 - Migrated the `Accounts()` function (the big add form with all asset/liability sub-fields, the welcome

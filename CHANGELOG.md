@@ -77,9 +77,9 @@ and every commit updates this file under `Unreleased`.
 - The Members screen's verbiage is now on the language store too (add form, reassign-before-delete
   panel, member rows incl. make-default/transactions/edit/delete, net-worth-by-member, validation),
   with a shared `owner.group` key.
-- The Accounts screen's main verbiage is now on the language store (add form incl. all asset/liability
-  sub-fields, the welcome card, net-worth/assets/liabilities stats, mark-all-updated, and the
-  assets/liabilities/archived section headers + empty states). The per-row controls follow next.
+- The Accounts screen is now fully on the language store: the main view plus each account row's inline
+  edit form, the update-balance prompt, the stale badge, the cleared-balance meta, and all row actions
+  (view / update balance / mark updated / edit / archive·restore / delete).
 - The Settings screen's verbiage is now on the language store (household summary + the debug-log
   viewer).
 - The global settings panel is now fully on the language store: the left column (members/base-currency/

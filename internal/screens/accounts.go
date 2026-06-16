@@ -420,7 +420,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	refresh := ui.UseEvent(Prevent(func() { props.OnRefresh(a) }))
 	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
 	setBal := ui.UseEvent(Prevent(func() {
-		if v := promptText("Actual balance of " + a.Name + " (" + a.Currency + ")?"); v != "" {
+		if v := promptText(uistate.T("accounts.setBalancePrompt", a.Name, a.Currency)); v != "" {
 			props.OnSetBalance(a, props.Balance, v)
 		}
 	}))
@@ -507,46 +507,46 @@ func AccountRow(props accountRowProps) ui.Node {
 		isLiab := a.Class == domain.ClassLiability
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
-				Select(Class("field"), Title("Owner"), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
-				Input(Class("field"), Type("number"), Placeholder("Opening balance"), Value(balS.Get()), Step("0.01"), OnInput(onBal)),
-				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Credit limit"), Value(climS.Get()), Step("0.01"), OnInput(onClim))),
-				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Interest APR %"), Value(aprS.Get()), Step("0.01"), OnInput(onApr))),
-				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Minimum payment"), Value(minpS.Get()), Step("0.01"), OnInput(onMinp))),
-				If(isLiab, Input(Class("field"), Type("number"), Placeholder("Due day (1–28)"), Value(dueS.Get()), OnInput(onDue))),
-				If(isLiab, Input(Class("field"), Type("text"), Placeholder("Lender"), Value(lenderS.Get()), OnInput(onLender))),
-				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Expected return APR %"), Value(retS.Get()), Step("0.01"), OnInput(onRet))),
-				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Liquidity 0–100"), Value(liqS.Get()), OnInput(onLiq))),
-				If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Stability 0–100"), Value(stabS.Get()), OnInput(onStab))),
-				If(!isLiab, Input(Class("field"), Type("date"), Title("Locked until"), Value(lockS.Get()), OnInput(onLock))),
-				Button(Class("btn btn-primary"), Type("submit"), "Save"),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
+				Select(Class("field"), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal)),
+				If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.creditLimit")), Value(climS.Get()), Step("0.01"), OnInput(onClim))),
+				If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.apr")), Value(aprS.Get()), Step("0.01"), OnInput(onApr))),
+				If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.minPayment")), Value(minpS.Get()), Step("0.01"), OnInput(onMinp))),
+				If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.dueDay")), Value(dueS.Get()), OnInput(onDue))),
+				If(isLiab, Input(Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender))),
+				If(!isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet))),
+				If(!isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq))),
+				If(!isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab))),
+				If(!isLiab, Input(Class("field"), Type("date"), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock))),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
 
-	archLabel := "Archive"
+	archLabel, archTitle := uistate.T("accounts.archive"), uistate.T("accounts.archiveTitle")
 	if a.Archived {
-		archLabel = "Restore"
+		archLabel, archTitle = uistate.T("accounts.restore"), uistate.T("accounts.restoreTitle")
 	}
 	meta := accountMeta(a, props.Balance)
 	if props.Cleared.Amount != props.Balance.Amount {
-		meta += " · cleared " + fmtMoney(props.Cleared)
+		meta += uistate.T("accounts.clearedSuffix", fmtMoney(props.Cleared))
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), a.Name,
-				If(props.Stale, Span(Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), "Stale")),
+				If(props.Stale, Span(Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("accounts.stale"))),
 			),
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
-		Button(Class("btn"), Type("button"), Title("View this account's transactions"), OnClick(view), "Transactions"),
-		If(!a.Archived, Button(Class("btn"), Type("button"), Title("Set the real balance; posts an adjustment"), OnClick(setBal), "Update balance")),
-		If(!a.Archived, Button(Class("btn"), Type("button"), Title("Mark balance as checked today"), OnClick(refresh), "Mark updated")),
-		Button(Class("btn"), Type("button"), Title("Edit account"), OnClick(startEdit), "Edit"),
-		Button(Class("btn"), Type("button"), Title(archLabel+" account"), OnClick(arch), archLabel),
-		Button(Class("btn-del"), Type("button"), Title("Delete account"), OnClick(del), "✕"),
+		Button(Class("btn"), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uistate.T("nav.transactions")),
+		If(!a.Archived, Button(Class("btn"), Type("button"), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uistate.T("accounts.updateBalance"))),
+		If(!a.Archived, Button(Class("btn"), Type("button"), Title(uistate.T("accounts.markUpdatedTitle")), OnClick(refresh), uistate.T("accounts.markUpdated"))),
+		Button(Class("btn"), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+		Button(Class("btn"), Type("button"), Title(archTitle), OnClick(arch), archLabel),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("accounts.deleteTitle")), OnClick(del), "✕"),
 	)
 }
 
