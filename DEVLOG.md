@@ -486,6 +486,10 @@ problems and fixes, and what's next.
   Allocate ranking can suggest funding a goal alongside accounts and debts. ~100 features in this
   session: the candidate-C design, all Phase-1 core, deep Phase 2, and Phase-3 PWA all shipped.
 
+- Added an **AI narrative to Allocate** ("Explain with AI"): builds a short prompt from the top-5
+  ranked candidates + profile and runs `ai.SendChat`, reusing the loading/result/error pattern. Hooks
+  (states + handler) are placed after the unconditional `ranked` so their order stays stable.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)

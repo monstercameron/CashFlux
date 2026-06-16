@@ -214,6 +214,7 @@ and every commit updates this file under `Unreleased`.
 - Allocate screen (replacing the stub): builds candidates from asset accounts, high-interest
   liabilities, and **unfinished goals**, ranks them by a chosen profile (Balanced / Maximize returns /
   Safety & access / Pay down debt), and shows each suggestion's score bar and per-criterion breakdown.
+  An optional **"Explain with AI"** narrative summarizes why the ranking suits the profile (BYO key).
 - `internal/formula`: tokenizer for the sandboxed formula language — numbers (incl. leading-dot),
   identifiers, double-quoted strings, arithmetic/comparison operators, parens, and commas; errors on
   unterminated strings, stray `=`/`!`, and unexpected characters. Table-driven tested.

@@ -394,7 +394,7 @@ Shared control components (from mockup):
 - [x] Candidate set assembly (asset accounts + high-interest liabilities + unfinished goals)
 - [x] Ranked output with per-criterion breakdown (no black box)
 - [~] Allocate screen: profile select → ranked suggestions done; amount input + constraints later
-- [ ] Optional AI narrative ("why this split")
+- [x] Optional AI narrative ("Explain with AI" on the Allocate screen)
 - [ ] ★ Extensive tests: scoring, weighting, constraints, determinism, custom criteria
 
 ---

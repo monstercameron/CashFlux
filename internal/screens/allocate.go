@@ -4,7 +4,9 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -69,6 +71,44 @@ func Allocate() ui.Node {
 	weights := allocProfiles()[profile.Get()]
 	ranked := allocate.Rank(cands, weights)
 
+	// Optional AI narrative explaining the ranking (bring-your-own-key).
+	settings := app.Settings()
+	aiKey := settings.OpenAIKey
+	aiModel := settings.OpenAIModel
+	if aiModel == "" {
+		aiModel = "gpt-4o-mini"
+	}
+	aiResult := ui.UseState("")
+	aiLoading := ui.UseState(false)
+	aiErr := ui.UseState("")
+	explain := ui.UseEvent(func() {
+		if aiKey == "" {
+			aiErr.Set("Add your OpenAI key in Settings to get an explanation.")
+			return
+		}
+		if len(ranked) == 0 {
+			return
+		}
+		aiLoading.Set(true)
+		aiErr.Set("")
+		aiResult.Set("")
+		var b strings.Builder
+		for i, r := range ranked {
+			if i >= 5 {
+				break
+			}
+			fmt.Fprintf(&b, "- %s (score %.0f%%)\n", r.Candidate.Name, r.Score*100)
+		}
+		messages := []ai.Message{
+			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant. In 2-3 sentences, explain why this ranking suits the chosen profile. Plain English, no jargon."},
+			{Role: ai.RoleUser, Content: "Profile: " + profile.Get() + ". Ranked places to put new money:\n" + b.String()},
+		}
+		ai.SendChat(aiKey, ai.DefaultBaseURL, aiModel, messages, 0.5,
+			func(c string) { aiLoading.Set(false); aiResult.Set(c) },
+			func(e string) { aiLoading.Set(false); aiErr.Set(e) },
+		)
+	})
+
 	var listBody ui.Node
 	if len(ranked) == 0 {
 		listBody = P(Class("empty"), "Add asset accounts (with expected return, stability, and liquidity) or high-interest debts to get suggestions.")
@@ -109,5 +149,11 @@ func Allocate() ui.Node {
 			H2(Class("card-title"), "Where to put your money next"),
 			listBody,
 		),
+		If(len(ranked) > 0, Section(Class("card"),
+			H2(Class("card-title"), "Why this order?"),
+			Button(Class("btn"), Type("button"), OnClick(explain), IfElse(aiLoading.Get(), Text("Thinking…"), Text("Explain with AI"))),
+			If(aiErr.Get() != "", P(Class("err"), aiErr.Get())),
+			If(aiResult.Get() != "", P(Class("muted"), aiResult.Get())),
+		)),
 	)
 }
