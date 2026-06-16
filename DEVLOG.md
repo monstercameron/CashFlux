@@ -410,8 +410,13 @@ problems and fixes, and what's next.
   result state, and prompts to add a key in Settings when absent. `Settings.OpenAIKey/OpenAIModel`
   already exist in the store; the codec stays pure/native-tested, the transport is js-only.
 
-**Next:** wire the global-settings AI key/model inputs to persist to `Settings`, then NL query /
-auto-categorization — continuing Phase 2.
+- Wired the **AI key/model to persist**: the global-settings key input (seeded from `Settings.OpenAIKey`)
+  saves on each input and the model select (GPT-4o mini / GPT-4o) saves on change, both via
+  `app.PutSettings`. Insights now has a real key to use. (In-memory store, so it survives the session;
+  reload-persistence rides on the broader settings/storage work.)
+
+**Next:** NL query over the data (Insights), auto-categorization rules, or document AI parsing —
+continuing Phase 2.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

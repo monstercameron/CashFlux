@@ -84,6 +84,28 @@ func globalSettingsForm() uic.Node {
 	dataRev := uistate.UseDataRevision()
 	bump := func() { dataRev.Update(func(n int) int { return n + 1 }) }
 
+	curKey, curModel := "", ""
+	if a := appstate.Default; a != nil {
+		s := a.Settings()
+		curKey, curModel = s.OpenAIKey, s.OpenAIModel
+	}
+	aiKey := uic.UseState(curKey)
+	onKey := uic.UseEvent(func(v string) {
+		aiKey.Set(v)
+		if a := appstate.Default; a != nil {
+			s := a.Settings()
+			s.OpenAIKey = v
+			_ = a.PutSettings(s)
+		}
+	})
+	onModel := uic.UseEvent(func(e uic.Event) {
+		if a := appstate.Default; a != nil {
+			s := a.Settings()
+			s.OpenAIModel = e.GetValue()
+			_ = a.PutSettings(s)
+		}
+	})
+
 	var members []domain.Member
 	base := "USD"
 	var fxRows []uic.Node
@@ -126,10 +148,10 @@ func globalSettingsForm() uic.Node {
 	right := Div(
 		Div(Class("set-label"), "AI (OpenAI · bring your own key)"),
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Enable AI features", On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
-		Input(Class("set-input mt-[0.45rem]"), Type("password"), Placeholder("OpenAI API key (sk-…)")),
-		Select(Class("set-input mt-[0.45rem]"),
-			Option("Model — latest"),
-			Option("Model — mini"),
+		Input(Class("set-input mt-[0.45rem]"), Type("password"), Placeholder("OpenAI API key (sk-…)"), Value(aiKey.Get()), OnInput(onKey)),
+		Select(Class("set-input mt-[0.45rem]"), OnChange(onModel),
+			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
+			Option(Value("gpt-4o"), SelectedIf(curModel == "gpt-4o"), "GPT-4o"),
 		),
 		Div(Class("set-label"), "Appearance"),
 		ui.Segmented(ui.SegmentedProps{

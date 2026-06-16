@@ -297,7 +297,7 @@ Shared control components (from mockup):
 - [ ] Base currency selector + editable FX rate table (add/edit/remove rate)
 - [ ] Category management entry
 - [ ] Freshness window overrides editor
-- [ ] OpenAI key + model fields (stored locally) with caveat copy (used P2)
+- [x] OpenAI key + model fields persist to Settings (global panel) — used by Insights
 - [ ] Data: export JSON, export CSV, import JSON, import CSV, load sample, wipe (confirm)
 - [ ] Preferences: theme/density, week-start, fiscal-month start, number/date formats
 - [ ] Budgeting methodology selector (envelope / zero-based / simple tracking)

@@ -230,6 +230,8 @@ and every commit updates this file under `Unreleased`.
   the `ToggleRow` primitive. The household card's global panel opens too (body coming next).
 - The rail's household card now opens the global settings flip panel (via the shared settings atom)
   instead of navigating to the Settings route.
+- Global settings: the OpenAI API key and model inputs now persist to the store (`Settings.OpenAIKey`/
+  `OpenAIModel`), so the Insights screen can use them. The key stays on-device.
 - Global settings panel body: a two-column flip-panel form with live household member chips, base
   currency, and editable FX rate rows (left) and AI (BYO key toggle + key + model), Appearance (theme
   `Segmented` + accent `SwatchPicker` + compact), and Data action buttons (right). Built from the
