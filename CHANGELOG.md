@@ -96,6 +96,9 @@ and every commit updates this file under `Unreleased`.
   Tailwind palette/type config, and the full candidate-C component CSS (bento grid, unified widget
   header, drag/resize handles, flip-settings panel, dark scroll pane, sidebar collapse, control
   primitives) — ported verbatim from `design/candidate-c.html`, ready for the Go component port.
+- `internal/money`: `Group` (thousands separators) and `FormatAccounting` — accounting-style display
+  (`$1,234.56`, negatives in parentheses like `($240.55)`, always `decimals` places, caller-supplied
+  symbol) for the candidate-C figure style; table-driven tests. Pure, no currency-registry dependency.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no

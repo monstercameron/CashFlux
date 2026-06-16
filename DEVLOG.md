@@ -18,6 +18,13 @@ problems and fixes, and what's next.
   scrollbar selectors were namespaced (`main.cf-scroll`, `body.cf`) so they only apply once the new
   shell opts in, avoiding restyling the current screens mid-migration.
 
+- Added the **accounting money formatter** as pure logic before any UI uses it (SDLC bottom-up):
+  `money.Group` for thousands separators and `money.FormatAccounting` for the candidate-C figure
+  style — symbol-prefixed, always two decimals, negatives in parentheses (`($240.55)`). Kept in
+  `internal/money` (pure, native-tested) and currency-registry-free by taking the symbol as an
+  argument, so the js/wasm screen layer composes `currency.Symbol(...)` + this without leaking the
+  registry into money. Table-driven tests cover grouping boundaries, zero, sub-unit, and millions.
+
 **Next:** port the app shell (fixed left rail + scrolling `main` + sticky top bar) as Go components,
 then the `Widget` shell and `FlipPanel` primitives, then individual widgets.
 

@@ -77,6 +77,49 @@ func TestFormatParseRoundTrip(t *testing.T) {
 	}
 }
 
+func TestGroup(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"0.00", "0.00"},
+		{"12.50", "12.50"},
+		{"123.45", "123.45"},
+		{"1234.56", "1,234.56"},
+		{"1234567.89", "1,234,567.89"},
+		{"-1234567", "-1,234,567"},
+		{"1000", "1,000"},
+		{"100000", "100,000"},
+	}
+	for _, tt := range tests {
+		if got := Group(tt.in); got != tt.want {
+			t.Errorf("Group(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestFormatAccounting(t *testing.T) {
+	tests := []struct {
+		amount   int64
+		decimals int
+		symbol   string
+		want     string
+	}{
+		{123456, 2, "$", "$1,234.56"},
+		{-24055, 2, "$", "($240.55)"},
+		{0, 2, "$", "$0.00"},
+		{5, 2, "$", "$0.05"},
+		{-100000000, 2, "$", "($1,000,000.00)"},
+		{150000, 0, "¥", "¥150,000"},
+		{-7, 0, "€", "(€7)"},
+	}
+	for _, tt := range tests {
+		if got := FormatAccounting(tt.amount, tt.decimals, tt.symbol); got != tt.want {
+			t.Errorf("FormatAccounting(%d, %d, %q) = %q, want %q", tt.amount, tt.decimals, tt.symbol, got, tt.want)
+		}
+	}
+}
+
 func TestMoneyFormatMethod(t *testing.T) {
 	if got := New(-24055, "USD").Format(2); got != "-240.55" {
 		t.Errorf("Money.Format = %q, want -240.55", got)
