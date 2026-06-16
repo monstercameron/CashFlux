@@ -63,13 +63,15 @@ func Transactions() ui.Node {
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
-	filterText := ui.UseState("")
-	filterAcc := ui.UseState("")
-	filterCat := ui.UseState("")
-	filterMember := ui.UseState("")
-	filterFrom := ui.UseState("")
-	filterTo := ui.UseState("")
-	sortBy := ui.UseState("date")
+	filterAtom := uistate.UseTxFilter()
+	f := filterAtom.Get()
+	setFilter := func(mut func(*uistate.TxFilter)) {
+		nf := filterAtom.Get()
+		mut(&nf)
+		nf = nf.Normalize()
+		filterAtom.Set(nf)
+		uistate.PersistTxFilter(nf)
+	}
 
 	onDesc := ui.UseEvent(func(v string) {
 		desc.Set(v)
@@ -87,13 +89,13 @@ func Transactions() ui.Node {
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
 	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
 	onTags := ui.UseEvent(func(v string) { tagsStr.Set(v) })
-	onFilterText := ui.UseEvent(func(v string) { filterText.Set(v) })
-	onFilterAcc := ui.UseEvent(func(e ui.Event) { filterAcc.Set(e.GetValue()) })
-	onFilterCat := ui.UseEvent(func(e ui.Event) { filterCat.Set(e.GetValue()) })
-	onSortBy := ui.UseEvent(func(e ui.Event) { sortBy.Set(e.GetValue()) })
-	onFilterMember := ui.UseEvent(func(e ui.Event) { filterMember.Set(e.GetValue()) })
-	onFilterFrom := ui.UseEvent(func(v string) { filterFrom.Set(v) })
-	onFilterTo := ui.UseEvent(func(v string) { filterTo.Set(v) })
+	onFilterText := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) })
+	onFilterAcc := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Account = e.GetValue() }) })
+	onFilterCat := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue() }) })
+	onSortBy := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Sort = e.GetValue() }) })
+	onFilterMember := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Member = e.GetValue() }) })
+	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
+	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
 
 	txnDefs := app.CustomFieldDefsFor("transaction")
 	onCustom := func(key, value string) {
@@ -106,13 +108,9 @@ func Transactions() ui.Node {
 		customVals.Set(nm)
 	}
 	clearFilters := ui.UseEvent(Prevent(func() {
-		filterText.Set("")
-		filterAcc.Set("")
-		filterCat.Set("")
-		filterMember.Set("")
-		filterFrom.Set("")
-		filterTo.Set("")
-		sortBy.Set("date")
+		cleared := uistate.TxFilter{}.Normalize()
+		filterAtom.Set(cleared)
+		uistate.PersistTxFilter(cleared)
 	}))
 
 	add := ui.UseEvent(Prevent(func() {
@@ -330,17 +328,17 @@ func Transactions() ui.Node {
 	txns := app.Transactions()
 	sort.Slice(txns, func(i, j int) bool { return txns[i].Date.After(txns[j].Date) })
 
-	ft := strings.ToLower(strings.TrimSpace(filterText.Get()))
-	fa := filterAcc.Get()
-	fc := filterCat.Get()
-	fm := filterMember.Get()
+	ft := strings.ToLower(strings.TrimSpace(f.Text))
+	fa := f.Account
+	fc := f.Category
+	fm := f.Member
 	var fromT, toT time.Time
-	if s := strings.TrimSpace(filterFrom.Get()); s != "" {
+	if s := strings.TrimSpace(f.From); s != "" {
 		if d, err := dateutil.ParseDate(s); err == nil {
 			fromT = d
 		}
 	}
-	if s := strings.TrimSpace(filterTo.Get()); s != "" {
+	if s := strings.TrimSpace(f.To); s != "" {
 		if d, err := dateutil.ParseDate(s); err == nil {
 			toT = d
 		}
@@ -368,7 +366,7 @@ func Transactions() ui.Node {
 		shown = append(shown, t)
 	}
 
-	switch sortBy.Get() {
+	switch f.Sort {
 	case "amount":
 		sort.Slice(shown, func(i, j int) bool { return absAmount(shown[i]) > absAmount(shown[j]) })
 	case "payee":
@@ -414,16 +412,16 @@ func Transactions() ui.Node {
 		Section(Class("card"),
 			H2(Class("card-title"), "All transactions"),
 			Form(Class("form-grid"), OnSubmit(clearFilters),
-				Input(Class("field"), Type("search"), Placeholder("Search description or tag"), Value(filterText.Get()), OnInput(onFilterText)),
+				Input(Class("field"), Type("search"), Placeholder("Search description or tag"), Value(f.Text), OnInput(onFilterText)),
 				Select(Class("field"), OnChange(onFilterAcc), filterAccOptions),
 				Select(Class("field"), OnChange(onFilterCat), filterCatOptions),
 				Select(Class("field"), Title("Member"), OnChange(onFilterMember), filterMemberOptions),
-				Input(Class("field"), Type("date"), Title("From date"), Value(filterFrom.Get()), OnInput(onFilterFrom)),
-				Input(Class("field"), Type("date"), Title("To date"), Value(filterTo.Get()), OnInput(onFilterTo)),
+				Input(Class("field"), Type("date"), Title("From date"), Value(f.From), OnInput(onFilterFrom)),
+				Input(Class("field"), Type("date"), Title("To date"), Value(f.To), OnInput(onFilterTo)),
 				Select(Class("field"), Title("Sort by"), OnChange(onSortBy),
-					Option(Value("date"), SelectedIf(sortBy.Get() == "date"), "Newest first"),
-					Option(Value("amount"), SelectedIf(sortBy.Get() == "amount"), "Largest amount"),
-					Option(Value("payee"), SelectedIf(sortBy.Get() == "payee"), "Payee A–Z"),
+					Option(Value("date"), SelectedIf(f.Sort == "date"), "Newest first"),
+					Option(Value("amount"), SelectedIf(f.Sort == "amount"), "Largest amount"),
+					Option(Value("payee"), SelectedIf(f.Sort == "payee"), "Payee A–Z"),
 				),
 				Button(Class("btn"), Type("submit"), "Clear"),
 			),

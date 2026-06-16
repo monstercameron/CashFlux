@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: persist the last filter
+
+- The seven filter/sort fields were independent `UseState`s that reset on reload. Consolidated them
+  into one `uistate.TxFilter` struct behind a localStorage-backed atom (`UseTxFilter`), the fourth
+  durable atom alongside layout, prefs, and hidden-modules.
+- **Refactor shape — one atom, a `setFilter(mutator)` helper.** Rather than seven persisted states,
+  the component reads `f := atom.Get()` for rendering and every change calls
+  `setFilter(func(x *TxFilter){ x.Field = v })`, which gets-mutates-sets-persists in one place. That
+  keeps each handler a one-liner and guarantees the whole filter is saved atomically on any change.
+  Clear writes a normalized empty filter.
+- All read sites (`ft/fa/fc/fm`, the date parses, the sort switch, and every input's `Value`/
+  `SelectedIf`) now derive from `f`, so the screen has a single source of truth.
+- **Why an atom and not just persisted `UseState`s:** reading-then-persisting the full struct avoids
+  the trap of `Set` followed by a stale `Get` in the same handler — the mutator operates on a fresh
+  `Get()` and persists exactly what it sets.
+- **Next.** Another contained backlog item — the category-delete reassign flow, or the
+  freshness-window overrides editor (the `Settings.FreshnessOverrides` field already exists).
+
 ## 2026-06-16 — Allocation: amount-split UI
 
 - Added two number inputs to the Allocate profile card — amount to allocate and emergency buffer —

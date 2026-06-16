@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- The transaction list now remembers your filter and sort across reloads: the search text, account,
+  category, member, date range, and sort are held in a single `uistate.UseTxFilter` atom persisted
+  to localStorage. Clearing resets it. (Previously the filter reset on every reload.)
 - Amount-split in the Allocate screen: enter an amount to allocate and an optional emergency buffer
   to keep back, and each ranked destination shows its suggested dollar amount (via `Distribute`),
   with a "Kept back" note for the buffer/leftover. Updates live as the amount, buffer, profile, or
