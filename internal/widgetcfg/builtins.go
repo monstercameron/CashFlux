@@ -26,4 +26,11 @@ func init() {
 			{Key: "months", Label: "Months of history", Type: Number, Default: "6", Min: 3, Max: 12},
 		},
 	})
+	register(Schema{
+		WidgetID: "breakdown",
+		Title:    "Spending breakdown",
+		Fields: []Field{
+			{Key: "topN", Label: "Top categories (rest grouped as Other)", Type: Number, Default: "3", Min: 2, Max: 6},
+		},
+	})
 }

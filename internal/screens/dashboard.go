@@ -129,7 +129,7 @@ func Dashboard() ui.Node {
 		netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")),
 		cashFlowWidget(txns, rates),
 		savingsRateWidget(income, expense, widgetCfgs.For("savings")),
-		spendingBreakdownWidget(app, txns, rates, start, end),
+		spendingBreakdownWidget(app, txns, rates, start, end, widgetCfgs.For("breakdown")),
 		upcomingBillsWidget(app),
 		freshnessWidget(accounts, app.FreshnessWindows(), remindToUpdate),
 	)
@@ -226,7 +226,13 @@ func nextDue(now time.Time, day int) time.Time {
 
 // spendingBreakdownWidget is the 2×1 Spending breakdown widget: a segmented bar
 // of the period's expenses by category (top three plus "Other") with a legend.
-func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, start, end time.Time) ui.Node {
+func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, start, end time.Time, cfg widgetcfg.Config) ui.Node {
+	topN := 3
+	if sch, ok := widgetcfg.SchemaFor("breakdown"); ok {
+		if f, ok := sch.FieldByKey("topN"); ok {
+			topN = f.Int(cfg)
+		}
+	}
 	cats := app.Categories()
 	catName := make(map[string]string, len(cats))
 	parent := make(map[string]string, len(cats))
@@ -290,13 +296,13 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 	}
 	sort.Slice(segs, func(i, j int) bool { return segs[i].amt > segs[j].amt })
 
-	// Top three categories, the rest lumped into "Other".
-	if len(segs) > 4 {
+	// Top N categories, the rest lumped into "Other".
+	if len(segs) > topN+1 {
 		var other int64
-		for _, s := range segs[3:] {
+		for _, s := range segs[topN:] {
 			other += s.amt
 		}
-		segs = append(segs[:3], seg{name: "Other", amt: other})
+		segs = append(segs[:topN], seg{name: "Other", amt: other})
 	}
 
 	tones := []string{"bg-up", "bg-warn", "bg-dim", "bg-down"}

@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12: Spending breakdown top-N setting
+
+- Fourth widget on the settings API: "breakdown" schema (`topN`, 2–6, default 3); the widget reads it
+  and groups the rest as "Other" (generalized the hardcoded top-3). Tones cycle so >4 segments are fine.
+- widgetcfg tests + wasm green. Dashboard widgets with persisted settings now: savings, recent, trend,
+  breakdown. **Next:** likely wrap up the widget-settings sweep and pick another backlog item.
+
 ## 2026-06-16 — B12: Net worth trend months setting
 
 - Third widget on the settings API: "trend" schema (`months`, 3–12, default 6); `netWorthTrendWidget`
