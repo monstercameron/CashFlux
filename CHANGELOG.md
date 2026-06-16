@@ -106,6 +106,9 @@ and every commit updates this file under `Unreleased`.
   transactions, budgets, goals, to-do, settings, page, plus, menu) that inherits color/size from the caller.
 
 ### Changed
+- Retargeted the legacy screen palette (the shared CSS variables) to candidate-C values, so the
+  non-dashboard screens (Accounts, Transactions, Budgets, Goals, To-do) — cards, stats, rows, forms,
+  bars — match the new flat neutral-dark bento shell, with squared (4px) corners.
 - App shell replaced the top-navigation chrome with the candidate-C layout: a fixed left rail
   (brand + icon-led primary navigation with active highlighting and router navigation) and an
   independently scrolling main pane with a sticky top bar (menu toggle, page title, Add action).

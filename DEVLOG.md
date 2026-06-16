@@ -223,8 +223,14 @@ problems and fixes, and what's next.
   in-memory and re-seeded on boot — only browser storage actually survives a reload. Missing widgets
   fall back to their default placement, so adding widgets later degrades gracefully.
 
-**Next:** a "reset layout" affordance, then restyle the non-dashboard screens (Accounts, Transactions,
-Budgets, Goals, To-do) to the candidate-C shell so they're not the old top-nav theme inside the new rail.
+- Restyled all non-dashboard screens in one move by **retargeting the legacy CSS variables** to the
+  candidate-C palette (base `#0e0e0f`, tile `#121214`, border `#2a2a2c`, up/down, radius 4px). Since
+  the old screen components (cards, stats, rows, forms, bars) are all driven by these vars, they now
+  match the flat neutral-dark shell without rewriting any Go — and they already inherit Inter from the
+  shell root. Per-screen bento-style polish can follow, but the jarring blue theme is gone.
+
+**Next:** a "reset layout" affordance for the bento, then update `TODOS.md` to reflect the large
+§1.7c progress; then continue the Phase-1 backlog (Members/Categories screens, transfers, edit flows).
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
