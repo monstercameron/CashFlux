@@ -467,7 +467,12 @@ problems and fixes, and what's next.
   runs `payoff.Project` a second time at `payment + extra` and reports the months saved and interest
   saved in plain English — the engine's first what-if surfaced.
 
-**Next:** per-row duplicate, persist-last-filter, then Phase 2 polish — as the loop continues.
+- Added a **trim-spending what-if** to the net-worth forecast: an input re-runs `forecast.Project`
+  with `monthlyNet + trim` and reports the improved 12-month figure and the difference. (Declared the
+  `trimStr` state at the component top so the hook stays unconditional even though the forecast card
+  is built inside `if app != nil`.)
+
+**Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

@@ -206,7 +206,8 @@ and every commit updates this file under `Unreleased`.
   `internal/payoff` engine, with a friendly message when the payment can't cover the interest, and an
   optional **extra-payment** input that shows how many months sooner it clears and how much interest
   it saves. Plus a **12-month net-worth projection** chart (current net worth + this month's net cash
-  flow, via `internal/forecast` + the area chart).
+  flow, via `internal/forecast` + the area chart) with a what-if "trim monthly spending by…" input
+  that re-projects and reports the improved 12-month figure.
 - `internal/allocate`: pure capital-allocation scorer — normalizes each candidate on returns,
   stability, liquidity, and debt-reduction, combines by a user `Weights` profile into an explainable
   `Score` + `Breakdown`, and `Rank`s candidates highest-first. Table-driven tested; deterministic.

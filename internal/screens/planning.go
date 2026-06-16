@@ -41,6 +41,8 @@ func Planning() ui.Node {
 	onApr := ui.UseEvent(func(v string) { aprStr.Set(v) })
 	onPay := ui.UseEvent(func(v string) { payStr.Set(v) })
 	onExtra := ui.UseEvent(func(v string) { extraStr.Set(v) })
+	trimStr := ui.UseState("")
+	onTrim := ui.UseEvent(func(v string) { trimStr.Set(v) })
 
 	var resultBody ui.Node
 	switch {
@@ -98,10 +100,21 @@ func Planning() ui.Node {
 		if monthlyNet < 0 {
 			stroke = "#d8716f"
 		}
+		trimNote := Fragment()
+		if trim, terr := money.ParseMinor(strings.TrimSpace(trimStr.Get()), currency.Decimals(base)); terr == nil && trim > 0 {
+			series2 := forecast.Project(net.Amount, []forecast.Recurring{{Monthly: monthlyNet + trim}}, nil, 12)
+			end2 := series2[len(series2)-1]
+			trimNote = P(Class("muted"), fmt.Sprintf("With %s/month less spending, projected to %s — %s more.",
+				fmtMoney(money.New(trim, base)), fmtMoney(money.New(end2, base)), fmtMoney(money.New(end2-series[len(series)-1], base))))
+		}
 		forecastCard = Section(Class("card"),
 			H2(Class("card-title"), "Net worth in 12 months"),
 			P(Class("muted"), fmt.Sprintf("If this month's net cash flow (%s) continues, projected to %s.", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
 			uiw.AreaChart(uiw.AreaChartProps{Values: values, Stroke: stroke, GradientID: "cf-forecast"}),
+			Form(Class("form-grid"),
+				Input(Class("field"), Type("number"), Placeholder("What if I trim monthly spending by… ("+base+")"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim)),
+			),
+			trimNote,
 		)
 	}
 

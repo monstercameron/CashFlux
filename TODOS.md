@@ -380,7 +380,7 @@ Shared control components (from mockup):
 - [ ] `Plan{ID, Name, HorizonMonths, BaseScenario, Assumptions[]}` + `PlanItem{...}` + CRUD
 - [~] ★ Forecast engine (pure): `internal/forecast.Project` over horizon from start + recurring + one-time items done; actuals-derived recurring later
 - [x] Debt payoff math (`internal/payoff.Project`) + tests + extra-payment scenario (months/interest saved)
-- [ ] What-if scenarios (add recurring, change spend, extra debt payment, rate change)
+- [~] What-if scenarios: extra debt payment + trim-spending forecast done; add-recurring/rate-change later
 - [ ] Planning screen: build scenario, compare vs actuals, push to forecast
 - [~] Forecast visualization (net-worth curve) done on Planning; scenario comparison later
 - [ ] ★ Tests: forecast projection, payoff math, scenario application
