@@ -27,7 +27,7 @@ import (
 func Goals() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:goals", 0)
@@ -69,7 +69,7 @@ func Goals() ui.Node {
 	add := ui.UseEvent(Prevent(func() {
 		tgt, err := money.ParseMinor(strings.TrimSpace(target.Get()), currency.Decimals(base))
 		if err != nil || tgt <= 0 {
-			errMsg.Set("Enter a positive target amount.")
+			errMsg.Set(uistate.T("goals.targetRequired"))
 			return
 		}
 		cur, err := money.ParseMinor(strings.TrimSpace(current.Get()), currency.Decimals(base))
@@ -79,7 +79,7 @@ func Goals() ui.Node {
 		var targetDate time.Time
 		if ds := strings.TrimSpace(dateStr.Get()); ds != "" {
 			if targetDate, err = dateutil.ParseDate(ds); err != nil {
-				errMsg.Set("Enter a valid target date (YYYY-MM-DD).")
+				errMsg.Set(uistate.T("goals.invalidDate"))
 				return
 			}
 		}
@@ -135,14 +135,14 @@ func Goals() ui.Node {
 			}
 			amt, err := money.ParseMinor(strings.TrimSpace(targetStr), currency.Decimals(cur))
 			if err != nil || amt <= 0 {
-				errMsg.Set("Enter a positive target amount.")
+				errMsg.Set(uistate.T("goals.targetRequired"))
 				return
 			}
 			g.TargetAmount = money.New(amt, cur)
 			if ds := strings.TrimSpace(dateStr); ds != "" {
 				d, derr := dateutil.ParseDate(ds)
 				if derr != nil {
-					errMsg.Set("Enter a valid target date (YYYY-MM-DD).")
+					errMsg.Set(uistate.T("goals.invalidDate"))
 					return
 				}
 				g.TargetDate = d
@@ -176,25 +176,25 @@ func Goals() ui.Node {
 		bump()
 	}
 
-	ownerOptions := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), "Group (shared)")}
+	ownerOptions := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), uistate.T("owner.group"))}
 	for _, m := range app.Members() {
 		ownerOptions = append(ownerOptions, Option(Value(m.ID), SelectedIf(owner.Get() == m.ID), m.Name))
 	}
 	linkOptions := goalAccountOptions(accounts, linkAcct.Get())
 
 	form := Section(Class("card"),
-		H2(Class("card-title"), "Add goal"),
+		H2(Class("card-title"), uistate.T("goals.add")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Placeholder("Name"), Value(name.Get()), OnInput(onName)),
-			Input(Class("field"), Type("number"), Placeholder("Target ("+base+")"), Value(target.Get()), Step("0.01"), OnInput(onTarget)),
-			Input(Class("field"), Type("number"), Placeholder("Saved so far"), Value(current.Get()), Step("0.01"), OnInput(onCurrent)),
+			Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
+			Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget)),
+			Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)),
 			Select(Class("field"), OnChange(onOwner), ownerOptions),
-			Select(Class("field"), Title("Linked account (optional)"), OnChange(onLinkAcct), linkOptions),
+			Select(Class("field"), Title(uistate.T("goals.linkedOptional")), OnChange(onLinkAcct), linkOptions),
 			Input(Class("field"), Type("date"), Value(dateStr.Get()), OnInput(onDate)),
 			MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),
-			Button(Class("btn btn-primary"), Type("submit"), "Add"),
+			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 	)
@@ -226,7 +226,7 @@ func Goals() ui.Node {
 
 	var listBody ui.Node
 	if len(goals) == 0 {
-		listBody = P(Class("empty"), "No goals yet.")
+		listBody = P(Class("empty"), uistate.T("goals.empty"))
 	} else {
 		rows := MapKeyed(goals,
 			func(g domain.Goal) any { return g.ID },
@@ -240,12 +240,12 @@ func Goals() ui.Node {
 	return Div(
 		form,
 		If(len(goals) > 0, Div(Class("stat-grid"),
-			stat("Saved so far", fmtMoney(money.New(savedTotal, base)), "pos"),
-			stat("Total target", fmtMoney(money.New(targetTotal, base)), ""),
-			stat("Overall progress", fmt.Sprintf("%d%%", overallPct), ""),
+			stat(uistate.T("goals.savedSoFar"), fmtMoney(money.New(savedTotal, base)), "pos"),
+			stat(uistate.T("goals.totalTarget"), fmtMoney(money.New(targetTotal, base)), ""),
+			stat(uistate.T("goals.overallProgress"), fmt.Sprintf("%d%%", overallPct), ""),
 		)),
 		Section(Class("card"),
-			H2(Class("card-title"), "Goals"),
+			H2(Class("card-title"), uistate.T("nav.goals")),
 			listBody,
 		),
 	)
@@ -293,7 +293,7 @@ func GoalRow(props goalRowProps) ui.Node {
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(g.ID) }))
 	contribute := ui.UseEvent(Prevent(func() {
-		if v := promptText("Contribute how much to " + g.Name + "?"); v != "" {
+		if v := promptText(uistate.T("goals.contributePrompt", g.Name)); v != "" {
 			props.OnContribute(g, v)
 		}
 	}))
@@ -326,13 +326,13 @@ func GoalRow(props goalRowProps) ui.Node {
 	if editing.Get() {
 		return Div(Class("budget"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder("Name"), Value(nameS.Get()), OnInput(onName)),
-				Input(Class("field"), Type("number"), Placeholder("Target"), Value(targetS.Get()), Step("0.01"), OnInput(onTarget)),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget)),
 				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
-				Select(Class("field"), Title("Owner"), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
-				Select(Class("field"), Title("Linked account"), OnChange(onAcct), goalAccountOptions(props.Accounts, acctS.Get())),
-				Button(Class("btn btn-primary"), Type("submit"), "Save"),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), "Cancel"),
+				Select(Class("field"), Title(uistate.T("goals.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
+				Select(Class("field"), Title(uistate.T("goals.linked")), OnChange(onAcct), goalAccountOptions(props.Accounts, acctS.Get())),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -341,29 +341,29 @@ func GoalRow(props goalRowProps) ui.Node {
 	rem, _ := goalsvc.Remaining(g)
 	complete, _ := goalsvc.IsComplete(g)
 
-	sub := fmt.Sprintf("%d%% · %s to go", pct, fmtMoney(rem))
+	sub := uistate.T("goals.progressFmt", pct, fmtMoney(rem))
 	if complete {
-		sub = "Complete 🎉"
+		sub = uistate.T("goals.complete")
 	}
 	if !g.TargetDate.IsZero() {
-		sub += " · by " + pr.FormatDate(g.TargetDate)
+		sub += uistate.T("goals.bySuffix", pr.FormatDate(g.TargetDate))
 		if !complete {
 			if per, ok, _ := goalsvc.MonthlyNeeded(g, time.Now()); ok {
-				sub += " · save " + fmtMoney(per) + "/mo"
+				sub += uistate.T("goals.saveSuffix", fmtMoney(per))
 			}
 		}
 	}
 	if n := accountName(props.Accounts, g.AccountID); n != "" {
-		sub += " · linked to " + n
+		sub += uistate.T("goals.linkedSuffix", n)
 	}
 
 	return Div(Class("budget"),
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), g.Name),
 			Span(Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
-			Button(Class("btn"), Type("button"), Title("Add to this goal"), OnClick(contribute), "Contribute"),
-			Button(Class("btn"), Type("button"), Title("Edit goal"), OnClick(startEdit), "Edit"),
-			Button(Class("btn-del"), Type("button"), Title("Delete goal"), OnClick(del), "✕"),
+			Button(Class("btn"), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uistate.T("goals.contribute")),
+			Button(Class("btn"), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+			Button(Class("btn-del"), Type("button"), Title(uistate.T("goals.deleteTitle")), OnClick(del), "✕"),
 		),
 		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", pct)))),
 		Span(Class("budget-sub"), sub),

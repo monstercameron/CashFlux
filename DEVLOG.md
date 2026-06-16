@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Goals screen migrated
+
+- Fourth screen onto i18n: `goals.go` — add form (incl. `Target (%s)` placeholder via T args), owner +
+  linked-account pickers, combined-progress stats, and the progress sub-line assembled from T
+  fragments (`progressFmt`, `complete`, `bySuffix`, `saveSuffix`, `linkedSuffix`) plus the contribute
+  prompt and row actions. Reused `common.name`, `owner.group`, `nav.goals`, `action.*`.
+- The CSS bar-width `fmt.Sprintf` and the `%d%%` stat value stay as fmt (not user-facing text), so the
+  fmt import remains. `i18n` tests + wasm green.
+- **Next:** Budgets or Accounts screen.
+
 ## 2026-06-16 — i18n: Categories screen migrated
 
 - Third screen onto i18n: `categories.go` fully migrated — add form, kind + parent pickers (incl. the
