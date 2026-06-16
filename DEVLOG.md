@@ -25,8 +25,17 @@ problems and fixes, and what's next.
   argument, so the js/wasm screen layer composes `currency.Symbol(...)` + this without leaking the
   registry into money. Table-driven tests cover grouping boundaries, zero, sub-unit, and millions.
 
-**Next:** port the app shell (fixed left rail + scrolling `main` + sticky top bar) as Go components,
-then the `Widget` shell and `FlipPanel` primitives, then individual widgets.
+- Confirmed the framework's `html/shorthand` exposes SVG element constructors (`Svg`/`Path`/`Rect`/
+  `Circle`/`G`/`Line`/`Polyline`/`Polygon`), a generic `Attr`/`Attrs` for arbitrary attributes, and a
+  full pointer/drag event set (`OnPointerDown/Move/Up`, `OnDragStart/Over/Drop/End`) — so the SVG
+  icons, charts, and the drag-reorder/resize interactions can all be expressed natively in Go.
+- Started the shared design-system package `internal/ui` (js/wasm-tagged) with the first reusable
+  primitive: **`Icon`** — the candidate-C stroked SVG set as a single props-driven component
+  (`Icon(name, extra...)`), color via `currentColor`, size via caller classes. Builds clean for
+  `GOOS=js GOARCH=wasm`.
+
+**Next:** port the app shell (fixed left rail + scrolling `main` + sticky top bar) as Go components
+using `Icon`, then the `Widget` shell and `FlipPanel` primitives, then individual widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

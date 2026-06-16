@@ -99,6 +99,9 @@ and every commit updates this file under `Unreleased`.
 - `internal/money`: `Group` (thousands separators) and `FormatAccounting` — accounting-style display
   (`$1,234.56`, negatives in parentheses like `($240.55)`, always `decimals` places, caller-supplied
   symbol) for the candidate-C figure style; table-driven tests. Pure, no currency-registry dependency.
+- `internal/ui`: new shared design-system package (Go port of `design/candidate-c.html`) with a
+  reusable, props-driven `Icon` primitive — the candidate-C stroked SVG icon set (dashboard, accounts,
+  transactions, budgets, goals, to-do, settings, page, plus) that inherits color/size from the caller.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
