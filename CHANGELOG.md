@@ -39,6 +39,10 @@ and every commit updates this file under `Unreleased`.
   preferred granularity without landing on a stale week or month.
 
 ### Changed
+- Added a pure, table-tested ordered-sequence + bin-packing model to `internal/dashlayout` (`Item`,
+  `Pack`, `Move`, `ResizeItem`) — the foundation for iOS-home-screen-style dashboard reflow (drag =
+  reorder + re-pack, multi-cell tiles never overlap). Not yet wired to the UI; the legacy
+  placement/swap API stays until the dashboard is migrated. (Backlog B2.)
 - Extracted the to-do list ordering/filtering into a pure, table-tested `internal/tasksort` package
   (`Order` + `Visible`); the to-do screen now delegates to it. No behavior change — the rules (open
   first, soonest due, then title; optional hide-done) are now unit-tested instead of inline in the

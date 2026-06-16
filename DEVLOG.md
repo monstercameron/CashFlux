@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B2 step 1: pure dashboard packing engine
+
+- Started the B2 dashboard-grid rewrite bottom-up: added `internal/dashlayout/pack.go` — an
+  ordered-sequence model (`Item{ID,ColSpan,RowSpan}`) plus `Pack(items, cols)` (first-fit, row-major,
+  span-aware, no overlap, deterministic, 1-based output), `Move(items, id, toIndex)` (the reorder a
+  drag produces), and `ResizeItem`. `DefaultItems()` reproduces the current bento when packed at 4
+  cols (verified by test, modulo the +1 header row offset the view will apply).
+- Kept the legacy `Placement`/`Swap`/`Resize` API intact — this commit is the engine only, fully
+  table-tested (default reproduction, mixed-span no-overlap + clamping, first-fit gap backfill, Move
+  reorder/clamp/unknown-noop, ResizeItem clamp, no-mutation). UI migration + FLIP animation are
+  separate follow-up commits so each stays green.
+- **Design note:** chose first-fit *with* gap backfill (CSS auto-flow "dense" semantics) — deterministic
+  and space-efficient; order still drives placement. Can revisit if strict order-preservation feels
+  better once it's on screen.
+- **Next.** Migrate dashboard state/UI onto Items+Pack (replace Swap-on-drop with Move+re-pack, persist
+  the order, offset rows for the header), then layer the FLIP reorder/resize animations.
+
 ## 2026-06-16 — Dashboard: Shift-to-reveal resize handles (+ animation reqs → B2)
 
 - User asked for three dashboard-editing refinements: resize handles only while holding Shift,
