@@ -266,8 +266,12 @@ problems and fixes, and what's next.
   (`MemberRow`). Registered `/members` with a new `users` rail icon under System. Delete-guard for
   members with owned entities is a follow-up.
 
-**Next:** edit flows (account/transaction/budget/goal full edit), member delete-guard, category
-color/sub-categories — continuing the priority-ordered Phase-1 backlog.
+- Added a **Freshness nudge** widget (full-width row 8 — grew the bento to 8 rows + a `dashlayout`
+  placement, test count 14→15): friendly "N balances could use a refresh" with per-account days-since
+  via `freshness.StaleAccounts`/`DaysSinceUpdate`. One-tap update + dismissal are follow-ups.
+
+**Next:** edit flows (account/transaction/budget/goal full edit), member delete-guard, then a
+one-tap "update balance" from the freshness nudge — continuing the priority-ordered Phase-1 backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

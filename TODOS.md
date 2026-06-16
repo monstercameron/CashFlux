@@ -267,7 +267,7 @@ Shared control components (from mockup):
 
 ### 1.15 Freshness & friendly nudges
 
-- [ ] Dashboard nudge card ("N balances could use a refresh"), dismissible
+- [~] Dashboard nudge widget ("N balances could use a refresh") done; dismissible + one-tap update later
 - [ ] One-tap "update balance" from nudge
 - [ ] Per-account staleness badges
 - [ ] Configurable windows in settings; recurring-bill exemption respected

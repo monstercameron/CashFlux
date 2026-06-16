@@ -30,8 +30,8 @@ func TestDefaultHasUniqueIDs(t *testing.T) {
 		}
 		seen[p.ID] = true
 	}
-	if len(l) != 14 {
-		t.Errorf("default layout has %d widgets, want 14", len(l))
+	if len(l) != 15 {
+		t.Errorf("default layout has %d widgets, want 15", len(l))
 	}
 }
 

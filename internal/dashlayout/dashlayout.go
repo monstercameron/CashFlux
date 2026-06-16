@@ -53,6 +53,7 @@ func Default() Layout {
 		{ID: "bills", Col: 3, Row: 6, ColSpan: 2, RowSpan: 1},
 		{ID: "savings", Col: 1, Row: 7, ColSpan: 2, RowSpan: 1},
 		{ID: "breakdown", Col: 3, Row: 7, ColSpan: 2, RowSpan: 1},
+		{ID: "freshness", Col: 1, Row: 8, ColSpan: 4, RowSpan: 1},
 	}
 }
 

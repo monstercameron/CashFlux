@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -87,7 +88,36 @@ func Dashboard() ui.Node {
 		savingsRateWidget(income, expense),
 		spendingBreakdownWidget(app, txns, rates, start, end),
 		upcomingBillsWidget(app),
+		freshnessWidget(accounts),
 	)
+}
+
+// freshnessWidget is the full-width Freshness nudge: a friendly reminder of which
+// account balances look stale (via internal/freshness), with how long since each
+// was last updated.
+func freshnessWidget(accounts []domain.Account) ui.Node {
+	now := time.Now()
+	stale := freshness.StaleAccounts(accounts, freshness.DefaultWindows(), now)
+	var body ui.Node
+	if len(stale) == 0 {
+		body = P(Class("text-up text-[13px]"), "Everything's up to date — nice work.")
+	} else {
+		chips := make([]ui.Node, 0, len(stale))
+		for _, a := range stale {
+			chips = append(chips, Span(Class("member-chip"),
+				Span(a.Name),
+				Span(Class("text-warn fig"), fmt.Sprintf("· %dd", freshness.DaysSinceUpdate(a, now))),
+			))
+		}
+		body = Div(
+			P(Class("text-dim text-[13px] mb-2"), fmt.Sprintf("%d balances could use a refresh.", len(stale))),
+			Div(Class("flex flex-wrap gap-2"), chips),
+		)
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "freshness", Title: "Freshness", Draggable: true, Resizable: true,
+		GridColumn: "1 / span 4", GridRow: "8", Body: body,
+	})
 }
 
 // upcomingBillsWidget is the 2×1 Upcoming bills widget: the next due date and
