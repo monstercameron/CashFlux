@@ -102,8 +102,14 @@ problems and fixes, and what's next.
   on mount: a `shown` `UseState` flipped to true inside a `UseEffect` (stable dep + guard against
   re-run), so the CSS transition animates from front→back rather than appearing pre-flipped.
 
+- Added the remaining **control primitives** to `internal/ui`: `Toggle` (`.switch`) + `ToggleRow`
+  (labeled `.toggle-row`), and `Swatch` (`.swatch`) + `SwatchPicker` (accent row). Each interactive
+  element is its own component (hook stability), and `SwatchPicker` keys each chip by color. These
+  complete the shared-control set the settings forms compose.
+
 **Next:** wire it up — a settings-target atom in `uistate`, `Widget`'s gear opens the `FlipPanel`
-with a per-widget settings form, mounted at the shell root; then the bento grid + first widgets.
+with a per-widget settings form built from these primitives, mounted at the shell root; then the
+bento grid + first widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

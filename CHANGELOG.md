@@ -142,6 +142,9 @@ and every commit updates this file under `Unreleased`.
   a card that lifts and 3D-flips to a settings back face (centered title, close button, scrollable
   body, dark Save/Cancel footer). Generic (title, body, size, Save/close handlers) and reused by both
   per-widget and global settings; the open animation runs once on mount via `UseState`/`UseEffect`.
+- `internal/ui`: reusable `Toggle` (pill switch) + `ToggleRow` (labeled settings row), `Swatch`
+  (color chip) + `SwatchPicker` (accent row) control primitives — the building blocks of the settings
+  forms, generic and props-driven, each interactive element its own component.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
