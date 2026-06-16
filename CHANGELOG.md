@@ -192,6 +192,9 @@ and every commit updates this file under `Unreleased`.
   + sync payload) via `appstate.ExportJSON` and a small Blob/anchor browser-download helper.
 - `internal/appstate`: `ExportCSV` (transactions → CSV), `LoadSample` (replace with the sample
   dataset), and `Wipe` (clear all data) — the data-action seams; tested natively.
+- Global settings Data actions wired: Export CSV (download), Import (file picker → replace dataset),
+  Load sample, and Wipe (with a confirm dialog). A shared `data:revision` atom is bumped on bulk
+  changes so the dashboard re-renders; added `pickFile`/`confirmAction` browser helpers.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

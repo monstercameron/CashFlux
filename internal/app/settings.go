@@ -81,6 +81,8 @@ func globalSettingsForm() uic.Node {
 	accent := uic.UseState("#54b884")
 	compact := uic.UseState(false)
 	aiOn := uic.UseState(false)
+	dataRev := uistate.UseDataRevision()
+	bump := func() { dataRev.Update(func(n int) int { return n + 1 }) }
 
 	var members []domain.Member
 	base := "USD"
@@ -147,10 +149,10 @@ func globalSettingsForm() uic.Node {
 		Div(Class("set-label"), "Data"),
 		Div(Class("flex flex-wrap gap-2 py-1"),
 			dataBtn("Export JSON", false, exportJSON),
-			dataBtn("Export CSV", false, nil),
-			dataBtn("Import…", false, nil),
-			dataBtn("Load sample", false, nil),
-			dataBtn("Wipe data", true, nil),
+			dataBtn("Export CSV", false, exportCSV),
+			dataBtn("Import…", false, func() { importJSON(bump) }),
+			dataBtn("Load sample", false, func() { loadSample(bump) }),
+			dataBtn("Wipe data", true, func() { wipeData(bump) }),
 		),
 	)
 
@@ -191,6 +193,61 @@ func exportJSON() {
 		return
 	}
 	downloadBytes("cashflux.json", "application/json", data)
+}
+
+// exportCSV downloads all transactions as a CSV file.
+func exportCSV() {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	data, err := app.ExportCSV()
+	if err != nil {
+		return
+	}
+	downloadBytes("transactions.csv", "text/csv", data)
+}
+
+// importJSON picks a JSON dataset file and replaces all data with it, then
+// bumps the data revision so screens refresh.
+func importJSON(onChange func()) {
+	pickFile(".json", func(data []byte) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.ImportJSON(data); err != nil {
+			return
+		}
+		onChange()
+	})
+}
+
+// loadSample replaces all data with the built-in sample dataset and refreshes.
+func loadSample(onChange func()) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	if err := app.LoadSample(); err != nil {
+		return
+	}
+	onChange()
+}
+
+// wipeData clears all data after a confirmation, then refreshes.
+func wipeData(onChange func()) {
+	if !confirmAction("Erase all CashFlux data on this device? This cannot be undone.") {
+		return
+	}
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	if err := app.Wipe(); err != nil {
+		return
+	}
+	onChange()
 }
 
 // dataBtnProps configures a data-action button.

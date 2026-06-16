@@ -186,8 +186,14 @@ problems and fixes, and what's next.
   (replace with `store.SampleDataset` — `store.Load` replaces, as the import path proves), and `Wipe`.
   Native test loads sample → asserts populated → wipes → asserts empty, plus a CSV smoke test.
 
-**Next:** wire these into the global-settings Data buttons (Export CSV download, Import via file
-picker, Load sample, Wipe with confirm) with an in-app refresh; then drag-reorder, resize, persistence.
+- Wired all global-settings **Data actions**: Export CSV (download), Import (`.json` file picker →
+  `ImportJSON`), Load sample, and Wipe (guarded by a native confirm). Added `pickFile` (file input +
+  `FileReader` → bytes, releasing the js callbacks after read) and `confirmAction`. Refresh uses a
+  shared `data:revision` atom: bulk actions bump it and `Dashboard` reads it so it re-renders behind
+  the still-open panel. Other screens refresh on their own navigation/rev atoms.
+
+**Next:** drag-to-reorder and edge-resize for the bento widgets (pointer/DnD via interop, persisting
+the per-user layout), then restyle the non-dashboard screens (Accounts/Transactions/etc.) to the new shell.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

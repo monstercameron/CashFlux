@@ -27,3 +27,45 @@ func downloadBytes(filename, mime string, data []byte) {
 	a.Call("click")
 	doc.Get("body").Call("removeChild", a)
 }
+
+// confirmAction shows a native confirm dialog and reports whether the user
+// accepted — used to guard destructive actions like wiping all data.
+func confirmAction(message string) bool {
+	return js.Global().Get("window").Call("confirm", message).Bool()
+}
+
+// pickFile opens the OS file picker and reads the chosen file's bytes, invoking
+// onLoad with them. accept is a file-input accept string (e.g. ".json"). The js
+// callbacks are released once the read completes.
+func pickFile(accept string, onLoad func([]byte)) {
+	input := js.Global().Get("document").Call("createElement", "input")
+	input.Set("type", "file")
+	if accept != "" {
+		input.Set("accept", accept)
+	}
+
+	var changeCb js.Func
+	changeCb = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		files := input.Get("files")
+		if files.Length() == 0 {
+			changeCb.Release()
+			return nil
+		}
+		reader := js.Global().Get("FileReader").New()
+		var loadCb js.Func
+		loadCb = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+			u8 := js.Global().Get("Uint8Array").New(reader.Get("result"))
+			buf := make([]byte, u8.Get("length").Int())
+			js.CopyBytesToGo(buf, u8)
+			onLoad(buf)
+			loadCb.Release()
+			changeCb.Release()
+			return nil
+		})
+		reader.Call("addEventListener", "load", loadCb)
+		reader.Call("readAsArrayBuffer", files.Index(0))
+		return nil
+	})
+	input.Call("addEventListener", "change", changeCb)
+	input.Call("click")
+}

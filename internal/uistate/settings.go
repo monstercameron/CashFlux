@@ -34,3 +34,12 @@ func Widget(id, title string) SettingsTarget {
 func Global() SettingsTarget {
 	return SettingsTarget{Kind: "global", Title: "Settings"}
 }
+
+const dataRevAtomID = "data:revision"
+
+// UseDataRevision returns the shared atom bumped whenever the whole dataset is
+// replaced (import, load-sample, wipe). Screens that read store data directly
+// read this too, so they re-render after a bulk data change.
+func UseDataRevision() state.Atom[int] {
+	return state.UseAtom(dataRevAtomID, 0)
+}

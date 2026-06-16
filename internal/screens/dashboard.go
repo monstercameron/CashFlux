@@ -28,6 +28,7 @@ func Dashboard() ui.Node {
 	if app == nil {
 		return Div(Class("bento"), Div(Class("w"), Div(Class("wbody"), P(Class("empty"), "App state is not ready yet."))))
 	}
+	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
 
 	accounts := app.Accounts()
 	txns := app.Transactions()
