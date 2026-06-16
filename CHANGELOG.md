@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- localStorage-backed preferences atom (`uistate.UsePrefs`/`PersistPrefs`): seeds the display
+  preferences from localStorage on boot and writes them back on change, so week-start and date-format
+  choices survive reloads — the same durable channel the dashboard layout uses (the dataset is
+  re-seeded each boot). Loads are always normalized.
 - Display-preferences engine (`internal/prefs`): a pure `Prefs` type (week start + date style) with
   `FormatDate` (ISO/US/EU/long), `WeekStartWeekday`, `WeekStartOf` (start-of-week honoring the
   configured first day), and `Normalize` (fills blank/unknown fields with defaults for forward

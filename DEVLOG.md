@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Reload-persistent preferences: the persistence atom
+
+- Step 4 (state): `uistate/prefs.go`, a near-mirror of `layout.go`. `UsePrefs` is a `state.Atom`
+  seeded from `loadPrefs()` (localStorage key `cashflux:prefs`, normalized, defaults on miss/parse
+  error); `PersistPrefs` marshals the normalized prefs back. No store involvement — by design,
+  preferences live outside the dataset because the store is wiped on every boot.
+- This keeps the wasm/persistence layer thin: all the meaning (formatting, week math, normalization)
+  is in the tested `internal/prefs` package; this file is just JSON ↔ localStorage plumbing.
+- **Next.** A Settings form (global panel) to choose week start and date style, calling
+  `atom.Set` + `PersistPrefs`; then route the screens' date rendering through `prefs.FormatDate`.
+
 ## 2026-06-16 — Reload-persistent preferences: the pure engine
 
 - New backlog area: preferences that survive a reload (week start, date format). Established first
