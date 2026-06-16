@@ -281,7 +281,7 @@ Shared control components (from mockup):
 - [~] Sort (open first, then due, then title) + hide-done filter done; more filters later
 - [x] Create-from-insight (Insights "Save as task" → AI task) + create-from-nudge (freshness
       "Remind me" → nudge task) hooks
-- [ ] Tests: ordering, status transitions
+- [~] Tests: ordering (pure `internal/tasksort` — Order/Visible, table-tested); status transitions still UI
 
 ### 1.15 Freshness & friendly nudges
 

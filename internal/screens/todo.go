@@ -3,7 +3,6 @@
 package screens
 
 import (
-	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -142,30 +142,10 @@ func Todo() ui.Node {
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 	)
 
-	// Open tasks first, then by due date (dated before undated), then title.
-	sort.Slice(tasks, func(i, j int) bool {
-		ti, tj := tasks[i], tasks[j]
-		if (ti.Status == domain.StatusOpen) != (tj.Status == domain.StatusOpen) {
-			return ti.Status == domain.StatusOpen
-		}
-		if ti.Due.IsZero() != tj.Due.IsZero() {
-			return !ti.Due.IsZero()
-		}
-		if !ti.Due.Equal(tj.Due) {
-			return ti.Due.Before(tj.Due)
-		}
-		return ti.Title < tj.Title
-	})
-
-	shown := tasks
-	if hideDone.Get() {
-		shown = make([]domain.Task, 0, len(tasks))
-		for _, t := range tasks {
-			if t.Status != domain.StatusDone {
-				shown = append(shown, t)
-			}
-		}
-	}
+	// Order + filter for display (open first, soonest due, then title) lives in
+	// the pure, tested internal/tasksort package.
+	tasks = tasksort.Order(tasks)
+	shown := tasksort.Visible(tasks, hideDone.Get())
 
 	var listBody ui.Node
 	switch {

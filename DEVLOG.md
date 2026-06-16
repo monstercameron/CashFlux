@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Extract to-do ordering into a tested package
+
+- Knocked off part of TODOS §1.14 "Tests: ordering, status transitions": the list ordering was a
+  `sort.Slice` inline in the js-only `todo.go`, untestable. Moved it to pure `internal/tasksort`
+  (`Order` returns a sorted copy; `Visible` applies the hide-done filter), both non-mutating, with
+  table tests covering open-before-done, dated-before-undated, due ascending, title tie-break, the
+  no-mutation guarantee, and the hide-done filter.
+- Mirrors the earlier `txnfilter` extraction — same pattern of pulling a core behavior out from
+  behind the wasm build tag so it gets native table tests. The screen lost its `sort` import.
+- Verified `internal/tasksort` green + wasm build.
+- **Next.** More inline-logic extraction / small polish (parked items await user input).
+
 ## 2026-06-16 — Extract (and fix) the net-worth percent-change calc
 
 - The dashboard KPI computed `(net - prev) * 100 / prev` inline — both a "no computation in view

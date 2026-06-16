@@ -36,6 +36,10 @@ and every commit updates this file under `Unreleased`.
   preferred granularity without landing on a stale week or month.
 
 ### Changed
+- Extracted the to-do list ordering/filtering into a pure, table-tested `internal/tasksort` package
+  (`Order` + `Visible`); the to-do screen now delegates to it. No behavior change — the rules (open
+  first, soonest due, then title; optional hide-done) are now unit-tested instead of inline in the
+  js-only screen.
 - Extracted transaction filtering/sorting into a pure, table-tested `internal/txnfilter` package
   (`Criteria` + `Apply` + `AbsAmount`); `uistate.TxFilter` now aliases `txnfilter.Criteria` and the
   ledger screen delegates to it. No behavior change — a core behavior is now unit-tested instead of
