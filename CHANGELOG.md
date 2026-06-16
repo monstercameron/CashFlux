@@ -31,6 +31,9 @@ and every commit updates this file under `Unreleased`.
   tested `period.Window.WithWeekStart`).
 
 ### Added
+- A polished boot experience: the wasm-load screen now shows an on-brand animated loader (a spinning
+  accent ring around the "C" mark with the wordmark fading in), and the app settles in with a calm
+  fade + slight lift once mounted. Both respect `prefers-reduced-motion`.
 - Dashboard widget resize handles now appear only while you hold **Shift**, keeping the bento grid
   visually calm the rest of the time (they fade in/out; window-blur clears the state so they never
   get stuck visible).

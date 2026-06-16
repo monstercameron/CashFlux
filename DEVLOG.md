@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Polished boot loader + app settle-in animation
+
+- Replaced the plain "Loading CashFlux…" boot text with an on-brand animated loader: a spinning
+  accent stroke-arc ring around the Fraunces "C" mark (gentle breathing), with the wordmark + subtle
+  subline fading up. Pure HTML/CSS in `web/index.html` (no Go change), so it paints instantly before
+  the wasm finishes.
+- Added an app settle-in: the MutationObserver that reveals `#app` now adds an `app-enter` class that
+  runs a calm fade + slight lift/scale (cubic-bezier ease-out); `#boot` fades and scales away. Both
+  gated behind `prefers-reduced-motion`.
+- **Next.** (User has queued more menu requests — logging those separately.)
+
 ## 2026-06-16 — Logged UI-scale (B6) and missing-menu-items (B7); reverted a premature impl
 
 - User asked for a font/UI-scale setting and to update the menu with all main-line features, then

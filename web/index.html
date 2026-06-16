@@ -55,14 +55,48 @@
         -webkit-font-smoothing: antialiased;
       }
 
-      /* Boot placeholder */
+      /* Boot loader: an on-brand animated mark while the wasm downloads and
+         instantiates. Fades + lifts away once the app mounts. */
       #boot {
         position: fixed; inset: 0; display: grid; place-items: center;
-        color: var(--text-dim); transition: opacity 0.25s ease; z-index: 10;
+        background: var(--bg); z-index: 10;
+        transition: opacity 0.45s ease, transform 0.45s ease;
       }
-      #boot.hidden { opacity: 0; pointer-events: none; }
-      #boot .dot { animation: pulse 1.2s ease-in-out infinite; }
-      @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+      #boot.hidden { opacity: 0; transform: scale(1.03); pointer-events: none; }
+      .boot-card { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; }
+      .boot-mark { position: relative; width: 64px; height: 64px; display: grid; place-items: center; }
+      .boot-ring { position: absolute; inset: 0; width: 64px; height: 64px; animation: boot-spin 1.15s linear infinite; }
+      .boot-ring-track { fill: none; stroke: var(--border); stroke-width: 3; }
+      .boot-ring-arc {
+        fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round;
+        stroke-dasharray: 70 126; stroke-dashoffset: 0;
+      }
+      .boot-c {
+        font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.6rem;
+        color: var(--text); line-height: 1; animation: boot-breathe 1.8s ease-in-out infinite;
+      }
+      .boot-word {
+        font-family: "Fraunces", Georgia, serif; font-size: 1.15rem; font-weight: 600;
+        letter-spacing: 0.01em; color: var(--text); opacity: 0; animation: boot-fade-up 0.6s ease 0.1s forwards;
+      }
+      .boot-sub {
+        font-size: 0.82rem; color: var(--text-faint); opacity: 0;
+        animation: boot-fade-up 0.6s ease 0.25s forwards;
+      }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @keyframes boot-breathe { 0%,100% { opacity: 0.55; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1); } }
+      @keyframes boot-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+      /* App settle-in: a calm fade + slight lift/scale once mounted. */
+      #app.app-enter { animation: app-settle 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+      @keyframes app-settle {
+        from { opacity: 0; transform: translateY(10px) scale(0.992); }
+        to   { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot, #boot.hidden { transition: opacity 0.2s ease; transform: none; }
+        .boot-ring, .boot-c, .boot-word, .boot-sub, #app.app-enter { animation: none; opacity: 1; }
+      }
       #boot-error {
         display: none; position: fixed; inset: auto 1rem 1rem 1rem; z-index: 20;
         background: #3b0d0d; color: #fecaca; border: 1px solid #7f1d1d;
@@ -342,7 +376,19 @@
     </style>
   </head>
   <body>
-    <div id="boot"><span>Loading CashFlux<span class="dot">…</span></span></div>
+    <div id="boot">
+      <div class="boot-card">
+        <div class="boot-mark">
+          <svg class="boot-ring" viewBox="0 0 64 64" aria-hidden="true">
+            <circle class="boot-ring-track" cx="32" cy="32" r="28" />
+            <circle class="boot-ring-arc" cx="32" cy="32" r="28" />
+          </svg>
+          <span class="boot-c">C</span>
+        </div>
+        <div class="boot-word">CashFlux</div>
+        <div class="boot-sub">Getting your money in order…</div>
+      </div>
+    </div>
     <div id="app"></div>
     <div id="boot-error"></div>
     <button id="installBtn" type="button"
@@ -385,7 +431,11 @@
 
         if (app && typeof MutationObserver === "function") {
           const obs = new MutationObserver(function () {
-            if (app.children.length > 0) { boot.classList.add("hidden"); obs.disconnect(); }
+            if (app.children.length > 0) {
+              app.classList.add("app-enter");
+              boot.classList.add("hidden");
+              obs.disconnect();
+            }
           });
           obs.observe(app, { childList: true });
         }
