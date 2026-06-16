@@ -82,7 +82,35 @@ func Dashboard() ui.Node {
 		accountsWidget(app, txns),
 		netWorthTrendWidget(accounts, txns, rates, net),
 		cashFlowWidget(txns, rates),
+		savingsRateWidget(income, expense),
 	)
+}
+
+// savingsRateWidget is the 2×1 Savings rate widget: the share of the period's
+// income that wasn't spent, as a big figure and a bar.
+func savingsRateWidget(income, expense money.Money) ui.Node {
+	pct := 0
+	if income.Amount > 0 {
+		pct = int((income.Amount - expense.Amount) * 100 / income.Amount)
+	}
+	tone, bar := "text-up", "bg-up"
+	if pct < 0 {
+		tone, bar = "text-down", "bg-down"
+	}
+	body := Div(Class("flex items-center gap-5"),
+		Div(
+			Div(Class("font-display fig text-[34px] leading-none "+tone), fmt.Sprintf("%d%%", pct)),
+			Div(Class("text-[12px] text-dim mt-1"), "of income saved"),
+		),
+		Div(Class("flex-1"),
+			uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: bar}),
+			Div(Class("text-[11px] text-faint mt-2"), "this period"),
+		),
+	)
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "savings", Title: "Savings rate", Draggable: true, GridColumn: "1 / span 2", GridRow: "7",
+		Body: body,
+	})
 }
 
 // cashFlowWidget is the 2×1 Cash flow widget: income (up) vs expense (down) bars
