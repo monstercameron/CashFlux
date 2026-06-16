@@ -63,6 +63,7 @@ func Transactions() ui.Node {
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	customVals := ui.UseState(map[string]string{})
 	selected := ui.UseState(map[string]bool{})
+	bulkCat := ui.UseState("")
 	errMsg := ui.UseState("")
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
@@ -291,6 +292,21 @@ func Transactions() ui.Node {
 		}
 		selected.Set(map[string]bool{})
 	}))
+	onBulkCat := ui.UseEvent(func(e ui.Event) { bulkCat.Set(e.GetValue()) })
+	bulkRecategorize := ui.UseEvent(Prevent(func() {
+		sel := selected.Get()
+		cid := bulkCat.Get()
+		for _, t := range app.Transactions() {
+			if !sel[t.ID] || t.IsTransfer() {
+				continue
+			}
+			t.CategoryID = cid
+			_ = app.PutTransaction(t)
+		}
+		selected.Set(map[string]bool{})
+		bulkCat.Set("")
+		bump()
+	}))
 
 	repeatLast := ui.UseEvent(func() {
 		all := app.Transactions()
@@ -458,6 +474,10 @@ func Transactions() ui.Node {
 	for _, m := range app.Members() {
 		filterMemberOptions = append(filterMemberOptions, Option(Value(m.ID), SelectedIf(fm == m.ID), m.Name))
 	}
+	bulkCatOptions := []ui.Node{Option(Value(""), SelectedIf(bulkCat.Get() == ""), "No category")}
+	for _, c := range categories {
+		bulkCatOptions = append(bulkCatOptions, Option(Value(c.ID), SelectedIf(bulkCat.Get() == c.ID), c.Name))
+	}
 
 	return Div(
 		formCard,
@@ -479,6 +499,8 @@ func Transactions() ui.Node {
 			),
 			If(len(selected.Get()) > 0, Div(Class("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
 				Span(Class("muted"), plural(len(selected.Get()), "transaction")+" selected"),
+				Select(Class("field"), Title("Category to apply"), OnChange(onBulkCat), bulkCatOptions),
+				Button(Class("btn"), Type("button"), Title("Set this category on the selected transactions"), OnClick(bulkRecategorize), "Apply category"),
 				Button(Class("btn-del"), Type("button"), Title("Delete the selected transactions"), OnClick(bulkDelete), "Delete selected"),
 				Button(Class("btn"), Type("button"), OnClick(clearSelection), "Clear selection"),
 			)),

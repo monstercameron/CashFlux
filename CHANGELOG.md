@@ -17,8 +17,9 @@ and every commit updates this file under `Unreleased`.
 
 ### Added
 - Bulk transaction actions: each transaction row has a select toggle, and when any are selected a
-  bar shows the count with "Delete selected" (transfer-aware, removing paired legs) and "Clear
-  selection". Lets you clean up many entries at once.
+  bar shows the count with a category picker + "Apply category" (recategorizes the selected
+  non-transfer rows), "Delete selected" (transfer-aware, removing paired legs), and "Clear
+  selection". Lets you reclassify or clean up many entries at once.
 - Duplicate detection on document import: rows already present in the chosen account (same date and
   amount) are skipped, and the result reports how many duplicates were left out — so re-reading the
   same receipt won't double-enter transactions. Backed by `extract.Row.Signature`/`FilterNew` (tested).

@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: bulk recategorize (bulk actions complete)
+
+- Added a category picker + "Apply category" to the selection bar. `bulkRecategorize` walks the
+  ledger, and for each selected non-transfer transaction sets `CategoryID` and saves via
+  `PutTransaction`, then clears the selection.
+- **Transfers skipped.** Transfers aren't categorized (they show "Transfer"), so bulk recategorize
+  ignores selected transfer legs rather than stamping a meaningless category on them — mirrors how
+  the per-row edit/duplicate already exclude transfers.
+- The empty option is "No category", so Apply can also *clear* categories — a legitimate bulk
+  action — not just set one.
+- Bulk actions are now complete: select → recategorize and/or delete → clear. Closes the §
+  transactions bulk-ops TODO.
+- **Next.** Remaining backlog is mostly Phase-3 sync (large) and smaller polish; will pick a
+  contained item or note that the major feature set is essentially complete.
+
 ## 2026-06-16 — Transactions: bulk select + delete
 
 - Added multi-select to the ledger. A `selected` set state in `Transactions`; each `TransactionRow`
