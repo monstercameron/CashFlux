@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Sub-categories: add-form picker + indented lists
+
+- Wired the tree engine into the UI. The add form gains a parent `Select` populated from
+  `categorytree.Flatten(kindCats)` (indented with `indentLabel`), filtered to the chosen kind; the
+  category lists now render flattened-by-depth so children sit under their parent. `CategoryRow`
+  takes a `Depth` and prefixes its label.
+- **Kind/parent consistency.** Changing the kind clears the parent choice (`onKind` resets
+  `parentID`), since a parent must share the child's kind — avoids creating a cross-kind nesting.
+- Deferred parent editing on the inline editor to keep this commit focused; the engine is cycle-safe
+  so even an odd edit can't break the display.
+- **Next.** Parent selector on the category inline editor (excluding self), then optionally rolling
+  spending-breakdown up to parent categories.
+
 ## 2026-06-16 — Sub-categories: the tree engine
 
 - `Category.ParentID` has existed in the schema but was unused. Started sub-categories bottom-up with

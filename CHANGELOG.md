@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Sub-categories in the Categories screen: the add form has a parent picker (categories of the same
+  kind, indented), and the category lists now display the parent/child hierarchy indented (via
+  `categorytree.Flatten`). Lets you nest e.g. Restaurants and Groceries under Food.
 - Category hierarchy engine (`internal/categorytree`): `Build` organizes a flat category list into a
   parent/child forest (siblings sorted by name) and `Flatten` returns a depth-tagged list for
   indented display, using the existing `Category.ParentID`. Defensive — orphans become roots and

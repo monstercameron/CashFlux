@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -27,12 +28,17 @@ func Categories() ui.Node {
 
 	name := ui.UseState("")
 	kind := ui.UseState(string(domain.KindExpense))
+	parentID := ui.UseState("")
 	errMsg := ui.UseState("")
 	reassignID := ui.UseState("") // category awaiting reassignment before delete
 	reassignTo := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
-	onKind := ui.UseEvent(func(e ui.Event) { kind.Set(e.GetValue()) })
+	onKind := ui.UseEvent(func(e ui.Event) {
+		kind.Set(e.GetValue())
+		parentID.Set("") // a parent must share the new kind; clear the stale choice
+	})
+	onParent := ui.UseEvent(func(e ui.Event) { parentID.Set(e.GetValue()) })
 	onReassignTo := ui.UseEvent(func(e ui.Event) { reassignTo.Set(e.GetValue()) })
 
 	add := ui.UseEvent(Prevent(func() {
@@ -41,12 +47,13 @@ func Categories() ui.Node {
 			errMsg.Set("Enter a category name.")
 			return
 		}
-		c := domain.Category{ID: id.New(), Name: n, Kind: domain.CategoryKind(kind.Get())}
+		c := domain.Category{ID: id.New(), Name: n, Kind: domain.CategoryKind(kind.Get()), ParentID: parentID.Get()}
 		if err := app.PutCategory(c); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		name.Set("")
+		parentID.Set("")
 		errMsg.Set("")
 		bump()
 	}))
@@ -108,11 +115,24 @@ func Categories() ui.Node {
 		Option(Value(string(domain.KindIncome)), SelectedIf(kind.Get() == string(domain.KindIncome)), "Income"),
 	}
 
+	// Parent options: existing categories of the chosen kind, indented by depth.
+	var kindCats []domain.Category
+	for _, c := range app.Categories() {
+		if string(c.Kind) == kind.Get() {
+			kindCats = append(kindCats, c)
+		}
+	}
+	parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentID.Get() == ""), "— No parent (top level) —")}
+	for _, f := range categorytree.Flatten(kindCats) {
+		parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentID.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
+	}
+
 	form := Section(Class("card"),
 		H2(Class("card-title"), "Add category"),
 		Form(Class("form-grid"), OnSubmit(add),
 			Input(Class("field"), Type("text"), Placeholder("Name"), Value(name.Get()), OnInput(onName)),
 			Select(Class("field"), OnChange(onKind), kindOptions),
+			Select(Class("field"), Title("Parent category (optional)"), OnChange(onParent), parentOpts),
 			Button(Class("btn btn-primary"), Type("submit"), "Add"),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
@@ -149,10 +169,10 @@ func Categories() ui.Node {
 		errMsg.Set("")
 		bump()
 	}
-	renderRow := func(c domain.Category) ui.Node {
-		return ui.CreateElement(CategoryRow, categoryRowProps{Category: c, OnDelete: deleteCat, OnSave: saveCat})
+	renderFlat := func(f categorytree.Flat) ui.Node {
+		return ui.CreateElement(CategoryRow, categoryRowProps{Category: f.Category, Depth: f.Depth, OnDelete: deleteCat, OnSave: saveCat})
 	}
-	keyOf := func(c domain.Category) any { return c.ID }
+	flatKey := func(f categorytree.Flat) any { return f.Category.ID }
 
 	// Reassign-before-delete panel, shown when a used category is being deleted.
 	reassignPanel := Fragment()
@@ -181,19 +201,25 @@ func Categories() ui.Node {
 		reassignPanel,
 		Section(Class("card"),
 			H2(Class("card-title"), "Expense categories"),
-			IfElse(len(expenseList) == 0, P(Class("empty"), "No expense categories yet."), Div(Class("rows"), MapKeyed(expenseList, keyOf, renderRow))),
+			IfElse(len(expenseList) == 0, P(Class("empty"), "No expense categories yet."), Div(Class("rows"), MapKeyed(categorytree.Flatten(expenseList), flatKey, renderFlat))),
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), "Income categories"),
-			IfElse(len(incomeList) == 0, P(Class("empty"), "No income categories yet."), Div(Class("rows"), MapKeyed(incomeList, keyOf, renderRow))),
+			IfElse(len(incomeList) == 0, P(Class("empty"), "No income categories yet."), Div(Class("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
 		),
 	)
 }
 
 type categoryRowProps struct {
 	Category domain.Category
+	Depth    int
 	OnDelete func(string)
 	OnSave   func(id, name, kind string)
+}
+
+// indentLabel returns a depth-proportional prefix for nested category labels.
+func indentLabel(depth int) string {
+	return strings.Repeat("— ", depth)
 }
 
 // CategoryRow is a per-category row. It can be edited inline (name + kind). All
@@ -231,9 +257,13 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		)
 	}
 
+	desc := c.Name
+	if props.Depth > 0 {
+		desc = indentLabel(props.Depth) + c.Name // visually nest sub-categories
+	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), c.Name),
+			Span(Class("row-desc"), desc),
 			Span(Class("row-meta"), humanizeType(string(c.Kind))),
 		),
 		Button(Class("btn"), Type("button"), Title("Edit category"), OnClick(startEdit), "Edit"),
