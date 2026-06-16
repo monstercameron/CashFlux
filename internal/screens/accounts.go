@@ -41,6 +41,9 @@ func Accounts() ui.Node {
 	minPayment := ui.UseState("")
 	dueDay := ui.UseState("")
 	lender := ui.UseState("")
+	expReturn := ui.UseState("")
+	liquidity := ui.UseState("")
+	stability := ui.UseState("")
 	errMsg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
@@ -53,6 +56,9 @@ func Accounts() ui.Node {
 	onMinPayment := ui.UseEvent(func(v string) { minPayment.Set(v) })
 	onDueDay := ui.UseEvent(func(v string) { dueDay.Set(v) })
 	onLender := ui.UseEvent(func(v string) { lender.Set(v) })
+	onExpReturn := ui.UseEvent(func(v string) { expReturn.Set(v) })
+	onLiquidity := ui.UseEvent(func(v string) { liquidity.Set(v) })
+	onStability := ui.UseEvent(func(v string) { stability.Set(v) })
 
 	bump := func() { rev.Set(rev.Get() + 1) }
 
@@ -87,6 +93,16 @@ func Accounts() ui.Node {
 				acc.DueDayOfMonth = dd
 			}
 			acc.Lender = strings.TrimSpace(lender.Get())
+		} else {
+			if r, e := strconv.ParseFloat(strings.TrimSpace(expReturn.Get()), 64); e == nil {
+				acc.ExpectedReturnAPR = r
+			}
+			if l, e := strconv.Atoi(strings.TrimSpace(liquidity.Get())); e == nil {
+				acc.LiquidityScore = l
+			}
+			if s, e := strconv.Atoi(strings.TrimSpace(stability.Get())); e == nil {
+				acc.StabilityScore = s
+			}
 		}
 		if err := app.PutAccount(acc); err != nil {
 			errMsg.Set(err.Error())
@@ -99,6 +115,9 @@ func Accounts() ui.Node {
 		minPayment.Set("")
 		dueDay.Set("")
 		lender.Set("")
+		expReturn.Set("")
+		liquidity.Set("")
+		stability.Set("")
 		errMsg.Set("")
 		bump()
 	}))
@@ -162,6 +181,9 @@ func Accounts() ui.Node {
 			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Minimum payment"), Value(minPayment.Get()), Step("0.01"), OnInput(onMinPayment))),
 			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Due day (1–28)"), Value(dueDay.Get()), OnInput(onDueDay))),
 			If(isLiab, Input(Class("field"), Type("text"), Placeholder("Lender"), Value(lender.Get()), OnInput(onLender))),
+			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Expected return APR %"), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn))),
+			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Liquidity 0–100"), Value(liquidity.Get()), OnInput(onLiquidity))),
+			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Stability 0–100"), Value(stability.Get()), OnInput(onStability))),
 			Button(Class("btn btn-primary"), Type("submit"), "Add account"),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),

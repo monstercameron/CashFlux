@@ -324,6 +324,8 @@ and every commit updates this file under `Unreleased`.
 - Accounts: the add form reveals a **liability sub-form** (credit limit, interest APR, minimum
   payment, due day, lender) when a liability type is selected — feeding the Upcoming-bills widget and
   credit-utilization display, which previously had no data entry path.
+- Accounts: for asset types, the add form reveals **allocation attributes** (expected return APR,
+  liquidity, stability) — giving the Allocate engine real per-account scores instead of zeros.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

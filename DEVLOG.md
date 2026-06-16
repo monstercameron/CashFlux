@@ -497,6 +497,10 @@ problems and fixes, and what's next.
 - Wired the global-settings **"+ Add member"** button (was a no-op) to close the flip panel (clear the
   settings target) and navigate to `/members`, via `router.UseNavigate` + the settings atom.
 
+- Added the **allocation-attributes sub-form** for asset accounts (expected return APR, liquidity,
+  stability), mirroring the liability sub-form (conditional `If(!isLiab, …)` inputs, parsed in the
+  add handler's else branch). Now the Allocate engine scores asset candidates on real data, not zeros.
+
 **Next:** per-row duplicate, persist-last-filter, then more Phase 2 polish — as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
