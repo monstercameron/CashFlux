@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Document vision AI: the extraction parser
+
+- `internal/extract.ParseRows` bridges the model's reply to the import flow. Models are unreliable
+  about output shape, so the parser is forgiving by design: bare array *or* object wrapper (tries
+  transactions/rows/items/data/results), amounts as JSON numbers *or* strings, a spread of field-name
+  synonyms (description/desc/merchant/payee/name), and it strips a ```json code fence. Rows with
+  neither description nor amount are dropped.
+- **Decision — strings out, not domain.Transaction.** `Row` is all strings and the package has no
+  domain dependency. The user reviews/edits before import, and the screen maps rows → real
+  transactions against a chosen account/currency at that point. Keeps extraction decoupled and the
+  values exactly as the model gave them (editable).
+- Fixed a first-draft bug where `amountString` returned early on a missing key instead of trying the
+  next synonym — caught by the string-amount test. Six table tests cover array, wrapper, fence,
+  skip-empty, and two error cases.
+- **Next.** The Documents-screen flow: pick an image → base64 data URL → `SendVisionChat` with a
+  strict "return JSON" prompt → `ParseRows` → editable draft rows → import against a chosen account.
+
 ## 2026-06-16 — Document vision AI: the transport
 
 - Added `SendVisionChat` and, while there, factored the fetch promise chain out of `SendChat` into a

@@ -16,6 +16,11 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Extraction parser (`internal/extract`): `ParseRows` turns an AI vision reply into reviewable
+  `Row{Date, Description, Amount, Category}` values, tolerant of a bare array or an object wrapper
+  (transactions/rows/items/data), numeric or string amounts, varied field names (merchant/payee/…),
+  and a Markdown code fence; empties are skipped. Pure, table-tested. Bridges vision output to the
+  import flow.
 - Vision chat transport (`internal/ai`): `SendVisionChat` posts a multimodal request (system prompt
   + user text + one image) to OpenAI client-side with the user's key, same async one-callback
   contract as `SendChat`. The fetch promise chain is now shared via an internal `postCompletions`.
