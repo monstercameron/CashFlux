@@ -126,6 +126,79 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [ ] Color picker (members/categories), DatePicker, Icon set
 - [ ] Responsive: mobile nav (drawer/hamburger), content widths
 
+### 1.7c Dashboard UI & design system — selected design: `design/candidate-c.html` ★
+
+The chosen visual direction is **candidate C** (flat neutral-dark · Fraunces serif headings + accounting
+figures · bento grid · per-widget grip/title/gear · drag-reorder + resize · gear→flip settings ·
+collapsible icon sidebar · global-settings flip). The static reference mockup is
+[`design/candidate-c.html`](./design/candidate-c.html) (open via the dev server at
+`/design/candidate-c.html`). Every item below is a Go/`html/shorthand` component to port from it.
+Drag/resize/flip need pointer/drag events via `syscall/js`/`interop`; keep computation in the tested
+logic packages, persist layout/settings to the store `Settings`.
+
+**Reusability (required):** build these as generic, props-driven components shared across the whole
+app — not per-widget bespoke markup. In particular: one `Widget` shell (grip/title/gear header slots
++ body slot), one `FlipPanel` primitive reused by **both** per-widget and global settings, one
+settings-form renderer driven by a field schema, and shared primitives (`Toggle`, `Segmented`,
+`StepperPill`, `Swatch`, `Chip`, `ProgressBar`, `Icon` set, and SVG `Chart` helpers). Every widget is
+`Widget`-shell + content; every screen composes these. Mark each item below `(reuse)` where a single
+component should serve many call sites.
+
+Design tokens & foundation:
+- [ ] `internal/ui` tokens (mirror mockup `<style>`): palette (base `#0e0e0f`, tile `#121214`, cell border `#34343a`, divider `#2a2a2c`, fg/dim/faint, up/down/warn), radii (cards squared, controls 4px, bars 2px)
+- [ ] Fonts: Fraunces (display headings + figures) + Inter (UI); `.fig` tabular lining figures helper
+- [ ] Accounting money display in UI (`$` + thousands + 2dp, **negatives in parentheses**, red/green) — wire `money.FormatMinor` + `currency`
+- [ ] Dark modern scrollbar styling for the scroll pane
+
+App shell & navigation:
+- [ ] App shell: fixed left rail + independently scrolling `main`; sticky top bar (`h-screen`/overflow)
+- [ ] Sidebar rail: brand header; nav items each with an SVG icon (Dashboard/Accounts/Transactions/Budgets/Goals/To-do/Settings)
+- [ ] "My pages" section: list of user **custom pages** (+ colored page icons) and a "New page" action
+- [ ] Collapsible rail: toggle → 58px icon-only mode (hide labels/captions/brand/household text); persist collapsed state
+- [ ] Household card (rail bottom) → opens global settings (see below)
+- [ ] Top bar: menu toggle, page title, time-resolution control, `+ Add`
+
+Time-resolution control (top bar):
+- [ ] Segmented **Week / Month / Quarter** toggle
+- [ ] **From / To** stepper pills that relabel per resolution (week ranges / months / quarters); clamp From ≤ To
+- [ ] Drive dashboard period from this control (feeds `ledger`/`budgeting` period range)
+
+Bento grid system:
+- [ ] Grid engine: base cell unit `--cell` (152px), N equal columns, uniform gap = outer margin, integer cell spans
+- [ ] Visible squared cell borders; full-width header cell (1×N)
+- [ ] Widget shell: unified header — **grip (left) · title (center) · gear (right)** + body
+- [ ] Drag-to-reorder / swap widgets (pointer/HTML5 DnD via interop), keyed by widget id
+- [ ] Resize: scale-wide (right edge) + scale-tall (bottom edge) handles → change col/row span, snap to cells
+- [ ] Persist per-user layout (order, spans, hidden, page) to the store
+
+Per-widget settings (gear → flip):
+- [ ] Flip primitive: card lifts to center, dim/blur backdrop, 3D `rotateY` to settings back face (reuse for global)
+- [ ] Settings back: centered title + right ✕ close; scrollable body; dark Save/Cancel footer
+- [ ] Settings fields: editable Title; toggles (allow moving, allow resizing, show header, show on dashboard, compact, show last-updated); accent swatches; default size; refresh; Remove
+
+Widget catalog (each backed by tested logic; see mockup):
+- [ ] KPI tile — Net worth / Income / Spending / Liabilities (figure + delta/subline)
+- [ ] Recent transactions (table, accounting amounts)
+- [ ] Budgets (progress bars, ok/near/over) — `internal/budgeting`
+- [ ] Net worth trend (SVG area chart) — `internal/ledger` series
+- [ ] Goals (progress) — `internal/goals`
+- [ ] To-do (task list)
+- [ ] Accounts (mini balances)
+- [ ] Cash flow (in/out bar chart per period) — `ledger.PeriodTotals`
+- [ ] Upcoming bills (from recurring/liabilities)
+- [ ] Savings rate (figure + bar)
+- [ ] Spending breakdown (segmented bar + legend by category)
+- [ ] Reusable SVG chart helpers (area/sparkline, bars, segmented bar, donut)
+
+Global settings (household card → large flip panel):
+- [ ] Large centered flip panel (2-column scrollable body), dark Save/Cancel
+- [ ] Household members (chips + add); Base currency; editable FX rate rows
+- [ ] AI (OpenAI BYO key toggle + key + model); Appearance (theme seg + accent + density)
+- [ ] Data: export JSON/CSV, import, load sample, wipe (confirm)
+
+Shared control components (from mockup):
+- [ ] Switch/toggle, swatch picker, segmented control, stepper pill, member chip, ghost/data buttons, dashed "add" button
+
 ### 1.8 Members / Household
 
 - [ ] List members; add/edit/delete; set default; color

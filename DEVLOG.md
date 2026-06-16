@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-15 — Dashboard design direction chosen (candidate C)
+
+- Paused screen porting to explore the dashboard visual design with the owner. Built 5 static
+  HTML+Tailwind candidates in `design/` (served at `/design/candidate-*.html`); iterated heavily.
+- **Selected candidate C**: flat neutral-dark palette, Fraunces serif headings + accounting figures
+  (negatives in parentheses), a **bento grid** with one base cell unit and integer-scaling widgets,
+  unified per-widget header (grip · title · gear), drag-to-reorder + edge resize handles, a
+  gear→center+flip per-widget settings panel, a collapsible icon-only sidebar with a "My pages"
+  (custom pages) section, a top-bar time-resolution control (Week/Month/Quarter + From/To), and a
+  large global-settings flip panel off the household card.
+- Decomposed the mockup into a granular component backlog in `TODOS.md` §1.7c, each item referencing
+  `design/candidate-c.html`. Drag/resize/flip will need pointer/DnD via `syscall/js`/`interop`;
+  computation stays in the tested logic packages and layout/settings persist to the store.
+
+**Next:** resume porting — apply the candidate-C shell (sidebar + top bar + bento) and start with the
+design tokens + app shell, then the widget shell and first widgets, per §1.7c.
+
 ## 2026-06-15 — Phase 1 begins: data model (money)
 
 - Started executing the backlog at §1.1, SDLC bottom-up. First service: `internal/money` — a

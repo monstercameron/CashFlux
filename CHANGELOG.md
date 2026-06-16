@@ -86,6 +86,12 @@ and every commit updates this file under `Unreleased`.
   optional target date, plus add and per-row delete.
 - To-do screen: tasks with priority badges and due dates — add, complete-toggle, delete, sorted
   (open first, then by due date).
+- Dashboard design exploration: five HTML/Tailwind candidates in `design/`; **candidate C selected**
+  (flat neutral-dark, Fraunces serif headings + accounting figures, bento grid, per-widget
+  grip/title/gear header, drag-reorder + edge resize, gear→flip settings, collapsible icon sidebar,
+  global-settings flip).
+- Granular, reusability-focused component backlog for the candidate-C dashboard UI (`TODOS.md` §1.7c),
+  every item referencing `design/candidate-c.html`.
 
 ### Changed
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
