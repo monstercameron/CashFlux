@@ -79,10 +79,10 @@ and every commit updates this file under `Unreleased`.
   with a shared `owner.group` key.
 - The Settings screen's verbiage is now on the language store (household summary + the debug-log
   viewer).
-- The global settings panel's left column + chrome are now on the language store (panel title, the
-  no-widget-settings placeholder, members/base-currency/exchange-rates/screens/freshness sections, and
-  the freshness account-type labels). The right column (AI/appearance/preferences/data/languages)
-  follows next.
+- The global settings panel is now fully on the language store: the left column (members/base-currency/
+  exchange-rates/screens/freshness) and the right column (AI, appearance + theme, accent, density,
+  preferences/week-start, date-format, data actions, languages). Currency/model display names and the
+  date-format examples stay literal.
 - The custom-fields UI is now on the language store: the manager (entity/type pickers, form, list,
   per-row meta/delete) and the per-field input control (required label, Yes/No), with the entity/type
   tables converted to i18n keys.

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: settings panel right column (panel complete)
+
+- Migrated the right column of `app/settings.go`'s global panel: AI section (title/enable/key
+  placeholder), Appearance (theme seg Dark/Light/System, Accent, Compact), Preferences (week-start
+  seg Sunday/Monday), Date format title, Data action buttons, and the Languages buttons — all via
+  `uistate.T`. Currency/model display names and the date-format example option text stay literal.
+- The global settings panel is now fully localized. `i18n` tests + wasm green.
+- Remaining UI verbiage: the two large screens **Accounts** and **Transactions**.
+
 ## 2026-06-16 — i18n: settings panel (left column + chrome)
 
 - Migrated the first half of `app/settings.go`'s global panel: SettingsHost panel title, the

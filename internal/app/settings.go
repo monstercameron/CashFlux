@@ -313,16 +313,16 @@ func globalSettingsForm() uic.Node {
 	)
 
 	right := Div(
-		Div(Class("set-label"), "AI (OpenAI · bring your own key)"),
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Enable AI features", On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
-		Input(Class("set-input mt-[0.45rem]"), Type("password"), Placeholder("OpenAI API key (sk-…)"), Value(aiKey.Get()), OnInput(onKey)),
+		Div(Class("set-label"), uistate.T("settings.aiTitle")),
+		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
+		Input(Class("set-input mt-[0.45rem]"), Type("password"), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(aiKey.Get()), OnInput(onKey)),
 		Select(Class("set-input mt-[0.45rem]"), OnChange(onModel),
 			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
 			Option(Value("gpt-4o"), SelectedIf(curModel == "gpt-4o"), "GPT-4o"),
 		),
-		Div(Class("set-label"), "Appearance"),
+		Div(Class("set-label"), uistate.T("settings.appearance")),
 		ui.Segmented(ui.SegmentedProps{
-			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: "Dark"}, {Value: string(prefs.ThemeLight), Label: "Light"}, {Value: string(prefs.ThemeSystem), Label: "System"}},
+			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")}, {Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")}, {Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")}},
 			Selected: string(pr.Theme),
 			OnSelect: func(v string) {
 				p := prefsAtom.Get()
@@ -331,7 +331,7 @@ func globalSettingsForm() uic.Node {
 			},
 		}),
 		Div(Class("toggle-row"),
-			Span("Accent"),
+			Span(uistate.T("settings.accent")),
 			ui.SwatchPicker(ui.SwatchPickerProps{
 				Colors:   []string{"#54b884", "#cfa14e", "#7c83ff", "#d8716f"},
 				Selected: pr.Accent,
@@ -342,16 +342,16 @@ func globalSettingsForm() uic.Node {
 				},
 			}),
 		),
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact density", On: pr.Compact, OnChange: func(v bool) {
+		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.compact"), On: pr.Compact, OnChange: func(v bool) {
 			p := prefsAtom.Get()
 			p.Compact = v
 			savePrefs(p)
 		}}),
-		Div(Class("set-label"), "Preferences"),
+		Div(Class("set-label"), uistate.T("settings.preferences")),
 		Div(Class("toggle-row"),
-			Span("Week starts on"),
+			Span(uistate.T("settings.weekStart")),
 			ui.Segmented(ui.SegmentedProps{
-				Options:  []ui.SegOption{{Value: string(prefs.WeekSunday), Label: "Sunday"}, {Value: string(prefs.WeekMonday), Label: "Monday"}},
+				Options:  []ui.SegOption{{Value: string(prefs.WeekSunday), Label: uistate.T("settings.sunday")}, {Value: string(prefs.WeekMonday), Label: uistate.T("settings.monday")}},
 				Selected: string(pr.WeekStart),
 				OnSelect: func(v string) {
 					p := prefsAtom.Get()
@@ -360,24 +360,24 @@ func globalSettingsForm() uic.Node {
 				},
 			}),
 		),
-		Select(Class("set-input mt-[0.45rem]"), Title("Date format"), OnChange(onDateStyle),
+		Select(Class("set-input mt-[0.45rem]"), Title(uistate.T("settings.dateFormat")), OnChange(onDateStyle),
 			Option(Value(string(prefs.DateISO)), SelectedIf(pr.DateStyle == prefs.DateISO), "2026-06-05  (ISO)"),
 			Option(Value(string(prefs.DateUS)), SelectedIf(pr.DateStyle == prefs.DateUS), "06/05/2026  (US)"),
 			Option(Value(string(prefs.DateEU)), SelectedIf(pr.DateStyle == prefs.DateEU), "05/06/2026  (European)"),
 			Option(Value(string(prefs.DateLong)), SelectedIf(pr.DateStyle == prefs.DateLong), "Jun 5, 2026  (Long)"),
 		),
-		Div(Class("set-label"), "Data"),
+		Div(Class("set-label"), uistate.T("settings.data")),
 		Div(Class("flex flex-wrap gap-2 py-1"),
-			dataBtn("Export JSON", false, func() { exportJSON(notify) }),
-			dataBtn("Export CSV", false, func() { exportCSV(notify) }),
-			dataBtn("Import…", false, func() { importJSON(bump, notify) }),
-			dataBtn("Load sample", false, func() { loadSample(bump, notify) }),
-			dataBtn("Wipe data", true, func() { wipeData(bump, notify) }),
+			dataBtn(uistate.T("settings.exportJSON"), false, func() { exportJSON(notify) }),
+			dataBtn(uistate.T("settings.exportCSV"), false, func() { exportCSV(notify) }),
+			dataBtn(uistate.T("settings.import"), false, func() { importJSON(bump, notify) }),
+			dataBtn(uistate.T("settings.loadSample"), false, func() { loadSample(bump, notify) }),
+			dataBtn(uistate.T("settings.wipe"), true, func() { wipeData(bump, notify) }),
 		),
-		Div(Class("set-label"), "Languages"),
+		Div(Class("set-label"), uistate.T("settings.languages")),
 		Div(Class("flex flex-wrap gap-2 py-1"),
-			dataBtn("Export languages", false, func() { exportLanguages(notify) }),
-			dataBtn("Import languages", false, func() { importLanguages(notify) }),
+			dataBtn(uistate.T("settings.exportLangs"), false, func() { exportLanguages(notify) }),
+			dataBtn(uistate.T("settings.importLangs"), false, func() { importLanguages(notify) }),
 		),
 	)
 
