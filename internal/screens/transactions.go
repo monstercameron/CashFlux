@@ -49,6 +49,7 @@ func Transactions() ui.Node {
 	}
 	accID := ui.UseState(defaultAcc)
 	catID := ui.UseState("")
+	toAccID := ui.UseState("")
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	errMsg := ui.UseState("")
 
@@ -58,6 +59,7 @@ func Transactions() ui.Node {
 	onKind := ui.UseEvent(func(e ui.Event) { kind.Set(e.GetValue()) })
 	onAcc := ui.UseEvent(func(e ui.Event) { accID.Set(e.GetValue()) })
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
+	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
 
 	add := ui.UseEvent(Prevent(func() {
 		acc, ok := accByID[accID.Get()]
@@ -70,21 +72,61 @@ func Transactions() ui.Node {
 			errMsg.Set("Enter a positive amount.")
 			return
 		}
-		if kind.Get() == "Expense" {
-			amt = -amt
-		}
 		date, derr := dateutil.ParseDate(strings.TrimSpace(dateStr.Get()))
 		if derr != nil {
 			errMsg.Set("Enter a valid date (YYYY-MM-DD).")
 			return
 		}
-		memberID := ""
-		if acc.Scope == domain.ScopeIndividual {
-			memberID = acc.OwnerID
+		memberFor := func(a domain.Account) string {
+			if a.Scope == domain.ScopeIndividual {
+				return a.OwnerID
+			}
+			return ""
+		}
+		label := strings.TrimSpace(desc.Get())
+
+		if kind.Get() == "Transfer" {
+			toAcc, ok := accByID[toAccID.Get()]
+			if !ok || toAcc.ID == acc.ID {
+				errMsg.Set("Choose a different destination account.")
+				return
+			}
+			if toAcc.Currency != acc.Currency {
+				errMsg.Set("Transfers between different currencies aren't supported yet.")
+				return
+			}
+			if label == "" {
+				label = "Transfer"
+			}
+			out := domain.Transaction{
+				ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
+				Amount: money.New(-amt, acc.Currency), TransferAccountID: toAcc.ID, MemberID: memberFor(acc),
+			}
+			in := domain.Transaction{
+				ID: id.New(), AccountID: toAcc.ID, Date: date, Desc: label,
+				Amount: money.New(amt, toAcc.Currency), TransferAccountID: acc.ID, MemberID: memberFor(toAcc),
+			}
+			if err := app.PutTransaction(out); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			if err := app.PutTransaction(in); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			desc.Set("")
+			amountStr.Set("")
+			errMsg.Set("")
+			bump()
+			return
+		}
+
+		if kind.Get() == "Expense" {
+			amt = -amt
 		}
 		t := domain.Transaction{
-			ID: id.New(), AccountID: acc.ID, Date: date, Desc: strings.TrimSpace(desc.Get()),
-			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: memberID,
+			ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
+			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: memberFor(acc),
 		}
 		if err := app.PutTransaction(t); err != nil {
 			errMsg.Set(err.Error())
@@ -108,9 +150,11 @@ func Transactions() ui.Node {
 	if len(accounts) == 0 {
 		formCard = Section(Class("card"), P(Class("empty"), "Add an account first, then you can record transactions."))
 	} else {
+		isTransfer := kind.Get() == "Transfer"
 		kindOptions := []ui.Node{
 			Option(Value("Expense"), SelectedIf(kind.Get() == "Expense"), "Expense"),
 			Option(Value("Income"), SelectedIf(kind.Get() == "Income"), "Income"),
+			Option(Value("Transfer"), SelectedIf(isTransfer), "Transfer"),
 		}
 		accOptions := make([]ui.Node, 0, len(accounts))
 		for _, a := range accounts {
@@ -120,14 +164,25 @@ func Transactions() ui.Node {
 		for _, c := range categories {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
 		}
+		toAccOptions := []ui.Node{Option(Value(""), SelectedIf(toAccID.Get() == ""), "— To account —")}
+		for _, a := range accounts {
+			toAccOptions = append(toAccOptions, Option(Value(a.ID), SelectedIf(toAccID.Get() == a.ID), a.Name))
+		}
+		accLabel := "Account"
+		if isTransfer {
+			accLabel = "From account"
+		}
 		formCard = Section(Class("card"),
 			H2(Class("card-title"), "Add transaction"),
 			Form(Class("form-grid"), OnSubmit(add),
 				Input(Class("field"), Type("text"), Placeholder("Description"), Value(desc.Get()), OnInput(onDesc)),
 				Input(Class("field"), Type("number"), Placeholder("Amount"), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(Class("field"), OnChange(onKind), kindOptions),
-				Select(Class("field"), OnChange(onAcc), accOptions),
-				Select(Class("field"), OnChange(onCat), catOptions),
+				Select(Class("field"), Title(accLabel), OnChange(onAcc), accOptions),
+				IfElse(isTransfer,
+					Select(Class("field"), Title("To account"), OnChange(onToAcc), toAccOptions),
+					Select(Class("field"), OnChange(onCat), catOptions),
+				),
 				Input(Class("field"), Type("date"), Value(dateStr.Get()), OnInput(onDate)),
 				Button(Class("btn btn-primary"), Type("submit"), "Add"),
 			),
@@ -175,7 +230,10 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Txn.ID) }))
 
 	cat := props.Category
-	if cat == "" {
+	switch {
+	case props.Txn.IsTransfer():
+		cat = "Transfer"
+	case cat == "":
 		cat = "Uncategorized"
 	}
 	meta := cat + " · " + dateutil.FormatDate(props.Txn.Date)

@@ -233,7 +233,7 @@ Shared control components (from mockup):
 - [x] ★ Ledger list (newest first); virtualization for large sets later
 - [x] ★ Add transaction (desc, amount, income/expense, category, account, date, member)
 - [~] ★ Delete transaction done (per-row component); edit + confirm later
-- [ ] ★ Transfers between accounts (paired entries; excluded from income/expense)
+- [x] ★ Transfers between accounts (paired entries; excluded from income/expense). TODO: deleting one leg should remove both
 - [ ] Tags input + tag display
 - [ ] Filters: member, account, category, date range, text; combine + clear; persist last filter
 - [ ] Sort options (date, amount, payee)

@@ -233,8 +233,16 @@ problems and fixes, and what's next.
   atom and persists it, undoing any drag/resize. (Persisting the default overwrites the saved layout,
   which is the intended "clear customization" behavior.)
 
-**Next:** update `TODOS.md` to reflect the large §1.7c progress (most of the dashboard/design-system
-items are done); then continue the Phase-1 backlog (Members/Categories screens, transfers, edit flows).
+- Synced `TODOS.md` (§1.7c mostly done) and implemented **account transfers** (§1.11 ★). The model is
+  paired entries: Balance only counts a transaction against its own `AccountID`, so a transfer needs a
+  debit on the source and a credit on the destination, both carrying `TransferAccountID` (so
+  `IsTransfer` excludes them from income/expense). The Transactions form gains a "Transfer" kind that
+  swaps the category picker for a "To account" picker; submit validates distinct accounts + matching
+  currency (cross-currency deferred) and writes both legs. Known gap: deleting one leg orphans the
+  other — a paired delete is the follow-up.
+
+**Next:** paired transfer delete; then more Phase-1 (Members + Categories screens, account
+edit/archive, transaction filters/edit), continuing the priority-ordered backlog.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
