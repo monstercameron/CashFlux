@@ -68,7 +68,3 @@ func Documents() ui.Node {
 	return stub(2, "Upload statements and receipts; AI extracts transactions for you to review and import, powering effortless monthly-spend tracking.")
 }
 
-// Customize covers custom fields and formulas.
-func Customize() ui.Node {
-	return stub(2, "Extend the app without code: define custom fields on any entity and build your own calculations with the formula builder.")
-}

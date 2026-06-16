@@ -367,10 +367,10 @@ Shared control components (from mockup):
 - [x] ★ Tokenizer (numbers, strings, idents, operators, parens, commas) — `internal/formula.Tokenize`
 - [x] ★ Parser → AST (precedence, unary, function calls) — `internal/formula.Parse`
 - [x] ★ Evaluator with allow-list functions (`sum/avg/min/max/count/if/round/abs`) + arithmetic/compare — `internal/formula.Eval`
-- [ ] Variable resolution: core fields, custom fields, filtered aggregates over transactions
-- [ ] Typed results (number/money/percent/bool/text) + formatting
+- [~] Variable resolution: live figures (net worth/income/expense/counts) done via `Env`; custom fields + filtered aggregates later
+- [~] Typed results (number/bool/text) done; money/percent typing + formatting later
 - [ ] `Formula{ID, Name, Target, Expr, ResultType, Format, Enabled}` store + CRUD
-- [ ] Builder UI: guided insert, live preview, validation + error messages
+- [~] Builder UI: live preview + error messages done (Customize screen); guided insert later
 - [ ] Surface results on dashboard / relevant entities
 - [ ] ★ Extensive tests: tokenizer, parser, evaluator, errors, security (no escape), edge cases
 

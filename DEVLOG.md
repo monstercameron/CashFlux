@@ -377,8 +377,13 @@ problems and fixes, and what's next.
   var/function, division/modulo by zero, and type mismatch. Tests: arithmetic, comparisons, every
   function, variable formulas (a savings-rate expression), and the error cases.
 
-**Next:** `Formula` entity + store CRUD, then surface formulas (a calculator/builder), then planning
-forecast/recurring — continuing Phase 2 bottom-up.
+- Surfaced the engine in the **Customize screen** (replaced the stub): a live formula calculator over
+  real figures — net worth/assets/liabilities + current-month income/expense (converted to major
+  units by base-currency decimals) and account/transaction/member counts — with the result (or the
+  engine's error message) updating per keystroke and an available-variables reference table.
+
+**Next:** the `Formula` entity + store CRUD (save named formulas), then planning forecast/recurring —
+continuing Phase 2 bottom-up.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
