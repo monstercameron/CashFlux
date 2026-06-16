@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Module visibility: sidebar filtering
+
+- `Sidebar` now reads `uistate.UseHiddenModules().Get()` and filters: the primary nav is built into a
+  `visibleNav` slice (skipping hidden paths) before the `MapKeyed`, and the two hideable System items
+  (Members, Categories) are wrapped in `If(!hidden.IsHidden(path), …)`. Settings and Dashboard are
+  locked in `internal/modules`, so they are never filtered — no special-casing needed here.
+- Reading the atom subscribes the Sidebar, so flipping a toggle re-renders the rail at once.
+- **Scope note.** Hiding is a *navigation* concern: the routes stay registered, so a hidden screen
+  reached directly by URL (or the unknown-path fallback) still renders. That is deliberate — we are
+  decluttering the rail, not building access control.
+- **Next.** The Settings panel show/hide toggles, which write `Toggle` + `PersistHiddenModules` for
+  each hideable screen — the last step to close this feature.
+
 ## 2026-06-16 — Module visibility: the persistence atom
 
 - `uistate/modules.go` — the third localStorage-backed atom (after layout and prefs), same shape:

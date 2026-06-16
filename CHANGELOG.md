@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- The sidebar now hides screens switched off via module visibility: the primary nav (Accounts,
+  Transactions, Budgets, Goals, To-do) and the System items (Members, Categories) are filtered by the
+  hidden-modules set, while locked screens (Dashboard, Settings) always stay. The Sidebar subscribes
+  to the atom, so toggles take effect immediately.
 - User-facing dates in the Transactions, Goals, and To-do lists now render using the chosen date
   format (via `prefs.FormatDate`) instead of always ISO. Each row component reads the preferences
   atom, so changing the format updates every list live.

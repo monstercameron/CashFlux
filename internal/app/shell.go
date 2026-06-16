@@ -85,9 +85,18 @@ func railHeader(label string) uic.Node {
 // custom "My pages", the System group, and a household card that opens settings.
 func Sidebar() uic.Node {
 	current := router.InspectCurrentRoute().Path
+	hidden := uistate.UseHiddenModules().Get()
 	cls := "rail w-60 shrink-0 border-r border-line flex flex-col"
 	if state.UseAtom(railCollapsedAtom, false).Get() {
 		cls += " collapsed"
+	}
+
+	// Hide screens the user has switched off (locked screens stay visible).
+	var visibleNav []railItem
+	for _, it := range primaryNav() {
+		if !hidden.IsHidden(it.Path) {
+			visibleNav = append(visibleNav, it)
+		}
 	}
 	return Aside(Class(cls),
 		Div(Class("railhead h-14 flex items-center gap-2.5 px-5 border-b border-line"),
@@ -95,7 +104,7 @@ func Sidebar() uic.Node {
 			Span(Class("brand-name font-display text-lg font-semibold tracking-tight"), "CashFlux"),
 		),
 		Nav(Class("flex-1 overflow-y-auto p-3 flex flex-col gap-0.5 text-dim text-[13.5px]"),
-			MapKeyed(primaryNav(),
+			MapKeyed(visibleNav,
 				func(it railItem) any { return it.Path },
 				func(it railItem) uic.Node {
 					return uic.CreateElement(navItem, navItemProps{
@@ -119,18 +128,18 @@ func Sidebar() uic.Node {
 			),
 			uic.CreateElement(navItem, navItemProps{Label: "New page", Icon: "plus", Muted: true}),
 			railHeader("System"),
-			uic.CreateElement(navItem, navItemProps{
+			If(!hidden.IsHidden("/members"), uic.CreateElement(navItem, navItemProps{
 				Label:  "Members",
 				Path:   "/members",
 				Icon:   "users",
 				Active: current == "/members",
-			}),
-			uic.CreateElement(navItem, navItemProps{
+			})),
+			If(!hidden.IsHidden("/categories"), uic.CreateElement(navItem, navItemProps{
 				Label:  "Categories",
 				Path:   "/categories",
 				Icon:   "tag",
 				Active: current == "/categories",
-			}),
+			})),
 			uic.CreateElement(navItem, navItemProps{
 				Label:  "Settings",
 				Path:   "/settings",

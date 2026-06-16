@@ -306,7 +306,7 @@ Shared control components (from mockup):
         live date rendering, reload-persistent); theme/density + fiscal-month start still to do
 - [ ] Budgeting methodology selector (envelope / zero-based / simple tracking)
 - [~] Module visibility toggles (show/hide screens) — pure `internal/modules` + localStorage atom
-      (`UseHiddenModules`) done; sidebar nav filter + Settings toggles next
+      + sidebar nav filter done; Settings show/hide toggles next
 - [ ] Debug: open log viewer
 
 ### 1.19 Configuration & modalities
