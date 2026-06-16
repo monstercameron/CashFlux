@@ -184,6 +184,9 @@ and every commit updates this file under `Unreleased`.
 - Allocate screen (replacing the stub): builds candidates from asset accounts and high-interest
   liabilities, ranks them by a chosen profile (Balanced / Maximize returns / Safety & access / Pay
   down debt), and shows each suggestion's score bar and per-criterion breakdown.
+- `internal/formula`: tokenizer for the sandboxed formula language — numbers (incl. leading-dot),
+  identifiers, double-quoted strings, arithmetic/comparison operators, parens, and commas; errors on
+  unterminated strings, stray `=`/`!`, and unexpected characters. Table-driven tested.
 - `internal/ui`: `AreaChart` helper renders a filled gradient sparkline from a value series (feeding
   the pure `chart` geometry into an `<svg>`). Net worth trend widget (1×2) on the dashboard: the
   current figure over a six-month end-of-month area chart via `ledger.NetWorthSeries`.

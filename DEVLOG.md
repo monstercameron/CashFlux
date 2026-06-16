@@ -360,8 +360,13 @@ problems and fixes, and what's next.
   return), ranks them with one of four preset profiles, and renders a score bar + per-criterion
   breakdown per suggestion. Amount input + constraints (emergency buffer, max-per-destination) later.
 
-**Next:** the formula-engine tokenizer (`internal/formula`), then parser/evaluator — continuing
-Phase 2 bottom-up.
+- Started the **formula engine** `internal/formula` with the **tokenizer**: numbers (including
+  leading-dot), identifiers, double-quoted strings, `+ - * / %` and `== != <= >= < >` operators,
+  parens, commas; EOF sentinel; errors on unterminated strings, a lone `=`/`!` (no assignment), and
+  unexpected characters. Table-driven tests cover arithmetic, calls, comparisons+strings, and errors.
+
+**Next:** the recursive-descent **parser** (→ AST with precedence/unary/calls), then the allow-list
+**evaluator** — continuing Phase 2 bottom-up toward the formula builder.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
