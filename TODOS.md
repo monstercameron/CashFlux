@@ -60,6 +60,34 @@ ordered reflow + size-aware packing.
 - [ ] Verify: dragging a 1×1 into a row of 2×2s reflows cleanly; multi-cell tiles never overlap;
       resize re-packs; layout persists across reload.
 
+### B3. Routing sometimes duplicates the whole page ★
+
+**Symptom:** navigating between screens sometimes renders the page twice (two sidebars / top bars /
+screens stacked).
+**Root cause (from GoWebComponents router source — live DOM scan was unavailable, see note):** the
+framework router is a **nested-layout router** (`router/doc.go`: "Nested layout routes with explicit
+outlets"; a layout renders chrome and places `router.GetOutlet()` where the active child goes). For a
+path like `/accounts`, `expandPathPrefixes` returns `["/", "/accounts"]`, so `resolveRouteStack`
+builds the stack `[exact "/", exact "/accounts"]` and renders `/` as the **parent layout** that wraps
+`/accounts` through the outlet. But `internal/app/app.go` registers **every** route — including `/` —
+as a full `Shell` page, and no `Shell` calls `router.GetOutlet()`. So any non-root navigation renders
+two full Shells (the `/` Dashboard Shell as the parent + the target screen's Shell as the unplaced
+child), duplicating the chrome/page. (The `*` route is *not* the cause: `Register("*", …)` is the
+router's dedicated not-found factory, not a stacking pattern.)
+**Fix (framework-intended layout + outlet structure):**
+- [ ] Register `/` as a **layout** component that renders the Shell chrome **once** and places
+      `router.GetOutlet()` for the active child — the layout must NOT itself be the Dashboard.
+- [ ] Register each screen as a **child route** that renders only its screen content (drop the
+      per-screen `Shell` wrapper in `app.go`); the layout supplies the chrome.
+- [ ] Make the Dashboard an **index child** of the layout (its own route) so home content also lands
+      in the outlet, rather than `/` doubling as both the universal parent layout and the dashboard.
+- [ ] Keep `*` as the not-found registration (already correct).
+- [ ] Verify (ideally with the browser oracle once Playwright is installed — see §0): navigating and
+      hard-refreshing every route renders exactly one Shell; no stacked/duplicated chrome.
+- _Note:_ couldn't scan the live DOM this session — `gwc probe` reports `playwright unavailable` and
+  the `gwc` MCP server isn't connected. Diagnosis is from the router source, which is definitive here.
+  Installing the Playwright driver (§0) would let `gwc probe`/MCP confirm the DOM directly.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)

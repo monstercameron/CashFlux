@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Diagnosed the page-duplication-on-route bug (B3)
+
+- User reported the page sometimes duplicating on navigation and asked me to scan the live DOM with
+  gwc. Couldn't: `gwc probe` reports `playwright unavailable: install the driver` and the gwc MCP
+  server isn't connected this session. Diagnosed from the framework router source instead — which is
+  definitive for this bug.
+- **Cause:** GoWebComponents' router is a *nested-layout* router. `expandPathPrefixes("/accounts")` →
+  `["/", "/accounts"]`, so `resolveRouteStack` produces a route stack `[exact "/", exact "/accounts"]`
+  and renders `/` as the parent layout wrapping `/accounts` via `router.GetOutlet()`. But `app.go`
+  registers every route — including `/` — as a full `Shell`, and no Shell calls `GetOutlet()`. Result:
+  non-root navigation renders the `/` Dashboard Shell **and** the target Shell = duplicated page. The
+  `*` route is innocent — `Register("*", …)` is the router's not-found factory, not a stacking pattern.
+- **Fix (logged as B3):** adopt the framework's layout+outlet structure — `/` becomes a chrome-only
+  layout with `GetOutlet()`, screens become child routes rendering just their content, Dashboard
+  becomes an index child. Real refactor of `app.go` + `Shell` + screen registration; deferred.
+- This also interacts with B1: once `/` is a proper layout, the deep-link refresh fix still needs the
+  SW/server history fallback, but the in-app routing will at least be structurally correct.
+
 ## 2026-06-16 — Logged two bugs (deep-link 404, dashboard drag) to the backlog
 
 - User reported two bugs; analyzed both and added a high-priority **§B Bug fixes** section to TODOS.
