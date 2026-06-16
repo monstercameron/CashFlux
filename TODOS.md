@@ -882,7 +882,9 @@ Shared control components (from mockup):
       (`ledger.CategorySpendSeries`, FX-aware, table-tested), and the offline **Spending highlights**
       card in Insights (`screens.spendingHighlights`, last 4 months, plain-English ↑/↓ rows, no AI key).
       AI-generated "advice cards" remain a separate later enhancement.
-- [ ] Pin/save insights; show top insight on dashboard
+- [~] Pin/save insights; show top insight on dashboard — **top insight on dashboard done**
+      (`screens.topHighlightWidget`: the #1 spending anomaly as a bento tile, shared detection/wording
+      with the Insights card). Still TODO: pinning/saving an AI-generated insight for later.
 - [ ] Guardrails: scope data sent, redact where possible
 - [ ] Tests: prompt assembly, data-context selection (pure parts)
 

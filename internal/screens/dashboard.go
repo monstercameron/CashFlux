@@ -132,6 +132,7 @@ func Dashboard() ui.Node {
 		spendingBreakdownWidget(app, txns, rates, start, end, widgetCfgs.For("breakdown")),
 		upcomingBillsWidget(app),
 		freshnessWidget(accounts, app.FreshnessWindows(), remindToUpdate),
+		topHighlightWidget(txns, app.Categories(), rates),
 	)
 }
 
@@ -354,6 +355,28 @@ func savingsRateWidget(income, expense money.Money, cfg widgetcfg.Config) ui.Nod
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "savings", Title: uistate.T("dashboard.savingsRate"), Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "7",
 		Body: body,
+	})
+}
+
+// topHighlightWidget surfaces the single most significant spending change this
+// month (via the shared anomaly detection) as a one-line plain-English highlight,
+// or a calm "nothing notable" message when there's nothing to flag. It links the
+// dashboard to the fuller Spending highlights card on the Insights screen.
+func topHighlightWidget(txns []domain.Transaction, categories []domain.Category, rates currency.Rates) ui.Node {
+	anomalies := detectSpendingAnomalies(txns, categories, rates)
+	var body ui.Node
+	if len(anomalies) == 0 {
+		body = P(Class("text-dim text-[13px]"), uistate.T("dashboard.noHighlights"))
+	} else {
+		a := anomalies[0]
+		body = Div(Class("flex items-start gap-2"),
+			Span(Class("insight-dot "+highlightTone(a)), Text(highlightArrow(a))),
+			Span(Class("text-[13px]"), highlightText(a, rates.Base)),
+		)
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "highlight", Title: uistate.T("dashboard.highlight"), Draggable: true, Resizable: true,
+		GridColumn: "1 / span 4", GridRow: "9", Body: body,
 	})
 }
 

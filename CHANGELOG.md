@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The dashboard now has a **Spending highlight** widget: it surfaces the single most significant
+  spending change this month (reusing the same anomaly detection as the Insights card) as a one-line
+  plain-English highlight with a green/red marker, or a calm "no big changes" message. Draggable and
+  resizable like the other bento tiles. The anomaly detection + sentence rendering are now shared
+  helpers (`detectSpendingAnomalies`, `highlightText/Tone/Arrow`) between the dashboard and Insights.
 - Insights now shows an offline **Spending highlights** card: it detects categories whose spend this
   month deviates materially from their recent average (via `ledger.CategorySpendSeries` →
   `insights.Detect` over the last four months) and explains each in plain English — "Dining spending

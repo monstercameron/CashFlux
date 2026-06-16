@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — dashboard: top Spending highlight widget
+
+- Added `topHighlightWidget` to the bento: shows the #1 spending anomaly this month as a one-line
+  highlight (green/red ↑/↓ + plain-English sentence), or a calm "no big changes" message. Placed at
+  a fresh grid row (1 / span 4, row 9) so its new widget ID can't collide with users' persisted
+  layouts — and since the dashboard is reconfigurable, they can drag it wherever they like.
+- Refactored to keep it DRY: extracted `detectSpendingAnomalies` (build series → Detect) and
+  `highlightText/highlightTone/highlightArrow` as shared `screens`-package helpers, so the dashboard
+  widget and the Insights card render identical wording/colors from one source. The Insights card now
+  just calls these.
+- New i18n keys `dashboard.highlight`/`dashboard.noHighlights`. Catalog test, full native `go test`,
+  and wasm build all green. Closes the §2.3 "show top insight on dashboard" piece.
+
 ## 2026-06-16 — insights UI: offline Spending highlights card
 
 - Wired the anomaly engine into the Insights screen: `spendingHighlights` builds the last four

@@ -398,6 +398,8 @@ var english = Catalog{
 	"dashboard.thisPeriod":     "this period",
 	"dashboard.assetsSub":      "Assets %s",
 	"dashboard.accountsCount":  "%d accounts",
+	"dashboard.highlight":      "Spending highlight",
+	"dashboard.noHighlights":   "No big spending changes this month.",
 
 	// Customize screen
 	"customize.formulaHint":     "Type a formula above — e.g. round((income - expense) / income * 100)",

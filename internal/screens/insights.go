@@ -172,6 +172,31 @@ func Insights() ui.Node {
 // empty node when there's nothing notable, so the card simply doesn't appear.
 // The card is non-interactive, so its rows are safe to render in a loop.
 func spendingHighlights(txns []domain.Transaction, categories []domain.Category, base string, rates currency.Rates) ui.Node {
+	anomalies := detectSpendingAnomalies(txns, categories, rates)
+	if len(anomalies) == 0 {
+		return Fragment()
+	}
+
+	rows := make([]ui.Node, 0, len(anomalies))
+	for _, a := range anomalies {
+		rows = append(rows, P(Class("insight-row"),
+			Span(Class("insight-dot "+highlightTone(a)), Text(highlightArrow(a))),
+			Span(highlightText(a, base)),
+		))
+	}
+
+	return Section(Class("card"),
+		H2(Class("card-title"), uistate.T("insights.highlightsTitle")),
+		P(Class("muted"), uistate.T("insights.highlightsHint")),
+		Div(Class("insight-list"), rows),
+	)
+}
+
+// detectSpendingAnomalies builds the last four monthly per-category spend series
+// and returns the detected anomalies (most significant first). Shared by the
+// Insights highlights card and the dashboard top-highlight widget. Returns nil
+// when there's nothing to detect.
+func detectSpendingAnomalies(txns []domain.Transaction, categories []domain.Category, rates currency.Rates) []insights.Anomaly {
 	curStart, _ := dateutil.MonthRange(time.Now())
 	// Four monthly periods (three baseline + the current month) → five boundaries.
 	bounds := []time.Time{
@@ -183,9 +208,8 @@ func spendingHighlights(txns []domain.Transaction, categories []domain.Category,
 	}
 	spendByCat, err := ledger.CategorySpendSeries(txns, bounds, rates)
 	if err != nil || len(spendByCat) == 0 {
-		return Fragment()
+		return nil
 	}
-
 	names := make(map[string]string, len(categories))
 	for _, c := range categories {
 		names[c.ID] = c.Name
@@ -198,33 +222,37 @@ func spendingHighlights(txns []domain.Transaction, categories []domain.Category,
 		}
 		series = append(series, insights.CategorySeries{Category: name, Spend: spend})
 	}
+	return insights.Detect(series, insights.DefaultOptions())
+}
 
-	anomalies := insights.Detect(series, insights.DefaultOptions())
-	if len(anomalies) == 0 {
-		return Fragment()
+// highlightText is the plain-English sentence for one spending anomaly.
+func highlightText(a insights.Anomaly, base string) string {
+	pct := a.PctChange
+	if pct < 0 {
+		pct = -pct
 	}
-
-	rows := make([]ui.Node, 0, len(anomalies))
-	for _, a := range anomalies {
-		pct := a.PctChange
-		if pct < 0 {
-			pct = -pct
-		}
-		current := fmtMoney(money.New(a.Current, base))
-		baseline := fmtMoney(money.New(a.Baseline, base))
-		tone, key := "text-up", "insights.highlightDown"
-		if a.Direction == insights.Up {
-			tone, key = "text-down", "insights.highlightUp"
-		}
-		rows = append(rows, P(Class("insight-row"),
-			Span(Class("insight-dot "+tone), If(a.Direction == insights.Up, Text("↑")), If(a.Direction == insights.Down, Text("↓"))),
-			Span(uistate.T(key, a.Category, pct, current, baseline)),
-		))
+	current := fmtMoney(money.New(a.Current, base))
+	baseline := fmtMoney(money.New(a.Baseline, base))
+	key := "insights.highlightDown"
+	if a.Direction == insights.Up {
+		key = "insights.highlightUp"
 	}
+	return uistate.T(key, a.Category, pct, current, baseline)
+}
 
-	return Section(Class("card"),
-		H2(Class("card-title"), uistate.T("insights.highlightsTitle")),
-		P(Class("muted"), uistate.T("insights.highlightsHint")),
-		Div(Class("insight-list"), rows),
-	)
+// highlightTone is the green/red text class for an anomaly's direction (up in
+// spending is red, down is green).
+func highlightTone(a insights.Anomaly) string {
+	if a.Direction == insights.Up {
+		return "text-down"
+	}
+	return "text-up"
+}
+
+// highlightArrow is the ↑/↓ marker for an anomaly's direction.
+func highlightArrow(a insights.Anomaly) string {
+	if a.Direction == insights.Up {
+		return "↑"
+	}
+	return "↓"
 }
