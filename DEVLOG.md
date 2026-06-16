@@ -310,6 +310,10 @@ problems and fixes, and what's next.
 - Added **transaction sort** (newest first / largest amount via `absAmount` / payee A–Z), applied to
   the filtered list before render.
 
+- Replaced the Net worth KPI's static "Assets X" subline with a real **month-over-month delta** (▲/▼
+  integer %) computed from `ledger.NetWorthSeries` at this month's start; falls back to the assets
+  line when there's no prior figure. Removes the last fabricated "2.4%" placeholder from the mockup.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

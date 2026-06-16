@@ -152,6 +152,7 @@ and every commit updates this file under `Unreleased`.
   (Net worth, Income, Spending, Liabilities) built from the live ledger and shown as accounting
   figures (`$1,234.56` / `($240.55)`, green/red tone). Each KPI is the reusable `Widget` shell +
   content; Income/Spending follow the time-resolution window. New `fmtAccounting`/`figTone` helpers.
+  The Net worth tile shows a real month-over-month change (▲/▼ %) via `ledger.NetWorthSeries`.
 - Recent transactions widget (2×2) on the dashboard: newest activity as a compact table with short
   dates and accounting amounts (green/red), in the reusable `Widget` shell.
 - `internal/ui`: reusable `ProgressBar` primitive — the candidate-C thin rounded track + colored fill
