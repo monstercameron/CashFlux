@@ -435,8 +435,13 @@ problems and fixes, and what's next.
   `theme-color` and the apple-mobile meta tags, so CashFlux can be installed as a standalone app.
   Icons + a caching service worker (offline shell) are the follow-ups.
 
-**Next:** a service worker (cache shell + wasm for offline), then back to Phase 2 polish (Rule store,
-custom fields) as time allows.
+- Added a **service worker** (`sw.js`, registered best-effort on load): **network-first** so it never
+  breaks the gwc live-reload (always fetches fresh, caches the response) yet serves the last good copy
+  when offline; pre-caches the core shell (index/wasm_exec/main.wasm/manifest) on install, evicts old
+  caches on activate, and only touches same-origin GETs so cross-origin OpenAI calls pass through.
+
+**Next:** PWA install prompt / update flow, then back to Phase 2 polish (Rule store, custom fields)
+as the loop continues.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

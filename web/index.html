@@ -307,6 +307,13 @@
           return;
         }
 
+        // Register the service worker for offline/installability (best-effort).
+        if ("serviceWorker" in navigator) {
+          window.addEventListener("load", function () {
+            navigator.serviceWorker.register("./sw.js").catch(function () {});
+          });
+        }
+
         const go = new Go();
         WebAssembly.instantiateStreaming(fetch("./bin/main.wasm"), go.importObject)
           .then(function (result) { go.run(result.instance); })

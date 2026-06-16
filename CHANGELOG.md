@@ -107,6 +107,9 @@ and every commit updates this file under `Unreleased`.
 
 - PWA web manifest (`manifest.webmanifest`) + theme-color/apple meta tags, making CashFlux installable
   as a standalone dark-themed app (Phase 3 start; icons and a service worker follow).
+- PWA service worker (`sw.js`, registered on load): network-first caching of same-origin GETs (core
+  shell pre-cached on install) so the app stays fresh online and loads offline; cross-origin calls
+  (e.g. OpenAI) pass through uncached.
 
 ### Changed
 - Retargeted the legacy screen palette (the shared CSS variables) to candidate-C values, so the
