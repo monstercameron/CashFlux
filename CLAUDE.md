@@ -171,5 +171,9 @@ These rules are non-negotiable and apply to every change:
 - **Maintain `DEVLOG.md`** — a developer journal/devlog: dated entries capturing what was worked
   on, decisions and trade-offs made, problems hit and how they were solved, and what's next. Append
   an entry whenever meaningful work happens; it is the narrative companion to the changelog.
+- **Commit AND push — never just commit.** After every commit, immediately `git push` to
+  `origin/main`. A feature isn't done until it's pushed. (Remote: `origin` →
+  `github.com/monstercameron/CashFlux`; `main` tracks `origin/main`.) If a push fails (e.g. non-
+  fast-forward), pull/rebase and resolve before continuing — don't leave commits unpushed.
 - Do not let work accumulate uncommitted. Commit each completed feature immediately, with its
   CHANGELOG + DEVLOG updates.
