@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — ledger: per-category spend-series feeder for anomalies
+
+- Added `ledger.CategorySpendSeries(all, bounds, rates)`: buckets non-transfer expense into the
+  half-open periods `[bounds[i], bounds[i+1])` and returns `map[categoryID][]int64` of base-currency
+  spend per period (oldest first, positive magnitudes, zeros where idle). This is the bridge between
+  raw transactions and `insights.Detect` — the UI maps the result to `[]insights.CategorySeries` with
+  display names.
+- Decoupling decision: the feeder lives in `ledger` (which already owns FX-aware aggregation) and
+  returns a plain map rather than `insights.CategorySeries`, so `insights` stays a pure math leaf
+  with zero domain/currency dependencies. The trivial map→CategorySeries mapping happens at the UI
+  edge that already imports both.
+- Table-tested: multi-period bucketing, same-period accumulation, FX conversion, and exclusion of
+  income/transfers/out-of-window/uncategorized-key handling; plus the <2-bounds empty case.
+
 ## 2026-06-16 — insights: pure spending anomaly/trend engine
 
 - New `internal/insights` package: `Detect(series, opts)` takes per-category spend histories

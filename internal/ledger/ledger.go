@@ -122,6 +122,49 @@ func PeriodTotals(all []domain.Transaction, start, end time.Time, rates currency
 	return income, expense, nil
 }
 
+// CategorySpendSeries buckets non-transfer expense into the consecutive periods
+// defined by bounds — period i is the half-open range [bounds[i], bounds[i+1]) —
+// returning each category's spend per period in base-currency minor units, oldest
+// first as a positive magnitude. Income and transfers are ignored, and expense
+// that falls outside every period is skipped. Uncategorized expense is grouped
+// under the empty-string key. Each returned slice has exactly len(bounds)-1
+// entries (zero where a category had no spend in that period), so it lines up with
+// insights.CategorySeries for anomaly detection. bounds must be ascending; fewer
+// than two bounds yields an empty result.
+func CategorySpendSeries(all []domain.Transaction, bounds []time.Time, rates currency.Rates) (map[string][]int64, error) {
+	n := len(bounds) - 1
+	out := map[string][]int64{}
+	if n < 1 {
+		return out, nil
+	}
+	for _, t := range all {
+		if !t.IsExpense() {
+			continue
+		}
+		idx := -1
+		for i := 0; i < n; i++ {
+			if dateutil.InRange(t.Date, bounds[i], bounds[i+1]) {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			continue
+		}
+		conv, err := rates.Convert(t.Amount, rates.Base)
+		if err != nil {
+			return nil, err
+		}
+		series, ok := out[t.CategoryID]
+		if !ok {
+			series = make([]int64, n)
+			out[t.CategoryID] = series
+		}
+		series[idx] += conv.Abs().Amount
+	}
+	return out, nil
+}
+
 // NetWorth returns net worth (assets − liabilities) along with the asset and
 // liability totals, all in the base currency. Archived accounts are excluded.
 // Liability amounts are reported as positive amounts owed.

@@ -135,6 +135,66 @@ func TestPeriodTotals(t *testing.T) {
 	}
 }
 
+func TestCategorySpendSeries(t *testing.T) {
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.10}}
+	tx := func(cat string, amount int64, cur, day string, transfer bool) domain.Transaction {
+		t := domain.Transaction{CategoryID: cat, Date: mustDate(day), Amount: money.New(amount, cur)}
+		if transfer {
+			t.TransferAccountID = "x"
+		}
+		return t
+	}
+	all := []domain.Transaction{
+		tx("food", -3000, "USD", "2026-04-10", false), // Apr food 30
+		tx("food", -2000, "USD", "2026-04-25", false), // Apr food 20 (same period → 50)
+		tx("food", -4000, "USD", "2026-05-05", false), // May food 40
+		tx("food", -9000, "USD", "2026-06-15", false), // Jun food 90
+		tx("gas", -1000, "EUR", "2026-06-02", false),  // Jun gas 10 EUR -> 11 USD
+		tx("food", 5000, "USD", "2026-06-20", false),  // income, ignored
+		tx("food", -7777, "USD", "2026-06-09", true),  // transfer, ignored
+		tx("food", -1234, "USD", "2026-03-01", false), // before window, ignored
+		tx("", -2500, "USD", "2026-05-12", false),     // uncategorized May 25
+	}
+	// Three monthly periods: Apr, May, Jun.
+	bounds := []time.Time{
+		mustDate("2026-04-01"), mustDate("2026-05-01"), mustDate("2026-06-01"), mustDate("2026-07-01"),
+	}
+	got, err := CategorySpendSeries(all, bounds, rates)
+	if err != nil {
+		t.Fatalf("CategorySpendSeries: %v", err)
+	}
+	want := map[string][]int64{
+		"food": {5000, 4000, 9000}, // Apr 50, May 40, Jun 90
+		"gas":  {0, 0, 1100},       // only Jun, EUR converted
+		"":     {0, 2500, 0},       // uncategorized in May
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d categories, want %d (%v)", len(got), len(want), got)
+	}
+	for cat, w := range want {
+		g := got[cat]
+		if len(g) != len(w) {
+			t.Fatalf("category %q: len %d, want %d", cat, len(g), len(w))
+		}
+		for i := range w {
+			if g[i] != w[i] {
+				t.Errorf("category %q period %d = %d, want %d", cat, i, g[i], w[i])
+			}
+		}
+	}
+}
+
+func TestCategorySpendSeriesTooFewBounds(t *testing.T) {
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{}}
+	got, err := CategorySpendSeries(nil, []time.Time{mustDate("2026-06-01")}, rates)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty for a single bound", got)
+	}
+}
+
 func TestNetWorthSeries(t *testing.T) {
 	rates := currency.Rates{Base: "USD", Rates: map[string]float64{}}
 	accounts := []domain.Account{

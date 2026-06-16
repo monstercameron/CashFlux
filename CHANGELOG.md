@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- `ledger.CategorySpendSeries` buckets non-transfer expense into consecutive periods (defined by a
+  list of boundaries) and returns each category's per-period spend in base-currency minor units,
+  oldest first — the feeder that turns transactions into the per-category histories `internal/insights`
+  consumes for anomaly detection. Income/transfers are excluded, FX is converted to base, and slices
+  align to the period count (zeros where idle). Table-tested.
 - A pure spending trend/anomaly engine (`internal/insights`): `Detect` compares each category's
   current-period spend against the trailing average of its prior periods and flags material
   deviations, returning explainable `Anomaly` records (baseline, signed delta, whole-percent change,
