@@ -946,10 +946,10 @@ Shared control components (from mockup):
 ### 2.6 Planning + Forecast
 
 - [~] `Recurring{Label, Amount, Cadence, NextDue, AccountID, CategoryID, Autopost}` + CRUD — model +
-      persistence done (`domain.Recurring` w/ `Cadence.Next`/`Advance`, `recurring` table, store CRUD,
-      dataset round-trip, validated `appstate.Recurring/PutRecurring/DeleteRecurring`; table-tested).
-      Amount is signed (carries currency) per the Transaction convention. Still TODO: management UI +
-      autoposting due ones into transactions.
+      persistence (`domain.Recurring` w/ `Cadence.Next`/`Advance`, `recurring` table, store CRUD,
+      dataset round-trip, validated appstate accessors; table-tested) **and** a "Recurring cash flows"
+      management card on Planning (add/list/delete). Still TODO: feed into the forecast + autoposting
+      due ones into transactions.
 - [ ] `Plan{ID, Name, HorizonMonths, BaseScenario, Assumptions[]}` + `PlanItem{...}` + CRUD
 - [~] ★ Forecast engine (pure): `internal/forecast.Project` over horizon from start + recurring + one-time items done; actuals-derived recurring later
 - [x] Debt payoff math (`internal/payoff.Project`) + tests + extra-payment scenario (months/interest saved)

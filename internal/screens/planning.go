@@ -11,7 +11,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/forecast"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
@@ -44,6 +46,49 @@ func Planning() ui.Node {
 	onExtra := ui.UseEvent(func(v string) { extraStr.Set(v) })
 	trimStr := ui.UseState("")
 	onTrim := ui.UseEvent(func(v string) { trimStr.Set(v) })
+
+	// Recurring cash-flow management.
+	rev := ui.UseState(0)
+	rLabel := ui.UseState("")
+	rAmount := ui.UseState("")
+	rCadence := ui.UseState(string(domain.CadenceMonthly))
+	rErr := ui.UseState("")
+	onRLabel := ui.UseEvent(func(v string) { rLabel.Set(v) })
+	onRAmount := ui.UseEvent(func(v string) { rAmount.Set(v) })
+	onRCadence := ui.UseEvent(func(e ui.Event) { rCadence.Set(e.GetValue()) })
+	addRecurring := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
+		label := strings.TrimSpace(rLabel.Get())
+		if label == "" {
+			rErr.Set(uistate.T("recurring.labelRequired"))
+			return
+		}
+		amt, err := money.ParseMinor(strings.TrimSpace(rAmount.Get()), currency.Decimals(base))
+		if err != nil || amt == 0 {
+			rErr.Set(uistate.T("recurring.amountRequired"))
+			return
+		}
+		r := domain.Recurring{
+			ID: id.New(), Label: label, Amount: money.New(amt, base),
+			Cadence: domain.RecurringCadence(rCadence.Get()), NextDue: time.Now(),
+		}
+		if err := app.PutRecurring(r); err != nil {
+			rErr.Set(err.Error())
+			return
+		}
+		rLabel.Set("")
+		rAmount.Set("")
+		rErr.Set("")
+		rev.Set(rev.Get() + 1)
+	}))
+	deleteRecurring := func(rid string) {
+		if app != nil {
+			_ = app.DeleteRecurring(rid)
+			rev.Set(rev.Get() + 1)
+		}
+	}
 
 	var resultBody ui.Node
 	switch {
@@ -118,8 +163,41 @@ func Planning() ui.Node {
 		)
 	}
 
+	recurringCard := Fragment()
+	if app != nil {
+		cadenceOpts := []ui.Node{
+			Option(Value(string(domain.CadenceWeekly)), SelectedIf(rCadence.Get() == string(domain.CadenceWeekly)), uistate.T("recurring.cadenceWeekly")),
+			Option(Value(string(domain.CadenceMonthly)), SelectedIf(rCadence.Get() == string(domain.CadenceMonthly)), uistate.T("recurring.cadenceMonthly")),
+			Option(Value(string(domain.CadenceQuarterly)), SelectedIf(rCadence.Get() == string(domain.CadenceQuarterly)), uistate.T("recurring.cadenceQuarterly")),
+			Option(Value(string(domain.CadenceYearly)), SelectedIf(rCadence.Get() == string(domain.CadenceYearly)), uistate.T("recurring.cadenceYearly")),
+		}
+		recs := app.Recurring()
+		list := IfElse(len(recs) == 0,
+			P(Class("empty"), uistate.T("recurring.empty")),
+			Div(Class("rows"), MapKeyed(recs,
+				func(r domain.Recurring) any { return r.ID },
+				func(r domain.Recurring) ui.Node {
+					return ui.CreateElement(RecurringRow, recurringRowProps{Recurring: r, OnDelete: deleteRecurring})
+				},
+			)),
+		)
+		recurringCard = Section(Class("card"),
+			H2(Class("card-title"), uistate.T("recurring.title")),
+			P(Class("muted"), uistate.T("recurring.hint")),
+			Form(Class("form-grid"), OnSubmit(addRecurring),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("recurring.amountPlaceholder", base)), Value(rAmount.Get()), Step("0.01"), OnInput(onRAmount)),
+				Select(Class("field"), OnChange(onRCadence), cadenceOpts),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
+			),
+			If(rErr.Get() != "", P(Class("err"), rErr.Get())),
+			list,
+		)
+	}
+
 	return Div(
 		forecastCard,
+		recurringCard,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("planning.payoffTitle")),
 			P(Class("muted"), uistate.T("planning.payoffDesc")),
@@ -135,4 +213,39 @@ func Planning() ui.Node {
 			resultBody,
 		),
 	)
+}
+
+type recurringRowProps struct {
+	Recurring domain.Recurring
+	OnDelete  func(string)
+}
+
+// RecurringRow renders one recurring cash flow (amount colored by sign) with a
+// remove button. It owns its own click handler (per the no-hooks-in-loops rule).
+func RecurringRow(props recurringRowProps) ui.Node {
+	r := props.Recurring
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
+	meta := cadenceLabel(r.Cadence) + " · " + uistate.T("recurring.nextDue", r.NextDue.Format("Jan 2, 2006"))
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), r.Label),
+			Span(Class("row-meta"), meta),
+		),
+		Span(Class(amountClass(r.Amount)), fmtMoney(r.Amount)),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("recurring.deleteTitle")), OnClick(del), "✕"),
+	)
+}
+
+// cadenceLabel localizes a recurring cadence.
+func cadenceLabel(c domain.RecurringCadence) string {
+	switch c {
+	case domain.CadenceWeekly:
+		return uistate.T("recurring.cadenceWeekly")
+	case domain.CadenceQuarterly:
+		return uistate.T("recurring.cadenceQuarterly")
+	case domain.CadenceYearly:
+		return uistate.T("recurring.cadenceYearly")
+	default:
+		return uistate.T("recurring.cadenceMonthly")
+	}
 }

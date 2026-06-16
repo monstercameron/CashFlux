@@ -162,6 +162,22 @@ var english = Catalog{
 	"planning.totalInterest":      "Total interest",
 	"planning.totalPaid":          "Total paid",
 
+	// Recurring cash flows (Planning)
+	"recurring.title":             "Recurring cash flows",
+	"recurring.hint":              "Bills, paychecks, and subscriptions that repeat. Enter a negative amount for money out, positive for money in.",
+	"recurring.labelPlaceholder":  "Label (e.g. Rent, Salary)",
+	"recurring.amountPlaceholder": "Amount (%s)",
+	"recurring.add":               "Add",
+	"recurring.empty":             "No recurring cash flows yet.",
+	"recurring.labelRequired":     "Enter a label.",
+	"recurring.amountRequired":    "Enter a non-zero amount.",
+	"recurring.deleteTitle":       "Delete recurring",
+	"recurring.nextDue":           "next %s",
+	"recurring.cadenceWeekly":     "Weekly",
+	"recurring.cadenceMonthly":    "Monthly",
+	"recurring.cadenceQuarterly":  "Quarterly",
+	"recurring.cadenceYearly":     "Yearly",
+
 	// Documents screen
 	"documents.csvEmpty":            "Paste some CSV first.",
 	"documents.csvError":            "Couldn't read that CSV: %s",

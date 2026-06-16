@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Recurring management UI on Planning
+
+- Added a "Recurring cash flows" card to the Planning screen (no new route — avoids the gated nav
+  redesign, and recurring flows belong with forecasting anyway): an add form (label, signed amount,
+  cadence select) and a list rendered via a `RecurringRow` component (own delete handler), amounts
+  colored by sign with cadence + next-due meta. `cadenceLabel` localizes the cadence.
+- Validation mirrors the others (label + non-zero amount client-side; appstate enforces the rest).
+  New `recurring.*` i18n keys. Catalog + wasm green.
+- Gives the Recurring model a real producer/consumer. Next: feed these into the forecast
+  (monthly-equivalent) and optional autoposting of due ones.
+
 ## 2026-06-16 — Recurring cash-flow model + persistence
 
 - Added `domain.Recurring` (label, signed `money.Money` amount, `RecurringCadence`, NextDue,

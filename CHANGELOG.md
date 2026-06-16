@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Planning screen now has a **Recurring cash flows** card: add a bill/paycheck/subscription
+  (label, signed amount, cadence) and see/remove the list — amounts colored by sign, each showing its
+  cadence and next-due date. Backed by the recurring store.
 - A **Recurring** cash-flow model (`domain.Recurring` + store/state): a scheduled bill/paycheck/
   subscription with a label, signed amount, cadence (weekly/monthly/quarterly/yearly), next-due date,
   account/category, and an autopost flag. Cadence math (`Cadence.Next`, `Recurring.Advance`) and full
