@@ -179,16 +179,14 @@ Three related sidebar changes (relates to B5 collapsed-hover, B7 missing items):
       `uistate` nav-order atom) and apply it when rendering `primaryNav`/System. Reuse the
       `internal/dashlayout` ordered-sequence/`Move` approach or a small pure `navorder` helper +
       table tests. Respect the On*-hooks-in-loops rule (each item already its own `navItem` component).
-- [ ] **Remove the "My pages" segment.** Drop the `myPages()` example section + "New page" affordance
-      from the rail (`internal/app/shell.go`) — custom pages integrate directly into the page rather
-      than living as a separate rail group.
-- [ ] **Menu visibility settings.** Add settings to choose which menu items are shown/hidden. Note a
-      base already exists: `internal/modules` + `hideableScreens` + the Settings module-visibility
-      toggles drive the sidebar filter. Extend it to cover *all* nav items (including the B7 additions
-      — Planning/Allocate/Insights/Documents/Customize) and surface it clearly as "menu items"
-      management; decide which items (if any) stay locked (Dashboard/Settings today).
-- [ ] Verify: Shift+drag reorders and persists; no "My pages" group; every nav item can be toggled
-      from settings; locked items can't be hidden.
+- [x] **Remove the "My pages" segment.** Dropped the `myPages()` example section + "New page"
+      affordance (and the dead `customPage`/`myPages` code) from the rail — the rail is now just the
+      real screens.
+- [~] **Menu visibility settings.** Base exists: `internal/modules` + `hideableScreens` + the Settings
+      → Screens module toggles drive the sidebar filter. Could extend `hideableScreens` to cover the
+      B7 Tools additions (Planning/Allocate/Insights/Documents/Customize), which already respect
+      `hidden.IsHidden` but aren't yet in the toggle list. Small follow-up.
+- [~] Verify: no "My pages" group (done, wasm green). Shift+drag reorder still pending.
 
 ### B9. Clickable breadcrumb in the top bar ★
 

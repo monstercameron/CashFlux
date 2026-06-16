@@ -73,22 +73,6 @@ func toolsNav() []railItem {
 	}
 }
 
-// customPage is an example "My pages" entry. Real, user-created custom pages
-// arrive with the custom-pages feature; for now these mirror the mockup.
-type customPage struct {
-	Label     string
-	IconClass string
-}
-
-// myPages returns the example custom pages shown in the rail.
-func myPages() []customPage {
-	return []customPage{
-		{"Debt payoff plan", "w-4 h-4 shrink-0 text-down"},
-		{"FIRE tracker", "w-4 h-4 shrink-0 text-up"},
-		{"Side hustle P&L", "w-4 h-4 shrink-0 text-[#7c83ff]"},
-	}
-}
-
 // railHeader renders a small uppercase section label inside the rail.
 func railHeader(label string) uic.Node {
 	return Div(Class("px-3 pt-4 pb-1 text-[10px] uppercase tracking-[0.16em] text-faint"), label)
@@ -146,18 +130,6 @@ func Sidebar() uic.Node {
 					})
 				},
 			),
-			railHeader(uistate.T("rail.myPages")),
-			MapKeyed(myPages(),
-				func(p customPage) any { return p.Label },
-				func(p customPage) uic.Node {
-					return uic.CreateElement(navItem, navItemProps{
-						Label:     p.Label,
-						Icon:      "page",
-						IconClass: p.IconClass,
-					})
-				},
-			),
-			uic.CreateElement(navItem, navItemProps{Label: uistate.T("rail.newPage"), Icon: "plus", Muted: true}),
 			railHeader(uistate.T("rail.system")),
 			If(!hidden.IsHidden("/members"), uic.CreateElement(navItem, navItemProps{
 				Label:  uistate.T("nav.members"),

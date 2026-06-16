@@ -86,6 +86,10 @@ and every commit updates this file under `Unreleased`.
   GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.
 
 ### Changed
+- Removed the placeholder **"My pages"** sidebar segment (the example "Debt payoff plan / FIRE tracker /
+  Side hustle P&L" entries and the "New page" affordance) — they were mockup stubs, not real pages, so
+  the rail is now just the actual screens. (Menu visibility is already configurable via the
+  module-visibility toggles in Settings → Screens.)
 - **One settings entry point** now: the duplicate `/settings` screen is gone — its only unique piece,
   the debug-log viewer, moved into the household-card settings panel (where currency/AI/appearance/
   data already live). The "Settings" sidebar item is removed; the household card at the bottom of the

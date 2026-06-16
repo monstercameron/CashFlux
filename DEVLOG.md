@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B8 (partial): drop the "My pages" segment
+
+- Removed the mockup "My pages" rail group (the three example custom pages + the "New page" item) and
+  the now-dead `customPage` type / `myPages()` func, per the user's "remove the my pages segment as
+  custom pages integrate directly into the page". The rail is now just the real navigable screens
+  (primary + Tools + System).
+- The other B8 sub-items: menu **visibility settings** already exist (Settings → Screens module
+  toggles, `hideableScreens`); **shift+drag reorder** of nav items remains (the heavy part — needs a
+  drag-order atom + persisted sequence) and is the open piece. `rail.myPages`/`rail.newPage` i18n keys
+  left in place (harmless). wasm green.
+
 ## 2026-06-16 — B4: consolidate the duplicate Settings
 
 - There were two settings entry points: the household-card → global panel (the real editor) and a
