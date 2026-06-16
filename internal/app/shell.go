@@ -217,6 +217,7 @@ type topBarProps struct {
 // static) menu toggle, the page title, and an Add action.
 func TopBar(props topBarProps) uic.Node {
 	collapsed := state.UseAtom(railCollapsedAtom, false)
+	nav := router.UseNavigate()
 	return Div(Class("h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20"),
 		Button(Class("menu-btn w-7 h-7 -ml-1"), Attr("title", "Collapse menu"),
 			OnClick(func() { collapsed.Update(func(c bool) bool { return !c }) }),
@@ -226,6 +227,8 @@ func TopBar(props topBarProps) uic.Node {
 		Div(Class("ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
 			uic.CreateElement(ResolutionControl),
 			Button(Class("px-3 py-1.5 border border-line text-fg hover:bg-hover"), Style(map[string]string{"border-radius": "4px"}),
+				Attr("title", "Add a transaction"),
+				OnClick(func() { nav.Navigate("/transactions") }),
 				"+ Add",
 			),
 		),

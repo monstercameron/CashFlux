@@ -295,6 +295,8 @@ problems and fixes, and what's next.
   wraps `window.prompt`), parses it in the goal's currency, and adds it to `CurrentAmount` via the
   validated put — advancing the progress bar. Auto-progress from a linked account is a follow-up.
 
+- Wired the top-bar **"+ Add"** button to navigate to Transactions (was a no-op).
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

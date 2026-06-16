@@ -224,6 +224,7 @@ and every commit updates this file under `Unreleased`.
   (`#tag`).
 - Goals: a "Contribute" action per goal adds an entered amount to its saved total (advancing the
   progress bar) via a quick prompt.
+- Top bar: the "+ Add" button now navigates to the Transactions screen (was inert).
 - Accounts: archive/restore an account from its row — archived accounts move to a separate "Archived"
   section and drop out of the assets/liabilities lists and net-worth totals (already excluded by
   `ledger`).
