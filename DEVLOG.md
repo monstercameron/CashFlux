@@ -430,7 +430,13 @@ problems and fixes, and what's next.
   same `ai.SendChat`, sharing the loading/result/error states with "Explain my month". Shown only
   when a key is set. Richer data context (per-category, history) is a follow-up.
 
-**Next:** a `Rule` entity + store CRUD and management UI, or custom fields — continuing Phase 2.
+- Started **Phase 3 (PWA)** with the web manifest: `manifest.webmanifest` (name, standalone display,
+  dark background/theme colors, scope/start_url, categories) linked from the host page along with
+  `theme-color` and the apple-mobile meta tags, so CashFlux can be installed as a standalone app.
+  Icons + a caching service worker (offline shell) are the follow-ups.
+
+**Next:** a service worker (cache shell + wasm for offline), then back to Phase 2 polish (Rule store,
+custom fields) as time allows.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

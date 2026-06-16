@@ -1,0 +1,13 @@
+{
+  "name": "CashFlux",
+  "short_name": "CashFlux",
+  "description": "Local-first, household-aware budgeting suite — budgeting, planning, goals, and AI insights.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e0e0f",
+  "theme_color": "#0e0e0f",
+  "categories": ["finance", "productivity"],
+  "icons": []
+}

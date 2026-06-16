@@ -105,6 +105,9 @@ and every commit updates this file under `Unreleased`.
   reusable, props-driven `Icon` primitive — the candidate-C stroked SVG icon set (dashboard, accounts,
   transactions, budgets, goals, to-do, settings, page, plus, menu) that inherits color/size from the caller.
 
+- PWA web manifest (`manifest.webmanifest`) + theme-color/apple meta tags, making CashFlux installable
+  as a standalone dark-themed app (Phase 3 start; icons and a service worker follow).
+
 ### Changed
 - Retargeted the legacy screen palette (the shared CSS variables) to candidate-C values, so the
   non-dashboard screens (Accounts, Transactions, Budgets, Goals, To-do) — cards, stats, rows, forms,

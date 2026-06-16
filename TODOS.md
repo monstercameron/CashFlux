@@ -418,7 +418,7 @@ Shared control components (from mockup):
 
 ### 3.3 PWA / offline
 
-- [ ] Web manifest + icons
+- [~] Web manifest done (`manifest.webmanifest` + theme-color/apple meta); icons later
 - [ ] Service worker (cache shell + assets)
 - [ ] Installability prompt; offline read; update flow
 - [ ] Verify via framework `pwa` package
