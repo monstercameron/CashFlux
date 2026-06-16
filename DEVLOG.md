@@ -297,6 +297,9 @@ problems and fixes, and what's next.
 
 - Wired the top-bar **"+ Add"** button to navigate to Transactions (was a no-op).
 
+- Added a **budget month stepper**: a `monthOffset` state + ‹/› pills drive `dateutil.AddMonths` so
+  you can review any month's budget spend, not just the current one.
+
 **Next:** full edit flows (transaction/budget/goal field edit), preferences (week-start, formats),
 and category-delete reassign — continuing the priority-ordered Phase-1 backlog.
 

@@ -56,11 +56,14 @@ func Budgets() ui.Node {
 	catID := ui.UseState(defaultCat)
 	owner := ui.UseState(domain.GroupOwnerID)
 	errMsg := ui.UseState("")
+	monthOffset := ui.UseState(0)
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+	prevMonth := ui.UseEvent(func() { monthOffset.Set(monthOffset.Get() - 1) })
+	nextMonth := ui.UseEvent(func() { monthOffset.Set(monthOffset.Get() + 1) })
 
 	add := ui.UseEvent(Prevent(func() {
 		amt, err := money.ParseMinor(strings.TrimSpace(limit.Get()), currency.Decimals(base))
@@ -122,7 +125,8 @@ func Budgets() ui.Node {
 	budgets := app.Budgets()
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	start, end := dateutil.MonthRange(time.Now())
+	viewMonth := dateutil.AddMonths(time.Now(), monthOffset.Get())
+	start, end := dateutil.MonthRange(viewMonth)
 	statuses, _ := budgeting.EvaluateAll(budgets, txns, start, end, rates, budgeting.DefaultNearThreshold)
 
 	var listBody ui.Node
@@ -141,7 +145,14 @@ func Budgets() ui.Node {
 	return Div(
 		formCard,
 		Section(Class("card"),
-			H2(Class("card-title"), "This month"),
+			Div(Class("budget-head"),
+				H2(Class("card-title"), "Budgets"),
+				Span(Class("rpill"),
+					Button(Class("rstep"), Type("button"), Title("Previous month"), OnClick(prevMonth), "‹"),
+					Span(Class("rlabel fig"), viewMonth.Format("January 2006")),
+					Button(Class("rstep"), Type("button"), Title("Next month"), OnClick(nextMonth), "›"),
+				),
+			),
 			listBody,
 		),
 	)
