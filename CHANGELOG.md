@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- Per-row "Duplicate" action on transactions: copies a transaction to today with a fresh id (tags
+  and custom fields included), saving it through the validated path. Offered for income/expense rows
+  only — a duplicate drops any transfer link, so it becomes a standalone entry rather than a broken
+  transfer leg.
 - Light theme: a `[data-theme="light"]` stylesheet that overrides the legacy palette variables, the
   shell's Tailwind utility colors (base/tile/hover/fg/dim/faint/line, the active-nav surface), and
   the widgets' hardcoded surface hexes (bento tiles, segmented/stepper pills, flip panel, settings

@@ -239,7 +239,7 @@ Shared control components (from mockup):
 - [x] Sort options (date, amount, payee)
 - [ ] Row component for actions; inline category quick-edit
 - [ ] Bulk select + bulk delete/recategorize
-- [~] Repeat-last helper done (pre-fills form from newest txn); per-row duplicate later
+- [x] Repeat-last helper (pre-fills form from newest txn) + per-row duplicate (copies row to today)
 - [ ] Tests: signed amounts, transfer pairing, filter + sort logic
 
 ### 1.12 Budgets (individual + group)

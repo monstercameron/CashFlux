@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Transactions: per-row Duplicate
+
+- Small, self-contained quality-of-life feature: a Duplicate button on each transaction row. The
+  handler copies the struct, swaps in a fresh `id.New()` and today's date, deep-copies the tags
+  slice (so the copy doesn't alias the original's backing array), and saves through
+  `app.PutTransaction` — so it re-validates and honors custom fields like any new entry.
+- **Decision — clear the transfer link on duplicate and only offer it for non-transfers.** A
+  transfer is a matched pair; cloning one leg can't recreate the pairing, so a duplicate
+  deliberately becomes a plain standalone entry. Rather than silently produce a half-transfer, the
+  button is hidden on transfer rows (`If(!IsTransfer, …)`).
+- Reused the established per-row component pattern: `OnDuplicate` prop + a `dup` hook owned by
+  `TransactionRow`, so the action button's hook stays at a stable position.
+- **Next.** Another contained item — persist-last-transaction-filter, or an allocation constraint
+  (e.g. exclude destinations / emergency buffer) which would start with a pure engine change.
+
 ## 2026-06-16 — Appearance prefs: the light theme (feature complete)
 
 - Authored the `[data-theme="light"]` skin deferred last commit. Three layers needed overriding,

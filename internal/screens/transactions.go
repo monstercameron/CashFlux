@@ -195,6 +195,22 @@ func Transactions() ui.Node {
 		bump()
 	}))
 
+	duplicateTxn := func(t domain.Transaction) {
+		cp := t
+		cp.ID = id.New()
+		cp.Date = time.Now()
+		cp.TransferAccountID = "" // a duplicate is a standalone entry, not a transfer leg
+		if len(t.Tags) > 0 {
+			cp.Tags = append([]string(nil), t.Tags...)
+		}
+		if err := app.PutTransaction(cp); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
+
 	deleteTxn := func(txnID string) {
 		all := app.Transactions()
 		var target domain.Transaction
@@ -372,7 +388,8 @@ func Transactions() ui.Node {
 			func(t domain.Transaction) ui.Node {
 				acc := accByID[t.AccountID]
 				return ui.CreateElement(TransactionRow, transactionRowProps{
-					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], OnDelete: deleteTxn,
+					Txn: t, Account: acc.Name, Category: catName[t.CategoryID],
+					OnDelete: deleteTxn, OnDuplicate: duplicateTxn,
 				})
 			},
 		)
@@ -416,10 +433,11 @@ func Transactions() ui.Node {
 }
 
 type transactionRowProps struct {
-	Txn      domain.Transaction
-	Account  string
-	Category string
-	OnDelete func(string)
+	Txn         domain.Transaction
+	Account     string
+	Category    string
+	OnDelete    func(string)
+	OnDuplicate func(domain.Transaction)
 }
 
 // absAmount returns the absolute minor-unit amount of a transaction (for sorting
@@ -464,6 +482,7 @@ func parseTags(s string) []string {
 // TransactionRow is a per-transaction row with a stable delete-handler hook.
 func TransactionRow(props transactionRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Txn.ID) }))
+	dup := ui.UseEvent(Prevent(func() { props.OnDuplicate(props.Txn) }))
 	pr := uistate.UsePrefs().Get()
 
 	cat := props.Category
@@ -487,6 +506,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class(amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
+		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title("Copy this transaction to today"), OnClick(dup), "Duplicate")),
 		Button(Class("btn-del"), Type("button"), Title("Delete transaction"), OnClick(del), "✕"),
 	)
 }
