@@ -229,8 +229,12 @@ problems and fixes, and what's next.
   match the flat neutral-dark shell without rewriting any Go — and they already inherit Inter from the
   shell root. Per-screen bento-style polish can follow, but the jarring blue theme is gone.
 
-**Next:** a "reset layout" affordance for the bento, then update `TODOS.md` to reflect the large
-§1.7c progress; then continue the Phase-1 backlog (Members/Categories screens, transfers, edit flows).
+- Added a **Reset layout** action in the dashboard header cell: restores `dashlayout.Default()` to the
+  atom and persists it, undoing any drag/resize. (Persisting the default overwrites the saved layout,
+  which is the intended "clear customization" behavior.)
+
+**Next:** update `TODOS.md` to reflect the large §1.7c progress (most of the dashboard/design-system
+items are done); then continue the Phase-1 backlog (Members/Categories screens, transfers, edit flows).
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

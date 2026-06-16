@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
@@ -509,14 +510,22 @@ func recentWidget(txns []domain.Transaction) ui.Node {
 	})
 }
 
-// dashboardHeaderCell is the full-width intro cell at the top of the bento grid.
+// dashboardHeaderCell is the full-width intro cell at the top of the bento grid,
+// with a Reset layout action that restores the default arrangement.
 func dashboardHeaderCell() ui.Node {
+	layoutAtom := uistate.UseLayout()
+	reset := func() {
+		d := dashlayout.Default()
+		layoutAtom.Set(d)
+		uistate.PersistLayout(d)
+	}
 	return Div(Class("w"), Style(map[string]string{"grid-column": "1 / -1", "grid-row": "1"}),
-		Div(Class("flex-1 flex items-center px-5"),
-			Div(
+		Div(Class("flex-1 flex items-center px-5 gap-3"),
+			Div(Class("flex-1"),
 				H1(Class("font-display text-2xl font-semibold tracking-tight"), "Your dashboard"),
 				P(Class("text-dim mt-0.5 text-[13px]"), "Drag tiles to move · grab the edge handles to resize"),
 			),
+			Button(Class("data-btn"), Type("button"), OnClick(reset), "Reset layout"),
 		),
 	)
 }
