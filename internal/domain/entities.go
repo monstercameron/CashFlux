@@ -78,6 +78,14 @@ type Transaction struct {
 	Custom            map[string]any `json:"custom,omitempty"`
 }
 
+// SavedInsight is an AI-generated insight the user pinned to revisit later, kept
+// separate from to-do tasks so saving an explanation doesn't clutter the list.
+type SavedInsight struct {
+	ID        string    `json:"id"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // DocumentKind is the source type of an imported document.
 type DocumentKind string
 

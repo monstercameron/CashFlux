@@ -187,6 +187,13 @@ func (a *App) Documents() []domain.Document {
 	return v
 }
 
+// SavedInsights returns every pinned AI insight.
+func (a *App) SavedInsights() []domain.SavedInsight {
+	v, err := a.store.ListSavedInsights()
+	a.logErr("saved insights", err)
+	return v
+}
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -381,6 +388,26 @@ func (a *App) PutDocument(d domain.Document) error {
 
 // DeleteDocument removes an imported-document record.
 func (a *App) DeleteDocument(id string) error { return a.del("document", id, a.store.DeleteDocument) }
+
+// PutSavedInsight pins an AI insight (needs an ID and non-empty text).
+func (a *App) PutSavedInsight(si domain.SavedInsight) error {
+	if si.ID == "" {
+		return fmt.Errorf("appstate: saved insight needs an id")
+	}
+	if strings.TrimSpace(si.Text) == "" {
+		return fmt.Errorf("appstate: saved insight needs text")
+	}
+	if err := a.store.PutSavedInsight(si); err != nil {
+		return err
+	}
+	a.log.Info("insight pinned", "id", si.ID)
+	return nil
+}
+
+// DeleteSavedInsight removes a pinned AI insight.
+func (a *App) DeleteSavedInsight(id string) error {
+	return a.del("saved insight", id, a.store.DeleteSavedInsight)
+}
 
 // ApplyRules assigns a category to every currently uncategorized, non-transfer
 // transaction whose payee/description matches a saved rule (first match wins),

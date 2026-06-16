@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Pinned-insight storage (`domain.SavedInsight` + store/state): persist an AI insight's text with a
+  timestamp, with full CRUD, export/import round-trip, and validated `appstate.SavedInsights`/
+  `PutSavedInsight`/`DeleteSavedInsight` (id + non-empty text required). Table-tested. The store behind
+  a "pin this insight" action and a pinned-insights list (UI next).
 - AI requests can now be **cancelled**: Insights shows a **Cancel** button while a request is in
   flight, which aborts the call (via `AbortController`) and clears any pending retry so the callbacks
   go quiet. `ai.SendChat`/`SendVisionChat`/`SendStructuredVisionChat` now return a cancel function.

@@ -131,6 +131,27 @@ func TestDocumentCRUD(t *testing.T) {
 	}
 }
 
+func TestSavedInsightCRUD(t *testing.T) {
+	s := newStore(t)
+	si := domain.SavedInsight{ID: "si1", Text: "Spending is down 12%.", CreatedAt: time.Now()}
+	if err := s.PutSavedInsight(si); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, ok, err := s.GetSavedInsight("si1")
+	if err != nil || !ok || got.Text != "Spending is down 12%." {
+		t.Fatalf("Get: ok=%v err=%v got=%+v", ok, err, got)
+	}
+	if list, _ := s.ListSavedInsights(); len(list) != 1 {
+		t.Errorf("list len = %d, want 1", len(list))
+	}
+	if deleted, err := s.DeleteSavedInsight("si1"); err != nil || !deleted {
+		t.Fatalf("delete: deleted=%v err=%v", deleted, err)
+	}
+	if _, ok, _ := s.GetSavedInsight("si1"); ok {
+		t.Error("saved insight still present after delete")
+	}
+}
+
 func TestGetAndDeleteMissing(t *testing.T) {
 	s := newStore(t)
 	if _, ok, err := s.GetGoal("nope"); ok || err != nil {

@@ -30,6 +30,7 @@ func sampleDataset() Dataset {
 			ID: "d1", Filename: "june.csv", Kind: domain.DocCSV, UploadedAt: asOf, AccountID: "a1",
 			Status: domain.DocImported, Extracted: []domain.DocumentRow{{Date: "2026-06-01", Description: "Coffee", Amount: "-4.50", Category: "Food"}},
 		}},
+		SavedInsights: []domain.SavedInsight{{ID: "si1", Text: "You saved 18% this month.", CreatedAt: asOf}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
 			FXRates:            map[string]float64{"EUR": 1.1},
@@ -87,6 +88,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if len(imported.Documents) != 1 || imported.Documents[0].Kind != domain.DocCSV || len(imported.Documents[0].Extracted) != 1 {
 		t.Errorf("documents lost: %+v", imported.Documents)
+	}
+	if len(imported.SavedInsights) != 1 || imported.SavedInsights[0].Text != "You saved 18% this month." {
+		t.Errorf("saved insights lost: %+v", imported.SavedInsights)
 	}
 }
 

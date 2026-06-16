@@ -138,6 +138,28 @@ func TestDocumentRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSavedInsightRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutSavedInsight(domain.SavedInsight{ID: "si1"}); err == nil {
+		t.Error("expected error for a saved insight with no text")
+	}
+	if err := a.PutSavedInsight(domain.SavedInsight{Text: "x"}); err == nil {
+		t.Error("expected error for a saved insight with no id")
+	}
+	if err := a.PutSavedInsight(domain.SavedInsight{ID: "si1", Text: "Net worth is up.", CreatedAt: time.Now()}); err != nil {
+		t.Fatalf("PutSavedInsight: %v", err)
+	}
+	if got := a.SavedInsights(); len(got) != 1 || got[0].Text != "Net worth is up." {
+		t.Fatalf("SavedInsights() = %+v", got)
+	}
+	if err := a.DeleteSavedInsight("si1"); err != nil {
+		t.Fatalf("DeleteSavedInsight: %v", err)
+	}
+	if len(a.SavedInsights()) != 0 {
+		t.Error("saved insight still present after delete")
+	}
+}
+
 func TestPutAccountValidatesCustomFields(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutCustomFieldDef(customfields.Def{

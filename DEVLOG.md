@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — pin/save insights: model + persistence
+
+- Added `domain.SavedInsight{ID, Text, CreatedAt}` and persisted it like the other entities
+  (savedinsights table, store CRUD, dataset round-trip, validated appstate accessors requiring id +
+  non-empty text). Table-tested at store, dataset, and appstate layers.
+- Kept it a separate entity from `Task` deliberately: "Save as task" already exists for actionable
+  items, but pinning an explanation to revisit shouldn't pollute the to-do list — different intent,
+  different store. The UI (a Pin button on the Insights answer + a pinned-insights card) is next.
+
 ## 2026-06-16 — AI request cancellation
 
 - `postCompletions` now creates an `AbortController`, passes its signal to fetch, and returns a cancel

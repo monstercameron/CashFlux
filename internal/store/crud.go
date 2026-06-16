@@ -254,3 +254,18 @@ func (s *SQLiteStore) DeleteDocument(id string) (bool, error) {
 func (s *SQLiteStore) ListDocuments() ([]domain.Document, error) {
 	return loadRows[domain.Document](s.db, "documents")
 }
+
+// --- Saved insights (pinned AI insights) ---
+
+func (s *SQLiteStore) PutSavedInsight(si domain.SavedInsight) error {
+	return putJSON(s.db, "savedinsights", si.ID, si)
+}
+func (s *SQLiteStore) GetSavedInsight(id string) (domain.SavedInsight, bool, error) {
+	return getJSON[domain.SavedInsight](s.db, "savedinsights", id)
+}
+func (s *SQLiteStore) DeleteSavedInsight(id string) (bool, error) {
+	return deleteRow(s.db, "savedinsights", id)
+}
+func (s *SQLiteStore) ListSavedInsights() ([]domain.SavedInsight, error) {
+	return loadRows[domain.SavedInsight](s.db, "savedinsights")
+}
