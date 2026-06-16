@@ -34,8 +34,19 @@ problems and fixes, and what's next.
   (`Icon(name, extra...)`), color via `currentColor`, size via caller classes. Builds clean for
   `GOOS=js GOARCH=wasm`.
 
-**Next:** port the app shell (fixed left rail + scrolling `main` + sticky top bar) as Go components
-using `Icon`, then the `Widget` shell and `FlipPanel` primitives, then individual widgets.
+- Ported the **app shell** to the candidate-C layout: `internal/app/shell.go` now renders a fixed
+  left rail (`Sidebar`) + an independently scrolling `main.cf-scroll` pane with a sticky `TopBar`,
+  replacing the old top-nav `Shell`/`NavBar`. The rail's primary nav is data-driven (`primaryNav()`)
+  and each entry is rendered by a `navItem` component so its click hook stays stable (On*-in-loops
+  rule). Imported the framework `ui` as `uic` to avoid colliding with our `internal/ui` (`ui`).
+- Kept design data in the design layer: the route→icon mapping lives in `primaryNav()` (not the
+  screen registry), so `internal/screens` stays free of presentation concerns. Phase-2 routes and
+  Settings are reachable by URL but not yet in the rail (the My-pages/System groups come next).
+- Full `GOOS=js GOARCH=wasm` build is green (~22 MB). Top bar's menu toggle, time-resolution control,
+  and the Add action are present but static for now — wired in upcoming features.
+
+**Next:** rail's "My pages" + System groups + household card; collapsible rail; the time-resolution
+control; then the `Widget` shell, `FlipPanel`, and the bento widgets.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 

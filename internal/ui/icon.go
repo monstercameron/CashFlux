@@ -88,6 +88,11 @@ func iconBody(name string) []any {
 		return []any{
 			Path(Attr("d", "M12 5v14M5 12h14")),
 		}
+	case "menu":
+		return []any{
+			Rect(Attr("x", "3"), Attr("y", "4"), Attr("width", "18"), Attr("height", "16"), Attr("rx", "2")),
+			Path(Attr("d", "M9 4v16")),
+		}
 	default:
 		return nil
 	}

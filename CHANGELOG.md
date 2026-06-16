@@ -101,9 +101,14 @@ and every commit updates this file under `Unreleased`.
   symbol) for the candidate-C figure style; table-driven tests. Pure, no currency-registry dependency.
 - `internal/ui`: new shared design-system package (Go port of `design/candidate-c.html`) with a
   reusable, props-driven `Icon` primitive — the candidate-C stroked SVG icon set (dashboard, accounts,
-  transactions, budgets, goals, to-do, settings, page, plus) that inherits color/size from the caller.
+  transactions, budgets, goals, to-do, settings, page, plus, menu) that inherits color/size from the caller.
 
 ### Changed
+- App shell replaced the top-navigation chrome with the candidate-C layout: a fixed left rail
+  (brand + icon-led primary navigation with active highlighting and router navigation) and an
+  independently scrolling main pane with a sticky top bar (menu toggle, page title, Add action).
+  `internal/app` now composes `internal/ui` primitives (`Icon`); screen bodies render inside the
+  new `main` scroll pane.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)
