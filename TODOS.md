@@ -219,7 +219,7 @@ Shared control components (from mockup):
 - [x] Allocation attributes sub-form (expected return, liquidity, stability, lock-until) on add + edit
 - [~] Per-account ledger view — account row "Transactions" button filters the ledger to that account
       and navigates; dedicated running-balance view optional later
-- [ ] "Update balance" action → adjustment txn + set `BalanceAsOf`
+- [x] "Update balance" action → cleared adjustment txn for the difference + set `BalanceAsOf`
 - [~] Credit utilization indicator done (on liability rows); due-date reminder via Upcoming bills widget
 - [x] Net-worth summary header (assets, liabilities, net) in base currency
 - [x] Per-account staleness indicator (Stale badge) + per-row "Mark updated" + bulk "Mark all updated"

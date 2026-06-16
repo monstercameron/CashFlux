@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Accounts: update-balance reconcile
+
+- Added "Update balance" to account rows: `promptText` asks for the real balance, then `setBalance`
+  posts a cleared "Balance adjustment" transaction for `target − currentBalance` and stamps
+  `BalanceAsOf`. So the computed balance matches a statement in one step, with the gap recorded as a
+  real (cleared) transaction rather than silently overwritten — keeps the ledger honest.
+- Marked the adjustment `Cleared` since it's a reconciliation entry. Zero-delta is a no-op (just
+  marks checked). Reused the existing balance prop for the current figure and `ledger.Balance`
+  semantics implicitly via the displayed balance.
+- Satisfies the §1.9 "Update balance → adjustment txn + set BalanceAsOf" backlog item.
+- **Next.** Genuine small polish; sync is the only large remaining item and needs a backend.
+
 ## 2026-06-16 — Freshness nudge → to-do (create-from-nudge)
 
 - The dashboard freshness widget's stale state now has a "Remind me" button that creates a

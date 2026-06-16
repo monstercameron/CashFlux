@@ -16,6 +16,9 @@ and every commit updates this file under `Unreleased`.
   atom, so changing the format updates every list live.
 
 ### Added
+- "Update balance" on account rows: enter an account's real balance and the app posts a cleared
+  "Balance adjustment" transaction for the difference and marks it checked today — reconciling the
+  computed balance to a statement without hunting for the missing entry.
 - "Remind me" on the dashboard freshness nudge: when balances are stale, one click adds a
   Nudge-sourced to-do ("Update stale account balances") and jumps to the list — the create-from-nudge
   hook, completing both AI/nudge → to-do paths.

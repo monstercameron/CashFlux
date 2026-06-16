@@ -262,6 +262,34 @@ func Accounts() ui.Node {
 		bump()
 	}
 
+	setBalance := func(ac domain.Account, currentBal money.Money, newStr string) {
+		dec := currency.Decimals(ac.Currency)
+		target, err := money.ParseMinor(strings.TrimSpace(newStr), dec)
+		if err != nil {
+			errMsg.Set("Enter a valid balance amount.")
+			return
+		}
+		// Post an adjustment transaction for the difference, so the computed
+		// balance equals the figure entered (e.g. matching a statement).
+		if delta := target - currentBal.Amount; delta != 0 {
+			adj := domain.Transaction{
+				ID: id.New(), AccountID: ac.ID, Date: time.Now(), Desc: "Balance adjustment",
+				Amount: money.New(delta, ac.Currency), Cleared: true,
+			}
+			if err := app.PutTransaction(adj); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+		}
+		ac.BalanceAsOf = time.Now()
+		if err := app.PutAccount(ac); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		errMsg.Set("")
+		bump()
+	}
+
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
 	viewTransactions := func(accountID string) {
@@ -284,7 +312,7 @@ func Accounts() ui.Node {
 		cleared, _ := ledger.ClearedBalance(ac, txns)
 		return ui.CreateElement(AccountRow, accountRowProps{
 			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), Members: app.Members(),
-			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount, OnSave: saveAccount, OnView: viewTransactions,
+			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount, OnSave: saveAccount, OnView: viewTransactions, OnSetBalance: setBalance,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
@@ -335,16 +363,17 @@ func accountMeta(a domain.Account, bal money.Money) string {
 }
 
 type accountRowProps struct {
-	Account   domain.Account
-	Balance   money.Money
-	Cleared   money.Money
-	Stale     bool
-	Members   []domain.Member
-	OnDelete  func(string)
-	OnArchive func(domain.Account)
-	OnRefresh func(domain.Account)
-	OnSave    func(domain.Account)
-	OnView    func(string)
+	Account      domain.Account
+	Balance      money.Money
+	Cleared      money.Money
+	Stale        bool
+	Members      []domain.Member
+	OnDelete     func(string)
+	OnArchive    func(domain.Account)
+	OnRefresh    func(domain.Account)
+	OnSave       func(domain.Account)
+	OnView       func(string)
+	OnSetBalance func(domain.Account, money.Money, string)
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -382,6 +411,11 @@ func AccountRow(props accountRowProps) ui.Node {
 	arch := ui.UseEvent(Prevent(func() { props.OnArchive(a) }))
 	refresh := ui.UseEvent(Prevent(func() { props.OnRefresh(a) }))
 	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
+	setBal := ui.UseEvent(Prevent(func() {
+		if v := promptText("Actual balance of " + a.Name + " (" + a.Currency + ")?"); v != "" {
+			props.OnSetBalance(a, props.Balance, v)
+		}
+	}))
 	editing := ui.UseState(false)
 	nameS := ui.UseState(a.Name)
 	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
@@ -500,6 +534,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
 		Button(Class("btn"), Type("button"), Title("View this account's transactions"), OnClick(view), "Transactions"),
+		If(!a.Archived, Button(Class("btn"), Type("button"), Title("Set the real balance; posts an adjustment"), OnClick(setBal), "Update balance")),
 		If(!a.Archived, Button(Class("btn"), Type("button"), Title("Mark balance as checked today"), OnClick(refresh), "Mark updated")),
 		Button(Class("btn"), Type("button"), Title("Edit account"), OnClick(startEdit), "Edit"),
 		Button(Class("btn"), Type("button"), Title(archLabel+" account"), OnClick(arch), archLabel),
