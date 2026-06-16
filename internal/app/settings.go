@@ -146,11 +146,11 @@ func globalSettingsForm() uic.Node {
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Compact density", On: compact.Get(), OnChange: func(v bool) { compact.Set(v) }}),
 		Div(Class("set-label"), "Data"),
 		Div(Class("flex flex-wrap gap-2 py-1"),
-			dataBtn("Export JSON", false),
-			dataBtn("Export CSV", false),
-			dataBtn("Import…", false),
-			dataBtn("Load sample", false),
-			dataBtn("Wipe data", true),
+			dataBtn("Export JSON", false, exportJSON),
+			dataBtn("Export CSV", false, nil),
+			dataBtn("Import…", false, nil),
+			dataBtn("Load sample", false, nil),
+			dataBtn("Wipe data", true, nil),
 		),
 	)
 
@@ -179,12 +179,43 @@ func rateRow(code string, rate float64, base string) uic.Node {
 	)
 }
 
+// exportJSON downloads the full dataset as a JSON file (the portable
+// export/import + sync payload), via the pure appstate export.
+func exportJSON() {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	data, err := app.ExportJSON()
+	if err != nil {
+		return
+	}
+	downloadBytes("cashflux.json", "application/json", data)
+}
+
+// dataBtnProps configures a data-action button.
+type dataBtnProps struct {
+	Label   string
+	Danger  bool
+	OnClick func()
+}
+
 // dataBtn renders a data-action button (danger variant for destructive actions).
-// The actions themselves are wired in a later feature.
-func dataBtn(label string, danger bool) uic.Node {
+// It is its own component so each click hook stays stable across the row.
+func dataBtn(label string, danger bool, onClick func()) uic.Node {
+	return uic.CreateElement(dataButton, dataBtnProps{Label: label, Danger: danger, OnClick: onClick})
+}
+
+func dataButton(props dataBtnProps) uic.Node {
 	args := []any{Class("data-btn"), Type("button")}
-	if danger {
+	if props.Danger {
 		args = append(args, Style(map[string]string{"color": "#d8716f", "border-color": "#5a2a2a"}))
 	}
-	return Button(append(args, label)...)
+	onClick := props.OnClick
+	args = append(args, OnClick(func() {
+		if onClick != nil {
+			onClick()
+		}
+	}), props.Label)
+	return Button(args...)
 }

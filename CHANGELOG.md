@@ -188,6 +188,8 @@ and every commit updates this file under `Unreleased`.
   currency, and editable FX rate rows (left) and AI (BYO key toggle + key + model), Appearance (theme
   `Segmented` + accent `SwatchPicker` + compact), and Data action buttons (right). Built from the
   shared control primitives; appearance controls hold local state and data actions are wired next.
+- Export JSON data action: downloads the full dataset as `cashflux.json` (the portable export/import
+  + sync payload) via `appstate.ExportJSON` and a small Blob/anchor browser-download helper.
 - Persistence switched from IndexedDB to pure-Go in-memory SQLite (`ncruces/go-sqlite3`, no cgo, no
   dependency on browser web storage); the JSON `Dataset` remains the portable import/export and sync
   payload. (Confirmed pure-Go SQLite compiles for `js/wasm` and runs in the browser.)

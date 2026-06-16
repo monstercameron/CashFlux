@@ -177,8 +177,13 @@ problems and fixes, and what's next.
   real reads from `appstate`; appearance is local state for now; the Data buttons are present but
   wired in the next feature (export/import/wipe need js download + store mutation + refresh).
 
-**Next:** wire the Data actions (Export JSON/CSV, Import, Load sample, Wipe), then persist
-appearance/theme prefs; then drag-reorder, resize, and layout persistence for the bento.
+- Wired the **Export JSON** data action: a tiny `downloadBytes` helper (the one DOM-touching spot for
+  file egress — Blob + transient anchor via `syscall/js`) downloads `appstate.ExportJSON()` as
+  `cashflux.json`. Generalized `dataBtn` into its own `dataButton` component taking an `OnClick` so
+  the remaining actions slot in cleanly.
+
+**Next:** the rest of the Data actions (Export CSV, Import via file picker, Load sample, Wipe with
+confirm — these need store accessors/refresh), then drag-reorder, resize, and bento layout persistence.
 
 ## 2026-06-15 — Dashboard design direction chosen (candidate C)
 
