@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — i18n: Accounts screen (main function)
+
+- Migrated the `Accounts()` function (the big add form with all asset/liability sub-fields, the welcome
+  card, net-worth/assets/liabilities stats, mark-all-updated notice + button, section headers + empty
+  states, the balance-adjustment txn desc, and the invalid-balance error) onto `uistate.T`. Reused
+  `common.name`, `owner.group`, `dashboard.netWorth/liabilities`.
+- Account *type* labels still come from the `humanizeType` helper (shared, used elsewhere) — left for a
+  helper-level pass. The `AccountRow` component (inline edit, per-row actions) is the next chunk.
+- `i18n` tests + wasm green. Split Accounts across two cycles to bound the diff.
+
 ## 2026-06-16 — i18n: settings panel right column (panel complete)
 
 - Migrated the right column of `app/settings.go`'s global panel: AI section (title/enable/key

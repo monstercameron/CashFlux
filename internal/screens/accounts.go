@@ -29,7 +29,7 @@ import (
 func Accounts() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), "App state is not ready yet."))
+		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
 	}
 
 	// Revision atom: bumping it after a mutation re-renders this screen.
@@ -193,14 +193,14 @@ func Accounts() ui.Node {
 			}
 			ac.BalanceAsOf = now
 			if err := app.PutAccount(ac); err != nil {
-				notifyErr("Couldn't mark some balances updated: " + err.Error())
+				notifyErr(uistate.T("accounts.markErr", err.Error()))
 				continue
 			}
 			n++
 		}
 		errMsg.Set("")
 		if n > 0 {
-			noticeAtom.Set(noticeAtom.Get().With(fmt.Sprintf("Marked %s as updated just now.", plural(n, "balance")), false))
+			noticeAtom.Set(noticeAtom.Get().With(uistate.T("accounts.markedUpdated", plural(n, "balance")), false))
 		}
 		bump()
 	}))
@@ -210,7 +210,7 @@ func Accounts() ui.Node {
 		typeOptions = append(typeOptions, Option(Value(string(t)), SelectedIf(accType.Get() == string(t)), humanizeType(string(t))))
 	}
 	ownerOptions := []ui.Node{
-		Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), "Group (shared)"),
+		Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), uistate.T("owner.group")),
 	}
 	for _, m := range app.Members() {
 		ownerOptions = append(ownerOptions, Option(Value(m.ID), SelectedIf(owner.Get() == m.ID), m.Name))
@@ -218,26 +218,26 @@ func Accounts() ui.Node {
 
 	isLiab := domain.AccountType(accType.Get()).Class() == domain.ClassLiability
 	form := Section(Class("card"),
-		H2(Class("card-title"), "Add account"),
+		H2(Class("card-title"), uistate.T("accounts.addTitle")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Placeholder("Name"), Value(name.Get()), OnInput(onName)),
+			Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
 			Select(Class("field"), OnChange(onType), typeOptions),
 			Select(Class("field"), OnChange(onOwner), ownerOptions),
-			Input(Class("field"), Type("text"), Placeholder("Currency"), Value(curr.Get()), OnInput(onCurr)),
-			Input(Class("field"), Type("number"), Placeholder("Opening balance"), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
-			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Credit limit"), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit))),
-			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Interest APR %"), Value(apr.Get()), Step("0.01"), OnInput(onApr))),
-			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Minimum payment"), Value(minPayment.Get()), Step("0.01"), OnInput(onMinPayment))),
-			If(isLiab, Input(Class("field"), Type("number"), Placeholder("Due day (1–28)"), Value(dueDay.Get()), OnInput(onDueDay))),
-			If(isLiab, Input(Class("field"), Type("text"), Placeholder("Lender"), Value(lender.Get()), OnInput(onLender))),
-			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Expected return APR %"), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn))),
-			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Liquidity 0–100"), Value(liquidity.Get()), OnInput(onLiquidity))),
-			If(!isLiab, Input(Class("field"), Type("number"), Placeholder("Stability 0–100"), Value(stability.Get()), OnInput(onStability))),
-			If(!isLiab, Input(Class("field"), Type("date"), Title("Locked until (no new money before this date)"), Value(lockUntil.Get()), OnInput(onLockUntil))),
+			Input(Class("field"), Type("text"), Placeholder(uistate.T("accounts.currency")), Value(curr.Get()), OnInput(onCurr)),
+			Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
+			If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.creditLimit")), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit))),
+			If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.apr")), Value(apr.Get()), Step("0.01"), OnInput(onApr))),
+			If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.minPayment")), Value(minPayment.Get()), Step("0.01"), OnInput(onMinPayment))),
+			If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.dueDay")), Value(dueDay.Get()), OnInput(onDueDay))),
+			If(isLiab, Input(Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lender.Get()), OnInput(onLender))),
+			If(!isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn))),
+			If(!isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity))),
+			If(!isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability))),
+			If(!isLiab, Input(Class("field"), Type("date"), Title(uistate.T("accounts.lockUntil")), Value(lockUntil.Get()), OnInput(onLockUntil))),
 			MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),
-			Button(Class("btn btn-primary"), Type("submit"), "Add account"),
+			Button(Class("btn btn-primary"), Type("submit"), uistate.T("accounts.addTitle")),
 		),
 		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
 	)
@@ -276,14 +276,14 @@ func Accounts() ui.Node {
 		dec := currency.Decimals(ac.Currency)
 		target, err := money.ParseMinor(strings.TrimSpace(newStr), dec)
 		if err != nil {
-			errMsg.Set("Enter a valid balance amount.")
+			errMsg.Set(uistate.T("accounts.invalidBalance"))
 			return
 		}
 		// Post an adjustment transaction for the difference, so the computed
 		// balance equals the figure entered (e.g. matching a statement).
 		if delta := target - currentBal.Amount; delta != 0 {
 			adj := domain.Transaction{
-				ID: id.New(), AccountID: ac.ID, Date: time.Now(), Desc: "Balance adjustment",
+				ID: id.New(), AccountID: ac.ID, Date: time.Now(), Desc: uistate.T("accounts.balanceAdjustment"),
 				Amount: money.New(delta, ac.Currency), Cleared: true,
 			}
 			if err := app.PutTransaction(adj); err != nil {
@@ -329,30 +329,30 @@ func Accounts() ui.Node {
 
 	return Div(
 		If(len(accounts) == 0, Section(Class("card"),
-			H2(Class("card-title"), "Welcome to CashFlux"),
-			P(Class("muted"), "No accounts yet. Add one below, or load some sample data to explore."),
-			Button(Class("btn btn-primary"), Type("button"), OnClick(loadSample), "Load sample data"),
+			H2(Class("card-title"), uistate.T("accounts.welcomeTitle")),
+			P(Class("muted"), uistate.T("accounts.welcomeDesc")),
+			Button(Class("btn btn-primary"), Type("button"), OnClick(loadSample), uistate.T("accounts.loadSample")),
 		)),
 		Div(Class("stat-grid"),
-			stat("Net worth", fmtMoney(net), accentFor(net)),
-			stat("Assets", fmtMoney(assets), "pos"),
-			stat("Liabilities", fmtMoney(liabilities), "neg"),
+			stat(uistate.T("dashboard.netWorth"), fmtMoney(net), accentFor(net)),
+			stat(uistate.T("accounts.assets"), fmtMoney(assets), "pos"),
+			stat(uistate.T("dashboard.liabilities"), fmtMoney(liabilities), "neg"),
 		),
 		If(staleCount > 0, Div(Style(map[string]string{"margin-bottom": "0.6rem"}),
-			Button(Class("btn"), Type("button"), Title("Mark every stale balance as checked today"), OnClick(markAllUpdated),
-				Textf("Mark all updated (%s stale)", plural(staleCount, "account"))),
+			Button(Class("btn"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
+				Text(uistate.T("accounts.markAll", plural(staleCount, "account")))),
 		)),
 		form,
 		Section(Class("card"),
-			H2(Class("card-title"), "Assets"),
-			IfElse(len(assetList) == 0, P(Class("empty"), "No asset accounts yet."), Div(Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
+			H2(Class("card-title"), uistate.T("accounts.assets")),
+			IfElse(len(assetList) == 0, P(Class("empty"), uistate.T("accounts.noAssets")), Div(Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
 		),
 		Section(Class("card"),
-			H2(Class("card-title"), "Liabilities"),
-			IfElse(len(liabList) == 0, P(Class("empty"), "No liabilities — nice."), Div(Class("rows"), MapKeyed(liabList, keyOf, renderRow))),
+			H2(Class("card-title"), uistate.T("dashboard.liabilities")),
+			IfElse(len(liabList) == 0, P(Class("empty"), uistate.T("accounts.noLiabilities")), Div(Class("rows"), MapKeyed(liabList, keyOf, renderRow))),
 		),
 		If(len(archivedList) > 0, Section(Class("card"),
-			H2(Class("card-title"), "Archived"),
+			H2(Class("card-title"), uistate.T("accounts.archived")),
 			Div(Class("rows"), MapKeyed(archivedList, keyOf, renderRow)),
 		)),
 	)
