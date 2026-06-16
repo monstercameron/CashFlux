@@ -273,6 +273,33 @@ func (a *App) PutCategory(c domain.Category) error {
 }
 func (a *App) DeleteCategory(id string) error { return a.del("category", id, a.store.DeleteCategory) }
 
+// ReassignCategory moves every transaction and budget referencing oldID to newID,
+// returning how many records were moved. Use it before deleting a category that
+// is still in use. The category itself is not deleted here.
+func (a *App) ReassignCategory(oldID, newID string) (int, error) {
+	moved := 0
+	for _, t := range a.Transactions() {
+		if t.CategoryID == oldID {
+			t.CategoryID = newID
+			if err := a.store.PutTransaction(t); err != nil {
+				return moved, err
+			}
+			moved++
+		}
+	}
+	for _, b := range a.Budgets() {
+		if b.CategoryID == oldID {
+			b.CategoryID = newID
+			if err := a.store.PutBudget(b); err != nil {
+				return moved, err
+			}
+			moved++
+		}
+	}
+	a.log.Info("reassigned category", "from", oldID, "to", newID, "moved", moved)
+	return moved, nil
+}
+
 func (a *App) PutTransaction(t domain.Transaction) error {
 	if is := validate.ValidateTransaction(t); !is.OK() {
 		return is

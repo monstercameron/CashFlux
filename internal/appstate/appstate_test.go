@@ -3,6 +3,7 @@ package appstate
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -70,6 +71,52 @@ func TestPutAccountValidatesCustomFields(t *testing.T) {
 	got := a.Accounts()
 	if len(got) != 1 || got[0].Custom["branch"] != "Downtown" {
 		t.Errorf("custom value not persisted: %+v", got)
+	}
+}
+
+func TestReassignCategory(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutCategory(domain.Category{ID: "old", Name: "Old", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory old: %v", err)
+	}
+	if err := a.PutCategory(domain.Category{ID: "new", Name: "New", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory new: %v", err)
+	}
+	if err := a.PutAccount(domain.Account{
+		ID: "a1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+	}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	if err := a.PutTransaction(domain.Transaction{
+		ID: "t1", AccountID: "a1", CategoryID: "old", Desc: "Lunch",
+		Date: time.Now(), Amount: money.New(-500, "USD"),
+	}); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+	if err := a.PutBudget(domain.Budget{
+		ID: "b1", Name: "Food", CategoryID: "old", Period: domain.PeriodMonthly,
+		Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: money.New(10000, "USD"),
+	}); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+
+	moved, err := a.ReassignCategory("old", "new")
+	if err != nil {
+		t.Fatalf("ReassignCategory: %v", err)
+	}
+	if moved != 2 {
+		t.Errorf("moved = %d, want 2", moved)
+	}
+	for _, tr := range a.Transactions() {
+		if tr.ID == "t1" && tr.CategoryID != "new" {
+			t.Errorf("transaction not reassigned: %q", tr.CategoryID)
+		}
+	}
+	for _, b := range a.Budgets() {
+		if b.ID == "b1" && b.CategoryID != "new" {
+			t.Errorf("budget not reassigned: %q", b.CategoryID)
+		}
 	}
 }
 

@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Categories: reassign-before-delete
+
+- Replaced the hard block on deleting an in-use category with a reassignment flow. Logic first:
+  `appstate.ReassignCategory(old, new)` repoints every referencing transaction and budget (via the
+  store directly — the records are already valid, just re-categorized) and reports how many moved;
+  tested with a transaction and a budget.
+- UI: `deleteCat` now opens a reassign panel (sets `reassignID`) when the category is in use, else
+  deletes immediately. The panel lists the other categories in a select; "Move and delete" runs
+  `ReassignCategory` then `DeleteCategory`, "Cancel" closes it. All the panel's hooks
+  (`onReassignTo`, `confirmReassign`, `cancelReassign`) are declared at the component top and the
+  panel itself is conditionally rendered, so hook order stays stable.
+- **Decision — reassign to any category, not just same-kind.** Simpler and occasionally useful
+  (recategorizing an expense as income-adjacent); validation already guarantees the target exists.
+  Guard still prevents picking the same category or none.
+- **Next.** Pick the next backlog item — likely the document vision-AI parse path, or a Phase-3 sync
+  primitive, or smaller polish (empty-state/accessibility pass).
+
 ## 2026-06-16 — Freshness overrides: the editor (feature complete)
 
 - Added a "Freshness reminders" section to the global settings left column: one number input per

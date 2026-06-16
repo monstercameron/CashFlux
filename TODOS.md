@@ -225,8 +225,9 @@ Shared control components (from mockup):
 - [~] List + add + delete; income vs expense done; edit + color later
 - [ ] Sub-categories (parentId) with tree display
 - [ ] Default scheme + reset; methodology-aware presets (envelope/zero-based)
-- [ ] Reassign transactions on category delete (pick replacement)
-- [ ] Tests: tree building, reassignment
+- [x] Reassign transactions on category delete (pick replacement) — `appstate.ReassignCategory` +
+      Categories reassign panel (moves transactions and budgets, then deletes)
+- [~] Tests: tree building, reassignment — reassignment tested; category tree building N/A (flat list)
 
 ### 1.11 Transactions (+ transfers, filters) ★
 
