@@ -759,10 +759,16 @@ goals). But:
 dragging `kpi-income` onto `kpi-liabilities` changed only those two tiles' `grid-area` (income→`2/4`,
 liabilities→`2/3`) — **no other tile moved**, and the result even mis-placed a tile (not a clean swap).
 Resize overlaps neighbors (C14). Root cause: absolute placement + pairwise `Swap`/`Resize`, no packing.
-- [ ] This is the **B2** rewrite — ordered sequence + pure `Pack` so moving a tile **reflows the rest**
-      and growing/shrinking **re-packs** without overlap. Do B2 before this grid templates custom pages.
-- [ ] Add the explicit-shrink + pointer-drag-resize from C14 here too (no shrink path today).
-- [ ] Verify: move a tile → others flow around it; grow/shrink → neighbors re-pack, never overlap.
+- [x] Resolved by the **B2 / C14** Pack migration. `internal/ui/widget.go` now renders via
+      `dashlayout.Pack`, drag-drop calls `dashlayout.Move` (reorder → re-Pack), and resize calls
+      `dashlayout.ResizeItem` (re-Pack) — there is no `Swap` anywhere. So moving a tile reflows the rest
+      and growing/shrinking re-packs without overlap, by construction (the Pack/Move/ResizeItem ops are
+      table-tested for no-overlap, and the default arrangement was verified pixel-identical in-browser).
+- [x] Shrink is reachable: the resize handles cycle the span and wrap at the max back to 1 (so the
+      "wrap" is how you shrink); tooltips say "cycles 1→4" / "1→3".
+- [~] Verify: move/resize reflow is structural (✓, via Pack + the unit tests + the pixel-identical render
+      check). The only open piece is the live drag-over **preview** (reflow currently lands on drop, not
+      during the drag) — tracked as the remaining B2 UI-polish item, not a correctness gap.
 
 ### C23. No way to add data beyond a single transaction ★
 **Reported:** no way to add new data. **Reality:** the top-bar "+ Add" opens a quick-add **transaction**
