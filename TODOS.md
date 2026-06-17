@@ -734,13 +734,14 @@ button *does* exist (28×28, with the `icon.Menu` glyph) and clicking it collaps
 **Reported:** per-tile settings don't exist. **Reality (verified):** the gear *does* open real,
 persisted settings for **8 widgets** (savings, recent, trend, breakdown, todo, accounts, budgets,
 goals). But:
-- [ ] The **four KPI tiles** (net worth / income / spending / liabilities) plus **cashflow, bills,
-      freshness** have **no schema**, so their gear opens the empty "This widget doesn't have any
-      settings yet." panel (see **C11**) — which reads as "settings don't exist." Either register
-      schemas for them or hide the gear where there's nothing to configure.
-- [ ] The gear is a faint inline `⚙` glyph (`.gear-inline`) — low-contrast/easy to miss; strengthen the
-      affordance (hover reveal, clearer icon) so per-tile settings are discoverable.
-- [ ] Verify on a no-schema tile and a schema tile that the gear's behavior is obviously different.
+- [x] Chose "hide the gear where there's nothing to configure": `ui.widget` now renders the gear only
+      when `widgetcfg.Has(id)` (or an explicit `OnGear`); no-schema tiles get an inert, equal-width slot
+      so the header stays balanced. The empty "no settings yet" panel is no longer reachable from a gear.
+- [x] Strengthened the affordance: the gear brightens on `.w:hover/:focus-within` (with a color
+      transition), so it's discoverable on configurable tiles without being loud.
+- [x] Verified live: 16 tiles → 8 real gears (recent, budgets, goals, todo, accounts, trend, savings,
+      breakdown) and 8 inert slots (the 4 KPIs + cashflow/bills/freshness); the net-worth KPI gear is a
+      hidden span, not a button. SW cache v7→v8.
 
 ### C22. Layout engine does not reflow on move or on resize ★ (= B2 / C14, with fresh evidence)
 **Reported:** moving tiles doesn't reflow; scaling tiles up/down doesn't reflow. **Verified live:**

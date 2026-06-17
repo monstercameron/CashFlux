@@ -326,7 +326,10 @@
       /* reconfigure controls */
       .ghandle { position:absolute; top:7px; right:40px; z-index:3; color:#5a5a64; cursor:grab; font-size:.95rem; line-height:1; }
       .ghandle:active { cursor:grabbing; }
-      .gear-inline { margin-left:auto; color:#5a5a64; background:transparent; border:0; cursor:pointer; font-size:.95rem; line-height:1; }
+      .gear-inline { margin-left:auto; color:#5a5a64; background:transparent; border:0; cursor:pointer; font-size:.95rem; line-height:1; transition:color .12s ease; }
+      /* Brighten the gear when the tile is hovered/focused so per-tile settings
+         are discoverable (C21); the gear only renders on configurable tiles. */
+      .w:hover .gear-inline, .w:focus-within .gear-inline { color:#9a9aa2; }
       .gear-inline:hover { color:#f4f4f5; }
       .gear-abs { position:absolute; top:7px; right:16px; z-index:3; color:#5a5a64; background:transparent; border:0; cursor:pointer; font-size:.95rem; line-height:1; }
       .gear-abs:hover { color:#f4f4f5; }

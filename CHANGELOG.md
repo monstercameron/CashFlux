@@ -21,6 +21,12 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **The widget gear now appears only where there's something to configure (C21):** the four KPI tiles
+  and the cashflow/bills/freshness tiles have no settings, but their gear still opened the empty "This
+  widget doesn't have any settings yet" panel — reading as broken. The gear now renders only on tiles
+  with a settings schema (or an explicit action); the rest get an inert, equal-width slot so the header
+  stays balanced. The gear also brightens on tile hover/focus so per-tile settings are more discoverable.
+  Verified live: 8 configurable tiles show a real gear, 8 non-configurable tiles don't. SW cache (v7 → v8).
 - **Top-bar controls are reachable on tablets and phones (C19):** below 1024px the time-resolution
   control + "+ Add" ran off the right edge with no wrap, so some were unreachable and the breadcrumb was
   clipped to "D". The bar now grows to two rows — breadcrumb on top, the controls wrapping onto a

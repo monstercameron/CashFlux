@@ -5,6 +5,7 @@ package ui
 import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -52,6 +53,18 @@ func widget(props WidgetProps) uic.Node {
 	if onGear == nil {
 		id, title := props.ID, props.Title
 		onGear = func() { settings.Set(uistate.Widget(id, title)) }
+	}
+
+	// Only show the gear on tiles that actually have something to configure — a
+	// registered settings schema, or an explicit custom OnGear. On the KPI and
+	// cashflow/bills/freshness tiles (no schema) the gear used to open an empty
+	// "no settings yet" panel, reading as broken (C21); render an inert,
+	// equal-width slot there instead so the header stays balanced.
+	var gear uic.Node
+	if props.OnGear != nil || widgetcfg.Has(props.ID) {
+		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
+	} else {
+		gear = Span(Class("gear-inline"), Attr("aria-hidden", "true"), Style(map[string]string{"visibility": "hidden"}), "⚙")
 	}
 
 	// Grid placement comes from packing the shared item sequence (so drag-reorder
@@ -109,7 +122,7 @@ func widget(props WidgetProps) uic.Node {
 		Div(Class("wh"),
 			Span(Class("grip"), "⠿"), // ⠿ drag grip
 			H3(props.Title),
-			uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear}),
+			gear,
 		),
 		Div(Class(bodyClass), props.Body),
 	)

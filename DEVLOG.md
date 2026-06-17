@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C21: widget gear only where there are settings
+
+- The gear opened real, persisted settings for 8 widgets but also showed on the 4 KPI tiles and
+  cashflow/bills/freshness, which have no schema — there it opened the C11 close-only "no settings yet"
+  panel, reading as broken. Gated the gear in `ui.widget`: render the `gearButton` only when
+  `props.OnGear != nil || widgetcfg.Has(props.ID)`; otherwise render an inert `span.gear-inline`
+  (visibility:hidden, aria-hidden) so the grip · title · gear header stays balanced.
+- Also strengthened discoverability (the gear was a very faint glyph): added a color transition and a
+  `.w:hover/.w:focus-within .gear-inline` brighten so it surfaces on the tiles that have settings.
+- Verified live: 16 tiles → 8 real `button.gear-inline` (exactly the schema'd widgets) and 8 hidden
+  `span.gear-inline`; the net-worth KPI's gear slot is a span, not a button. SW cache v7→v8.
+- C22 ("layout doesn't reflow on move/resize") is the same root cause as B2/C14 and is already resolved
+  by the Pack migration (widget.go uses Pack/Move/ResizeItem, no Swap) — only the live drag *preview*
+  remains, tracked under B2.
+
 ## 2026-06-17 — bugfix C19 (top bar): controls were unreachable on tablet/phone
 
 - At ≤768px the top-bar control cluster (resolution segmented + jump + stepper + custom range + Add) ran
