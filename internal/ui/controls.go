@@ -143,13 +143,22 @@ func toggle(props ToggleProps) uic.Node {
 	if on {
 		checked = "true"
 	}
+	toggleFn := func() {
+		if onChange != nil {
+			onChange(!on)
+		}
+	}
 	args := []any{
 		Class(cls),
 		Attr("role", "switch"),
 		Attr("aria-checked", checked),
-		OnClick(func() {
-			if onChange != nil {
-				onChange(!on)
+		Attr("tabindex", "0"), // focusable: it's a div, so it needs this to be reachable
+		OnClick(toggleFn),
+		// Space/Enter operate the switch (PreventDefault on Space stops page scroll).
+		OnKeyDown(func(e uic.KeyboardEvent) {
+			if k := e.GetKey(); k == " " || k == "Spacebar" || k == "Enter" {
+				e.PreventDefault()
+				toggleFn()
 			}
 		}),
 	}
@@ -197,15 +206,24 @@ func swatch(props SwatchProps) uic.Node {
 		checked = "true"
 	}
 	onSelect := props.OnSelect
+	selectFn := func() {
+		if onSelect != nil {
+			onSelect()
+		}
+	}
 	return Div(
 		Class(cls),
 		Attr("role", "radio"),
 		Attr("aria-checked", checked),
 		Attr("aria-label", props.Color),
+		Attr("tabindex", "0"), // focusable: a div needs this to be keyboard-reachable
 		Style(map[string]string{"background": props.Color}),
-		OnClick(func() {
-			if onSelect != nil {
-				onSelect()
+		OnClick(selectFn),
+		// Space/Enter pick the color (PreventDefault on Space stops page scroll).
+		OnKeyDown(func(e uic.KeyboardEvent) {
+			if k := e.GetKey(); k == " " || k == "Spacebar" || k == "Enter" {
+				e.PreventDefault()
+				selectFn()
 			}
 		}),
 	)

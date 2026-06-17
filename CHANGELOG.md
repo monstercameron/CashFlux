@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the **toggle switches** and **accent color swatches** are now fully keyboard-operable —
+  they're focusable (Tab) and respond to Space/Enter, with a visible focus ring — so settings and the
+  accent picker no longer require a mouse. (Previously they were mouse-only `<div>`s.)
 - New pure `contrast` package: WCAG relative-luminance and contrast-ratio math with AA/AAA pass
   predicates — the foundation for checking that colors (especially a user's chosen accent) are legible
   against their background. Fully table-tested (black/white = 21:1, symmetry, known boundary pairs).

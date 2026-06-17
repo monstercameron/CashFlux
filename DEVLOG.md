@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: keyboard operability for div-based switch/swatch
+
+- Verified the framework exposes a declarative `OnKeyDown` (shorthand → `html.OnKeyDown`) whose callback
+  gets a `ui.KeyboardEvent` with `GetKey()`/`PreventDefault()` — so no per-instance js wiring is needed.
+  Made the `Toggle` (role=switch) and `Swatch` (role=radio) `<div>`s keyboard-operable: added
+  `tabindex="0"` and an `OnKeyDown` that toggles/selects on Space/Enter (PreventDefault on Space to stop
+  page scroll). The existing `:focus-visible` rule already targets `[role=switch]`/`[role=radio]`, so
+  they get a focus ring for free. (The Segmented control is real `<button>`s — already operable.)
+  This resolves the earlier "needs a framework key handler" blocker. wasm + vet green.
+
 ## 2026-06-16 — a11y: theme-token contrast audit + text-faint fix
 
 - Audited the suspect tokens with the new `contrast` package (throwaway test, not committed). Findings:

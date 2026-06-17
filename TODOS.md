@@ -416,9 +416,11 @@ one-line a11y item in §1.20.
 - [~] **Semantics & landmarks:** sidebar `<nav>` labelled "Main navigation"; `<main id=main tabindex=-1>`
       + a **skip-to-content** link; the top bar's page title is now the screen's single `<h1>` (dashboard
       in-canvas header demoted to `<h2>`). Still TODO: `banner`/`contentinfo` roles.
-- [ ] **Keyboard:** everything reachable + operable in a logical tab order; **the bento drag/resize is
-      pointer-only — needs a keyboard alternative** (move/resize via arrows; Shift+drag in B2/B8 is
-      pointer-only); inline-edit rows manage focus on enter/exit.
+- [~] **Keyboard:** the div-based **toggle switch** and **accent swatches** are now focusable + operable
+      (tabindex=0 + Space/Enter via the framework's `OnKeyDown`; focus ring via the existing
+      `:focus-visible`). Segmented = real buttons (already operable). Still pointer-only: **the bento
+      drag/resize** (needs an arrow-key move/resize alternative) and the Shift+drag nav reorder (B8);
+      inline-edit rows' focus-on-enter/exit also still TODO.
 - [x] **Dialogs (`FlipPanel`, the B11 add panel, confirms):** `role="dialog"` + `aria-modal="true"` +
       an accessible label, **Esc to close**, a **focus trap** (Tab/Shift+Tab cycle within), **initial
       focus** into the dialog, and **focus restore** to the trigger on close — all done in one shared
