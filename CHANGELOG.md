@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: small icon-only buttons (delete ✕, toast dismiss, dialog close, the time-resolution
+  arrows) now have a **minimum 24×24px hit area** with the glyph centered (WCAG 2.5.8) — easier to tap.
 - Accessibility: with the OS **"reduce motion"** preference on, the flip-panel no longer flips/lifts,
   the toast no longer slides in, and the sidebar resizes instantly — the app respects users who are
   sensitive to motion (the boot animation and rail flyout already did).

@@ -450,7 +450,8 @@ one-line a11y item in §1.20.
       first Tab still reaches the skip link) and `document.title` is set to "<Screen> · CashFlux".
 - [~] **Charts:** `ui.AreaChart` is now `role="img"` + `aria-label` with a live-figure summary (net-worth
       trend, forecast). Remaining: the div-based bar charts + any future D3 charts (B14).
-- [ ] **Touch targets:** ≥44×44px hit areas (watch compact density + small icon buttons).
+- [~] **Touch targets:** small icon-only buttons (delete/toast-x/rstep/set-close) now meet the WCAG
+      2.5.8 AA 24×24 minimum (centered glyph). 44×44 (AAA) left aspirational given the dense desktop UI.
 - [ ] **i18n:** route `aria-label`s/announcements through the language store (B i18n) so they translate.
 - [ ] **Tooling:** wire an automated a11y check into CI (axe via the browser lane) once Playwright is in.
 

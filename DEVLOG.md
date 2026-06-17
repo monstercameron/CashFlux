@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: minimum touch targets (24px, WCAG 2.5.8)
+
+- Gave the small icon-only buttons (`.btn-del`, `.toast-x`, `.rstep`, `.set-close`) a `min-width`/
+  `min-height` of 24px with `inline-grid` + `place-items:center` so the glyph centers in a comfortably
+  tappable box — meeting WCAG 2.5.8 (AA, 24×24) without inflating the dense desktop layout. The
+  `.menu-btn` already gets ≥24px from its `w-7 h-7` utility classes. 44×44 (AAA) noted as aspirational.
+  Pure CSS; no Go change.
+
 ## 2026-06-16 — a11y: prefers-reduced-motion for interaction animations
 
 - Extended the existing `@media (prefers-reduced-motion: reduce)` block to neutralize the remaining
