@@ -958,7 +958,9 @@ Shared control components (from mockup):
       Planning (add w/ account/category/autopost, list, delete, net-monthly total), and **autoposting**
       due ones into transactions (`appstate.PostDueRecurring` + "Post due now" button; table-tested).
       Optional later: feed recurring into the forecast (needs a no-double-count design vs. actuals).
-- [ ] `Plan{ID, Name, HorizonMonths, BaseScenario, Assumptions[]}` + `PlanItem{...}` + CRUD
+- [~] `Plan{ID, Name, HorizonMonths, StartBalance, Items[]}` + `PlanItem{ID,Label,Kind,Amount,Month}`
+      done (`domain`, pure data) plus an `internal/planning` engine (`Project`/`MonthlyNet`/`EndBalance`
+      over the forecast engine, table-tested). Still TODO: CRUD/persistence + Planning UI.
 - [~] ★ Forecast engine (pure): `internal/forecast.Project` over horizon from start + recurring + one-time items done; actuals-derived recurring later
 - [x] Debt payoff math (`internal/payoff.Project`) + tests + extra-payment scenario (months/interest saved)
 - [~] What-if scenarios: extra debt payment + trim-spending forecast done; add-recurring/rate-change later

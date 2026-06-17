@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- New **Plan** model and `planning` engine: a saved what-if scenario (a starting balance projected
+  over a horizon under a set of recurring/one-time assumptions) can now be projected into a balance
+  curve, its steady monthly net, and its end-of-horizon balance — composing the pure domain types
+  with the existing forecast engine. Fully table-tested; persistence and the Planning UI come next.
 - The Documents screen now shows a **monthly-spend summary** of the rows awaiting import — out vs. in
   vs. net per month — so you can see what a receipt or statement says you spent before committing any
   rows. Amounts use the chosen account's currency; undated rows are listed under "No date".

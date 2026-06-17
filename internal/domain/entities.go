@@ -105,6 +105,39 @@ type AllocationProfile struct {
 	GoalProgress  float64 `json:"goalProgress,omitempty"`
 }
 
+// PlanItemKind distinguishes a recurring monthly assumption from a one-time one.
+type PlanItemKind string
+
+const (
+	// PlanItemRecurring is a cash flow applied every month of the horizon.
+	PlanItemRecurring PlanItemKind = "recurring"
+	// PlanItemOneTime is a single cash flow in a specific horizon month.
+	PlanItemOneTime PlanItemKind = "one_time"
+)
+
+// PlanItem is one assumption in a Plan: a labeled cash flow that is either a
+// recurring monthly amount or a one-time amount in a specific horizon month.
+// Amounts are integer minor units; positive is an inflow, negative an outflow.
+type PlanItem struct {
+	ID     string       `json:"id"`
+	Label  string       `json:"label"`
+	Kind   PlanItemKind `json:"kind"`
+	Amount int64        `json:"amount"`
+	Month  int          `json:"month,omitempty"` // one-time only: 1-based month within the horizon
+}
+
+// Plan is a saved what-if scenario: a starting balance (the base scenario)
+// projected over HorizonMonths under a set of assumptions (Items). The Planning
+// screen runs it through the forecast engine to show a net-worth curve. Amounts
+// are integer minor units in the household base currency.
+type Plan struct {
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	HorizonMonths int        `json:"horizonMonths"`
+	StartBalance  int64      `json:"startBalance"`
+	Items         []PlanItem `json:"items,omitempty"`
+}
+
 // RecurringCadence is how often a recurring cash flow repeats.
 type RecurringCadence string
 

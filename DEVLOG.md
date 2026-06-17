@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Plan model + planning engine (§2.6)
+
+- Added `domain.Plan{ID, Name, HorizonMonths, StartBalance, Items}` and `domain.PlanItem{ID, Label,
+  Kind, Amount, Month}` with `PlanItemKind` (recurring | one_time). Interpreted the TODO's vague
+  "BaseScenario" as `StartBalance` (the base starting point) and "Assumptions[]" as `Items` — plain
+  data, JSON-tagged, `omitempty` on optional fields. Kept `domain` a pure data leaf: no forecast
+  import there.
+- New pure package `internal/planning` composes domain + forecast: `Project` (balance curve over the
+  horizon), `MonthlyNet` (recurring-only steady change), `EndBalance` (last projected, or StartBalance
+  if no horizon). Layering keeps both `domain` and `forecast` as leaves; planning is the thin glue.
+  Seven table tests (recurring+one-time projection, monthly-net excludes one-time, end balance with/
+  without horizon, empty horizon, unknown-kind ignored). Fixed a miscalculated expected-curve fixture
+  (net is +40000/mo, not +400). Next: Plan persistence (store + dataset + appstate), then the UI.
+
 ## 2026-06-16 — documents UI: monthly-spend summary view (§2.2)
 
 - The Documents screen renders `spendsummary.Summarize` over the draft (awaiting-import) rows as a
