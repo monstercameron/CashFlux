@@ -3,6 +3,38 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B10: presets dropdown
+
+- Added a "Jump to…" quick-pick to `ResolutionControl`: a native `<select>` (keyboard-accessible, no
+  custom menu state) with This period / Last period / This quarter / Year to date, wired to
+  `period.NewWindow`/`Previous`/`YearToDate`. It's an action menu — the placeholder option is always
+  `SelectedIf(true)` so the control snaps back after applying. Quarter/YTD also persist the resolution
+  change. The `onPreset` handler is a `uic.UseEvent` at a stable position (alongside the rangeMode
+  state). New `resolution.preset*`/`jumpTo` keys. With this, B10's UI redesign is essentially done
+  (single stepper + reset + custom range + presets); only narrow-width responsive behavior remains.
+  i18n + wasm green.
+
+## 2026-06-16 — B10: ResolutionControl rebuilt (single stepper + reset + custom range)
+
+- Rebuilt the top bar's `ResolutionControl`. Default is now a single-period stepper using
+  `Window.Label()`/`Shift(±1)` (pages the whole window, reads as one label). A local `uic.UseState`
+  `rangeMode` toggles to the old dual From/To steppers (`Custom range` ↔ `Single period`); leaving
+  range mode calls `Window.Single()` to collapse cleanly. A `This period` button appears only when
+  `!w.IsCurrent(now)` — the off-now cue + one-tap reset to `NewWindow(res, now)`. Granularity segmented
+  unchanged. Safe to render the steppers conditionally because `StepperPill`/`Segmented` are
+  `CreateElement` components (isolated hooks); the only hook in ResolutionControl is the rangeMode
+  state. New `resolution.*` keys. Deferred to a follow-up: a presets dropdown (This/Last/YTD) and
+  narrow-width responsive behavior. i18n + wasm green.
+
+## 2026-06-16 — B10: single-period Window helpers (pure logic)
+
+- Added to `period.Window`: `IsSinglePeriod()` (From == To), `Single()` (collapse To := From), and a
+  combined `Label()` that returns one unit label when single ("Jun 2026") or "from – to" for a range.
+  This is the pure-logic prerequisite for the redesigned single-stepper resolution control — the label
+  collapses correctly so the common "this month" case stops reading as "Jun 2026 – Jun 2026". Three
+  table tests (single vs range predicate, collapse, label both ways). Next B10 slices: rebuild
+  `ResolutionControl` as single-stepper + presets dropdown + this-period reset (UI).
+
 ## 2026-06-16 — B12: goals widget config schema (sweep complete)
 
 - Registered a `goals` widget schema: "byProgress" Toggle (default false) and "showDate" Toggle

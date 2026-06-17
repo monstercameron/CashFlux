@@ -96,3 +96,25 @@ func (w Window) Range() (start, end time.Time) {
 // FromLabel and ToLabel render the two anchors for the stepper pills.
 func (w Window) FromLabel() string { return Label(w.Res, w.From, w.WeekStart) }
 func (w Window) ToLabel() string   { return Label(w.Res, w.To, w.WeekStart) }
+
+// IsSinglePeriod reports whether the window covers exactly one unit (its anchors
+// coincide). The common case — "this month" — so the UI can show one label
+// instead of a redundant "Jun 2026 – Jun 2026".
+func (w Window) IsSinglePeriod() bool { return w.From.Equal(w.To) }
+
+// Single collapses the window to the single period at its from anchor (To := From).
+// It's the primary path for the redesigned control, where one period is the
+// default and ranges are opt-in.
+func (w Window) Single() Window {
+	return Window{Res: w.Res, From: w.From, To: w.From, WeekStart: w.WeekStart}
+}
+
+// Label renders the window as one string: a single unit label when it covers one
+// period ("Jun 2026"), or "from – to" for a multi-unit range ("Jun 2026 – Aug
+// 2026"). This is what the redesigned single-stepper control shows.
+func (w Window) Label() string {
+	if w.IsSinglePeriod() {
+		return w.FromLabel()
+	}
+	return w.FromLabel() + " – " + w.ToLabel()
+}

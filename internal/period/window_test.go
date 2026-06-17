@@ -110,6 +110,37 @@ func TestYearToDatePreset(t *testing.T) {
 	}
 }
 
+func TestIsSinglePeriod(t *testing.T) {
+	if !NewWindow(Month, d(2026, time.June, 15), time.Monday).IsSinglePeriod() {
+		t.Error("a fresh window should be a single period")
+	}
+	if NewWindow(Month, d(2026, time.June, 1), time.Monday).StepTo(1).IsSinglePeriod() {
+		t.Error("a two-month range should not be a single period")
+	}
+}
+
+func TestSingleCollapsesRange(t *testing.T) {
+	w := NewWindow(Month, d(2026, time.June, 1), time.Monday).StepTo(2) // Jun..Aug
+	got := w.Single()
+	if !got.From.Equal(d(2026, time.June, 1)) || !got.To.Equal(d(2026, time.June, 1)) {
+		t.Errorf("Single() = %s..%s, want Jun..Jun", got.From.Format("2006-01-02"), got.To.Format("2006-01-02"))
+	}
+	if !got.IsSinglePeriod() {
+		t.Error("Single() result should be a single period")
+	}
+}
+
+func TestWindowLabelCollapses(t *testing.T) {
+	single := NewWindow(Month, d(2026, time.June, 15), time.Monday)
+	if got := single.Label(); got != "Jun 2026" {
+		t.Errorf("single Label = %q, want Jun 2026", got)
+	}
+	rng := NewWindow(Month, d(2026, time.June, 1), time.Monday).StepTo(2) // Jun..Aug
+	if got := rng.Label(); got != "Jun 2026 – Aug 2026" {
+		t.Errorf("range Label = %q, want Jun 2026 – Aug 2026", got)
+	}
+}
+
 func TestWindowRange(t *testing.T) {
 	w := NewWindow(Month, d(2026, time.June, 1), time.Monday).StepTo(2) // Jun..Aug
 	start, end := w.Range()

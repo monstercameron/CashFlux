@@ -250,11 +250,12 @@ a `Week | Month | Quarter` segmented toggle + **two** independent stepper pills 
       `Window.Shift` (page the whole window) and `Window.IsCurrent` (off-now predicate). `ThisPeriod` =
       `NewWindow`. `LastNDays` dropped — arbitrary day ranges don't fit the unit-based Window model
       (would need a different representation if wanted).
-- [ ] `Window`: a single-period helper (set both anchors to one unit) + a clear "is single period" check
-      so the label collapses correctly. Tests.
-- [ ] UI: rebuild `ResolutionControl` as single-stepper + presets dropdown + reset, with Custom-range
-      revealing the dual steppers. Keep persisting resolution (and now presets/range) per B existing
-      reload-persistence.
+- [x] `Window`: `IsSinglePeriod()` + `Single()` (collapse to one unit) + a combined `Label()` that
+      collapses to one unit label when single, else "from – to". Table-tested.
+- [x] UI: `ResolutionControl` rebuilt — single-period stepper (pages the window, one label), a
+      "This period" reset that shows only when off the current period, a "Custom range" toggle that
+      reveals the dual From/To steppers (collapsing back on exit), and a **"Jump to…" presets dropdown**
+      (This/Last period, This quarter, Year to date). Resolution still persists.
 - [ ] Responsive: collapse gracefully in a narrow top bar.
 - [ ] Verify: single-period is one tap and reads cleanly; presets work; "this period" resets to now;
       custom range still does everything today's control can; persists across reload.

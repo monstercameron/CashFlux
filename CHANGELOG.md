@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Groundwork for the simpler time-resolution control: the period `Window` now knows when it's a single
+  period and renders one clean label ("Jun 2026") instead of a redundant "Jun 2026 – Jun 2026", with a
+  helper to collapse a range back to a single period.
 - The dashboard **Goals widget** is now configurable: feature the **goal nearest completion** instead
   of the first, and optionally hide the target date.
 - The dashboard **Budgets widget** is now configurable: cap how many budgets to show (3–20, default 6)
@@ -157,6 +160,13 @@ and every commit updates this file under `Unreleased`.
   GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.
 
 ### Changed
+- The top bar's **time-resolution control** is simplified: the common case is now a **single period**
+  with one ‹ Jun 2026 › stepper that pages the whole window (reading as one clean label). A **"This
+  period"** reset appears only when you've moved off the current period, and the dual From/To range
+  steppers are now behind a **"Custom range"** toggle (which collapses back to a single period when
+  you leave it) — so the 90% single-period case is one tap and ranges stay available for power users.
+  A **"Jump to…"** quick-pick menu offers This period / Last period / This quarter / Year to date in
+  one tap.
 - The Settings → Screens **show/hide toggles now cover every main-line screen**, including the Tools
   group (Planning, Allocate, Insights, Documents, Customize) and Rules — so any nav item except the
   dashboard can be hidden from the sidebar.

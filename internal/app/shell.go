@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/period"
@@ -280,13 +281,71 @@ func TopBar(props topBarProps) uic.Node {
 	)
 }
 
-// ResolutionControl is the top bar's time-resolution control: a Week/Month/
-// Quarter segmented toggle and From/To stepper pills, all driven by the shared
-// dashboard window (internal/uistate + internal/period). It owns no date math —
-// every action just stores the next immutable Window.
+// ResolutionControl is the top bar's time-resolution control. The common case is
+// a single period: a Week/Month/Quarter granularity toggle and one stepper that
+// pages the whole window (‹ Jun 2026 ›). When the view has moved off the current
+// period a "This period" reset appears; a "Custom range" toggle reveals the
+// dual From/To steppers for advanced ranges. All date math lives in
+// internal/period — every action just stores the next immutable Window.
 func ResolutionControl() uic.Node {
 	atom := uistate.UsePeriod()
 	w := atom.Get()
+	rangeMode := uic.UseState(false)
+	isCurrent := w.IsCurrent(time.Now())
+
+	// Quick presets. The select always shows its placeholder (it's an action menu,
+	// not a persistent selection), so choosing an option applies it and the
+	// control snaps back. Quarter/YTD also change the resolution, so persist it.
+	onPreset := uic.UseEvent(func(e uic.Event) {
+		now := time.Now()
+		switch e.GetValue() {
+		case "this":
+			atom.Set(period.NewWindow(w.Res, now, w.WeekStart))
+		case "last":
+			atom.Set(period.Previous(w.Res, now, w.WeekStart))
+		case "quarter":
+			uistate.PersistResolution(period.Quarter)
+			atom.Set(period.NewWindow(period.Quarter, now, w.WeekStart))
+		case "ytd":
+			uistate.PersistResolution(period.Month)
+			atom.Set(period.YearToDate(now, w.WeekStart))
+		}
+	})
+
+	var stepper uic.Node
+	if rangeMode.Get() {
+		stepper = Span(Class("flex items-center gap-2.5"),
+			ui.StepperPill(ui.StepperPillProps{
+				Label:     w.FromLabel(),
+				OnPrev:    func() { atom.Set(w.StepFrom(-1)) },
+				OnNext:    func() { atom.Set(w.StepFrom(1)) },
+				PrevLabel: uistate.T("resolution.fromEarlier"),
+				NextLabel: uistate.T("resolution.fromLater"),
+			}),
+			Span(Class("text-faint"), "–"),
+			ui.StepperPill(ui.StepperPillProps{
+				Label:     w.ToLabel(),
+				OnPrev:    func() { atom.Set(w.StepTo(-1)) },
+				OnNext:    func() { atom.Set(w.StepTo(1)) },
+				PrevLabel: uistate.T("resolution.toEarlier"),
+				NextLabel: uistate.T("resolution.toLater"),
+			}),
+		)
+	} else {
+		stepper = ui.StepperPill(ui.StepperPillProps{
+			Label:     w.Label(),
+			OnPrev:    func() { atom.Set(w.Shift(-1)) },
+			OnNext:    func() { atom.Set(w.Shift(1)) },
+			PrevLabel: uistate.T("resolution.prevPeriod"),
+			NextLabel: uistate.T("resolution.nextPeriod"),
+		})
+	}
+
+	rangeLabel := uistate.T("resolution.customRange")
+	if rangeMode.Get() {
+		rangeLabel = uistate.T("resolution.singlePeriod")
+	}
+
 	return Span(Class("flex items-center gap-2.5"),
 		ui.Segmented(ui.SegmentedProps{
 			Options: []ui.SegOption{
@@ -301,20 +360,28 @@ func ResolutionControl() uic.Node {
 				atom.Set(w.SetResolution(r))
 			},
 		}),
-		ui.StepperPill(ui.StepperPillProps{
-			Label:     w.FromLabel(),
-			OnPrev:    func() { atom.Set(w.StepFrom(-1)) },
-			OnNext:    func() { atom.Set(w.StepFrom(1)) },
-			PrevLabel: uistate.T("resolution.fromEarlier"),
-			NextLabel: uistate.T("resolution.fromLater"),
-		}),
-		Span(Class("text-faint"), "–"),
-		ui.StepperPill(ui.StepperPillProps{
-			Label:     w.ToLabel(),
-			OnPrev:    func() { atom.Set(w.StepTo(-1)) },
-			OnNext:    func() { atom.Set(w.StepTo(1)) },
-			PrevLabel: uistate.T("resolution.toEarlier"),
-			NextLabel: uistate.T("resolution.toLater"),
-		}),
+		Select(Class("rstep text-[12px]"), Attr("title", uistate.T("resolution.jumpTo")), OnChange(onPreset),
+			Option(Value(""), SelectedIf(true), uistate.T("resolution.jumpTo")),
+			Option(Value("this"), uistate.T("resolution.presetThis")),
+			Option(Value("last"), uistate.T("resolution.presetLast")),
+			Option(Value("quarter"), uistate.T("resolution.presetQuarter")),
+			Option(Value("ytd"), uistate.T("resolution.presetYTD")),
+		),
+		stepper,
+		If(!isCurrent, Button(Class("px-2 py-1 text-dim hover:text-fg text-[12px]"), Type("button"),
+			Attr("title", uistate.T("resolution.thisPeriodTitle")),
+			OnClick(func() { atom.Set(period.NewWindow(w.Res, time.Now(), w.WeekStart)) }),
+			uistate.T("resolution.thisPeriod"))),
+		Button(Class("px-2 py-1 text-faint hover:text-fg text-[12px]"), Type("button"),
+			OnClick(func() {
+				if rangeMode.Get() {
+					// Leaving range mode collapses back to a single period.
+					atom.Set(w.Single())
+					rangeMode.Set(false)
+				} else {
+					rangeMode.Set(true)
+				}
+			}),
+			rangeLabel),
 	)
 }
