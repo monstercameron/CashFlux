@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"syscall/js"
+
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -38,6 +40,28 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		return nil
 	}, true)
 
+	// Esc closes the dialog (a standard modal affordance). The listener is added
+	// on mount and removed on unmount — which, since the panel mounts fresh each
+	// open and unmounts on close, matches the dialog's lifetime exactly.
+	onCloseRef := props.OnClose
+	uic.UseEffect(func() func() {
+		if onCloseRef == nil {
+			return nil
+		}
+		doc := js.Global().Get("document")
+		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if len(args) > 0 && args[0].Get("key").String() == "Escape" {
+				onCloseRef()
+			}
+			return nil
+		})
+		doc.Call("addEventListener", "keydown", cb)
+		return func() {
+			doc.Call("removeEventListener", "keydown", cb)
+			cb.Release()
+		}
+	}, true)
+
 	width, height := props.Width, props.Height
 	if width == "" {
 		width = "384px"
@@ -56,6 +80,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 
 	return Div(Class(backdropCls),
 		Div(Class("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
+			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-label", props.Title),
 			Div(Class(innerCls),
 				// Front face — a neutral card briefly seen during the flip.
 				Div(Class("flip-face"),

@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: FlipPanel is a real modal dialog
+
+- Gave `ui.FlipPanel` `role="dialog"` + `aria-modal="true"` + `aria-label` (its title) on the flip-wrap,
+  and an Esc-to-close listener via a `UseEffect` keyed `true` (added on mount, removed + `cb.Release()`
+  on unmount — matches the panel's open/close lifetime since it mounts fresh each open). One change
+  covers every overlay: quick-add and both settings panels. Still TODO for the dialogs item: a focus
+  trap + moving initial focus into the dialog (needs a DOM ref to the panel node). wasm + vet green.
+
 ## 2026-06-16 — B11: quick-add transaction flip panel
 
 - The top bar "+ Add" no longer navigates to /transactions; it opens a quick-add flip panel via a new

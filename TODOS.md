@@ -404,8 +404,9 @@ one-line a11y item in §1.20.
 - [ ] **Keyboard:** everything reachable + operable in a logical tab order; **the bento drag/resize is
       pointer-only — needs a keyboard alternative** (move/resize via arrows; Shift+drag in B2/B8 is
       pointer-only); inline-edit rows manage focus on enter/exit.
-- [ ] **Dialogs (`FlipPanel`, the B11 add panel, confirms):** `role="dialog"` + `aria-modal`, focus
-      trap, Esc to close, restore focus to the trigger on close.
+- [~] **Dialogs (`FlipPanel`, the B11 add panel, confirms):** `role="dialog"` + `aria-modal="true"` +
+      an accessible label, and **Esc to close** are done (one change covers every overlay). Still TODO:
+      a focus trap, moving initial focus into the dialog, and restoring focus to the trigger on close.
 - [~] **Custom controls → correct ARIA:** Segmented = `role="radiogroup"`/`role="radio"`/`aria-checked`;
       Toggle/ToggleRow = `role="switch"` + `aria-checked` + name; StepperPill ‹/› have `aria-label`s;
       SwatchPicker = labelled `role="radiogroup"` of `role="radio"` chips. Still TODO: the gear/menu/grip

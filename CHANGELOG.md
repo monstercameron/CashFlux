@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the flip-panel overlay (quick-add, household/global settings, per-widget settings) is
+  now a proper modal dialog — `role="dialog"` + `aria-modal="true"` + an accessible name from its
+  title — and **Esc closes it**, so screen-reader and keyboard users get expected modal behavior.
 - The top bar's **"+ Add"** button now opens a **quick-add transaction** flip panel from anywhere —
   pick the account, expense/income, amount, description, category, and date, and save without leaving
   the screen you're on. The result is announced via the toast.
