@@ -202,6 +202,23 @@ var english = Catalog{
 	"recurring.cadenceQuarterly":  "Quarterly",
 	"recurring.cadenceYearly":     "Yearly",
 
+	// What-if plans
+	"plans.title":              "Savings & spending plans",
+	"plans.hint":               "Sketch a what-if: a starting balance, a monthly change, and how many months to project.",
+	"plans.namePlaceholder":    "Plan name (e.g. House fund)",
+	"plans.horizonPlaceholder": "Months",
+	"plans.horizonTitle":       "Months to project",
+	"plans.startPlaceholder":   "Starting balance (%s)",
+	"plans.monthlyPlaceholder": "Monthly change, + in / − out (%s)",
+	"plans.monthlyLabel":       "Monthly change",
+	"plans.add":                "Add plan",
+	"plans.empty":              "No plans yet. Add one above to see where you'd land.",
+	"plans.nameRequired":       "Enter a plan name.",
+	"plans.horizonRequired":    "Enter how many months to project.",
+	"plans.rowMeta":            "%d months · start %s · %s/mo",
+	"plans.projected":          "Projected %s",
+	"plans.deleteTitle":        "Delete this plan",
+
 	// Documents screen
 	"documents.csvEmpty":            "Paste some CSV first.",
 	"documents.csvError":            "Couldn't read that CSV: %s",

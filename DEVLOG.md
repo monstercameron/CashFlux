@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Planning UI: plans card (§2.6)
+
+- Added a "Savings & spending plans" card to the Planning screen: create (name, horizon, start
+  balance, monthly change), list, and delete. The create form captures one steady monthly change as a
+  recurring `PlanItem` (the common case); one-time items can be a later slice. Each saved plan renders
+  via a `PlanRow` component (own delete hook, no-hooks-in-loops) showing horizon/start/monthly meta
+  and the projected end balance from `planning.EndBalance`, toned by `figTone`. New `plans.*` i18n
+  keys. Closes §2.6's Plan/PlanItem feature across model → logic → persistence → UI. i18n + wasm green.
+
 ## 2026-06-16 — Plan persistence (§2.6)
 
 - Wired `domain.Plan` through the store exactly like the other JSON-blob entities: a `plans` table

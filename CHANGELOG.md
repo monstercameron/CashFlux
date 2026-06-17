@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Planning screen now has a **Savings & spending plans** card: name a what-if, set a starting
+  balance, a monthly change (+ in / − out), and a horizon in months, and each saved plan shows where
+  you'd land (its projected end-of-horizon balance, toned green/red) — backed by the planning engine.
+  Plans list and can be deleted.
 - Plans now **persist**: saved what-if scenarios survive reloads and round-trip losslessly through
   JSON/CSV export/import, with validated save (needs an id, a name, and a positive horizon).
 - New **Plan** model and `planning` engine: a saved what-if scenario (a starting balance projected

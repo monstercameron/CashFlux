@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
+	"github.com/monstercameron/CashFlux/internal/planning"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -108,6 +109,58 @@ func Planning() ui.Node {
 		postMsg.Set(uistate.T("recurring.posted", plural(n, "transaction")))
 		rev.Set(rev.Get() + 1)
 	}))
+
+	// What-if plans: a starting balance projected over a horizon under a steady
+	// monthly change (a recurring PlanItem). Persisted via appstate, projected
+	// through internal/planning.
+	plName := ui.UseState("")
+	plHorizon := ui.UseState("12")
+	plStart := ui.UseState("")
+	plMonthly := ui.UseState("")
+	plErr := ui.UseState("")
+	onPlName := ui.UseEvent(func(v string) { plName.Set(v) })
+	onPlHorizon := ui.UseEvent(func(v string) { plHorizon.Set(v) })
+	onPlStart := ui.UseEvent(func(v string) { plStart.Set(v) })
+	onPlMonthly := ui.UseEvent(func(v string) { plMonthly.Set(v) })
+	addPlan := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
+		name := strings.TrimSpace(plName.Get())
+		if name == "" {
+			plErr.Set(uistate.T("plans.nameRequired"))
+			return
+		}
+		horizon, herr := strconv.Atoi(strings.TrimSpace(plHorizon.Get()))
+		if herr != nil || horizon <= 0 {
+			plErr.Set(uistate.T("plans.horizonRequired"))
+			return
+		}
+		// Start balance and monthly change are optional; blank means 0.
+		start, _ := money.ParseMinor(strings.TrimSpace(plStart.Get()), currency.Decimals(base))
+		monthly, _ := money.ParseMinor(strings.TrimSpace(plMonthly.Get()), currency.Decimals(base))
+		p := domain.Plan{ID: id.New(), Name: name, HorizonMonths: horizon, StartBalance: start}
+		if monthly != 0 {
+			p.Items = []domain.PlanItem{{
+				ID: id.New(), Label: uistate.T("plans.monthlyLabel"), Kind: domain.PlanItemRecurring, Amount: monthly,
+			}}
+		}
+		if err := app.PutPlan(p); err != nil {
+			plErr.Set(err.Error())
+			return
+		}
+		plName.Set("")
+		plStart.Set("")
+		plMonthly.Set("")
+		plErr.Set("")
+		rev.Set(rev.Get() + 1)
+	}))
+	deletePlan := func(pid string) {
+		if app != nil {
+			_ = app.DeletePlan(pid)
+			rev.Set(rev.Get() + 1)
+		}
+	}
 
 	var resultBody ui.Node
 	switch {
@@ -238,9 +291,37 @@ func Planning() ui.Node {
 		)
 	}
 
+	plansCard := Fragment()
+	if app != nil {
+		plans := app.Plans()
+		list := IfElse(len(plans) == 0,
+			P(Class("empty"), uistate.T("plans.empty")),
+			Div(Class("rows"), MapKeyed(plans,
+				func(p domain.Plan) any { return p.ID },
+				func(p domain.Plan) ui.Node {
+					return ui.CreateElement(PlanRow, planRowProps{Plan: p, Base: base, OnDelete: deletePlan})
+				},
+			)),
+		)
+		plansCard = Section(Class("card"),
+			H2(Class("card-title"), uistate.T("plans.title")),
+			P(Class("muted"), uistate.T("plans.hint")),
+			Form(Class("form-grid"), OnSubmit(addPlan),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)),
+				Input(Class("field"), Type("number"), Title(uistate.T("plans.horizonTitle")), Placeholder(uistate.T("plans.horizonPlaceholder")), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("plans.startPlaceholder", base)), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart)),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("plans.monthlyPlaceholder", base)), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly)),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("plans.add")),
+			),
+			If(plErr.Get() != "", P(Class("err"), plErr.Get())),
+			list,
+		)
+	}
+
 	return Div(
 		forecastCard,
 		recurringCard,
+		plansCard,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("planning.payoffTitle")),
 			P(Class("muted"), uistate.T("planning.payoffDesc")),
@@ -276,6 +357,31 @@ func RecurringRow(props recurringRowProps) ui.Node {
 		),
 		Span(Class(amountClass(r.Amount)), fmtMoney(r.Amount)),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("recurring.deleteTitle")), OnClick(del), "✕"),
+	)
+}
+
+type planRowProps struct {
+	Plan     domain.Plan
+	Base     string
+	OnDelete func(string)
+}
+
+// PlanRow renders one saved what-if plan: its name, the horizon/start/monthly
+// assumptions, and the projected end-of-horizon balance from internal/planning,
+// with a remove button. Its own component per the no-hooks-in-loops rule.
+func PlanRow(props planRowProps) ui.Node {
+	p := props.Plan
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(p.ID) }))
+	end := money.New(planning.EndBalance(p), props.Base)
+	monthly := money.New(planning.MonthlyNet(p), props.Base)
+	meta := uistate.T("plans.rowMeta", p.HorizonMonths, fmtMoney(money.New(p.StartBalance, props.Base)), fmtMoney(monthly))
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), p.Name),
+			Span(Class("row-meta"), meta),
+		),
+		Span(Class("amount fig "+figTone(end)), uistate.T("plans.projected", fmtMoney(end))),
+		Button(Class("btn-del"), Type("button"), Title(uistate.T("plans.deleteTitle")), OnClick(del), "✕"),
 	)
 }
 
