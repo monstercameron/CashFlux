@@ -551,8 +551,9 @@ The CLAUDE.md standard is accounting format — thousands separators + **parenth
 **Symptom:** the bottom-left household card overlaps and clips its own text — the avatar bubble (which
 oddly reads **"GWC"**, not the member's initial) sits on top of "Your household", and the second line
 shows cut-off fragments ("…ember · USD base ·" / "…tings"). Present on all 14 screens.
-- [ ] Fix the card layout (avatar + two lines without overlap/clipping); the avatar should show the
-      member initial ("Y" for "You"), not "GWC".
+- [x] Resolved by the redesign: the card is now a flex Button (gear icon + two text lines), no avatar
+      bubble and no overlap/clipping (the "GWC" avatar was from the old mockup). Tidied the summary to
+      drop the redundant "· Settings". (Re-verified in current code.)
 
 ### C4. Global top-bar chrome appears on screens where it's meaningless ★ (UX)
 The **time-resolution control** (Week/Month/Quarter + Jump-to + ‹Jun 2026› + Custom range) and the
@@ -625,8 +626,8 @@ something to save.
 **Symptom:** in the global Settings flip panel, the last Appearance row ("Display scale") is cut off
 where the two-column scrollable body meets the sticky Cancel/Save footer (label renders as "Display
 sale"). The body doesn't scroll far enough to clear the footer.
-- [ ] Give the panel body bottom padding equal to the footer height (or make the footer non-overlapping)
-      so the last row is fully visible/scrollable.
+- [x] Added bottom padding to `.set-body` (1rem → 1.5rem) so the last row clears the sticky footer fold
+      and scrolls fully into view.
 
 ### C13. Quick-add panel is transaction-only with large empty space (UX)
 The "+ Add" flip panel jumps straight to a tall "Add a transaction" form with lots of unused vertical

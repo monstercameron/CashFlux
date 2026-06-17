@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- The last row of the **settings panel** (e.g. "Display scale") is no longer clipped against the
+  sticky footer — the scrollable body now has extra bottom padding so it clears the fold. (C12)
+- The rail's **household card** summary no longer repeats "Settings" (the gear icon and tooltip already
+  convey it) — it reads "N members · USD base". (The earlier "GWC avatar overlap" symptom was from the
+  old mockup and is gone in the current flex layout.) (C3)
 - Money amounts everywhere now show **thousands grouping** (e.g. `$20,749.25` instead of `$20749.25`)
   — Accounts, Budgets, Goals, Allocate, etc. that used the ungrouped `fmtMoney` are fixed in one place. (C2)
 - The top-bar **time-resolution control** (Week/Month/Quarter + period stepper) now appears only on

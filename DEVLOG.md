@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C12: last settings row clipped by footer
+
+- The global settings flip panel is a flex column (header / `.set-body` flex:1 overflow-auto / sticky
+  `.set-foot`), so the last row could sit flush against the footer fold and read as clipped. Per the
+  TODO's prescribed fix, bumped `.set-body` bottom padding (1rem → 1.5rem) so the final row clears the
+  footer and scrolls fully into view. Pure CSS; low-risk regardless of the exact rendering cause (I
+  can't browser-verify, but extra bottom padding only helps).
+
+## 2026-06-17 — bugfix C3: household card (verified resolved + tidy)
+
+- Re-checked C3 against current code: the reported "GWC avatar overlapping/clipping its own text" is
+  gone — `HouseholdCard` is now a clean flex Button (gear icon + a two-line text span), and the only
+  `.hh` CSS is the collapsed-rail rule (no absolute positioning, no avatar). So the layout bug is
+  resolved by the redesign since the review. Minor tidy: dropped the redundant trailing "· Settings"
+  from the visible summary (the gear icon + tooltip already signal it), keeping it in the Title tooltip.
+  wasm + vet green.
+
 ## 2026-06-16 — bugfix C2 (part): grouped fmtMoney
 
 - `fmtMoney` rendered ungrouped amounts ("$20749.25"), so every screen using it (Accounts/Budgets/

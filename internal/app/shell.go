@@ -231,11 +231,13 @@ func HouseholdCard() uic.Node {
 		if members == 1 {
 			noun = "member"
 		}
-		summary = fmt.Sprintf("%d %s · %s base · %s", members, noun, base, uistate.T("household.settings"))
+		summary = fmt.Sprintf("%d %s · %s base", members, noun, base)
 	}
 	return Button(
 		Class("hh mt-auto m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover"),
-		Title(name+" · "+summary), // tooltip + accessible name when the rail is collapsed
+		// Tooltip/accessible name — keeps the "Settings" affordance (the gear icon
+		// signals it visually) without repeating it in the visible summary line.
+		Title(name+" · "+summary+" · "+uistate.T("household.settings")),
 		OnClick(func() { settings.Set(uistate.Global()) }),
 		ui.Icon(icon.Settings, Class("w-4 h-4 shrink-0 text-dim")),
 		Span(Class("hh-text leading-tight"),
