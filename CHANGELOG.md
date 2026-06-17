@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the quick-add amount and the plan name/horizon are now marked `aria-required`, so
+  screen readers announce them as required fields.
 - Accessibility: inline **form validation errors** are now `role="alert"`, so screen readers announce
   them the moment they appear (e.g. "Enter a positive target amount") instead of leaving the failure
   silent.

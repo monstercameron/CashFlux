@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: aria-required on key form fields
+
+- Marked the genuinely-required inputs with `aria-required="true"` on the forms I recently built:
+  quick-add amount, and the plan name + horizon. Deliberately used `aria-required` (semantic) rather
+  than the native `required` attribute, which would trigger the browser's own validation popup and
+  conflict with the app's custom Go-side validation + the `role="alert"` error messages. Contained to
+  two forms (not a scattered sweep). wasm + vet green. Marking required fields across every add form is
+  a broader follow-up.
+
 ## 2026-06-16 — a11y: announce form validation errors (role=alert)
 
 - Added `role="alert"` to all 17 inline error-message `P(Class("err"), …)` elements across the screens

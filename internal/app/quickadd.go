@@ -126,7 +126,7 @@ func QuickAddHost() uic.Node {
 			Selected: kind.Get(),
 			OnSelect: func(v string) { kind.Set(v) },
 		}),
-		Input(Class("field"), Type("number"), Attr("title", uistate.T("quickAdd.amount")), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
+		Input(Class("field"), Type("number"), Attr("title", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
 		Input(Class("field"), Type("text"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)),
 		Select(Class("field"), Attr("title", uistate.T("quickAdd.category")), OnChange(onCat), catOpts),
 		Input(Class("field"), Type("date"), Attr("title", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate)),

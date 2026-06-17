@@ -453,8 +453,9 @@ one-line a11y item in §1.20.
 - [ ] **Zoom / reflow:** usable at 200% browser zoom and with enlarged browser font sizes — the
       px-heavy styling (see B6) is the risk; pairs with the B6 UI-scale work.
 - [~] **Forms:** correct input types (number/date) in use; **inline validation is now announced** —
-      every `.err` message is `role="alert"` (assertive live region). Still TODO: per-field
-      `aria-describedby` association + explicit required-field marking.
+      every `.err` message is `role="alert"` (assertive live region); key required fields (quick-add
+      amount, plan name/horizon) carry `aria-required`. Still TODO: per-field `aria-describedby`
+      association and `aria-required` across the remaining add forms.
 - [x] **Route changes (SPA):** focus moves to `<main>` on navigation (skips the initial load so the
       first Tab still reaches the skip link) and `document.title` is set to "<Screen> · CashFlux".
 - [~] **Charts:** `ui.AreaChart` is now `role="img"` + `aria-label` with a live-figure summary (net-worth
