@@ -715,7 +715,11 @@ Captured at 768px (tablet):
       are reachable too. No horizontal page scroll at either width. SW cache v6→v7.
 - [ ] **Transaction rows break:** at narrow widths the row's action buttons (Mark cleared / Edit /
       Duplicate / ✕) overlap the date/account text instead of wrapping.
-- [ ] **KPI tile figures clip** (e.g. "$20,749.2", "$1,800.7$") when the bento is squeezed.
+- [x] **KPI tile figures clip** (e.g. "$20,749.2", "$1,800.7$") when the bento is squeezed — fixed.
+      Between the phone breakpoint and the desktop, the 4-column bento squeezed tiles to ~153px and a
+      figure clipped. Added a tablet bento (`768–1024px`) that flows the tiles into **2 columns** (header
+      kept full-width via `:first-child`). Verified live at 900px: 0 clipped figures, KPI tiles ~315px
+      (was 153), header full-width, no horizontal page scroll. SW cache v8→v9.
 - _Good:_ the Add/filter `form-grid`s do reflow to two columns cleanly — the pattern works; the rail,
   top bar, bento, and list rows are the parts that don't. (Pairs with C10.)
 
@@ -826,6 +830,38 @@ non-responsive layout (**C10**) at large values.
       → Appearance ("Text size", with sample preview).
 - [ ] Verify at 200%: all 14 screens remain usable, no clipped/overlapping content, no horizontal
       scroll (ties B15 zoom/reflow + C10).
+
+### C27. AI features — live test results with a real OpenAI key (2026-06-17)
+Tested by driving the app with the key from `.env` (entered in Settings → AI; key persists on input).
+Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all returned HTTP 200 on
+`gpt-4o-mini`). **Working well:**
+- [x] **Insights → Explain my month** — returns a coherent narrative from live figures.
+- [x] **Insights → Ask about your money** — answered using **income $4,200 / spending $1,800.75**, with
+      token + cost surfaced ("Used 166 tokens · about $0.0001"). _Note: the AI context computes income
+      **$4,200 correctly**, while the Dashboard Income KPI shows **$0** — independent corroboration that
+      **C1** is a dashboard/period bug, not a data problem._
+- [x] **Allocate → Explain with AI** — returns a sensible ranking rationale.
+- [x] **Documents → Read with AI (vision)** — read the test receipt accurately: Coffee −4.50, Sandwich
+      −8.25, Cookie −2.00 (2026-06-10), review screen + monthly summary "out $14.75 · net ($14.75)".
+
+**Not working / rough edges found (fix):**
+- [ ] **CSV import rejects the documented format** ★ — pasting the on-screen example shape
+      `date,payee,amount,account` fails with a leaked store error: *"Couldn't read that CSV: store: csv
+      line 2: amount and currency are required."* It only succeeds when an undocumented **`currency`**
+      column is added. Fix: default the currency (to the target account's or the base currency) when the
+      column is absent, **and/or** update `documents.csvDesc` to list currency; never surface the raw
+      `store:` validation string to the user.
+- [ ] **Vision category names don't match the app's categories** — the model returns "Food & Drink" but
+      the household category is "Food", so name-matching ("Categories are matched by name") likely imports
+      these uncategorized. Fix: fuzzy/alias category matching, or constrain the vision prompt/schema to the
+      user's existing category names, or offer a per-row category picker in review.
+- [ ] **Review-row amounts use a minus sign** ("−4.50") not accounting format — same as **C2**; route
+      through `money.FormatAccounting`.
+- [ ] Harden the AI key flow: the key lives only in the in-memory store, so a **page reload loses it**
+      (settings aren't hydrated from localStorage). Decide whether the OpenAI key should persist across
+      reload (with a clear on-device-only notice) — today every reload silently turns AI back off.
+- [ ] Not yet exercised here (queue for the browser E2E lane): cancel/abort mid-call, retry/backoff on
+      429/5xx, error messaging on a bad key, and the "Save as task"/"Pin" insight actions.
 
 ---
 

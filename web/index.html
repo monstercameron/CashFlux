@@ -452,6 +452,15 @@
         .topbar-controls { margin-left: 0; flex: 1 0 100%; flex-wrap: wrap; row-gap: .4rem; justify-content: flex-start; }
         .reso-control { flex-wrap: wrap; row-gap: .4rem; }
       }
+      /* Tablet bento (C19): between the phone breakpoint and the desktop, the
+         4-column grid squeezed tiles to ~150px and KPI figures clipped. Flow the
+         tiles into 2 columns instead (header stays full-width) so figures fit. */
+      @media (min-width: 768px) and (max-width: 1024px) {
+        .bento { grid-template-columns: repeat(2, 1fr) !important; grid-template-rows: none !important;
+          grid-auto-rows: minmax(var(--cell), auto) !important; }
+        .bento > * { grid-column: auto !important; grid-row: auto !important; }
+        .bento > *:first-child { grid-column: 1 / -1 !important; } /* dashboard header spans both columns */
+      }
       .menu-btn { background:transparent; border:0; color:#a6a6ac; cursor:pointer; display:grid; place-items:center; }
       .menu-btn:hover { color:#f4f4f5; }
 

@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C19 (KPI clip): 2-column tablet bento
+
+- Measured the reported KPI clip live: at 900px the bento was still the desktop 4-column grid, tiles
+  ~153px, and one figure clipped (`scrollWidth > clientWidth`). The phone block (<768px, 1 column)
+  didn't reach this range, so 768–1024px fell through to the cramped desktop grid.
+- Added a tablet bento media block (`min-width:768px and max-width:1024px`): 2 columns, tiles flow with
+  `grid-column:auto`, and `.bento > *:first-child` keeps the dashboard header spanning both columns
+  (it carries an inline `grid-column: 1 / -1` that the auto override would otherwise drop).
+- Verified live at 900px: 0 clipped figures, KPI tiles ~315px (was 153), header ~640px (full content
+  width = both columns), no horizontal page scroll. SW cache v8→v9.
+- C19 now done except transaction-row action-button wrapping at narrow widths — that's route-gated
+  (can't drive /transactions in the static oracle) and a list-row concern, left open under C19.
+
 ## 2026-06-17 — bugfix C20: persist the sidebar collapsed state
 
 - C20 ("collapsible panel reads as missing") had three parts. Two are now resolved: C15 fixed the

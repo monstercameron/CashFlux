@@ -21,6 +21,10 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Dashboard KPI figures no longer clip on tablets (C19):** between the phone breakpoint and the
+  desktop the 4-column bento squeezed tiles to ~150px and figures like "$20,749.25" clipped. A tablet
+  layout (768–1024px) now flows the tiles into two columns (the header stays full-width), so figures fit.
+  Verified live at 900px (no clipped figures, KPI tiles ~315px, no horizontal scroll). SW cache (v8 → v9).
 - **The collapsed/expanded sidebar state now survives reloads (C20):** collapsing the rail was a
   transient choice lost on refresh. It's now persisted to localStorage (like the other UI prefs) and
   restored on load. Combined with C15 (collapse keeps the nav icons), collapsing the sidebar is now
