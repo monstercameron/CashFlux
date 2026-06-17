@@ -73,7 +73,11 @@ func widget(props WidgetProps) uic.Node {
 	// row 1.
 	itemsAtom := uistate.UseLayoutItems()
 	items := itemsAtom.Get()
-	packed := dashlayout.Pack(items, gridCols)
+	// The layout mode decides the order before packing: Custom uses the stored
+	// sequence as-is; the auto modes reorder it (C24). Sizes are untouched.
+	modeAtom := uistate.UseLayoutMode()
+	mode := modeAtom.Get()
+	packed := dashlayout.Pack(dashlayout.Arrange(items, mode), gridCols)
 	gridCol, gridRow := props.GridColumn, props.GridRow
 	if p, ok := packed.Get(props.ID); ok {
 		gridCol = p.GridColumn()
@@ -98,19 +102,26 @@ func widget(props WidgetProps) uic.Node {
 			OnDrop(Prevent(func() {
 				// Reorder the dragged tile to the drop target's position, then the
 				// grid re-Packs around it (iOS-home-screen reflow) instead of a
-				// pairwise swap.
+				// pairwise swap. A manual drag is an explicit hand-arrangement, so it
+				// bakes the current (possibly auto-arranged) order into the sequence
+				// and switches to Custom mode (C24).
 				if src := dragSrc.Get(); src != "" && src != id {
+					baked := dashlayout.Arrange(items, mode)
 					ti := -1
-					for i, it := range items {
+					for i, it := range baked {
 						if it.ID == id {
 							ti = i
 							break
 						}
 					}
 					if ti >= 0 {
-						next := dashlayout.Move(items, src, ti)
+						next := dashlayout.Move(baked, src, ti)
 						itemsAtom.Set(next)
 						uistate.PersistItems(next)
+						if mode != dashlayout.ModeCustom {
+							modeAtom.Set(dashlayout.ModeCustom)
+							uistate.PersistLayoutMode(dashlayout.ModeCustom)
+						}
 					}
 				}
 				dragSrc.Set("")

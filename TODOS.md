@@ -792,11 +792,15 @@ added **only** by navigating to its own screen — there's no global/dashboard a
       field. Custom = no-op; Auto-default = canonical `DefaultItems` order; Auto-importance = importance
       desc, canonical-order tiebreak. Table-tested: determinism, stability, no-overlap-after-Pack, no
       input mutation, spans preserved, unknown ids sort last.
-- [ ] **State (next):** persist the `LayoutMode` (custom/auto-default/auto-importance) alongside the items;
-      a manual drag flips it to Custom.
-- [ ] **UI (next):** apply `Arrange` before `Pack` in the render path; a mode selector (Custom · Auto:
-      default · Auto: importance) on the dashboard header; an Importance control in the per-tile gear
-      panel (and let the gear show on every tile while in importance mode).
+- [x] **State (done):** `uistate.UseLayoutMode()` / `PersistLayoutMode` / `loadLayoutMode` persist the
+      mode (default Custom). A manual drag bakes the current arrangement into the sequence and flips to
+      Custom.
+- [x] **UI — selector + render (done):** `ui.widget` applies `Arrange(items, mode)` before `Pack`; the
+      dashboard header has a Custom · Auto: default · Auto: importance selector (switching to Custom bakes
+      the current auto order so tiles don't jump). Verified live: selector persists, dashboard re-renders.
+- [ ] **UI — importance editing (next):** an Importance control in the per-tile gear panel, and let the
+      gear show on every tile while in importance mode (importance makes the panel non-empty, so this
+      respects C21). Then demonstrate a high-importance tile moving up in auto-importance mode.
 - [x] _Decision to confirm with user:_ resolved above (per-tile gear; size user-set). (per the
       "agree the spec first" rule).
 

@@ -12,8 +12,11 @@ and every commit updates this file under `Unreleased`.
   built-in order), or **Auto: importance** (sort by a per-tile importance, ties broken by the default
   order) — and the existing `Pack` then derives positions. Auto-layout only reorders; tile sizes stay
   user-set. Tile gained an `Importance` field (additive; older saved layouts keep working). Table-tested
-  (order determinism, stability, no-overlap-after-pack, no input mutation). The mode selector + a way to
-  set importance are the next (UI) steps.
+  (order determinism, stability, no-overlap-after-pack, no input mutation).
+- **Dashboard layout-mode selector (C24):** the dashboard header now has a Custom / Auto: default /
+  Auto: importance selector; the render path applies `Arrange` before `Pack`, the choice persists across
+  reloads, and a manual drag bakes the current arrangement and switches back to Custom. Verified live
+  (selector persists, dashboard re-renders cleanly). Setting per-tile importance is the next step.
 
 ### Changed
 - **Negative money now reads the same on every screen (C2):** all figure displays use one accounting

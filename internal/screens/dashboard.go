@@ -740,11 +740,29 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 // with a Reset layout action that restores the default arrangement.
 func dashboardHeaderCell() ui.Node {
 	layoutAtom := uistate.UseLayoutItems()
+	modeAtom := uistate.UseLayoutMode()
 	reset := func() {
 		d := dashlayout.DefaultItems()
 		layoutAtom.Set(d)
 		uistate.PersistItems(d)
 	}
+	// Layout-mode selector (C24): Custom keeps your hand-arranged order; the auto
+	// modes reorder the tiles (sizes stay as you set them). Switching to Custom
+	// bakes the current auto order into the sequence so nothing jumps.
+	onMode := ui.UseEvent(func(e ui.Event) {
+		m := dashlayout.Mode(e.GetValue())
+		if !m.Valid() {
+			return
+		}
+		if m == dashlayout.ModeCustom {
+			baked := dashlayout.Arrange(layoutAtom.Get(), modeAtom.Get())
+			layoutAtom.Set(baked)
+			uistate.PersistItems(baked)
+		}
+		modeAtom.Set(m)
+		uistate.PersistLayoutMode(m)
+	})
+	mode := modeAtom.Get()
 	return Div(Class("w"), Style(map[string]string{"grid-column": "1 / -1", "grid-row": "1"}),
 		Div(Class("flex-1 flex items-center px-5 gap-3"),
 			Div(Class("flex-1"),
@@ -752,6 +770,11 @@ func dashboardHeaderCell() ui.Node {
 				// so this in-canvas header is an <h2> to keep the heading order valid.
 				H2(Class("font-display text-2xl font-semibold tracking-tight"), uistate.T("dashboard.title")),
 				P(Class("text-dim mt-0.5 text-[13px]"), uistate.T("dashboard.hint")),
+			),
+			Select(Class("rstep text-[12px]"), Attr("title", uistate.T("dashboard.layoutMode")), OnChange(onMode),
+				Option(Value(string(dashlayout.ModeCustom)), SelectedIf(mode == dashlayout.ModeCustom), uistate.T("dashboard.layoutCustom")),
+				Option(Value(string(dashlayout.ModeAutoDefault)), SelectedIf(mode == dashlayout.ModeAutoDefault), uistate.T("dashboard.layoutAutoDefault")),
+				Option(Value(string(dashlayout.ModeAutoImportance)), SelectedIf(mode == dashlayout.ModeAutoImportance), uistate.T("dashboard.layoutAutoImportance")),
 			),
 			Button(Class("data-btn"), Type("button"), OnClick(reset), uistate.T("dashboard.reset")),
 		),

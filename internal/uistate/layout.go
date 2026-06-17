@@ -49,6 +49,38 @@ func loadItems() []dashlayout.Item {
 	return items
 }
 
+const (
+	layoutModeAtomID = "dashboard:layout-mode"
+	layoutModeStore  = "cashflux:layout-mode"
+)
+
+// UseLayoutMode returns the shared dashboard layout-mode atom (custom /
+// auto-default / auto-importance), seeded from localStorage. Custom is the
+// default so an existing, hand-arranged dashboard keeps its order (C24).
+func UseLayoutMode() state.Atom[dashlayout.Mode] {
+	return state.UseAtom(layoutModeAtomID, loadLayoutMode())
+}
+
+// PersistLayoutMode saves the dashboard layout mode across reloads.
+func PersistLayoutMode(m dashlayout.Mode) {
+	if !m.Valid() {
+		return
+	}
+	js.Global().Get("localStorage").Call("setItem", layoutModeStore, string(m))
+}
+
+// loadLayoutMode reads the saved mode, defaulting to Custom when absent/invalid.
+func loadLayoutMode() dashlayout.Mode {
+	v := js.Global().Get("localStorage").Call("getItem", layoutModeStore)
+	if v.IsNull() || v.IsUndefined() {
+		return dashlayout.ModeCustom
+	}
+	if m := dashlayout.Mode(v.String()); m.Valid() {
+		return m
+	}
+	return dashlayout.ModeCustom
+}
+
 const dragSrcAtomID = "dashboard:drag-source"
 
 // UseDragSource returns the shared atom holding the id of the widget currently

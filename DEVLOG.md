@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — feature C24 (wiring): layout-mode state + selector
+
+- Wired the auto-layout engine into the dashboard. State: `uistate.UseLayoutMode` /
+  `PersistLayoutMode` / `loadLayoutMode` (default Custom, mirrors the resolution-pref pattern). Render:
+  `ui.widget` now packs `Arrange(items, mode)` instead of the raw items, so each tile's grid placement
+  follows the active mode. UI: a mode `<select>` in the dashboard header (Custom / Auto: default / Auto:
+  importance) with i18n keys.
+- Two ordering subtleties handled: (1) a manual drag in an auto mode bakes the current *arranged* order
+  into the stored sequence and flips to Custom — otherwise the drop index (computed against the visual
+  order) wouldn't match the stored order. (2) Switching the selector to Custom likewise bakes the auto
+  order, so tiles don't jump back to an older hand-arrangement. Resize is order-independent, so it stays
+  untouched and works in every mode.
+- Verified live: the selector shows 3 options, defaults to Custom, persists `cashflux:layout-mode` on
+  change, and the dashboard re-renders cleanly (16 tiles) in each mode. Actual reordering is covered by
+  the model's table tests; it'll be visually demonstrable once importance is settable (next commit) —
+  on a fresh default layout all three modes coincide (canonical order), so there's nothing to see yet.
+- Note: tiles render in a fixed DOM order (dashboard.go source order); modes change CSS grid placement
+  (via Pack), not DOM order.
+
 ## 2026-06-17 — feature C24 (model): dashboard auto-layout engine
 
 - After clearing the whole C-series bug backlog (C1–C22 this session), asked the user which decision-
