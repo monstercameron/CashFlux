@@ -438,7 +438,10 @@ one-line a11y item in §1.20.
       medium were both `●`) — now uses distinct shapes ▲/●/○ plus accessible names.
 - [ ] **Contrast:** verify AA (4.5:1 text / 3:1 large+UI) for both themes — `text-faint` and accent-on-
       surface are suspect; bake checked values into the token set.
-- [ ] **Motion:** `prefers-reduced-motion` for the dashboard reorder/resize animations (B2) and the
+- [~] **Motion:** `prefers-reduced-motion` now also covers the flip-panel, toast slide-in, and rail
+      width (boot + rail flyout were already handled). Still TODO once they exist: the dashboard
+      reorder/resize animations (B2). Original note below:
+- [ ] (orig) **Motion:** `prefers-reduced-motion` for the dashboard reorder/resize animations (B2) and the
       flip panel (boot loader + settle already do).
 - [ ] **Zoom / reflow:** usable at 200% browser zoom and with enlarged browser font sizes — the
       px-heavy styling (see B6) is the risk; pairs with the B6 UI-scale work.

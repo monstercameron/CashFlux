@@ -110,6 +110,11 @@
       @media (prefers-reduced-motion: reduce) {
         #boot, #boot.hidden { transition: opacity 0.2s ease; transform: none; }
         .boot-ring, .boot-c, .boot-word, .boot-sub, #app.app-enter { animation: none; opacity: 1; }
+        /* No motion: the dialog appears in place (no flip/lift), the toast doesn't
+           slide in, and the rail resizes instantly. */
+        .flip-inner, .flip-backdrop { transition: none; }
+        .toast { animation: none; }
+        aside.rail { transition: none; }
       }
       #boot-error {
         display: none; position: fixed; inset: auto 1rem 1rem 1rem; z-index: 20;

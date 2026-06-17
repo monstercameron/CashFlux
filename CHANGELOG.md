@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: with the OS **"reduce motion"** preference on, the flip-panel no longer flips/lifts,
+  the toast no longer slides in, and the sidebar resizes instantly — the app respects users who are
+  sensitive to motion (the boot animation and rail flyout already did).
 - New pure `chartspec` package: a **typed, declarative chart description** (kind + series + axes +
   options) with `Validate` and data-`Extent` helpers — the framework-agnostic foundation for richer
   charts that any renderer (pure-Go SVG today, possibly D3 later) can consume. Fully table-tested.

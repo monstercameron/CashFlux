@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: prefers-reduced-motion for interaction animations
+
+- Extended the existing `@media (prefers-reduced-motion: reduce)` block to neutralize the remaining
+  interaction animations: `.flip-inner`/`.flip-backdrop` transitions (dialog appears in place, no
+  flip/lift), the `.toast` slide-in, and the `aside.rail` width transition. The boot animation and the
+  rail flyout were already handled (flyout is gated behind `no-preference`). Pure CSS in index.html —
+  no Go/wasm change. Minor residual transitions (toggle knob, button filter) left as-is (low motion).
+
 ## 2026-06-16 — B14: pure chartspec package (decision-independent half)
 
 - New pure package `internal/chartspec`: `Kind` (line/area/bar/donut) + `Point`/`Series`/`Axis`/`Spec`,
