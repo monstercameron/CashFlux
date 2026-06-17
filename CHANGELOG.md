@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- New pure `icon` package: the app's curated line-icon set is now a **type-safe registry** —
+  compile-checked `Name` constants with `Inner()`/`Valid()`/`All()` — so icons can't be referenced by
+  a typo'd string. Fully table-tested; the view layer adopts it next.
 - The Allocate screen's amount split now has a **"Max per destination"** input — cap how much any one
   account/goal/debt can receive, and the overflow is held back (reported in the kept-back note). This
   surfaces the split engine's already-tested per-destination cap.

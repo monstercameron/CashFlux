@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B13: pure icon registry (type-safe Name)
+
+- New pure package `internal/icon`: a `Name` type with compile-checked constants for the 16 curated
+  icons, each mapping to its inner SVG markup (lifted verbatim from the hand-rolled `ui.iconBody`), plus
+  `Inner()`/`Valid()`/`All()`. Kept the existing string names (not Lucide ids) so the later `ui.Icon`
+  rewire is mechanical and the glyphs stay pixel-identical. Tests: every constant resolves to non-empty
+  inner-only markup, unknown names are invalid/empty, `All()` is sorted and matches the curated set.
+- Scope/flag: this is B13's pure interface + data half. Deferred (separate slices): rewire `ui.Icon`
+  to take `icon.Name` and migrate call sites; and the optional generator to fetch real Lucide path data
+  (the current curated glyphs are already Lucide-format stroked SVGs, so that's a refinement not a
+  blocker). No `syscall/js`, so it's fully `go test`-verifiable.
+
 ## 2026-06-16 — allocate: max-per-destination input (§2.7)
 
 - Surfaced the `Distribute` engine's already-tested `MaxPer` cap in the Allocate amount-split UI: a new

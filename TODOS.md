@@ -337,8 +337,10 @@ existing viewBox/stroke/currentColor defaults (size + tint still via caller clas
   - *vs.* CDN + `lucide.createIcons()` rewriting `<i data-lucide>` — simpler but fights the framework's
     vdom and needs network; **not** recommended for this wasm/offline app.
 **Bottom-up plan:**
-- [ ] `internal/icon`: `Name` + curated constants + embedded Lucide path data; `Inner`/`Valid`; tests
-      (every constant resolves to non-empty data; `Valid` correct). Pure, no `syscall/js`.
+- [x] `internal/icon`: `Name` + curated constants (16 icons) + inner SVG markup (lifted from the
+      hand-rolled set), `Inner`/`Valid`/`All`; table-tested (every constant resolves to non-empty
+      inner-only markup, unknowns invalid/empty, `All` sorted). Pure, no `syscall/js`. Kept existing
+      names (not Lucide ids) so the rewire stays mechanical and glyphs identical.
 - [ ] Generator/script to fetch Lucide SVGs for the set and write the Go file (documented, repeatable).
 - [ ] Rewire `ui.Icon` to take `icon.Name`; migrate call sites (sidebar nav string names → Lucide ids).
 - [ ] Verify: all existing icons render identically/closely; unknown-name path is gone (compile-checked).
