@@ -535,13 +535,13 @@ UTC-dated transaction.
 The CLAUDE.md standard is accounting format — thousands separators + **parentheses** for negatives
 (`money.FormatAccounting`). It's applied on the **Dashboard** and the **Transactions list summary**
 (`$20,749.25`, `($1,500.00)`) but bypassed elsewhere, producing ugly/locale-naive output:
-- [x] **Grouping** — fixed in one place: `fmtMoney` now wraps `money.Group`, so Accounts/Budgets/Goals/
-      Allocate/etc. show `$20,749.25` not `$20749.25`.
-- [~] **Negative style** — `fmtMoney` still uses a minus sign while `fmtAccounting` uses parentheses, so
-      Transactions rows (`-$60.20`) differ from the Dashboard (`($60.20)`). Unifying to parentheses needs
-      per-context care (some `fmtMoney` outputs are inline/compact, and parentheses must never reach an
-      input value) and a browser check — left as a targeted `fmtAccounting` migration of the row/KPI
-      displays.
+- [x] **Grouping** — fixed in one place: `fmtMoney` now formats with thousands grouping, so
+      Accounts/Budgets/Goals/Allocate/etc. show `$20,749.25` not `$20749.25`.
+- [x] **Negative style** — unified. `fmtMoney` now renders accounting-style (parentheses + grouping),
+      identical to the old `fmtAccounting`, so Transactions rows now show `($60.20)` like the Dashboard.
+      The two formatters were collapsed into one canonical `fmtMoney`. Confirmed safe: `fmtMoney` is
+      display-only (no `Value(fmtMoney(...))` anywhere — inputs use `money.FormatMinor`/`ParseMinor`), so
+      parentheses can't reach an editable value. Verified live (Dashboard figures unchanged).
 
 ### C3. "Your household" card (rail bottom) is visually broken on every page ★
 **Symptom:** the bottom-left household card overlaps and clips its own text — the avatar bubble (which
@@ -705,6 +705,232 @@ Captured at 768px (tablet):
 - [ ] **KPI tile figures clip** (e.g. "$20,749.2", "$1,800.7$") when the bento is squeezed.
 - _Good:_ the Add/filter `form-grid`s do reflow to two columns cleanly — the pattern works; the rail,
   top bar, bento, and list rows are the parts that don't. (Pairs with C10.)
+
+---
+
+## D. Cross-component E2E workstream stories — budgeting · planning · finances ★
+
+Each story below is a **workstream**: one real user journey followed end-to-end, asserting that every
+component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
+UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
+**span components** so a change in one place is proven not to break the figures somewhere else.
+
+**How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so
+`gwc probe` / the screenshot harness in `.review-screenshots/` can drive these manually today; wire
+`gwc test -lane browser` into CI when ready). For every *computational* assertion, also add/strengthen
+a pure table-driven test in the owning logic package (`ledger`/`budgeting`/`forecast`/… ) so the
+invariant is guarded without a browser. **Discipline:** when a story surfaces a defect, file it (or
+extend a B/C item) and check the story's "fix:" box only when both the unit test and the journey pass.
+Known live findings are cross-linked inline.
+
+### Budgeting workstreams
+
+#### D1. Paycheck → spend → budget → dashboard, one period ★
+**Workstream:** add an income paycheck and a couple of category expenses, then confirm they flow into
+the ledger, the period totals, the matching budget's spent/left, the savings-rate widget, and the
+dashboard KPIs — all scoped to the same period.
+**Touches:** Transactions · `ledger.PeriodTotals` · `budgeting` · Budgets · Dashboard (Income/Spending/
+Savings KPIs) · `period.Window`.
+- [ ] Add an income txn dated the **1st** of the current month; assert Dashboard Income KPI rises by it
+      and the deposit count increments. **(Currently fails — C1 timezone boundary drops day-1 income.)**
+- [ ] Add a Food expense; assert Budgets "spent" rises, "left" falls, and the threshold tone updates.
+- [ ] Assert the same expense shows in the Dashboard Spending KPI and the savings-rate recomputes.
+- [ ] Switch resolution Week→Month→Quarter; assert the budget window and all KPIs re-window together.
+- [ ] Reload; assert every figure persists and still agrees across screens.
+- [ ] fix: any cross-screen disagreement — correct it in the shared `ledger`/`period` path, not per screen.
+
+#### D2. Budget near/over-limit lifecycle ★
+**Workstream:** drive a budget from under → near → over and back, watching indicators everywhere.
+**Touches:** `budgeting` (threshold eval) · Budgets (bar + summary) · Dashboard Budgets widget · a11y (color-not-only).
+- [ ] Add spend to cross the "near" threshold; assert bar tone + "Near limit" text on Budgets and widget.
+- [ ] Cross "over"; assert "Over budget" text + tone, and the summary "left" goes negative correctly.
+- [ ] Delete/adjust the txn back under; assert all indicators revert.
+- [ ] Assert the state is conveyed by **text + shape**, not color alone (B15 color-cue rule).
+- [ ] unit: `budgeting` threshold table test covers exact boundary (==limit, ==near%) values.
+
+#### D3. Category reassign-on-delete ripples into budgets & ledger ★
+**Workstream:** delete a category that has both transactions and a budget; reassign to a replacement.
+**Touches:** Categories · `appstate.ReassignCategory` · Transactions · Budgets · store · Dashboard breakdown.
+- [ ] Delete a used category, pick a replacement; assert all its transactions move to the replacement.
+- [ ] Assert the budget on the deleted category moves/points to the replacement (no orphan budget).
+- [ ] Assert spending breakdown + budget "spent" recompute against the new category.
+- [ ] Reload; assert no dangling `CategoryID` anywhere and totals unchanged.
+- [ ] fix: any orphaned reference; unit test `ReassignCategory` for txns **and** budgets.
+
+#### D4. Individual vs group budget scope aggregation
+**Workstream:** create one individual (member-owned) and one group budget on the same category; verify scope-correct spend.
+**Touches:** Members · Budgets (scope/owner) · `budgeting` (scope aggregation) · `ledger` per-member rollup.
+- [ ] Add expenses by different members; assert the individual budget counts only its owner's spend.
+- [ ] Assert the group budget counts the household's spend.
+- [ ] Edit a budget's owner inline; assert spend recomputes for the new scope.
+- [ ] unit: `budgeting` scope-aggregation test (individual vs group, mixed members).
+
+#### D5. Sub-category rollup into parent budget & breakdown
+**Workstream:** add a sub-category under a parent, spend on the sub, and confirm rollup.
+**Touches:** Categories (parentId tree) · `categorytree` · Dashboard breakdown (rolls sub→parent) · Budgets.
+- [ ] Create a sub-category; add spend on it; assert the dashboard breakdown rolls it up to the parent.
+- [ ] Assert a parent-category budget includes sub-category spend (define + assert the intended rule).
+- [ ] Reassign the sub's parent; assert rollup follows.
+- [ ] unit: `categorytree` rollup test (multi-level, reparent).
+
+#### D6. Budget methodology selector (envelope / zero-based / simple) — gap
+**Workstream:** pick a methodology and confirm the UI affordances and presets adapt.
+**Touches:** Settings (methodology — **not yet built**, §1.18/1.19) · Categories presets (`catscheme`) · Budgets.
+- [ ] **fix/build first:** add the methodology selector (currently missing) + persisted config.
+- [ ] Apply "zero-based"; assert the budgets view surfaces "assign every dollar" affordance.
+- [ ] Apply "envelope"; assert envelope-style view; switching methodologies doesn't corrupt data.
+- [ ] unit: config-layering test that methodology resolves defaults→household→member.
+
+#### D7. Month-boundary rollover correctness ★
+**Workstream:** step the period across a month/quarter/week boundary with transactions on the edges.
+**Touches:** `period.Window`/`Range`/`Truncate` · `dateutil` · `ledger.PeriodTotals` · Budgets · Dashboard.
+- [ ] Place txns on the **first** and **last** day of a month; step the window; assert each lands in
+      exactly one period (no drop, no double-count). **(C1: day-1 UTC txns currently dropped.)**
+- [ ] Repeat for week (honoring week-start) and quarter boundaries.
+- [ ] fix: adopt a single UTC-calendar-date convention across `period`/`dateutil`/`ledger`; unit-test
+      boundary membership under a **non-UTC** `time.Local`.
+
+### Planning workstreams
+
+#### D8. Recurring cash flow → autopost → ledger → forecast (no double-count) ★
+**Workstream:** add a recurring bill + paycheck, autopost the due ones, and project the forecast.
+**Touches:** Planning (Recurring) · `domain.Recurring.Cadence` · `appstate.PostDueRecurring` · Transactions · `forecast.Project` · Dashboard.
+- [ ] Add a monthly recurring expense + income; assert net-monthly total is correct.
+- [ ] "Post due now"; assert exactly the due occurrences become transactions (none missed/duplicated).
+- [ ] Assert the forecast projects from start + recurring **without double-counting** already-posted actuals.
+- [ ] Advance the period and re-post; assert idempotence (no duplicate posts for the same due date).
+- [ ] unit: `Cadence.Next/Advance` + a forecast-vs-actuals no-double-count test.
+
+#### D9. Debt payoff scenario → allocate → balances ★
+**Workstream:** model a credit-card payoff, then allocate extra cash toward it and watch the liability fall.
+**Touches:** Planning (`payoff.Project`) · Accounts (liability, APR, min payment) · Allocate (`allocate` debt scorer + `Distribute`) · `ledger` net worth.
+- [ ] Enter balance/APR/min payment; assert months-to-clear + total interest match `payoff`.
+- [ ] Add an extra payment; assert months & interest saved recompute.
+- [ ] On Allocate, assert the card ranks high under the debt-reduction criterion and `Distribute` honors
+      the emergency buffer + max-per-destination.
+- [ ] Post a payment; assert the liability balance and net worth update consistently.
+- [ ] unit: `payoff` boundary tests (payment==interest, payoff month) + `allocate.Distribute` reserve/cap.
+
+#### D10. What-if trim-spending → forecast curve vs actuals
+**Workstream:** apply a "trim monthly spending by X" what-if and compare the projected net-worth curve.
+**Touches:** Planning (trim what-if) · `forecast` · `ledger.NetWorthSeries` · chart (`ui.Chart`).
+- [ ] Enter a trim amount; assert the projected end balance shifts by the right delta.
+- [ ] Assert the chart redraws and the axis is **in dollars, not cents** (**C16**).
+- [ ] Compare scenario vs actual baseline side by side (build the comparison — §2.6 gap).
+- [ ] unit: `forecast.Project` with a spending delta over the horizon.
+
+#### D11. Plan (start balance + monthly) projection → dashboard surfacing
+**Workstream:** create a savings/spending plan and see its projection.
+**Touches:** Planning (`planning.Project`/`EndBalance`) · store (`plans`) · Dashboard (formula/plan slot — §1.17 gap).
+- [ ] Create a plan (name/horizon/start/monthly); assert projected end balance matches `planning.EndBalance`.
+- [ ] Add a one-time item in a future month; assert the curve bends at that month.
+- [ ] Reload; assert the plan persists and re-projects identically.
+- [ ] unit: `planning.Project`/`MonthlyNet`/`EndBalance` with one-time items.
+
+#### D12. Goal pace → linked-account contributions → allocate
+**Workstream:** create a goal linked to an account, contribute, and see pace + allocation interplay.
+**Touches:** Goals (`goals` pace/projection) · Accounts (linked) · Allocate (goal-progress criterion) · Dashboard goal widget.
+- [ ] Create a goal with a target date + linked account; assert monthly-needed + projected completion.
+- [ ] Contribute; assert progress %, remaining, and the dashboard goal widget update.
+- [ ] On Allocate, assert "Finish goals" preset feeds `GoalProgress` and ranks the goal sensibly.
+- [ ] unit: `goals.MonthlyNeeded`/projection + allocate goal-progress scorer.
+
+#### D13. Net-worth forecast horizon correctness ★
+**Workstream:** project net worth over the horizon from recurring + one-time items and validate edges.
+**Touches:** `forecast.Project` · `ledger.NetWorthSeries` · Planning chart · Dashboard trend widget.
+- [ ] Assert out-of-horizon items are ignored; same-month items sum; negative balances allowed.
+- [ ] Assert the dashboard trend widget and the planning curve agree for overlapping months.
+- [ ] Assert chart values are dollars (**C16**) and labels are readable at the widget's width.
+- [ ] unit: `forecast` horizon/edge tests (already partial — extend for net-worth feed).
+
+### Finances workstreams
+
+#### D14. Transfer between accounts (paired, excluded from totals) ★
+**Workstream:** transfer money between two accounts and confirm it's balance-neutral to income/expense.
+**Touches:** Transactions (transfer) · `domain.IsTransfer` · `ledger` (Balance, PeriodTotals exclude transfers) · Dashboard · net worth.
+- [ ] Create a transfer; assert both account balances move and net worth is unchanged.
+- [ ] Assert Income/Spending KPIs and budgets are **not** affected by the transfer.
+- [ ] Delete one leg; assert the paired leg is removed too.
+- [ ] unit: `ledger.PeriodTotals`/Balance transfer-exclusion + paired-delete.
+
+#### D15. Reconciliation: clear → cleared balance → update-balance adjustment ★
+**Workstream:** clear transactions, reconcile against a real balance, and let the app post an adjustment.
+**Touches:** Transactions (cleared toggle + filter) · `ledger.ClearedBalance` · Accounts ("Update balance") · `freshness` (BalanceAsOf).
+- [ ] Toggle cleared on several txns; assert cleared balance = opening + cleared only.
+- [ ] Use "Update balance" with a different real balance; assert a cleared adjustment txn for the diff is
+      created and `BalanceAsOf` is set.
+- [ ] Assert the staleness badge clears after the update (ties D17).
+- [ ] unit: `ledger.ClearedBalance` + adjustment-amount math.
+
+#### D16. Multi-currency FX across every aggregate ★
+**Workstream:** add a foreign-currency account + txns and confirm base-currency conversion everywhere.
+**Touches:** Settings (base currency + FX rates) · `currency.Rates.Convert/ToBase` · `ledger` (net worth, totals) · Budgets · `forecast` · displays.
+- [ ] Add a non-base account + foreign txns; assert net worth, period totals, and budgets convert to base.
+- [ ] Edit an FX rate; assert every aggregate re-converts live.
+- [ ] Assert a missing/zero rate surfaces a clear error, not a silent wrong total.
+- [ ] Assert rounding is to target minor units and is stable (no drift on re-render).
+- [ ] unit: `currency` cross-rate + rounding + missing-rate tests (extend existing).
+
+#### D17. Staleness → nudge → task ★
+**Workstream:** let an account go stale, get nudged, and turn the nudge into a to-do.
+**Touches:** `freshness.IsStale` · Accounts (Stale badge, Mark updated) · Dashboard freshness widget · To-do (create-from-nudge).
+- [ ] Age a balance past its window; assert the Stale badge + dashboard "N balances need a refresh".
+- [ ] "Remind me"; assert a nudge task is created in To-do.
+- [ ] "Mark updated" / update balance; assert staleness clears and the nudge count drops.
+- [ ] Assert recurring-bill exemption is respected.
+- [ ] unit: `freshness.IsStale` windows + exemption; **1.15** dismissal-state test (gap).
+
+#### D18. Net-worth assembly across members & group ★
+**Workstream:** mix individual and shared assets/liabilities and verify the net-worth breakdown.
+**Touches:** Accounts (scope/owner/class) · `ledger.NetWorth` + per-member/group rollups · Members ("Net worth by member") · Dashboard.
+- [ ] Assert net worth = assets − liabilities in base currency, matching the Accounts header and KPI.
+- [ ] Assert per-member rollup sums to the household total (individual + group).
+- [ ] Archive an account; assert it drops out of net worth but is restorable.
+- [ ] unit: `ledger.NetWorth` + rollup tests (multi-member, multi-currency, archived).
+
+#### D19. Member add/reassign/delete ripples ★
+**Workstream:** add a member, reassign ownership, then delete a member with owned entities.
+**Touches:** Members · `appstate.ReassignOwner` · Accounts/Budgets/Goals/Transactions (owner) · net worth rollups.
+- [ ] Add a member + set default; assert default-member behavior in new forms.
+- [ ] Reassign owned accounts/budgets/goals/txns to another owner; assert all move.
+- [ ] Delete the member; assert no orphaned `OwnerID`/`MemberID` and rollups recompute.
+- [ ] unit: `ReassignOwner` across all four entity types.
+
+#### D20. Rules auto-categorize on entry & import ★
+**Workstream:** define rules, then add/import transactions and confirm category/tags are applied (and conflicts handled).
+**Touches:** Rules (`rules` engine, conflicts) · `rulesuggest` · Transactions (entry auto-fill) · Documents (import) · `appstate.ApplyRules` · Budgets/breakdown impact.
+- [ ] Add a rule; type a matching description; assert category + tags auto-fill without overriding a manual pick.
+- [ ] Import a CSV/image; assert rows are categorized by first-match rule; assert budget/breakdown reflect it.
+- [ ] "Apply to existing"; assert pre-existing uncategorized txns get categorized.
+- [ ] Assert a shadowed/never-fires rule shows the conflict warning.
+- [ ] unit: `rules.FirstMatch`/`Conflicts` + `ApplyRules` retroactive path.
+
+#### D21. Document import → review → dedupe → ledger → derived figures ★
+**Workstream:** import via CSV and via image (vision), review, dedupe, import to ledger, and verify downstream.
+**Touches:** Documents (CSV + image) · `extract.ParseRows` · `ai` vision codec · dedupe · store (`documents`) · Transactions · Dashboard/Budgets/net worth · `spendsummary`.
+- [ ] Paste a CSV with a header; assert rows map by column name and import to the chosen account.
+- [ ] Import the same rows again; assert same-date+amount dedupe skips them and reports the count.
+- [ ] (Image path, key set) assert vision extraction → review edits → import; assert an Import-history entry.
+- [ ] Assert imported txns update Spending KPI, budgets, and the monthly-spend summary.
+- [ ] unit: `extract` parsing/dedupe + CSV column mapping.
+
+#### D22. Custom fields + formula over live figures
+**Workstream:** define a custom field, fill it on an entity, and reference live figures in a saved formula.
+**Touches:** Customize (custom fields + formula) · `customfields.Validate` · `formula` (Tokenize/Parse/Eval, `Env`) · store round-trip.
+- [ ] Add a custom field to an entity; assert it renders on that entity's add/edit form and validates by type.
+- [ ] Build a formula (e.g. `round((income-expense)/income*100)`); assert the live result matches the figures.
+- [ ] Save the formula; reload; assert it persists and re-evaluates.
+- [ ] Assert sandbox safety: a non-allowlisted function / unknown var errors cleanly (no escape).
+- [ ] unit: `formula` eval + security + `customfields.Validate` round-trip.
+
+#### D23. Accounting money display consistency on every surface ★
+**Workstream:** the same money value renders identically (grouped thousands, parentheses for negatives) everywhere it appears.
+**Touches:** `money.FormatAccounting` · Dashboard · Accounts · Budgets · Goals · Transactions · Planning · charts.
+- [ ] Pick one negative and one large value; assert identical formatting on every screen that shows it.
+- [ ] **(Currently fails — C2:** Accounts/Budgets/Goals drop grouping; Transactions use `-` not parentheses.)**
+- [ ] Assert chart axes/labels use major units + currency formatting (**C16**).
+- [ ] fix: route every money render through `money.FormatAccounting`; add a guard test/shared helper so
+      new surfaces can't bypass it.
 
 ---
 

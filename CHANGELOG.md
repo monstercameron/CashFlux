@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Negative money now reads the same on every screen (C2):** all figure displays use one accounting
+  formatter, so negatives show in parentheses (`($60.20)`) with thousands grouping everywhere — the
+  Transactions list, Accounts, Budgets, Goals, Allocate, Planning, etc. now match the Dashboard instead
+  of mixing in a minus sign (`-$60.20`). The two display formatters (`fmtMoney`/`fmtAccounting`) were
+  collapsed into one. Editable inputs are unaffected (they format with a plain minus and never parse a
+  parenthesized value). Verified live in a headless browser (Dashboard figures unchanged: `$20,749.25`,
+  `($1,500.00)`).
 - **Dashboard tiles now reflow instead of overlapping (C14/B2):** the bento is now an ordered sequence
   packed into the grid, so dragging a tile reorders it and the others flow to fill the gap, and resizing
   reflows around the new size — fixing the old behavior where a widened tile overlapped its neighbor and

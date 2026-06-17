@@ -89,7 +89,7 @@ func Dashboard() ui.Node {
 	})
 
 	// Net-worth change since the start of this month (end of last month).
-	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtAccounting(assets)), "text-dim"
+	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
 	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
 		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
 			if d < 0 {
@@ -105,22 +105,22 @@ func Dashboard() ui.Node {
 		uiw.Widget(uiw.WidgetProps{
 			ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
 			GridColumn: "1", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtAccounting(net), figTone(net), nwSub, nwTone),
+			Body: kpiBody(fmtMoney(net), figTone(net), nwSub, nwTone),
 		}),
 		uiw.Widget(uiw.WidgetProps{
 			ID: "kpi-income", Title: uistate.T("dashboard.income"), Draggable: true, Resizable: true,
 			GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtAccounting(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
+			Body: kpiBody(fmtMoney(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
 			ID: "kpi-spending", Title: uistate.T("dashboard.spending"), Draggable: true, Resizable: true,
 			GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtAccounting(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
+			Body: kpiBody(fmtMoney(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
 		}),
 		uiw.Widget(uiw.WidgetProps{
 			ID: "kpi-liabilities", Title: uistate.T("dashboard.liabilities"), Draggable: true, Resizable: true,
 			GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtAccounting(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
+			Body: kpiBody(fmtMoney(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
 		}),
 		recentWidget(txns, widgetCfgs.For("recent")),
 		budgetsWidget(app, txns, rates, widgetCfgs.For("budgets")),
@@ -200,7 +200,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 			rows = append(rows, Div(Class("flex justify-between"),
 				Span(b.name),
 				Span(Class(dueTone), b.due.Format("Jan 2")),
-				Span(Class("font-display fig text-down w-24 text-right"), fmtAccounting(b.amount.Neg())),
+				Span(Class("font-display fig text-down w-24 text-right"), fmtMoney(b.amount.Neg())),
 			))
 		}
 		body = Div(Class("text-[13px] space-y-2.5"), rows)
@@ -429,7 +429,7 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 	}
 	netBlock := Div(Class("ml-auto text-right"),
 		Div(Class("text-[11px] text-faint"), "net · "+last.label),
-		Div(Class("font-display fig text-lg "+netTone), fmtAccounting(netMoney)),
+		Div(Class("font-display fig text-lg "+netTone), fmtMoney(netMoney)),
 	)
 
 	return uiw.Widget(uiw.WidgetProps{
@@ -463,8 +463,8 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 		Series: []chartspec.Series{{Name: "Net worth", Points: pts}}, // empty Color → theme accent
 	}
 	body := Div(Class("flex flex-col h-full"),
-		Div(Class("font-display fig text-[22px]"), fmtAccounting(net)),
-		uiw.Chart(uiw.ChartProps{Spec: spec, Height: "120px", Label: uistate.T("dashboard.netWorthChartLabel", fmtAccounting(net))}),
+		Div(Class("font-display fig text-[22px]"), fmtMoney(net)),
+		uiw.Chart(uiw.ChartProps{Spec: spec, Height: "120px", Label: uistate.T("dashboard.netWorthChartLabel", fmtMoney(net))}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "trend", Title: uistate.T("dashboard.netWorthTrend"), Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",
@@ -503,7 +503,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.
 		}
 		cells = append(cells, Div(
 			Div(Class("text-dim"), a.Name),
-			Div(Class("font-display fig mt-0.5 "+tone), fmtAccounting(bal)),
+			Div(Class("font-display fig mt-0.5 "+tone), fmtMoney(bal)),
 		))
 		if len(cells) >= limit {
 			break
@@ -607,7 +607,7 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	body := Div(
 		Div(Class("flex justify-between text-[13px]"),
 			Span(Class("text-dim"), "saved"),
-			Span(Class("font-display fig"), fmtAccounting(g.CurrentAmount)+" / "+fmtAccounting(g.TargetAmount)),
+			Span(Class("font-display fig"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 		),
 		uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: "bg-fg", Class: "mt-2"}),
 		Div(Class("text-[12px] text-dim mt-1.5"), caption),
@@ -711,7 +711,7 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 			rows = append(rows, Tr(Class("border-b border-line/70"),
 				Td(Class("py-2.5 fig text-dim w-16"), t.Date.Format("Jan 2")),
 				Td(Class("py-2.5"), t.Desc),
-				Td(Class("py-2.5 text-right font-display fig "+figTone(t.Amount)), fmtAccounting(t.Amount)),
+				Td(Class("py-2.5 text-right font-display fig "+figTone(t.Amount)), fmtMoney(t.Amount)),
 			))
 		}
 		body = Table(Class("w-full text-[13px]"), Tbody(rows))

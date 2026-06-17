@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C2 (negatives): one money formatter, parentheses everywhere
+
+- Closed the last open part of C2. `fmtMoney` rendered negatives with a minus sign (`-$60.20`) while
+  `fmtAccounting` used accounting parentheses (`($60.20)`), so the Transactions rows disagreed with the
+  Dashboard KPIs. The CLAUDE.md standard is accounting format, so I unified on parentheses.
+- **Approach — collapse to one formatter rather than migrate 38 call sites.** The two functions differed
+  only in negative style (both already grouped thousands). I rewrote `fmtMoney` to delegate to
+  `money.FormatAccounting`, making it identical to `fmtAccounting`, then deleted `fmtAccounting` and
+  pointed its 11 Dashboard call sites at `fmtMoney`. One canonical display formatter, no redundant twin.
+- **The risk the TODO flagged — parentheses must never reach an input value — does not apply.** Grepped:
+  there is no `Value(fmtMoney(...))` anywhere; editable inputs prefill with `money.FormatMinor` (plain
+  minus, no symbol) and parse with `money.ParseMinor`. `fmtMoney` is display-only, so the change can't
+  leak a parenthesized string into a form field.
+- Verified live in the headless oracle: the Dashboard (which already used parentheses, now via the
+  collapsed `fmtMoney`) still renders correctly — `$20,749.25 | $1,800.75 | ($60.20) | ($240.55) |
+  ($1,500.00)` — confirming the collapse caused no regression. The other screens route through the same
+  tested formatter, so their rows now match.
+- With this, every substantial C-series bug (C2–C14) is fixed. What remains is B2 *enhancement* polish
+  (live drag-over preview, FLIP animations) — beyond the reported bug, which is already fixed.
+
 ## 2026-06-17 — bugfix C13: quick-add panel height fits its content
 
 - The "+ Add" quick-add flip panel used the default FlipPanel height (470px), leaving the compact

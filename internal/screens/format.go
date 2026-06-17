@@ -9,22 +9,14 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
-// fmtMoney renders a Money value for display with thousands grouping, e.g.
-// "$1,234.56" or "-$240.55". (Negatives keep a minus sign; the parenthesized
-// accounting style is fmtAccounting.)
+// fmtMoney renders a Money value for display in the candidate-C accounting
+// figure style: thousands grouping, the currency symbol, and parentheses for
+// negatives — "$1,234.56" for positives and "($240.55)" for negatives. This is
+// the single money-display formatter so figures read identically on every
+// screen (C2). It is display-only; editable inputs format with
+// money.FormatMinor (no symbol, plain minus) so a value never round-trips
+// through parentheses.
 func fmtMoney(m money.Money) string {
-	sym := currency.Symbol(m.Currency)
-	s := money.Group(money.FormatMinor(m.Amount, currency.Decimals(m.Currency)))
-	if strings.HasPrefix(s, "-") {
-		return "-" + sym + s[1:]
-	}
-	return sym + s
-}
-
-// fmtAccounting renders a Money in the candidate-C accounting figure style:
-// "$1,234.56" for positives and "($240.55)" for negatives, with thousands
-// grouping and the currency's symbol.
-func fmtAccounting(m money.Money) string {
 	return money.FormatAccounting(m.Amount, currency.Decimals(m.Currency), currency.Symbol(m.Currency))
 }
 
