@@ -577,8 +577,9 @@ you can't tell which is returns / stability / liquidity / debt-reduction / goal-
       prompt to set allocation attributes.
 
 ### C7. Budgets — duplicate "Food · Food" label + double period control
-- [ ] The budget row reads **"Food · Food"** (budget name "Food" + category "Food"). Don't repeat when
-      name == category; show one, or label as "Budget · Category" only when they differ.
+- [x] The budget row reads **"Food · Food"** — fixed: `BudgetRow` now shows one label when name ==
+      category (case-insensitive), just the category when unnamed, and "name · category" only when they
+      differ.
 - [ ] Two month pickers compete: the global top-bar `Jun 2026` and the Budgets card's own `June 2026`
       stepper — and the formats differ ("Jun" vs "June"). Consolidate to one control + one format.
 
@@ -592,7 +593,8 @@ Add button — no visible swatch/label, looks broken.
       0–100") — the row crams ~9 inputs; wrap/space them or use a two-row form.
 - [ ] **Accounts** rows expose 6 actions each (Transactions / Update balance / Mark updated / Edit /
       Archive / ✕) — visually busy; consider an overflow menu for secondary actions.
-- [ ] **Goals** add form has an unlabeled `0` field (current amount) with no placeholder — label it.
+- [x] **Goals** add form's current-amount field — already labelled with a "Saved so far" placeholder
+      (stale report; verified in current code).
 - [ ] **Categories** don't display their color anywhere despite a color field; show the swatch on rows.
 - [ ] **Insights** is bare without a key (just the "Explain my month" prompt) — surface the offline
       Spending-highlights card and the "Ask about your money" box even before a key is set.
@@ -612,8 +614,8 @@ off the right edge. The app is effectively unusable on a phone.
 **Symptom:** clicking the gear on a no-schema widget (e.g. Net worth) opens the flip panel reading
 "This widget doesn't have any settings yet." — yet it still shows a **Save** button, implying there's
 something to save.
-- [ ] Either hide the gear on widgets that have no settings schema, or replace Cancel/Save with a
-      single Close when the panel is empty. (Relates to B12 — register the remaining schemas.)
+- [x] Replaced Cancel/Save with a single **Close** when a widget's settings panel is empty —
+      `FlipPanel.CloseOnly` set via `!widgetcfg.Has(id)` in `SettingsHost`. (C11)
 
 ### C12. Settings panel: "Display scale" row is clipped by the footer
 **Symptom:** in the global Settings flip panel, the last Appearance row ("Display scale") is cut off
@@ -627,6 +629,33 @@ The "+ Add" flip panel jumps straight to a tall "Add a transaction" form with lo
 space and no other add actions. (Already tracked as the open part of **B11** — scan bill / scan
 document / custom workflow cards.) Logged here for review continuity; also tighten the panel height to
 its content.
+
+### C14. Dashboard grid resize is broken in practice + can't shrink ★ (UX — this grid templates custom pages)
+**Reported:** Shift+click resize "doesn't work" and there's no simple way to shrink a tile. Confirmed
+empirically by driving the live app (held Shift, clicked the right edge handle, watched the inline
+style):
+- **It fires once, then self-destructs.** The first Shift+click correctly grew `kpi-networth` from
+  `grid-area: 2 / 1` to `2 / 1 / auto / span 2`. But the layout is **absolute placement with no
+  packing** (`internal/dashlayout` Default + `Resize` set spans without reflow), so the now-2-wide tile
+  **overlaps** `kpi-income` (col 2, row 2). The overlapping neighbor paints over the resize handle, so
+  the **second** click is intercepted (Playwright click times out). To the user this looks like "resize
+  doesn't work." This is the same root cause as **B2** (absolute placement + pairwise `Swap`/`Resize`,
+  no `Pack`).
+- **No way to shrink — by design.** Each handle (`internal/ui/widget.go` `.rz` `OnClick`) only
+  *increments* the span and *wraps* at the max (`maxColSpan 4`, `maxRowSpan 3`): a 2-wide tile shrinks
+  only via `3 → 4 → 1`. No drag, no shrink handle; the handle tooltips say only "Widen"/"Taller", so the
+  wrap-to-shrink is invisible.
+- **Poor affordance/discoverability.** Resize needs *holding Shift* while clicking a 3px bar inside an
+  11px edge strip, with no on-screen hint that Shift is the trigger. It's click-to-cycle, not the drag
+  gesture users expect (`widget.go` comment: "click-cycle for now, pointer-drag later").
+- **Silent no-op for off-layout widgets.** `Resize`/`Swap` return the layout unchanged for any id not in
+  the layout (`indexOf == -1`), and the grid then falls back to the props defaults — so a widget whose
+  id isn't in `Default()`/the persisted layout can't be resized or reordered at all (relevant once this
+  grid backs custom pages with arbitrary widget ids).
+**Fix:** this is the B2 work — do **B2 first** (ordered sequence + pure `Pack` bin-packing so spans
+never overlap + `Move`/re-pack + pointer drag-resize with an explicit shrink direction + FLIP animation)
+before reusing this grid as the custom-pages template. Add table tests that a grow never produces
+overlapping cells and that shrink is reachable in one gesture.
 
 ---
 

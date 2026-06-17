@@ -42,9 +42,12 @@ func SettingsHost() uic.Node {
 		})
 	default: // "widget"
 		return ui.FlipPanel(ui.FlipPanelProps{
-			Title:   target.Title,
-			Back:    uic.CreateElement(widgetSettingsForm, widgetSettingsFormProps{ID: target.ID, Title: target.Title}),
-			OnClose: closePanel,
+			Title: target.Title,
+			Back:  uic.CreateElement(widgetSettingsForm, widgetSettingsFormProps{ID: target.ID, Title: target.Title}),
+			// A widget with no settings schema has nothing to save — show a single
+			// Close button instead of a misleading Cancel/Save (C11).
+			CloseOnly: !widgetcfg.Has(target.ID),
+			OnClose:   closePanel,
 		})
 	}
 }

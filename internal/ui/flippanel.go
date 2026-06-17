@@ -17,6 +17,10 @@ type FlipPanelProps struct {
 	Height  string   // panel height, default "470px" (use "560px" for global settings)
 	OnSave  func()   // invoked on Save (then the panel closes)
 	OnClose func()   // invoked on Cancel/close (and after Save)
+	// CloseOnly replaces the Cancel/Save footer with a single Close button — for
+	// panels that have nothing to save (e.g. a widget with no settings), so the UI
+	// doesn't imply there's something to commit.
+	CloseOnly bool
 }
 
 // FlipPanel is the candidate-C settings overlay shared by both per-widget and
@@ -135,6 +139,32 @@ func flipPanel(props FlipPanelProps) uic.Node {
 
 	onClose, onSave := props.OnClose, props.OnSave
 
+	save := func() {
+		if onSave != nil {
+			onSave()
+		}
+		if onClose != nil {
+			onClose()
+		}
+	}
+	cancel := func() {
+		if onClose != nil {
+			onClose()
+		}
+	}
+	var foot uic.Node
+	if props.CloseOnly {
+		// Nothing to save: a single Close button (no Cancel/Save pair).
+		foot = Div(Class("set-foot"),
+			Button(Class("set-btn save"), Type("button"), OnClick(save), "Close"),
+		)
+	} else {
+		foot = Div(Class("set-foot"),
+			Button(Class("set-btn cancel"), Type("button"), OnClick(cancel), "Cancel"),
+			Button(Class("set-btn save"), Type("button"), OnClick(save), "Save"),
+		)
+	}
+
 	return Div(Class(backdropCls),
 		Div(Class("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
 			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-label", props.Title),
@@ -158,27 +188,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 						),
 					),
 					Div(Class("set-body"), props.Back),
-					Div(Class("set-foot"),
-						Button(Class("set-btn cancel"), Type("button"),
-							OnClick(func() {
-								if onClose != nil {
-									onClose()
-								}
-							}),
-							"Cancel",
-						),
-						Button(Class("set-btn save"), Type("button"),
-							OnClick(func() {
-								if onSave != nil {
-									onSave()
-								}
-								if onClose != nil {
-									onClose()
-								}
-							}),
-							"Save",
-						),
-					),
+					foot,
 				),
 			),
 		),

@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — bugfix C11: empty widget panel showed Save
+
+- Added a `CloseOnly` option to `ui.FlipPanel`: when set, the footer is a single "Close" button instead
+  of Cancel/Save (refactored the footer into a precomputed node + shared save/cancel closures).
+  `SettingsHost` sets `CloseOnly: !widgetcfg.Has(target.ID)` for the per-widget panel, so a widget with
+  no settings schema no longer shows a Save button implying there's something to commit. Verified by
+  inspection (the placeholder body "This widget doesn't have any settings yet." now pairs with Close).
+  Also checked C9's "goals unlabeled current-amount field" — already fixed (it has a "Saved so far"
+  placeholder), so that one was stale. wasm + vet green.
+
+## 2026-06-16 — bugfix C7: budget row "Food · Food"
+
+- Shifted to the C-series UI bugs. `BudgetRow` built its label as `Name + " · " + Category`
+  unconditionally, so a budget named after its category read "Food · Food", and an unnamed budget read
+  "· Food". Replaced with a switch: empty name → show the category alone; name == category
+  (case-insensitive) → show one; otherwise "name · category". Code-logic fix verified by inspection
+  (no browser needed). C7's second part (the Budgets card's own month stepper duplicating the global
+  resolution control) is a separate UX concern tied to C4/B10 — left for its own slice. wasm + vet green.
+
 ## 2026-06-16 — B14: migrate net-worth trend widget to ui.Chart (proof)
 
 - Migrated `netWorthTrendWidget` from the pure-SVG `uiw.AreaChart` to `uiw.Chart`: build a

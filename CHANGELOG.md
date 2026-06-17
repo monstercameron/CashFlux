@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- A widget whose gear opens a settings panel with **no settings** now shows a single **Close** button
+  instead of a Cancel/Save pair that implied there was something to commit. (C11)
+- Budget rows no longer show a redundant **"Food · Food"** when a budget is named after its category —
+  they show one label; an unnamed budget shows just its category (no leading "· "). (C7)
+
 ### Changed
 - The dashboard's **net-worth trend** widget now renders through the new D3 `ui.Chart` (with axes)
   instead of the pure-SVG sparkline — the proof of the D3 pipeline. (Other charts still use the

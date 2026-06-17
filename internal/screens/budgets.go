@@ -325,8 +325,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		label = uistate.T("budgets.overBudget")
 	}
 
+	// Show "name · category" only when they add information: an unnamed budget
+	// shows just its category, and a budget named after its category ("Food" for
+	// the Food category) shows one label, not a redundant "Food · Food".
 	title := s.Budget.Name
-	if props.Category != "" {
+	switch {
+	case title == "":
+		title = props.Category
+	case props.Category != "" && !strings.EqualFold(props.Category, title):
 		title += " · " + props.Category
 	}
 
