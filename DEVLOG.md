@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B14: migrate net-worth trend widget to ui.Chart (proof)
+
+- Migrated `netWorthTrendWidget` from the pure-SVG `uiw.AreaChart` to `uiw.Chart`: build a
+  `chartspec.Spec{Kind: Area, Series: [{Points: (i, netWorth[i])}]}` (empty Color → theme accent) and
+  render it at 120px. This is the B14 proof that the Go → JSON → D3 pipeline works end to end. Kept the
+  blast radius to one widget — `AreaChart` still renders the planning forecast and the plan-row
+  sparklines — so if D3 misbehaves only this widget is affected. wasm + vet green. **Needs an
+  in-browser smoke test** (D3 render correctness, theme colors, resize) before declaring parity and
+  migrating the rest.
+
 ## 2026-06-16 — B14: ui.Chart Go component (drives the D3 shim)
 
 - Added `internal/ui/chartd3.go` — `ui.Chart(ChartProps{Spec, Height, Class, Label})`. It renders a

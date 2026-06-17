@@ -393,8 +393,11 @@ which chart kinds first (line/area/bar/donut)?
 - [x] `ui.Chart` (`internal/ui/chartd3.go`): managed container (stable `UseId`) + `UseEffect` keyed on
       the serialized spec that calls `cashfluxRenderChart`; clears on unmount; theme-aware via the shim.
       `role="img"`+label. (D3 render needs a browser check.)
-- [ ] Migrate one widget (e.g. net-worth trend) to `ui.Chart` as the proof; keep others until parity.
-- [ ] Verify: chart renders + updates on data change, survives hot-reload, works offline, matches theme.
+- [x] Migrated the dashboard **net-worth trend** widget to `ui.Chart` (Area spec) as the proof; the
+      pure-SVG `AreaChart` still renders the planning forecast + plan sparklines (kept until parity).
+- [ ] **Verify in a browser** (the one step I can't do here): the D3 trend chart renders + updates on
+      data change, survives hot-reload, works offline (SW cache), and matches light/dark. Then migrate
+      the remaining charts and retire `AreaChart`.
 
 ### B15. App-wide accessibility — spike + program ★
 

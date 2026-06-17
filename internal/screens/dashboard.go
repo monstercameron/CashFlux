@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -453,13 +454,17 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 		cutoffs = append(cutoffs, dateutil.AddMonths(start, i-(months-2))) // window ends at the current month +1
 	}
 	series, _ := ledger.NetWorthSeries(accounts, txns, cutoffs, rates)
-	values := make([]float64, len(series))
+	pts := make([]chartspec.Point, len(series))
 	for i, m := range series {
-		values[i] = float64(m.Amount)
+		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount)}
+	}
+	spec := chartspec.Spec{
+		Kind:   chartspec.Area,
+		Series: []chartspec.Series{{Name: "Net worth", Points: pts}}, // empty Color → theme accent
 	}
 	body := Div(Class("flex flex-col h-full"),
 		Div(Class("font-display fig text-[22px]"), fmtAccounting(net)),
-		uiw.AreaChart(uiw.AreaChartProps{Values: values, GradientID: "cf-networth", Label: uistate.T("dashboard.netWorthChartLabel", fmtAccounting(net))}),
+		uiw.Chart(uiw.ChartProps{Spec: spec, Height: "120px", Label: uistate.T("dashboard.netWorthChartLabel", fmtAccounting(net))}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "trend", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",

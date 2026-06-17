@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- The dashboard's **net-worth trend** widget now renders through the new D3 `ui.Chart` (with axes)
+  instead of the pure-SVG sparkline — the proof of the D3 pipeline. (Other charts still use the
+  pure-SVG renderer; this one needs an in-browser check.)
+
 ### Added
 - Charting (D3): a Go `ui.Chart` component now drives the D3 shim — it owns a managed container and an
   effect (keyed on the serialized spec) that hands the element and a `chartspec.Spec` to D3, redrawing
