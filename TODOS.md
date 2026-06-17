@@ -628,11 +628,12 @@ sale"). The body doesn't scroll far enough to clear the footer.
 - [x] Added bottom padding to `.set-body` (1rem → 1.5rem) so the last row clears the sticky footer fold
       and scrolls fully into view.
 
-### C13. Quick-add panel is transaction-only with large empty space (UX)
-The "+ Add" flip panel jumps straight to a tall "Add a transaction" form with lots of unused vertical
-space and no other add actions. (Already tracked as the open part of **B11** — scan bill / scan
-document / custom workflow cards.) Logged here for review continuity; also tighten the panel height to
-its content.
+### C13. Quick-add panel is transaction-only with large empty space (UX) — DONE (height)
+The "+ Add" flip panel jumped straight to a tall "Add a transaction" form with lots of unused vertical
+space and no other add actions. **Fixed (panel height):** the panel is now sized to its content (420px,
+body scrolls if it overflows) so it no longer floats in a tall empty card — verified live in a headless
+browser (opens at 420px on "+ Add"). The *additional add-actions* part (scan bill / scan document /
+custom workflow cards) remains tracked as the open part of **B11**.
 
 ### C14. Dashboard grid resize is broken in practice + can't shrink ★ (UX — this grid templates custom pages)
 **Reported:** Shift+click resize "doesn't work" and there's no simple way to shrink a tile. Confirmed

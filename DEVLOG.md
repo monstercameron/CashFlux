@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C13: quick-add panel height fits its content
+
+- The "+ Add" quick-add flip panel used the default FlipPanel height (470px), leaving the compact
+  6-field "Add a transaction" form floating in a tall, mostly-empty card. Set `Height: "420px"` on the
+  panel so it fits its content; the `.set-body` keeps `overflow-y:auto`, so a too-short panel just
+  scrolls — there's no risk of clipping content with a fixed reduction.
+- Verified live: drove the headless browser oracle to click "+ Add" (async re-render handled with a
+  Playwright-awaited async IIFE + 500ms settle), then measured `.flip-wrap` — `panelH=420 fields=5`.
+  Confirms the panel both opens correctly and renders at the new height.
+- The *richer quick-add* part of this item (scan-bill / scan-document / custom-workflow add cards)
+  stays open under **B11**; only the empty-space/height complaint is resolved here.
+- Next: the remaining C-series items are minor/debatable — C2-negatives (parentheses-vs-minus
+  unification across screens, risk of parentheses leaking into input values) and the B2 drag polish
+  (live drag-over preview, FLIP animations). Assess whether to wrap the bug pass.
+
 ## 2026-06-17 — bugfix C9: Accounts asset-input placeholders clipped
 
 - The asset inputs on the Accounts add/edit form had long placeholders ("Expected return APR %",

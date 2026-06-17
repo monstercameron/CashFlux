@@ -133,8 +133,12 @@ func QuickAddHost() uic.Node {
 	)
 
 	return ui.FlipPanel(ui.FlipPanelProps{
-		Title:   uistate.T("quickAdd.title"),
-		Back:    body,
+		Title: uistate.T("quickAdd.title"),
+		Back:  body,
+		// Shorter than the default so the compact add-a-transaction form doesn't
+		// float in a tall, mostly-empty panel (C13). The body scrolls if it ever
+		// overflows.
+		Height:  "420px",
 		OnSave:  save,
 		OnClose: closePanel,
 	})

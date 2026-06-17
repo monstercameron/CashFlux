@@ -8,6 +8,9 @@
 # Design candidates copied into web/ for local preview (canonical copies live in design/)
 /web/design/
 
+# UI/UX review captures (screenshots + rendered text from gwc/Playwright runs)
+/.review-screenshots/
+
 # Local env / editor
 .env
 .env.*

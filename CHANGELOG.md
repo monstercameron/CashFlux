@@ -14,6 +14,9 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- The **quick-add** transaction panel no longer floats in a tall, mostly-empty card: the panel height
+  is now sized to its compact form (420px instead of the default 470px) with the body still scrolling
+  if it ever overflows. Verified live in a headless browser (panel opens at 420px on "+ Add"). (C13)
 - The **Accounts** add/edit form's asset inputs no longer clip their labels ("Expected returr",
   "Liquidity 0–10…"): the placeholders are now short ("Return %", "Liquidity", "Stability") with the
   full label + range on hover (`title`). (C9)
