@@ -191,7 +191,7 @@ func Planning() ui.Node {
 		apr, errA := strconv.ParseFloat(strings.TrimSpace(aprStr.Get()), 64)
 		switch {
 		case errB != nil || errP != nil || errA != nil:
-			resultBody = P(Class("err"), uistate.T("planning.invalidNumbers"))
+			resultBody = P(Class("err"), Attr("role", "alert"), uistate.T("planning.invalidNumbers"))
 		default:
 			if r, ok := payoff.Project(bal, apr, pay); ok {
 				extraNote := Fragment()
@@ -211,7 +211,7 @@ func Planning() ui.Node {
 					extraNote,
 				)
 			} else {
-				resultBody = P(Class("err"), uistate.T("planning.paymentTooLow"))
+				resultBody = P(Class("err"), Attr("role", "alert"), uistate.T("planning.paymentTooLow"))
 			}
 		}
 	}
@@ -300,7 +300,7 @@ func Planning() ui.Node {
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
 			),
 			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
-			If(rErr.Get() != "", P(Class("err"), rErr.Get())),
+			If(rErr.Get() != "", P(Class("err"), Attr("role", "alert"), rErr.Get())),
 			totalNote,
 			list,
 			Div(Class("flex items-center gap-2 mt-2"),
@@ -334,7 +334,7 @@ func Planning() ui.Node {
 				Input(Class("field"), Type("number"), Title(uistate.T("plans.onceMonthTitle")), Placeholder(uistate.T("plans.onceMonthPlaceholder")), Value(plOnceMonth.Get()), Step("1"), OnInput(onPlOnceMonth)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("plans.add")),
 			),
-			If(plErr.Get() != "", P(Class("err"), plErr.Get())),
+			If(plErr.Get() != "", P(Class("err"), Attr("role", "alert"), plErr.Get())),
 			list,
 		)
 	}

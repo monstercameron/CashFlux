@@ -121,7 +121,7 @@ func CustomFieldsManager() ui.Node {
 			),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
 		),
-		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
+		If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 	)
 
 	// Group existing defs by entity type for a tidy list.

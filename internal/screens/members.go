@@ -240,7 +240,7 @@ func Members() ui.Node {
 				}),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.add")),
 			),
-			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
+			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 		),
 		reassignPanel,
 		Section(Class("card"),

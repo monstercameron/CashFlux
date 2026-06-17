@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: announce form validation errors (role=alert)
+
+- Added `role="alert"` to all 17 inline error-message `P(Class("err"), …)` elements across the screens
+  (accounts, allocate, budgets, categories, customfields, customize, documents, goals, insights,
+  members, planning ×4, rules, todo, transactions) via a safe mechanical replace. `role="alert"` is an
+  implicit assertive live region, so a validation failure is spoken when it appears rather than being a
+  silent style change (WCAG 3.3.1). wasm + vet green. (Per-field `aria-describedby` association is a
+  larger follow-up; this gives the announce-on-appear win broadly with one pass.)
+
 ## 2026-06-16 — planning: projected-balance sparkline on each plan row
 
 - `PlanRow` now renders a compact `uiw.AreaChart` of `planning.Project(p)` (int64 curve → float64),

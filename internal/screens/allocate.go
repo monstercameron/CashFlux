@@ -385,7 +385,7 @@ func Allocate() ui.Node {
 		If(len(ranked) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("allocate.whyTitle")),
 			Button(Class("btn"), Type("button"), OnClick(explain), IfElse(aiLoading.Get(), Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAI")))),
-			If(aiErr.Get() != "", P(Class("err"), aiErr.Get())),
+			If(aiErr.Get() != "", P(Class("err"), Attr("role", "alert"), aiErr.Get())),
 			If(aiResult.Get() != "", P(Class("muted"), aiResult.Get())),
 		)),
 	)

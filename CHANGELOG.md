@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: inline **form validation errors** are now `role="alert"`, so screen readers announce
+  them the moment they appear (e.g. "Enter a positive target amount") instead of leaving the failure
+  silent.
 - Each saved plan now shows a small **projected-balance sparkline** of its trajectory over the horizon
   (green if it ends up, red if down) next to its end figure — so you can see the shape, not just the
   number.

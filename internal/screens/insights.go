@@ -207,7 +207,7 @@ func Insights() ui.Node {
 			H2(Class("card-title"), uistate.T("insights.explainTitle")),
 			P(Class("muted"), uistate.T("insights.explainHint")),
 			action,
-			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
+			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 		),
 		If(key != "", Section(Class("card"),
 			H2(Class("card-title"), uistate.T("insights.askTitle")),

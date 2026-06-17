@@ -103,7 +103,7 @@ func Customize() ui.Node {
 		resultBody = P(Class("muted"), uistate.T("customize.formulaHint"))
 	default:
 		if val, err := formula.Eval(e, formula.Env{Vars: vars}); err != nil {
-			resultBody = P(Class("err"), err.Error())
+			resultBody = P(Class("err"), Attr("role", "alert"), err.Error())
 		} else {
 			resultBody = Div(Class("stat-value"), formatFormulaValue(val))
 		}

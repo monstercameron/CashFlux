@@ -441,7 +441,7 @@ func Transactions() ui.Node {
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.repeatLastTitle")), OnClick(repeatLast), uistate.T("transactions.repeatLast")),
 			),
-			If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
+			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 		)
 	}
 

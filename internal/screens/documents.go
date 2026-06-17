@@ -334,7 +334,7 @@ func Documents() ui.Node {
 				If(imageURL.Get() != "", Span(Class("muted"), uistate.T("documents.imageReady"))),
 				Button(Class("btn btn-primary"), Type("button"), OnClick(readAI), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
 			),
-			If(aiErr.Get() != "", P(Class("err"), aiErr.Get())),
+			If(aiErr.Get() != "", P(Class("err"), Attr("role", "alert"), aiErr.Get())),
 		),
 		draftBody,
 		summaryBody,

@@ -139,7 +139,7 @@ func Todo() ui.Node {
 			Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
-		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
+		If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 	)
 
 	// Order + filter for display (open first, soonest due, then title) lives in

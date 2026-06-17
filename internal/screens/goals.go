@@ -196,7 +196,7 @@ func Goals() ui.Node {
 			}),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
-		If(errMsg.Get() != "", P(Class("err"), errMsg.Get())),
+		If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 	)
 
 	goals := app.Goals()
