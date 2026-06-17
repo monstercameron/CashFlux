@@ -40,4 +40,12 @@ func init() {
 			{Key: "count", Label: "Tasks to show", Type: Number, Default: "3", Min: 1, Max: 10},
 		},
 	})
+	register(Schema{
+		WidgetID: "accounts",
+		Title:    "Accounts",
+		Fields: []Field{
+			{Key: "count", Label: "Accounts to show", Type: Number, Default: "6", Min: 3, Max: 12},
+			{Key: "cleared", Label: "Show cleared balance only", Type: Toggle, Default: "false"},
+		},
+	})
 }

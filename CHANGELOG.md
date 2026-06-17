@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The dashboard **Accounts widget** is now configurable: set how many accounts to show (3–12,
+  default 6) and whether to show only **cleared** balances (reconciled money) instead of current.
 - The dashboard **To-do widget** is now configurable: open its gear to set how many tasks it shows
   (1–10, default 3), instead of a fixed three.
 - Accessibility: the flip-panel overlay (quick-add, household/global settings, per-widget settings) is

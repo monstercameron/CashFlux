@@ -125,7 +125,7 @@ func Dashboard() ui.Node {
 		budgetsWidget(app, txns, rates),
 		goalsWidget(app),
 		todoWidget(app, widgetCfgs.For("todo")),
-		accountsWidget(app, txns),
+		accountsWidget(app, txns, widgetCfgs.For("accounts")),
 		netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")),
 		cashFlowWidget(txns, rates),
 		savingsRateWidget(income, expense, widgetCfgs.For("savings")),
@@ -467,15 +467,31 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 	})
 }
 
-// accountsWidget is the 2×1 Accounts widget: a small grid of up to six active
-// account balances (accounting figures, negatives toned red) via ledger.Balance.
-func accountsWidget(app *appstate.App, txns []domain.Transaction) ui.Node {
-	cells := make([]ui.Node, 0, 6)
+// accountsWidget is the 2×1 Accounts widget: a small grid of active account
+// balances (accounting figures, negatives toned red) via ledger.Balance. How
+// many accounts to show, and whether to show only cleared balances, are
+// configurable.
+func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
+	limit, cleared := 6, false
+	if sch, ok := widgetcfg.SchemaFor("accounts"); ok {
+		if f, ok := sch.FieldByKey("count"); ok {
+			limit = f.Int(cfg)
+		}
+		if f, ok := sch.FieldByKey("cleared"); ok {
+			cleared = f.Bool(cfg)
+		}
+	}
+	cells := make([]ui.Node, 0, limit)
 	for _, a := range app.Accounts() {
 		if a.Archived {
 			continue
 		}
-		bal, _ := ledger.Balance(a, txns)
+		var bal money.Money
+		if cleared {
+			bal, _ = ledger.ClearedBalance(a, txns)
+		} else {
+			bal, _ = ledger.Balance(a, txns)
+		}
 		tone := ""
 		if bal.IsNegative() {
 			tone = "text-down"
@@ -484,7 +500,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction) ui.Node {
 			Div(Class("text-dim"), a.Name),
 			Div(Class("font-display fig mt-0.5 "+tone), fmtAccounting(bal)),
 		))
-		if len(cells) >= 6 {
+		if len(cells) >= limit {
 			break
 		}
 	}

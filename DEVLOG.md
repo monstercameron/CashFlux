@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12: accounts widget config schema
+
+- Registered an `accounts` widget schema: a "count" Number (default 6, clamped [3,12]) and a "cleared"
+  Toggle (default false). Wired `accountsWidget` to read both — the limit caps the grid, and when
+  cleared is on it shows `ledger.ClearedBalance` instead of `ledger.Balance` (reconciled vs current).
+  Both criteria are real and explainable. Registration/clamp/bool test added. wasm + tests green.
+
 ## 2026-06-16 — B12: to-do widget config schema
 
 - Registered a `widgetcfg` schema for the `todo` widget (a "Tasks to show" Number field, default 3,
