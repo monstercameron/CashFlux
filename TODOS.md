@@ -597,7 +597,8 @@ Add button — no visible swatch/label, looks broken.
       Archive / ✕) — visually busy; consider an overflow menu for secondary actions.
 - [x] **Goals** add form's current-amount field — already labelled with a "Saved so far" placeholder
       (stale report; verified in current code).
-- [ ] **Categories** don't display their color anywhere despite a color field; show the swatch on rows.
+- [x] **Categories** now show their color (an 11px swatch on each row) and let you set it — the Add
+      form and inline Edit row have a color picker; `Color` is threaded through `saveCat`/`OnSave`.
 - [ ] **Insights** is bare without a key (just the "Explain my month" prompt) — surface the offline
       Spending-highlights card and the "Ask about your money" box even before a key is set.
 

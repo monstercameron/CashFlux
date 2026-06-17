@@ -29,11 +29,13 @@ func Categories() ui.Node {
 	name := ui.UseState("")
 	kind := ui.UseState(string(domain.KindExpense))
 	parentID := ui.UseState("")
+	color := ui.UseState("#7c83ff")
 	errMsg := ui.UseState("")
 	reassignID := ui.UseState("") // category awaiting reassignment before delete
 	reassignTo := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
+	onColor := ui.UseEvent(func(v string) { color.Set(v) })
 	onKind := ui.UseEvent(func(e ui.Event) {
 		kind.Set(e.GetValue())
 		parentID.Set("") // a parent must share the new kind; clear the stale choice
@@ -47,7 +49,7 @@ func Categories() ui.Node {
 			errMsg.Set(uistate.T("categories.nameRequired"))
 			return
 		}
-		c := domain.Category{ID: id.New(), Name: n, Kind: domain.CategoryKind(kind.Get()), ParentID: parentID.Get()}
+		c := domain.Category{ID: id.New(), Name: n, Kind: domain.CategoryKind(kind.Get()), ParentID: parentID.Get(), Color: color.Get()}
 		if err := app.PutCategory(c); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -133,6 +135,7 @@ func Categories() ui.Node {
 			Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
 			Select(Class("field"), OnChange(onKind), kindOptions),
 			Select(Class("field"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
+			Input(Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(color.Get()), OnInput(onColor)),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
@@ -149,7 +152,7 @@ func Categories() ui.Node {
 			expenseList = append(expenseList, c)
 		}
 	}
-	saveCat := func(id, newName, kind, parent string) {
+	saveCat := func(id, newName, kind, parent, color string) {
 		for _, c := range app.Categories() {
 			if c.ID != id {
 				continue
@@ -161,6 +164,7 @@ func Categories() ui.Node {
 				c.Kind = k
 			}
 			c.ParentID = parent
+			c.Color = color
 			if err := app.PutCategory(c); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -216,7 +220,7 @@ type categoryRowProps struct {
 	Depth         int
 	AllCategories []domain.Category // for the inline parent picker
 	OnDelete      func(string)
-	OnSave        func(id, name, kind, parent string)
+	OnSave        func(id, name, kind, parent, color string)
 }
 
 // indentLabel returns a depth-proportional prefix for nested category labels.
@@ -233,7 +237,9 @@ func CategoryRow(props categoryRowProps) ui.Node {
 	nameS := ui.UseState(c.Name)
 	kindS := ui.UseState(string(c.Kind))
 	parentS := ui.UseState(c.ParentID)
+	colorS := ui.UseState(catColor(c.Color))
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
 	onKind := ui.UseEvent(func(e ui.Event) {
 		kindS.Set(e.GetValue())
 		parentS.Set("") // parent must share the kind
@@ -243,11 +249,12 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		nameS.Set(c.Name)
 		kindS.Set(string(c.Kind))
 		parentS.Set(c.ParentID)
+		colorS.Set(catColor(c.Color))
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(c.ID, nameS.Get(), kindS.Get(), parentS.Get())
+		props.OnSave(c.ID, nameS.Get(), kindS.Get(), parentS.Get(), colorS.Get())
 		editing.Set(false)
 	}))
 
@@ -271,6 +278,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 					Option(Value(string(domain.KindIncome)), SelectedIf(kindS.Get() == string(domain.KindIncome)), uistate.T("category.income")),
 				),
 				Select(Class("field"), Title(uistate.T("categories.parent")), OnChange(onParent), parentOpts),
+				Input(Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(colorS.Get()), OnInput(onColor)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
@@ -286,6 +294,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		kindLabel = uistate.T("category.income")
 	}
 	return Div(Class("row"),
+		Span(Class("cat-swatch"), Style(map[string]string{"background": catColor(c.Color)})),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), desc),
 			Span(Class("row-meta"), kindLabel),
@@ -293,4 +302,13 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		Button(Class("btn"), Type("button"), Title(uistate.T("categories.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("categories.deleteTitle")), OnClick(del), "✕"),
 	)
+}
+
+// catColor returns a category's color, falling back to a neutral default when
+// it has none set (older categories created before colors existed).
+func catColor(c string) string {
+	if strings.TrimSpace(c) == "" {
+		return "#7c83ff"
+	}
+	return c
 }

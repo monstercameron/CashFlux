@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Categories** can now have a **color** and show it: a color swatch appears on each category row, and
+  the Add/Edit category forms have a color picker (the `Color` field existed in the model but was never
+  surfaced). (C9)
 - The **member color picker** (Add/Edit member) now renders as a proper clickable color swatch with a
   label instead of a thin bare line (it was a native color input squeezed into a text-field style). (C8)
 - The dashboard no longer shows two tiles both titled **"Net worth"**: the trend chart tile is now

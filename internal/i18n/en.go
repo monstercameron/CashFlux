@@ -97,6 +97,7 @@ var english = Catalog{
 	"categories.chooseCategory": "— Choose category —",
 	"categories.parentOptional": "Parent category (optional)",
 	"categories.parent":         "Parent category",
+	"categories.color":          "Category color",
 	"categories.reassignDesc":   "%q is used by %d transaction(s) or budget(s). Move them to another category, then it will be deleted.",
 	"categories.expenseTitle":   "Expense categories",
 	"categories.incomeTitle":    "Income categories",

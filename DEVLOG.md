@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — bugfix C9: category color never surfaced
+
+- `domain.Category.Color` existed but the Categories screen never read or set it. Wired it end to end:
+  the Add form and the inline Edit row got a `.color-input` (reusing the C8 class), threaded color
+  through `saveCat` (new param) and `categoryRowProps.OnSave` (signature widened), and each display row
+  now shows an 11px `.cat-swatch` colored dot before the name. A `catColor` helper falls back to a
+  neutral default for categories created before colors existed. Persistence was already free (the store
+  JSON-blobs the whole Category). New `categories.color` key. i18n + wasm green.
+
 ## 2026-06-16 — bugfix C8: member color picker was a bare line
 
 - The Add/Edit member forms used `<input type="color">` with the `.field` class (tuned for text), so
