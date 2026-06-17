@@ -145,6 +145,30 @@ func TestBudgetsSchemaRegistered(t *testing.T) {
 	}
 }
 
+func TestGoalsSchemaRegistered(t *testing.T) {
+	s, ok := SchemaFor("goals")
+	if !ok {
+		t.Fatal("goals schema not registered")
+	}
+	bp, ok := s.FieldByKey("byProgress")
+	if !ok {
+		t.Fatal("goals missing byProgress field")
+	}
+	if bp.Bool(Config{}) {
+		t.Error("byProgress default should be false")
+	}
+	sd, ok := s.FieldByKey("showDate")
+	if !ok {
+		t.Fatal("goals missing showDate field")
+	}
+	if !sd.Bool(Config{}) {
+		t.Error("showDate default should be true")
+	}
+	if sd.Bool(Config{"showDate": "false"}) {
+		t.Error("showDate explicit false should be false")
+	}
+}
+
 func TestSchemaFieldByKey(t *testing.T) {
 	s := Schema{Fields: []Field{{Key: "a"}, {Key: "b"}}}
 	if _, ok := s.FieldByKey("b"); !ok {

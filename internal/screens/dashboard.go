@@ -123,7 +123,7 @@ func Dashboard() ui.Node {
 		}),
 		recentWidget(txns, widgetCfgs.For("recent")),
 		budgetsWidget(app, txns, rates, widgetCfgs.For("budgets")),
-		goalsWidget(app),
+		goalsWidget(app, widgetCfgs.For("goals")),
 		todoWidget(app, widgetCfgs.For("todo")),
 		accountsWidget(app, txns, widgetCfgs.For("accounts")),
 		netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")),
@@ -564,9 +564,19 @@ func todoWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	})
 }
 
-// goalsWidget is the 1×1 Goals widget: the first goal's progress (% + saved /
-// target) via internal/goals.
-func goalsWidget(app *appstate.App) ui.Node {
+// goalsWidget is the 1×1 Goals widget: one goal's progress (% + saved / target)
+// via internal/goals. By default it features the first goal; configurably it can
+// feature the goal nearest completion, and the target-date caption is optional.
+func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
+	byProgress, showDate := false, true
+	if sch, ok := widgetcfg.SchemaFor("goals"); ok {
+		if f, ok := sch.FieldByKey("byProgress"); ok {
+			byProgress = f.Bool(cfg)
+		}
+		if f, ok := sch.FieldByKey("showDate"); ok {
+			showDate = f.Bool(cfg)
+		}
+	}
 	list := app.Goals()
 	if len(list) == 0 {
 		return uiw.Widget(uiw.WidgetProps{
@@ -575,9 +585,18 @@ func goalsWidget(app *appstate.App) ui.Node {
 		})
 	}
 	g := list[0]
+	if byProgress {
+		// Feature the goal nearest completion (highest percent; first wins ties).
+		best := goals.Percent(g)
+		for _, cand := range list[1:] {
+			if p := goals.Percent(cand); p > best {
+				best, g = p, cand
+			}
+		}
+	}
 	pct := goals.Percent(g)
 	caption := fmt.Sprintf("%d%%", pct)
-	if !g.TargetDate.IsZero() {
+	if showDate && !g.TargetDate.IsZero() {
 		caption += " · by " + g.TargetDate.Format("Jan 2")
 	}
 	body := Div(

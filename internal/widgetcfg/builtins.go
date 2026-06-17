@@ -56,4 +56,12 @@ func init() {
 			{Key: "atRisk", Label: "Show only near or over budget", Type: Toggle, Default: "false"},
 		},
 	})
+	register(Schema{
+		WidgetID: "goals",
+		Title:    "Goals",
+		Fields: []Field{
+			{Key: "byProgress", Label: "Feature the goal nearest completion", Type: Toggle, Default: "false"},
+			{Key: "showDate", Label: "Show the target date", Type: Toggle, Default: "true"},
+		},
+	})
 }

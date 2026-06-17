@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12: goals widget config schema (sweep complete)
+
+- Registered a `goals` widget schema: "byProgress" Toggle (default false) and "showDate" Toggle
+  (default true). Wired `goalsWidget` — byProgress features the goal with the highest `goals.Percent`
+  (first wins ties) instead of `list[0]`; showDate gates the "· by <date>" caption. A dynamic
+  goal-picker `Select` doesn't fit the static-at-init schema model, so "nearest completion" is the
+  pragmatic, explainable knob. Registration/default test added.
+- With this, every dashboard widget that has feasible settings now exposes them (savings, recent,
+  trend, breakdown, to-do, accounts, budgets, goals) — B12's incremental-schema item is effectively
+  complete. wasm + tests green.
+
 ## 2026-06-16 — B12: budgets widget config schema
 
 - Registered a `budgets` widget schema: "count" Number (default 6, clamped [3,20]) and "atRisk" Toggle
