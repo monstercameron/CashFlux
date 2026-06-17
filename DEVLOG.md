@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B11: quick-add transaction flip panel
+
+- The top bar "+ Add" no longer navigates to /transactions; it opens a quick-add flip panel via a new
+  `uistate.UseQuickAdd()` bool atom + a `QuickAddHost` mounted at the shell root (mirrors SettingsHost).
+  Form: account, expense/income segmented, amount, description, optional category, date (defaults to
+  today). Save builds the transaction (expense → negative) and calls `app.PutTransaction`, bumps the
+  data-revision atom so screens refresh, and toasts the outcome.
+- Hook-ordering care: all hooks (atoms, 6×UseState, 5×UseEvent) run unconditionally *before* the
+  open/closed guard so hook order is stable across opens. Avoided setting state during render — used
+  effective fallback values (first account, today) for both display and save instead, so an immediate
+  Save works without a pre-render Set. FlipPanel always closes after Save, so validation failures
+  report via an error toast (the now-persistent live region) rather than inline. New `quickAdd.*`
+  i18n keys. i18n + wasm green. Closes B11.
+
 ## 2026-06-16 — Planning UI: plans card (§2.6)
 
 - Added a "Savings & spending plans" card to the Planning screen: create (name, horizon, start

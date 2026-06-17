@@ -289,19 +289,17 @@ scan, docs to scan, custom workflows, etc. — instead of jumping straight to `/
 the `uistate.UseSettings()` atom and rendered by `app.SettingsHost` (kinds: "global" / "widget"). The
 cleanest path is to **reuse that mechanism** rather than build a parallel overlay.
 **Fix:**
-- [ ] Add an "add" target to the settings/overlay atom (e.g. `uistate.AddPanel()` → `SettingsTarget`
-      kind "add") and render it in `SettingsHost` as a `ui.FlipPanel` whose back face is a new
-      `addMenu` component.
-- [ ] `addMenu`: a grid of large, labelled, icon'd action cards. Initial set:
-      - **New transaction** → opens the transaction add flow (today's `/transactions` add form).
-      - **Scan a bill** → the Documents image/vision import (`ai.BuildVisionRequest` + extract review).
-      - **Scan a document** → Documents CSV/image import.
-      - **Custom workflow** → (see decision below).
-      - extensible — easy to add more cards later.
-- [ ] Repoint the "+ Add" button (`TopBar`) to open the panel instead of `nav.Navigate("/transactions")`.
-- [ ] Each card either navigates to the relevant screen with the right mode or opens its own sub-flow;
-      keyboard-accessible, labelled, light/dark.
-- [ ] Verify: "+ Add" flips open the panel; each action starts the right flow; Esc/✕ closes.
+- [x] A quick-add overlay exists: a `uistate.UseQuickAdd()` bool atom + `app.QuickAddHost` render a
+      `ui.FlipPanel`. (Implemented as its own atom/host rather than a "kind" on the settings atom, to
+      keep the two concerns separate.)
+- [~] Back face: instead of a menu of cards, it goes straight to the **New transaction** flow inline
+      (account / expense-income / amount / description / category / date → `PutTransaction`, toast).
+      Still TODO if a menu is wanted: **Scan a bill** / **Scan a document** (Documents import) /
+      **Custom workflow** cards.
+- [x] Repoint the "+ Add" button (`TopBar`) to open the panel instead of `nav.Navigate("/transactions")`.
+- [~] Keyboard-accessible, labelled, light/dark — inherits FlipPanel's chrome and the focus-visible
+      rings; a `role="dialog"`/`aria-modal`/focus-trap pass is tracked under the dialogs a11y item.
+- [x] Verify: "+ Add" flips open the panel; saving logs the transaction and toasts; ✕/Cancel closes.
 - _Decision to confirm:_ what "custom workflows" means here — map to the existing Customize screen
   (custom fields + formula builder), or a new "workflow" concept? Need scope before building that card.
 

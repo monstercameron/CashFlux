@@ -11,14 +11,29 @@ var english = Catalog{
 	"household.settings": "Settings",
 
 	// Top bar
-	"topbar.menu":            "Collapse menu",
-	"topbar.add":             "Add a transaction",
-	"topbar.addLabel":        "+ Add",
-	"topbar.breadcrumb":      "Breadcrumb",
-	"resolution.fromEarlier": "Move start earlier",
-	"resolution.fromLater":   "Move start later",
-	"resolution.toEarlier":   "Move end earlier",
-	"resolution.toLater":     "Move end later",
+	"topbar.menu":       "Collapse menu",
+	"topbar.add":        "Add a transaction",
+	"topbar.addLabel":   "+ Add",
+	"topbar.breadcrumb": "Breadcrumb",
+
+	// Quick-add transaction panel
+	"quickAdd.title":           "Add a transaction",
+	"quickAdd.account":         "Account",
+	"quickAdd.kind":            "Type",
+	"quickAdd.expense":         "Expense",
+	"quickAdd.income":          "Income",
+	"quickAdd.amount":          "Amount",
+	"quickAdd.descPlaceholder": "What was it for?",
+	"quickAdd.category":        "Category",
+	"quickAdd.noCategory":      "— No category —",
+	"quickAdd.date":            "Date",
+	"quickAdd.needAccount":     "Add an account first, then log a transaction.",
+	"quickAdd.needAmount":      "Enter a non-zero amount.",
+	"quickAdd.added":           "Transaction added.",
+	"resolution.fromEarlier":   "Move start earlier",
+	"resolution.fromLater":     "Move start later",
+	"resolution.toEarlier":     "Move end earlier",
+	"resolution.toLater":       "Move end later",
 
 	// Primary navigation
 	"nav.primaryLabel": "Main navigation",

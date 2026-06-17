@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The top bar's **"+ Add"** button now opens a **quick-add transaction** flip panel from anywhere —
+  pick the account, expense/income, amount, description, category, and date, and save without leaving
+  the screen you're on. The result is announced via the toast.
 - The Planning screen now has a **Savings & spending plans** card: name a what-if, set a starting
   balance, a monthly change (+ in / − out), and a horizon in months, and each saved plan shows where
   you'd land (its projected end-of-horizon balance, toned green/red) — backed by the planning engine.
