@@ -63,9 +63,23 @@
       sel.selectAll("text").attr("fill", fg).attr("font-size", "10px");
       sel.selectAll("line,path").attr("stroke", grid);
     }
-    g.append("g").attr("transform", "translate(0," + ih + ")")
-      .call(d3.axisBottom(x).ticks(4).tickSizeOuter(0)).call(styleAxis);
-    g.append("g").call(d3.axisLeft(y).ticks(4).tickSizeOuter(0)).call(styleAxis);
+    // Honor the optional per-axis d3 format hint (chartspec.Axis.Format), e.g.
+    // "$.2~s" to render Y ticks as compact currency ("$20k") instead of raw
+    // numbers that overflow the narrow margin. Invalid specs fall back silently.
+    function tickFormatter(axisSpec) {
+      if (axisSpec && axisSpec.format) {
+        try { return d3.format(axisSpec.format); } catch (e) { return null; }
+      }
+      return null;
+    }
+    var xAxis = d3.axisBottom(x).ticks(4).tickSizeOuter(0);
+    var xf = tickFormatter(spec.x);
+    if (xf) xAxis.tickFormat(xf);
+    var yAxis = d3.axisLeft(y).ticks(4).tickSizeOuter(0);
+    var yf = tickFormatter(spec.y);
+    if (yf) yAxis.tickFormat(yf);
+    g.append("g").attr("transform", "translate(0," + ih + ")").call(xAxis).call(styleAxis);
+    g.append("g").call(yAxis).call(styleAxis);
 
     if (spec.kind === "bar") {
       var groupW = iw / Math.max(1, allPts.length / series.length);

@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C16: net-worth trend chart plotted cents
+
+- The net-worth trend D3 chart fed `Y: float64(m.Amount)` — raw minor units (cents) — so the Y axis
+  ticked in millions of cents and the labels clipped/looked non-monotonic ("000,000 / 500,000") in the
+  narrow 44px-margin widget. The big figure above was fine because it used the money formatter.
+- **Fix, two parts.** (1) `dashboard.go` now divides by the currency's decimal factor (same `div` loop
+  idiom as `customize.go`) so the chart plots dollars, and sets `Y.Format` to a compact-currency d3
+  spec (`$.2~s` for `$` currencies, `.2~s` otherwise). (2) `web/chart.js` now honors the per-axis
+  `format` hint (`chartspec.Axis.Format`) — it builds a `d3.format` tick formatter for X and/or Y when a
+  spec is present, falling back silently on an invalid spec. The `Axis.Format` field already existed in
+  the spec; nothing was reading it.
+- Bumped the service-worker cache (`cashflux-v3` → `v4`) because `chart.js` is a cached CORE asset —
+  otherwise returning users keep the old shim.
+- **Audited the other chart feeds** as the TODO asked: `customize.go` already converts to major units;
+  the planning `AreaChart` is the pure-Go sparkline (`internal/ui/chart.go`) — a normalized path with no
+  numeric axis, so cents-vs-dollars only ever affected its (identical) shape, not any label. No other
+  `*.Amount`-fed chart had the bug.
+- Verified live in the headless oracle: Y-axis now reads `$0, $5k, $10k, $15k, $20k` (monotonic, fits).
+- Note: there were still-open C-series items beyond C2–C14 (C1, C15–C19). C16 done here; C1 (Income $0
+  correctness) and C15 (collapsed rail loses nav) are the next high-value bugs.
+
 ## 2026-06-17 — bugfix C2 (negatives): one money formatter, parentheses everywhere
 
 - Closed the last open part of C2. `fmtMoney` rendered negatives with a minus sign (`-$60.20`) while

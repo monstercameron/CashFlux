@@ -454,13 +454,26 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 		cutoffs = append(cutoffs, dateutil.AddMonths(start, i-(months-2))) // window ends at the current month +1
 	}
 	series, _ := ledger.NetWorthSeries(accounts, txns, cutoffs, rates)
+	// Plot in major units (dollars), not raw minor units (cents): feeding cents
+	// made the Y axis read "2,000,000 / 1,500,000 …" and clip in the narrow
+	// widget (C16). The Y-axis format hint renders ticks as compact currency
+	// ("$20k"); see web/chart.js.
+	div := 1.0
+	for i := 0; i < currency.Decimals(net.Currency); i++ {
+		div *= 10
+	}
 	pts := make([]chartspec.Point, len(series))
 	for i, m := range series {
-		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount)}
+		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div}
+	}
+	yFmt := ".2~s" // compact SI, e.g. "21k"
+	if currency.Symbol(net.Currency) == "$" {
+		yFmt = "$.2~s" // "$21k" for dollar currencies
 	}
 	spec := chartspec.Spec{
 		Kind:   chartspec.Area,
 		Series: []chartspec.Series{{Name: "Net worth", Points: pts}}, // empty Color → theme accent
+		Y:      chartspec.Axis{Format: yFmt},
 	}
 	body := Div(Class("flex flex-col h-full"),
 		Div(Class("font-display fig text-[22px]"), fmtMoney(net)),

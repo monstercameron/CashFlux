@@ -21,6 +21,11 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- The **net-worth trend chart** Y-axis is now readable and correct (C16): it plotted raw minor units
+  (cents), so the axis showed clipped, non-monotonic labels like "000,000 / 500,000". The chart now
+  plots major units (dollars) and formats ticks as compact currency — `$0 / $5k / $10k / $15k / $20k`
+  (verified live in a headless browser). The D3 shim now honors the per-axis `format` hint
+  (`chartspec.Axis.Format`). Service-worker cache bumped (v3 → v4) so returning users get the new shim.
 - The **quick-add** transaction panel no longer floats in a tall, mostly-empty card: the panel height
   is now sized to its compact form (420px instead of the default 470px) with the body still scrolling
   if it ever overflows. Verified live in a headless browser (panel opens at 420px on "+ Add"). (C13)

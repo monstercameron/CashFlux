@@ -679,9 +679,12 @@ the "TOOLS"/"SYSTEM" section headers) also hides every nav item, because the fra
 units (cents)** — into the chart spec, so the axis ticks are cent values (2,000,000 / 1,500,000 / …)
 truncated to 7 chars in the narrow widget. The figure above the chart is correct ($20,749.25) only
 because it uses `fmtAccounting`.
-- [ ] Convert minor units to major units (÷100) before plotting, and format axis ticks as currency
-      (compact, e.g. "$20k"). Check every other chart fed from `*.Amount` (cash flow bars, etc.) for the
-      same cents-vs-dollars mistake.
+- [x] Convert minor units to major units before plotting, and format axis ticks as compact currency.
+      `dashboard.go` now divides by the currency's decimal factor and sets `Y.Format` (`$.2~s`); the D3
+      shim (`web/chart.js`) honors the per-axis `format` hint. Y-axis now reads `$0 / $5k / $10k / $15k /
+      $20k` — verified live in a headless browser. SW cache bumped v3→v4. Audited the other chart feeds:
+      `customize.go` already plots major units; the planning `AreaChart` is an axis-less sparkline
+      (normalized path, no numeric labels) so it was never affected. No other cents-vs-dollars feed.
 
 ### C17. Custom range shows a redundant "Jun 2026 – Jun 2026" (live confirmation of B10 #2)
 **Symptom:** toggling "Custom range" reveals two steppers that read "Jun 2026 – Jun 2026" when From==To
