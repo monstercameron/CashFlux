@@ -986,9 +986,10 @@ Shared control components (from mockup):
       `allocprofiles` table, store CRUD, dataset round-trip, validated appstate accessors; table-tested)
       **and** an Allocate picker with editable criterion weights, preset/saved-profile loading, and
       save/delete. Constraints/CustomCriteria on the profile are a later extension.
-- [~] Constraints: emergency buffer, max-per-destination, exclusions — applied/clamped
-      — exclusions complete (engine + UI); emergency buffer + max-per-destination implemented in the
-        `Distribute` split engine (tested); amount-split UI next
+- [x] Constraints: emergency buffer, max-per-destination, exclusions — applied/clamped across engine
+      and UI. Exclusions (engine + UI), emergency buffer (reserve input), and **max-per-destination**
+      (new amount-split input → `SplitOptions.MaxPer`) are all wired; overflow falls into the kept-back
+      note. (Persisting reserve/max-per onto a saved profile is a possible later extension.)
 - [x] Candidate set assembly (asset accounts + high-interest liabilities + unfinished goals)
 - [x] Ranked output with per-criterion breakdown (no black box)
 - [x] Allocate screen: profile select → ranked suggestions + exclude/restore + amount-split input

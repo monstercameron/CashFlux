@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Allocate screen's amount split now has a **"Max per destination"** input — cap how much any one
+  account/goal/debt can receive, and the overflow is held back (reported in the kept-back note). This
+  surfaces the split engine's already-tested per-destination cap.
 - Groundwork for the simpler time-resolution control: the period `Window` now knows when it's a single
   period and renders one clean label ("Jun 2026") instead of a redundant "Jun 2026 – Jun 2026", with a
   helper to collapse a range back to a single period.

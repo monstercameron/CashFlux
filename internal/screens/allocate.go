@@ -151,8 +151,10 @@ func Allocate() ui.Node {
 	onProfName := ui.UseEvent(func(v string) { profName.Set(v) })
 	amountStr := ui.UseState("")
 	reserveStr := ui.UseState("")
+	maxPerStr := ui.UseState("")
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
 	onReserve := ui.UseEvent(func(v string) { reserveStr.Set(v) })
+	onMaxPer := ui.UseEvent(func(v string) { maxPerStr.Set(v) })
 	excluded := ui.UseState(map[string]bool{})
 	toggleExclude := func(id string) {
 		m := excluded.Get()
@@ -300,11 +302,12 @@ func Allocate() ui.Node {
 	dec := currency.Decimals(base)
 	totalMinor, _ := money.ParseMinor(strings.TrimSpace(amountStr.Get()), dec)
 	reserveMinor, _ := money.ParseMinor(strings.TrimSpace(reserveStr.Get()), dec)
+	maxPerMinor, _ := money.ParseMinor(strings.TrimSpace(maxPerStr.Get()), dec)
 	planByID := map[string]int64{}
 	var remainder int64
 	if totalMinor > 0 {
 		var plans []allocate.Plan
-		plans, remainder = allocate.Distribute(ranked, totalMinor, allocate.SplitOptions{Reserve: reserveMinor})
+		plans, remainder = allocate.Distribute(ranked, totalMinor, allocate.SplitOptions{Reserve: reserveMinor, MaxPer: maxPerMinor})
 		for _, p := range plans {
 			planByID[p.Candidate.ID] = p.Amount
 		}
@@ -352,6 +355,7 @@ func Allocate() ui.Node {
 				),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("allocate.reservePlaceholder")), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve)),
+				Input(Class("field"), Type("number"), Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)), Value(maxPerStr.Get()), Step("0.01"), OnInput(onMaxPer)),
 			),
 			P(Class("set-label"), uistate.T("allocate.weightsTitle")),
 			Form(Class("form-grid"),

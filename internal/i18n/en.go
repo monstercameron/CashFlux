@@ -320,6 +320,8 @@ var english = Catalog{
 	"allocate.profileSaved":           "Profile saved.",
 	"allocate.amountPlaceholder":      "Amount to allocate (%s)",
 	"allocate.reservePlaceholder":     "Keep back (emergency buffer)",
+	"allocate.maxPerPlaceholder":      "Max per destination (%s)",
+	"allocate.maxPerTitle":            "Cap how much any one destination can receive",
 	"allocate.keptBack":               "Kept back: %s (buffer plus anything caps or rounding left over).",
 	"allocate.suggestionsTitle":       "Where to put your money next",
 	"allocate.excludedTitle":          "Excluded",

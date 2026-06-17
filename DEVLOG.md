@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — allocate: max-per-destination input (§2.7)
+
+- Surfaced the `Distribute` engine's already-tested `MaxPer` cap in the Allocate amount-split UI: a new
+  "Max per destination" number input (`maxPerStr` state + handler), parsed to minor units and passed as
+  `SplitOptions.MaxPer`. Overflow from caps falls into the existing kept-back remainder note, so no new
+  display logic was needed. Pure wiring of an existing capability — no logic/test changes. Closes the
+  "amount-split UI next" item under §2.7 constraints. i18n + wasm green.
+
 ## 2026-06-16 — B10: presets dropdown
 
 - Added a "Jump to…" quick-pick to `ResolutionControl`: a native `<select>` (keyboard-accessible, no
