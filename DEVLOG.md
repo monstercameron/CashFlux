@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B14: ui.Chart Go component (drives the D3 shim)
+
+- Added `internal/ui/chartd3.go` — `ui.Chart(ChartProps{Spec, Height, Class, Label})`. It renders a
+  managed container `Div` with a stable `UseId` id, marshals the `chartspec.Spec` to JSON, and in a
+  `UseEffect` keyed on that JSON resolves the element via `getElementById` and calls
+  `window.cashfluxRenderChart(el, json)` (guarded by `fn.Type()==TypeFunction`). Cleanup clears the
+  box's innerHTML on unmount / before a redraw, so no stale SVG lingers — the ref/portal pattern for
+  letting D3 own that subtree without fighting the vdom. `role="img"` + `aria-label` for a11y. Renamed
+  the internal component func to `chartD3` to avoid colliding with the imported `internal/chart`
+  package. wasm + vet green; D3 render still needs a browser check.
+- Next: migrate one widget (net-worth trend) from the pure-SVG `AreaChart` to `ui.Chart` as the proof.
+
 ## 2026-06-16 — B14: D3 chart shim + offline caching (renderer foundation)
 
 - User chose D3 for B14 (via AskUserQuestion). Started the integration bottom-up: JSON-tagged the

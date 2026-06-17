@@ -390,7 +390,9 @@ which chart kinds first (line/area/bar/donut)?
 - [x] JS shim `web/chart.js` `cashfluxRenderChart(el, specJSON)` building line/area/bar/donut with D3
       (theme-aware via CSS vars); pinned D3 v7.9.0 in index.html; both added to the SW CORE cache (v3).
       chartspec JSON-tagged. (D3 render needs an in-browser check.)
-- [ ] `ui.Chart`: managed container + effect that drives the shim; cleanup; theme-aware (reads CSS vars).
+- [x] `ui.Chart` (`internal/ui/chartd3.go`): managed container (stable `UseId`) + `UseEffect` keyed on
+      the serialized spec that calls `cashfluxRenderChart`; clears on unmount; theme-aware via the shim.
+      `role="img"`+label. (D3 render needs a browser check.)
 - [ ] Migrate one widget (e.g. net-worth trend) to `ui.Chart` as the proof; keep others until parity.
 - [ ] Verify: chart renders + updates on data change, survives hot-reload, works offline, matches theme.
 
@@ -591,6 +593,37 @@ Add button — no visible swatch/label, looks broken.
 - [ ] **Categories** don't display their color anywhere despite a color field; show the swatch on rows.
 - [ ] **Insights** is bare without a key (just the "Explain my month" prompt) — surface the offline
       Spending-highlights card and the "Ask about your money" box even before a key is set.
+
+### C10. No responsive / mobile layout at all ★ (UX, severe)
+**Symptom (verified at 390×844):** on every screen the left rail stays full-width and fixed, the
+content is pushed off-screen to the right, and the page scrolls **horizontally** to reach it. The
+dashboard bento keeps its desktop cell size so tiles are clipped; forms (Add account/transaction) run
+off the right edge. The app is effectively unusable on a phone.
+- [ ] Add a responsive breakpoint: collapse the rail to a hamburger/drawer below ~768px (the
+      collapse atom exists for desktop — extend it), and let the main content take full width.
+- [ ] Reflow the bento grid to 1–2 columns on narrow screens; stack multi-input form rows vertically.
+- [ ] Verify at 390px and 768px: no horizontal scroll, rail is a drawer, tiles/forms reflow cleanly.
+      (Pairs with 1.7 "Responsive: mobile nav" and B15 zoom/reflow.)
+
+### C11. Widget gear opens an empty "Save"-able panel for widgets with no settings (UX)
+**Symptom:** clicking the gear on a no-schema widget (e.g. Net worth) opens the flip panel reading
+"This widget doesn't have any settings yet." — yet it still shows a **Save** button, implying there's
+something to save.
+- [ ] Either hide the gear on widgets that have no settings schema, or replace Cancel/Save with a
+      single Close when the panel is empty. (Relates to B12 — register the remaining schemas.)
+
+### C12. Settings panel: "Display scale" row is clipped by the footer
+**Symptom:** in the global Settings flip panel, the last Appearance row ("Display scale") is cut off
+where the two-column scrollable body meets the sticky Cancel/Save footer (label renders as "Display
+sale"). The body doesn't scroll far enough to clear the footer.
+- [ ] Give the panel body bottom padding equal to the footer height (or make the footer non-overlapping)
+      so the last row is fully visible/scrollable.
+
+### C13. Quick-add panel is transaction-only with large empty space (UX)
+The "+ Add" flip panel jumps straight to a tall "Add a transaction" form with lots of unused vertical
+space and no other add actions. (Already tracked as the open part of **B11** — scan bill / scan
+document / custom workflow cards.) Logged here for review continuity; also tighten the panel height to
+its content.
 
 ---
 

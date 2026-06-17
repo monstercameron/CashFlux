@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Charting (D3): a Go `ui.Chart` component now drives the D3 shim — it owns a managed container and an
+  effect (keyed on the serialized spec) that hands the element and a `chartspec.Spec` to D3, redrawing
+  on data change and clearing on unmount. Ready for widgets to adopt. (Render needs an in-browser check.)
 - Charting groundwork (D3): a pinned D3 v7 and a theme-aware `cashfluxRenderChart` shim that draws a
   `chartspec.Spec` (line/area/bar/donut, with axes) are now loaded and service-worker cached for
   offline use; the `chartspec` types are JSON-tagged for the wire format. The Go `ui.Chart` component
