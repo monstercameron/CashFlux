@@ -774,11 +774,16 @@ Resize overlaps neighbors (C14). Root cause: absolute placement + pairwise `Swap
 **Reported:** no way to add new data. **Reality:** the top-bar "+ Add" opens a quick-add **transaction**
 form only; every other entity (account, budget, goal, category, member, rule, recurring, plan) can be
 added **only** by navigating to its own screen — there's no global/dashboard add affordance for them.
-- [ ] Turn "+ Add" into a real add menu (the open part of **B11**): New transaction · New account · New
-      budget · New goal · Scan a bill/document — routing to the right form or inline flow.
+- [x] Turn "+ Add" into a real add menu (the open part of **B11**): the new `app.AddMenu` component makes
+      "+ Add" a popover — New transaction (inline quick-add) · New account · New budget · New goal · Scan
+      a document — the entity items route to their screen via the router. Always-rendered + CSS-toggled so
+      the On* hooks stay stable. Verified live: opens with 5 items, "New transaction" opens the quick-add
+      panel, the menu closes on select. SW cache v10→v11.
 - [ ] Consider per-widget "add" affordances on the dashboard (e.g. an empty Budgets tile offers "Add a
-      budget") so data entry is reachable in context.
-- [ ] Verify: from the dashboard alone a user can create each core entity type.
+      budget") so data entry is reachable in context. _(Enhancement — left open.)_
+- [x] Verify: from the dashboard alone a user can create each core entity type — the menu reaches
+      transaction/account/budget/goal/document from anywhere. (Category/member/rule are still reachable
+      via their screens; could be added to the menu later if wanted.)
 
 ### C24. Proposal: auto-layout engine with two modalities (importance vs default) ★ (design)
 **Request:** an optional auto-layout with two modes — (1) **user-defined importance sorting** and (2) a

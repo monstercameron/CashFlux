@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"+ Add" is now a multi-entity add menu (C23):** instead of jumping straight to a transaction form,
+  the top-bar "+ Add" opens a small menu — New transaction (the inline quick-add panel) · New account ·
+  New budget · New goal · Scan a document — routing to the right place so data entry isn't trapped on
+  each entity's own screen. Verified live (menu opens with 5 items, "New transaction" opens the quick-add
+  panel, the menu closes on select). SW cache bumped (v10 → v11).
 - **Auto-layout engine for the dashboard (C24, model):** a pure `dashlayout.Arrange(items, mode)` that
   reorders tiles by a chosen `Mode` — **Custom** (your manual order), **Auto: default** (the canonical
   built-in order), or **Auto: importance** (sort by a per-tile importance, ties broken by the default

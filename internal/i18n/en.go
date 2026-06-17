@@ -12,9 +12,16 @@ var english = Catalog{
 
 	// Top bar
 	"topbar.menu":       "Collapse menu",
-	"topbar.add":        "Add a transaction",
+	"topbar.add":        "Add something new",
 	"topbar.addLabel":   "+ Add",
 	"topbar.breadcrumb": "Breadcrumb",
+
+	// "+ Add" menu (C23)
+	"addmenu.transaction": "New transaction",
+	"addmenu.account":     "New account",
+	"addmenu.budget":      "New budget",
+	"addmenu.goal":        "New goal",
+	"addmenu.document":    "Scan a document",
 
 	// Quick-add transaction panel
 	"quickAdd.title":             "Add a transaction",

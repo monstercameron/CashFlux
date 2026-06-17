@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — feature C23: "+ Add" multi-entity add menu
+
+- Picked the next ticket myself (the user said to stop asking which to do — see the new memory). Chose
+  C23 as the most self-contained, clearly-valuable next feature.
+- "+ Add" opened only the quick-add transaction panel; every other entity could be added only from its
+  own screen. New `app.AddMenu` component turns "+ Add" into a popover: New transaction (opens the inline
+  quick-add) · New account · New budget · New goal · Scan a document (the entity items route via the
+  router to the screen where the add form lives).
+- Framework-safe rendering: the popover + a click-catching backdrop are always in the DOM and shown/
+  hidden with a `.hidden-menu` CSS class (not `If`), so the menu items' OnClick hooks stay at stable
+  positions (the On*-hooks-in-loops rule). The 5 items are built by a fixed-count helper, not a loop.
+  Moved `UseQuickAdd` out of TopBar into AddMenu.
+- Verified live: the menu is hidden initially, opens on click with 5 items, "New transaction" opens the
+  quick-add panel, and the menu closes on select. Entity navigation uses the same router.Navigate the
+  nav rail uses. SW cache v10→v11.
+- Left open (enhancement): per-widget in-context "add" affordances (e.g. an empty Budgets tile offering
+  "Add a budget").
+
 ## 2026-06-17 — feature C24 (importance UI): rank tiles from the gear — C24 done
 
 - Final piece: a per-tile Importance control. Added pure `dashlayout.SetImportance`/`ImportanceOf`

@@ -251,7 +251,6 @@ type topBarProps struct {
 // static) menu toggle, the page title, and an Add action.
 func TopBar(props topBarProps) uic.Node {
 	collapsed := uistate.UseRailCollapsed()
-	quickAdd := uistate.UseQuickAdd()
 	nav := router.UseNavigate()
 	// Breadcrumb: Dashboard (clickable) › current screen. Off the dashboard the
 	// home crumb navigates back; on it, just the title shows.
@@ -281,11 +280,7 @@ func TopBar(props topBarProps) uic.Node {
 		),
 		Div(Class("topbar-controls ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
-			Button(Class("px-3 py-1.5 border border-line text-fg hover:bg-hover"), Style(map[string]string{"border-radius": "4px"}),
-				Attr("title", uistate.T("topbar.add")),
-				OnClick(func() { quickAdd.Set(true) }),
-				uistate.T("topbar.addLabel"),
-			),
+			uic.CreateElement(AddMenu),
 		),
 	)
 }
