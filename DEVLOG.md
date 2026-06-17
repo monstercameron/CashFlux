@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: FlipPanel focus trap + restore
+
+- Extended the FlipPanel modal effect (which already did Esc-to-close) into a full focus trap: on mount
+  it captures `document.activeElement`, moves focus to the dialog's first focusable (querying
+  `.flip-wrap` for tabbable elements, skipping `tabindex="-1"` and disabled), and traps Tab/Shift+Tab to
+  cycle within the dialog (wrapping at the ends via `preventDefault` + focus). On unmount it restores
+  focus to the remembered trigger. Uses `js.Value.Equal` to compare the active element to first/last.
+  One change covers every overlay (quick-add + both settings panels). Completes the B15 dialogs item
+  (role/aria-modal/label + Esc + focus trap + initial focus + restore). wasm + vet green.
+
 ## 2026-06-16 — a11y: minimum touch targets (24px, WCAG 2.5.8)
 
 - Gave the small icon-only buttons (`.btn-del`, `.toast-x`, `.rstep`, `.set-close`) a `min-width`/

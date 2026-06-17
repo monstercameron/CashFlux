@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Accessibility: the flip-panel dialogs (quick-add, settings) now **trap keyboard focus** — focus moves
+  into the dialog on open, Tab/Shift+Tab cycle within it instead of escaping to the page behind, and
+  focus returns to whatever you opened it from when it closes. Completes the modal dialog semantics.
 - Accessibility: small icon-only buttons (delete ✕, toast dismiss, dialog close, the time-resolution
   arrows) now have a **minimum 24×24px hit area** with the glyph centered (WCAG 2.5.8) — easier to tap.
 - Accessibility: with the OS **"reduce motion"** preference on, the flip-panel no longer flips/lifts,

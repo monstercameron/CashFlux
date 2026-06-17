@@ -40,18 +40,72 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		return nil
 	}, true)
 
-	// Esc closes the dialog (a standard modal affordance). The listener is added
-	// on mount and removed on unmount — which, since the panel mounts fresh each
-	// open and unmounts on close, matches the dialog's lifetime exactly.
+	// Modal keyboard behavior: Esc closes; Tab is trapped inside the dialog;
+	// focus moves into the dialog on open and is restored to the trigger on close.
+	// The listener is added on mount and removed on unmount, which (since the panel
+	// mounts fresh each open and unmounts on close) matches the dialog's lifetime.
 	onCloseRef := props.OnClose
 	uic.UseEffect(func() func() {
-		if onCloseRef == nil {
+		doc := js.Global().Get("document")
+		if doc.IsNull() || doc.IsUndefined() {
 			return nil
 		}
-		doc := js.Global().Get("document")
+		// Remember what had focus so we can restore it when the dialog closes.
+		prevFocus := doc.Get("activeElement")
+
+		// focusables lists the dialog's tabbable elements in DOM order.
+		focusables := func() []js.Value {
+			wrap := doc.Call("querySelector", ".flip-wrap")
+			if wrap.IsNull() || wrap.IsUndefined() {
+				return nil
+			}
+			list := wrap.Call("querySelectorAll", "a[href], button, input, select, textarea, [tabindex]")
+			out := make([]js.Value, 0, list.Get("length").Int())
+			for i := 0; i < list.Get("length").Int(); i++ {
+				el := list.Index(i)
+				if el.Call("getAttribute", "tabindex").String() == "-1" {
+					continue
+				}
+				if d := el.Get("disabled"); !d.IsUndefined() && d.Bool() {
+					continue
+				}
+				out = append(out, el)
+			}
+			return out
+		}
+
+		// Move focus into the dialog (its first focusable) so keyboard/SR users
+		// start inside the modal rather than behind it.
+		if fs := focusables(); len(fs) > 0 {
+			fs[0].Call("focus")
+		}
+
 		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) > 0 && args[0].Get("key").String() == "Escape" {
-				onCloseRef()
+			if len(args) == 0 {
+				return nil
+			}
+			e := args[0]
+			switch e.Get("key").String() {
+			case "Escape":
+				if onCloseRef != nil {
+					onCloseRef()
+				}
+			case "Tab":
+				fs := focusables()
+				if len(fs) == 0 {
+					return nil
+				}
+				first, last := fs[0], fs[len(fs)-1]
+				active := doc.Get("activeElement")
+				if e.Get("shiftKey").Bool() {
+					if active.Equal(first) {
+						e.Call("preventDefault")
+						last.Call("focus")
+					}
+				} else if active.Equal(last) {
+					e.Call("preventDefault")
+					first.Call("focus")
+				}
 			}
 			return nil
 		})
@@ -59,6 +113,9 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		return func() {
 			doc.Call("removeEventListener", "keydown", cb)
 			cb.Release()
+			if !prevFocus.IsNull() && !prevFocus.IsUndefined() {
+				prevFocus.Call("focus")
+			}
 		}
 	}, true)
 
