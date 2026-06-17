@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C19 (top bar): controls were unreachable on tablet/phone
+
+- At ≤768px the top-bar control cluster (resolution segmented + jump + stepper + custom range + Add) ran
+  off the right edge with no wrap, so some controls were unreachable and the breadcrumb shrank to "D".
+- First attempt — `flex-wrap: wrap` + `width: 100%` on the control cluster — *didn't* work, and the
+  oracle showed why: flexbox preferred to *shrink* every item onto one line (squashing the breadcrumb to
+  ~48px) rather than wrap, and Tailwind's `.h-14` was overriding my `height:auto` so even a wrapped row
+  would have been clipped. Measured it live: barH stayed 56, breadcrumb h1 width ~96 but controls still
+  shared the row.
+- Fix that worked: `.topbar-controls { flex: 1 0 100% }` (no shrink, full-basis → forced onto its own
+  row) plus `.topbar { height: auto !important }` to beat `h-14`, and `flex-wrap` on the bar and the
+  resolution control so the cluster wraps internally. Gave the bar a `topbar` class, the cluster a
+  `topbar-controls` class, and the resolution control a `reso-control` class to target them.
+- Verified live with the oracle's viewport flags: 768px → bar 175px, breadcrumb readable (96px), every
+  control's right edge ≤ 768, no page h-scroll; 390px → all controls reachable, no h-scroll. SW v6→v7.
+- Remaining C19 (separate concerns, left open): transaction-row action buttons overlapping at narrow
+  widths (route-gated — can't drive /transactions in the static oracle) and KPI figure clipping when the
+  desktop bento is squeezed between 768–1024px.
+
 ## 2026-06-17 — bugfix C18: inline-edit stacked fields vertically
 
 - Editing a Transactions or Accounts row rendered its fields in a tall single column with dead space to

@@ -21,6 +21,13 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Top-bar controls are reachable on tablets and phones (C19):** below 1024px the time-resolution
+  control + "+ Add" ran off the right edge with no wrap, so some were unreachable and the breadcrumb was
+  clipped to "D". The bar now grows to two rows — breadcrumb on top, the controls wrapping onto a
+  full-width row below. Verified live at 768px (bar ~175px, breadcrumb readable, nothing past the
+  viewport) and 390px (all controls reachable, no horizontal scroll). SW cache bumped (v6 → v7).
+  (Transaction-row action-button wrapping and KPI figure clipping at squeezed widths remain open under
+  C19.)
 - **Inline-edit now lays out like the Add form on every screen (C18):** editing a **Transactions** or
   **Accounts** row stacked its fields vertically in a narrow left column (tall, with empty space to the
   right), while **Budgets** edited horizontally. The edit form (already a `form-grid`) was wrapped in the

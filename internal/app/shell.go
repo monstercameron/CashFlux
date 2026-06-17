@@ -269,7 +269,7 @@ func TopBar(props topBarProps) uic.Node {
 	periodAware := map[string]bool{
 		"/": true, "/transactions": true, "/budgets": true, "/planning": true, "/insights": true,
 	}[curPath]
-	return Div(Class("h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20"),
+	return Div(Class("topbar h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20"),
 		Button(Class("menu-btn w-7 h-7 -ml-1"), Attr("title", uistate.T("topbar.menu")),
 			OnClick(func() { collapsed.Update(func(c bool) bool { return !c }) }),
 			ui.Icon(icon.Menu, Class("w-5 h-5")),
@@ -281,7 +281,7 @@ func TopBar(props topBarProps) uic.Node {
 			// has exactly one top-level heading for screen-reader heading navigation.
 			H1(Class("text-lg font-semibold truncate"), Attr("aria-current", "page"), props.Title),
 		),
-		Div(Class("ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
+		Div(Class("topbar-controls ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
 			Button(Class("px-3 py-1.5 border border-line text-fg hover:bg-hover"), Style(map[string]string{"border-radius": "4px"}),
 				Attr("title", uistate.T("topbar.add")),
@@ -357,7 +357,7 @@ func ResolutionControl() uic.Node {
 		rangeLabel = uistate.T("resolution.singlePeriod")
 	}
 
-	return Span(Class("flex items-center gap-2.5"),
+	return Span(Class("reso-control flex items-center gap-2.5"),
 		ui.Segmented(ui.SegmentedProps{
 			Options: []ui.SegOption{
 				{Value: string(period.Week), Label: "Week"},

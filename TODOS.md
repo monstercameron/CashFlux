@@ -707,9 +707,12 @@ left-hand column (very tall, lots of empty space to the right), looking unfinish
 
 ### C19. Responsive breakage specifics (extends C10) ★
 Captured at 768px (tablet):
-- [ ] **Top-bar controls overflow off-screen:** the Week/Month/Quarter + Jump-to + stepper + Custom
-      range + "+ Add" run off the right edge with no wrap/collapse, so some are unreachable. The
-      breadcrumb is clipped to "D".
+- [x] **Top-bar controls overflow off-screen:** fixed. At ≤1024px the top bar now grows to two rows —
+      breadcrumb on row 1, the control cluster (resolution segmented + jump + stepper + custom range +
+      Add) wraps onto a full-width row below (`flex: 1 0 100%`, `height:auto !important` to beat
+      Tailwind's `h-14`, and the resolution control wraps internally). Verified live: at 768px the bar is
+      ~175px with the breadcrumb readable (96px) and no control past the viewport; at 390px all controls
+      are reachable too. No horizontal page scroll at either width. SW cache v6→v7.
 - [ ] **Transaction rows break:** at narrow widths the row's action buttons (Mark cleared / Edit /
       Duplicate / ✕) overlap the date/account text instead of wrapping.
 - [ ] **KPI tile figures clip** (e.g. "$20,749.2", "$1,800.7$") when the bento is squeezed.

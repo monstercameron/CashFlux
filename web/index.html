@@ -437,6 +437,18 @@
           grid-auto-rows: minmax(var(--cell), auto) !important; }
         .bento > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
       }
+      /* Tablet/narrow (C19): the top bar's controls (resolution segmented + jump +
+         stepper + custom range + Add) ran off the right edge with no wrap, so some
+         were unreachable. Let the bar grow to two rows — breadcrumb on top, the
+         controls wrapping onto a full-width second row — so nothing is clipped. */
+      @media (max-width: 1024px) {
+        /* height:auto must beat Tailwind's .h-14; flex:1 0 100% forces the
+           control cluster onto its own full-width row (without it, flexbox just
+           shrinks everything onto one line and squashes the breadcrumb). */
+        .topbar { height: auto !important; min-height: 3.5rem; flex-wrap: wrap; row-gap: .4rem; padding-top: .4rem; padding-bottom: .4rem; }
+        .topbar-controls { margin-left: 0; flex: 1 0 100%; flex-wrap: wrap; row-gap: .4rem; justify-content: flex-start; }
+        .reso-control { flex-wrap: wrap; row-gap: .4rem; }
+      }
       .menu-btn { background:transparent; border:0; color:#a6a6ac; cursor:pointer; display:grid; place-items:center; }
       .menu-btn:hover { color:#f4f4f5; }
 
