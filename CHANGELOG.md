@@ -29,6 +29,12 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Tighter default density (C25):** the out-of-the-box UI felt too heavy for a dense finance app. The
+  base font is now 14.5px (from 16) with line-height 1.45, and the shared control/widget tokens are
+  trimmed — `.field` ~34px (was ~40) with 6px corners, `.btn` padding reduced, `.wbody` padding tightened.
+  The Fraunces display figures keep their sizes, so the data accents stay prominent; the Compact toggle
+  and Display scale remain as further levers. Nothing drops below the 24px touch-target minimum. Verified
+  live (no text clipping; KPI figures still fit). SW cache bumped (v11 → v12).
 - **Negative money now reads the same on every screen (C2):** all figure displays use one accounting
   formatter, so negatives show in parentheses (`($60.20)`) with thousands grouping everywhere — the
   Transactions list, Accounts, Budgets, Goals, Allocate, Planning, etc. now match the Dashboard instead

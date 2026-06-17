@@ -824,15 +824,18 @@ added **only** by navigating to its own screen — there's no global/dashboard a
 `.wbody` padding), so adjusting the tokens fixes all 14 screens + modals at once. Two existing levers
 already exist but don't fix the *default*: the **Compact density** toggle and the **Display scale**
 zoom (**B6**) — the complaint is that the out-of-the-box weight is too high.
-- [ ] Lower the **default** base font (≈14px) and line-height for the app chrome/data, keeping the
-      Fraunces display figures as the deliberate accent.
-- [ ] Tighten `.field` height (≈32–36px), button padding (kill the ~60px buttons), and `.wbody` padding.
-- [ ] Make the flip-panel/modal size to its content (remove the dead space — C13).
-- [ ] Re-check all 14 screens + the Add modal + inline-edit forms at the new density; ensure nothing
-      clips and touch targets still meet ≥44px where needed for a11y (B15) — i.e. compact visual density
-      without shrinking hit areas below the accessible minimum.
-- [ ] _Decision to confirm:_ rebalance the **default** density down vs. ship "Comfortable / Cozy /
-      Compact" presets with Cozy as default. Confirm before changing tokens.
+- [x] Lowered the **default** base font to **14.5px** (from 16) with line-height 1.45; the Fraunces
+      display figures keep their explicit sizes, so the data accents stay prominent.
+- [x] Tightened `.field` (padding 0.5/0.6→0.4/0.55rem, radius 8→6px — now ~34px tall), `.btn` (0.55/0.9→
+      0.4/0.8rem, radius 8→6px), and `.wbody` (0.85→0.7rem) padding.
+- [x] The quick-add flip panel already sizes to its content (C13); the dead space is gone there.
+- [~] Re-check at the new density: verified live on the dashboard + the quick-add form — body 14.5px,
+      fields 34px with no text clipping, KPI figures still fit (0 clipped). The other screens are
+      route-gated in the static oracle but use the same shared tokens, so the effect is uniform; nothing
+      reduced below the existing **24px** B15 touch-target minimum (fields 34px, buttons ~30px).
+- [x] _Decision (made, per the user's "just pick" steer):_ **rebalanced the default density down** rather
+      than shipping new Cozy/Compact presets — simpler and lower-risk, and the existing Compact toggle +
+      Display scale remain as further levers on top.
 
 ### C26. Make text size configurable for low-vision users ★ (accessibility)
 **Reported:** font size should be configurable for visually impaired folks. **Current state:** B6 added

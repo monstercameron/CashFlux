@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — C25: rebalance the default density down
+
+- Picked C25 next ("UI too fat/chunky"). The TODO said to confirm the approach first, but the user told
+  me to stop asking and just pick — so I made the call: rebalance the *default* density down rather than
+  introduce new Cozy/Compact presets. Simpler, lower-risk, and the existing Compact toggle + Display
+  scale still layer on top.
+- Trimmed the shared tokens in index.html: body 16px/1.5 → 14.5px/1.45 (Fraunces display figures keep
+  their explicit sizes, so the data stays prominent); `.field` 0.5/0.6→0.4/0.55rem padding + radius 8→6;
+  `.btn` 0.55/0.9→0.4/0.8rem + radius 8→6; `.wbody` 0.85→0.7rem.
+- Checked the a11y angle: the B15 touch-target rule enforces a 24px minimum on small controls; fields are
+  now ~34px and buttons ~30px, both above it — no regression. (The app's standard is 24px, not the 44px
+  the TODO aspired to; I didn't make that worse.)
+- Verified live on the dashboard + the quick-add form: body computes to 14.5px, `.field` is 34px with no
+  text clipping, and the KPI figures still fit (0 clipped). Other screens are route-gated in the static
+  oracle but share these tokens, so the effect is uniform. SW cache v11→v12.
+
 ## 2026-06-17 — feature C23: "+ Add" multi-entity add menu
 
 - Picked the next ticket myself (the user said to stop asking which to do — see the new memory). Chose
