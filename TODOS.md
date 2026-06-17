@@ -960,7 +960,9 @@ Shared control components (from mockup):
       Optional later: feed recurring into the forecast (needs a no-double-count design vs. actuals).
 - [~] `Plan{ID, Name, HorizonMonths, StartBalance, Items[]}` + `PlanItem{ID,Label,Kind,Amount,Month}`
       done (`domain`, pure data) plus an `internal/planning` engine (`Project`/`MonthlyNet`/`EndBalance`
-      over the forecast engine, table-tested). Still TODO: CRUD/persistence + Planning UI.
+      over the forecast engine, table-tested) **and persistence** (`plans` table, store CRUD, dataset
+      round-trip, validated appstate `Plans`/`PutPlan`/`DeletePlan`; tested at every layer). Still TODO:
+      Planning UI (create/list/project/delete).
 - [~] ★ Forecast engine (pure): `internal/forecast.Project` over horizon from start + recurring + one-time items done; actuals-derived recurring later
 - [x] Debt payoff math (`internal/payoff.Project`) + tests + extra-payment scenario (months/interest saved)
 - [~] What-if scenarios: extra debt payment + trim-spending forecast done; add-recurring/rate-change later

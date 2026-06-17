@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Plans now **persist**: saved what-if scenarios survive reloads and round-trip losslessly through
+  JSON/CSV export/import, with validated save (needs an id, a name, and a positive horizon).
 - New **Plan** model and `planning` engine: a saved what-if scenario (a starting balance projected
   over a horizon under a set of recurring/one-time assumptions) can now be projected into a balance
   curve, its steady monthly net, and its end-of-horizon balance — composing the pure domain types

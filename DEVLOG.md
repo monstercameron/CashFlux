@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — Plan persistence (§2.6)
+
+- Wired `domain.Plan` through the store exactly like the other JSON-blob entities: a `plans` table
+  (id + data TEXT), `Dataset.Plans` field, replaceRows/loadRows in the snapshot path, and
+  Put/Get/Delete/List CRUD. Added validated appstate accessors `Plans()`/`PutPlan` (requires id, name,
+  positive horizon) /`DeletePlan`. No SchemaVersion bump — additive, the blob carries everything.
+  Tests at every layer: store CRUD (incl. nested PlanItem round-trip), dataset export/import lossless
+  check, and appstate validation (rejects no-id/no-name/zero/negative horizon). Full suite green.
+- Next: the Planning screen UI to create/list/project/delete plans (UI last).
+
 ## 2026-06-16 — Plan model + planning engine (§2.6)
 
 - Added `domain.Plan{ID, Name, HorizonMonths, StartBalance, Items}` and `domain.PlanItem{ID, Label,

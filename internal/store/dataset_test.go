@@ -37,6 +37,8 @@ func sampleDataset() Dataset {
 		}},
 		AllocProfiles: []domain.AllocationProfile{{ID: "ap1", Name: "Aggressive", Returns: 3, Stability: 1, Liquidity: 1, DebtReduction: 2, GoalProgress: 1.5}},
 		Formulas:      []domain.Formula{{ID: "f1", Name: "Savings rate", Expr: "(income - expense) / income * 100", Enabled: true}},
+		Plans: []domain.Plan{{ID: "pl1", Name: "Runway", HorizonMonths: 6, StartBalance: 300000,
+			Items: []domain.PlanItem{{ID: "pi1", Label: "Burn", Kind: domain.PlanItemRecurring, Amount: -40000}}}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
 			FXRates:            map[string]float64{"EUR": 1.1},
@@ -107,6 +109,10 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if len(imported.Formulas) != 1 || imported.Formulas[0].Name != "Savings rate" || !imported.Formulas[0].Enabled {
 		t.Errorf("formulas lost: %+v", imported.Formulas)
+	}
+	if len(imported.Plans) != 1 || imported.Plans[0].Name != "Runway" || imported.Plans[0].HorizonMonths != 6 ||
+		len(imported.Plans[0].Items) != 1 || imported.Plans[0].Items[0].Amount != -40000 {
+		t.Errorf("plans lost: %+v", imported.Plans)
 	}
 }
 

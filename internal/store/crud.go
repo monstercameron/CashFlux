@@ -314,3 +314,18 @@ func (s *SQLiteStore) DeleteFormula(id string) (bool, error) {
 func (s *SQLiteStore) ListFormulas() ([]domain.Formula, error) {
 	return loadRows[domain.Formula](s.db, "formulas")
 }
+
+// --- Plans (saved what-if scenarios) ---
+
+func (s *SQLiteStore) PutPlan(p domain.Plan) error {
+	return putJSON(s.db, "plans", p.ID, p)
+}
+func (s *SQLiteStore) GetPlan(id string) (domain.Plan, bool, error) {
+	return getJSON[domain.Plan](s.db, "plans", id)
+}
+func (s *SQLiteStore) DeletePlan(id string) (bool, error) {
+	return deleteRow(s.db, "plans", id)
+}
+func (s *SQLiteStore) ListPlans() ([]domain.Plan, error) {
+	return loadRows[domain.Plan](s.db, "plans")
+}

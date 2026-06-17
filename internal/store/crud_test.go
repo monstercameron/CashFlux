@@ -218,6 +218,36 @@ func TestFormulaCRUD(t *testing.T) {
 	}
 }
 
+func TestPlanCRUD(t *testing.T) {
+	s := newStore(t)
+	p := domain.Plan{
+		ID: "p1", Name: "Save for house", HorizonMonths: 12, StartBalance: 500000,
+		Items: []domain.PlanItem{
+			{ID: "i1", Label: "Savings", Kind: domain.PlanItemRecurring, Amount: 50000},
+			{ID: "i2", Label: "Bonus", Kind: domain.PlanItemOneTime, Month: 6, Amount: 200000},
+		},
+	}
+	if err := s.PutPlan(p); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, ok, err := s.GetPlan("p1")
+	if err != nil || !ok || got.HorizonMonths != 12 || got.StartBalance != 500000 || len(got.Items) != 2 {
+		t.Fatalf("Get: ok=%v err=%v got=%+v", ok, err, got)
+	}
+	if got.Items[1].Kind != domain.PlanItemOneTime || got.Items[1].Month != 6 || got.Items[1].Amount != 200000 {
+		t.Errorf("one-time item lost: %+v", got.Items[1])
+	}
+	if list, _ := s.ListPlans(); len(list) != 1 {
+		t.Errorf("list len = %d, want 1", len(list))
+	}
+	if deleted, err := s.DeletePlan("p1"); err != nil || !deleted {
+		t.Fatalf("delete: deleted=%v err=%v", deleted, err)
+	}
+	if _, ok, _ := s.GetPlan("p1"); ok {
+		t.Error("plan still present after delete")
+	}
+}
+
 func TestGetAndDeleteMissing(t *testing.T) {
 	s := newStore(t)
 	if _, ok, err := s.GetGoal("nope"); ok || err != nil {

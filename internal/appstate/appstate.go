@@ -217,6 +217,13 @@ func (a *App) Formulas() []domain.Formula {
 	return v
 }
 
+// Plans returns every saved what-if plan.
+func (a *App) Plans() []domain.Plan {
+	v, err := a.store.ListPlans()
+	a.logErr("plans", err)
+	return v
+}
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -499,6 +506,27 @@ func (a *App) PutFormula(f domain.Formula) error {
 
 // DeleteFormula removes a saved formula.
 func (a *App) DeleteFormula(id string) error { return a.del("formula", id, a.store.DeleteFormula) }
+
+// PutPlan saves a what-if plan (needs an ID, a name, and a positive horizon).
+func (a *App) PutPlan(p domain.Plan) error {
+	if p.ID == "" {
+		return fmt.Errorf("appstate: plan needs an id")
+	}
+	if strings.TrimSpace(p.Name) == "" {
+		return fmt.Errorf("appstate: plan needs a name")
+	}
+	if p.HorizonMonths <= 0 {
+		return fmt.Errorf("appstate: plan needs a positive horizon")
+	}
+	if err := a.store.PutPlan(p); err != nil {
+		return err
+	}
+	a.log.Info("plan saved", "id", p.ID)
+	return nil
+}
+
+// DeletePlan removes a saved plan.
+func (a *App) DeletePlan(id string) error { return a.del("plan", id, a.store.DeletePlan) }
 
 // PostDueRecurring posts a transaction for each autopost recurring whose NextDue
 // is on or before asOf, advancing NextDue past asOf — catching up any missed

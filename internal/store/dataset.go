@@ -44,6 +44,7 @@ type Dataset struct {
 	Recurring     []domain.Recurring         `json:"recurring,omitempty"`
 	AllocProfiles []domain.AllocationProfile `json:"allocProfiles,omitempty"`
 	Formulas      []domain.Formula           `json:"formulas,omitempty"`
+	Plans         []domain.Plan              `json:"plans,omitempty"`
 	Settings      Settings                   `json:"settings"`
 }
 

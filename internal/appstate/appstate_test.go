@@ -236,6 +236,33 @@ func TestFormulaRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPlanRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+	bad := []domain.Plan{
+		{Name: "x", HorizonMonths: 6},           // no id
+		{ID: "p", HorizonMonths: 6},             // no name
+		{ID: "p", Name: "x"},                    // non-positive horizon
+		{ID: "p", Name: "x", HorizonMonths: -1}, // negative horizon
+	}
+	for i, p := range bad {
+		if err := a.PutPlan(p); err == nil {
+			t.Errorf("bad plan %d accepted: %+v", i, p)
+		}
+	}
+	if err := a.PutPlan(domain.Plan{ID: "p1", Name: "Runway", HorizonMonths: 6, StartBalance: 300000}); err != nil {
+		t.Fatalf("PutPlan: %v", err)
+	}
+	if got := a.Plans(); len(got) != 1 || got[0].Name != "Runway" {
+		t.Fatalf("Plans() = %+v", got)
+	}
+	if err := a.DeletePlan("p1"); err != nil {
+		t.Fatalf("DeletePlan: %v", err)
+	}
+	if len(a.Plans()) != 0 {
+		t.Error("plan still present after delete")
+	}
+}
+
 func TestPostDueRecurring(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutAccount(domain.Account{
