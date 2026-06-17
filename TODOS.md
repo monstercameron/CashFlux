@@ -539,13 +539,13 @@ UTC-dated transaction.
 The CLAUDE.md standard is accounting format — thousands separators + **parentheses** for negatives
 (`money.FormatAccounting`). It's applied on the **Dashboard** and the **Transactions list summary**
 (`$20,749.25`, `($1,500.00)`) but bypassed elsewhere, producing ugly/locale-naive output:
-- [ ] **Accounts** KPIs + rows: `$20749.25`, `$21599.25`, `cleared $6900.00`, `-$850.00` (no grouping;
-      minus sign instead of parentheses).
-- [ ] **Budgets / Goals** KPI cards + sublines: `$3000.00`, `$2500.00 to go`, `$416.67/mo` (no grouping).
-- [ ] **Transactions rows** use a minus sign (`-$60.20`, `-$1500.00`) while the Dashboard recent-txns
-      use parentheses (`($60.20)`) for the same data — pick one (parentheses, per the standard).
-- [ ] Sweep every money render through `money.FormatAccounting`/`fmtAccounting`; add a quick grep guard
-      or shared helper so new screens can't bypass it.
+- [x] **Grouping** — fixed in one place: `fmtMoney` now wraps `money.Group`, so Accounts/Budgets/Goals/
+      Allocate/etc. show `$20,749.25` not `$20749.25`.
+- [~] **Negative style** — `fmtMoney` still uses a minus sign while `fmtAccounting` uses parentheses, so
+      Transactions rows (`-$60.20`) differ from the Dashboard (`($60.20)`). Unifying to parentheses needs
+      per-context care (some `fmtMoney` outputs are inline/compact, and parentheses must never reach an
+      input value) and a browser check — left as a targeted `fmtAccounting` migration of the row/KPI
+      displays.
 
 ### C3. "Your household" card (rail bottom) is visually broken on every page ★
 **Symptom:** the bottom-left household card overlaps and clips its own text — the avatar bubble (which

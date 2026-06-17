@@ -9,10 +9,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
-// fmtMoney renders a Money value for display, e.g. "$1234.56" or "-$240.55".
+// fmtMoney renders a Money value for display with thousands grouping, e.g.
+// "$1,234.56" or "-$240.55". (Negatives keep a minus sign; the parenthesized
+// accounting style is fmtAccounting.)
 func fmtMoney(m money.Money) string {
 	sym := currency.Symbol(m.Currency)
-	s := money.FormatMinor(m.Amount, currency.Decimals(m.Currency))
+	s := money.Group(money.FormatMinor(m.Amount, currency.Decimals(m.Currency)))
 	if strings.HasPrefix(s, "-") {
 		return "-" + sym + s[1:]
 	}

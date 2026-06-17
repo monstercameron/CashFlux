@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- Money amounts everywhere now show **thousands grouping** (e.g. `$20,749.25` instead of `$20749.25`)
+  — Accounts, Budgets, Goals, Allocate, etc. that used the ungrouped `fmtMoney` are fixed in one place. (C2)
 - The top-bar **time-resolution control** (Week/Month/Quarter + period stepper) now appears only on
   period-aware screens (Dashboard, Transactions, Budgets, Planning, Insights) — it's hidden on Members,
   Categories, Rules, Customize, Allocate, Documents, To-do, and Goals where a period does nothing. (C4)

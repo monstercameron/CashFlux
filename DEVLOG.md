@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — bugfix C2 (part): grouped fmtMoney
+
+- `fmtMoney` rendered ungrouped amounts ("$20749.25"), so every screen using it (Accounts/Budgets/
+  Goals/Allocate/Documents/Plans…) looked locale-naive next to the Dashboard's grouped accounting
+  figures. Wrapped its `FormatMinor` in the existing `money.Group`, so all `fmtMoney` output is now
+  comma-grouped — fixed in one place. Kept the **minus-sign** negative style (not parentheses) so
+  there's zero risk to any input pre-filled via `fmtMoney` (parentheses wouldn't re-parse) and no
+  jarring inline parentheses. The remaining C2 sub-point — unifying negatives to parentheses (Transactions
+  rows minus vs Dashboard parentheses) — is a visual-standard call best verified in a browser and is
+  left as a follow-up (the row-level `fmtAccounting` migration). wasm + money tests green.
+
 ## 2026-06-16 — bugfix C4: resolution control on non-period screens
 
 - The TopBar rendered `ResolutionControl` on every route, so a Week/Month/Quarter stepper showed on
