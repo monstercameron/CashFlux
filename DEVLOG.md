@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — bugfix C4: resolution control on non-period screens
+
+- The TopBar rendered `ResolutionControl` on every route, so a Week/Month/Quarter stepper showed on
+  Categories/Members/Rules/etc. where it does nothing. Gated it behind a `periodAware` set
+  (`/`, `/transactions`, `/budgets`, `/planning`, `/insights`) derived from
+  `router.InspectCurrentRoute().Path`. Left `+ Add` everywhere — logging a transaction is a valid action
+  on any screen, so it has an obvious target (C4's second bullet is a no-op by that reasoning). wasm +
+  vet green.
+
 ## 2026-06-16 — bugfix C9: category color never surfaced
 
 - `domain.Category.Color` existed but the Categories screen never read or set it. Wired it end to end:

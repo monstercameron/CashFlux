@@ -258,7 +258,13 @@ func TopBar(props topBarProps) uic.Node {
 	// Breadcrumb: Dashboard (clickable) › current screen. Off the dashboard the
 	// home crumb navigates back; on it, just the title shows.
 	onHome := func() { nav.Navigate("/") }
-	onDashboard := router.InspectCurrentRoute().Path == "/"
+	curPath := router.InspectCurrentRoute().Path
+	onDashboard := curPath == "/"
+	// The time-resolution control only makes sense where there's a period concept;
+	// on Members/Categories/Rules/etc. it does nothing, so hide it there (C4).
+	periodAware := map[string]bool{
+		"/": true, "/transactions": true, "/budgets": true, "/planning": true, "/insights": true,
+	}[curPath]
 	return Div(Class("h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20"),
 		Button(Class("menu-btn w-7 h-7 -ml-1"), Attr("title", uistate.T("topbar.menu")),
 			OnClick(func() { collapsed.Update(func(c bool) bool { return !c }) }),
@@ -272,7 +278,7 @@ func TopBar(props topBarProps) uic.Node {
 			H1(Class("text-lg font-semibold truncate"), Attr("aria-current", "page"), props.Title),
 		),
 		Div(Class("ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
-			uic.CreateElement(ResolutionControl),
+			If(periodAware, uic.CreateElement(ResolutionControl)),
 			Button(Class("px-3 py-1.5 border border-line text-fg hover:bg-hover"), Style(map[string]string{"border-radius": "4px"}),
 				Attr("title", uistate.T("topbar.add")),
 				OnClick(func() { quickAdd.Set(true) }),

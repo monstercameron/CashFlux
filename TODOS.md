@@ -558,9 +558,10 @@ shows cut-off fragments ("…ember · USD base ·" / "…tings"). Present on all
 The **time-resolution control** (Week/Month/Quarter + Jump-to + ‹Jun 2026› + Custom range) and the
 **+ Add** button render on *every* route, including ones with no period concept — Members, Categories,
 Rules, Customize, Allocate, Documents, To-do, Goals. A period stepper on Categories does nothing.
-- [ ] Show the resolution control only on period-aware screens (Dashboard, Transactions, Budgets,
-      Planning, Insights); hide or contextualize it elsewhere. (Relates to B10.)
-- [ ] Make "+ Add" context-aware (or hide where it has no obvious target).
+- [x] The resolution control now shows only on period-aware screens (Dashboard, Transactions, Budgets,
+      Planning, Insights), gated by a `periodAware` set on the current route in `TopBar`.
+- [x] "+ Add" left visible everywhere — logging a transaction is a valid action on any screen, so it has
+      an obvious target (no-op by that reasoning).
 
 ### C5. Dashboard ships a duplicate "Net worth" widget (default layout)
 The default bento has the **Net worth KPI** (`$20,749.25 ▼7% this month`) *and* a second standalone
