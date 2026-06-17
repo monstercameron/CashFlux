@@ -180,6 +180,11 @@ and every commit updates this file under `Unreleased`.
   GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.
 
 ### Changed
+- Accessibility: the **faint/secondary text color** was darkened (light theme) / lightened (dark theme)
+  so captions, hints, and meta text now meet WCAG AA (4.5:1) against both the base and elevated
+  surfaces — previously ~3:1, which failed for normal-size text. (Audited with the new `contrast`
+  package; the shared brand **accent** is low-contrast on the light theme but changing its hue is a
+  brand decision, so it's left for review.)
 - Icons are now **type-safe end to end**: `ui.Icon` takes an `icon.Name` and every call site (sidebar
   nav, top bar, household card) uses the compile-checked constants — a mistyped icon name is now a
   build error instead of a silently-blank glyph. Rendering is unchanged.

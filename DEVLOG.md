@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: theme-token contrast audit + text-faint fix
+
+- Audited the suspect tokens with the new `contrast` package (throwaway test, not committed). Findings:
+  `text-faint` failed AA-normal on both themes — dark #6c6c72 = 3.70/3.33 (bg/elev), light #8a8a90 =
+  3.18/2.93 (the light-on-elev even failed AA-large). text-dim, danger, and accent-on-dark all passed.
+  The shared **accent** #54b884 fails on light (2.27 on bg / 2.45 on card) — but it's mostly fills/large
+  UI and changing the brand hue is a visual decision, so I flagged it rather than altering it.
+- Fix (data-driven): lightened dark `--text-faint` to **#888890** (5.49/4.94) and darkened light
+  `--text-faint` to **#686870** (5.11/4.72) — both clear AA-normal (4.5) on base and elevated surfaces,
+  picked by iterating candidates through `contrast.Ratio`. Updated the dark var, the light var, and the
+  light `.text-faint` utility override. Pure CSS; no Go change.
+
 ## 2026-06-16 — contrast: WCAG luminance/ratio utility (pure)
 
 - New pure package `internal/contrast`: `ParseHex` (3/6-digit, optional #), `RelativeLuminance`, `Ratio`

@@ -437,10 +437,11 @@ one-line a11y item in §1.20.
       "On track/Near limit/Over budget" text, net-worth/highlights use ▲/▼ arrows, stale accounts show
       a "Stale" badge, cleared shows a ✓; the one offender — the To-do widget's priority dots (high vs
       medium were both `●`) — now uses distinct shapes ▲/●/○ plus accessible names.
-- [~] **Contrast:** built a pure `internal/contrast` (WCAG luminance + ratio + AA/AAA predicates,
-      table-tested) — the tool to verify token pairs and validate custom accents. Still TODO: actually
-      audit `text-faint`/accent-on-surface for both themes and bake any fixes into the token set; and
-      wire an accent-contrast warning into the swatch picker.
+- [~] **Contrast:** built `internal/contrast` (table-tested) and **audited** the tokens with it.
+      Fixed: `text-faint` now meets AA-normal (4.5) on both surfaces in both themes (dark→#888890,
+      light→#686870). Flagged (needs a brand decision, not changed): the shared **accent** #54b884 is
+      ~2.3:1 on the light theme — fine on dark, low on light. Still TODO: pick a light-theme-safe accent
+      (or per-theme accent) and optionally wire an accent-contrast warning into the swatch picker.
 - [~] **Motion:** `prefers-reduced-motion` now also covers the flip-panel, toast slide-in, and rail
       width (boot + rail flyout were already handled). Still TODO once they exist: the dashboard
       reorder/resize animations (B2). Original note below:
@@ -493,6 +494,96 @@ relying on the (already extensive) pure-logic unit tests. Run the suite in CI on
 - [ ] Cross-cutting: reload persistence, offline (PWA), deep-link routing (B1/B3), accessibility journeys (B15).
 - [ ] Organize as story files; gate CI on them once the browser lane is available; aim for full
       standard-path coverage of every feature.
+
+---
+
+## C. Live UI/UX review findings — 2026-06-16 (sample data) ★
+
+Captured by driving the running app (`http://127.0.0.1:8080`) in a real headless Chromium via the
+now-installed Playwright driver and screenshotting all 14 routes (Dashboard, Accounts, Transactions,
+Budgets, Goals, To-do, Planning, Allocate, Insights, Documents, Customize, Members, Categories,
+Rules). Screenshots + rendered text are in `.review-screenshots/` (git-ignore this). Items are
+ordered correctness-first, then cross-cutting chrome, then per-screen polish.
+
+### C1. Dashboard "Income" shows $0.00 despite a $4,200 salary in-period ★ (correctness)
+**Symptom:** with sample data, the Dashboard Income KPI reads **$0.00 · 0 deposits** for Jun 2026,
+but `tx-1` Salary (+$4,200, income, cleared, **2026-06-01**) is clearly in June. Spending ($1,800.75,
+3 txns on Jun 2/3/5) is correct.
+**Root cause (verified in code):** `period.Range`/`Truncate` compute the window start with
+`dateutil.MonthStart(t)` which **preserves the browser-local timezone** (`t.Location()`), while sample
+transaction dates are stored at **UTC midnight** (`time.Date(2026,6,1,0,0,0,0,time.UTC)`). In any
+timezone *behind* UTC, the local month-start (e.g. `Jun 1 00:00 −05:00` = `Jun 1 05:00Z`) falls
+*after* the `Jun 1 00:00Z` salary, so `dateutil.InRange` (`!Before(start) && Before(end)`) drops it.
+Jun 2–5 expenses survive because they're a day later. This silently drops any first-of-period,
+UTC-dated transaction.
+- [ ] Decide a canonical date convention (store + compare both as UTC calendar dates, or truncate
+      windows in UTC) and apply it consistently in `period`/`dateutil`/`ledger`. Add a table test that
+      a `00:00Z` first-of-month transaction is counted regardless of the machine timezone (run the test
+      under a non-UTC `TZ`/`time.Local`).
+- [ ] Verify: Dashboard Income shows $4,200 · 1 deposit for the sample month; period totals match the
+      ledger on all screens.
+
+### C2. Money formatting is inconsistent across screens ★ (correctness/polish)
+The CLAUDE.md standard is accounting format — thousands separators + **parentheses** for negatives
+(`money.FormatAccounting`). It's applied on the **Dashboard** and the **Transactions list summary**
+(`$20,749.25`, `($1,500.00)`) but bypassed elsewhere, producing ugly/locale-naive output:
+- [ ] **Accounts** KPIs + rows: `$20749.25`, `$21599.25`, `cleared $6900.00`, `-$850.00` (no grouping;
+      minus sign instead of parentheses).
+- [ ] **Budgets / Goals** KPI cards + sublines: `$3000.00`, `$2500.00 to go`, `$416.67/mo` (no grouping).
+- [ ] **Transactions rows** use a minus sign (`-$60.20`, `-$1500.00`) while the Dashboard recent-txns
+      use parentheses (`($60.20)`) for the same data — pick one (parentheses, per the standard).
+- [ ] Sweep every money render through `money.FormatAccounting`/`fmtAccounting`; add a quick grep guard
+      or shared helper so new screens can't bypass it.
+
+### C3. "Your household" card (rail bottom) is visually broken on every page ★
+**Symptom:** the bottom-left household card overlaps and clips its own text — the avatar bubble (which
+oddly reads **"GWC"**, not the member's initial) sits on top of "Your household", and the second line
+shows cut-off fragments ("…ember · USD base ·" / "…tings"). Present on all 14 screens.
+- [ ] Fix the card layout (avatar + two lines without overlap/clipping); the avatar should show the
+      member initial ("Y" for "You"), not "GWC".
+
+### C4. Global top-bar chrome appears on screens where it's meaningless ★ (UX)
+The **time-resolution control** (Week/Month/Quarter + Jump-to + ‹Jun 2026› + Custom range) and the
+**+ Add** button render on *every* route, including ones with no period concept — Members, Categories,
+Rules, Customize, Allocate, Documents, To-do, Goals. A period stepper on Categories does nothing.
+- [ ] Show the resolution control only on period-aware screens (Dashboard, Transactions, Budgets,
+      Planning, Insights); hide or contextualize it elsewhere. (Relates to B10.)
+- [ ] Make "+ Add" context-aware (or hide where it has no obvious target).
+
+### C5. Dashboard ships a duplicate "Net worth" widget (default layout)
+The default bento has the **Net worth KPI** (`$20,749.25 ▼7% this month`) *and* a second standalone
+**Net worth** tile (`$20,749.25`) lower in the grid — redundant out of the box.
+- [ ] Remove the duplicate from the default layout (or differentiate it, e.g. make the lower one the
+      net-worth *trend* chart).
+
+### C6. Allocate criterion weights are five unlabeled "1" inputs ★ (UX)
+Under "CRITERION WEIGHTS" there are five number fields all defaulting to `1` with **no labels**, so
+you can't tell which is returns / stability / liquidity / debt-reduction / goal-progress.
+- [ ] Label each weight input (or add a caption row); they map to the five scorers in `internal/allocate`.
+- [ ] Candidates with all-zero scores (Checking/Savings show `0% · returns 0 · stability 0 · liquidity 0`
+      because no allocation attributes are set) render as empty noise — hide zero-score candidates or
+      prompt to set allocation attributes.
+
+### C7. Budgets — duplicate "Food · Food" label + double period control
+- [ ] The budget row reads **"Food · Food"** (budget name "Food" + category "Food"). Don't repeat when
+      name == category; show one, or label as "Budget · Category" only when they differ.
+- [ ] Two month pickers compete: the global top-bar `Jun 2026` and the Budgets card's own `June 2026`
+      stepper — and the formats differ ("Jun" vs "June"). Consolidate to one control + one format.
+
+### C8. Members — color picker renders as a bare line
+**Symptom:** the Add-member form's color field shows only a thin horizontal line between Name and the
+Add button — no visible swatch/label, looks broken.
+- [ ] Render a proper labelled color swatch/picker (matches the SwatchPicker used elsewhere).
+
+### C9. Smaller polish
+- [ ] **Accounts** add-account row: input placeholders are clipped ("Expected returr", "Liquidity
+      0–100") — the row crams ~9 inputs; wrap/space them or use a two-row form.
+- [ ] **Accounts** rows expose 6 actions each (Transactions / Update balance / Mark updated / Edit /
+      Archive / ✕) — visually busy; consider an overflow menu for secondary actions.
+- [ ] **Goals** add form has an unlabeled `0` field (current amount) with no placeholder — label it.
+- [ ] **Categories** don't display their color anywhere despite a color field; show the swatch on rows.
+- [ ] **Insights** is bare without a key (just the "Explain my month" prompt) — surface the offline
+      Spending-highlights card and the "Ask about your money" box even before a key is set.
 
 ---
 
