@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The Documents screen now shows a **monthly-spend summary** of the rows awaiting import — out vs. in
+  vs. net per month — so you can see what a receipt or statement says you spent before committing any
+  rows. Amounts use the chosen account's currency; undated rows are listed under "No date".
 - New `spendsummary` package: turns extracted document rows into a **per-month spend summary**
   (money out vs. money in, with net), tolerant of varied date formats and currency symbols, surfacing
   undated rows rather than dropping them. Fully table-tested; the Documents screen view comes next.

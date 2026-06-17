@@ -889,8 +889,9 @@ Shared control components (from mockup):
       and removes them.
 - [x] Review screen: list + per-row edit + per-row remove → import to ledger (account-pick) +
       dedupe vs existing (skip same date+amount in account, reported)
-- [~] Monthly-spend extraction summary view — logic done (`internal/spendsummary.Summarize`:
-      per-month out/in/net, tolerant date+amount parsing, table-tested). Documents-screen view is next.
+- [x] Monthly-spend extraction summary view — `internal/spendsummary.Summarize` (per-month out/in/net,
+      tolerant parsing, table-tested) rendered on the Documents screen as a per-month card over the
+      draft rows (account-currency amounts; undated rows surfaced).
 - [~] Tests: CSV parsing (store) + extraction parsing/dedupe (`extract`) done; extraction→txn mapping is UI
 
 ### 2.3 Insights & NL query

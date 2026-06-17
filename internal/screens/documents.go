@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/spendsummary"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -267,6 +268,39 @@ func Documents() ui.Node {
 		)
 	}
 
+	// Monthly-spend summary of the rows awaiting import: out vs in vs net per
+	// month, so the user sees what a statement says they spent before committing
+	// any rows. Amounts read at the chosen account's currency precision.
+	summaryBody := ui.Node(nil)
+	if len(rows) > 0 {
+		cur := app.Settings().BaseCurrency
+		if cur == "" {
+			cur = "USD"
+		}
+		if acc, ok := accByIDFrom(accounts, importAcct.Get()); ok && acc.Currency != "" {
+			cur = acc.Currency
+		}
+		months := spendsummary.Summarize(rows, currency.Decimals(cur))
+		sumRows := make([]ui.Node, 0, len(months))
+		for _, m := range months {
+			label := m.Month
+			if label == "" {
+				label = uistate.T("documents.summaryUndated")
+			}
+			sumRows = append(sumRows, Div(Class("row"),
+				Span(Class("row-desc"), label),
+				Span(Class("muted"), plural(m.Count, "row")),
+				Span(Class("amount fig"), uistate.T("documents.summaryOutIn",
+					fmtMoney(money.New(m.Out, cur)), fmtMoney(money.New(m.In, cur)), fmtMoney(money.New(m.Net(), cur)))),
+			))
+		}
+		summaryBody = Section(Class("card"),
+			H2(Class("card-title"), uistate.T("documents.summaryTitle")),
+			P(Class("muted"), uistate.T("documents.summaryDesc")),
+			Div(Class("rows"), sumRows),
+		)
+	}
+
 	// Import history: every recorded document, newest first.
 	deleteDoc := func(docID string) {
 		_ = app.DeleteDocument(docID)
@@ -303,6 +337,7 @@ func Documents() ui.Node {
 			If(aiErr.Get() != "", P(Class("err"), aiErr.Get())),
 		),
 		draftBody,
+		summaryBody,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("documents.csvTitle")),
 			P(Class("muted"), uistate.T("documents.csvDesc")),

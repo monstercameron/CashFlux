@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — documents UI: monthly-spend summary view (§2.2)
+
+- The Documents screen renders `spendsummary.Summarize` over the draft (awaiting-import) rows as a
+  per-month out/in/net card, shown between the review list and the CSV card and only when rows exist.
+  Amounts read at the selected import account's currency precision (falls back to base/USD), formatted
+  via `fmtMoney`; the undated bucket shows "No date". New i18n keys documents.summaryTitle/Desc/
+  Undated/OutIn. Closes §2.2's monthly-spend summary across logic + UI. i18n catalog + wasm green.
+
 ## 2026-06-16 — spendsummary: monthly-spend summary logic (§2.2)
 
 - New pure package `internal/spendsummary`: `Summarize([]extract.Row, decimals) []MonthSpend` buckets
