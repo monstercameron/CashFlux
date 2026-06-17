@@ -382,7 +382,11 @@ work. Adopt D3 for the richer/interactive charts (accepting the JS dep + offline
 vdom-portal complexity), **or** keep growing the pure-Go SVG helpers (no dep, fully testable)? If D3:
 which chart kinds first (line/area/bar/donut)?
 **Bottom-up plan (assuming D3 is approved):**
-- [ ] `internal/chartspec`: the typed spec + `Validate` + scale/extent helpers; table tests. Pure.
+- [x] `internal/chartspec`: the typed spec (`Kind`/`Point`/`Series`/`Axis`/`Spec`) + `Validate`
+      (sentinel errors) + `Extent` (min/max with ok flag); table tests. Pure, no `syscall/js`. Built
+      decision-independent — drives either a D3 or pure-SVG renderer.
+- _Decision still open (renderer):_ D3 (JS dep + offline cache + vdom portal) vs. keep pure-Go SVG.
+      `ui.Chart` waits on this; the chartspec foundation is useful either way.
 - [ ] JS shim (`web/`) `cashfluxRenderChart(el, specJSON)` building each Kind with D3; pin D3 version;
       SW-cache it.
 - [ ] `ui.Chart`: managed container + effect that drives the shim; cleanup; theme-aware (reads CSS vars).

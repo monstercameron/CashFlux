@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B14: pure chartspec package (decision-independent half)
+
+- New pure package `internal/chartspec`: `Kind` (line/area/bar/donut) + `Point`/`Series`/`Axis`/`Spec`,
+  with `Kind.Valid`, `Spec.Validate` (unknown kind, no series, empty series, multi-series donut — all
+  as sentinel errors for `errors.Is`), and `Spec.Extent` (min/max X/Y across all points, with an `ok`
+  flag so callers don't scale a zero-width range). Table tests cover valid/invalid specs and extent
+  (incl. empty). This is B14's framework-agnostic foundation — a renderer (pure-Go SVG or D3) consumes
+  a Spec.
+- Flagged decision (genuinely the user's): whether to adopt **D3** for the renderer (large JS dep +
+  offline SW caching + vdom-portal complexity) or **keep growing the pure-Go SVG** helpers. The
+  chartspec package is useful either way, so I built it without committing to that choice; the renderer
+  (`ui.Chart`) waits on the decision. Pure, no `syscall/js`; `go test` green.
+
 ## 2026-06-16 — B13: rewire ui.Icon to icon.Name (call sites migrated)
 
 - `ui.Icon`/`iconBody` now take `icon.Name` and switch on the `icon.*` constants; migrated every call

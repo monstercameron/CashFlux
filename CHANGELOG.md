@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- New pure `chartspec` package: a **typed, declarative chart description** (kind + series + axes +
+  options) with `Validate` and data-`Extent` helpers — the framework-agnostic foundation for richer
+  charts that any renderer (pure-Go SVG today, possibly D3 later) can consume. Fully table-tested.
 - New pure `icon` package: the app's curated line-icon set is now a **type-safe registry** —
   compile-checked `Name` constants with `Inner()`/`Valid()`/`All()` — so icons can't be referenced by
   a typo'd string. Fully table-tested; the view layer adopts it next.
