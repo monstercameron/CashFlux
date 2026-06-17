@@ -524,12 +524,15 @@ timezone *behind* UTC, the local month-start (e.g. `Jun 1 00:00 −05:00` = `Jun
 *after* the `Jun 1 00:00Z` salary, so `dateutil.InRange` (`!Before(start) && Before(end)`) drops it.
 Jun 2–5 expenses survive because they're a day later. This silently drops any first-of-period,
 UTC-dated transaction.
-- [ ] Decide a canonical date convention (store + compare both as UTC calendar dates, or truncate
-      windows in UTC) and apply it consistently in `period`/`dateutil`/`ledger`. Add a table test that
-      a `00:00Z` first-of-month transaction is counted regardless of the machine timezone (run the test
-      under a non-UTC `TZ`/`time.Local`).
-- [ ] Verify: Dashboard Income shows $4,200 · 1 deposit for the sample month; period totals match the
-      ledger on all screens.
+- [x] Canonical convention chosen: **dates are timezone-free calendar dates stored at UTC midnight**
+      (`ParseDate` already parses in UTC; transaction input round-trips through it). The boundary builders
+      in `dateutil` (`midnight`/`MonthStart`/`FiscalMonthRange`/`NextMonthlyDue`, and `WeekStart` via
+      `midnight`) plus `period.quarterStart` now take the calendar date from the reference instant but
+      emit the boundary at **UTC midnight**, so windows compare cleanly against UTC-dated transactions.
+- [x] Table test `TestPeriodBoundariesAreUTCRegardlessOfZone`: a `00:00Z` first-of-month transaction is
+      counted for "now" evaluated in UTC-5, UTC-11, and UTC+13 zones (was dropped behind UTC).
+- [x] Verified live: Dashboard Income shows **$4,200.00** (was $0.00); KPIs read net $20,749.25 / income
+      $4,200.00 / expense $1,800.75 / liabilities $850.00.
 
 ### C2. Money formatting is inconsistent across screens ★ (correctness/polish)
 The CLAUDE.md standard is accounting format — thousands separators + **parentheses** for negatives
@@ -708,6 +711,68 @@ Captured at 768px (tablet):
 - [ ] **KPI tile figures clip** (e.g. "$20,749.2", "$1,800.7$") when the bento is squeezed.
 - _Good:_ the Add/filter `form-grid`s do reflow to two columns cleanly — the pattern works; the rail,
   top bar, bento, and list rows are the parts that don't. (Pairs with C10.)
+
+### C20. Collapsible side panel reads as "missing" — toggle is misplaced and collapse is broken ★
+**Reported:** no collapsible left panel and no toggle button. **Reality (verified):** a menu-toggle
+button *does* exist (28×28, with the `icon.Menu` glyph) and clicking it collapses the rail — but:
+- [ ] The toggle lives in the **top bar** (inside the scrolling main pane, ~x=260), not **on the
+      panel** where a collapse control is conventionally expected — so it doesn't read as "the panel's
+      collapse button." Add an on-panel collapse affordance (e.g. a chevron at the rail's edge/footer).
+- [ ] Collapsing **empties the rail** (no nav icons survive — see **C15**), so the collapsed panel looks
+      gone/broken rather than icon-only. C15 must be fixed for collapse to be usable.
+- [ ] Persist the collapsed state across reloads (currently a transient `state.UseAtom`, not stored).
+- [ ] Verify: an obvious toggle on the panel; collapse → usable icon rail; expand → full rail; persists.
+
+### C21. Per-tile dashboard settings are incomplete + the gear is easy to miss ★
+**Reported:** per-tile settings don't exist. **Reality (verified):** the gear *does* open real,
+persisted settings for **8 widgets** (savings, recent, trend, breakdown, todo, accounts, budgets,
+goals). But:
+- [ ] The **four KPI tiles** (net worth / income / spending / liabilities) plus **cashflow, bills,
+      freshness** have **no schema**, so their gear opens the empty "This widget doesn't have any
+      settings yet." panel (see **C11**) — which reads as "settings don't exist." Either register
+      schemas for them or hide the gear where there's nothing to configure.
+- [ ] The gear is a faint inline `⚙` glyph (`.gear-inline`) — low-contrast/easy to miss; strengthen the
+      affordance (hover reveal, clearer icon) so per-tile settings are discoverable.
+- [ ] Verify on a no-schema tile and a schema tile that the gear's behavior is obviously different.
+
+### C22. Layout engine does not reflow on move or on resize ★ (= B2 / C14, with fresh evidence)
+**Reported:** moving tiles doesn't reflow; scaling tiles up/down doesn't reflow. **Verified live:**
+dragging `kpi-income` onto `kpi-liabilities` changed only those two tiles' `grid-area` (income→`2/4`,
+liabilities→`2/3`) — **no other tile moved**, and the result even mis-placed a tile (not a clean swap).
+Resize overlaps neighbors (C14). Root cause: absolute placement + pairwise `Swap`/`Resize`, no packing.
+- [ ] This is the **B2** rewrite — ordered sequence + pure `Pack` so moving a tile **reflows the rest**
+      and growing/shrinking **re-packs** without overlap. Do B2 before this grid templates custom pages.
+- [ ] Add the explicit-shrink + pointer-drag-resize from C14 here too (no shrink path today).
+- [ ] Verify: move a tile → others flow around it; grow/shrink → neighbors re-pack, never overlap.
+
+### C23. No way to add data beyond a single transaction ★
+**Reported:** no way to add new data. **Reality:** the top-bar "+ Add" opens a quick-add **transaction**
+form only; every other entity (account, budget, goal, category, member, rule, recurring, plan) can be
+added **only** by navigating to its own screen — there's no global/dashboard add affordance for them.
+- [ ] Turn "+ Add" into a real add menu (the open part of **B11**): New transaction · New account · New
+      budget · New goal · Scan a bill/document — routing to the right form or inline flow.
+- [ ] Consider per-widget "add" affordances on the dashboard (e.g. an empty Budgets tile offers "Add a
+      budget") so data entry is reachable in context.
+- [ ] Verify: from the dashboard alone a user can create each core entity type.
+
+### C24. Proposal: auto-layout engine with two modalities (importance vs default) ★ (design)
+**Request:** an optional auto-layout with two modes — (1) **user-defined importance sorting** and (2) a
+**default sort order** — so tiles arrange themselves instead of being hand-placed. Analysis + plan:
+- [ ] Builds on the **B2** `Pack` engine: auto-layout = sort tiles by a key, then `Pack` into the grid
+      (no manual Col/Row). Keep manual drag as a third, explicit "custom" mode.
+- [ ] **Mode A — importance:** each widget carries a user-set importance/priority (and a size hint);
+      sort by importance desc, then pack. Needs a per-widget importance field + a UI to set it
+      (reuse the per-tile settings panel, C21).
+- [ ] **Mode B — default:** a sensible built-in order (KPIs first, then recent/budgets/trend, …) — pure
+      and deterministic; effectively today's `dashlayout.Default` order, but expressed as a sort key so
+      packing derives positions.
+- [ ] Add a layout-mode selector (Auto: importance · Auto: default · Custom) persisted with the layout;
+      switching to a custom drag implicitly sets "Custom".
+- [ ] Pure `internal/dashlayout` (or a new `autolayout`) function: `Arrange(tiles, mode) Layout` with
+      table tests (deterministic order, no overlap, respects size hints, stable across runs).
+- [ ] _Decision to confirm with user:_ where importance is set (per-tile gear vs a dedicated "arrange"
+      panel), and whether size is user-set or derived from importance. Confirm before building (per the
+      "agree the spec first" rule).
 
 ---
 

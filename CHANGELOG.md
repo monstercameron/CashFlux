@@ -21,6 +21,13 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Period totals no longer silently drop first-of-period transactions (C1):** the Dashboard Income KPI
+  read `$0.00` for a month that clearly held a $4,200 salary dated the 1st. Period windows were built at
+  the machine's *local* midnight while transaction dates are stored at UTC midnight, so on any machine in
+  a timezone behind UTC the month-start landed *after* a `00:00Z` first-of-month transaction and excluded
+  it. Period boundaries are now UTC-midnight calendar dates throughout (`dateutil`, `period`), matching
+  the UTC-dated transactions. Added a table test that a `00:00Z` first-of-month transaction is counted
+  regardless of the machine timezone. Income KPI now shows `$4,200.00` (verified live).
 - The **net-worth trend chart** Y-axis is now readable and correct (C16): it plotted raw minor units
   (cents), so the axis showed clipped, non-monotonic labels like "000,000 / 500,000". The chart now
   plots major units (dollars) and formats ticks as compact currency — `$0 / $5k / $10k / $15k / $20k`

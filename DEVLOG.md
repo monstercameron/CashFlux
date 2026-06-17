@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C1: period totals dropped first-of-period UTC-dated transactions
+
+- The Dashboard Income KPI read `$0.00` for June even though a $4,200 salary was dated 2026-06-01. Root
+  cause was a timezone mismatch: transaction dates are stored at **UTC midnight** (`ParseDate` parses in
+  UTC, and the add flow round-trips the date string through it), but the period boundary builders in
+  `dateutil` constructed the window start in the **machine's local timezone** (`t.Location()`). On any
+  machine behind UTC, the local month-start (e.g. `Jun 1 00:00 −05:00` = `Jun 1 05:00Z`) sorts *after* a
+  `Jun 1 00:00Z` transaction, so `InRange` (`!Before(start) && Before(end)`) excluded it. The Jun 2–5
+  expenses survived because they're a day clear of the boundary.
+- **Fix — one canonical convention: UTC-midnight calendar dates.** `midnight`, `MonthStart`,
+  `FiscalMonthRange`, and `NextMonthlyDue` now take the calendar date from the reference instant (in its
+  own location — the user's wall calendar) but emit the boundary at `time.UTC` midnight; `WeekStart`
+  inherits it via `midnight`, and `period.quarterStart` got the same treatment. Now both sides of every
+  in-range comparison are UTC calendar dates.
+- Why take the date in local but emit in UTC: "what month is it" should follow the user's wall calendar,
+  while the boundary must align with UTC-stored dates. Worked the edge cases (late-night behind-UTC, the
+  1st in a far-behind zone, far-ahead zones) — a same-day-1 UTC transaction is now always counted.
+- Added `TestPeriodBoundariesAreUTCRegardlessOfZone` (UTC-5 / UTC-11 / UTC+13) asserting the boundary is
+  UTC midnight and a first-of-month `00:00Z` txn is in range. Existing date/period/ledger suites stay
+  green (their fixtures were already UTC). Verified live: Income KPI now shows `$4,200.00`.
+
 ## 2026-06-17 — bugfix C16: net-worth trend chart plotted cents
 
 - The net-worth trend D3 chart fed `Y: float64(m.Amount)` — raw minor units (cents) — so the Y axis

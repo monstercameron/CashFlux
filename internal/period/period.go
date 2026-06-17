@@ -96,5 +96,7 @@ func Range(r Resolution, from, to time.Time, weekStart time.Weekday) (start, end
 // quarterStart returns the first day of the calendar quarter containing t.
 func quarterStart(t time.Time) time.Time {
 	q := (int(t.Month()) - 1) / 3 // 0..3
-	return time.Date(t.Year(), time.Month(q*3+1), 1, 0, 0, 0, 0, t.Location())
+	// UTC-midnight calendar boundary, matching dateutil and the UTC-dated
+	// transactions it's compared against (C1).
+	return time.Date(t.Year(), time.Month(q*3+1), 1, 0, 0, 0, 0, time.UTC)
 }

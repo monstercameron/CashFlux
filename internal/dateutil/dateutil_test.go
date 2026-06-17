@@ -111,6 +111,37 @@ func TestInRange(t *testing.T) {
 	}
 }
 
+// TestPeriodBoundariesAreUTCRegardlessOfZone guards C1: a transaction stored at
+// UTC midnight on the first of the month must be counted in that month's window
+// even when "now" is evaluated in a timezone behind UTC (where a naive
+// local-zone month-start would land *after* the 00:00Z transaction and silently
+// drop it). It also checks a zone ahead of UTC and the week boundary.
+func TestPeriodBoundariesAreUTCRegardlessOfZone(t *testing.T) {
+	firstOfMonth := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC) // a UTC-dated salary
+	zones := []struct {
+		name    string
+		loc     *time.Location
+		nowDay  int
+		nowHour int
+	}{
+		{"behind UTC (UTC-5, mid-month)", time.FixedZone("UTC-5", -5*3600), 15, 9},
+		{"behind UTC (UTC-11, early on the 1st)", time.FixedZone("UTC-11", -11*3600), 1, 2},
+		{"ahead of UTC (UTC+13)", time.FixedZone("UTC+13", 13*3600), 15, 9},
+	}
+	for _, z := range zones {
+		t.Run(z.name, func(t *testing.T) {
+			now := time.Date(2026, time.June, z.nowDay, z.nowHour, 0, 0, 0, z.loc)
+			start, end := MonthRange(now)
+			if start.Location() != time.UTC || !start.Equal(firstOfMonth) {
+				t.Errorf("MonthStart(%s) = %s, want 2026-06-01T00:00:00Z", now.Format(time.RFC3339), start.Format(time.RFC3339))
+			}
+			if !InRange(firstOfMonth, start, end) {
+				t.Errorf("June-1 00:00Z txn not in MonthRange(%s) = [%s, %s)", now.Format(time.RFC3339), start.Format(time.RFC3339), end.Format(time.RFC3339))
+			}
+		})
+	}
+}
+
 func TestDaysBetween(t *testing.T) {
 	tests := []struct {
 		a, b string

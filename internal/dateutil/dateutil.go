@@ -25,16 +25,25 @@ func ParseDate(s string) (time.Time, error) {
 // FormatDate renders a time as "YYYY-MM-DD".
 func FormatDate(t time.Time) string { return t.Format(Layout) }
 
-// midnight returns t truncated to the start of its day in its own location.
+// CashFlux dates are timezone-free calendar dates stored at UTC midnight:
+// ParseDate parses "YYYY-MM-DD" in UTC, and transaction/account dates are kept
+// that way. Period boundaries must therefore also be UTC-midnight calendar
+// dates, or a first-of-period transaction dated 00:00Z is dropped on any
+// machine in a timezone behind UTC (the local month-start lands *after* it).
+// The boundary builders below take the calendar date from t (in t's own
+// location, i.e. the user's wall calendar) but emit the boundary at UTC
+// midnight so it compares cleanly against stored dates (C1).
+
+// midnight returns t's calendar day at 00:00 UTC.
 func midnight(t time.Time) time.Time {
 	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-// MonthStart returns the first day of t's month at 00:00 in t's location.
+// MonthStart returns the first day of t's month at 00:00 UTC.
 func MonthStart(t time.Time) time.Time {
 	y, m, _ := t.Date()
-	return time.Date(y, m, 1, 0, 0, 0, 0, t.Location())
+	return time.Date(y, m, 1, 0, 0, 0, 0, time.UTC)
 }
 
 // AddMonths returns t shifted by n calendar months (n may be negative).
@@ -64,8 +73,8 @@ func FiscalMonthRange(t time.Time, startDay int) (start, end time.Time) {
 		startDay = 28
 	}
 	y, m, _ := t.Date()
-	anchor := time.Date(y, m, startDay, 0, 0, 0, 0, t.Location())
-	if t.Before(anchor) {
+	anchor := time.Date(y, m, startDay, 0, 0, 0, 0, time.UTC)
+	if midnight(t).Before(anchor) {
 		anchor = AddMonths(anchor, -1)
 	}
 	return anchor, AddMonths(anchor, 1)
@@ -87,8 +96,9 @@ func DaysBetween(a, b time.Time) int {
 }
 
 // NextMonthlyDue returns the next occurrence of a monthly due-day on or after
-// the day containing `now` (at 00:00 in now's location). The day is clamped to
-// 28 so it stays valid in every month, including February.
+// the day containing `now`, at 00:00 UTC (the canonical calendar-date basis;
+// see the boundary-builder note above). The day is clamped to 28 so it stays
+// valid in every month, including February.
 func NextMonthlyDue(now time.Time, day int) time.Time {
 	if day > 28 {
 		day = 28
@@ -97,8 +107,8 @@ func NextMonthlyDue(now time.Time, day int) time.Time {
 		day = 1
 	}
 	y, m, d := now.Date()
-	due := time.Date(y, m, day, 0, 0, 0, 0, now.Location())
-	today := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	due := time.Date(y, m, day, 0, 0, 0, 0, time.UTC)
+	today := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 	if due.Before(today) {
 		due = AddMonths(due, 1)
 	}
