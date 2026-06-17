@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — feature C24 (importance UI): rank tiles from the gear — C24 done
+
+- Final piece: a per-tile Importance control. Added pure `dashlayout.SetImportance`/`ImportanceOf`
+  (+ tests), then an `importanceRow` component in the gear settings panel (Highest/High/Normal/Low →
+  2/1/0/−1) that writes the layout items atom and persists on change.
+- Resolved the C21 tension cleanly: importance is a *universal* per-tile setting, so the settings panel
+  is never empty. That let me show the gear on **every** tile while in Auto-importance mode (the widget
+  gear gate gained `|| mode == ModeAutoImportance`) without bringing back the empty "no settings" panel
+  — in the other modes the gear still only shows on schema'd tiles (C21 preserved).
+- Hit (and fixed) an ordering bug: the gear gate referenced `mode` before it was computed; hoisted the
+  mode read above the gate.
+- **End-to-end live verification** (the satisfying one): switched the header selector to Auto-importance
+  → the no-schema freshness tile now shows a gear → opened it → set Importance to Highest → the freshness
+  tile moved from grid-row 8 (bottom) to row 2 (top), and `cashflux:layout` now contains the Importance
+  field. The whole feature works front to back.
+- C24 is complete (model + state + selector + importance editing). Remaining decision-gated C-items:
+  C17 (→ B10 redesign), C23 (add-menu feature), C25 (density — confirm tokens), C26 (text-resize).
+
 ## 2026-06-17 — feature C24 (wiring): layout-mode state + selector
 
 - Wired the auto-layout engine into the dashboard. State: `uistate.UseLayoutMode` /

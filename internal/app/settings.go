@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/contrast"
+	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/i18n"
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -63,11 +64,15 @@ type widgetSettingsFormProps struct {
 // with no schema yet show a friendly placeholder.
 func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 	cfgAtom := uistate.UseWidgetConfigs()
+	// Every tile can be ranked for the auto-importance layout mode, so the
+	// importance control always renders — which is also why a no-schema tile's
+	// panel is never empty (C21/C24).
+	importance := uic.CreateElement(importanceRow, importanceRowProps{ID: props.ID})
 	schema, ok := widgetcfg.SchemaFor(props.ID)
 	if !ok {
 		return Div(
 			Div(Class("set-label"), props.Title),
-			P(Class("muted"), uistate.T("settings.noWidgetSettings")),
+			importance,
 		)
 	}
 	all := cfgAtom.Get()
@@ -77,12 +82,52 @@ func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 		cfgAtom.Set(next)
 		uistate.PersistWidgetConfigs(next)
 	}
-	rows := make([]any, 0, len(schema.Fields)+1)
+	rows := make([]any, 0, len(schema.Fields)+2)
 	rows = append(rows, Div(Class("set-label"), schema.Title))
 	for _, f := range schema.Fields {
 		rows = append(rows, uic.CreateElement(widgetFieldRow, widgetFieldRowProps{Field: f, Cfg: cfg, OnSet: set}))
 	}
+	rows = append(rows, importance)
 	return Div(rows...)
+}
+
+type importanceRowProps struct {
+	ID string
+}
+
+// importanceLevels are the friendly importance choices shown in the per-tile
+// settings panel; the value is the priority the auto-importance layout mode
+// sorts by (higher first), with Normal = 0 the default.
+var importanceLevels = []struct {
+	Label string // i18n key
+	Value int
+}{
+	{"widget.importanceHighest", 2},
+	{"widget.importanceHigh", 1},
+	{"widget.importanceNormal", 0},
+	{"widget.importanceLow", -1},
+}
+
+// importanceRow lets the user rank this tile for the auto-importance layout mode
+// (C24). Its own component so the select's change hook stays at a stable
+// position; it writes the shared layout-items atom and persists.
+func importanceRow(props importanceRowProps) uic.Node {
+	itemsAtom := uistate.UseLayoutItems()
+	cur := dashlayout.ImportanceOf(itemsAtom.Get(), props.ID)
+	on := uic.UseEvent(func(e uic.Event) {
+		n, err := strconv.Atoi(e.GetValue())
+		if err != nil {
+			return
+		}
+		next := dashlayout.SetImportance(itemsAtom.Get(), props.ID, n)
+		itemsAtom.Set(next)
+		uistate.PersistItems(next)
+	})
+	opts := []any{Class("set-input"), Title(uistate.T("widget.importance")), OnChange(on)}
+	for _, lvl := range importanceLevels {
+		opts = append(opts, Option(Value(strconv.Itoa(lvl.Value)), SelectedIf(cur == lvl.Value), uistate.T(lvl.Label)))
+	}
+	return Div(Class("toggle-row"), Span(uistate.T("widget.importance")), Select(opts...))
 }
 
 type widgetFieldRowProps struct {

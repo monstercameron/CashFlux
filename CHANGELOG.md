@@ -15,8 +15,13 @@ and every commit updates this file under `Unreleased`.
   (order determinism, stability, no-overlap-after-pack, no input mutation).
 - **Dashboard layout-mode selector (C24):** the dashboard header now has a Custom / Auto: default /
   Auto: importance selector; the render path applies `Arrange` before `Pack`, the choice persists across
-  reloads, and a manual drag bakes the current arrangement and switches back to Custom. Verified live
-  (selector persists, dashboard re-renders cleanly). Setting per-tile importance is the next step.
+  reloads, and a manual drag bakes the current arrangement and switches back to Custom.
+- **Per-tile importance ranking (C24):** in Auto-importance mode every tile's gear opens a settings panel
+  with an Importance control (Highest/High/Normal/Low); ranking a tile reorders the dashboard (sizes
+  stay as you set them). Because importance is a universal setting, a tile's gear panel is never empty —
+  so the gear can appear on every tile in importance mode without reintroducing C21's empty panel. End-
+  to-end verified live: ranking the bottom freshness tile "Highest" moved it from grid-row 8 to row 2,
+  and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
 - **Negative money now reads the same on every screen (C2):** all figure displays use one accounting

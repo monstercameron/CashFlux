@@ -118,6 +118,27 @@ func TestArrangeUnknownIdsSortAfterKnown(t *testing.T) {
 	}
 }
 
+func TestSetImportanceAndImportanceOf(t *testing.T) {
+	in := []Item{{ID: "a"}, {ID: "b", Importance: 1}}
+	out := SetImportance(in, "b", 5)
+	if ImportanceOf(out, "b") != 5 {
+		t.Errorf("ImportanceOf(b) = %d, want 5", ImportanceOf(out, "b"))
+	}
+	if ImportanceOf(out, "a") != 0 {
+		t.Errorf("ImportanceOf(a) = %d, want 0", ImportanceOf(out, "a"))
+	}
+	if in[1].Importance != 1 {
+		t.Errorf("input was mutated: %+v", in)
+	}
+	// Unknown id is a no-op copy; ImportanceOf of an unknown id is 0.
+	if got := SetImportance(in, "zzz", 9); !reflect.DeepEqual(got, in) {
+		t.Errorf("unknown-id SetImportance changed items: %+v", got)
+	}
+	if ImportanceOf(in, "zzz") != 0 {
+		t.Error("ImportanceOf of unknown id should be 0")
+	}
+}
+
 func TestArrangeThenPackHasNoOverlap(t *testing.T) {
 	for _, mode := range []Mode{ModeCustom, ModeAutoDefault, ModeAutoImportance} {
 		layout := Pack(Arrange(DefaultItems(), mode), 4)

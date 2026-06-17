@@ -55,28 +55,29 @@ func widget(props WidgetProps) uic.Node {
 		onGear = func() { settings.Set(uistate.Widget(id, title)) }
 	}
 
+	// Grid placement comes from packing the shared item sequence (so drag-reorder
+	// and resize reflow without overlap), falling back to the caller-provided
+	// defaults. The layout mode decides the order before packing: Custom uses the
+	// stored sequence as-is; the auto modes reorder it (C24). Sizes are untouched.
+	// Packed rows are offset by 1 because the fixed header owns grid row 1.
+	itemsAtom := uistate.UseLayoutItems()
+	items := itemsAtom.Get()
+	modeAtom := uistate.UseLayoutMode()
+	mode := modeAtom.Get()
+
 	// Only show the gear on tiles that actually have something to configure — a
-	// registered settings schema, or an explicit custom OnGear. On the KPI and
-	// cashflow/bills/freshness tiles (no schema) the gear used to open an empty
-	// "no settings yet" panel, reading as broken (C21); render an inert,
+	// registered settings schema, an explicit custom OnGear, or (in the
+	// auto-importance layout mode) every tile, since importance is then settable
+	// per tile (C24). On the no-schema tiles in other modes the gear used to open
+	// an empty "no settings yet" panel, reading as broken (C21); render an inert,
 	// equal-width slot there instead so the header stays balanced.
 	var gear uic.Node
-	if props.OnGear != nil || widgetcfg.Has(props.ID) {
+	if props.OnGear != nil || widgetcfg.Has(props.ID) || mode == dashlayout.ModeAutoImportance {
 		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
 	} else {
 		gear = Span(Class("gear-inline"), Attr("aria-hidden", "true"), Style(map[string]string{"visibility": "hidden"}), "⚙")
 	}
 
-	// Grid placement comes from packing the shared item sequence (so drag-reorder
-	// and resize reflow without overlap), falling back to the caller-provided
-	// defaults. Packed rows are offset by 1 because the fixed header owns grid
-	// row 1.
-	itemsAtom := uistate.UseLayoutItems()
-	items := itemsAtom.Get()
-	// The layout mode decides the order before packing: Custom uses the stored
-	// sequence as-is; the auto modes reorder it (C24). Sizes are untouched.
-	modeAtom := uistate.UseLayoutMode()
-	mode := modeAtom.Get()
 	packed := dashlayout.Pack(dashlayout.Arrange(items, mode), gridCols)
 	gridCol, gridRow := props.GridColumn, props.GridRow
 	if p, ok := packed.Get(props.ID); ok {

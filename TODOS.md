@@ -798,9 +798,11 @@ added **only** by navigating to its own screen — there's no global/dashboard a
 - [x] **UI — selector + render (done):** `ui.widget` applies `Arrange(items, mode)` before `Pack`; the
       dashboard header has a Custom · Auto: default · Auto: importance selector (switching to Custom bakes
       the current auto order so tiles don't jump). Verified live: selector persists, dashboard re-renders.
-- [ ] **UI — importance editing (next):** an Importance control in the per-tile gear panel, and let the
-      gear show on every tile while in importance mode (importance makes the panel non-empty, so this
-      respects C21). Then demonstrate a high-importance tile moving up in auto-importance mode.
+- [x] **UI — importance editing (done):** the per-tile gear panel now has an Importance control
+      (Highest/High/Normal/Low → 2/1/0/−1) that writes the layout items via `dashlayout.SetImportance`
+      (pure + tested). The gear shows on **every** tile while in Auto-importance mode; importance is a
+      universal setting, so the panel is never empty (respects C21). End-to-end verified live: ranking
+      the bottom freshness tile "Highest" moved it from grid-row 8 → row 2, and persisted. **C24 done.**
 - [x] _Decision to confirm with user:_ resolved above (per-tile gear; size user-set). (per the
       "agree the spec first" rule).
 

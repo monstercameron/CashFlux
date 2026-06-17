@@ -363,6 +363,11 @@ var english = Catalog{
 	// Settings panel (household / global flip panel)
 	"settings.panelTitle":        "Settings",
 	"settings.noWidgetSettings":  "This widget doesn't have any settings yet.",
+	"widget.importance":          "Importance",
+	"widget.importanceHighest":   "Highest",
+	"widget.importanceHigh":      "High",
+	"widget.importanceNormal":    "Normal",
+	"widget.importanceLow":       "Low",
 	"settings.addMember":         "+ Add member",
 	"settings.householdMembers":  "Household members",
 	"settings.exchangeRates":     "Exchange rates",

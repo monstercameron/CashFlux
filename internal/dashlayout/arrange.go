@@ -53,6 +53,26 @@ func canonRank(order map[string]int, id string) int {
 	return len(order)
 }
 
+// SetImportance returns a copy of items with the given widget's Importance set
+// (the priority the auto-importance mode sorts by; higher is more important).
+// Unknown ids return an unchanged copy. The input is not modified.
+func SetImportance(items []Item, id string, importance int) []Item {
+	out := append([]Item(nil), items...)
+	if i := indexOfItem(out, id); i >= 0 {
+		out[i].Importance = importance
+	}
+	return out
+}
+
+// ImportanceOf returns the Importance of the item with the given id, or 0 if it
+// is not present.
+func ImportanceOf(items []Item, id string) int {
+	if i := indexOfItem(items, id); i >= 0 {
+		return items[i].Importance
+	}
+	return 0
+}
+
 // Arrange returns a reordered copy of items for the given mode, without changing
 // any tile's spans. ModeCustom (and any unknown mode) returns the items in their
 // existing order. The input is not modified. Deterministic: same items + mode →
