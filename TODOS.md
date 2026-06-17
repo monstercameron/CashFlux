@@ -565,16 +565,16 @@ Rules, Customize, Allocate, Documents, To-do, Goals. A period stepper on Categor
 ### C5. Dashboard ships a duplicate "Net worth" widget (default layout)
 The default bento has the **Net worth KPI** (`$20,749.25 ▼7% this month`) *and* a second standalone
 **Net worth** tile (`$20,749.25`) lower in the grid — redundant out of the box.
-- [ ] Remove the duplicate from the default layout (or differentiate it, e.g. make the lower one the
-      net-worth *trend* chart).
+- [x] Differentiated rather than removed: the lower tile is the net-worth **trend chart** and is now
+      titled "Net worth trend" (distinct from the net-worth KPI), so they no longer read as duplicates.
 
 ### C6. Allocate criterion weights are five unlabeled "1" inputs ★ (UX)
 Under "CRITERION WEIGHTS" there are five number fields all defaulting to `1` with **no labels**, so
 you can't tell which is returns / stability / liquidity / debt-reduction / goal-progress.
-- [ ] Label each weight input (or add a caption row); they map to the five scorers in `internal/allocate`.
-- [ ] Candidates with all-zero scores (Checking/Savings show `0% · returns 0 · stability 0 · liquidity 0`
-      because no allocation attributes are set) render as empty noise — hide zero-score candidates or
-      prompt to set allocation attributes.
+- [x] Each weight input is labelled (Title + Placeholder: "Returns weight" … "Goal-progress weight").
+- [x] Zero-score candidates (no allocation attributes set) are now hidden from the ranked list (and the
+      amount split); when that empties the list, a hint prompts setting expected return / stability /
+      liquidity on the accounts.
 
 ### C7. Budgets — duplicate "Food · Food" label + double period control
 - [x] The budget row reads **"Food · Food"** — fixed: `BudgetRow` now shows one label when name ==
@@ -586,7 +586,9 @@ you can't tell which is returns / stability / liquidity / debt-reduction / goal-
 ### C8. Members — color picker renders as a bare line
 **Symptom:** the Add-member form's color field shows only a thin horizontal line between Name and the
 Add button — no visible swatch/label, looks broken.
-- [ ] Render a proper labelled color swatch/picker (matches the SwatchPicker used elsewhere).
+- [x] Fixed: the native color input now uses a dedicated `.color-input` class (renders as a proper
+      clickable swatch, not a bare line) with a "Member color" label, in both the Add and Edit forms.
+      Kept the native picker (full color choice) over the fixed-palette SwatchPicker.
 
 ### C9. Smaller polish
 - [ ] **Accounts** add-account row: input placeholders are clipped ("Expected returr", "Liquidity
@@ -656,6 +658,50 @@ style):
 never overlap + `Move`/re-pack + pointer drag-resize with an explicit shrink direction + FLIP animation)
 before reusing this grid as the custom-pages template. Add table tests that a grow never produces
 overlapping cells and that shrink is reachable in one gesture.
+
+### C15. Collapsed rail loses all navigation ★ (bug)
+**Symptom (verified live):** clicking the top-bar menu toggle collapses the rail to 58px, but it then
+shows only the "C" brand mark and the active item's highlight box — **no nav icons at all**, so you
+can't navigate while collapsed (and B5's hover-flyout has nothing to reveal).
+**Likely cause:** `web/index.html` `aside.rail.collapsed nav > div { display:none }` (intended to hide
+the "TOOLS"/"SYSTEM" section headers) also hides every nav item, because the framework wraps each
+`uic.CreateElement(navItem, …)` output in a `<div>` — so `nav > div` matches the items too.
+- [ ] Scope the rule to the section-header element only (give `railHeader` a class and target that),
+      so collapsed shows the item icons. Verify icons render centered and the hover-flyout label works.
+
+### C16. Net-worth trend chart plots cents — Y-axis is wrong & unreadable ★ (correctness)
+**Symptom (verified live):** the Net worth trend chart's Y-axis labels read "000,000 / 500,000 /
+000,000 / 500,000" — non-monotonic and clipped.
+**Root cause (verified in code):** `dashboard.go:459` feeds `Y: float64(m.Amount)` — the **raw minor
+units (cents)** — into the chart spec, so the axis ticks are cent values (2,000,000 / 1,500,000 / …)
+truncated to 7 chars in the narrow widget. The figure above the chart is correct ($20,749.25) only
+because it uses `fmtAccounting`.
+- [ ] Convert minor units to major units (÷100) before plotting, and format axis ticks as currency
+      (compact, e.g. "$20k"). Check every other chart fed from `*.Amount` (cash flow bars, etc.) for the
+      same cents-vs-dollars mistake.
+
+### C17. Custom range shows a redundant "Jun 2026 – Jun 2026" (live confirmation of B10 #2)
+**Symptom:** toggling "Custom range" reveals two steppers that read "Jun 2026 – Jun 2026" when From==To
+— the exact redundancy called out in **B10**. (Logged here as a live repro; fix under B10's
+single-period collapse.)
+
+### C18. Inline-edit layout is inconsistent across screens (UX)
+**Symptom (verified live):** **Budgets** inline-edit lays its fields out horizontally, matching the Add
+form — good. But **Transactions** and **Accounts** inline-edit stack every field vertically in a narrow
+left-hand column (very tall, lots of empty space to the right), looking unfinished and inconsistent.
+- [ ] Make inline-edit reuse the same horizontal `form-grid` as the corresponding Add form on every
+      entity, so editing looks like adding.
+
+### C19. Responsive breakage specifics (extends C10) ★
+Captured at 768px (tablet):
+- [ ] **Top-bar controls overflow off-screen:** the Week/Month/Quarter + Jump-to + stepper + Custom
+      range + "+ Add" run off the right edge with no wrap/collapse, so some are unreachable. The
+      breadcrumb is clipped to "D".
+- [ ] **Transaction rows break:** at narrow widths the row's action buttons (Mark cleared / Edit /
+      Duplicate / ✕) overlap the date/account text instead of wrapping.
+- [ ] **KPI tile figures clip** (e.g. "$20,749.2", "$1,800.7$") when the bento is squeezed.
+- _Good:_ the Add/filter `form-grid`s do reflow to two columns cleanly — the pattern works; the rail,
+  top bar, bento, and list rows are the parts that don't. (Pairs with C10.)
 
 ---
 

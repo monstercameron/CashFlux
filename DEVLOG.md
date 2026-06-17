@@ -3,6 +3,33 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — bugfix C8: member color picker was a bare line
+
+- The Add/Edit member forms used `<input type="color">` with the `.field` class (tuned for text), so
+  the native color control collapsed to a thin line. Gave it a dedicated `.color-input` class
+  (46×34, padding, swatch-wrapper resets for webkit) so it renders as a proper clickable color swatch,
+  plus a `title`/`aria-label` "Member color". Chose styling the native input over swapping to the fixed
+  `SwatchPicker` palette — it keeps full color choice, avoids an off-palette-selection edge case, and is
+  a smaller, reliable change (native color inputs honor explicit width/height). New `members.color` key.
+
+## 2026-06-16 — bugfix C5: two "Net worth" tiles read as duplicates
+
+- The dashboard has both the `kpi-networth` KPI (figure + ▲/▼% this month) and the `trend` tile (figure
+  + D3 chart), and both were titled "Net worth", so they looked like a redundant duplicate. They're not
+  truly redundant (one's a number, one's a curve), so per C5's "differentiate it" option I retitled the
+  trend tile to **"Net worth trend"** (new `dashboard.netWorthTrend` key) rather than deleting it. Now
+  the KPI and the trend chart read as distinct widgets. i18n + wasm green.
+
+## 2026-06-16 — bugfix C6: Allocate zero-score noise (+ labels verified)
+
+- C6 part 1 (unlabeled weight inputs) was already fixed — the five weight inputs carry
+  `Title`+`Placeholder` ("Returns weight", … "Goal-progress weight"). Part 2 (zero-score candidates):
+  `RankWith` returned accounts with all-zero criteria, which `AllocRow` rendered as
+  "0% · returns 0 · stability 0 · liquidity 0" noise. Now filter `ranked` to `Score > 0` before both
+  the amount-split `Distribute` and the list; track `hiddenZero` so when filtering empties the list we
+  show a "set expected return / stability / liquidity on your accounts" hint instead of the generic
+  empty message. New `allocate.setAttributes` key. i18n + wasm green.
+
 ## 2026-06-16 — bugfix C11: empty widget panel showed Save
 
 - Added a `CloseOnly` option to `ui.FlipPanel`: when set, the footer is a single "Close" button instead

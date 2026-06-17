@@ -306,6 +306,7 @@ var english = Catalog{
 	"allocate.goalPrefix":             "Goal · %s",
 	"allocate.needKey":                "Add your OpenAI key in Settings to get an explanation.",
 	"allocate.emptyNoCandidates":      "Add asset accounts (with expected return, stability, and liquidity) or high-interest debts to get suggestions.",
+	"allocate.setAttributes":          "Set an expected return, stability, and liquidity on your accounts so they can be ranked.",
 	"allocate.allExcluded":            "Every destination is excluded. Restore one below to see suggestions.",
 	"allocate.profileTitle":           "Allocation profile",
 	"allocate.profileDesc":            "Pick what matters most; suggestions are ranked and show why.",
@@ -527,6 +528,7 @@ var english = Catalog{
 
 	// Dashboard
 	"dashboard.netWorth":           "Net worth",
+	"dashboard.netWorthTrend":      "Net worth trend",
 	"dashboard.income":             "Income",
 	"dashboard.spending":           "Spending",
 	"dashboard.liabilities":        "Liabilities",
@@ -616,6 +618,7 @@ var english = Catalog{
 	// Members screen
 	"members.add":                "Add member",
 	"members.name":               "Name",
+	"members.color":              "Member color",
 	"members.nameRequired":       "Enter a member name.",
 	"members.listTitle":          "Household members",
 	"members.empty":              "No members yet.",

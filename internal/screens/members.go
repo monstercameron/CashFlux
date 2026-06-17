@@ -234,7 +234,7 @@ func Members() ui.Node {
 			H2(Class("card-title"), uistate.T("members.add")),
 			Form(Class("form-grid"), OnSubmit(add),
 				Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)),
-				Input(Class("field"), Type("color"), Value(color.Get()), OnInput(onColor)),
+				Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
 				MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
@@ -294,7 +294,7 @@ func MemberRow(props memberRowProps) ui.Node {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName)),
-				Input(Class("field"), Type("color"), Value(colorS.Get()), OnInput(onColor)),
+				Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(colorS.Get()), OnInput(onColor)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),

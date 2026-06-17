@@ -467,7 +467,7 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 		uiw.Chart(uiw.ChartProps{Spec: spec, Height: "120px", Label: uistate.T("dashboard.netWorthChartLabel", fmtAccounting(net))}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "trend", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",
+		ID: "trend", Title: uistate.T("dashboard.netWorthTrend"), Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",
 		BodyClass: "flex flex-col", Body: body,
 	})
 }

@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- The **member color picker** (Add/Edit member) now renders as a proper clickable color swatch with a
+  label instead of a thin bare line (it was a native color input squeezed into a text-field style). (C8)
+- The dashboard no longer shows two tiles both titled **"Net worth"**: the trend chart tile is now
+  titled **"Net worth trend"**, distinct from the net-worth KPI. (C5)
+- The Allocate screen no longer lists **zero-score candidates** (accounts with no expected-return/
+  stability/liquidity set, which rendered as "0% · returns 0 · stability 0 …" noise); when that hides
+  everything, it nudges you to set those account attributes instead. (C6)
 - A widget whose gear opens a settings panel with **no settings** now shows a single **Close** button
   instead of a Cancel/Save pair that implied there was something to commit. (C11)
 - Budget rows no longer show a redundant **"Food · Food"** when a budget is named after its category —

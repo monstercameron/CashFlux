@@ -215,6 +215,18 @@ func Allocate() ui.Node {
 		GoalProgress:  parseWeight(wGoal.Get()),
 	}
 	ranked := allocate.RankWith(cands, weights, allocate.Constraints{Exclude: excluded.Get()})
+	// Drop candidates with no ranking signal (every criterion zero under the
+	// current weights, e.g. an account with no expected-return/stability/liquidity
+	// set) — they'd render as "0% · returns 0 · stability 0 …" noise. Remember if
+	// any were hidden so we can nudge the user to fill in account attributes.
+	scored := make([]allocate.Ranked, 0, len(ranked))
+	for _, r := range ranked {
+		if r.Score > 0 {
+			scored = append(scored, r)
+		}
+	}
+	hiddenZero := len(scored) < len(ranked)
+	ranked = scored
 
 	saveProfile := ui.UseEvent(Prevent(func() {
 		name := strings.TrimSpace(profName.Get())
@@ -321,6 +333,8 @@ func Allocate() ui.Node {
 
 	var listBody ui.Node
 	switch {
+	case len(ranked) == 0 && hiddenZero:
+		listBody = P(Class("empty"), uistate.T("allocate.setAttributes"))
 	case len(ranked) == 0 && len(excludedRows) == 0:
 		listBody = P(Class("empty"), uistate.T("allocate.emptyNoCandidates"))
 	case len(ranked) == 0:
