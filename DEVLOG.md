@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — feature C24 (model): dashboard auto-layout engine
+
+- After clearing the whole C-series bug backlog (C1–C22 this session), asked the user which decision-
+  gated item to take next; they chose **C24, the auto-layout engine**, and confirmed the two open
+  decisions: importance is set **per-tile via the gear**, and tile **size stays user-set** (auto-layout
+  only reorders). Noted the C21 tension (KPI tiles have no gear) — the resolution is to make importance a
+  universal per-tile setting so the gear panel is never empty, letting the gear show on every tile in
+  importance mode without bringing back C21's empty panel. That's a UI-stage concern; recorded for then.
+- Built the **model first** (bottom-up): pure `dashlayout.Arrange(items, mode) []Item` that reorders the
+  sequence by `Mode` (Custom = no-op, AutoDefault = canonical `DefaultItems` order, AutoImportance =
+  importance desc with canonical-order tiebreak); the existing `Pack` still derives positions. Added an
+  additive `Importance int` to `Item` (json omitempty, so older saved layouts load unchanged). Arrange
+  never touches spans — sizes remain user-set per the decision.
+- 8 table tests: Mode.Valid, Custom no-op, AutoDefault restores canonical order from any start,
+  AutoImportance high-first then canonical tiebreak, ties stable, no input mutation + spans preserved,
+  unknown ids sort after known, and Arrange+Pack has no overlap in every mode. Native suite + wasm build
+  green.
+- Next (separate commits): persist a `LayoutMode`; then the render path applies Arrange before Pack, a
+  mode selector on the dashboard header, and an Importance control in the gear panel.
+
 ## 2026-06-17 — bugfix C19 (list rows): action buttons wrap instead of overlapping
 
 - The last C19 sub-item: at narrow widths the transaction row's buttons overlapped the description/date

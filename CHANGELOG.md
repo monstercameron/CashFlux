@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Auto-layout engine for the dashboard (C24, model):** a pure `dashlayout.Arrange(items, mode)` that
+  reorders tiles by a chosen `Mode` — **Custom** (your manual order), **Auto: default** (the canonical
+  built-in order), or **Auto: importance** (sort by a per-tile importance, ties broken by the default
+  order) — and the existing `Pack` then derives positions. Auto-layout only reorders; tile sizes stay
+  user-set. Tile gained an `Importance` field (additive; older saved layouts keep working). Table-tested
+  (order determinism, stability, no-overlap-after-pack, no input mutation). The mode selector + a way to
+  set importance are the next (UI) steps.
+
 ### Changed
 - **Negative money now reads the same on every screen (C2):** all figure displays use one accounting
   formatter, so negatives show in parentheses (`($60.20)`) with thousands grouping everywhere — the

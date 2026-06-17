@@ -783,20 +783,21 @@ added **only** by navigating to its own screen — there's no global/dashboard a
 ### C24. Proposal: auto-layout engine with two modalities (importance vs default) ★ (design)
 **Request:** an optional auto-layout with two modes — (1) **user-defined importance sorting** and (2) a
 **default sort order** — so tiles arrange themselves instead of being hand-placed. Analysis + plan:
-- [ ] Builds on the **B2** `Pack` engine: auto-layout = sort tiles by a key, then `Pack` into the grid
-      (no manual Col/Row). Keep manual drag as a third, explicit "custom" mode.
-- [ ] **Mode A — importance:** each widget carries a user-set importance/priority (and a size hint);
-      sort by importance desc, then pack. Needs a per-widget importance field + a UI to set it
-      (reuse the per-tile settings panel, C21).
-- [ ] **Mode B — default:** a sensible built-in order (KPIs first, then recent/budgets/trend, …) — pure
-      and deterministic; effectively today's `dashlayout.Default` order, but expressed as a sort key so
-      packing derives positions.
-- [ ] Add a layout-mode selector (Auto: importance · Auto: default · Custom) persisted with the layout;
-      switching to a custom drag implicitly sets "Custom".
-- [ ] Pure `internal/dashlayout` (or a new `autolayout`) function: `Arrange(tiles, mode) Layout` with
-      table tests (deterministic order, no overlap, respects size hints, stable across runs).
-- [ ] _Decision to confirm with user:_ where importance is set (per-tile gear vs a dedicated "arrange"
-      panel), and whether size is user-set or derived from importance. Confirm before building (per the
+- [x] **Confirmed with user (2026-06-17):** importance is set **per-tile via the gear panel**; tile
+      **size stays user-set** (auto-layout only reorders, never resizes). Resolves the C21 tension by
+      making importance a universal per-tile setting, so a gear panel is never empty (the gear can show
+      on every tile in importance mode without reintroducing C21's empty panel).
+- [x] **Model + tests (done):** pure `dashlayout.Arrange(items, mode) []Item` reorders by `Mode`, then
+      the existing `Pack` derives positions (no manual Col/Row). `Item` gained an additive `Importance`
+      field. Custom = no-op; Auto-default = canonical `DefaultItems` order; Auto-importance = importance
+      desc, canonical-order tiebreak. Table-tested: determinism, stability, no-overlap-after-Pack, no
+      input mutation, spans preserved, unknown ids sort last.
+- [ ] **State (next):** persist the `LayoutMode` (custom/auto-default/auto-importance) alongside the items;
+      a manual drag flips it to Custom.
+- [ ] **UI (next):** apply `Arrange` before `Pack` in the render path; a mode selector (Custom · Auto:
+      default · Auto: importance) on the dashboard header; an Importance control in the per-tile gear
+      panel (and let the gear show on every tile while in importance mode).
+- [x] _Decision to confirm with user:_ resolved above (per-tile gear; size user-set). (per the
       "agree the spec first" rule).
 
 ### C25. Default UI is too "fat/chunky" — tighten the density tokens ★ (UX)
@@ -869,8 +870,15 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
 - [ ] Harden the AI key flow: the key lives only in the in-memory store, so a **page reload loses it**
       (settings aren't hydrated from localStorage). Decide whether the OpenAI key should persist across
       reload (with a clear on-device-only notice) — today every reload silently turns AI back off.
-- [ ] Not yet exercised here (queue for the browser E2E lane): cancel/abort mid-call, retry/backoff on
-      429/5xx, error messaging on a bad key, and the "Save as task"/"Pin" insight actions.
+- [x] **Insights "Save as task"** — verified: the AI answer becomes a To-do (body carries the full
+      answer; savings-rate math 2399.25/4200 = 57.14% correct). **Rough edge:** the task **title is the
+      entire first sentence** of the answer (long, "…"-truncated) — derive a short title (the question or
+      a trimmed summary) and keep the prose in notes.
+- [x] **Insights "Pin"** — verified: pins to the "Pinned insights" list.
+- [ ] Re-confirmed on re-test (2026-06-17): OpenAI calls 200, vision works, **CSV documented format
+      still fails** (currency-required bug above — not yet fixed).
+- [ ] Not yet exercised (queue for the browser E2E lane): cancel/abort mid-call, retry/backoff on
+      429/5xx, and the error message shown on a bad/empty key.
 
 ---
 

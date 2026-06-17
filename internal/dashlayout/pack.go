@@ -10,10 +10,14 @@ package dashlayout
 
 // Item is a widget's identity and intrinsic grid size. Its position in the
 // ordered slice is its placement priority — earlier items are packed first.
+// Importance is the user-set priority used by the auto-importance layout mode
+// (higher is more important); it is ignored in custom and auto-default modes and
+// defaults to 0, so older persisted layouts (which omit it) keep working.
 type Item struct {
-	ID      string
-	ColSpan int
-	RowSpan int
+	ID         string
+	ColSpan    int
+	RowSpan    int
+	Importance int `json:",omitempty"`
 }
 
 // DefaultItems is the default dashboard order and tile sizes. Packing it with
