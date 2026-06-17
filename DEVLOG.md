@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B14: D3 chart shim + offline caching (renderer foundation)
+
+- User chose D3 for B14 (via AskUserQuestion). Started the integration bottom-up: JSON-tagged the
+  `chartspec` types (lowercase wire keys), added `web/chart.js` — a self-contained `cashfluxRenderChart(el, specJSON)`
+  shim that parses a Spec and draws line/area/bar (with D3 axes) or donut, reading axis/grid/default
+  colors from the app's CSS custom properties so it's theme-aware and redraws on each call. Pinned D3
+  v7.9.0 via CDN and `./chart.js` in index.html before the wasm boot, and added both to the service
+  worker's CORE cache (bumped CACHE → v3) for offline use.
+- Verified: chartspec tests green, wasm builds, `node --check` passes on chart.js. NOT verified: actual
+  D3 rendering (needs a browser — flagged). Next slices: the Go `ui.Chart` component (managed container
+  + effect that serializes the spec and calls the shim, with cleanup) and migrating one widget
+  (net-worth trend) as the proof.
+
 ## 2026-06-16 — a11y: aria-required across all add forms
 
 - Completed required-field marking: added `aria-required="true"` to each add form's primary required

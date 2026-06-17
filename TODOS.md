@@ -387,8 +387,9 @@ which chart kinds first (line/area/bar/donut)?
       decision-independent — drives either a D3 or pure-SVG renderer.
 - _Decision still open (renderer):_ D3 (JS dep + offline cache + vdom portal) vs. keep pure-Go SVG.
       `ui.Chart` waits on this; the chartspec foundation is useful either way.
-- [ ] JS shim (`web/`) `cashfluxRenderChart(el, specJSON)` building each Kind with D3; pin D3 version;
-      SW-cache it.
+- [x] JS shim `web/chart.js` `cashfluxRenderChart(el, specJSON)` building line/area/bar/donut with D3
+      (theme-aware via CSS vars); pinned D3 v7.9.0 in index.html; both added to the SW CORE cache (v3).
+      chartspec JSON-tagged. (D3 render needs an in-browser check.)
 - [ ] `ui.Chart`: managed container + effect that drives the shim; cleanup; theme-aware (reads CSS vars).
 - [ ] Migrate one widget (e.g. net-worth trend) to `ui.Chart` as the proof; keep others until parity.
 - [ ] Verify: chart renders + updates on data change, survives hot-reload, works offline, matches theme.

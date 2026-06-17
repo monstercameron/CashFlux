@@ -471,6 +471,12 @@
       })();
     </script>
 
+    <!-- D3 (pinned) + the chart shim the Go ui.Chart component drives. Loaded
+         before the wasm boot so window.cashfluxRenderChart exists by first paint;
+         both are service-worker cached for offline use. -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script src="./chart.js"></script>
+
     <script src="./wasm_exec.js"></script>
     <script>
       (function () {

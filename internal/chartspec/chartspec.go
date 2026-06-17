@@ -33,36 +33,36 @@ func (k Kind) Valid() bool {
 }
 
 // Point is one datum: an X/Y pair with an optional label (used for category axes
-// and donut slices).
+// and donut slices). JSON-tagged because the spec is serialized to the D3 shim.
 type Point struct {
-	X     float64
-	Y     float64
-	Label string
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Label string  `json:"label,omitempty"`
 }
 
 // Series is a named, colored set of points (one line/area/bar group, or the
 // single ring of a donut).
 type Series struct {
-	Name   string
-	Color  string // hex; empty lets the renderer pick a default
-	Points []Point
+	Name   string  `json:"name,omitempty"`
+	Color  string  `json:"color,omitempty"` // hex; empty lets the renderer pick a default
+	Points []Point `json:"points"`
 }
 
 // Axis describes one axis: a display label and an optional value format hint
 // (e.g. "$,.0f" or "%") the renderer may honor.
 type Axis struct {
-	Label  string
-	Format string
+	Label  string `json:"label,omitempty"`
+	Format string `json:"format,omitempty"`
 }
 
 // Spec is a complete, declarative chart description.
 type Spec struct {
-	Kind    Kind
-	Series  []Series
-	X       Axis
-	Y       Axis
-	Stacked bool // stack multiple series (area/bar)
-	Legend  bool // show a legend
+	Kind    Kind     `json:"kind"`
+	Series  []Series `json:"series"`
+	X       Axis     `json:"x"`
+	Y       Axis     `json:"y"`
+	Stacked bool     `json:"stacked,omitempty"` // stack multiple series (area/bar)
+	Legend  bool     `json:"legend,omitempty"`  // show a legend
 }
 
 // Validation errors, exported so callers can branch on them with errors.Is.
