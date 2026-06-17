@@ -342,8 +342,14 @@ existing viewBox/stroke/currentColor defaults (size + tint still via caller clas
       inner-only markup, unknowns invalid/empty, `All` sorted). Pure, no `syscall/js`. Kept existing
       names (not Lucide ids) so the rewire stays mechanical and glyphs identical.
 - [ ] Generator/script to fetch Lucide SVGs for the set and write the Go file (documented, repeatable).
-- [ ] Rewire `ui.Icon` to take `icon.Name`; migrate call sites (sidebar nav string names → Lucide ids).
-- [ ] Verify: all existing icons render identically/closely; unknown-name path is gone (compile-checked).
+- [x] Rewire `ui.Icon` to take `icon.Name`; migrated all call sites (railItem/navItemProps Icon fields
+      + the settings/menu icons). Renders the same typed shapes (no framework raw-SVG inject primitive
+      exists to consume `icon.Inner()` strings — kept for a future Lucide-string renderer). Glyphs
+      identical; the stringly-typed unknown-name path is gone (compile-checked).
+- [x] Verify: all existing icons render identically (typed shapes unchanged); unknown-name path is now
+      a build error, not a blank SVG. wasm + native suite green.
+- [ ] Optional refinement: a generator to fetch real Lucide path data for the curated set (current
+      glyphs are already Lucide-format stroked SVGs, so this is polish, not a blocker).
 
 ### B14. Integrate D3 charting behind a strong Go interface ★
 

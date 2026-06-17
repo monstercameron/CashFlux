@@ -166,6 +166,9 @@ and every commit updates this file under `Unreleased`.
   GitHub Pages (the auto-generated `404.html`), Netlify, Vercel, nginx, and Caddy.
 
 ### Changed
+- Icons are now **type-safe end to end**: `ui.Icon` takes an `icon.Name` and every call site (sidebar
+  nav, top bar, household card) uses the compile-checked constants — a mistyped icon name is now a
+  build error instead of a silently-blank glyph. Rendering is unchanged.
 - The top bar's **time-resolution control** is simplified: the common case is now a **single period**
   with one ‹ Jun 2026 › stepper that pages the whole window (reading as one clean label). A **"This
   period"** reset appears only when you've moved off the current period, and the dual From/To range

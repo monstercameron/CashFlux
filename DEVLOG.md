@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B13: rewire ui.Icon to icon.Name (call sites migrated)
+
+- `ui.Icon`/`iconBody` now take `icon.Name` and switch on the `icon.*` constants; migrated every call
+  site (railItem.Icon and navItemProps.Icon fields → `icon.Name`; nav literals, members/categories/
+  rules, the household `Settings` and top-bar `Menu` icons). Checked the framework for a raw-SVG inject
+  primitive (dangerouslySetInnerHTML/innerHTML) to consume `icon.Inner()` directly — none exists, so
+  the renderer keeps the typed shorthand shapes and the icon package remains the compile-checked name
+  vocabulary (its `Inner()` stays available for non-render consumers and a future Lucide-string
+  renderer). Net effect: a mistyped icon is now a build error, not a blank SVG. Glyphs unchanged; wasm
+  + full native suite green.
+
 ## 2026-06-16 — B13: pure icon registry (type-safe Name)
 
 - New pure package `internal/icon`: a `Name` type with compile-checked constants for the 16 curated

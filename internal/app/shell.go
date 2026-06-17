@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -66,18 +67,18 @@ func Shell(props ShellProps) uic.Node {
 type railItem struct {
 	Key  string // i18n key, resolved via uistate.T at render
 	Path string
-	Icon string
+	Icon icon.Name
 }
 
 // primaryNav is the candidate-C rail's main navigation group.
 func primaryNav() []railItem {
 	return []railItem{
-		{"nav.dashboard", "/", "dashboard"},
-		{"nav.accounts", "/accounts", "accounts"},
-		{"nav.transactions", "/transactions", "transactions"},
-		{"nav.budgets", "/budgets", "budgets"},
-		{"nav.goals", "/goals", "goals"},
-		{"nav.todo", "/todo", "todo"},
+		{"nav.dashboard", "/", icon.Dashboard},
+		{"nav.accounts", "/accounts", icon.Accounts},
+		{"nav.transactions", "/transactions", icon.Transactions},
+		{"nav.budgets", "/budgets", icon.Budgets},
+		{"nav.goals", "/goals", icon.Goals},
+		{"nav.todo", "/todo", icon.Todo},
 	}
 }
 
@@ -85,11 +86,11 @@ func primaryNav() []railItem {
 // otherwise only reachable by URL.
 func toolsNav() []railItem {
 	return []railItem{
-		{"nav.planning", "/planning", "planning"},
-		{"nav.allocate", "/allocate", "allocate"},
-		{"nav.insights", "/insights", "insights"},
-		{"nav.documents", "/documents", "page"},
-		{"nav.customize", "/customize", "customize"},
+		{"nav.planning", "/planning", icon.Planning},
+		{"nav.allocate", "/allocate", icon.Allocate},
+		{"nav.insights", "/insights", icon.Insights},
+		{"nav.documents", "/documents", icon.Page},
+		{"nav.customize", "/customize", icon.Customize},
 	}
 }
 
@@ -154,19 +155,19 @@ func Sidebar() uic.Node {
 			If(!hidden.IsHidden("/members"), uic.CreateElement(navItem, navItemProps{
 				Label:  uistate.T("nav.members"),
 				Path:   "/members",
-				Icon:   "users",
+				Icon:   icon.Users,
 				Active: current == "/members",
 			})),
 			If(!hidden.IsHidden("/categories"), uic.CreateElement(navItem, navItemProps{
 				Label:  uistate.T("nav.categories"),
 				Path:   "/categories",
-				Icon:   "tag",
+				Icon:   icon.Tag,
 				Active: current == "/categories",
 			})),
 			If(!hidden.IsHidden("/rules"), uic.CreateElement(navItem, navItemProps{
 				Label:  uistate.T("nav.rules"),
 				Path:   "/rules",
-				Icon:   "tag",
+				Icon:   icon.Tag,
 				Active: current == "/rules",
 			})),
 		),
@@ -178,7 +179,7 @@ func Sidebar() uic.Node {
 type navItemProps struct {
 	Label     string
 	Path      string // empty = non-navigating placeholder (e.g. example pages)
-	Icon      string
+	Icon      icon.Name
 	IconClass string // defaults to "w-4 h-4 shrink-0"
 	Active    bool
 	Muted     bool // faint styling for low-emphasis actions ("New page")
@@ -236,7 +237,7 @@ func HouseholdCard() uic.Node {
 		Class("hh mt-auto m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover"),
 		Title(name+" · "+summary), // tooltip + accessible name when the rail is collapsed
 		OnClick(func() { settings.Set(uistate.Global()) }),
-		ui.Icon("settings", Class("w-4 h-4 shrink-0 text-dim")),
+		ui.Icon(icon.Settings, Class("w-4 h-4 shrink-0 text-dim")),
 		Span(Class("hh-text leading-tight"),
 			Span(Class("font-display text-[14px] font-medium block"), name),
 			Span(Class("text-xs text-faint block"), summary),
@@ -261,7 +262,7 @@ func TopBar(props topBarProps) uic.Node {
 	return Div(Class("h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20"),
 		Button(Class("menu-btn w-7 h-7 -ml-1"), Attr("title", uistate.T("topbar.menu")),
 			OnClick(func() { collapsed.Update(func(c bool) bool { return !c }) }),
-			ui.Icon("menu", Class("w-5 h-5")),
+			ui.Icon(icon.Menu, Class("w-5 h-5")),
 		),
 		Nav(Class("flex items-center gap-2 font-display min-w-0"), Attr("aria-label", uistate.T("topbar.breadcrumb")),
 			If(!onDashboard, Button(Class("text-dim hover:text-fg text-[15px]"), Type("button"), Attr("title", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))),
