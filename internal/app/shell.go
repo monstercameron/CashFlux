@@ -94,9 +94,11 @@ func toolsNav() []railItem {
 	}
 }
 
-// railHeader renders a small uppercase section label inside the rail.
+// railHeader renders a small uppercase section label inside the rail. The
+// rail-section class lets the collapsed/mobile rules hide just these labels
+// (not the nav items, which the framework also wraps in a <div>) — see C15.
 func railHeader(label string) uic.Node {
-	return Div(Class("px-3 pt-4 pb-1 text-[10px] uppercase tracking-[0.16em] text-faint"), label)
+	return Div(Class("rail-section px-3 pt-4 pb-1 text-[10px] uppercase tracking-[0.16em] text-faint"), label)
 }
 
 // Sidebar renders the left rail: brand header, primary navigation, the user's

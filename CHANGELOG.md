@@ -21,6 +21,13 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Collapsing the sidebar no longer hides all navigation (C15):** the collapsed rail showed only the
+  brand mark and the active highlight — no nav icons — so you couldn't navigate while collapsed. The CSS
+  rule that hides the "TOOLS"/"SYSTEM" section labels (`nav > div`) also matched every nav item, because
+  the framework wraps each item in a `<div>`. The section labels now carry a `rail-section` class and the
+  rule targets only those, so the icon buttons stay visible (and B5's hover-flyout label works). The same
+  fix covers the <768px mobile rail, which had the identical bug. Verified live (collapsed rail shows all
+  14 icons; both section headers hidden). SW cache bumped (v4 → v5).
 - **Period totals no longer silently drop first-of-period transactions (C1):** the Dashboard Income KPI
   read `$0.00` for a month that clearly held a $4,200 salary dated the 1st. Period windows were built at
   the machine's *local* midnight while transaction dates are stored at UTC midnight, so on any machine in

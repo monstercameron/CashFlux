@@ -672,8 +672,10 @@ can't navigate while collapsed (and B5's hover-flyout has nothing to reveal).
 **Likely cause:** `web/index.html` `aside.rail.collapsed nav > div { display:none }` (intended to hide
 the "TOOLS"/"SYSTEM" section headers) also hides every nav item, because the framework wraps each
 `uic.CreateElement(navItem, …)` output in a `<div>` — so `nav > div` matches the items too.
-- [ ] Scope the rule to the section-header element only (give `railHeader` a class and target that),
-      so collapsed shows the item icons. Verify icons render centered and the hover-flyout label works.
+- [x] Scoped the rule to the section-header element: `railHeader` now carries a `rail-section` class and
+      the collapsed rule targets `nav .rail-section` instead of `nav > div`, so the wrapped nav items stay
+      visible. Applied the same scoping to the `<768px` mobile rail (it had the identical bug). Verified
+      live: collapsed rail (58px) shows all 14 nav icons with both section headers hidden. SW cache v4→v5.
 
 ### C16. Net-worth trend chart plots cents — Y-axis is wrong & unreadable ★ (correctness)
 **Symptom (verified live):** the Net worth trend chart's Y-axis labels read "000,000 / 500,000 /
@@ -773,6 +775,47 @@ added **only** by navigating to its own screen — there's no global/dashboard a
 - [ ] _Decision to confirm with user:_ where importance is set (per-tile gear vs a dedicated "arrange"
       panel), and whether size is user-set or derived from importance. Confirm before building (per the
       "agree the spec first" rule).
+
+### C25. Default UI is too "fat/chunky" — tighten the density tokens ★ (UX)
+**Reported:** the UI (incl. the Add-transaction modal) feels too fat/chunky on every screen.
+**Measured live (1440px, scale 100%) — concrete weights:**
+- body **16px** / 24px line-height (Tailwind default; heavy for a dense finance app)
+- form `.field` inputs **40px tall**, 16px text, 8×9.6px padding
+- buttons up to **~60px tall** (12px padding); primary actions read oversized
+- widget `.wbody` padding **~15×16px**; widget title 16px; nav items **36px** tall
+- the "+ Add" → **Add a transaction** modal body is ~360px but its fields use only ~150px — large dead
+  space below the form (also **C13**)
+**Analysis:** chunkiness is global because it comes from shared tokens (base font, `.field`, button,
+`.wbody` padding), so adjusting the tokens fixes all 14 screens + modals at once. Two existing levers
+already exist but don't fix the *default*: the **Compact density** toggle and the **Display scale**
+zoom (**B6**) — the complaint is that the out-of-the-box weight is too high.
+- [ ] Lower the **default** base font (≈14px) and line-height for the app chrome/data, keeping the
+      Fraunces display figures as the deliberate accent.
+- [ ] Tighten `.field` height (≈32–36px), button padding (kill the ~60px buttons), and `.wbody` padding.
+- [ ] Make the flip-panel/modal size to its content (remove the dead space — C13).
+- [ ] Re-check all 14 screens + the Add modal + inline-edit forms at the new density; ensure nothing
+      clips and touch targets still meet ≥44px where needed for a11y (B15) — i.e. compact visual density
+      without shrinking hit areas below the accessible minimum.
+- [ ] _Decision to confirm:_ rebalance the **default** density down vs. ship "Comfortable / Cozy /
+      Compact" presets with Cozy as default. Confirm before changing tokens.
+
+### C26. Make text size configurable for low-vision users ★ (accessibility)
+**Reported:** font size should be configurable for visually impaired folks. **Current state:** B6 added
+a **Display scale** (70–130%) implemented as a whole-UI **`zoom`** on `#app`. That helps but isn't a
+true text-resize control: it tops out at 130%, scales layout (not just text), and `zoom` can break the
+non-responsive layout (**C10**) at large values.
+- [ ] Provide a **text-size** control aimed at accessibility: raise the range to **at least 200%**
+      (WCAG 2.1 SC 1.4.4 "Resize text" — text must be resizable to 200% without loss of content/function).
+- [ ] Prefer **reflow** over pure zoom: the px-heavy styling (Tailwind arbitrary `text-[13px]`, etc.,
+      noted in B6) means a rem/font-scale won't take effect without migrating px→rem on type and
+      spacing. Decide: (a) migrate type tokens to rem and scale the root font, or (b) keep `zoom` but
+      first fix C10 responsiveness so large zoom reflows instead of overflowing.
+- [ ] Distinguish this from C25's density: density = how tight the *default* is; text-size = an
+      accessibility multiplier on top. They should compose (e.g. Compact density + 150% text).
+- [ ] Persist with the other prefs (reload-persistent) and expose with a plain-English label in Settings
+      → Appearance ("Text size", with sample preview).
+- [ ] Verify at 200%: all 14 screens remain usable, no clipped/overlapping content, no horizontal
+      scroll (ties B15 zoom/reflow + C10).
 
 ---
 

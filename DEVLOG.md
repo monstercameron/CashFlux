@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C15: collapsed rail hid every nav icon
+
+- Collapsing the sidebar left only the brand mark and the active-item highlight — no nav icons — so you
+  couldn't navigate while collapsed, and B5's hover-flyout had nothing to reveal. The collapse CSS hid
+  `aside.rail.collapsed nav > div` to drop the "TOOLS"/"SYSTEM" section labels, but the framework wraps
+  each `uic.CreateElement(navItem, …)` in its own `<div>`, so the selector matched every item too.
+- Fix: gave `railHeader` a `rail-section` class and retargeted the rule to `nav .rail-section`. The
+  `<768px` mobile rail had a copy of the same `nav > div` rule (C10) — fixed it there as well, so the
+  phone rail won't lose its icons either.
+- Bumped SW cache v4→v5 (index.html is a precached CORE asset and changed).
+- Verified live by adding `.collapsed` to the rail in the oracle and reading computed styles: railW=58,
+  14/14 `.nv` items visible, 2/2 `.rail-section` headers hidden.
+
 ## 2026-06-17 — bugfix C1: period totals dropped first-of-period UTC-dated transactions
 
 - The Dashboard Income KPI read `$0.00` for June even though a $4,200 salary was dated 2026-06-01. Root
