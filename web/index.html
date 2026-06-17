@@ -451,6 +451,11 @@
         .topbar { height: auto !important; min-height: 3.5rem; flex-wrap: wrap; row-gap: .4rem; padding-top: .4rem; padding-bottom: .4rem; }
         .topbar-controls { margin-left: 0; flex: 1 0 100%; flex-wrap: wrap; row-gap: .4rem; justify-content: flex-start; }
         .reso-control { flex-wrap: wrap; row-gap: .4rem; }
+        /* List rows (transactions etc.): let the action buttons wrap below the
+           description instead of overlapping it when the row is too narrow (C19).
+           row-main keeps flex:1 so it takes the first line and the controls flow
+           underneath. A no-op on rows that still fit. */
+        .row { flex-wrap: wrap; row-gap: .4rem; }
       }
       /* Tablet bento (C19): between the phone breakpoint and the desktop, the
          4-column grid squeezed tiles to ~150px and KPI figures clipped. Flow the

@@ -713,8 +713,11 @@ Captured at 768px (tablet):
       Tailwind's `h-14`, and the resolution control wraps internally). Verified live: at 768px the bar is
       ~175px with the breadcrumb readable (96px) and no control past the viewport; at 390px all controls
       are reachable too. No horizontal page scroll at either width. SW cache v6→v7.
-- [ ] **Transaction rows break:** at narrow widths the row's action buttons (Mark cleared / Edit /
-      Duplicate / ✕) overlap the date/account text instead of wrapping.
+- [x] **Transaction rows break:** fixed. `.row` now wraps (`flex-wrap: wrap`) at ≤1024px, so `.row-main`
+      (flex:1) takes the first line and the action buttons (Mark cleared / Edit / Duplicate / ✕) flow
+      underneath instead of overlapping. A no-op on rows that still fit. Shared by every list screen.
+      Verified the mechanism by injecting a representative row at 360px: it wraps (height ~204px) with 0
+      of 5 buttons overlapping the text. SW cache v9→v10.
 - [x] **KPI tile figures clip** (e.g. "$20,749.2", "$1,800.7$") when the bento is squeezed — fixed.
       Between the phone breakpoint and the desktop, the 4-column bento squeezed tiles to ~153px and a
       figure clipped. Added a tablet bento (`768–1024px`) that flows the tiles into **2 columns** (header

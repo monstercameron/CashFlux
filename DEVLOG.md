@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C19 (list rows): action buttons wrap instead of overlapping
+
+- The last C19 sub-item: at narrow widths the transaction row's buttons overlapped the description/date
+  because `.row` is a nowrap flex. Added `.row { flex-wrap: wrap; row-gap: .4rem }` to the ≤1024px block.
+  `.row-main` keeps `flex:1`, so it claims the first line and the buttons flow underneath; it's a no-op
+  whenever the row still fits on one line. Shared by every list screen (transactions/accounts/budgets/…),
+  and wrapping is graceful everywhere.
+- /transactions can't be loaded in the static oracle (no SPA fallback), so I verified the *mechanism* the
+  same way as C18: injected a representative `.row` (check + row-main + Mark cleared/amount/Edit/
+  Duplicate/✕) at 360px and measured — the row wrapped (height ~204px) with 0 of 5 buttons overlapping
+  the text rect. SW cache v9→v10.
+- C19 is now fully done (top bar + KPI clip + list rows).
+- C22 is verified resolved by the C14/B2 Pack migration (widget.go uses Pack/Move/ResizeItem, no Swap):
+  moving a tile reflows the rest and resize re-packs without overlap. Only the live drag *preview*
+  remains, tracked under B2.
+
 ## 2026-06-17 — bugfix C19 (KPI clip): 2-column tablet bento
 
 - Measured the reported KPI clip live: at 900px the bento was still the desktop 4-column grid, tiles

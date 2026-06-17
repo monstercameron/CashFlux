@@ -21,6 +21,10 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **List-row action buttons wrap instead of overlapping at narrow widths (C19):** on a phone/tablet the
+  transaction row's buttons (Mark cleared / Edit / Duplicate / ✕) overlapped the description and date.
+  Rows now wrap below 1024px so the actions flow under the text. Shared by every list screen; a no-op
+  when the row still fits. Verified the wrap mechanism in a headless browser. SW cache (v9 → v10).
 - **Dashboard KPI figures no longer clip on tablets (C19):** between the phone breakpoint and the
   desktop the 4-column bento squeezed tiles to ~150px and figures like "$20,749.25" clipped. A tablet
   layout (768–1024px) now flows the tiles into two columns (the header stays full-width), so figures fit.
