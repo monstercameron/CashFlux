@@ -21,6 +21,11 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **The collapsed/expanded sidebar state now survives reloads (C20):** collapsing the rail was a
+  transient choice lost on refresh. It's now persisted to localStorage (like the other UI prefs) and
+  restored on load. Combined with C15 (collapse keeps the nav icons), collapsing the sidebar is now
+  usable rather than reading as "the panel disappeared." Verified live: toggling writes the stored flag
+  and the rail goes 58px↔240px. (An on-panel collapse chevron is still a separate UX item.)
 - **The widget gear now appears only where there's something to configure (C21):** the four KPI tiles
   and the cashflow/bills/freshness tiles have no settings, but their gear still opened the empty "This
   widget doesn't have any settings yet" panel — reading as broken. The gear now renders only on tiles

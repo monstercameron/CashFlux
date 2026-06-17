@@ -725,10 +725,14 @@ button *does* exist (28×28, with the `icon.Menu` glyph) and clicking it collaps
 - [ ] The toggle lives in the **top bar** (inside the scrolling main pane, ~x=260), not **on the
       panel** where a collapse control is conventionally expected — so it doesn't read as "the panel's
       collapse button." Add an on-panel collapse affordance (e.g. a chevron at the rail's edge/footer).
-- [ ] Collapsing **empties the rail** (no nav icons survive — see **C15**), so the collapsed panel looks
-      gone/broken rather than icon-only. C15 must be fixed for collapse to be usable.
-- [ ] Persist the collapsed state across reloads (currently a transient `state.UseAtom`, not stored).
-- [ ] Verify: an obvious toggle on the panel; collapse → usable icon rail; expand → full rail; persists.
+      _(Remaining — a placement/design choice; the working top-bar toggle stands in the meantime.)_
+- [x] Collapsing **empties the rail** — resolved by **C15** (the collapsed rail now keeps its nav icons).
+- [x] Persist the collapsed state across reloads: moved the atom into `uistate.UseRailCollapsed()` seeded
+      from localStorage, with `PersistRailCollapsed` written on every toggle (mirrors the resolution-pref
+      pattern). Verified live: toggling writes `cashflux:rail-collapsed` = `1`/`0` and the rail goes
+      58px↔240px. (The load path matches the proven `loadResolution` pattern; the oracle uses a fresh
+      profile per launch so cross-reload couldn't be exercised end-to-end there.)
+- [~] Verify: collapse → usable icon rail (C15 ✓) and persists (✓). An on-panel toggle is the open part.
 
 ### C21. Per-tile dashboard settings are incomplete + the gear is easy to miss ★
 **Reported:** per-tile settings don't exist. **Reality (verified):** the gear *does* open real,

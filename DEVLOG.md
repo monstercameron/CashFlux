@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C20: persist the sidebar collapsed state
+
+- C20 ("collapsible panel reads as missing") had three parts. Two are now resolved: C15 fixed the
+  empties-on-collapse problem (icons survive), and this change persists the collapsed/expanded choice
+  across reloads — it was a transient `state.UseAtom` in app/shell.go, lost on refresh.
+- Moved the atom into `uistate.UseRailCollapsed()` seeded from localStorage via `loadRailCollapsed`, with
+  `PersistRailCollapsed` written in the menu-button click. This mirrors the existing
+  `UsePeriod`/`PersistResolution`/`loadResolution` pattern exactly. Removed the now-unused `state` import
+  and the old const from shell.go.
+- Verified live: clicking the toggle writes `cashflux:rail-collapsed` = `1` then `0` and the rail width
+  goes 58↔240. The oracle uses a fresh browser profile per launch (confirmed: localStorage set in one
+  launch reads null in the next), so the load-on-reload leg can't be exercised end-to-end there — but it
+  is structurally identical to the resolution-pref load path that's already in use.
+- Remaining C20: an on-panel collapse affordance (chevron) — a placement/design call; the working
+  top-bar toggle stands in the meantime, so I left it for a spec decision rather than guessing.
+
 ## 2026-06-17 — bugfix C21: widget gear only where there are settings
 
 - The gear opened real, persisted settings for 8 widgets but also showed on the 4 KPI tiles and

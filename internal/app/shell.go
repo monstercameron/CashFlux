@@ -13,14 +13,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
-	"github.com/monstercameron/GoWebComponents/state"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
-
-// railCollapsed is the shared atom coordinating the collapsible rail: the top
-// bar's menu button toggles it and the sidebar reads it to switch to icon-only
-// mode. Keyed globally so both components stay in sync.
-const railCollapsedAtom = "rail:collapsed"
 
 // ShellProps configures the chrome around a screen.
 type ShellProps struct {
@@ -107,7 +101,7 @@ func Sidebar() uic.Node {
 	current := router.InspectCurrentRoute().Path
 	hidden := uistate.UseHiddenModules().Get()
 	cls := "rail w-60 shrink-0 border-r border-line flex flex-col"
-	if state.UseAtom(railCollapsedAtom, false).Get() {
+	if uistate.UseRailCollapsed().Get() {
 		cls += " collapsed"
 	}
 
@@ -256,7 +250,7 @@ type topBarProps struct {
 // TopBar is the sticky page header inside the scrolling main pane: a (currently
 // static) menu toggle, the page title, and an Add action.
 func TopBar(props topBarProps) uic.Node {
-	collapsed := state.UseAtom(railCollapsedAtom, false)
+	collapsed := uistate.UseRailCollapsed()
 	quickAdd := uistate.UseQuickAdd()
 	nav := router.UseNavigate()
 	// Breadcrumb: Dashboard (clickable) › current screen. Off the dashboard the
@@ -271,7 +265,11 @@ func TopBar(props topBarProps) uic.Node {
 	}[curPath]
 	return Div(Class("topbar h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20"),
 		Button(Class("menu-btn w-7 h-7 -ml-1"), Attr("title", uistate.T("topbar.menu")),
-			OnClick(func() { collapsed.Update(func(c bool) bool { return !c }) }),
+			OnClick(func() {
+				next := !collapsed.Get()
+				collapsed.Set(next)
+				uistate.PersistRailCollapsed(next) // remember the choice across reloads (C20)
+			}),
 			ui.Icon(icon.Menu, Class("w-5 h-5")),
 		),
 		Nav(Class("flex items-center gap-2 font-display min-w-0"), Attr("aria-label", uistate.T("topbar.breadcrumb")),
