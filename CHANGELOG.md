@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The dashboard **To-do widget** is now configurable: open its gear to set how many tasks it shows
+  (1–10, default 3), instead of a fixed three.
 - Accessibility: the flip-panel overlay (quick-add, household/global settings, per-widget settings) is
   now a proper modal dialog — `role="dialog"` + `aria-modal="true"` + an accessible name from its
   title — and **Esc closes it**, so screen-reader and keyboard users get expected modal behavior.

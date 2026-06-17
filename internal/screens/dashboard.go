@@ -124,7 +124,7 @@ func Dashboard() ui.Node {
 		recentWidget(txns, widgetCfgs.For("recent")),
 		budgetsWidget(app, txns, rates),
 		goalsWidget(app),
-		todoWidget(app),
+		todoWidget(app, widgetCfgs.For("todo")),
 		accountsWidget(app, txns),
 		netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")),
 		cashFlowWidget(txns, rates),
@@ -500,9 +500,16 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction) ui.Node {
 	})
 }
 
-// todoWidget is the 1×1 To-do widget: up to three open tasks, dot-toned by
-// priority (high = amber, others = dim/faint).
-func todoWidget(app *appstate.App) ui.Node {
+// todoWidget is the 1×1 To-do widget: the next few open tasks (how many is
+// configurable, default 3), dot-toned by priority (high = amber, others =
+// dim/faint).
+func todoWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
+	count := 3
+	if sch, ok := widgetcfg.SchemaFor("todo"); ok {
+		if f, ok := sch.FieldByKey("count"); ok {
+			count = f.Int(cfg)
+		}
+	}
 	var open []domain.Task
 	for _, t := range app.Tasks() {
 		if t.Status == domain.StatusOpen {
@@ -513,8 +520,8 @@ func todoWidget(app *appstate.App) ui.Node {
 	if len(open) == 0 {
 		body = P(Class("empty text-dim text-[13px]"), "Nothing to do — nice.")
 	} else {
-		if len(open) > 3 {
-			open = open[:3]
+		if len(open) > count {
+			open = open[:count]
 		}
 		rows := make([]ui.Node, 0, len(open))
 		for _, t := range open {

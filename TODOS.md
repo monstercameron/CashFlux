@@ -275,8 +275,9 @@ registry + accessors; savings rate schema (target rate %, show-bar toggle). Tabl
       `widgetFieldRow` component bound to the persisted config; placeholder for widgets with no schema.
 - [x] Savings widget consumes its config: reads target rate + show-bar from `WidgetConfigs.For("savings")`
       — tone reflects performance vs target (green/amber/red), subline shows the target, bar hides when off.
-- [ ] Register feasible schemas for the other widgets incrementally (recent-transactions count,
-      budgets scope, trend range, etc.) — "any feasible settings exposed and persisted".
+- [~] Register feasible schemas for the other widgets incrementally — done: recent-transactions count,
+      trend range, breakdown top-N, **to-do tasks-to-show**. Remaining candidates: budgets scope, goals
+      widget, accounts widget.
 - [ ] Verify: gear opens widget-specific settings; changes persist across reload; savings reflects its
       target.
 

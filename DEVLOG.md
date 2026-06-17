@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12: to-do widget config schema
+
+- Registered a `widgetcfg` schema for the `todo` widget (a "Tasks to show" Number field, default 3,
+  clamped [1,10]) and wired `todoWidget` to read it via `SchemaFor("todo")` + `f.Int(cfg)`, replacing
+  the hardcoded `open[:3]`. The per-widget flip-panel renders the field generically, so no UI change
+  was needed beyond passing the config through. Added a registration/clamp test. First of the B12
+  "more widget schemas" additions; goals/accounts/etc. can follow the same pattern. wasm + tests green.
+
 ## 2026-06-16 — a11y: FlipPanel is a real modal dialog
 
 - Gave `ui.FlipPanel` `role="dialog"` + `aria-modal="true"` + `aria-label` (its title) on the flip-wrap,

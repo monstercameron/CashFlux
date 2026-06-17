@@ -33,4 +33,11 @@ func init() {
 			{Key: "topN", Label: "Top categories (rest grouped as Other)", Type: Number, Default: "3", Min: 2, Max: 6},
 		},
 	})
+	register(Schema{
+		WidgetID: "todo",
+		Title:    "To-do",
+		Fields: []Field{
+			{Key: "count", Label: "Tasks to show", Type: Number, Default: "3", Min: 1, Max: 10},
+		},
+	})
 }

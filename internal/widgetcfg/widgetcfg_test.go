@@ -70,6 +70,27 @@ func TestSavingsSchemaRegistered(t *testing.T) {
 	}
 }
 
+func TestTodoSchemaRegistered(t *testing.T) {
+	s, ok := SchemaFor("todo")
+	if !ok {
+		t.Fatal("todo schema not registered")
+	}
+	f, ok := s.FieldByKey("count")
+	if !ok {
+		t.Fatal("todo missing count field")
+	}
+	// Default 3, clamped to [1, 10].
+	if got := f.Int(Config{}); got != 3 {
+		t.Errorf("default count = %d, want 3", got)
+	}
+	if got := f.Int(Config{"count": "99"}); got != 10 {
+		t.Errorf("count clamp high = %d, want 10", got)
+	}
+	if got := f.Int(Config{"count": "0"}); got != 1 {
+		t.Errorf("count clamp low = %d, want 1", got)
+	}
+}
+
 func TestSchemaFieldByKey(t *testing.T) {
 	s := Schema{Fields: []Field{{Key: "a"}, {Key: "b"}}}
 	if _, ok := s.FieldByKey("b"); !ok {
