@@ -3,6 +3,33 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — browser oracle online; verified D3 + fixed C10 (responsive)
+
+- The engineer pointed out the gwc MCP browser tools. The shipped `.tools/gwc.exe` lacked the
+  `playwrightgo` build tag, so I rebuilt the runner from the GoWebComponents checkout
+  (`go build -tags playwrightgo -o .tools/gwc-pw.exe ./tools/gwc`); Playwright/Chromium was already
+  installed. Now I can `serve` the app and drive it with `gwc-pw screenshot/eval` (headless). PowerShell
+  5.1 mangles double-quotes in native args, so JS exprs must use single quotes wrapped in a PS
+  double-quoted string.
+- **Verified B14 D3 charts**: `eval` on the live dashboard reports `d3=object`, `.cf-chart svg` present
+  → the net-worth trend renders via D3 with axes. The boot overlay seen in a screenshot is just the
+  0.45s fade (`#boot` already has class `hidden`), not a stuck overlay.
+- **Fixed C10** (was flagged blocked-on-browser): a `@media (max-width:767px)` block forces the rail to
+  its icon-only 56px, hides rail text, stacks the bento into one column (overriding tiles' inline
+  grid-column/row with `!important`), and clamps `overflow-x`. Verified at 390px: `scrollWidth ==
+  clientWidth == 390`, `overflow=false`, rail 56px. Desktop (1280/1366) unaffected. Note: the top-bar
+  resolution control can still overflow on a phone (no page-wide scroll though) and there's no slide-in
+  drawer (icon nav is tappable) — minor follow-ups.
+
+## 2026-06-17 — bugfix C9: Insights bare without a key
+
+- Verified: the offline Spending-highlights card already renders unconditionally (line 205), so that
+  half of C9 was done. The "Ask about your money" card, though, was `If(key != "", …)` — invisible to
+  keyless users. Restructured so the Ask card always renders: the working `Form` stays under
+  `If(key != "")` (identical OnSubmit/OnInput hook conditionality — no hook-order change), and a
+  `If(key == "")` branch shows a disabled input preview + the existing `insights.keyHint` so the
+  feature is visible and self-explanatory. wasm + vet green.
+
 ## 2026-06-17 — bugfix C12: last settings row clipped by footer
 
 - The global settings flip panel is a flex column (header / `.set-body` flex:1 overflow-auto / sticky

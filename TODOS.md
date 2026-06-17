@@ -601,19 +601,21 @@ Add button — no visible swatch/label, looks broken.
       (stale report; verified in current code).
 - [x] **Categories** now show their color (an 11px swatch on each row) and let you set it — the Add
       form and inline Edit row have a color picker; `Color` is threaded through `saveCat`/`OnSave`.
-- [ ] **Insights** is bare without a key (just the "Explain my month" prompt) — surface the offline
-      Spending-highlights card and the "Ask about your money" box even before a key is set.
+- [x] **Insights** without a key: the offline Spending-highlights card already showed; now the "Ask
+      about your money" box is also always visible (disabled preview + key hint when no key), so the
+      screen advertises its features instead of looking bare.
 
 ### C10. No responsive / mobile layout at all ★ (UX, severe)
 **Symptom (verified at 390×844):** on every screen the left rail stays full-width and fixed, the
 content is pushed off-screen to the right, and the page scrolls **horizontally** to reach it. The
 dashboard bento keeps its desktop cell size so tiles are clipped; forms (Add account/transaction) run
 off the right edge. The app is effectively unusable on a phone.
-- [ ] Add a responsive breakpoint: collapse the rail to a hamburger/drawer below ~768px (the
-      collapse atom exists for desktop — extend it), and let the main content take full width.
-- [ ] Reflow the bento grid to 1–2 columns on narrow screens; stack multi-input form rows vertically.
-- [ ] Verify at 390px and 768px: no horizontal scroll, rail is a drawer, tiles/forms reflow cleanly.
-      (Pairs with 1.7 "Responsive: mobile nav" and B15 zoom/reflow.)
+- [x] Below 768px the rail collapses to its icon-only width and the main content takes full width (CSS
+      `@media (max-width:767px)`). The `.form-grid`/`.stat-grid` already auto-fit.
+- [x] Bento reflows to a single column on narrow screens (tiles' inline grid placement overridden).
+- [x] Verified at 390px in a headless browser: no horizontal scroll (scrollWidth == clientWidth), rail
+      56px. Follow-ups: a slide-in drawer (vs icon rail) and the top-bar resolution control's mobile
+      overflow.
 
 ### C11. Widget gear opens an empty "Save"-able panel for widgets with no settings (UX)
 **Symptom:** clicking the gear on a no-schema widget (e.g. Net worth) opens the flip panel reading

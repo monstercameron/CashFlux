@@ -412,6 +412,25 @@
         aside.rail.collapsed .nv:focus-within > span { animation: rail-flyout .12s ease both; }
       }
       @keyframes rail-flyout { from { opacity:0; transform:translate(-4px,-50%); } to { opacity:1; transform:translateY(-50%); } }
+
+      /* Phone layout (C10): below 768px the full 240px rail pushed content
+         off-screen and the page scrolled horizontally. Collapse the rail to its
+         icon-only width to reclaim space, stack the bento into one column
+         (overriding tiles' inline grid placement), and clamp horizontal overflow. */
+      @media (max-width: 767px) {
+        html, body, #app { overflow-x: hidden; max-width: 100vw; }
+        aside.rail { width: 56px; }
+        aside.rail .brand-name,
+        aside.rail .nv span,
+        aside.rail nav > div,
+        aside.rail .hh-text { display: none; }
+        aside.rail .nv { justify-content: center; gap: 0; padding-left: 0; padding-right: 0; }
+        aside.rail .railhead { padding-left: 0; padding-right: 0; justify-content: center; }
+        aside.rail .hh { justify-content: center; padding-left: 0; padding-right: 0; }
+        .bento { grid-template-columns: 1fr !important; grid-template-rows: none !important;
+          grid-auto-rows: minmax(var(--cell), auto) !important; }
+        .bento > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
+      }
       .menu-btn { background:transparent; border:0; color:#a6a6ac; cursor:pointer; display:grid; place-items:center; }
       .menu-btn:hover { color:#f4f4f5; }
 

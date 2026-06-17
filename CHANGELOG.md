@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Mobile/responsive layout (C10):** below 768px the app no longer scrolls horizontally with the
+  content pushed off-screen — the sidebar collapses to an icon rail, the main area takes the full
+  width, and the dashboard bento stacks into a single column. Verified in a headless browser at 390px
+  (no horizontal overflow). Desktop is unchanged.
+- The **Insights** screen is no longer near-empty without an OpenAI key: the "Ask about your money" box
+  now always shows (a disabled preview + a hint to add a key when none is set), advertising the feature
+  — the offline Spending-highlights card already displayed. (C9)
 - The last row of the **settings panel** (e.g. "Display scale") is no longer clipped against the
   sticky footer — the scrollable body now has extra bottom padding so it clears the fold. (C12)
 - The rail's **household card** summary no longer repeats "Settings" (the gear icon and tooltip already
