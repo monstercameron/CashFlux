@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — contrast: WCAG luminance/ratio utility (pure)
+
+- New pure package `internal/contrast`: `ParseHex` (3/6-digit, optional #), `RelativeLuminance`, `Ratio`
+  (1..21, symmetric), and `PassesAA`/`PassesAAA` with the standard thresholds (4.5/3.0, 7.0/4.5). Exact
+  sRGB linearization per WCAG. Table tests: parse incl. shorthand/error cases, black=0/white=1 luminance,
+  black/white=21:1 + symmetry, identical=1, the canonical #767676-on-white ≈4.54 boundary, and the
+  pass-predicate boundaries. Directly useful for the user-configurable accent (a future "this accent is
+  hard to read" check) and for auditing the theme tokens. `go test` green.
+- Note: built the calculator now; using it to validate the accent swatch (or warn on low-contrast custom
+  accents) is a natural follow-up UI slice.
+
 ## 2026-06-16 — a11y: FlipPanel focus trap + restore
 
 - Extended the FlipPanel modal effect (which already did Esc-to-close) into a full focus trap: on mount

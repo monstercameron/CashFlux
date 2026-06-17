@@ -437,8 +437,10 @@ one-line a11y item in §1.20.
       "On track/Near limit/Over budget" text, net-worth/highlights use ▲/▼ arrows, stale accounts show
       a "Stale" badge, cleared shows a ✓; the one offender — the To-do widget's priority dots (high vs
       medium were both `●`) — now uses distinct shapes ▲/●/○ plus accessible names.
-- [ ] **Contrast:** verify AA (4.5:1 text / 3:1 large+UI) for both themes — `text-faint` and accent-on-
-      surface are suspect; bake checked values into the token set.
+- [~] **Contrast:** built a pure `internal/contrast` (WCAG luminance + ratio + AA/AAA predicates,
+      table-tested) — the tool to verify token pairs and validate custom accents. Still TODO: actually
+      audit `text-faint`/accent-on-surface for both themes and bake any fixes into the token set; and
+      wire an accent-contrast warning into the swatch picker.
 - [~] **Motion:** `prefers-reduced-motion` now also covers the flip-panel, toast slide-in, and rail
       width (boot + rail flyout were already handled). Still TODO once they exist: the dashboard
       reorder/resize animations (B2). Original note below:

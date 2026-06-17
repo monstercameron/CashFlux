@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- New pure `contrast` package: WCAG relative-luminance and contrast-ratio math with AA/AAA pass
+  predicates — the foundation for checking that colors (especially a user's chosen accent) are legible
+  against their background. Fully table-tested (black/white = 21:1, symmetry, known boundary pairs).
 - Accessibility: the flip-panel dialogs (quick-add, settings) now **trap keyboard focus** — focus moves
   into the dialog on open, Tab/Shift+Tab cycle within it instead of escaping to the page behind, and
   focus returns to whatever you opened it from when it closes. Completes the modal dialog semantics.
