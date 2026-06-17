@@ -92,7 +92,7 @@ func Rules() ui.Node {
 		H2(Class("card-title"), uistate.T("rules.add")),
 		P(Class("muted"), uistate.T("rules.hint")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)),
+			Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)),
 			Select(Class("field"), OnChange(onCategory), categoryOptions(cats, categoryID.Get())),
 			Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),

@@ -165,7 +165,7 @@ func Budgets() ui.Node {
 				Select(Class("field"), OnChange(onCat), catOptions),
 				Select(Class("field"), OnChange(onOwner), ownerOptions),
 				Select(Class("field"), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get())),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
+				Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
 				MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),

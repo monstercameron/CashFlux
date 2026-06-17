@@ -133,7 +133,7 @@ func Todo() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("todo.addTitle")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)),
+			Input(Class("field field-wide"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)),
 			Select(Class("field"), OnChange(onPriority), prioOptions),
 			Input(Class("field"), Type("date"), Value(dueStr.Get()), OnInput(onDue)),
 			Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),

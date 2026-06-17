@@ -452,10 +452,10 @@ one-line a11y item in §1.20.
       flip panel (boot loader + settle already do).
 - [ ] **Zoom / reflow:** usable at 200% browser zoom and with enlarged browser font sizes — the
       px-heavy styling (see B6) is the risk; pairs with the B6 UI-scale work.
-- [~] **Forms:** correct input types (number/date) in use; **inline validation is now announced** —
-      every `.err` message is `role="alert"` (assertive live region); key required fields (quick-add
-      amount, plan name/horizon) carry `aria-required`. Still TODO: per-field `aria-describedby`
-      association and `aria-required` across the remaining add forms.
+- [~] **Forms:** correct input types (number/date) in use; **inline validation is announced** —
+      every `.err` message is `role="alert"`; **required fields carry `aria-required`** across every add
+      form (accounts, categories, budgets, goals, members, rules, to-do, transactions, quick-add,
+      plans). Still TODO: per-field `aria-describedby` association tying each error to its input.
 - [x] **Route changes (SPA):** focus moves to `<main>` on navigation (skips the initial load so the
       first Tab still reaches the skip link) and `document.title` is set to "<Screen> · CashFlux".
 - [~] **Charts:** `ui.AreaChart` is now `role="img"` + `aria-label` with a live-figure summary (net-worth

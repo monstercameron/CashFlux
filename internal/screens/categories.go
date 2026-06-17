@@ -130,7 +130,7 @@ func Categories() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("categories.add")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
+			Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
 			Select(Class("field"), OnChange(onKind), kindOptions),
 			Select(Class("field"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),

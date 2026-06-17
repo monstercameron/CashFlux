@@ -426,7 +426,7 @@ func Transactions() ui.Node {
 			H2(Class("card-title"), uistate.T("transactions.addTitle")),
 			Form(Class("form-grid"), OnSubmit(add),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
+				Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(Class("field"), OnChange(onKind), kindOptions),
 				Select(Class("field"), Title(accLabel), OnChange(onAcc), accOptions),
 				IfElse(isTransfer,

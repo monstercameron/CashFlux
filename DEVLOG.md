@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — a11y: aria-required across all add forms
+
+- Completed required-field marking: added `aria-required="true"` to each add form's primary required
+  input — account name, category name, budget limit, goal name + target, member name, rule match,
+  to-do title, transaction amount (the add forms only; edit-row inputs use the S-suffixed vars and were
+  left). Done via a targeted per-file replace keyed on each input's unique `Placeholder/Value` segment
+  (verified exactly one match per target). Still `aria-required` (semantic) not native `required`, to
+  avoid clashing with the app's own validation. wasm + vet green. Closes the required-field-marking
+  part of the forms a11y item; per-field `aria-describedby` remains.
+
 ## 2026-06-16 — a11y: aria-required on key form fields
 
 - Marked the genuinely-required inputs with `aria-required="true"` on the forms I recently built:

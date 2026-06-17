@@ -233,7 +233,7 @@ func Members() ui.Node {
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("members.add")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)),
+				Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)),
 				Input(Class("field"), Type("color"), Value(color.Get()), OnInput(onColor)),
 				MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})

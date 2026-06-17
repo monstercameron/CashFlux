@@ -220,7 +220,7 @@ func Accounts() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("accounts.addTitle")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
+			Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
 			Select(Class("field"), OnChange(onType), typeOptions),
 			Select(Class("field"), OnChange(onOwner), ownerOptions),
 			Input(Class("field"), Type("text"), Placeholder(uistate.T("accounts.currency")), Value(curr.Get()), OnInput(onCurr)),
