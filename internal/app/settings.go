@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/contrast"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/i18n"
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -371,6 +372,7 @@ func globalSettingsForm() uic.Node {
 				},
 			}),
 		),
+		accentContrastNote(pr.Accent, pr.Theme),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.compact"), On: pr.Compact, OnChange: func(v bool) {
 			p := prefsAtom.Get()
 			p.Compact = v
@@ -462,6 +464,42 @@ func scaleOptions(current int) []uic.Node {
 		opts = append(opts, Option(Value(strconv.Itoa(s)), SelectedIf(current == s), label))
 	}
 	return opts
+}
+
+// accentSurfaceHexes returns the elevated surface color(s) the accent is judged
+// against for the given theme — both when the theme follows the system, since we
+// can't know which is active at render time.
+func accentSurfaceHexes(theme prefs.Theme) []string {
+	const darkElev, lightElev = "#1a1a1d", "#efede8"
+	switch theme {
+	case prefs.ThemeLight:
+		return []string{lightElev}
+	case prefs.ThemeDark:
+		return []string{darkElev}
+	default: // system: judged against both
+		return []string{darkElev, lightElev}
+	}
+}
+
+// accentContrastNote renders a small line stating the selected accent's contrast
+// ratio against the theme surface and whether it clears WCAG AA for UI/large
+// elements (3:1), using the pure internal/contrast helpers. Accent is used for
+// fills, active states, and the focus ring, so the large/UI threshold applies.
+func accentContrastNote(accent string, theme prefs.Theme) uic.Node {
+	if accent == "" {
+		accent = "#54b884" // the default swatch
+	}
+	worst := 21.0
+	for _, surf := range accentSurfaceHexes(theme) {
+		if r, err := contrast.Ratio(accent, surf); err == nil && r < worst {
+			worst = r
+		}
+	}
+	if contrast.PassesAA(worst, true) {
+		return Span(Class("muted text-xs"), uistate.T("settings.accentContrastOk", worst))
+	}
+	return Span(Class("text-xs"), Style(map[string]string{"color": "var(--danger)"}),
+		uistate.T("settings.accentContrastLow", worst))
 }
 
 // langDisplay gives a human label for a language code: English by name, any

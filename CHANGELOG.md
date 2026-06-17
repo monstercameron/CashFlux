@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Each saved plan now shows a small **projected-balance sparkline** of its trajectory over the horizon
+  (green if it ends up, red if down) next to its end figure — so you can see the shape, not just the
+  number.
+- Settings → Appearance now shows the **contrast ratio of the chosen accent** against the theme
+  surface, with a warning when it's low (e.g. the default green on the light theme) — so you can pick a
+  more legible accent. Powered by the new `contrast` package.
 - Plans can now include a **one-time amount** (a bonus or big expense) in a chosen month, alongside the
   steady monthly change — so "what if I also get a $2,000 bonus in month 6" shows up in the projection.
 - Accessibility: the **toggle switches** and **accent color swatches** are now fully keyboard-operable —

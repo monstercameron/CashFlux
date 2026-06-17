@@ -441,9 +441,10 @@ one-line a11y item in §1.20.
       medium were both `●`) — now uses distinct shapes ▲/●/○ plus accessible names.
 - [~] **Contrast:** built `internal/contrast` (table-tested) and **audited** the tokens with it.
       Fixed: `text-faint` now meets AA-normal (4.5) on both surfaces in both themes (dark→#888890,
-      light→#686870). Flagged (needs a brand decision, not changed): the shared **accent** #54b884 is
-      ~2.3:1 on the light theme — fine on dark, low on light. Still TODO: pick a light-theme-safe accent
-      (or per-theme accent) and optionally wire an accent-contrast warning into the swatch picker.
+      light→#686870). The appearance settings now **show the selected accent's contrast ratio** vs the
+      theme surface and warn when it's low (uses `internal/contrast`) — so users see when an accent is
+      hard to read. Still TODO (brand decision): pick a light-theme-safe default accent (or per-theme
+      accent) since the default green is ~2.3:1 on light.
 - [~] **Motion:** `prefers-reduced-motion` now also covers the flip-panel, toast slide-in, and rail
       width (boot + rail flyout were already handled). Still TODO once they exist: the dashboard
       reorder/resize animations (B2). Original note below:

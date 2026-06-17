@@ -396,11 +396,28 @@ func PlanRow(props planRowProps) ui.Node {
 	end := money.New(planning.EndBalance(p), props.Base)
 	monthly := money.New(planning.MonthlyNet(p), props.Base)
 	meta := uistate.T("plans.rowMeta", p.HorizonMonths, fmtMoney(money.New(p.StartBalance, props.Base)), fmtMoney(monthly))
+
+	// A compact sparkline of the projected balance over the horizon, toned by
+	// whether the plan ends up or down vs. its starting balance.
+	curve := planning.Project(p)
+	vals := make([]float64, len(curve))
+	for i, v := range curve {
+		vals[i] = float64(v)
+	}
+	stroke := "#54b884"
+	if planning.EndBalance(p) < p.StartBalance {
+		stroke = "#d8716f"
+	}
+
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), p.Name),
 			Span(Class("row-meta"), meta),
 		),
+		If(len(vals) > 1, uiw.AreaChart(uiw.AreaChartProps{
+			Values: vals, Stroke: stroke, GradientID: "cf-plan-" + p.ID,
+			Width: 120, Height: 28, Label: uistate.T("plans.chartLabel", fmtMoney(end)),
+		})),
 		Span(Class("amount fig "+figTone(end)), uistate.T("plans.projected", fmtMoney(end))),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("plans.deleteTitle")), OnClick(del), "✕"),
 	)

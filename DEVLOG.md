@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — planning: projected-balance sparkline on each plan row
+
+- `PlanRow` now renders a compact `uiw.AreaChart` of `planning.Project(p)` (int64 curve → float64),
+  toned green/red by whether `EndBalance` is above/below `StartBalance`, with a per-plan `GradientID`
+  ("cf-plan-"+ID) to avoid SVG gradient id collisions across rows, a `role="img"` accessible label
+  (`plans.chartLabel`), and an `If(len>1)` guard. Reuses the existing tested chart geometry + planning
+  engine — no new logic. i18n + wasm green.
+
+## 2026-06-16 — settings: accent-contrast indicator (uses contrast pkg)
+
+- Added `accentContrastNote` under the accent SwatchPicker in `globalSettingsForm`: computes the
+  selected accent's WCAG ratio against the theme's elevated surface via `contrast.Ratio` and shows a
+  muted "Contrast X.X:1 — passes AA" line, or a danger-colored "low; may be hard to see" warning when
+  it fails AA for UI/large elements (3:1 — accent is used for fills/active states/focus ring). For the
+  system theme it checks both dark and light surfaces and reports the worst. This puts the earlier
+  contrast audit in front of the user (the default green flags as low on light) and lets them choose a
+  safer swatch. New `settings.accentContrast*` keys. i18n + wasm green.
+
 ## 2026-06-16 — planning: one-time item in the plan create form
 
 - Extended the Plans create form with an optional one-time amount + "in month #" pair. When both are
