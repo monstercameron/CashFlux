@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Plans can now include a **one-time amount** (a bonus or big expense) in a chosen month, alongside the
+  steady monthly change — so "what if I also get a $2,000 bonus in month 6" shows up in the projection.
 - Accessibility: the **toggle switches** and **accent color swatches** are now fully keyboard-operable —
   they're focusable (Tab) and respond to Space/Enter, with a visible focus ring — so settings and the
   accent picker no longer require a mouse. (Previously they were mouse-only `<div>`s.)

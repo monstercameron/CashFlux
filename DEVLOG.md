@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — planning: one-time item in the plan create form
+
+- Extended the Plans create form with an optional one-time amount + "in month #" pair. When both are
+  given (and the month is within the horizon — else a validation error), `addPlan` appends a
+  `PlanItemOneTime` alongside the recurring monthly item, switching `p.Items` to `append` so a plan can
+  carry both. The model/engine/persistence already supported one-time items (engine + projection were
+  table-tested earlier), so this is pure form wiring + validation. New `plans.once*` i18n keys. The
+  projected end balance reflects the windfall/expense. i18n + wasm green. A full per-plan item
+  add/remove editor (editing existing plans' items) remains a later option.
+
 ## 2026-06-16 — a11y: keyboard operability for div-based switch/swatch
 
 - Verified the framework exposes a declarative `OnKeyDown` (shorthand → `html.OnKeyDown`) whose callback

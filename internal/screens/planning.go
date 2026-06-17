@@ -117,11 +117,15 @@ func Planning() ui.Node {
 	plHorizon := ui.UseState("12")
 	plStart := ui.UseState("")
 	plMonthly := ui.UseState("")
+	plOnceAmt := ui.UseState("")
+	plOnceMonth := ui.UseState("")
 	plErr := ui.UseState("")
 	onPlName := ui.UseEvent(func(v string) { plName.Set(v) })
 	onPlHorizon := ui.UseEvent(func(v string) { plHorizon.Set(v) })
 	onPlStart := ui.UseEvent(func(v string) { plStart.Set(v) })
 	onPlMonthly := ui.UseEvent(func(v string) { plMonthly.Set(v) })
+	onPlOnceAmt := ui.UseEvent(func(v string) { plOnceAmt.Set(v) })
+	onPlOnceMonth := ui.UseEvent(func(v string) { plOnceMonth.Set(v) })
 	addPlan := ui.UseEvent(Prevent(func() {
 		if app == nil {
 			return
@@ -141,9 +145,22 @@ func Planning() ui.Node {
 		monthly, _ := money.ParseMinor(strings.TrimSpace(plMonthly.Get()), currency.Decimals(base))
 		p := domain.Plan{ID: id.New(), Name: name, HorizonMonths: horizon, StartBalance: start}
 		if monthly != 0 {
-			p.Items = []domain.PlanItem{{
+			p.Items = append(p.Items, domain.PlanItem{
 				ID: id.New(), Label: uistate.T("plans.monthlyLabel"), Kind: domain.PlanItemRecurring, Amount: monthly,
-			}}
+			})
+		}
+		// Optional one-time amount in a chosen month (e.g. a bonus or big expense).
+		// Only added when both an amount and an in-horizon month are given.
+		onceAmt, _ := money.ParseMinor(strings.TrimSpace(plOnceAmt.Get()), currency.Decimals(base))
+		onceMonth, monthErr := strconv.Atoi(strings.TrimSpace(plOnceMonth.Get()))
+		if onceAmt != 0 && strings.TrimSpace(plOnceMonth.Get()) != "" {
+			if monthErr != nil || onceMonth < 1 || onceMonth > horizon {
+				plErr.Set(uistate.T("plans.onceMonthRange"))
+				return
+			}
+			p.Items = append(p.Items, domain.PlanItem{
+				ID: id.New(), Label: uistate.T("plans.onceLabel"), Kind: domain.PlanItemOneTime, Amount: onceAmt, Month: onceMonth,
+			})
 		}
 		if err := app.PutPlan(p); err != nil {
 			plErr.Set(err.Error())
@@ -152,6 +169,8 @@ func Planning() ui.Node {
 		plName.Set("")
 		plStart.Set("")
 		plMonthly.Set("")
+		plOnceAmt.Set("")
+		plOnceMonth.Set("")
 		plErr.Set("")
 		rev.Set(rev.Get() + 1)
 	}))
@@ -311,6 +330,8 @@ func Planning() ui.Node {
 				Input(Class("field"), Type("number"), Title(uistate.T("plans.horizonTitle")), Placeholder(uistate.T("plans.horizonPlaceholder")), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("plans.startPlaceholder", base)), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("plans.monthlyPlaceholder", base)), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly)),
+				Input(Class("field"), Type("number"), Title(uistate.T("plans.onceAmtTitle")), Placeholder(uistate.T("plans.onceAmtPlaceholder", base)), Value(plOnceAmt.Get()), Step("0.01"), OnInput(onPlOnceAmt)),
+				Input(Class("field"), Type("number"), Title(uistate.T("plans.onceMonthTitle")), Placeholder(uistate.T("plans.onceMonthPlaceholder")), Value(plOnceMonth.Get()), Step("1"), OnInput(onPlOnceMonth)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("plans.add")),
 			),
 			If(plErr.Get() != "", P(Class("err"), plErr.Get())),

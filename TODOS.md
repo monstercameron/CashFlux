@@ -1076,7 +1076,9 @@ Shared control components (from mockup):
       + CRUD — across all layers: `domain` data, `internal/planning` engine (`Project`/`MonthlyNet`/
       `EndBalance`, table-tested), persistence (`plans` table, store CRUD, dataset round-trip, validated
       appstate accessors), and a Planning-screen **Plans card** (create name/horizon/start/monthly,
-      list with projected end balance, delete). Later: per-plan one-time item editor; scenario-vs-actuals.
+      list with projected end balance, delete) — now also captures an optional **one-time item**
+      (amount + in-horizon month) on create. Later: a full per-plan item add/remove editor for existing
+      plans; scenario-vs-actuals.
 - [~] ★ Forecast engine (pure): `internal/forecast.Project` over horizon from start + recurring + one-time items done; actuals-derived recurring later
 - [x] Debt payoff math (`internal/payoff.Project`) + tests + extra-payment scenario (months/interest saved)
 - [~] What-if scenarios: extra debt payment + trim-spending forecast done; add-recurring/rate-change later
