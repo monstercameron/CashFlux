@@ -49,19 +49,15 @@ drag (acts only on drop); (c) swapping spans between differently-sized tiles ove
 corrupts the bento packing. The model is absolute-placement + pairwise-swap; iOS-grid behavior needs
 ordered reflow + size-aware packing.
 **Fix (bottom-up per SDLC):**
-- [ ] Model: change `internal/dashlayout` from absolute placement+`Swap` to an **ordered sequence** of
-      tiles (`ID` + `ColSpan` + `RowSpan`) plus a pure **`Pack`** that flows tiles into the N-column
-      grid (first-fit/dense bin-packing, top→bottom, no overlap, honoring each tile's spans) and derives
-      `Col/Row`. Keep the `GridColumn()/GridRow()` rendering.
-- [ ] Ops: replace `Swap` with `Move(id, toIndex)` (reorder the sequence) then re-`Pack`; keep
-      `Resize` (re-`Pack` after a span change). **Table tests:** mixed-span packing has no overlaps,
-      wraps to the next row, `Move` reflows the rest, determinism, no-mutation, clamp oversized spans
-      to the column count.
-- [ ] State: persist the ordered sequence + spans; migrate the existing localStorage layout and
-      tolerate the old absolute format.
-- [ ] UI: live reflow — on drag-over compute the insertion index and re-pack a preview (CSS-transition
-      animate the shifts); commit on drop. Prefer pointer events over HTML5 DnD for smooth movement +
-      touch support. Respect the On*-hooks-in-loops rule (the cell component owns its handlers).
+- [x] Model: `internal/dashlayout/pack.go` — ordered `Item` sequence + `Pack` (first-fit, no overlap,
+      honors spans, clamps oversized), table-tested.
+- [x] Ops: `Move(id, toIndex)` (reorder → re-`Pack`) replaces `Swap`; `ResizeItem` + re-`Pack`. Tested.
+- [x] State: persist the ordered `[]Item` (`uistate.PersistItems`); the old `[]Placement` localStorage
+      migrates for free (unmarshal into `Item` ignores col/row).
+- [x] UI wired: `widget.go` renders via `Pack(items,4)` (header row offset), drag-drop calls `Move` +
+      reflow, resize calls `ResizeItem` + reflow. Verified in-browser: default arrangement pixel-identical.
+- [ ] UI polish (deferred): live drag-over reflow PREVIEW (currently reflows on drop, not during drag);
+      prefer pointer events over HTML5 DnD for touch.
 - [ ] **Animate reorder**: tiles that shift during a reflow move smoothly, iOS-home-screen style.
       CSS-grid placement changes don't transition natively → use a FLIP technique (measure old/new
       rects, transform from old→new, transition the transform to zero) keyed by widget id.
@@ -70,8 +66,8 @@ ordered reflow + size-aware packing.
 - [x] **Resize handles only while holding Shift**: `.rz` hidden by default, revealed when the root has
       `data-resize` (toggled by a global Shift keydown/keyup listener + window-blur clear in
       `internal/app/resizereveal.go`), with an opacity fade. Keeps the bento visually calm.
-- [ ] Verify: dragging a 1×1 into a row of 2×2s reflows cleanly; multi-cell tiles never overlap;
-      resize re-packs; reorder/resize animate smoothly; layout persists across reload.
+- [~] Verify: multi-cell tiles never overlap + resize re-packs — **done** (Pack model + render verified
+      in-browser). Still TODO: smooth FLIP animations and a live drag-over preview (reflow is on drop).
 
 ### B3. Routing sometimes duplicates the whole page ★
 
@@ -593,8 +589,9 @@ Add button — no visible swatch/label, looks broken.
       Kept the native picker (full color choice) over the fixed-palette SwatchPicker.
 
 ### C9. Smaller polish
-- [ ] **Accounts** add-account row: input placeholders are clipped ("Expected returr", "Liquidity
-      0–100") — the row crams ~9 inputs; wrap/space them or use a two-row form.
+- [x] **Accounts** add/edit row: shortened the asset placeholders ("Return %"/"Liquidity"/"Stability")
+      and added full-label `title`s with the range, so they no longer clip. (The `.form-grid` already
+      wraps the ~9 inputs.)
 - [ ] **Accounts** rows expose 6 actions each (Transactions / Update balance / Mark updated / Edit /
       Archive / ✕) — visually busy; consider an overflow menu for secondary actions.
 - [x] **Goals** add form's current-amount field — already labelled with a "Saved so far" placeholder

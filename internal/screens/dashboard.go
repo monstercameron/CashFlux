@@ -726,11 +726,11 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 // dashboardHeaderCell is the full-width intro cell at the top of the bento grid,
 // with a Reset layout action that restores the default arrangement.
 func dashboardHeaderCell() ui.Node {
-	layoutAtom := uistate.UseLayout()
+	layoutAtom := uistate.UseLayoutItems()
 	reset := func() {
-		d := dashlayout.Default()
+		d := dashlayout.DefaultItems()
 		layoutAtom.Set(d)
-		uistate.PersistLayout(d)
+		uistate.PersistItems(d)
 	}
 	return Div(Class("w"), Style(map[string]string{"grid-column": "1 / -1", "grid-row": "1"}),
 		Div(Class("flex-1 flex items-center px-5 gap-3"),

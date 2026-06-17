@@ -6,7 +6,17 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Dashboard tiles now reflow instead of overlapping (C14/B2):** the bento is now an ordered sequence
+  packed into the grid, so dragging a tile reorders it and the others flow to fill the gap, and resizing
+  reflows around the new size — fixing the old behavior where a widened tile overlapped its neighbor and
+  the resize handle then "stopped working." Resize handles cycle the span (tooltips now say so). The
+  default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
+
 ### Fixed
+- The **Accounts** add/edit form's asset inputs no longer clip their labels ("Expected returr",
+  "Liquidity 0–10…"): the placeholders are now short ("Return %", "Liquidity", "Stability") with the
+  full label + range on hover (`title`). (C9)
 - **Mobile/responsive layout (C10):** below 768px the app no longer scrolls horizontally with the
   content pushed off-screen — the sidebar collapses to an icon rail, the main area takes the full
   width, and the dashboard bento stacks into a single column. Verified in a headless browser at 390px

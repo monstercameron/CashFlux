@@ -3,10 +3,14 @@
 package ui
 
 import (
+	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
+
+// gridCols is the bento width Pack flows tiles into.
+const gridCols = 4
 
 // Span bounds for the resize handles (the bento grid is 4 columns × 7 rows).
 const (
@@ -50,13 +54,17 @@ func widget(props WidgetProps) uic.Node {
 		onGear = func() { settings.Set(uistate.Widget(id, title)) }
 	}
 
-	// Grid placement comes from the shared layout when present (so drag-reorder
-	// and resize take effect), falling back to the caller-provided defaults.
-	layoutAtom := uistate.UseLayout()
-	layout := layoutAtom.Get()
+	// Grid placement comes from packing the shared item sequence (so drag-reorder
+	// and resize reflow without overlap), falling back to the caller-provided
+	// defaults. Packed rows are offset by 1 because the fixed header owns grid
+	// row 1.
+	itemsAtom := uistate.UseLayoutItems()
+	items := itemsAtom.Get()
+	packed := dashlayout.Pack(items, gridCols)
 	gridCol, gridRow := props.GridColumn, props.GridRow
-	if p, ok := layout.Get(props.ID); ok {
-		gridCol, gridRow = p.GridColumn(), p.GridRow()
+	if p, ok := packed.Get(props.ID); ok {
+		gridCol = p.GridColumn()
+		gridRow = dashlayout.Placement{Row: p.Row + 1, RowSpan: p.RowSpan}.GridRow()
 	}
 	dragSrc := uistate.UseDragSource()
 
@@ -75,10 +83,22 @@ func widget(props WidgetProps) uic.Node {
 			OnDragStart(func() { dragSrc.Set(id) }),
 			OnDragOver(Prevent(func() {})), // allow drop
 			OnDrop(Prevent(func() {
+				// Reorder the dragged tile to the drop target's position, then the
+				// grid re-Packs around it (iOS-home-screen reflow) instead of a
+				// pairwise swap.
 				if src := dragSrc.Get(); src != "" && src != id {
-					next := layout.Swap(src, id)
-					layoutAtom.Set(next)
-					uistate.PersistLayout(next)
+					ti := -1
+					for i, it := range items {
+						if it.ID == id {
+							ti = i
+							break
+						}
+					}
+					if ti >= 0 {
+						next := dashlayout.Move(items, src, ti)
+						itemsAtom.Set(next)
+						uistate.PersistItems(next)
+					}
 				}
 				dragSrc.Set("")
 			})),
@@ -95,28 +115,39 @@ func widget(props WidgetProps) uic.Node {
 	)
 	if props.Resizable {
 		id := props.ID
-		cur, _ := layout.Get(id)
+		// Current intrinsic spans from the item sequence.
+		curCol, curRow := 1, 1
+		for _, it := range items {
+			if it.ID == id {
+				curCol, curRow = it.ColSpan, it.RowSpan
+				break
+			}
+		}
+		resize := func(cs, rs int) {
+			next := dashlayout.ResizeItem(items, id, cs, rs)
+			itemsAtom.Set(next)
+			uistate.PersistItems(next)
+		}
 		args = append(args,
-			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", "Widen"),
+			// Click cycles the span up and wraps at the max back to 1; with Pack
+			// the grid reflows around the new size (so growing never overlaps and
+			// the wrap is how you shrink). Tooltip says so.
+			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", "Resize width (cycles 1→4)"),
 				OnClick(func() {
-					span := cur.ColSpan + 1
+					span := curCol + 1
 					if span > maxColSpan {
 						span = 1
 					}
-					next := layout.Resize(id, span, cur.RowSpan)
-					layoutAtom.Set(next)
-					uistate.PersistLayout(next)
+					resize(span, curRow)
 				}),
 			),
-			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", "Taller"),
+			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", "Resize height (cycles 1→3)"),
 				OnClick(func() {
-					span := cur.RowSpan + 1
+					span := curRow + 1
 					if span > maxRowSpan {
 						span = 1
 					}
-					next := layout.Resize(id, cur.ColSpan, span)
-					layoutAtom.Set(next)
-					uistate.PersistLayout(next)
+					resize(curCol, span)
 				}),
 			),
 		)

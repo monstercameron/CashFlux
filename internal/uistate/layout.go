@@ -15,36 +15,38 @@ const (
 	layoutStoreID = "cashflux:layout"
 )
 
-// UseLayout returns the shared bento layout atom, seeded from localStorage so a
-// rearranged dashboard survives reloads. The Widget shell reads it to place each
-// widget; drag-reorder and resize write swapped/resized layouts back (and persist
-// via PersistLayout).
-func UseLayout() state.Atom[dashlayout.Layout] {
-	return state.UseAtom(layoutAtomID, loadLayout())
+// UseLayoutItems returns the shared bento layout atom: the ordered widget items
+// (id + intrinsic spans) that dashlayout.Pack flows into the grid. Seeded from
+// localStorage so a rearranged dashboard survives reloads. The Widget shell Packs
+// it to place each widget; drag-reorder (Move) and resize (ResizeItem) rewrite it
+// and persist via PersistItems.
+func UseLayoutItems() state.Atom[[]dashlayout.Item] {
+	return state.UseAtom(layoutAtomID, loadItems())
 }
 
-// PersistLayout saves a layout to localStorage. Call it after writing the atom
-// so the arrangement is remembered across reloads.
-func PersistLayout(l dashlayout.Layout) {
-	data, err := json.Marshal(l)
+// PersistItems saves the ordered items to localStorage. Call it after writing the
+// atom so the arrangement is remembered across reloads.
+func PersistItems(items []dashlayout.Item) {
+	data, err := json.Marshal(items)
 	if err != nil {
 		return
 	}
 	js.Global().Get("localStorage").Call("setItem", layoutStoreID, string(data))
 }
 
-// loadLayout reads a saved layout from localStorage, falling back to the default
-// arrangement when absent or invalid.
-func loadLayout() dashlayout.Layout {
+// loadItems reads the saved items from localStorage, falling back to the default
+// arrangement when absent or invalid. The legacy []Placement format migrates for
+// free: unmarshaling it into []Item picks up id + spans and ignores col/row.
+func loadItems() []dashlayout.Item {
 	v := js.Global().Get("localStorage").Call("getItem", layoutStoreID)
 	if v.IsNull() || v.IsUndefined() {
-		return dashlayout.Default()
+		return dashlayout.DefaultItems()
 	}
-	var l dashlayout.Layout
-	if err := json.Unmarshal([]byte(v.String()), &l); err != nil || len(l) == 0 {
-		return dashlayout.Default()
+	var items []dashlayout.Item
+	if err := json.Unmarshal([]byte(v.String()), &items); err != nil || len(items) == 0 || items[0].ID == "" {
+		return dashlayout.DefaultItems()
 	}
-	return l
+	return items
 }
 
 const dragSrcAtomID = "dashboard:drag-source"

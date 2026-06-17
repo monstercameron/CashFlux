@@ -3,6 +3,34 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C9: Accounts asset-input placeholders clipped
+
+- The asset inputs on the Accounts add/edit form had long placeholders ("Expected return APR %",
+  "Liquidity 0–100", "Stability 0–100") that clipped in the ~150px grid columns. Shortened the
+  placeholders to "Return %"/"Liquidity"/"Stability" and added `title` attrs with the full label + range
+  (e.g. "Liquidity score (0–100)") on both the add form and the edit row. Route-gated (the static serve
+  has no SPA fallback so I can't load /accounts directly), but shorter placeholder text definitively
+  can't clip and the titles preserve the detail. i18n + wasm green.
+
+## 2026-06-17 — C14/B2: migrate dashboard onto the Pack model
+
+- Discovered `dashlayout/pack.go` (the ordered-sequence + bin-packing model: `Item`, `DefaultItems`,
+  `Pack`, `Move`, `ResizeItem`) already existed and is table-tested — the remaining B2 work was wiring
+  the UI onto it. (Reverted a duplicate `Pack`/`Move` I'd started adding to dashlayout.go before
+  spotting it.)
+- Migrated the UI: `uistate` layout atom is now `[]dashlayout.Item` (`UseLayoutItems`/`PersistItems`;
+  legacy `[]Placement` localStorage migrates for free since unmarshaling into `Item` ignores col/row).
+  `widget.go` now `Pack(items, 4)`s for rendering (row offset +1 for the fixed header), drag-drop calls
+  `Move(items, src, targetIndex)` (reorder → reflow, not pairwise Swap), and resize calls `ResizeItem`.
+  Dashboard "Reset layout" uses `DefaultItems`. Added `grid-auto-rows` to `.bento` so packed layouts
+  taller than 8 rows still render.
+- Fixes C14's core: a widened tile no longer overlaps its neighbor (Pack reflows), so the resize handle
+  is never painted-over / "stuck"; the wrap-at-max is now a clean reflow (and tooltips say "cycles
+  1→4/1→3"). **Verified in a headless browser**: the packed default arrangement is pixel-identical to
+  before (dumped every tile's grid-area; matches), full test suite + wasm green. Remaining B2 polish
+  (deferred): live drag-over reflow preview, FLIP animations, pointer-drag over HTML5 DnD, and a direct
+  one-click shrink (vs the wrap-cycle).
+
 ## 2026-06-17 — browser oracle online; verified D3 + fixed C10 (responsive)
 
 - The engineer pointed out the gwc MCP browser tools. The shipped `.tools/gwc.exe` lacked the
