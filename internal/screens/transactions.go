@@ -609,7 +609,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		for _, c := range props.Categories {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catS.Get() == c.ID), c.Name))
 		}
-		return Div(Class("row"),
+		return Div(Class("row-edit"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),

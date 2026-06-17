@@ -21,6 +21,12 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Inline-edit now lays out like the Add form on every screen (C18):** editing a **Transactions** or
+  **Accounts** row stacked its fields vertically in a narrow left column (tall, with empty space to the
+  right), while **Budgets** edited horizontally. The edit form (already a `form-grid`) was wrapped in the
+  flex `.row`, which shrink-wrapped it to a single 150px column. It now uses a full-width `.row-edit`
+  block, so the grid expands to multiple columns and editing matches adding. Verified: the grid yields
+  3 columns at 600px in `.row-edit` vs 1 in the old `.row`. SW cache bumped (v5 → v6).
 - **Collapsing the sidebar no longer hides all navigation (C15):** the collapsed rail showed only the
   brand mark and the active highlight — no nav icons — so you couldn't navigate while collapsed. The CSS
   rule that hides the "TOOLS"/"SYSTEM" section labels (`nav > div`) also matched every nav item, because

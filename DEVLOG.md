@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C18: inline-edit stacked fields vertically
+
+- Editing a Transactions or Accounts row rendered its fields in a tall single column with dead space to
+  the right, while Budgets edited horizontally. Surprise: all three edit forms already used
+  `Form(Class("form-grid"))` — the difference was the *wrapper*. Transactions/Accounts wrapped the form
+  in the flex `.row` (`display:flex; justify-content:space-between`), so the single grid child shrank to
+  its min content and `auto-fit minmax(150px,1fr)` collapsed to one column. Budgets wrapped it in a
+  block (`.budget`), giving the grid a definite full width and thus multiple columns.
+- Fix: added a `.row-edit` block class (same top-border/padding as `.row`, density-aware) and switched
+  both edit wrappers to it. No change to the forms themselves.
+- Verified the mechanism in the oracle (the routes don't load there, but the CSS does): injected a
+  `form-grid` with four fields into a 600px `.row-edit` vs `.row` — 3 columns vs 1. SW cache v5→v6.
+
 ## 2026-06-17 — bugfix C15: collapsed rail hid every nav icon
 
 - Collapsing the sidebar left only the brand mark and the active-item highlight — no nav icons — so you

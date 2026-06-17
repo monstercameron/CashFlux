@@ -505,7 +505,7 @@ func AccountRow(props accountRowProps) ui.Node {
 
 	if editing.Get() {
 		isLiab := a.Class == domain.ClassLiability
-		return Div(Class("row"),
+		return Div(Class("row-edit"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
 				Select(Class("field"), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),

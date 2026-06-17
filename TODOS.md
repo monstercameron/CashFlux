@@ -700,8 +700,10 @@ single-period collapse.)
 **Symptom (verified live):** **Budgets** inline-edit lays its fields out horizontally, matching the Add
 form — good. But **Transactions** and **Accounts** inline-edit stack every field vertically in a narrow
 left-hand column (very tall, lots of empty space to the right), looking unfinished and inconsistent.
-- [ ] Make inline-edit reuse the same horizontal `form-grid` as the corresponding Add form on every
-      entity, so editing looks like adding.
+- [x] Done. The Transactions/Accounts edit forms were already `form-grid` but wrapped in the flex `.row`,
+      which shrink-wrapped them to a single column. Wrapped them in a new full-width `.row-edit` block
+      instead (Budgets already used a block, `.budget`), so the grid expands like the Add form. Verified
+      in-browser: `form-grid` yields 3 columns at 600px in `.row-edit` vs 1 in `.row`. SW cache v5→v6.
 
 ### C19. Responsive breakage specifics (extends C10) ★
 Captured at 768px (tablet):
