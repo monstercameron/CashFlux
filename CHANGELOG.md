@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The dashboard **Budgets widget** is now configurable: cap how many budgets to show (3–20, default 6)
+  and optionally show **only those near or over budget**, so it can focus on what needs attention.
 - The dashboard **Accounts widget** is now configurable: set how many accounts to show (3–12,
   default 6) and whether to show only **cleared** balances (reconciled money) instead of current.
 - The dashboard **To-do widget** is now configurable: open its gear to set how many tasks it shows

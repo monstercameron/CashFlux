@@ -118,6 +118,33 @@ func TestAccountsSchemaRegistered(t *testing.T) {
 	}
 }
 
+func TestBudgetsSchemaRegistered(t *testing.T) {
+	s, ok := SchemaFor("budgets")
+	if !ok {
+		t.Fatal("budgets schema not registered")
+	}
+	cnt, ok := s.FieldByKey("count")
+	if !ok {
+		t.Fatal("budgets missing count field")
+	}
+	if got := cnt.Int(Config{}); got != 6 {
+		t.Errorf("default count = %d, want 6", got)
+	}
+	if got := cnt.Int(Config{"count": "1"}); got != 3 {
+		t.Errorf("count clamp low = %d, want 3", got)
+	}
+	risk, ok := s.FieldByKey("atRisk")
+	if !ok {
+		t.Fatal("budgets missing atRisk field")
+	}
+	if risk.Bool(Config{}) {
+		t.Error("atRisk default should be false")
+	}
+	if !risk.Bool(Config{"atRisk": "true"}) {
+		t.Error("atRisk explicit true should be true")
+	}
+}
+
 func TestSchemaFieldByKey(t *testing.T) {
 	s := Schema{Fields: []Field{{Key: "a"}, {Key: "b"}}}
 	if _, ok := s.FieldByKey("b"); !ok {

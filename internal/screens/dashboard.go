@@ -122,7 +122,7 @@ func Dashboard() ui.Node {
 			Body: kpiBody(fmtAccounting(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
 		}),
 		recentWidget(txns, widgetCfgs.For("recent")),
-		budgetsWidget(app, txns, rates),
+		budgetsWidget(app, txns, rates, widgetCfgs.For("budgets")),
 		goalsWidget(app),
 		todoWidget(app, widgetCfgs.For("todo")),
 		accountsWidget(app, txns, widgetCfgs.For("accounts")),
@@ -598,10 +598,30 @@ func goalsWidget(app *appstate.App) ui.Node {
 // budget with an ok/near/over progress bar (via internal/budgeting). Budgets are
 // monthly, so it always evaluates the current month regardless of the dashboard
 // window.
-func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates) ui.Node {
+func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, cfg widgetcfg.Config) ui.Node {
+	limit, atRisk := 6, false
+	if sch, ok := widgetcfg.SchemaFor("budgets"); ok {
+		if f, ok := sch.FieldByKey("count"); ok {
+			limit = f.Int(cfg)
+		}
+		if f, ok := sch.FieldByKey("atRisk"); ok {
+			atRisk = f.Bool(cfg)
+		}
+	}
 	budgets := app.Budgets()
 	start, end := dateutil.MonthRange(time.Now())
 	statuses, _ := budgeting.EvaluateAll(budgets, txns, start, end, rates, budgeting.DefaultNearThreshold)
+
+	// When "at-risk only" is on, drop budgets that are comfortably on track.
+	if atRisk {
+		kept := statuses[:0]
+		for _, s := range statuses {
+			if s.State == budgeting.StateNear || s.State == budgeting.StateOver {
+				kept = append(kept, s)
+			}
+		}
+		statuses = kept
+	}
 
 	catName := make(map[string]string)
 	for _, c := range app.Categories() {
@@ -610,8 +630,15 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 
 	var body ui.Node
 	if len(statuses) == 0 {
-		body = P(Class("empty text-dim text-[13px]"), "No budgets yet.")
+		empty := "No budgets yet."
+		if atRisk {
+			empty = "Nothing near or over budget."
+		}
+		body = P(Class("empty text-dim text-[13px]"), empty)
 	} else {
+		if len(statuses) > limit {
+			statuses = statuses[:limit]
+		}
 		rows := make([]ui.Node, 0, len(statuses))
 		for _, s := range statuses {
 			tone, bar := "text-dim", "bg-up"

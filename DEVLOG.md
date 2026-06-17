@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-16 — B12: budgets widget config schema
+
+- Registered a `budgets` widget schema: "count" Number (default 6, clamped [3,20]) and "atRisk" Toggle
+  (default false). Wired `budgetsWidget` to optionally filter to Near/Over statuses (in-place filter on
+  the fresh EvaluateAll slice) and cap the list; the empty state messages differ ("No budgets yet." vs
+  "Nothing near or over budget."). Registration/clamp/bool test added. wasm + tests green.
+
 ## 2026-06-16 — B12: accounts widget config schema
 
 - Registered an `accounts` widget schema: a "count" Number (default 6, clamped [3,12]) and a "cleared"

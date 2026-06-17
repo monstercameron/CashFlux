@@ -48,4 +48,12 @@ func init() {
 			{Key: "cleared", Label: "Show cleared balance only", Type: Toggle, Default: "false"},
 		},
 	})
+	register(Schema{
+		WidgetID: "budgets",
+		Title:    "Budgets",
+		Fields: []Field{
+			{Key: "count", Label: "Budgets to show", Type: Number, Default: "6", Min: 3, Max: 20},
+			{Key: "atRisk", Label: "Show only near or over budget", Type: Toggle, Default: "false"},
+		},
+	})
 }
