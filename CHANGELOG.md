@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend blobs are content-addressed.** Server storage now writes artifact bytes under sha256
+  path-sharded filenames, records blob metadata, links blobs to workspaces, verifies reads, and sweeps
+  unreferenced blobs for future artifact sync.
 - **Backend snapshot storage retains recovery history.** Server storage now writes current workspace
   snapshots, preserves prior versions in last-N history, and rejects oversized dataset payloads before
   they reach SyncService.

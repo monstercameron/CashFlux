@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: backend blob store
+
+- Added content-addressed blob storage for the backend: sha256 hashing, path-sharded files, metadata
+  upsert, verified reads, workspace links, and a GC sweep for blobs with no workspace references.
+- Covered dedupe/idempotence, linked-vs-unlinked sweep behavior, oversized rejection, and hash-mismatch
+  detection with native server tests.
+
 ## 2026-06-18 - feat: backend snapshot store
 
 - Added server snapshot methods for opaque gzipped dataset payloads: put current, get current, list

@@ -1,6 +1,9 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -149,6 +152,83 @@ func TestSnapshotStoreCanDropHistory(t *testing.T) {
 	}
 	if len(history) != 0 {
 		t.Fatalf("history with limit 0 = %+v, want empty", history)
+	}
+}
+
+func TestBlobStoreContentAddressingLinksAndGC(t *testing.T) {
+	s := openTestStore(t)
+	root := filepath.Join(t.TempDir(), "blobs")
+	now := time.Date(2026, time.June, 18, 16, 50, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+
+	data := []byte("receipt bytes")
+	blob, err := s.PutBlob(root, data, "image/png", "receipt.png", 1024)
+	if err != nil {
+		t.Fatalf("PutBlob: %v", err)
+	}
+	wantHash := sha256.Sum256(data)
+	if blob.Hash != hex.EncodeToString(wantHash[:]) || blob.Size != int64(len(data)) || blob.Mime != "image/png" {
+		t.Fatalf("blob metadata = %+v", blob)
+	}
+	read, err := s.ReadBlob(root, blob.Hash)
+	if err != nil {
+		t.Fatalf("ReadBlob: %v", err)
+	}
+	if string(read) != string(data) {
+		t.Fatalf("read blob = %q, want %q", read, data)
+	}
+	if err := s.LinkWorkspaceBlob("w1", blob.Hash); err != nil {
+		t.Fatalf("LinkWorkspaceBlob: %v", err)
+	}
+	linked, err := s.WorkspaceBlobs("w1")
+	if err != nil {
+		t.Fatalf("WorkspaceBlobs: %v", err)
+	}
+	if len(linked) != 1 || linked[0].Hash != blob.Hash {
+		t.Fatalf("linked blobs = %+v", linked)
+	}
+	deleted, err := s.SweepUnreferencedBlobs(root)
+	if err != nil {
+		t.Fatalf("Sweep linked: %v", err)
+	}
+	if deleted != 0 {
+		t.Fatalf("deleted linked blobs = %d, want 0", deleted)
+	}
+	if _, err := s.db.Exec(`DELETE FROM workspace_blobs WHERE workspace_id = ? AND hash = ?`, "w1", blob.Hash); err != nil {
+		t.Fatalf("unlink blob: %v", err)
+	}
+	deleted, err = s.SweepUnreferencedBlobs(root)
+	if err != nil {
+		t.Fatalf("Sweep unlinked: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted unlinked blobs = %d, want 1", deleted)
+	}
+	if _, ok, err := s.GetBlob(blob.Hash); err != nil || ok {
+		t.Fatalf("blob metadata after sweep = ok %v err %v, want missing", ok, err)
+	}
+}
+
+func TestBlobStoreRejectsOversizedAndHashMismatch(t *testing.T) {
+	s := openTestStore(t)
+	root := filepath.Join(t.TempDir(), "blobs")
+	blob, err := s.PutBlob(root, []byte("abc"), "text/plain", "a.txt", 16)
+	if err != nil {
+		t.Fatalf("PutBlob: %v", err)
+	}
+	if _, err := s.PutBlob(root, []byte("too big"), "text/plain", "big.txt", 2); err == nil {
+		t.Fatal("oversized blob accepted")
+	}
+	if err := os.WriteFile(blobPath(root, blob.Hash), []byte("tampered"), 0o600); err != nil {
+		t.Fatalf("tamper blob: %v", err)
+	}
+	if _, err := s.ReadBlob(root, blob.Hash); err == nil {
+		t.Fatal("hash-mismatched blob read accepted")
 	}
 }
 

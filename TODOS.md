@@ -3940,7 +3940,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Repository layer with table-driven tests on native Go (no transport/proto deps).
 - [x] Snapshot store: put/get current, retain last **N** prior snapshots per workspace (LWW recovery),
       enforce a dataset size cap.
-- [ ] Blob metadata + on-disk **content-addressed** store (sha256, path-sharded); `workspace_blobs`
+- [x] Blob metadata + on-disk **content-addressed** store (sha256, path-sharded); `workspace_blobs`
       refcount; GC sweep for unreferenced blobs.
 - [ ] `ai_keys`: AES-GCM encrypt/decrypt helper; master key from env/secret manager; rotation note.
 - [ ] `usage`: per-user/day request + token counters; helpers for rate-limit checks.

@@ -1,9 +1,13 @@
 package server
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -36,6 +40,15 @@ type Snapshot struct {
 	Dataset     []byte
 	Version     int64
 	UpdatedAt   time.Time
+}
+
+// Blob is content-addressed artifact metadata. Bytes live on disk by hash.
+type Blob struct {
+	Hash      string
+	Size      int64
+	Mime      string
+	Name      string
+	CreatedAt time.Time
 }
 
 // UpsertUser stores an OAuth identity, keyed by provider+subject.
@@ -236,6 +249,140 @@ func (s *Store) SnapshotHistory(workspaceID string, limit int) ([]Snapshot, erro
 	return out, nil
 }
 
+// PutBlob stores bytes under a sha256 content-addressed path and records metadata.
+func (s *Store) PutBlob(root string, data []byte, mime, name string, maxBytes int64) (Blob, error) {
+	if maxBytes > 0 && int64(len(data)) > maxBytes {
+		return Blob{}, fmt.Errorf("server store: blob is %d bytes, exceeds limit %d", len(data), maxBytes)
+	}
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	blob := Blob{
+		Hash:      hash,
+		Size:      int64(len(data)),
+		Mime:      strings.TrimSpace(mime),
+		Name:      strings.TrimSpace(name),
+		CreatedAt: time.Now().UTC(),
+	}
+	path := blobPath(root, hash)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return Blob{}, fmt.Errorf("server store: blob mkdir: %w", err)
+	}
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			return Blob{}, fmt.Errorf("server store: blob write: %w", err)
+		}
+	} else if err != nil {
+		return Blob{}, fmt.Errorf("server store: blob stat: %w", err)
+	}
+	if _, err := s.db.Exec(`
+INSERT INTO blobs(hash, size, mime, created_at)
+VALUES(?, ?, ?, ?)
+ON CONFLICT(hash) DO UPDATE SET size = excluded.size, mime = excluded.mime`,
+		blob.Hash, blob.Size, blob.Mime, formatTime(blob.CreatedAt)); err != nil {
+		return Blob{}, fmt.Errorf("server store: put blob metadata: %w", err)
+	}
+	return blob, nil
+}
+
+// ReadBlob reads content-addressed blob bytes from disk.
+func (s *Store) ReadBlob(root, hash string) ([]byte, error) {
+	if _, ok, err := s.GetBlob(hash); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, os.ErrNotExist
+	}
+	data, err := os.ReadFile(blobPath(root, hash))
+	if err != nil {
+		return nil, fmt.Errorf("server store: blob read: %w", err)
+	}
+	sum := sha256.Sum256(data)
+	if hex.EncodeToString(sum[:]) != hash {
+		return nil, fmt.Errorf("server store: blob hash mismatch")
+	}
+	return data, nil
+}
+
+// GetBlob returns stored blob metadata.
+func (s *Store) GetBlob(hash string) (Blob, bool, error) {
+	row := s.db.QueryRow(`SELECT hash, size, mime, created_at FROM blobs WHERE hash = ?`, hash)
+	blob, err := scanBlob(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Blob{}, false, nil
+	}
+	if err != nil {
+		return Blob{}, false, err
+	}
+	return blob, true, nil
+}
+
+// LinkWorkspaceBlob records that a workspace snapshot references a blob hash.
+func (s *Store) LinkWorkspaceBlob(workspaceID, hash string) error {
+	if strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(hash) == "" {
+		return fmt.Errorf("server store: workspace id and blob hash are required")
+	}
+	if _, err := s.db.Exec(`INSERT OR IGNORE INTO workspace_blobs(workspace_id, hash) VALUES(?, ?)`, workspaceID, hash); err != nil {
+		return fmt.Errorf("server store: link workspace blob: %w", err)
+	}
+	return nil
+}
+
+// WorkspaceBlobs returns blob metadata linked to a workspace.
+func (s *Store) WorkspaceBlobs(workspaceID string) ([]Blob, error) {
+	rows, err := s.db.Query(`
+SELECT b.hash, b.size, b.mime, b.created_at
+FROM blobs b
+JOIN workspace_blobs wb ON wb.hash = b.hash
+WHERE wb.workspace_id = ?
+ORDER BY b.hash`, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("server store: workspace blobs: %w", err)
+	}
+	defer rows.Close()
+	var out []Blob
+	for rows.Next() {
+		blob, err := scanBlob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, blob)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: workspace blobs rows: %w", err)
+	}
+	return out, nil
+}
+
+// SweepUnreferencedBlobs deletes metadata and files for blobs no workspace references.
+func (s *Store) SweepUnreferencedBlobs(root string) (int, error) {
+	rows, err := s.db.Query(`
+SELECT b.hash, b.size, b.mime, b.created_at
+FROM blobs b
+LEFT JOIN workspace_blobs wb ON wb.hash = b.hash
+WHERE wb.hash IS NULL`)
+	if err != nil {
+		return 0, fmt.Errorf("server store: unreferenced blobs: %w", err)
+	}
+	defer rows.Close()
+	var blobs []Blob
+	for rows.Next() {
+		blob, err := scanBlob(rows)
+		if err != nil {
+			return 0, err
+		}
+		blobs = append(blobs, blob)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("server store: unreferenced blob rows: %w", err)
+	}
+	for _, blob := range blobs {
+		_ = os.Remove(blobPath(root, blob.Hash))
+		if _, err := s.db.Exec(`DELETE FROM blobs WHERE hash = ?`, blob.Hash); err != nil {
+			return 0, fmt.Errorf("server store: delete blob metadata: %w", err)
+		}
+	}
+	return len(blobs), nil
+}
+
 func trimSnapshotHistory(tx *sql.Tx, workspaceID string, limit int) error {
 	if limit <= 0 {
 		if _, err := tx.Exec(`DELETE FROM snapshot_history WHERE workspace_id = ?`, workspaceID); err != nil {
@@ -263,6 +410,10 @@ type workspaceScanner interface {
 }
 
 type snapshotScanner interface {
+	Scan(dest ...any) error
+}
+
+type blobScanner interface {
 	Scan(dest ...any) error
 }
 
@@ -305,4 +456,25 @@ func scanSnapshot(row snapshotScanner) (Snapshot, error) {
 	}
 	snapshot.UpdatedAt = t
 	return snapshot, nil
+}
+
+func scanBlob(row blobScanner) (Blob, error) {
+	var blob Blob
+	var created string
+	if err := row.Scan(&blob.Hash, &blob.Size, &blob.Mime, &created); err != nil {
+		return Blob{}, err
+	}
+	t, err := parseTime(created)
+	if err != nil {
+		return Blob{}, fmt.Errorf("server store: parse blob created_at: %w", err)
+	}
+	blob.CreatedAt = t
+	return blob, nil
+}
+
+func blobPath(root, hash string) string {
+	if len(hash) < 4 {
+		return filepath.Join(root, hash)
+	}
+	return filepath.Join(root, hash[:2], hash[2:4], hash)
 }
