@@ -58,6 +58,8 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Account rows are less cluttered (C9):** the six per-row actions are now Transactions / Edit / ✕ inline
+  plus a **⋯ overflow menu** holding the secondary actions (Update balance / Mark updated / Archive).
 - **Parent-category budgets now include sub-category spend (D5):** a budget on a parent category (e.g.
   "Food") counts spend in its sub-categories (e.g. "Groceries", "Restaurants") too, rolling the subtree
   up. Period and per-owner scope are still respected, and reparenting a sub-category moves its spend to

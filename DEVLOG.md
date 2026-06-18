@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — C9: accounts-row overflow menu
+
+- Account rows exposed six actions each — visually busy. Kept the primary three inline (Transactions /
+  Edit / ✕) and moved Update balance / Mark updated / Archive into a "⋯" overflow menu, reusing the C23
+  popover CSS (.add-wrap/.add-menu/.add-item/.add-backdrop/.hidden-menu) — no new styles.
+- AccountRow is its own component, so the menu state (`menuOpen` UseState) + toggle/close/secondary
+  handlers register as hooks at the top (unconditional); the menu is always rendered and CSS-toggled, and
+  the secondary handlers now also close the menu. Made `archTitle` the archive item's tooltip.
+- Verified live (in-app nav to /accounts): rows show a ⋯ that opens with [Update balance, Mark updated,
+  Archive]; hidden→shown on click.
+
 ## 2026-06-18 — feature D6 (envelope): carry-forward budgeting view
 
 - User said to grind until every TODO is done and stop pausing for direction (recorded in

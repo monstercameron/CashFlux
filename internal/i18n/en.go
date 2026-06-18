@@ -550,6 +550,7 @@ var english = Catalog{
 	"accounts.updateBalance":      "Update balance",
 	"accounts.updateBalanceTitle": "Set the real balance; posts an adjustment",
 	"accounts.markUpdated":        "Mark updated",
+	"accounts.moreActions":        "More actions",
 	"accounts.markUpdatedTitle":   "Mark balance as checked today",
 	"accounts.editTitle":          "Edit account",
 	"accounts.deleteTitle":        "Delete account",

@@ -415,11 +415,18 @@ func AccountRow(props accountRowProps) ui.Node {
 	a := props.Account
 	dec := currency.Decimals(a.Currency)
 
+	// Secondary actions live in a "⋯" overflow menu so each row stays uncluttered
+	// (primary: Transactions / Edit / ✕); selecting one closes the menu (C9).
+	menuOpen := ui.UseState(false)
+	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
+	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
+
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(a.ID) }))
-	arch := ui.UseEvent(Prevent(func() { props.OnArchive(a) }))
-	refresh := ui.UseEvent(Prevent(func() { props.OnRefresh(a) }))
+	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
+	refresh := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnRefresh(a) }))
 	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
 	setBal := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
 		if v := promptText(uistate.T("accounts.setBalancePrompt", a.Name, a.Currency)); v != "" {
 			props.OnSetBalance(a, props.Balance, v)
 		}
@@ -533,6 +540,10 @@ func AccountRow(props accountRowProps) ui.Node {
 	if props.Cleared.Amount != props.Balance.Amount {
 		meta += uistate.T("accounts.clearedSuffix", fmtMoney(props.Cleared))
 	}
+	menuHidden := ""
+	if !menuOpen.Get() {
+		menuHidden = " hidden-menu"
+	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), a.Name,
@@ -541,11 +552,18 @@ func AccountRow(props accountRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
+		// Primary actions inline; everything else in the ⋯ menu.
 		Button(Class("btn"), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uistate.T("nav.transactions")),
-		If(!a.Archived, Button(Class("btn"), Type("button"), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uistate.T("accounts.updateBalance"))),
-		If(!a.Archived, Button(Class("btn"), Type("button"), Title(uistate.T("accounts.markUpdatedTitle")), OnClick(refresh), uistate.T("accounts.markUpdated"))),
 		Button(Class("btn"), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
-		Button(Class("btn"), Type("button"), Title(archTitle), OnClick(arch), archLabel),
+		Div(Class("add-wrap"),
+			Button(Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), OnClick(toggleMenu), "⋯"),
+			Div(Class("add-backdrop"+menuHidden), OnClick(closeMenu)),
+			Div(Class("add-menu"+menuHidden), Attr("role", "menu"),
+				If(!a.Archived, Button(Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),
+				If(!a.Archived, Button(Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
+				Button(Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
+			),
+		),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("accounts.deleteTitle")), OnClick(del), "✕"),
 	)
 }

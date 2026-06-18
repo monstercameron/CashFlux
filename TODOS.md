@@ -601,8 +601,9 @@ Add button — no visible swatch/label, looks broken.
 - [x] **Accounts** add/edit row: shortened the asset placeholders ("Return %"/"Liquidity"/"Stability")
       and added full-label `title`s with the range, so they no longer clip. (The `.form-grid` already
       wraps the ~9 inputs.)
-- [ ] **Accounts** rows expose 6 actions each (Transactions / Update balance / Mark updated / Edit /
-      Archive / ✕) — visually busy; consider an overflow menu for secondary actions.
+- [x] **Accounts** rows: moved the secondary actions into a "⋯" overflow menu. Primary stays inline
+      (Transactions / Edit / ✕); the menu holds Update balance / Mark updated / Archive (reusing the
+      C23 popover CSS). Verified live: /accounts rows show a ⋯ that opens with the three secondary items.
 - [x] **Goals** add form's current-amount field — already labelled with a "Saved so far" placeholder
       (stale report; verified in current code).
 - [x] **Categories** now show their color (an 11px swatch on each row) and let you set it — the Add
