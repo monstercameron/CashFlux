@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Bills rail icon (B22)
+
+- Added a Lucide calendar `icon.Bills` and wired `/bills` into `railMeta` with the `nav.bills` key, so the
+  Bills screen shows a calendar glyph instead of the neutral page icon. Updated the icon curated-set test
+  (18→19). Native icon test green, wasm build green.
+
+## 2026-06-18 - feat: guard backend AI proxy calls
+
+- Added AI proxy abuse guards to `server.AIService`: configured model allow-list, request JSON size cap, and
+  per-user daily request/token ceilings. The guards run before loading the encrypted OpenAI key or calling the
+  upstream provider, so rejected requests do not expose secrets or spend tokens.
+- Added env-backed config: `CASHFLUX_SERVER_AI_MODELS`, `CASHFLUX_SERVER_AI_REQUEST_MAX_BYTES`,
+  `CASHFLUX_SERVER_AI_REQUESTS_PER_DAY`, and `CASHFLUX_SERVER_AI_TOKENS_PER_DAY`.
+- Tests cover disallowed models, oversized requests, daily request/token caps, and the HTTP endpoint mapping.
+
 ## 2026-06-18 — feat: Bills screen — wire the B22 core into the UI (B22, step 2)
 
 - New `screens.Bills()` registered as `/bills` in the Tools group: runs `bills.Upcoming(accounts, now)`,

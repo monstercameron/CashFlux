@@ -13,7 +13,8 @@ and every commit updates this file under `Unreleased`.
   on Feb 28/29) and days-until, soonest first. Pure, table-tested.
 - **Bills screen (B22).** A new **Bills** item in the Tools nav lists those upcoming payments — name, next
   due date, how soon it's due ("due today / tomorrow / in N days"), and the amount — with the total due
-  soon and the next due date up top. Read-only; the month calendar and mark-paid come next.
+  soon and the next due date up top. It has its own calendar icon in the rail. Read-only; the month
+  calendar and mark-paid come next.
 - **Subscriptions detection — the pure core (B25, internal).** New `internal/subscriptions` package that
   finds recurring charges in your transaction history: it groups identical repeated expenses, infers a
   cadence (weekly / monthly / yearly) from the spacing between them, and reports each one's normalized
@@ -351,6 +352,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend AI proxy now enforces abuse guards.** Server-side OpenAI calls can be constrained with an
+  allow-list of model IDs, max request-body bytes, and per-user daily request/token caps before the encrypted
+  BYO key is loaded or an upstream call is made.
 - **Screen registry routes through i18n (copy pass).** The `screens.go` route registry hardcoded every
   screen's nav label, page title, and subtitle in English. Labels/titles now hold the existing `nav.*` keys and
   subtitles hold new `screen.*Sub` keys; the shell resolves them via `uistate.T` at render. The custom-page
