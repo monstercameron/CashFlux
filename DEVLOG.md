@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Cover the untested store CRUD wrappers (76% → 81%)
+
+- Coverage sweep on persistence. `store` was 76.2%; the per-function profile showed the Get/Delete/List (and
+  some Put) wrappers for **Member, Category, Transaction, Budget, Goal, Task** at 0% — the existing CRUD
+  tests covered Account/Rule/Document/SavedInsight/Recurring/AllocProfile/Formula/Plan/CustomFieldDef but not
+  these six core entities.
+- Added `crud_more_test.go`: a Put → Get → List → Delete → Get-absent round-trip per entity, following the
+  existing `TestAccountCRUD` shape (and `newStore(t)` helper). `store` → **81.4%**.
+- The residual is `sqlitestore.go` infra (NewMemory/Load/Snapshot/replaceRows) and the generic helpers'
+  marshal/scan error arms — DB-failure paths that need fault injection to hit; deferred as low-value.
+
 ## 2026-06-18 — Raise id test coverage (73% → 91%)
 
 - Coverage sweep. `id` was 72.7%; the gaps were the **package-level** `NewWithPrefix` (0% — the existing

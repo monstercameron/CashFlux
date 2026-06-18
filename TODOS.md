@@ -1157,6 +1157,16 @@ results are summarized here so the backlog doesn't bloat.
     longer truncated "Expected returr").
   - [ ] Minor remaining (C9): Goals add form still has an **unlabeled "0" field** (current amount) — give
     it a placeholder/label.
+- **2026-06-18 #18** — Full-route SPA error sweep + re-checks.
+  - ✅ **Clean sweep:** all 14 routes (SPA-navigated, SW warm) load with one `<h1>` each and **0
+    console/network/pageerror** events — no regressions from the recent batch of fixes.
+  - ⚠️ **C28 (icons) STILL OPEN — correcting a false positive.** A quick `outerHTML.slice(0,80)` check
+    suggested `viewbox` was gone, but the reliable signals disagree: the icon's child shape paints at
+    **`childPaintedBox:[0,0]`** and a **screenshot shows the rail is still text-only (no icons)**. The
+    SVG still isn't rendering. _Harness lesson: don't trust a truncated-HTML string check for the
+    `viewBox` casing — assert on a child shape's painted size (or screenshot), since `hasAttribute` is
+    case-insensitive here and reports both `viewBox`/`viewbox` true._
+  - ⚠️ **Members "Add member" via button still no-ops** ("Sam" not added) — unchanged.
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.
