@@ -1573,7 +1573,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Import a CSV/image; assert rows are categorized by first-match rule; assert budget/breakdown reflect it.
 - [ ] "Apply to existing"; assert pre-existing uncategorized txns get categorized.
 - [ ] Assert a shadowed/never-fires rule shows the conflict warning.
-- [ ] unit: `rules.FirstMatch`/`Conflicts` + `ApplyRules` retroactive path.
+- [x] unit: `rules.FirstMatch`/`Conflicts` + `ApplyRules` retroactive path.
 
 #### D21. Document import → review → dedupe → ledger → derived figures ★
 **Workstream:** import via CSV and via image (vision), review, dedupe, import to ledger, and verify downstream.

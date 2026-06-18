@@ -87,9 +87,17 @@ func TestApplyRules(t *testing.T) {
 		return domain.Transaction{ID: id, AccountID: "a1", Desc: desc, CategoryID: cat, Date: time.Now(), Amount: money.New(-500, "USD")}
 	}
 	for _, tx := range []domain.Transaction{
-		mk("t1", "Uber ride home", ""),       // matches, uncategorized → updated
-		mk("t2", "Uber Eats dinner", "food"), // matches but already categorized → untouched
-		mk("t3", "Grocery store", ""),        // no match → stays uncategorized
+		mk("t1", "Uber ride home", ""),       // matches, uncategorized -> updated
+		mk("t2", "Uber Eats dinner", "food"), // matches but already categorized -> untouched
+		mk("t3", "Grocery store", ""),        // no match -> stays uncategorized
+		{
+			ID: "t4", AccountID: "a1", TransferAccountID: "a2", Desc: "Uber transfer",
+			Date: time.Now(), Amount: money.New(-500, "USD"),
+		},
+		{
+			ID: "t5", AccountID: "a1", Desc: "Uber rewards", Tags: []string{"existing"},
+			Date: time.Now(), Amount: money.New(-500, "USD"),
+		},
 	} {
 		if err := a.PutTransaction(tx); err != nil {
 			t.Fatalf("PutTransaction %s: %v", tx.ID, err)
@@ -100,8 +108,8 @@ func TestApplyRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplyRules: %v", err)
 	}
-	if n != 1 {
-		t.Errorf("updated = %d, want 1", n)
+	if n != 2 {
+		t.Errorf("updated = %d, want 2", n)
 	}
 	byID := map[string]domain.Transaction{}
 	for _, tx := range a.Transactions() {
@@ -115,6 +123,12 @@ func TestApplyRules(t *testing.T) {
 	}
 	if byID["t3"].CategoryID != "" {
 		t.Errorf("t3 should stay uncategorized, got %q", byID["t3"].CategoryID)
+	}
+	if byID["t4"].CategoryID != "" {
+		t.Errorf("t4 transfer should be skipped, got %q", byID["t4"].CategoryID)
+	}
+	if got := byID["t5"]; got.CategoryID != "transport" || len(got.Tags) != 1 || got.Tags[0] != "existing" {
+		t.Errorf("t5 should be categorized while preserving existing tags: %+v", got)
 	}
 }
 

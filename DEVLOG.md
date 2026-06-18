@@ -65,6 +65,8 @@ problems and fixes, and what's next.
   pre-existing transaction tags are preserved.
 - The pure `rules.FirstMatch` and `rules.Conflicts` tests already covered ordering/shadowing, so this closes
   the remaining retroactive `ApplyRules` path.
+- Rechecked after the B17.1 quote/greeting commit landed and kept a fresh docs delta for the atomic rules
+  test/TODO commit.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 

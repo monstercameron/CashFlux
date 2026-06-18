@@ -40,6 +40,8 @@ and every commit updates this file under `Unreleased`.
   autopost catch-up has an exact no-double-count regression test.
 - **Rules retroactive coverage.** `ApplyRules` now has regression coverage for transfer exclusion and
   preserving existing tags while applying the first matching category retroactively.
+- **Rules TODO closeout.** The retroactive rules test commit now carries its own post-B17 docs delta with
+  the completed checklist item, after the lock-screen quote commit landed.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
