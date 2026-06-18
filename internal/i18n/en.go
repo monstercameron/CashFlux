@@ -716,11 +716,19 @@ var english = Catalog{
 	"todo.deleteTitle":      "Delete task",
 
 	// Custom pages
-	"pages.notFound":     "That page doesn't exist. It may have been deleted.",
-	"pages.empty":        "This page is empty. Add a widget to get started.",
-	"pages.sectionTitle": "My pages",
-	"pages.newPrompt":    "Name your new page",
-	"pages.newDefault":   "My page",
+	"pages.notFound":      "That page doesn't exist. It may have been deleted.",
+	"pages.empty":         "This page is empty. Add a widget to get started.",
+	"pages.sectionTitle":  "My pages",
+	"pages.newPrompt":     "Name your new page",
+	"pages.newDefault":    "My page",
+	"pages.menu":          "Page options",
+	"pages.rename":        "Rename",
+	"pages.renamePrompt":  "Rename this page",
+	"pages.hide":          "Hide from sidebar",
+	"pages.show":          "Show in sidebar",
+	"pages.delete":        "Delete page",
+	"pages.deleteConfirm": "Delete this page and its widgets? This can't be undone.",
+	"pages.hiddenSection": "Hidden pages",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

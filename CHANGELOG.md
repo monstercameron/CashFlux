@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom pages — page management:** each "My pages" entry now has a "⋯" menu to **rename** (re-slugs and
+  follows the page), **hide/show** (a "Hidden pages" sub-section brings hidden ones back), and **delete**
+  (with confirm). Rounds out Phase A page management alongside create + drag-reorder.
 - **Custom pages — "My pages" rail group:** the sidebar now has a "My pages" section listing your custom
   pages in order, each navigating to `/p/<slug>`, with a "New page" action that names + creates a page
   (unique slug) and jumps to it. Pages are drag-reorderable (persists their order). Built on the pure
