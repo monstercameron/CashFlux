@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: empty-state CTAs for transactions + categories (§6.5, batch 2)
+
+- Extended `EmptyStateCTA` to transactions (truly-empty case only — the filtered no-match case keeps a
+  plain line, since adding wouldn't help) and to both category lists (expense/income), each focusing the
+  shared add-name field (`txn-add`, `cat-add`). New `transactions.addFirst` and
+  `categories.addFirst{Expense,Income}` i18n keys.
+- That covers the meaningful "add your first" empty states. Remaining bare empties (artifacts, custom
+  fields, workflows, planning, documents history, allocate) are either tool outputs or have no single
+  add-form to jump to — left as plain lines intentionally. Build green, gofmt clean.
+
 ## 2026-06-18 — feat: empty-state call-to-action blocks (§6.5, batch 1)
 
 - Empty lists were a bare `P(Class("empty"), …)` line. Added a reusable `EmptyStateCTA` component

@@ -132,7 +132,7 @@ func Categories() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("categories.add")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
+			Input(append([]any{Class("field"), Attr("id", "cat-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
 			Select(Class("field"), OnChange(onKind), kindOptions),
 			Select(Class("field"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
 			Input(Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(color.Get()), OnInput(onColor)),
@@ -206,11 +206,11 @@ func Categories() ui.Node {
 		reassignPanel,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("categories.expenseTitle")),
-			IfElse(len(expenseList) == 0, P(Class("empty"), uistate.T("categories.expenseEmpty")), Div(Class("rows"), MapKeyed(categorytree.Flatten(expenseList), flatKey, renderFlat))),
+			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), FocusID: "cat-add"}), Div(Class("rows"), MapKeyed(categorytree.Flatten(expenseList), flatKey, renderFlat))),
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("categories.incomeTitle")),
-			IfElse(len(incomeList) == 0, P(Class("empty"), uistate.T("categories.incomeEmpty")), Div(Class("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
+			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), FocusID: "cat-add"}), Div(Class("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
 		),
 	)
 }

@@ -384,7 +384,7 @@ func Transactions() ui.Node {
 		formCard = Section(Class("card"),
 			H2(Class("card-title"), uistate.T("transactions.addTitle")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)}, errAttrs("txn-err", errMsg.Get())...)...),
+				Input(append([]any{Class("field"), Attr("id", "txn-add"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)}, errAttrs("txn-err", errMsg.Get())...)...),
 				Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(Class("field"), OnChange(onKind), kindOptions),
 				Select(Class("field"), Title(accLabel), OnChange(onAcc), accOptions),
@@ -437,7 +437,7 @@ func Transactions() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(txns) == 0:
-		listBody = P(Class("empty"), uistate.T("transactions.empty"))
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), FocusID: "txn-add"})
 	case len(shown) == 0:
 		listBody = P(Class("empty"), uistate.T("transactions.noMatch"))
 	default:

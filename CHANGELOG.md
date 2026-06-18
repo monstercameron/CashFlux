@@ -7,9 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Empty lists now invite you to add the first item (§6.5).** Goals, budgets, to-do, members, and rules
-  show a centered "Add your first…" button on their empty state that jumps the cursor straight to the add
-  form, instead of just a bare line of grey text.
+- **Empty lists now invite you to add the first item (§6.5).** Goals, budgets, to-do, members, rules,
+  transactions, and both category lists show a centered "Add your first…" button on their empty state
+  that jumps the cursor straight to the add form, instead of just a bare line of grey text. (A filtered
+  list that matches nothing still shows a plain "no matches" line — that's a filter result, not an empty
+  account.)
 - **Custom-page widgets are now fully arrangeable and editable.** Each widget tile gained a drag handle
   (drop onto another tile to reorder), width/height resize buttons (↔ / ↕ cycle the span), an **edit**
   button (✎ — change the title and binding/config in place), and the existing delete. Reorder + resize
