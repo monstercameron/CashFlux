@@ -240,6 +240,8 @@ func Sidebar() uic.Node {
 					})
 				},
 			),
+			// The user's custom pages ("My pages"): listing, create, and reorder.
+			uic.CreateElement(CustomPagesNav),
 		),
 		// The household card is the single Settings entry point (opens the global panel).
 		uic.CreateElement(HouseholdCard),

@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom pages — "My pages" rail group:** the sidebar now has a "My pages" section listing your custom
+  pages in order, each navigating to `/p/<slug>`, with a "New page" action that names + creates a page
+  (unique slug) and jumps to it. Pages are drag-reorderable (persists their order). Built on the pure
+  `internal/pages` logic and the existing `navItem` (so click, drag, and the collapsed-rail flyout all
+  work). Rename/delete/hide management and the page's widget grid follow.
 - **Custom pages — screen + routing:** a generic `screens.CustomPage(slug)` renders a user-authored page,
   resolved by slug from app state, with friendly empty/not-found states (the bento grid of widgets lands in
   Phase B). All custom pages ride a single `/p/:slug` pattern route registered at startup, so new pages are

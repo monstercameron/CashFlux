@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: custom pages — "My pages" rail group (Phase A cont.)
+
+- Added `internal/app/custompagesnav.go` (`CustomPagesNav`): renders the "My pages" rail section from
+  `appstate.CustomPages()` via `pages.Visible`, each row a `navItem` to `/p/<slug>` (so click/drag/flyout
+  reuse the built-in nav), plus a "New page" action (prompt → `pages.UniqueSlug` + `id.New` + `NextOrder` →
+  `PutCustomPage` → navigate). Drag-reorder persists via `pages.Reorder` + `PutCustomPage`. Wired into
+  `Sidebar` with one line after the System group.
+- Gotcha: a component rendered via `CreateElement` that returns a **bare `Fragment`** did NOT keep its
+  sibling position among the `MapKeyed` rail groups — "My pages" jumped to the top of the rail. Returning a
+  single root `Div` fixed the ordering (verified: section now sits after System, above the household card).
+  Worth remembering for any rail/section component.
+- Verified in a headless browser (built to `web/bin/main.wasm`, `gwc serve`, Edge screenshot): "My pages"
+  + "New page" render with icons in the correct spot. (Create flow uses `window.prompt`, which headless
+  blocks, so that path is logic-verified rather than click-verified.)
+- Concurrency: the parallel workspaces agent had already committed its rail switcher + i18n; my
+  `shell.go`/`en.go` hunks were cleanly just-mine on top, so this committed without entangling its code.
+- Next (Phase A wrap): rename/delete/hide page management; then Phase B (widget engine + grid rendering).
+
 ## 2026-06-18 — feat: workspaces — Phases 2+3 (engine + UI), wired & browser-verified
 
 - Phase 2 (engine, `internal/app/workspace.go`): the active workspace keeps using the canonical `cashflux:*`

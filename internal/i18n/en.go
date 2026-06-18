@@ -719,6 +719,8 @@ var english = Catalog{
 	"pages.notFound":     "That page doesn't exist. It may have been deleted.",
 	"pages.empty":        "This page is empty. Add a widget to get started.",
 	"pages.sectionTitle": "My pages",
+	"pages.newPrompt":    "Name your new page",
+	"pages.newDefault":   "My page",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.
