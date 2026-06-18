@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom pages — screen + routing:** a generic `screens.CustomPage(slug)` renders a user-authored page,
+  resolved by slug from app state, with friendly empty/not-found states (the bento grid of widgets lands in
+  Phase B). All custom pages ride a single `/p/:slug` pattern route registered at startup, so new pages are
+  reachable without mutating the router after mount. Adds `pages.*` i18n strings.
+- **Workspaces — multiple independent contexts with quick switching:** one user can now keep several
+  separate workspaces (e.g. real money vs. an experimental sandbox), each with its **own dataset and UI/
+  layout**. A picker at the top of the sidebar shows the active workspace and lets you **switch**, create a
+  **+ New workspace** (seeded with the sample), or **duplicate** the current one; **Settings → Workspaces**
+  manages rename/delete. Switching swaps *everything* except your **OpenAI key**, which stays available
+  across workspaces. Existing data migrates automatically into a "Default" workspace on first load. Under
+  the hood the active workspace lives in the canonical `localStorage` keys and inactive ones are bundled
+  under `cashflux:ws-data:<id>`; switching restores the bundle and reloads so boot rehydrates cleanly.
 - **Custom pages — persistence:** custom pages now round-trip through the store. Added a `custompages`
   table, the `Dataset.CustomPages` field, `Load`/`Snapshot` wiring, `Put/Get/Delete/ListCustomPage(s)`
   CRUD, and `appstate` accessors (`CustomPages`, validated `PutCustomPage`, `DeleteCustomPage`). The
