@@ -876,10 +876,11 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
       export's `*_id` headers — appstate resolves any **names** to ids case-insensitively. The UI strips
       the `store:` prefix from import errors. `documents.csvDesc` updated (currency optional, names or IDs).
       New table tests: default-currency + friendly columns, and id-wins-over-name.
-- [ ] **Vision category names don't match the app's categories** — the model returns "Food & Drink" but
-      the household category is "Food", so name-matching ("Categories are matched by name") likely imports
-      these uncategorized. Fix: fuzzy/alias category matching, or constrain the vision prompt/schema to the
-      user's existing category names, or offer a per-row category picker in review.
+- [x] **Vision category names don't match the app's categories** — improved with a fuzzy fallback in the
+      import: after the exact (case-insensitive) name match fails, accept a substring match either way
+      ("Food & Drink" ↔ "Food", min length 3, categories scanned in order for determinism) before falling
+      through to the auto-rules. Handles the reported near-name case. (Constraining the vision prompt to
+      the user's category list, or a per-row picker, remain as possible further hardening.)
 - [x] **Review-row amounts use a minus sign** — FIXED. The draft review rows now format the amount
       through `fmtMoney` (the unified accounting formatter, parentheses for negatives) in the chosen import
       account's currency (falling back to base), with a raw-string fallback while the value is unparseable.

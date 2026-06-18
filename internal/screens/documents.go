@@ -197,6 +197,20 @@ func Documents() ui.Node {
 			}
 			desc := strings.TrimSpace(r.Description)
 			cid := catByName[strings.ToLower(r.Category)]
+			// Fuzzy fallback: the model often returns a near-name ("Food & Drink"
+			// for the user's "Food"), so if the exact name doesn't match, accept a
+			// substring match either way (min length 3 to avoid spurious hits),
+			// scanning categories in order for determinism (C27).
+			if cid == "" && strings.TrimSpace(r.Category) != "" {
+				aiCat := strings.ToLower(strings.TrimSpace(r.Category))
+				for _, c := range app.Categories() {
+					cn := strings.ToLower(c.Name)
+					if len(cn) >= 3 && (strings.Contains(aiCat, cn) || strings.Contains(cn, aiCat)) {
+						cid = c.ID
+						break
+					}
+				}
+			}
 			var tags []string
 			if cid == "" {
 				if mr := rules.FirstMatch(autoRules, desc); mr != nil {

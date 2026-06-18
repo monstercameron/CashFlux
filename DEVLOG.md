@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C27: vision category near-name matching
+
+- The receipt-import path matched the AI's category string to a household category by exact (lowercased)
+  name, so "Food & Drink" missed "Food" and imported uncategorized. Added a fuzzy fallback between the
+  exact match and the existing auto-rules fallback: substring match either direction (min length 3 to
+  avoid spurious hits like a one-letter category), scanning `app.Categories()` in order for determinism.
+- Chose the contained post-processing fix over constraining the vision prompt to the category list (a
+  bigger AI-call change) — noted prompt-constraint and a per-row picker as further hardening. Route-gated
+  screen + AI call, so verified by reasoning + build.
+
 ## 2026-06-17 — bugfix C27: "Save as task" title
 
 - Saving an AI insight as a to-do used the whole first sentence of the answer (truncated to 80 runes) as

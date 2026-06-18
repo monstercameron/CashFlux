@@ -54,6 +54,10 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Receipt import matches near-miss category names (C27):** the vision model often returns a near-name
+  ("Food & Drink") for a household category ("Food"), which previously imported uncategorized. Imports now
+  fall back to a substring match (either direction, min 3 chars, deterministic order) before the
+  auto-rules, so close category names land in the right category.
 - **"Save as task" gives the to-do a sensible title (C27):** saving an AI insight used the entire first
   sentence of the answer as the task title (long, truncated). The title is now the question you asked
   (or a short "Money insight" label for "Explain my month"), with the full answer kept in the notes.
