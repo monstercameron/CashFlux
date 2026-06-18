@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend auth handshake documented.** `docs/BACKEND_PLAN.md` now spells out how the Settings backend URL is
+  used for HTTP routes and converted to the GoGRPCBridge `/grpc` websocket target, and how the same bearer token
+  flows through HTTP `Authorization` and gRPC metadata.
 - **Authenticated blob HTTP endpoints started.** The backend now exposes bearer-protected `PUT`, `GET`, and
   `HEAD /v1/blobs/{hash}` endpoints that enforce claimed SHA-256 hashes, request-size caps, content-addressed
   SQLite/file storage, immutable cache headers, and CORS preflight support.

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - docs: document backend auth handshake
+
+- Updated `docs/BACKEND_PLAN.md` from plan-only language to backend-foundation-in-progress and documented the
+  concrete transport split: HTTP keeps the configured backend base URL, while gRPC converts it to the `/grpc`
+  ws/wss bridge target.
+- Documented the bearer-token contract shared by HTTP and gRPC: `Authorization: Bearer <token>` for HTTP,
+  `authorization: Bearer <token>` metadata for unary/stream RPCs, and the current token-mode server validation.
+- Brought the artifact endpoint docs in line with the implemented `PUT`/`GET`/`HEAD /v1/blobs/:hash` shape.
+
 ## 2026-06-18 - feat: add authenticated blob endpoints
 
 - Added bearer-protected `PUT`, `GET`, and `HEAD /v1/blobs/{hash}` routes. Uploads are capped by

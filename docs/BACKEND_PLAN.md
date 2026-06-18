@@ -1,6 +1,6 @@
 # CashFlux Backend — Design Plan
 
-> Status: **plan only, no code.** A thin server for two jobs: **dataset sync** and an
+> Status: backend foundation in progress. A thin server for two jobs: **dataset sync** and an
 > **AI API proxy**. All business logic stays in the wasm client; the app remains
 > local-first and fully usable offline — the backend is an optional sync/proxy tier.
 
@@ -62,12 +62,33 @@ debounced autosave and on reconnect; pull on load and on tab focus; apply the ne
 > recovery. A later, cheap upgrade is optimistic concurrency (client sends its base
 > `version`; server 409s on mismatch) without changing the wire format.
 
+## Transport and auth handshake
+CashFlux uses one user-facing backend base URL in Settings. The client derives two transports from it:
+
+- **HTTP JSON/blob routes:** use the configured base URL directly, e.g. `http://127.0.0.1:8081/v1/version`,
+  `/v1/ai/key`, and `/v1/blobs/{hash}`.
+- **gRPC bridge routes:** convert the same base URL to a websocket `/grpc` target (`http` → `ws`, `https` →
+  `wss`) and dial it with GoGRPCBridge `BuildTunnelConn`.
+
+The same access token is carried on both surfaces:
+
+- HTTP routes send `Authorization: Bearer <token>`.
+- gRPC calls send outgoing metadata `authorization: Bearer <token>` on every unary and streaming RPC.
+- The server hashes the bearer token into a stable token-mode user id, validates it in constant time against
+  `CASHFLUX_SERVER_TOKEN`, and attaches the authenticated user to the request/RPC context.
+
+Self-hosted token mode uses this flow directly. OAuth mode will issue short-lived access tokens through the
+HTTP login/refresh endpoints, then the client will carry those tokens through the same HTTP header and gRPC
+metadata slots.
+
 ## Artifacts (content-addressed blobs)
 Keeps the synced snapshot small even with images/datasets.
 - Client computes `sha256` of artifact bytes; the dataset stores
   `{id, hash, mime, size, name}` only (no `Bytes`).
-- `POST /v1/blobs` (idempotent; skips if hash exists) → stored by hash.
+- `PUT  /v1/blobs/:hash` (idempotent; skips if hash exists) → verifies the bytes hash to `:hash`, enforces
+  `CASHFLUX_SERVER_BLOB_MAX_BYTES`, and stores by hash.
 - `GET  /v1/blobs/:hash` → bytes (cacheable, immutable).
+- `HEAD /v1/blobs/:hash` → existence and metadata.
 - Sync transfers only the small dataset; blobs upload on save and download on demand,
   deduped by hash across workspaces. Refcount via `workspace_blobs`; GC unreferenced.
 
