@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Raise formula test coverage (89% → 93%)
+
+- Coverage sweep, the sandboxed expression engine. `formula` was 88.7%; the existing tests covered the
+  happy paths well, but several type-coercion/edge branches were untested: `asNumber`'s bool case,
+  `truthy`'s string case, `evalBinary`'s string `!=` and the cannot-compare error, the unary `+`, and a few
+  function arity/type errors (avg/min/max empty, round arity, a string passed to a numeric function).
+- Added `eval_edge_test.go` driving each through `Eval`: bool→number coercion via `(2>1)+10`, unary `+`,
+  `if("x",…)`/`if("",…)` for the string truthiness, `"a" != "b"`, and the error set (`"a" == 1`, `avg()`,
+  `min()`, `max()`, `round(1,2)`, `sum("x")`). `formula` → **92.7%** (`asNumber` 100%). The residual is
+  genuinely unreachable: `truthy`/`eval` default arms and the unknown-operator branch can't fire because
+  Values are only float/string/bool and the parser only emits known operators.
+
 ## 2026-06-18 — Raise ledger test coverage (87% → 94%)
 
 - Next package in the coverage sweep. `ledger` was 86.5%; the misses were the error branches of the
