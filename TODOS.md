@@ -1582,7 +1582,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Import the same rows again; assert same-date+amount dedupe skips them and reports the count.
 - [ ] (Image path, key set) assert vision extraction → review edits → import; assert an Import-history entry.
 - [ ] Assert imported txns update Spending KPI, budgets, and the monthly-spend summary.
-- [ ] unit: `extract` parsing/dedupe + CSV column mapping.
+- [x] unit: `extract` parsing/dedupe + CSV column mapping.
 
 #### D22. Custom fields + formula over live figures
 **Workstream:** define a custom field, fill it on an entity, and reference live figures in a saved formula.

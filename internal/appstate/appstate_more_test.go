@@ -153,4 +153,35 @@ func TestTransactionsCSVAndImport(t *testing.T) {
 	if n != 1 {
 		t.Errorf("imported %d, want 1", n)
 	}
+
+	if err := b.PutCategory(domain.Category{ID: "food", Name: "Dining", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory(b): %v", err)
+	}
+	if err := b.PutMember(domain.Member{ID: "m1", Name: "Alex"}); err != nil {
+		t.Fatalf("PutMember(b): %v", err)
+	}
+	reordered := []byte("amount,member,category,account,date,payee,desc,tags,cleared\n-12.34,alex,dining,checking,2026-06-18,Bistro,Dinner,meal;work,true\n")
+	n, err = b.ImportTransactionsCSV(reordered)
+	if err != nil {
+		t.Fatalf("ImportTransactionsCSV reordered: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("friendly-name import count = %d, want 1", n)
+	}
+	var imported domain.Transaction
+	for _, tx := range b.Transactions() {
+		if tx.Payee == "Bistro" {
+			imported = tx
+			break
+		}
+	}
+	if imported.AccountID != "a1" || imported.CategoryID != "food" || imported.MemberID != "m1" {
+		t.Errorf("friendly columns resolved to account/category/member = %q/%q/%q", imported.AccountID, imported.CategoryID, imported.MemberID)
+	}
+	if imported.Amount.Amount != -1234 || imported.Amount.Currency != "USD" {
+		t.Errorf("amount = %+v, want -12.34 USD", imported.Amount)
+	}
+	if imported.Date.Format("2006-01-02") != "2026-06-18" || !imported.Cleared || len(imported.Tags) != 2 || imported.Tags[1] != "work" {
+		t.Errorf("date/cleared/tags not mapped: %+v", imported)
+	}
 }

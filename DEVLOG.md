@@ -117,6 +117,13 @@ problems and fixes, and what's next.
 - Rechecked after the B17.1 unlock animation landed; keeping the staged formula/custom-field test and TODO
   checkbox paired with fresh docs.
 
+## 2026-06-18 — test: extract/CSV column mapping
+
+- Extended the CSV import round-trip test with a hand-written, reordered header using friendly
+  `account`/`category`/`member` names.
+- The test asserts those names resolve to IDs and the imported row keeps amount, date, cleared state, and
+  semicolon-separated tags, complementing the existing `extract.ParseRows` parsing/dedupe tests.
+
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 
 - Closed the D15 pure ledger unit-test checklist item by extracting `ledger.AdjustmentToTarget` and covering
