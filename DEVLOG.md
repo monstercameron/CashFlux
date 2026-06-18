@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Subscriptions rail icon (B25, step 3)
+
+- Added a Lucide "repeat" `icon.Subscriptions` and wired `/subscriptions` into `railMeta` with the
+  `nav.subscriptions` key, so the screen shows a recurring-cycle glyph instead of the neutral page icon.
+  Updated the icon curated-set test (17→18). gofmt realigned the (now wider) `railMeta` and icon maps.
+  Native icon test green, wasm build green.
+
 ## 2026-06-18 — chore: route settings.go strings through i18n (copy pass, file 1)
 
 - First file in the "all text through i18n + improve copy" sweep. `internal/app/settings.go` had ~16 hardcoded
