@@ -3,12 +3,35 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: complete custom-page widget management (reorder/resize/edit)
+
+- Closed the last custom-page gaps from the plan: widgets were add/delete only. Added, in `custompage.go`:
+  - **Reorder:** each tile header is a drag handle; dropping on another tile calls `dashlayout.Move` over
+    the page's layout (drag source held in `CustomPage`, drop callbacks passed per tile). Persisted.
+  - **Resize:** ↔ / ↕ header buttons cycle width (max 4) / height (max 3) via `dashlayout.CycleSpan` +
+    `ResizeItem`. `ensureLayout` synthesizes default 1×1 entries for widgets missing a layout row so
+    reorder/resize always have something to operate on.
+  - **Edit:** an ✎ button toggles an inline `editWidgetForm` in the tile body — edit title + the type's
+    binding (KPI formula+format, list source, text, artifact) and save back into the page. All field hooks
+    run unconditionally (per-type control just picks which to show), so the hooks-in-loops rule holds.
+- All pure layout ops were already tested (`dashlayout`); browser-verified the tile chrome (grip/↔/↕/✎/✕)
+  renders on a seeded page. wasm builds, `go test ./...` green.
+- This completes the custom-page feature: pages (create/rename/hide/delete/reorder), widgets (add/edit/
+  delete/reorder/resize) of all six types, artifacts, and the workflow engine.
+
 ## 2026-06-18 - test: transfer paired delete
 
 - Moved reciprocal transfer-leg deletion from the wasm Transactions screen into appstate so the behavior is
   native-testable and reusable from any delete caller.
 - Added a regression that deletes one transfer leg, removes only its exact reciprocal, and keeps a same-account
   decoy on another date plus a standalone transaction.
+
+## 2026-06-18 - test: freshness dismissal state
+
+- Added pure freshness dismissal state keyed by account ID. A dismissed stale nudge stays hidden for the
+  current balance timestamp, then becomes eligible again once the balance is marked updated and later ages stale.
+- Wired the Dashboard Freshness widget to persist dismissals in localStorage and added a Dismiss action beside
+  the existing Remind flow.
 
 ## 2026-06-18 — fix: hide the left-rail scrollbar (C31)
 

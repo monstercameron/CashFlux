@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom-page widgets are now fully arrangeable and editable.** Each widget tile gained a drag handle
+  (drop onto another tile to reorder), width/height resize buttons (↔ / ↕ cycle the span), an **edit**
+  button (✎ — change the title and binding/config in place), and the existing delete. Reorder + resize
+  persist in the page's layout via the pure `dashlayout` engine. This completes custom-page widget
+  management (add / edit / delete / reorder / resize).
 - **Pause the lock without losing your passcode (B17).** Settings → App lock has a **Lock screen** switch
   that turns the gate off while keeping the passcode — flip it back on and no re-entry is needed (distinct
   from "Remove passcode lock", which clears it). A paused lock won't gate at startup or auto-lock. Backed by
@@ -67,6 +72,8 @@ and every commit updates this file under `Unreleased`.
   behavior for budget methodology, including the absence of member-level methodology overrides.
 - **Transfer delete pairing coverage.** Appstate now owns deleting the reciprocal leg of a transfer, with
   regression coverage that leaves unrelated same-account transfer decoys intact.
+- **Freshness nudge dismissal coverage.** The dashboard freshness nudge is now dismissible, persisted per
+  account, and backed by pure tests that reset the dismissal after a balance update.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

@@ -135,12 +135,13 @@ var english = Catalog{
 	"applock.statusSuspended": "Paused — your passcode is kept, but the lock screen is off.",
 
 	// Common actions (shared across screens)
-	"action.add":    "Add",
-	"action.save":   "Save",
-	"action.cancel": "Cancel",
-	"action.delete": "Delete",
-	"action.edit":   "Edit",
-	"action.close":  "Close",
+	"action.add":     "Add",
+	"action.save":    "Save",
+	"action.cancel":  "Cancel",
+	"action.delete":  "Delete",
+	"action.edit":    "Edit",
+	"action.close":   "Close",
+	"action.dismiss": "Dismiss",
 
 	// Shared
 	"common.notReady":      "App state is not ready yet.",
@@ -803,6 +804,9 @@ var english = Catalog{
 	"pages.textContent":    "Text to show",
 	"pages.chartDefault":   "Shows your net-worth trend.",
 	"pages.deleteWidget":   "Remove widget",
+	"pages.editWidget":     "Edit widget",
+	"pages.resizeWidth":    "Cycle width",
+	"pages.resizeHeight":   "Cycle height",
 	"pages.unknownWidget":  "Unknown widget type.",
 	"pages.pickSource":     "Pick a data source.",
 	"pages.noData":         "Nothing to show yet.",

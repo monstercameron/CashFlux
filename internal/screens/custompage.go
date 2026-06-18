@@ -47,11 +47,55 @@ func CustomPage(slug string) ui.Node {
 		return Section(Class("card"), P(Class("empty"), uistate.T("pages.notFound")))
 	}
 
-	// A version counter forces a re-render after a mutation (add/delete widget)
-	// that doesn't change the route.
+	// A version counter forces a re-render after a mutation (add/delete/resize/
+	// reorder widget) that doesn't change the route.
 	version := ui.UseState(0)
 	_ = version.Get()
 	refresh := func() { version.Set(version.Get() + 1) }
+
+	// dragSrc holds the id of the widget being dragged, so a drop on another tile
+	// can reorder the page's layout. Held here so it survives across the tiles.
+	dragSrc := ui.UseState("")
+
+	// reorderWidget moves the dragged widget in front of the drop target in the
+	// page's layout, then persists. resizeWidget cycles a widget's width/height.
+	reorderWidget := func(targetID string) {
+		src := dragSrc.Get()
+		dragSrc.Set("")
+		if src == "" || src == targetID {
+			return
+		}
+		pg, ok := pages.ByID(app.CustomPages(), page.ID)
+		if !ok {
+			return
+		}
+		pg.Layout = ensureLayout(pg)
+		pg.Layout = dashlayout.Move(pg.Layout, src, layoutIndex(pg.Layout, targetID))
+		_ = app.PutCustomPage(pg)
+		refresh()
+	}
+	resizeWidget := func(id string, widthAxis bool) {
+		pg, ok := pages.ByID(app.CustomPages(), page.ID)
+		if !ok {
+			return
+		}
+		pg.Layout = ensureLayout(pg)
+		for _, it := range pg.Layout {
+			if it.ID != id {
+				continue
+			}
+			col, row := it.ColSpan, it.RowSpan
+			if widthAxis {
+				col = dashlayout.CycleSpan(col, 4, false)
+			} else {
+				row = dashlayout.CycleSpan(row, 3, false)
+			}
+			pg.Layout = dashlayout.ResizeItem(pg.Layout, id, col, row)
+			break
+		}
+		_ = app.PutCustomPage(pg)
+		refresh()
+	}
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -93,8 +137,13 @@ func CustomPage(slug string) ui.Node {
 		if has {
 			col, row = p.GridColumn(), p.GridRow()
 		}
+		id := w.ID
 		tiles = append(tiles, ui.CreateElement(customTile, customTileProps{
 			PageID: page.ID, Widget: w, Ctx: ctx, GridColumn: col, GridRow: row, Refresh: refresh,
+			OnDragStart: func() { dragSrc.Set(id) },
+			OnDrop:      func() { reorderWidget(id) },
+			OnResizeW:   func() { resizeWidget(id, true) },
+			OnResizeH:   func() { resizeWidget(id, false) },
 		}))
 	}
 
@@ -105,20 +154,28 @@ func CustomPage(slug string) ui.Node {
 }
 
 type customTileProps struct {
-	PageID     string
-	Widget     domain.PageWidget
-	Ctx        pageCtx
-	GridColumn string
-	GridRow    string
-	Refresh    func()
+	PageID      string
+	Widget      domain.PageWidget
+	Ctx         pageCtx
+	GridColumn  string
+	GridRow     string
+	Refresh     func()
+	OnDragStart func()
+	OnDrop      func()
+	OnResizeW   func()
+	OnResizeH   func()
 }
 
-// customTile renders one widget instance as a bento cell: a header with the title
-// and a delete button, and a body produced by the type's renderer. It's its own
-// component so the delete-click hook stays stable across the widget list.
+// customTile renders one widget instance as a bento cell. Its header is a drag
+// handle (drop onto another tile to reorder), with width/height resize buttons, an
+// edit toggle, and a delete button; the body is the type's renderer, or an inline
+// edit form while editing. It's its own component so its hooks (edit state, click
+// handlers) stay stable across the widget list.
 func customTile(props customTileProps) ui.Node {
 	w := props.Widget
 	pageID := props.PageID
+	editing := ui.UseState(false)
+
 	del := func() {
 		app := appstate.Default
 		if app == nil {
@@ -141,15 +198,205 @@ func customTile(props customTileProps) ui.Node {
 		title = widgetTypeLabel(w.Type)
 	}
 
+	// The header doubles as the drag handle for reordering.
+	header := Div(Class("wh"),
+		Attr("draggable", "true"),
+		OnDragStart(func() {
+			if props.OnDragStart != nil {
+				props.OnDragStart()
+			}
+		}),
+		OnDragOver(Prevent(func() {})),
+		OnDrop(Prevent(func() {
+			if props.OnDrop != nil {
+				props.OnDrop()
+			}
+		})),
+		Span(Class("grip cursor-grab"), "⠿"),
+		H3(title),
+		Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeWidth")),
+			OnClick(func() {
+				if props.OnResizeW != nil {
+					props.OnResizeW()
+				}
+			}), "↔"),
+		Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeHeight")),
+			OnClick(func() {
+				if props.OnResizeH != nil {
+					props.OnResizeH()
+				}
+			}), "↕"),
+		Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.editWidget")),
+			OnClick(func() { editing.Set(!editing.Get()) }), "✎"),
+		Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.deleteWidget")),
+			OnClick(del), "✕"),
+	)
+
+	var body ui.Node
+	if editing.Get() {
+		body = ui.CreateElement(editWidgetForm, editWidgetFormProps{
+			PageID: pageID, Widget: w, Ctx: props.Ctx,
+			OnDone: func() {
+				editing.Set(false)
+				if props.Refresh != nil {
+					props.Refresh()
+				}
+			},
+		})
+	} else {
+		body = widgetBody(w, props.Ctx)
+	}
+
 	return Div(Class("w"),
 		Attr("style", "grid-column:"+props.GridColumn+";grid-row:"+props.GridRow),
-		Div(Class("wh"),
-			Span(Class("grip"), ""),
-			H3(title),
-			Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.deleteWidget")),
-				OnClick(del), "✕"),
+		header,
+		Div(Class("wbody"), body),
+	)
+}
+
+// layoutIndex returns the position of id in items, or 0 if absent (so a drop falls
+// to the front rather than erroring).
+func layoutIndex(items []dashlayout.Item, id string) int {
+	for i, it := range items {
+		if it.ID == id {
+			return i
+		}
+	}
+	return 0
+}
+
+// ensureLayout returns the page's layout, synthesizing a default 1×1 entry for any
+// widget missing one (older pages or after an add), so reorder/resize always have
+// a layout to operate on.
+func ensureLayout(p domain.CustomPage) []dashlayout.Item {
+	have := map[string]bool{}
+	out := append([]dashlayout.Item(nil), p.Layout...)
+	for _, it := range out {
+		have[it.ID] = true
+	}
+	for _, w := range p.Widgets {
+		if !have[w.ID] {
+			out = append(out, dashlayout.Item{ID: w.ID, ColSpan: 1, RowSpan: 1})
+		}
+	}
+	return out
+}
+
+type editWidgetFormProps struct {
+	PageID string
+	Widget domain.PageWidget
+	Ctx    pageCtx
+	OnDone func()
+}
+
+// editWidgetForm is the inline editor shown in a tile while editing: it edits the
+// widget's title and its one binding (KPI formula + format, list source, text,
+// or artifact), then saves the change back into the page. Its own component so its
+// field hooks are stable; all hooks run unconditionally (the per-type control just
+// picks which states to show).
+func editWidgetForm(props editWidgetFormProps) ui.Node {
+	w := props.Widget
+	title := ui.UseState(w.Title)
+	expr := ui.UseState(w.Binding.Expr)
+	format := ui.UseState(w.Config["format"])
+	source := ui.UseState(w.Binding.Source)
+	text := ui.UseState(w.Config["text"])
+	artifact := ui.UseState(w.Binding.ArtifactID)
+
+	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
+	onExpr := ui.UseEvent(func(v string) { expr.Set(v) })
+	onText := ui.UseEvent(func(v string) { text.Set(v) })
+	onFormat := ui.UseEvent(func(e ui.Event) { format.Set(e.GetValue()) })
+	onSource := ui.UseEvent(func(e ui.Event) { source.Set(e.GetValue()) })
+	onArtifact := ui.UseEvent(func(e ui.Event) { artifact.Set(e.GetValue()) })
+
+	save := func() {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		pg, ok := pages.ByID(app.CustomPages(), props.PageID)
+		if !ok {
+			return
+		}
+		for i := range pg.Widgets {
+			if pg.Widgets[i].ID != w.ID {
+				continue
+			}
+			nw := pg.Widgets[i]
+			nw.Title = title.Get()
+			if nw.Config == nil {
+				nw.Config = map[string]string{}
+			}
+			switch nw.Type {
+			case widgetspec.TypeKPI:
+				nw.Binding.Expr = expr.Get()
+				nw.Config["format"] = format.Get()
+			case widgetspec.TypeList:
+				nw.Binding.Source = source.Get()
+			case widgetspec.TypeText:
+				nw.Config["text"] = text.Get()
+			case widgetspec.TypeImage, widgetspec.TypeTable:
+				nw.Binding.ArtifactID = artifact.Get()
+			}
+			pg.Widgets[i] = nw
+			break
+		}
+		_ = app.PutCustomPage(pg)
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	}
+
+	// The binding control depends on the widget type.
+	var bindCtl ui.Node
+	switch w.Type {
+	case widgetspec.TypeKPI:
+		bindCtl = Div(Class("flex flex-col gap-1"),
+			Input(Class("field"), Attr("placeholder", uistate.T("pages.kpiFormula")), Value(expr.Get()), OnInput(onExpr)),
+			Select(Class("field"), OnChange(onFormat),
+				Option(Value("number"), SelectedIf(format.Get() == "number"), "number"),
+				Option(Value("percent"), SelectedIf(format.Get() == "percent"), "percent"),
+				Option(Value("currency"), SelectedIf(format.Get() == "currency"), "currency"),
+			),
+		)
+	case widgetspec.TypeList:
+		opts := make([]ui.Node, 0)
+		for _, d := range widgetspec.ListSources() {
+			opts = append(opts, Option(Value(d.Type), SelectedIf(source.Get() == d.Type), d.Label))
+		}
+		bindCtl = Select(Class("field"), OnChange(onSource), opts)
+	case widgetspec.TypeText:
+		bindCtl = Input(Class("field"), Attr("placeholder", uistate.T("pages.textContent")), Value(text.Get()), OnInput(onText))
+	case widgetspec.TypeImage, widgetspec.TypeTable:
+		opts := []ui.Node{Option(Value(""), uistate.T("pages.chooseArtifact"))}
+		if appstate.Default != nil {
+			for _, a := range appstate.Default.Artifacts() {
+				if w.Type == widgetspec.TypeImage && a.Kind != artifacts.KindImage {
+					continue
+				}
+				if w.Type == widgetspec.TypeTable && a.Kind == artifacts.KindImage {
+					continue
+				}
+				opts = append(opts, Option(Value(a.ID), SelectedIf(artifact.Get() == a.ID), a.Name))
+			}
+		}
+		bindCtl = Select(Class("field"), OnChange(onArtifact), opts)
+	default:
+		bindCtl = P(Class("muted"), uistate.T("pages.chartDefault"))
+	}
+
+	return Div(Class("flex flex-col gap-2"),
+		Input(Class("field"), Attr("placeholder", uistate.T("pages.widgetTitle")), Value(title.Get()), OnInput(onTitle)),
+		bindCtl,
+		Div(Class("flex gap-2"),
+			Button(Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("action.save")),
+			Button(Class("btn"), Type("button"), OnClick(func() {
+				if props.OnDone != nil {
+					props.OnDone()
+				}
+			}), uistate.T("action.cancel")),
 		),
-		Div(Class("wbody"), widgetBody(w, props.Ctx)),
 	)
 }
 
