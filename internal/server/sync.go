@@ -15,6 +15,14 @@ type SyncService struct {
 	store *Store
 }
 
+// PutWorkspaceResult reports the server-side result of a LWW workspace put.
+type PutWorkspaceResult struct {
+	Accepted  bool
+	Workspace Workspace
+	Version   int64
+	UpdatedAt time.Time
+}
+
 // NewSyncService builds the server-side workspace sync service.
 func NewSyncService(store *Store) *SyncService {
 	return &SyncService{store: store}
@@ -47,6 +55,55 @@ func (s *SyncService) Get(ctx context.Context, workspaceID string) (Workspace, b
 		return Workspace{}, false, fmt.Errorf("server sync: get workspace: %w", err)
 	}
 	return workspace, ok, nil
+}
+
+// PutWorkspace applies last-write-wins workspace updates scoped to the authenticated user.
+func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, clientUpdatedAt time.Time, force bool, serverNow time.Time) (PutWorkspaceResult, error) {
+	user, err := syncUser(ctx)
+	if err != nil {
+		return PutWorkspaceResult{}, err
+	}
+	if strings.TrimSpace(workspace.ID) == "" || strings.TrimSpace(workspace.Name) == "" {
+		return PutWorkspaceResult{}, status.Error(codes.InvalidArgument, "workspace id and name are required")
+	}
+	owner, owned, err := s.store.WorkspaceOwner(workspace.ID)
+	if err != nil {
+		return PutWorkspaceResult{}, fmt.Errorf("server sync: workspace owner: %w", err)
+	}
+	if owned && owner != user.ID {
+		return PutWorkspaceResult{}, status.Error(codes.NotFound, "workspace not found")
+	}
+	current, exists, err := s.store.GetWorkspace(user.ID, workspace.ID)
+	if err != nil {
+		return PutWorkspaceResult{}, fmt.Errorf("server sync: get current workspace: %w", err)
+	}
+	if exists && !force && clientUpdatedAt.Before(current.UpdatedAt) {
+		return PutWorkspaceResult{
+			Accepted:  false,
+			Workspace: current,
+			Version:   current.Version,
+			UpdatedAt: current.UpdatedAt,
+		}, nil
+	}
+	if serverNow.IsZero() {
+		serverNow = time.Now().UTC()
+	}
+	workspace.UserID = user.ID
+	workspace.UpdatedAt = serverNow.UTC()
+	if exists {
+		workspace.Version = current.Version + 1
+	} else {
+		workspace.Version = 1
+	}
+	if err := s.store.PutWorkspace(workspace); err != nil {
+		return PutWorkspaceResult{}, fmt.Errorf("server sync: put workspace: %w", err)
+	}
+	return PutWorkspaceResult{
+		Accepted:  true,
+		Workspace: workspace,
+		Version:   workspace.Version,
+		UpdatedAt: workspace.UpdatedAt,
+	}, nil
 }
 
 // Delete writes a user-scoped workspace tombstone.

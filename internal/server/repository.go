@@ -152,6 +152,18 @@ FROM workspaces WHERE user_id = ? AND id = ?`, userID, workspaceID)
 	return w, true, nil
 }
 
+func (s *Store) WorkspaceOwner(workspaceID string) (string, bool, error) {
+	var userID string
+	err := s.db.QueryRow(`SELECT user_id FROM workspaces WHERE id = ?`, workspaceID).Scan(&userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("server store: workspace owner: %w", err)
+	}
+	return userID, true, nil
+}
+
 // SoftDeleteWorkspace marks a user's workspace as deleted.
 func (s *Store) SoftDeleteWorkspace(userID, workspaceID string, updatedAt time.Time, deviceID string) (bool, error) {
 	if updatedAt.IsZero() {

@@ -57,6 +57,53 @@ func TestSyncServiceListGetDeleteAreUserScoped(t *testing.T) {
 	}
 }
 
+func TestSyncServicePutWorkspaceLWW(t *testing.T) {
+	store := openTestStore(t)
+	service := NewSyncService(store)
+	now := time.Date(2026, time.June, 18, 18, 30, 0, 0, time.UTC)
+	seedSyncUser(t, store, "u1", now)
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
+
+	result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home", Color: "blue"}, now, false, now.Add(time.Minute))
+	if err != nil || !result.Accepted || result.Version != 1 || !result.UpdatedAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("initial PutWorkspace = %+v/%v", result, err)
+	}
+	stale, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Stale"}, now.Add(-time.Hour), false, now.Add(2*time.Minute))
+	if err != nil || stale.Accepted {
+		t.Fatalf("stale PutWorkspace = %+v/%v, want reject", stale, err)
+	}
+	if stale.Workspace.Name != "Home" || stale.Version != 1 || !stale.UpdatedAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("stale result current state = %+v", stale)
+	}
+	fresh, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Fresh", Color: "green"}, now.Add(time.Minute), false, now.Add(3*time.Minute))
+	if err != nil || !fresh.Accepted || fresh.Version != 2 {
+		t.Fatalf("fresh PutWorkspace = %+v/%v", fresh, err)
+	}
+	forced, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Forced"}, now.Add(-time.Hour), true, now.Add(4*time.Minute))
+	if err != nil || !forced.Accepted || forced.Version != 3 {
+		t.Fatalf("forced PutWorkspace = %+v/%v", forced, err)
+	}
+}
+
+func TestSyncServicePutWorkspaceRejectsCrossUserIDTakeover(t *testing.T) {
+	store := openTestStore(t)
+	service := NewSyncService(store)
+	now := time.Date(2026, time.June, 18, 18, 45, 0, 0, time.UTC)
+	seedSyncUser(t, store, "u1", now)
+	seedSyncUser(t, store, "u2", now)
+	if err := store.PutWorkspace(Workspace{ID: "shared", UserID: "u2", Name: "Other", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace seed: %v", err)
+	}
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
+	if _, err := service.PutWorkspace(ctx, Workspace{ID: "shared", Name: "Takeover"}, now, true, now.Add(time.Minute)); status.Code(err) != codes.NotFound {
+		t.Fatalf("cross-user PutWorkspace = %v, want not found", err)
+	}
+	workspace, ok, err := store.GetWorkspace("u2", "shared")
+	if err != nil || !ok || workspace.Name != "Other" {
+		t.Fatalf("cross-user workspace after rejected put = %+v/%v/%v", workspace, ok, err)
+	}
+}
+
 func TestSyncServiceRequiresAuthenticatedUser(t *testing.T) {
 	service := NewSyncService(openTestStore(t))
 	if _, err := service.List(context.Background(), false); status.Code(err) != codes.Unauthenticated {
