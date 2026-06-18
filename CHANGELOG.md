@@ -298,6 +298,8 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Disabled buttons now read as disabled (UX audit §6.4).** Shared `.btn` disabled styling dims inactive
+  actions, suppresses hover brightening, and switches the cursor to `not-allowed`.
 - **Upcoming bill dates honor the display preference (UX audit §6.3).** The dashboard bills widget now uses
   the shared date formatter instead of hardcoding `Jan 2`.
 - **"When a transaction is added" workflows now fire from every add path (was: quick-add only).** The

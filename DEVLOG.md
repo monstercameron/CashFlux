@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.4 — disabled button state
+
+- Closed the shared disabled-button style item in `web/index.html`: `.btn:disabled` and
+  `.btn[aria-disabled="true"]` now dim, use `cursor:not-allowed`, and suppress hover brightening.
+- Targets existing real disabled buttons such as Insights' "Thinking" state without changing screen logic.
+
 ## 2026-06-18 — feat: theme + sidebar toggle commands in the palette
 
 - Added "Toggle light / dark theme" and "Collapse / expand sidebar" to the Cmd+K palette — standard
