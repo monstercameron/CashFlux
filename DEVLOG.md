@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Raise id test coverage (73% → 91%)
+
+- Coverage sweep. `id` was 72.7%; the gaps were the **package-level** `NewWithPrefix` (0% — the existing
+  tests only exercised the `Generator` method and package-level `New`) and the method's error path.
+- Added `id_edge_test.go` (reusing the existing `errReader`/`errBoom` helpers): the crypto/rand-backed
+  `NewWithPrefix("acc")` happy path and the generator's `NewWithPrefix` error propagation. `id` → **90.9%**.
+  The residual is the two `panic`-on-randomness-failure branches in the package-level `New`/`NewWithPrefix`,
+  unreachable without injecting a failing source into the fixed default generator (not worth a test seam).
+
 ## 2026-06-18 — domain enums to 100% coverage
 
 - Coverage sweep, the foundational types. `domain` was 85.5%; the misses were the default (invalid) arms of
