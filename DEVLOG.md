@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — extract dashboard "recent transactions" into tested ledger.Recent
+
+- New vein of work the user's "keep going" surfaced: pure logic still embedded in the wasm-only view
+  packages (0% native coverage), against CLAUDE.md's "never put computation in view code". Swept `screens`
+  for pure helpers; `recentTransactions` (copy → sort newest-first → take N) was the most logic-bearing.
+- Moved it to `ledger.Recent(txns, n)` (`recent.go`) — ledger is pure and transaction-focused, and `screens`
+  already imports it (no cycle). Added a negative-n guard (the inline version would panic on n<0). Table
+  tests in `recent_test.go`: ordering, top-N limit, n>len returns all, n≤0 empty, and input not mutated.
+  Rewired `dashboard.go` to call it; removed the local copy. ledger tests + wasm build green.
+- More such helpers remain in `screens` (parseTags, parseWeight/trimWeight, validateRuleInput, plural, …);
+  I'll extract the logic-bearing ones over subsequent commits.
+
 ## 2026-06-18 — widgetcfg IDs() to 100%
 
 - Last pure package under 90%. `widgetcfg` was 88.1% with one untested function, `IDs()` (the sorted

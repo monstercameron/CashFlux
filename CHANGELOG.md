@@ -69,6 +69,10 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **"Recent transactions" logic moved into the tested ledger package (internal):** the dashboard's
+  newest-first/top-N transaction selection lived in the wasm-only view (`dashboard.go`) with no tests. It's
+  now `ledger.Recent(txns, n)` — pure and table-tested (ordering, limit, n≤0, no input mutation) — with a
+  negative-n guard added (the old inline version would have panicked). No behavior change for valid input.
 - **Dashboard span math moved into the tested layout package (internal):** the tile resize grow/shrink/clamp
   arithmetic lived in the wasm-only view (`internal/ui/widget.go`) with no tests, against the project rule
   that computation belongs in pure, unit-tested packages. It's now `dashlayout.CycleSpan`/`dashlayout.ClampSpan`

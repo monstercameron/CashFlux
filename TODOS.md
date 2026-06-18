@@ -1227,6 +1227,26 @@ results are summarized here so the backlog doesn't bloat.
   C28 nav-icon child paints `[0,0]` (still not rendering); Members "Add member" button no-op ("Pat" not
   added); Rules "Add" no-op ("disney" not added). No regressions elsewhere. _These three are the standing
   open defects; will spot-check periodically rather than every sweep._
+- **2026-06-18 #26** — Responsive re-check at 390px (0 console errors). **C10 — RESOLVED.** No horizontal
+  overflow (`scrollWidth=390=viewport`); the rail auto-collapses to a **58px icon strip**; content reflows
+  to a clean **single column** (top-bar controls stack vertically; bento widgets stack full-width; money
+  formatted: $20,749.25 / $4,200.00 / $1,800.75). The earlier "severe, unusable on phone" state is gone.
+  - [ ] **Caveat — coupled to C28:** the collapsed mobile rail shows **blank icons** (C28), so mobile
+    navigation is effectively invisible until icons render. Fixing C28 unblocks mobile nav usability.
+  - [ ] Minor: on mobile the top-bar controls (Week/Month/Quarter · Jump to · stepper · Custom range · +
+    Add) each take a full row, pushing content well down — consider condensing on narrow screens.
+- **2026-06-18 #27** — Keyboard a11y (B15), 0 console errors. **All good:**
+  - ✅ First **Tab focuses the "Skip to content" link** (correct focus order).
+  - ✅ Settings opens as `role="dialog"`; **Escape closes it**; Tabbing moves focus through the dialog's
+    own controls (focus is managed inside the panel).
+  - [ ] Not exhaustively verified: full **focus *trap*** (Tab wrapping at the last element back into the
+    dialog vs. escaping to the page) — still a B15 TODO; spot-checks look managed but confirm the wrap.
+- **2026-06-18 #28** — Period control drives data (0 console errors). ✅ **Works.** Jump-to presets
+  present (This period / Last period / This quarter / Year to date — B10). Selecting **"Last period"**
+  re-windowed the dashboard from **Jun 2026 (1 deposit)** → **May 2026 (0 deposits, spending $0)** —
+  correct, since sample data is all June. Re-corroborates the **C1 fix** (Jun income counted: 1 deposit).
+- **2026-06-18 #29** — Spot-check, 0 errors. Durable bugs **all unchanged**: C28 icon painted `[0,0]`;
+  Members add-button no-op ("Quinn"); Accounts add-button no-op ("LoopFund29"). No regressions.
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

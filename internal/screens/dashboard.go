@@ -764,7 +764,7 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 			count = f.Int(cfg)
 		}
 	}
-	recent := recentTransactions(txns, count)
+	recent := ledger.Recent(txns, count)
 	var body ui.Node
 	if len(recent) == 0 {
 		body = P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noTransactions"))
@@ -849,12 +849,3 @@ func kpiBody(figure, figTone, subline, subTone string) ui.Node {
 	)
 }
 
-// recentTransactions returns the n most recent transactions, newest first.
-func recentTransactions(txns []domain.Transaction, n int) []domain.Transaction {
-	cp := append([]domain.Transaction(nil), txns...)
-	sort.Slice(cp, func(i, j int) bool { return cp[i].Date.After(cp[j].Date) })
-	if len(cp) > n {
-		cp = cp[:n]
-	}
-	return cp
-}
