@@ -78,6 +78,16 @@ var english = Catalog{
 	"rail.system":  "System",
 	"rail.tools":   "Tools",
 
+	// Keyboard shortcuts help overlay (§6.6)
+	"shortcuts.title":      "Keyboard shortcuts",
+	"shortcuts.jump":       "Jump to a section",
+	"shortcuts.add":        "Add a transaction",
+	"shortcuts.palette":    "Command palette",
+	"shortcuts.save":       "Save the open settings panel",
+	"shortcuts.close":      "Close a panel / this help",
+	"shortcuts.resize":     "Show dashboard resize handles",
+	"shortcuts.toggleHelp": "Toggle this help",
+
 	// Common actions (shared across screens)
 	"action.add":    "Add",
 	"action.save":   "Save",

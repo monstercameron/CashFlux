@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — refactor: i18n the keyboard help overlay (§6.6)
+
+- Routed the `?` cheat-sheet through the i18n catalog per the engineering standards: `helpHTML` went from a
+  const to a builder func that interpolates `uistate.T("shortcuts.*")` for the title + row labels (8 new
+  keys after `rail.tools`); chords stay literal. The palette's "Keyboard shortcuts" command now reuses
+  `shortcuts.title`. (Command-palette chrome strings — search placeholder, no-match, action labels — remain
+  a follow-up.)
+- en.go is the hottest shared file; took a couple of Read→Edit retries as the parallel session wrote it.
+  Verified via worktree build at HEAD with my shortcuts.go + en.go (exit 0; disk build red only on the
+  parallel session's WIP). Committed by pathspec.
+
+## 2026-06-18 — fix: UX polish §6.2 — priority badge legibility
+
+- Closed the To-do priority badge part of the tiny-type item in `web/index.html`: `.badge-prio` moved from
+  `0.68rem` to `0.75rem`, and `.task-meta` gap loosened from `0.5rem` to `0.6rem`.
+- Kept this CSS-only because the rendered badge markup already uses the shared `.badge-prio` classes.
+
 ## 2026-06-18 — fix: UX polish §6.4 — disabled button state
 
 - Closed the shared disabled-button style item in `web/index.html`: `.btn:disabled` and

@@ -104,21 +104,27 @@ func isEditableTarget(doc js.Value) bool {
 
 const helpOverlayID = "cf-help-overlay"
 
-// helpHTML is the shortcuts cheat sheet body. (English for now — a follow-up can
-// route these through the i18n catalog like the rest of the UI.)
-const helpHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:0.8rem;">
-  <strong style="font-size:1rem;">Keyboard shortcuts</strong>
-  <button id="cf-help-close" type="button" aria-label="Close" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:1.15rem;line-height:1;min-width:24px;min-height:24px;">&times;</button>
-</div>
-<table style="width:100%;border-collapse:collapse;">
-  <tr><td style="padding:0.28rem 0;opacity:0.85;">Jump to a section</td><td style="text-align:right;white-space:nowrap;">Alt + 1&ndash;9</td></tr>
-  <tr><td style="padding:0.28rem 0;opacity:0.85;">Add a transaction</td><td style="text-align:right;white-space:nowrap;">Alt + N</td></tr>
-  <tr><td style="padding:0.28rem 0;opacity:0.85;">Command palette</td><td style="text-align:right;white-space:nowrap;">Ctrl/&#8984; + K</td></tr>
-  <tr><td style="padding:0.28rem 0;opacity:0.85;">Save the open settings panel</td><td style="text-align:right;white-space:nowrap;">Enter</td></tr>
-  <tr><td style="padding:0.28rem 0;opacity:0.85;">Close a panel / this help</td><td style="text-align:right;white-space:nowrap;">Esc</td></tr>
-  <tr><td style="padding:0.28rem 0;opacity:0.85;">Show dashboard resize handles</td><td style="text-align:right;white-space:nowrap;">Hold Shift</td></tr>
-  <tr><td style="padding:0.28rem 0;opacity:0.85;">Toggle this help</td><td style="text-align:right;white-space:nowrap;">?</td></tr>
-</table>`
+// helpHTML builds the shortcuts cheat-sheet body, with the row labels and title
+// routed through the i18n catalog (the key chords themselves stay literal).
+func helpHTML() string {
+	row := func(key, chord string) string {
+		return `<tr><td style="padding:0.28rem 0;opacity:0.85;">` + htmlEscaper.Replace(uistate.T(key)) +
+			`</td><td style="text-align:right;white-space:nowrap;">` + chord + `</td></tr>`
+	}
+	return `<div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:0.8rem;">` +
+		`<strong style="font-size:1rem;">` + htmlEscaper.Replace(uistate.T("shortcuts.title")) + `</strong>` +
+		`<button id="cf-help-close" type="button" aria-label="Close" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:1.15rem;line-height:1;min-width:24px;min-height:24px;">&times;</button>` +
+		`</div>` +
+		`<table style="width:100%;border-collapse:collapse;">` +
+		row("shortcuts.jump", "Alt + 1&ndash;9") +
+		row("shortcuts.add", "Alt + N") +
+		row("shortcuts.palette", "Ctrl/&#8984; + K") +
+		row("shortcuts.save", "Enter") +
+		row("shortcuts.close", "Esc") +
+		row("shortcuts.resize", "Hold Shift") +
+		row("shortcuts.toggleHelp", "?") +
+		`</table>`
+}
 
 // toggleHelpOverlay shows or hides the keyboard cheat sheet, building it on first
 // use. It's a self-contained DOM overlay (not a framework component), so the
@@ -156,7 +162,7 @@ func buildHelpOverlay(doc js.Value) {
 
 	card := doc.Call("createElement", "div")
 	card.Get("style").Set("cssText", "background:var(--bg-elev,#1a1a1d);color:var(--text,#f4f4f5);border:1px solid var(--border,#2a2a2c);border-radius:10px;padding:1.1rem 1.35rem;max-width:min(92vw,440px);box-shadow:0 12px 40px rgba(0,0,0,0.5);font-size:0.9rem;line-height:1.5;")
-	card.Set("innerHTML", helpHTML)
+	card.Set("innerHTML", helpHTML())
 	ov.Call("appendChild", card)
 
 	// Click the dimmed backdrop (not the card) to dismiss.
@@ -219,7 +225,7 @@ func buildPaletteCommands() []paletteCmd {
 		paletteCmd{label: uistate.T("addmenu.transaction"), run: func() { uistate.UseQuickAdd().Set(true) }},
 		paletteCmd{label: "Toggle light / dark theme", run: toggleTheme},
 		paletteCmd{label: "Collapse / expand sidebar", run: toggleSidebar},
-		paletteCmd{label: "Keyboard shortcuts", run: toggleHelpOverlay},
+		paletteCmd{label: uistate.T("shortcuts.title"), run: toggleHelpOverlay},
 	)
 	// Workspace management straight from the palette.
 	reg := loadRegistry()
