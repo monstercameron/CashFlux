@@ -566,6 +566,18 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when the inline editor opens (§6.7).
+	editKey := "closed"
+	if editing.Get() {
+		editKey = "open"
+	}
+	ui.UseEffect(func() func() {
+		if editing.Get() {
+			focusByID("txn-edit-" + t.ID)
+		}
+		return nil
+	}, editKey)
+
 	if editing.Get() {
 		catOptions := []ui.Node{Option(Value(""), SelectedIf(catS.Get() == ""), uistate.T("transactions.noCategory"))}
 		for _, c := range props.Categories {
@@ -573,7 +585,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		}
 		return Div(Class("row-edit"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
+				Input(Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(Class("field"), OnChange(onCat), catOptions),
 				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),

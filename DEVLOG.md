@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: focus-on-edit for transactions + budgets (§6.7 cont.)
+
+- Extended the §6.7 focus-on-edit pattern to `TransactionRow` and `BudgetRow`: a `ui.UseEffect` keyed on
+  the editor's open/closed state calls `focusByID` on the first input (desc / name), which now carries a
+  stable `Attr("id", ...)`. Used a plain "open"/"closed" string dep key (no `fmt` dependency added).
+- Remaining inline editors: categories, members, todo, rules, documents, custom pages. Build green.
+
 ## 2026-06-18 - feat: add scoped backend sync helpers
 
 - Added a `SyncService` wrapper over the backend repository for the first RPC-shaped workspace operations:

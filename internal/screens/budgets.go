@@ -323,10 +323,22 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when the inline editor opens (§6.7).
+	editKey := "closed"
+	if editing.Get() {
+		editKey = "open"
+	}
+	ui.UseEffect(func() func() {
+		if editing.Get() {
+			focusByID("budget-edit-" + s.Budget.ID)
+		}
+		return nil
+	}, editKey)
+
 	if editing.Get() {
 		return Div(Class("budget"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Attr("id", "budget-edit-"+s.Budget.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
 				Select(Class("field"), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(periodS.Get())),
 				Select(Class("field"), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
