@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — store error-path coverage via a closed DB (81% → 84%)
+
+- Revisited the store error arms I'd earlier written off as needing a fault-injecting mock. They don't: a
+  **closed** `*sql.DB` makes every Exec/Query/QueryRow fail, and `Close()` is already public — so the error
+  branches are reachable with no production seam.
+- Added `errors_test.go` running the helpers against a closed store: `putJSON`/`getJSON`/`deleteRow`/
+  `queryRows`/`loadRows` (via PutMember/GetMember/DeleteMember/ListMembers/TransactionsByAccount),
+  `GetSettings`/`PutSettings`/`Wipe`, and `Snapshot`/`Load`. `store` → **83.7%** (`deleteRow` 100%, the JSON
+  helpers ~85–91%). The residual is per-table error branches in Load/Snapshot (only the first table's arm
+  fires before returning) and unreachable `json.Marshal` failures.
+
 ## 2026-06-18 — payoff negative-APR branch (92% → 96%); coverage sweep complete
 
 - Last reachable-gap package. `payoff` was 91.7%; the untested branch was the interest floor (a negative

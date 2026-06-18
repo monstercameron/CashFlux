@@ -1176,7 +1176,45 @@ results are summarized here so the backlog doesn't bloat.
     + click). Likely the **same button-commit bug as Members/Accounts** (broken set may be Members,
     Accounts, **Rules**), OR the rule's category `<select>` didn't commit so the rule was invalid. _Confirm
     with Enter-vs-click + verify the select value commits; add Rules to the add-button-parity fix list._
-component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
+- **2026-06-18 #20** — Verified #19's two flags (0 console errors).
+  - 🟡 **C24 auto-layout re-pack — INCONCLUSIVE (over-claimed; see #22).** Switching Custom → Auto·default
+    → Auto·by-importance kept placements canonical (2/1, 2/2, …) — but the layout was *already* canonical,
+    so canonical output is expected in every mode. This is **not** evidence the modes are broken; the test
+    was invalid (no custom layout to revert from).
+  - 🐞 **Rules "Add" fails via BOTH Enter and click** (spotify via Enter, hulu via click — neither added,
+    category selected first). **Different from Members/Accounts** (where Enter worked), so this is **not**
+    the button-commit bug — more likely the rule's **category `<select>` value isn't committing** (rule
+    invalid → silent no-op) or an add handler that silently drops invalid rules. Either way: **no error
+    feedback** on a failed rule add. _Confirm the category select commits; surface a validation message._
+- **2026-06-18 #21** — Attempted the definitive C24 drag-then-Auto re-pack test; **inconclusive (harness
+  issue), 0 console errors.** `select.First()` returned an empty `value` — it grabbed the wrong `<select>`
+  (not the layout-mode one; #19 located it by scanning option text), and the drag registered no change
+  (likely wrong-element targeting, or drag disabled outside "custom" mode). So C24's "modes don't re-pack"
+  (#20) is **not yet confirmed/refuted** by the snap-back test.
+  - [ ] Harness fix for next pass: select the layout-mode `<select>` by its options (Custom/Auto…), assert
+        its `value` changes on switch, then drag→Auto·default and check tiles snap back to canonical order.
+- **2026-06-18 #22** — Correctly targeted the layout-mode `<select>` (0 console errors).
+  - ✅ **Mode selector is wired** — value changes **`custom` → `auto-default` → `auto-importance`** on
+    switch (located the select by option text; it's the 2nd select on the page).
+  - 🟡 **C24 re-pack STILL UNVERIFIED — and #20 corrected.** Automated **drag did not change the layout**
+    (Playwright's HTML5-DnD sim is flaky for this app's `OnDragStart/OnDrop` — it worked in #6 but not #20–
+    #22), so I couldn't create a non-canonical layout to test snap-back. Switching modes on the canonical
+    default yields canonical output **in every mode by definition**, so it proves nothing. **Net: whether
+    Auto·default / Auto·by-importance actually re-pack can't be confirmed via this harness.**
+    - [ ] **Needs manual verification:** drag a tile out of place, switch to "Auto · default order" — it
+          should snap back; set tile importances and switch to "Auto · by importance" — order should change.
+    - [ ] (Harness) the bento drag isn't reliably drivable by Playwright `DragTo`; consider dispatching
+          explicit `dragstart`/`dragover`/`drop` events or pointer-move steps for future drag assertions.
+- **2026-06-18 #23** — Visual sweep (Allocate/Customize/Categories/To-do/Rules), 0 console errors.
+  - ✅ **C9 (category colors) — RESOLVED.** Categories now render a **colored swatch** per row
+    (Food=orange, Housing=blue, Transport=purple, Income=green) and the Add-category form has a color
+    picker.
+  - 🟡 **C6 (Allocate) — part 2 done, part 1 open.** Zero-score candidates (Checking/Savings) are now
+    **hidden** (only Pay-down-Credit-Card + Goal·Vacation show) — good. But the **5 criterion-weight
+    inputs are still unlabeled "1"s** (returns/stability/liquidity/debt/goal) — no labels. Part 1 open.
+  - Customize formula builder + variables panel render fine. _(Minor: the "Available variables" panel
+    shows raw figures `assets 21599.25` / `expense 1800.75` — acceptable since they're numeric formula
+    inputs, not display money.)_
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
