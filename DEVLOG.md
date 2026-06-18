@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add backend rpc auth middleware
+
+- Added reusable gRPC auth middleware for the upcoming SyncService and AIService: bearer token extraction
+  from incoming metadata, a validator hook, authenticated-user context helpers, and unary/stream interceptors.
+- Covered missing/malformed auth, invalid-token rejection, unary context propagation, and stream context wrapping
+  with native server tests.
+
 ## 2026-06-18 - feat: add backend usage counters
 
 - Added `usage` repository helpers for per-user UTC-day request/token increments, day lookups, and

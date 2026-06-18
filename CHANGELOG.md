@@ -292,6 +292,8 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend RPC auth now has bearer middleware.** Added gRPC unary and stream interceptors that read bearer
+  metadata, validate tokens through a server hook, and attach the authenticated user to the RPC context.
 - **Backend usage counters are ready for rate limits.** Server storage now tracks per-user UTC-day
   request and token counters with helpers for daily limit checks and tests for increments, isolation,
   empty users, and invalid caps.
