@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add authenticated blob endpoints
+
+- Added bearer-protected `PUT`, `GET`, and `HEAD /v1/blobs/{hash}` routes. Uploads are capped by
+  `CASHFLUX_SERVER_BLOB_MAX_BYTES`, must hash to the URL `:hash`, and are stored through the existing
+  content-addressed blob repository under the server data dir.
+- Downloads return the stored MIME type, content length, ETag, and immutable cache headers. CORS now allows the
+  blob methods alongside the existing AI proxy methods.
+- Verified upload/download/head, missing auth, oversized uploads, hash mismatch, invalid hashes, CORS preflight,
+  and negative blob-limit config with server tests. Workspace blob linking remains for the sync/artifact atom.
+
 ## 2026-06-18 - feat: add client grpc bridge transport
 
 - Added `internal/syncbridge`, a small client transport layer that turns the configured backend HTTP(S) URL into

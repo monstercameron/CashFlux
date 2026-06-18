@@ -52,6 +52,16 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		})
 	})
 	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg))
+	mux.HandleFunc("OPTIONS /v1/blobs/{hash}", func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("PUT /v1/blobs/{hash}", handlePutBlob(cfg, store))
+	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
+	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/ai/key", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
@@ -245,7 +255,7 @@ func writeCORS(w http.ResponseWriter, r *http.Request, cfg Config) bool {
 	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Set("Vary", "Origin")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, POST, OPTIONS")
 	return true
 }
 

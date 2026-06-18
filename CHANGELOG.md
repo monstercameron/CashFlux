@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Authenticated blob HTTP endpoints started.** The backend now exposes bearer-protected `PUT`, `GET`, and
+  `HEAD /v1/blobs/{hash}` endpoints that enforce claimed SHA-256 hashes, request-size caps, content-addressed
+  SQLite/file storage, immutable cache headers, and CORS preflight support.
 - **Client gRPC bridge transport foundation.** Added a `syncbridge` client helper that converts the saved
   backend URL to the `/grpc` websocket tunnel target, builds a GoGRPCBridge `BuildTunnelConn`, and attaches
   the backend bearer token as gRPC metadata for unary and streaming calls.

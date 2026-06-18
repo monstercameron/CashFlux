@@ -30,6 +30,7 @@ type Config struct {
 	AIRequestMaxBytes                 int64
 	AIRequestsPerDay                  int64
 	AITokensPerDay                    int64
+	BlobMaxBytes                      int64
 	GRPCReadLimitBytes                int64
 	GRPCKeepaliveInterval             time.Duration
 	GRPCIdleTimeout                   time.Duration
@@ -54,6 +55,7 @@ func FromEnv() (Config, error) {
 	cfg.AIRequestMaxBytes = envInt64("CASHFLUX_SERVER_AI_REQUEST_MAX_BYTES", 4<<20)
 	cfg.AIRequestsPerDay = envInt64("CASHFLUX_SERVER_AI_REQUESTS_PER_DAY", 0)
 	cfg.AITokensPerDay = envInt64("CASHFLUX_SERVER_AI_TOKENS_PER_DAY", 0)
+	cfg.BlobMaxBytes = envInt64("CASHFLUX_SERVER_BLOB_MAX_BYTES", 32<<20)
 	cfg.GRPCReadLimitBytes = envInt64("CASHFLUX_SERVER_GRPC_READ_LIMIT_BYTES", 16<<20)
 	cfg.GRPCKeepaliveInterval = envDuration("CASHFLUX_SERVER_GRPC_KEEPALIVE_INTERVAL", 30*time.Second)
 	cfg.GRPCIdleTimeout = envDuration("CASHFLUX_SERVER_GRPC_IDLE_TIMEOUT", 90*time.Second)
@@ -79,6 +81,9 @@ func (c Config) Validate() error {
 	}
 	if c.AIRequestMaxBytes < 0 || c.AIRequestsPerDay < 0 || c.AITokensPerDay < 0 {
 		return fmt.Errorf("server: ai limits must be non-negative")
+	}
+	if c.BlobMaxBytes < 0 {
+		return fmt.Errorf("server: blob max bytes must be non-negative")
 	}
 	if c.GRPCReadLimitBytes < 0 || c.GRPCKeepaliveInterval < 0 || c.GRPCIdleTimeout < 0 ||
 		c.GRPCMaxActiveConnections < 0 || c.GRPCMaxConnectionsPerClient < 0 || c.GRPCMaxUpgradesPerClientPerMinute < 0 {

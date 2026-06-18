@@ -3,6 +3,8 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +31,11 @@ func TestConfigValidate(t *testing.T) {
 	invalid.GRPCReadLimitBytes = -1
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("negative grpc read limit accepted")
+	}
+	invalid = valid
+	invalid.BlobMaxBytes = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative blob max bytes accepted")
 	}
 	invalid = valid
 	invalid.GRPCKeepaliveInterval = 30
@@ -195,6 +202,109 @@ func TestGRPCTokenValidatorMatchesHTTPBearerUser(t *testing.T) {
 	}
 }
 
+func TestBlobEndpointsPutGetHead(t *testing.T) {
+	store := openTestStore(t)
+	data := []byte("receipt bytes")
+	hash := blobHash(data)
+	cfg := Config{
+		AuthMode:     "token",
+		Token:        "dev-token",
+		DataDir:      t.TempDir(),
+		BlobMaxBytes: 1024,
+	}
+	h := NewMux(cfg, store)
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash, bytes.NewReader(data))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "image/png")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("put blob status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var body BlobResponse
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode blob response: %v", err)
+	}
+	if body.Hash != hash || body.Size != int64(len(data)) || body.Mime != "image/png" {
+		t.Fatalf("blob response = %+v", body)
+	}
+
+	req = httptest.NewRequest(http.MethodHead, "/v1/blobs/"+hash, nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("head blob status = %d", rr.Code)
+	}
+	if rr.Header().Get("Content-Type") != "image/png" || rr.Header().Get("ETag") != `"`+hash+`"` {
+		t.Fatalf("head headers = content-type %q etag %q", rr.Header().Get("Content-Type"), rr.Header().Get("ETag"))
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("head body length = %d, want 0", rr.Body.Len())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/blobs/"+hash, nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || rr.Body.String() != string(data) {
+		t.Fatalf("get blob status/body = %d/%q", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+		t.Fatalf("cache-control = %q", rr.Header().Get("Cache-Control"))
+	}
+}
+
+func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{AuthMode: "token", Token: "dev-token", DataDir: t.TempDir(), BlobMaxBytes: 4}
+	h := NewMux(cfg, store)
+	hash := blobHash([]byte("abc"))
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash, bytes.NewReader([]byte("abc")))
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("missing auth status = %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash, bytes.NewReader([]byte("wrong")))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversize status = %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash, bytes.NewReader([]byte("abd")))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("hash mismatch status = %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/blobs/not-a-hash", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("bad hash status = %d", rr.Code)
+	}
+}
+
+func TestBlobEndpointCORS(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token", AppOrigin: "http://127.0.0.1:8080"})
+	req := httptest.NewRequest(http.MethodOptions, "/v1/blobs/"+blobHash([]byte("abc")), nil)
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent || !strings.Contains(rr.Header().Get("Access-Control-Allow-Methods"), "PUT") {
+		t.Fatalf("allowed blob cors status/methods = %d/%q", rr.Code, rr.Header().Get("Access-Control-Allow-Methods"))
+	}
+}
+
 func TestAIChatEndpoint(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer sk-secret" {
@@ -235,6 +345,11 @@ func TestAIChatEndpoint(t *testing.T) {
 	if body.Content != "server says hi" || body.Usage.TotalTokens != 11 {
 		t.Fatalf("chat response = %+v", body)
 	}
+}
+
+func blobHash(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 func TestAIChatEndpointAppliesConfiguredGuards(t *testing.T) {
