@@ -35,6 +35,7 @@ const (
 	Allocate     Name = "allocate"
 	Insights     Name = "insights"
 	Customize    Name = "customize"
+	Reports      Name = "reports"
 )
 
 // inner maps each icon to its inner SVG markup — the child shapes only. Stroke,
@@ -57,6 +58,7 @@ var inner = map[Name]string{
 	Allocate:     `<circle cx="12" cy="12" r="9"/><path d="M12 3v9l7 4"/>`,
 	Insights:     `<path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 1 4 10.5c-.7.7-1 1.2-1 2.5H9c0-1.3-.3-1.8-1-2.5A6 6 0 0 1 12 3z"/>`,
 	Customize:    `<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="9" cy="7" r="1.8"/><circle cx="15" cy="12" r="1.8"/><circle cx="7" cy="17" r="1.8"/>`,
+	Reports:      `<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>`,
 }
 
 // Inner returns the icon's inner SVG markup, or "" for an unknown name.

@@ -12,7 +12,7 @@ and every commit updates this file under `Unreleased`.
   spending by category compared to the prior period (each category's amount with a green ▼ / red ▲ change
   badge). Works with no AI key — it's all from the deterministic reports core, so the figures match the
   dashboard. It also charts a **cash-flow trend** — net income minus spending over the last six periods
-  of the chosen resolution.
+  of the chosen resolution — and has its own bar-chart icon in the rail.
 - **Reports engine — the pure reporting core (B21, internal).** New `internal/reports` package with the
   first report: spending by category over a period, sorted largest-first, with an optional comparison to
   the prior period (each category's prior amount + percent change, and a union so a category that dropped

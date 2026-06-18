@@ -9,7 +9,7 @@ import (
 // constant is added without data (or vice versa).
 var curated = []Name{
 	Dashboard, Accounts, Transactions, Budgets, Goals, Todo, Settings, Page,
-	Plus, Menu, Tag, Users, Planning, Allocate, Insights, Customize,
+	Plus, Menu, Tag, Users, Planning, Allocate, Insights, Customize, Reports,
 }
 
 func TestEveryConstantResolves(t *testing.T) {

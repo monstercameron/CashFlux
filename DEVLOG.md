@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Reports rail icon (B21, step 7)
+
+- Reports already auto-appeared in the rail (navGroup shows any registered Tools screen, B7) but with the
+  neutral Page icon. Added a dedicated Lucide-style bar-chart `icon.Reports`, wired `"/reports"` into
+  `railMeta` with the `nav.reports` key. Updated the icon package's curated-set test (16→17). Native icon
+  test green, wasm build green, gofmt clean.
+
 ## 2026-06-18 — feat: Reports cash-flow trend chart (B21, step 6)
 
 - Added a cash-flow trend to the Reports screen using the existing pure `ui.AreaChart` sparkline (no D3

@@ -69,6 +69,7 @@ var english = Catalog{
 	"nav.planning":     "Planning",
 	"nav.allocate":     "Allocate",
 	"nav.insights":     "Insights",
+	"nav.reports":      "Reports",
 	"nav.documents":    "Documents",
 	"nav.customize":    "Customize",
 
