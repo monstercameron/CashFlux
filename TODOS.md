@@ -1232,12 +1232,35 @@ confidentiality, secret handling, and durability**. Ordered by severity; build b
 (crypto in a pure tested `internal/crypto` package first, then wire persistence, then UI).
 
 - [ ] **B33.1 — Encrypt the at-rest dataset snapshot (🔴 highest).** Today `persist.go:92` writes the full
-      dataset as **plaintext JSON** to `localStorage["cashflux:dataset"]`. Build an AES-256-GCM envelope in a
-      pure `internal/crypto` package (table-driven tests: encrypt→decrypt round-trip, tamper/auth-fail, wrong
-      key). Key derived from the B17 passphrase via **Argon2id** (or PBKDF2 fallback), or a WebAuthn-PRF KEK.
-      When lock is **enabled**, persist the encrypted blob (with salt + nonce + KDF params) instead of plaintext;
-      decrypt on unlock. When lock is **disabled**, keep today's plaintext snapshot (explicit user opt-out).
+      dataset as **plaintext JSON** to `localStorage["cashflux:dataset"]`. Encrypt-before-write, paying the cost
+      on save — which is **negligible** because the heavy KDF runs once at unlock, not per-save (see strategy below).
       _Depends on / extends B17 (lock + recovery). Live DB stays `:memory:` so no plaintext DB file on disk._
+
+      **RESEARCHED STRATEGY (2026-06-18, OWASP + WebAuthn-L3 + WebCrypto modern-algos):**
+      - **Bulk cipher = AES-256-GCM via WebCrypto `crypto.subtle`** (native, authenticated, ~sub-ms on a 30 KB
+        dataset). Call it from Go/wasm through `syscall/js`. New **random 12-byte nonce every save**
+        (`crypto.getRandomValues`) — never reuse a nonce with the same key (GCM fails catastrophically).
+      - **Envelope encryption (DEK + wrapped KEKs)** — the design that makes recovery cheap:
+        • a random **DEK** encrypts the dataset; • the DEK is **wrapped** by one or more **KEKs**
+        (passphrase-KEK, recovery-code-KEK, and later a WebAuthn-PRF KEK). Changing the passphrase or using
+        recovery **re-wraps the DEK only** — no full re-encrypt. Store all wrapped-DEK blobs in the envelope.
+      - **KDF (passphrase → KEK) = Argon2id.** OWASP 2025 baseline **m=19 MiB, t=2, p=1** (or m=46 MiB, t=1, p=1).
+        WebCrypto Argon2id is not yet universal (modern-algos proposal; feature-detect via
+        `SubtleCrypto.supports('importKey','Argon2id')`), so **use pure-Go `golang.org/x/crypto/argon2`** in wasm
+        for portability (no browser-version dependency). **PBKDF2-HMAC-SHA256 fallback** only if needed:
+        **≥600,000 iterations** (OWASP/FIPS), 310k absolute floor. Store the KDF id + params + salt in the envelope
+        for crypto-agility.
+      - **Cost model (answers the "pay on save" question):** run Argon2id **once at unlock** → unwrap the DEK →
+        cache it as a **non-extractable in-memory `CryptoKey`**. Every 4 s autosave then does **only** AES-GCM over
+        the JSON = imperceptible. The only slow step is the one-time unlock the user already expects.
+      - **Envelope format (versioned):** `{ v, kdf:{id,salt,params}, wrappedDEKs:[{kind,nonce,ct}], data:{nonce,ct} }`,
+        base64 in localStorage for now (note ~33% bloat → reinforces B33.4 / IndexedDB binary storage).
+      - **Pure tested `internal/crypto` package first** (table-driven: encrypt→decrypt round-trip, tamper/auth-fail,
+        wrong-key reject, DEK re-wrap across KEKs, KDF param round-trip) — then wire persistence, then UI (CLAUDE.md
+        bottom-up). Keep KDF/cipher behind interfaces so params can ratchet up later without a data migration.
+      - **Modes:** lock **enabled** → encrypted envelope; lock **disabled** → today's plaintext snapshot (explicit
+        opt-out); optional **middle tier** = device-bound key in IndexedDB (stops casual disk/file inspection but
+        **not** same-origin XSS/extensions — state that limitation in the UI).
 - [ ] **B33.2 — Zeroize plaintext on lock/timeout (🔴).** On inactivity-lock/manual-lock (B17), drop the derived
       key, clear the cached plaintext snapshot string, and ideally re-init the `:memory:` DB so a memory scrape
       after auto-lock yields nothing. Add a test/inspection hook proving the key + snapshot are cleared.
@@ -1253,8 +1276,29 @@ confidentiality, secret handling, and durability**. Ordered by severity; build b
       that all user values MUST use `?` bind params and any future dynamic identifier (column/ORDER BY/table)
       MUST come from a hard-coded allow-list — never string-interpolated user text. Add a brief test or comment
       asserting the invariant so a future contributor can't regress it.
-_Cross-links: C45 (source audit), B17/B17.2/B17.3 (lock/crypto/passkey KEK + recovery), C44 (XSS surface that
-makes plaintext-at-rest reachable), B32 Cluster (CIA/OWASP), B29 (sync — encrypt-before-send reuses B33.1)._
+- [ ] **B33.6 — Settings: enable/disable sensitivity (encryption + lock) toggle (🔴 UI).** A single master switch
+      in Settings → Privacy & Security that turns at-rest encryption + the lock gate on/off. Behavior:
+      • **Off → On (first-time setup):** run an inline **set-password** flow (password / passphrase / PIN per B17,
+        with NIST-grade strength validation + hint), generate the DEK, encrypt the current snapshot, set up the
+        recovery wrap (security questions / recovery code per B17). After this the snapshot on disk is ciphertext.
+      • **On → Off:** **must be confirmed behind the current password** (B17 rule — can't disable from an unlocked
+        session without re-auth) → decrypt and rewrite the plaintext snapshot, drop the keys. Show a plain-English
+        warning that data will be stored unencrypted on this device.
+      • Preserve credentials when merely toggling the *gate* vs. fully disabling (B17's "toggle lock without
+        wiping creds" requirement). Persist the chosen mode (off / encrypted-passphrase / device-bound middle tier).
+      _Depends on B17 (lock spec) + B33.1 (crypto). UI is the thin shell over the tested crypto package._
+- [ ] **B33.7 — Initialize / unlock screen on load (🔴 UI).** When encryption is enabled, the app must **not** read
+      the dataset until the user authenticates. On load show a **decrypt/unlock screen** (extends the existing
+      `applockgate.go`) with a password/passphrase/PIN input (+ "show hint", + recovery link). On submit:
+      derive the KEK (Argon2id, the one-time cost) → unwrap the DEK → **decrypt the snapshot into the `:memory:`
+      SQLite DB** → cache the non-extractable key → arm encrypt-on-save (B33.1). Wrong password = clear auth-fail
+      message + rate-limit/backoff (no oracle leak). Until unlocked, render nothing sensitive (privacy-first lock
+      screen per B17 — smart-quote/neutral content only). On manual lock / inactivity timeout, re-show this screen
+      and zeroize per B33.2. First run with encryption off → skip straight to the app (no gate).
+      _This is the runtime counterpart to B33.6's setup: B33.6 establishes the password & encrypts; B33.7 is the
+      every-load decrypt gate. Both sit on B17's lock-gate UI + B33.1's crypto._
+_Cross-links: C45 (source audit), B17/B17.2/B17.3 (lock/crypto/passkey KEK + recovery + lock-gate UI), C44 (XSS
+surface that makes plaintext-at-rest reachable), B32 Cluster (CIA/OWASP), B29 (sync — encrypt-before-send reuses B33.1)._
 
 ---
 
@@ -3901,3 +3945,46 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] **Rollout (each independently shippable; app works without the backend throughout):**
       (1) OAuth + snapshot sync (artifacts still inline) → (2) blob store + client artifact extraction →
       (3) AI proxy + encrypted keys + metering.
+
+### 7.11 Monetization — billing + Cloud UX (paid tier) ★
+
+> CashFlux Cloud is the paid tier: sync + backup + AI proxy. App stays free/local-first.
+> Design: [`docs/CLOUD_UX.md`](./docs/CLOUD_UX.md) + [`docs/CLOUD_BUSINESS_PLAN.md`](./docs/CLOUD_BUSINESS_PLAN.md).
+> **Locked:** app free; Cloud paid (annual-first subscription); AI proxy bundled into Cloud; personal
+> plan now, household later. Recommended pricing ~$34.99/yr / $3.99/mo, 14-day trial (validate).
+
+#### Server (billing + entitlements)
+- [ ] Stripe integration: products/prices (annual + monthly), Checkout session creation, customer portal session.
+- [ ] Stripe **webhook** handler (checkout.completed, subscription.updated/deleted, invoice.payment_failed)
+      → update `subscriptions` table; idempotent; signature-verified.
+- [ ] `subscriptions(user_id, stripe_customer, stripe_sub, status, plan, current_period_end, trial_end)`.
+- [ ] **Entitlement gate**: a single `IsCloudActive(user)` check (active|trial|grace) enforced in the
+      gRPC auth interceptor for Sync/AI RPCs and the blob endpoints; past-due grace window; lapse →
+      reject cloud RPCs (clear status code) while local app keeps working.
+- [ ] Storage fair-use cap per user (blob bytes); soft-warn → block new uploads over cap; overage copy.
+- [ ] Privacy/compliance: privacy policy + terms endpoints; account export + **delete account**
+      (purge server data + blobs); GDPR/CCPA data-request path.
+- [ ] Tests: webhook state transitions, entitlement gate (trial/active/past-due/canceled), cap enforcement.
+
+#### Client (Cloud UX)
+- [ ] **Cloud settings section** (global FlipPanel): signed-out pitch + OAuth buttons; signed-in plan
+      status, manage subscription, AI key, devices, sign out, export/delete account.
+- [ ] **Sync status chip** by the workspace switcher: synced / syncing / offline (queued count) /
+      error / not-signed-in; "last synced" tooltip; "Sync now"; opens Cloud settings.
+- [ ] **Contextual upgrade sheet** when a free user taps a Cloud-only action (non-blocking; benefits +
+      price + Start trial + Maybe later). Never blocks local features.
+- [ ] **Pricing screen**: annual/monthly segmented toggle (annual-first), price, trial note, Subscribe
+      → Stripe Checkout (redirect); trust line (cancel/export anytime, encrypted, BYO key).
+- [ ] **Account/subscription states** wired end-to-end: signed-out, free, trial (+days-left banner),
+      active, past-due (grace banner), canceled → **graceful downgrade-to-local** (data stays).
+- [ ] **AI key (Cloud)**: move key entry into Cloud settings (encrypted server-side, shown as "Key set",
+      replace/remove); keep the client-side key field for free users.
+- [ ] **Devices** list + revoke; **Manage subscription** → Stripe portal (redirect).
+- [ ] **First-run Cloud mention** (calm, dismissible) + LWW pulled-newer toast.
+- [ ] a11y + plain-English copy on every Cloud surface; empty/loading/offline/error states (sign-in
+      failure, payment failure with retry).
+
+#### Launch gating
+- [ ] Monetize at the **sync milestone** (auth + snapshot sync + Stripe + trial); AI proxy + blobs land
+      as later Cloud upgrades (no price change). Household plan is a later phase.
+- [ ] Analytics: trial starts, trial→paid, MRR/ARR, churn, ARPU, storage/user, gross margin (privacy-respecting).
