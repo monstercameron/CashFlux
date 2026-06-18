@@ -259,11 +259,13 @@ a `Week | Month | Quarter` segmented toggle + **two** independent stepper pills 
       "This period" reset that shows only when off the current period, a "Custom range" toggle that
       reveals the dual From/To steppers (collapsing back on exit), and a **"Jump to…" presets dropdown**
       (This/Last period, This quarter, Year to date). Resolution still persists.
-- [ ] Responsive: collapse gracefully in a narrow top bar.
-- [ ] Verify: single-period is one tap and reads cleanly; presets work; "this period" resets to now;
-      custom range still does everything today's control can; persists across reload.
-- _Decision to confirm:_ how far to simplify — keep the full From/To range power behind "Custom range"
-  (recommended), or drop ranges entirely for a single-period-only control.
+- [x] Responsive: collapses gracefully in a narrow top bar — handled by C19 (`.reso-control` wraps and
+      the whole control cluster drops to its own full-width row below 1024px; verified at 768/390px).
+- [x] Verify (live): the control reads as a single label ("Jun 2026", not "Jun 2026 – Jun 2026"); the
+      "Last period" preset shifts to May 2026; one stepper that "Custom range" expands to two From/To
+      steppers; resolution persists. Confirmed in a headless browser.
+- [x] _Decision:_ kept the full From/To range power behind "Custom range" (the recommended option), not a
+      single-period-only control.
 
 ### B12. Wire per-widget flip-panel settings to content (persisted) ★
 
@@ -952,10 +954,23 @@ rail" is really this `viewBox` bug — C28 supersedes the icon symptom._
 Running log of the recurring 10-min Playwright sweep. New defects get their own C-item; routine
 results are summarized here so the backlog doesn't bloat.
 - **2026-06-18 #1** — Console/network/pageerror sweep across all 14 routes: **0 errors**. Every route
-  loads with the correct `document.title` and exactly **one `<h1>`** (good for SR heading nav).
-  **B1 deep-link refresh appears RESOLVED:** a hard `reload()` of `/accounts` returns **HTTP 200**
-  (no "404 page not found") — previously the open B1 item. _Verify the other deep-link routes + offline
-  before checking B1 off._ No new UI/UX defects this pass.
+  loads with the correct `document.title` and exactly **one `<h1>`** (good for SR heading nav). Observed
+  a hard `reload()` of `/accounts` returning HTTP 200 — _but see #2: this was a **warm-service-worker
+  false positive**, NOT a B1 fix._
+- **2026-06-18 #2** — ⚠️ **B1 deep-link 404 is NOT fixed (correcting #1).** A **cold** first navigation
+  (fresh browser context, no SW yet) straight to **`/transactions`** returned the dev server's raw
+  **"404 page not found"** page (white page, plain text) instead of the app — a console
+  `Failed to load resource: 404`. The flow test (add transaction + filter) couldn't run because the app
+  never loaded. **Why #1 looked fine:** #1 visited `/` first, which installs `web/sw.js`; the SW then
+  serves the cached shell on the *subsequent* `/accounts` reload (200). The underlying **server-side SPA
+  fallback gap remains** — `gwc dev` 404s a cold deep-link to any non-root route (matches B1's original
+  analysis: SW only masks it on warm/installed visits).
+  - [ ] B1 stays open: the dev server (and any static host) must serve `index.html` for unknown non-asset
+        routes. Re-test cold deep-links to **every** route, not just warm reloads.
+  - [ ] Test-harness note: a cold load of a deep route may 404; warm the SW by visiting `/` first, or
+        always start flows from `/` and SPA-navigate, when scripting flow tests.
+  - [ ] (Flow test add-transaction + filter round-trip: **not exercised** — blocked by the 404; retry
+        next iteration starting from `/`.)
 
 ---
 

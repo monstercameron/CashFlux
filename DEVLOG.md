@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B10 closed: resolution control verified + responsive
+
+- Picked up B10 (the "drastic" resolution-control redesign) expecting a big build, but found the redesign
+  was already implemented (single-period stepper, This-period reset, Custom-range toggle, Jump-to presets)
+  and the remaining "responsive collapse" was already handled by my C19 work (`.reso-control` wraps; the
+  control cluster drops to a full-width row below 1024px). So B10 was really down to verification.
+- Verified live on the dashboard: the control shows a single label "Jun 2026" (not the old
+  "Jun 2026 – Jun 2026"); the "Last period" preset shifts the window to May 2026; there's one stepper
+  that "Custom range" expands to two From/To steppers. Decision recorded: full range power stays behind
+  Custom range (recommended), not dropped.
+- Docs/verification only (no code change this iteration). B10 complete.
+
 ## 2026-06-18 — feature B2: FLIP animations for the dashboard bento
 
 - Grid placement changes don't transition, so animating tile reorder/resize needs FLIP. Did it with a
