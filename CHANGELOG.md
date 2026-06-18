@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend SyncService scopes workspace reads and tombstones.** Added authenticated-user service helpers for
+  workspace list/get/delete that route through the store with caller `user_id` isolation and reject unauthenticated
+  or malformed requests.
 - **Backend RPC auth now has bearer middleware.** Added gRPC unary and stream interceptors that read bearer
   metadata, validate tokens through a server hook, and attach the authenticated user to the RPC context.
 - **Backend usage counters are ready for rate limits.** Server storage now tracks per-user UTC-day
@@ -321,6 +324,9 @@ and every commit updates this file under `Unreleased`.
 - **Rules auto-fill now shares one tested path.** Transaction entry and CSV import now both run through
   the appstate auto-categorization helper, preserving manual category/tags while first-match rules fill
   empty fields; coverage also asserts imported budget impact, apply-to-existing, and conflict warnings.
+- **Inline editors now put the cursor in the first field (§6.7).** Opening a goal's edit or *Contribute*
+  form, or an account's edit or *Update balance* form, focuses the first input automatically, so you can
+  start typing without reaching for the mouse.
 - **Lock-screen content is now toggleable (B17.1).** Settings → App lock has two switches — *Show greeting
   & date* and *Show a daily quote* — both ON by default; turning one off hides it on the unlock screen.
 - **App lock is now in Settings.** Added a **Settings → App lock** section so the passcode lock is

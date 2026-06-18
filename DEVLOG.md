@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add scoped backend sync helpers
+
+- Added a `SyncService` wrapper over the backend repository for the first RPC-shaped workspace operations:
+  authenticated `List`, `Get`, and soft-delete `Delete`, all scoped exclusively to `AuthUser.ID`.
+- Covered per-user list/get isolation, cross-user delete no-op behavior, own tombstone propagation, and
+  unauthenticated / invalid workspace-id errors with native server tests.
+
 ## 2026-06-18 - feat: add backend rpc auth middleware
 
 - Added reusable gRPC auth middleware for the upcoming SyncService and AIService: bearer token extraction
@@ -106,6 +113,22 @@ problems and fixes, and what's next.
 - The test runs those aggregates at two different EUR rates, proving an edited rate recomputes every figure.
   Existing currency and aggregate error tests already cover missing/zero rates and stable target-minor-unit
   rounding, so the D16 behavior checklist can close without duplicating those paths.
+
+## 2026-06-18 — feat: focus the first field when an inline editor opens (§6.7, goals + accounts)
+
+- Inline edit forms opened with focus stranded on `<body>` (the Edit/Contribute button that opened them
+  was removed from the DOM), so the user had to click into the first field. Added `screens.focusByID`
+  (a `syscall/js` `getElementById(...).focus()` helper) and a `ui.UseEffect` per row keyed on the
+  editor's open/closed state that focuses the first field when it opens.
+- `autofocus` was rejected: browsers only honour it on initial page load, not on dynamic insertion, and
+  it loses to whatever already has focus. The post-render UseEffect is the reliable path (same hook the
+  dashboard uses to run the FLIP after layout).
+- Gotcha: in the `screens` package `ui` is the framework `GoWebComponents/ui` (hooks), not `internal/ui`.
+  First put the helper in `internal/ui` (`ui.FocusByID`) — undefined at the call sites. Moved it to a
+  package-local `focusByID` in `internal/screens/focus.go`.
+- Applied to goals (edit + Contribute) and accounts (edit + Update balance) this commit; first inputs got
+  stable `Attr("id", ...)`. Remaining inline editors (transactions, budgets, categories, members, todo,
+  rules, documents, custom pages) follow in subsequent commits. Disk wasm build green, gofmt clean.
 
 ## 2026-06-18 — feat: complete custom-page widget management (reorder/resize/edit)
 

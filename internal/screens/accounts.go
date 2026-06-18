@@ -524,10 +524,21 @@ func AccountRow(props accountRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when an inline editor opens (§6.7).
+	ui.UseEffect(func() func() {
+		switch {
+		case settingBal.Get():
+			focusByID("acct-setbal-" + a.ID)
+		case editing.Get():
+			focusByID("acct-edit-" + a.ID)
+		}
+		return nil
+	}, fmt.Sprintf("%t-%t", editing.Get(), settingBal.Get()))
+
 	if settingBal.Get() {
 		return Div(Class("row-edit"),
 			Form(Class("form-grid"), OnSubmit(doSetBal),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.setBalanceAmount")), Value(setBalAmtS.Get()), Step("0.01"), OnInput(onSetBalAmt)),
+				Input(Class("field"), Attr("id", "acct-setbal-"+a.ID), Type("number"), Placeholder(uistate.T("accounts.setBalanceAmount")), Value(setBalAmtS.Get()), Step("0.01"), OnInput(onSetBalAmt)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(Class("btn"), Type("button"), OnClick(cancelSetBal), uistate.T("action.cancel")),
 			),
@@ -537,7 +548,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		isLiab := a.Class == domain.ClassLiability
 		return Div(Class("row-edit"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Attr("id", "acct-edit-"+a.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
 				Select(Class("field"), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal)),
 				If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.creditLimit")), Value(climS.Get()), Step("0.01"), OnInput(onClim))),

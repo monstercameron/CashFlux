@@ -329,11 +329,22 @@ func GoalRow(props goalRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when an inline editor opens (§6.7).
+	ui.UseEffect(func() func() {
+		switch {
+		case contributing.Get():
+			focusByID("goal-contrib-" + g.ID)
+		case editing.Get():
+			focusByID("goal-edit-" + g.ID)
+		}
+		return nil
+	}, fmt.Sprintf("%t-%t", editing.Get(), contributing.Get()))
+
 	if contributing.Get() {
 		return Div(Class("budget"),
 			Div(Class("budget-head"), Span(Class("row-desc"), g.Name)),
 			Form(Class("form-grid"), OnSubmit(doContribute),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.contributeAmount")), Value(contribAmtS.Get()), Step("0.01"), OnInput(onContribAmt)),
+				Input(Class("field"), Attr("id", "goal-contrib-"+g.ID), Type("number"), Placeholder(uistate.T("goals.contributeAmount")), Value(contribAmtS.Get()), Step("0.01"), OnInput(onContribAmt)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("goals.contribute")),
 				Button(Class("btn"), Type("button"), OnClick(cancelContribute), uistate.T("action.cancel")),
 			),
@@ -342,7 +353,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	if editing.Get() {
 		return Div(Class("budget"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Attr("id", "goal-edit-"+g.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget)),
 				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
 				Select(Class("field"), Title(uistate.T("goals.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
