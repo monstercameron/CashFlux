@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.2 — segmented button label size
+
+- Closed the segmented-button part of the tiny-type item in `web/index.html`: `.seg-btn` labels moved from
+  `0.8rem` to `0.85rem` without changing the existing compact padding or active-state styling.
+- This covers the shared segmented control CSS used by the dashboard/resolution controls.
+
 ## 2026-06-18 — fix: UX polish §6.11 — accent swatch hit area
 
 - Closed the settings accent-swatch target-size item in `web/index.html`: `.swatch` moved from 22×22px to
