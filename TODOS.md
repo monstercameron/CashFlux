@@ -1465,7 +1465,7 @@ Savings KPIs) · `period.Window`.
 - [ ] "Post due now"; assert exactly the due occurrences become transactions (none missed/duplicated).
 - [ ] Assert the forecast projects from start + recurring **without double-counting** already-posted actuals.
 - [ ] Advance the period and re-post; assert idempotence (no duplicate posts for the same due date).
-- [ ] unit: `Cadence.Next/Advance` + a forecast-vs-actuals no-double-count test.
+- [x] unit: `Cadence.Next/Advance` + a forecast-vs-actuals no-double-count test.
 
 #### D9. Debt payoff scenario → allocate → balances ★
 **Workstream:** model a credit-card payoff, then allocate extra cash toward it and watch the liability fall.

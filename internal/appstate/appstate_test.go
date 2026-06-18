@@ -271,8 +271,8 @@ func TestPostDueRecurring(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PutAccount: %v", err)
 	}
-	now := time.Now()
-	due := now.AddDate(0, -3, 0) // ~3 months overdue, monthly
+	now := time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC)
+	due := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Autopost recurring with an account → posts and catches up.
 	if err := a.PutRecurring(domain.Recurring{
@@ -300,8 +300,8 @@ func TestPostDueRecurring(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PostDueRecurring: %v", err)
 	}
-	if n < 3 {
-		t.Errorf("posted = %d, want at least 3 (caught-up months)", n)
+	if n != 4 {
+		t.Errorf("posted = %d, want 4 (Jan-Apr catch-up months)", n)
 	}
 	// Every posted transaction is the salary; mystery/manual posted nothing.
 	for _, tx := range a.Transactions() {
@@ -309,9 +309,17 @@ func TestPostDueRecurring(t *testing.T) {
 			t.Errorf("unexpected posted txn: %+v", tx)
 		}
 	}
-	// r1's NextDue is now advanced past now; re-posting does nothing.
+	for _, r := range a.Recurring() {
+		if r.ID == "r1" && !r.NextDue.Equal(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("r1 NextDue = %s, want 2026-05-01", r.NextDue.Format("2006-01-02"))
+		}
+	}
+	// r1's NextDue is now advanced past now; re-posting does not double-count the catch-up months.
 	if again, _ := a.PostDueRecurring(now); again != 0 {
 		t.Errorf("second post = %d, want 0 (already caught up)", again)
+	}
+	if got := len(a.Transactions()); got != 4 {
+		t.Errorf("transactions after second post = %d, want 4", got)
 	}
 }
 

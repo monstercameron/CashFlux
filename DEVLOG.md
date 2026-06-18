@@ -40,6 +40,12 @@ problems and fixes, and what's next.
   records as well as accounts and transactions.
 - This closes the ReassignOwner unit TODO with explicit assertions across all four entity categories.
 
+## 2026-06-18 — test: recurring cadence catch-up
+
+- Expanded `Recurring.Advance` coverage from monthly-only to weekly, monthly, quarterly, and yearly.
+- Made `PostDueRecurring` deterministic with fixed due/as-of dates, asserting the exact catch-up count,
+  advanced `NextDue`, and zero new transactions on a second run.
+
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 
 - Closed the D15 pure ledger unit-test checklist item by extracting `ledger.AdjustmentToTarget` and covering

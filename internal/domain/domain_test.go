@@ -114,14 +114,22 @@ func TestRecurringCadenceNext(t *testing.T) {
 }
 
 func TestRecurringAdvance(t *testing.T) {
-	r := Recurring{Cadence: CadenceMonthly, NextDue: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
-	next := r.Advance()
-	if !next.NextDue.Equal(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Errorf("Advance NextDue = %s, want 2026-07-01", next.NextDue.Format("2006-01-02"))
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	cases := map[RecurringCadence]time.Time{
+		CadenceWeekly:    time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC),
+		CadenceMonthly:   time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC),
+		CadenceQuarterly: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+		CadenceYearly:    time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC),
 	}
-	// Original is unchanged (value receiver).
-	if !r.NextDue.Equal(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Error("Advance mutated the original")
+	for cadence, want := range cases {
+		r := Recurring{Cadence: cadence, NextDue: base}
+		next := r.Advance()
+		if !next.NextDue.Equal(want) {
+			t.Errorf("%s Advance NextDue = %s, want %s", cadence, next.NextDue.Format("2006-01-02"), want.Format("2006-01-02"))
+		}
+		if !r.NextDue.Equal(base) {
+			t.Errorf("%s Advance mutated the original to %s", cadence, r.NextDue.Format("2006-01-02"))
+		}
 	}
 }
 

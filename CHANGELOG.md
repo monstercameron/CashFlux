@@ -31,6 +31,8 @@ and every commit updates this file under `Unreleased`.
   net-worth feed test and checklist completion travel together.
 - **Owner reassignment coverage.** The `appstate` unit tests now assert the post-move owner and scope for
   accounts, budgets, goals, and transactions, closing the D-style ReassignOwner coverage gap.
+- **Recurring cadence catch-up coverage.** `Recurring.Advance` is now covered across every cadence, and
+  autopost catch-up has an exact no-double-count regression test.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
