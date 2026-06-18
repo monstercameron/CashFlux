@@ -5,9 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 )
 
 func sampleDataset() Dataset {
@@ -39,6 +41,15 @@ func sampleDataset() Dataset {
 		Formulas:      []domain.Formula{{ID: "f1", Name: "Savings rate", Expr: "(income - expense) / income * 100", Enabled: true}},
 		Plans: []domain.Plan{{ID: "pl1", Name: "Runway", HorizonMonths: 6, StartBalance: 300000,
 			Items: []domain.PlanItem{{ID: "pi1", Label: "Burn", Kind: domain.PlanItemRecurring, Amount: -40000}}}},
+		CustomPages: []domain.CustomPage{{
+			ID: "cp1", Slug: "my-money", Name: "My Money", Icon: "page", Order: 0, CreatedAt: asOf,
+			Layout: []dashlayout.Item{{ID: "w1", ColSpan: 2, RowSpan: 1}},
+			Widgets: []domain.PageWidget{{
+				ID: "w1", Type: "kpi", Title: "Savings rate",
+				Config:  widgetcfg.Config{"format": "percent"},
+				Binding: domain.WidgetBinding{Expr: "(income - expense) / income * 100"},
+			}},
+		}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
 			FXRates:            map[string]float64{"EUR": 1.1},
@@ -113,6 +124,17 @@ func TestExportImportRoundTrip(t *testing.T) {
 	if len(imported.Plans) != 1 || imported.Plans[0].Name != "Runway" || imported.Plans[0].HorizonMonths != 6 ||
 		len(imported.Plans[0].Items) != 1 || imported.Plans[0].Items[0].Amount != -40000 {
 		t.Errorf("plans lost: %+v", imported.Plans)
+	}
+	if len(imported.CustomPages) != 1 {
+		t.Fatalf("custom pages lost: %+v", imported.CustomPages)
+	}
+	cp := imported.CustomPages[0]
+	if cp.Slug != "my-money" || cp.Name != "My Money" ||
+		len(cp.Layout) != 1 || cp.Layout[0].ID != "w1" || cp.Layout[0].ColSpan != 2 ||
+		len(cp.Widgets) != 1 || cp.Widgets[0].Type != "kpi" ||
+		cp.Widgets[0].Config["format"] != "percent" ||
+		cp.Widgets[0].Binding.Expr != "(income - expense) / income * 100" {
+		t.Errorf("custom page lost: %+v", cp)
 	}
 }
 

@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom pages — persistence:** custom pages now round-trip through the store. Added a `custompages`
+  table, the `Dataset.CustomPages` field, `Load`/`Snapshot` wiring, `Put/Get/Delete/ListCustomPage(s)`
+  CRUD, and `appstate` accessors (`CustomPages`, validated `PutCustomPage`, `DeleteCustomPage`). The
+  export→import and SQLite round-trip tests now cover a page with a layout + a bound KPI widget, so pages
+  travel losslessly with the rest of the dataset.
 - **Custom pages — data model + ordering logic (groundwork):** new `domain.CustomPage`/`PageWidget`/
   `WidgetBinding` types model user-authored pages (their own rail entry, order, visibility, and a bento
   grid of custom widgets), stored in the dataset so they export/import with everything else. A new pure

@@ -288,6 +288,13 @@ func (a *App) Plans() []domain.Plan {
 	return v
 }
 
+// CustomPages returns every user-authored custom page.
+func (a *App) CustomPages() []domain.CustomPage {
+	v, err := a.store.ListCustomPages()
+	a.logErr("customPages", err)
+	return v
+}
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -591,6 +598,29 @@ func (a *App) PutPlan(p domain.Plan) error {
 
 // DeletePlan removes a saved plan.
 func (a *App) DeletePlan(id string) error { return a.del("plan", id, a.store.DeletePlan) }
+
+// PutCustomPage saves a user-authored page (needs an ID, a name, and a slug).
+func (a *App) PutCustomPage(p domain.CustomPage) error {
+	if p.ID == "" {
+		return fmt.Errorf("appstate: custom page needs an id")
+	}
+	if strings.TrimSpace(p.Name) == "" {
+		return fmt.Errorf("appstate: custom page needs a name")
+	}
+	if strings.TrimSpace(p.Slug) == "" {
+		return fmt.Errorf("appstate: custom page needs a slug")
+	}
+	if err := a.store.PutCustomPage(p); err != nil {
+		return err
+	}
+	a.log.Info("custom page saved", "id", p.ID, "slug", p.Slug)
+	return nil
+}
+
+// DeleteCustomPage removes a user-authored page.
+func (a *App) DeleteCustomPage(id string) error {
+	return a.del("customPage", id, a.store.DeleteCustomPage)
+}
 
 // PostDueRecurring posts a transaction for each autopost recurring whose NextDue
 // is on or before asOf, advancing NextDue past asOf — catching up any missed

@@ -329,3 +329,18 @@ func (s *SQLiteStore) DeletePlan(id string) (bool, error) {
 func (s *SQLiteStore) ListPlans() ([]domain.Plan, error) {
 	return loadRows[domain.Plan](s.db, "plans")
 }
+
+// --- Custom pages (user-authored pages of custom widgets) ---
+
+func (s *SQLiteStore) PutCustomPage(p domain.CustomPage) error {
+	return putJSON(s.db, "custompages", p.ID, p)
+}
+func (s *SQLiteStore) GetCustomPage(id string) (domain.CustomPage, bool, error) {
+	return getJSON[domain.CustomPage](s.db, "custompages", id)
+}
+func (s *SQLiteStore) DeleteCustomPage(id string) (bool, error) {
+	return deleteRow(s.db, "custompages", id)
+}
+func (s *SQLiteStore) ListCustomPages() ([]domain.CustomPage, error) {
+	return loadRows[domain.CustomPage](s.db, "custompages")
+}

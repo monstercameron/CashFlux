@@ -18,6 +18,20 @@ problems and fixes, and what's next.
   removing the active promotes the first survivor, the last workspace can't be removed. ID generation is the
   caller's job so the package stays deterministic. Tests green, gofmt clean.
 
+## 2026-06-18 — feat: custom pages — persistence (Phase A cont.)
+
+- Wired `CustomPage` through the store with the existing JSON-in-SQLite seam: `custompages` table,
+  `Dataset.CustomPages`, `Load`/`Snapshot`, the 4-method CRUD in `crud.go`, and appstate
+  `CustomPages`/`PutCustomPage`(validates id+name+slug)/`DeleteCustomPage`. Exactly the documented 7-step
+  pattern — no new mechanism.
+- Extended `sampleDataset()` with a page (layout + bound KPI widget) so both round-trip tests
+  (`Export→Import` byte-equality and SQLite `Load→Snapshot`) prove pages are lossless, including the nested
+  `dashlayout.Item` layout and `widgetcfg.Config`/`WidgetBinding`. Green; vet/gofmt clean.
+- Note: a parallel "workspaces" agent was committing at the same time and its `git add -A` swept my
+  uncommitted `sqlitestore.go`/`dataset.go` edits into its commit (`fb689b2`); committed the remainder
+  (crud/appstate/test) with scoped `git add` to avoid clobbering its in-flight files.
+- Next: `/p/:slug` routing + an empty page screen.
+
 ## 2026-06-18 — feat: custom pages — Phase A starts (data model + pure logic)
 
 - Kicked off the big "custom pages + widget engine + workflow engine + artifacts" feature (plan agreed
