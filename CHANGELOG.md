@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Your data now survives a page reload (local persistence):** previously every reload reset the app to
+  the sample dataset (data was in an in-memory store with only manual Export/Import). The dataset is now
+  autosaved to localStorage — snapshotted on a short ticker (catching every change) and on page-hide,
+  writing only when it changes — and loaded on boot (falling back to the sample on first run). The OpenAI
+  key is **redacted** before saving, so the secret stays session-only; a save that exceeds the storage
+  quota is caught rather than crashing. Verified live: a redacted dataset (no `openAiKey`) is written
+  within a few seconds and the app boots with its data.
 - **"+ Add" is now a multi-entity add menu (C23):** instead of jumping straight to a transaction form,
   the top-bar "+ Add" opens a small menu — New transaction (the inline quick-add panel) · New account ·
   New budget · New goal · Scan a document — routing to the right place so data entry isn't trapped on

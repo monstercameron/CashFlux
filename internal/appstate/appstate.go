@@ -85,6 +85,19 @@ func (a *App) ExportJSON() ([]byte, error) {
 	return store.Export(ds)
 }
 
+// ExportJSONRedacted serializes the whole dataset for local persistence with the
+// OpenAI key removed, so the secret is never written to localStorage (it stays
+// session-only). The manual ExportJSON keeps the key, so a user's own backup is
+// complete.
+func (a *App) ExportJSONRedacted() ([]byte, error) {
+	ds, err := a.store.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	ds.Settings.OpenAIKey = ""
+	return store.Export(ds)
+}
+
 // ImportJSON replaces all data with the given dataset JSON.
 func (a *App) ImportJSON(data []byte) error {
 	ds, err := store.Import(data)

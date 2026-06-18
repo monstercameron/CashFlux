@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature: local dataset persistence (data survives reload)
+
+- Re-armed loop ("implement all features"). Picked the highest-value gap I'd surfaced while investigating
+  the C27 AI-key bug: the dataset wasn't persisted locally at all — `appstate` seeded the *sample* on
+  boot and only manual Export/Import saved anything, so a reload lost the user's data.
+- Design choice: rather than instrument all ~25 mutation methods with an OnChange hook (error-prone —
+  Puts don't share a helper, only Deletes route through `a.del`), autosave on a **4s ticker + page-hide**.
+  The ticker snapshots the current dataset and writes only when the serialized bytes change, so it catches
+  every mutation regardless of code path without touching appstate's write methods.
+- `internal/app/persist.go` (js&&wasm): `hydrateDataset()` loads `cashflux:dataset` from localStorage on
+  boot (ImportJSON), or seeds the sample on first run; `startDatasetAutosave()` wires the ticker +
+  `pagehide`/`visibilitychange` listeners. Boot changed to `appstate.Init(nil, false)` (empty store) then
+  `hydrateDataset()` before mount, and `startDatasetAutosave()` after mount.
+- Security: added `appstate.ExportJSONRedacted()` — snapshots and zeroes `Settings.OpenAIKey` before
+  marshaling, so the autosave never writes the secret (it stays session-only). The manual `ExportJSON`
+  keeps the key so a user's own backup is complete. Guarded `save()` with `recover()` so a quota-exceeded
+  `localStorage.setItem` (large dataset) logs instead of crashing.
+- Verified live: within ~5s a redacted dataset blob (4627 bytes, has transactions, **no openAiKey**) is in
+  localStorage, and the app boots with its data ($20,749.25). Cross-reload load couldn't be exercised in
+  the static oracle (fresh browser profile per launch), but ImportJSON + the localStorage read are both
+  proven, mirroring the resolution/rail persistence pattern.
+- This also shrinks the C27 AI-key item to just an opt-in "remember my key" toggle (secure-by-default).
+
 ## 2026-06-17 — bugfix C27: vision category near-name matching
 
 - The receipt-import path matched the AI's category string to a household category by exact (lowercased)

@@ -885,9 +885,13 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
       through `fmtMoney` (the unified accounting formatter, parentheses for negatives) in the chosen import
       account's currency (falling back to base), with a raw-string fallback while the value is unparseable.
       Matches the rest of the app (C2). The summary line already used `fmtMoney`.
-- [ ] Harden the AI key flow: the key lives only in the in-memory store, so a **page reload loses it**
-      (settings aren't hydrated from localStorage). Decide whether the OpenAI key should persist across
-      reload (with a clear on-device-only notice) — today every reload silently turns AI back off.
+- [~] Harden the AI key flow: the key lives only in the in-memory store, so a **page reload loses it**.
+      **Investigated (2026-06-17):** this was not isolated — `appstate.New(seed=true)` loaded the *sample*
+      dataset on boot and there was **no dataset autosave**. **Local dataset persistence is now done
+      (2026-06-18):** the dataset autosaves to localStorage and hydrates on boot, so data survives a
+      reload — but the OpenAI key is **redacted** before saving (stays session-only), so the key itself
+      still resets, by design. What remains is just the **opt-in** key persistence: a "remember my key on
+      this device" toggle that, when on, also writes the key (secure-by-default off). Small, isolated.
 - [x] **Insights "Save as task"** — verified: the AI answer becomes a To-do (body carries the full
       answer; savings-rate math 2399.25/4200 = 57.14% correct). **Rough edge FIXED:** the task title is
       now the **question** (for a Q&A) or a short generic label ("Money insight") for "Explain my month",

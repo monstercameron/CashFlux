@@ -19,11 +19,13 @@ import (
 func Run() {
 	utils.DisableAllDebug()
 
-	// Seed an in-memory store with sample data on boot. Logs (os.Stderr) surface
-	// in the browser console.
-	if err := appstate.Init(nil, true); err != nil {
+	// Start with an empty in-memory store, then load the user's saved dataset from
+	// localStorage (or seed the sample on first run). Logs (os.Stderr) surface in
+	// the browser console.
+	if err := appstate.Init(nil, false); err != nil {
 		panic(err)
 	}
+	hydrateDataset()
 
 	// Apply saved appearance preferences (theme/accent/density) before mounting,
 	// so the first paint matches the user's choice instead of flashing defaults.
@@ -50,6 +52,9 @@ func Run() {
 
 	// Reveal the widgets' resize handles only while Shift is held.
 	wireResizeReveal()
+
+	// Persist the dataset to localStorage so it survives a reload.
+	startDatasetAutosave()
 
 	utils.WaitForever()
 }
