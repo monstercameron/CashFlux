@@ -1,6 +1,14 @@
 package forecast
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
+)
 
 func eq(a, b []int64) bool {
 	if len(a) != len(b) {
@@ -91,5 +99,25 @@ func TestProjectSpendingDeltaShiftsEndBalance(t *testing.T) {
 	}
 	if got, want := trimmed[months-1]-base[months-1], int64(delta*months); got != want {
 		t.Errorf("end-of-horizon delta = %d, want %d", got, want)
+	}
+}
+
+func TestProjectFromLedgerNetWorthFeed(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	accounts := []domain.Account{
+		{ID: "checking", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: money.New(100000, "USD")},
+		{ID: "card", Class: domain.ClassLiability, Currency: "USD", OpeningBalance: money.New(-20000, "USD")},
+	}
+	txns := []domain.Transaction{
+		{AccountID: "checking", Date: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC), Amount: money.New(10000, "USD")},
+	}
+	series, err := ledger.NetWorthSeries(accounts, txns, []time.Time{time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)}, rates)
+	if err != nil {
+		t.Fatalf("NetWorthSeries error: %v", err)
+	}
+	got := Project(series[0].Amount, []Recurring{{Monthly: 5000}}, []OneTime{{Month: 2, Amount: -12000}}, 3)
+	want := []int64{95000, 88000, 93000}
+	if !eq(got, want) {
+		t.Errorf("forecast from net-worth feed = %v, want %v", got, want)
 	}
 }

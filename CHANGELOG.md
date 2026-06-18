@@ -27,6 +27,8 @@ and every commit updates this file under `Unreleased`.
   `ledger.NetWorthSeries`, so the D13 test proves the bridge, not just the standalone forecast math.
 - **Forecast net-worth feed coverage.** The `forecast` unit tests now bridge from `ledger.NetWorthSeries`
   into `Project`, extending D13 horizon coverage to the dashboard/planning feed shape.
+- **Forecast feed regression note.** D13 now also has an isolated commit-level TODO closeout so the
+  net-worth feed test and checklist completion travel together.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

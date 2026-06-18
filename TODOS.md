@@ -1511,7 +1511,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Assert out-of-horizon items are ignored; same-month items sum; negative balances allowed.
 - [ ] Assert the dashboard trend widget and the planning curve agree for overlapping months.
 - [ ] Assert chart values are dollars (**C16**) and labels are readable at the widget's width.
-- [ ] unit: `forecast` horizon/edge tests (already partial — extend for net-worth feed).
+- [x] unit: `forecast` horizon/edge tests (already partial — extend for net-worth feed).
 
 ### Finances workstreams
 

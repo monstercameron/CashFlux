@@ -30,6 +30,8 @@ problems and fixes, and what's next.
   future changes with `forecast.Project`, covering the dashboard/planning overlap at the pure layer.
 - Rechecked after the B17 shortcut hardening commit landed and kept this docs delta attached to the
   forecast test/TODO commit.
+- Rechecked again after the lock-gate focus-trap commit landed; the final D13 commit now carries the
+  test, docs follow-up, and completed TODO checkbox together.
 - Verification: `go test ./...`, wasm build, and `gwc verify` passed.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math
