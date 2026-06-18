@@ -29,6 +29,16 @@ problems and fixes, and what's next.
   Updated the icon curated-set test (17→18). gofmt realigned the (now wider) `railMeta` and icon maps.
   Native icon test green, wasm build green.
 
+## 2026-06-18 — chore: route dashboard empty states through i18n (copy pass, file 3)
+
+- `internal/screens/dashboard.go` had three hardcoded display strings: the "App state is not ready yet."
+  fallback, "No upcoming bills.", and "Nothing near or over budget." The first now reuses the existing shared
+  `common.notReady` key (no duplicate); the other two got new `dashboard.noUpcomingBills` /
+  `dashboard.noBudgetAlerts` keys, with the budget one nudged friendlier ("Nothing's near or over budget.").
+- Scan note: insights.go / allocate.go "hardcoded" strings are AI **system prompts** (prompt engineering), not
+  display copy — intentionally left in English; localizing them would degrade AI output. The rest of the UI is
+  already i18n'd. Remaining genuine gap is the `screens.go` route registry (deferred, needs a key-based refactor).
+
 ## 2026-06-18 — chore: route lock-screen greeting through i18n (copy pass, file 2)
 
 - `internal/app/applockgate.go` set the lock-screen greeting from hardcoded English ("Good evening" default,

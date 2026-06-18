@@ -33,7 +33,7 @@ import (
 func Dashboard() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Div(Class("bento"), Div(Class("w"), Div(Class("wbody"), P(Class("empty"), "App state is not ready yet."))))
+		return Div(Class("bento"), Div(Class("w"), Div(Class("wbody"), P(Class("empty"), uistate.T("common.notReady")))))
 	}
 	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
 
@@ -215,7 +215,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 
 	var body ui.Node
 	if len(bills) == 0 {
-		body = P(Class("empty text-dim text-[13px]"), "No upcoming bills.")
+		body = P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noUpcomingBills"))
 	} else {
 		if len(bills) > 4 {
 			bills = bills[:4]
@@ -723,7 +723,7 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 			body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No budgets yet.", Label: uistate.T("dashboard.addBudget"), Path: "/budgets"})
 		} else {
 			// Budgets exist but none match the at-risk filter — not an add case.
-			body = P(Class("empty text-dim text-[13px]"), "Nothing near or over budget.")
+			body = P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noBudgetAlerts"))
 		}
 	} else {
 		if len(statuses) > limit {
