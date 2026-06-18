@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: subscriptions detection — pure core (B25, step 1)
+
+- New pure `internal/subscriptions` (no syscall/js, table-tested): `Detect(txns, rates, minCount)` finds
+  recurring charges. It considers non-transfer expenses, converts to base currency, groups by normalized
+  description + identical converted amount, and infers a cadence from the **median** gap between dates
+  (weekly 6–8d, monthly 26–33d, yearly 350–380d; anything else is not a subscription). Each result carries
+  count, last date, next-renewal (last + one interval), and `MonthlyAmount`/`AnnualAmount` normalizers;
+  `MonthlyTotal` sums the burden. Sorted by monthly cost.
+- Used the median (not mean) gap so a single off-cycle charge doesn't break detection, and required ≥2
+  occurrences (one gap) minimum. Tests: monthly/weekly/yearly classification, irregular + sparse + income
+  exclusion, ordering, and the monthly total. `go vet` clean; pure, not yet wired (UI is the next step).
+- B25 is a "SPEC" item but the detection algorithm is unambiguous and the standing directive is to
+  implement features; built bottom-up so the core is reusable regardless of the eventual UI/scope.
+
 ## 2026-06-18 — feat: Reports rail icon (B21, step 7)
 
 - Reports already auto-appeared in the rail (navGroup shows any registered Tools screen, B7) but with the
