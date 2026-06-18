@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — appstate resolver + freshness-override paths (90% → 91%)
+
+- Two more reachable feature paths: `idResolver` (the C27 name→id CSV resolver, callable directly since the
+  test is in-package) and `FreshnessWindows`'s per-type override loop.
+- Added `resolver_test.go`: `idResolver` across all three branches (exact-id passthrough, case-insensitive
+  name match, unresolved passthrough) and a `FreshnessWindows` test that layers a household "checking" → 5
+  override over the defaults. Both functions → **100%**; `appstate` → **90.7%**.
+
 ## 2026-06-18 — appstate business-logic branches (87% → 90%)
 
 - The reachable business-logic gaps after the error-path pass: `PutCustomFieldDef`'s rejection of an
