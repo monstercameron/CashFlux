@@ -1564,7 +1564,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Add a member + set default; assert default-member behavior in new forms.
 - [ ] Reassign owned accounts/budgets/goals/txns to another owner; assert all move.
 - [ ] Delete the member; assert no orphaned `OwnerID`/`MemberID` and rollups recompute.
-- [ ] unit: `ReassignOwner` across all four entity types.
+- [x] unit: `ReassignOwner` across all four entity types.
 
 #### D20. Rules auto-categorize on entry & import ★
 **Workstream:** define rules, then add/import transactions and confirm category/tags are applied (and conflicts handled).

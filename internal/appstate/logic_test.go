@@ -67,6 +67,16 @@ func TestReassignOwnerAllEntityTypes(t *testing.T) {
 			t.Errorf("account owner/scope = %q/%q, want m2/individual", ac.OwnerID, ac.Scope)
 		}
 	}
+	for _, b := range a.Budgets() {
+		if b.ID == "b1" && (b.OwnerID != "m2" || b.Scope != domain.ScopeIndividual) {
+			t.Errorf("budget owner/scope = %q/%q, want m2/individual", b.OwnerID, b.Scope)
+		}
+	}
+	for _, g := range a.Goals() {
+		if g.ID == "g1" && (g.OwnerID != "m2" || g.Scope != domain.ScopeIndividual) {
+			t.Errorf("goal owner/scope = %q/%q, want m2/individual", g.OwnerID, g.Scope)
+		}
+	}
 	for _, tr := range a.Transactions() {
 		if tr.ID == "t1" && tr.MemberID != "m2" {
 			t.Errorf("transaction member = %q, want m2", tr.MemberID)

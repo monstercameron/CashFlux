@@ -34,6 +34,12 @@ problems and fixes, and what's next.
   test, docs follow-up, and completed TODO checkbox together.
 - Verification: `go test ./...`, wasm build, and `gwc verify` passed.
 
+## 2026-06-18 — test: ReassignOwner entity coverage
+
+- Tightened `TestReassignOwnerAllEntityTypes` so it verifies the final owner/scope for budget and goal
+  records as well as accounts and transactions.
+- This closes the ReassignOwner unit TODO with explicit assertions across all four entity categories.
+
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 
 - Closed the D15 pure ledger unit-test checklist item by extracting `ledger.AdjustmentToTarget` and covering
