@@ -6,6 +6,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
 // EmptyDataset returns a blank starter dataset for a brand-new workspace: a
@@ -156,6 +157,25 @@ func SampleDataset() Dataset {
 			{ID: "task-card", Title: "Pay credit card by the 18th", Status: domain.StatusOpen, Priority: domain.PriorityHigh, RelatedType: domain.RelatedAccount, RelatedID: card, MemberID: me, Source: domain.SourceManual},
 			{ID: "task-401k", Title: "Bump 401(k) contribution to 15%", Status: domain.StatusOpen, Priority: domain.PriorityMedium, RelatedType: domain.RelatedAccount, RelatedID: broker, MemberID: me, Source: domain.SourceManual},
 			{ID: "task-physical", Title: "Schedule annual physical", Status: domain.StatusOpen, Priority: domain.PriorityLow, MemberID: me, Source: domain.SourceManual},
+		},
+		Workflows: []workflow.Workflow{
+			{
+				ID: "wf-flag-big", Name: "Flag large purchases", Enabled: true,
+				Trigger:   workflow.Trigger{Kind: workflow.TriggerTxnAdded},
+				Condition: "txn_abs > 200",
+				Actions:   []workflow.Action{{Kind: workflow.ActionFlagReview}},
+			},
+			{
+				ID: "wf-coffee", Name: "Categorize coffee runs", Enabled: true,
+				Trigger:   workflow.Trigger{Kind: workflow.TriggerTxnAdded},
+				Condition: `contains(txn_payee, "coffee")`,
+				Actions:   []workflow.Action{{Kind: workflow.ActionSetCategory, CategoryID: catDining}},
+			},
+			{
+				ID: "wf-tidy", Name: "Tidy up categories", Enabled: false,
+				Trigger: workflow.Trigger{Kind: workflow.TriggerManual},
+				Actions: []workflow.Action{{Kind: workflow.ActionApplyRules}},
+			},
 		},
 		Settings: Settings{BaseCurrency: "USD"},
 	}

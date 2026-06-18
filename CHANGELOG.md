@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
+  automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
+  "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
+  categories" (apply rules). They demonstrate per-transaction conditions and transaction-mutating actions.
 - **Passcode lock (B17, MVP).** You can now set a passcode that gates the app: a full-screen unlock screen
   covers everything at startup (and on demand via the command palette's **Lock now**) until the right
   passcode is entered. Manage it from Cmd/Ctrl+K — **Set passcode lock**, **Change passcode**, **Lock now**,
@@ -327,7 +331,7 @@ and every commit updates this file under `Unreleased`.
 ### Fixed
 - **Delete buttons have a larger touch target (UX audit §6.1).** `.btn-del` controls now carry an explicit
   32×32px floor instead of relying on the shared 24px icon-button minimum; browser verification confirmed
-  the computed size.
+  the computed size, and `gwc verify` stayed green.
 - **Selected transaction rows have a real visual state (UX audit §6.4).** Bulk-selection checkboxes now get
   an accent background/border when selected instead of relying on the glyph alone. Browser verification
   covered the selected checkbox's computed colors, and `gwc verify` stayed green after the app-lock updates.
