@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature D10: forecast scenario comparison + dollar axis
+
+- The Planning 12-month forecast used the axis-less sparkline and showed the trim scenario as text only.
+  Switched it to the D3 `ui.Chart`: plots major units with a compact-currency Y axis ($0/$10k/…, the C16
+  fix), and overlays a second series (the trimmed scenario, gold) beside the baseline when a trim amount
+  is entered — so the two net-worth curves compare directly (the §2.6 comparison gap).
+- Added legend rendering to the D3 shim (`web/chart.js`): when `spec.legend` and >1 series, a small
+  top-right colored-dot + name list, so the baseline/scenario lines are labeled. SW cache v13→v14.
+- Unit: `forecast.TestProjectSpendingDeltaShiftsEndBalance` — trimming by `delta`/month pulls the curve
+  ahead by delta each month (end = delta×months higher), backing the what-if.
+- Verified live on /planning: D3 svg with `$0/$10k/$20k/$30k` ticks; entering a trim adds the scenario
+  line (stroked paths 3→4).
+
 ## 2026-06-18 — feature B2: live drag-over preview
 
 - The reorder previously only happened on drop; added a live preview during the drag. Clean,

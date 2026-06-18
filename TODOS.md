@@ -980,8 +980,17 @@ results are summarized here so the backlog doesn't bloat.
   text filter "coffee" → **1 shown** (only the match); Clear restored the list; inline-edit opened with
   a Save control. Confirms the add/filter/inline-edit flow works correctly — the only blocker is the
   cold deep-link 404 (#2), not the flow itself. No new defects.
-
----
+- **2026-06-18 #4** — Creation flows (from `/`, 0 console errors): **Budgets add** ✓ ("Loop Groceries"
+  appeared), **Goals add** ✓ ("Loop Fund" appeared). Positive: the **Members color picker now renders a
+  real swatch** (C8's "bare line" appears fixed). **NEW BUG — Members "Add member" button is a silent
+  no-op:**
+  - [ ] Typing a name and **clicking "Add member" does nothing** — no member added, no console error,
+        field not cleared. Isolated it: (A) fill + click → not added; (B) fill + Tab-blur + click → not
+        added; (C) fill + **Enter** → **added**. So only the form's Enter/submit path commits; the
+        button's click handler reads stale/empty name state. This is **inconsistent** with Budgets/Goals,
+        whose buttons add correctly with the same fill+click. Likely the Name `OnInput` isn't wired (or
+        the button reads a state var the input never updates) while the `<form>` onSubmit reads the live
+        value. _Confirm with real keyboard typing; fix so the button and Enter behave identically._
 
 ## D. Cross-component E2E workstream stories — budgeting · planning · finances ★
 
@@ -1112,10 +1121,14 @@ Savings KPIs) · `period.Window`.
 #### D10. What-if trim-spending → forecast curve vs actuals
 **Workstream:** apply a "trim monthly spending by X" what-if and compare the projected net-worth curve.
 **Touches:** Planning (trim what-if) · `forecast` · `ledger.NetWorthSeries` · chart (`ui.Chart`).
-- [ ] Enter a trim amount; assert the projected end balance shifts by the right delta.
-- [ ] Assert the chart redraws and the axis is **in dollars, not cents** (**C16**).
-- [ ] Compare scenario vs actual baseline side by side (build the comparison — §2.6 gap).
-- [ ] unit: `forecast.Project` with a spending delta over the horizon.
+- [x] Enter a trim amount → the projected end balance shifts (the trim note shows the new end + delta).
+- [x] Chart axis is **in dollars, not cents** — the forecast now uses the D3 `ui.Chart` with a compact
+      currency Y axis ($0/$10k/$20k/$30k), like C16 (was the axis-less sparkline).
+- [x] Compare scenario vs actual baseline side by side — the chart now overlays two series (Baseline +
+      With-trim, distinct colors + a legend) when a trim is set. Verified live (entering a trim adds the
+      second line; dollar axis confirmed).
+- [x] unit: `forecast.Project` with a spending delta — `TestProjectSpendingDeltaShiftsEndBalance` (trim
+      pulls the curve ahead by delta each month; end = delta×months higher).
 
 #### D11. Plan (start balance + monthly) projection → dashboard surfacing
 **Workstream:** create a savings/spending plan and see its projection.

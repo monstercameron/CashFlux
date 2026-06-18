@@ -199,6 +199,8 @@ var english = Catalog{
 	"planning.forecastHint":       "If this month's net cash flow (%s) continues, projected to %s.",
 	"planning.trimPlaceholder":    "What if I trim monthly spending by… (%s)",
 	"planning.trimNote":           "With %s/month less spending, projected to %s — %s more.",
+	"planning.seriesBaseline":     "Baseline",
+	"planning.seriesTrim":         "With trim",
 	"planning.payoffTitle":        "Debt payoff calculator",
 	"planning.payoffDesc":         "See how long a debt takes to clear and how much interest it costs.",
 	"planning.balancePlaceholder": "Balance owed (%s)",

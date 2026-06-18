@@ -96,6 +96,18 @@
       return;
     }
 
+    // Optional legend (top-right): a colored dot + the series name for each
+    // series, so multi-series charts (e.g. baseline vs scenario) are readable.
+    if (spec.legend && series.length > 1) {
+      var lg = g.append("g").attr("font-size", "10px");
+      series.forEach(function (s, si) {
+        var color = s.color || defColor;
+        var row = lg.append("g").attr("transform", "translate(0," + si * 13 + ")");
+        row.append("rect").attr("x", iw - 9).attr("y", 0).attr("width", 8).attr("height", 8).attr("rx", 2).attr("fill", color);
+        row.append("text").attr("x", iw - 13).attr("y", 7).attr("text-anchor", "end").attr("fill", fg).text(s.name || ("Series " + (si + 1)));
+      });
+    }
+
     // line / area
     series.forEach(function (s) {
       var color = s.color || defColor;

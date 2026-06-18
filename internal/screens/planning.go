@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -227,26 +228,46 @@ func Planning() ui.Node {
 		monthlyNet := income.Amount - expense.Amount
 
 		series := forecast.Project(net.Amount, []forecast.Recurring{{Label: "net cash flow", Monthly: monthlyNet}}, nil, 12)
-		values := make([]float64, len(series))
-		for i, s := range series {
-			values[i] = float64(s)
-		}
 		endVal := money.New(series[len(series)-1], base)
-		stroke := "#54b884"
-		if monthlyNet < 0 {
-			stroke = "#d8716f"
+
+		// Plot in major units (dollars) with a compact-currency axis (C16), and
+		// overlay the trimmed scenario beside the baseline when a trim is set, so
+		// the two net-worth curves can be compared directly (D10).
+		divf := 1.0
+		for i := 0; i < currency.Decimals(base); i++ {
+			divf *= 10
 		}
+		toPoints := func(vals []int64) []chartspec.Point {
+			pts := make([]chartspec.Point, len(vals))
+			for i, v := range vals {
+				pts[i] = chartspec.Point{X: float64(i), Y: float64(v) / divf}
+			}
+			return pts
+		}
+		yFmt := ".2~s"
+		if currency.Symbol(base) == "$" {
+			yFmt = "$.2~s"
+		}
+		chartSeries := []chartspec.Series{{Name: uistate.T("planning.seriesBaseline"), Points: toPoints(series)}}
+
 		trimNote := Fragment()
 		if trim, terr := money.ParseMinor(strings.TrimSpace(trimStr.Get()), currency.Decimals(base)); terr == nil && trim > 0 {
 			series2 := forecast.Project(net.Amount, []forecast.Recurring{{Monthly: monthlyNet + trim}}, nil, 12)
+			chartSeries = append(chartSeries, chartspec.Series{Name: uistate.T("planning.seriesTrim"), Color: "#cfa14e", Points: toPoints(series2)})
 			end2 := series2[len(series2)-1]
 			trimNote = P(Class("muted"), uistate.T("planning.trimNote",
 				fmtMoney(money.New(trim, base)), fmtMoney(money.New(end2, base)), fmtMoney(money.New(end2-series[len(series)-1], base))))
 		}
+		spec := chartspec.Spec{
+			Kind:   chartspec.Line,
+			Series: chartSeries,
+			Y:      chartspec.Axis{Format: yFmt},
+			Legend: len(chartSeries) > 1,
+		}
 		forecastCard = Section(Class("card"),
 			H2(Class("card-title"), uistate.T("planning.forecastTitle")),
 			P(Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
-			uiw.AreaChart(uiw.AreaChartProps{Values: values, Stroke: stroke, GradientID: "cf-forecast", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
+			uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
 			Form(Class("form-grid"),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.trimPlaceholder", base)), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim)),
 			),

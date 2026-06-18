@@ -76,3 +76,20 @@ func TestProjectCanGoNegative(t *testing.T) {
 		t.Errorf("projection should allow negative, got %v", got)
 	}
 }
+
+// TestProjectSpendingDeltaShiftsEndBalance backs the Planning "trim spending"
+// what-if (D10): trimming spending by `delta`/month pulls the projected curve
+// ahead by delta each month, so by the horizon end it's delta*months higher.
+func TestProjectSpendingDeltaShiftsEndBalance(t *testing.T) {
+	const start, baseMonthly, delta, months = 100000, 50000, 20000, 12
+	base := Project(start, []Recurring{{Monthly: baseMonthly}}, nil, months)
+	trimmed := Project(start, []Recurring{{Monthly: baseMonthly + delta}}, nil, months)
+	for i := range base {
+		if got, want := trimmed[i]-base[i], int64(delta*(i+1)); got != want {
+			t.Errorf("month %d delta = %d, want %d", i, got, want)
+		}
+	}
+	if got, want := trimmed[months-1]-base[months-1], int64(delta*months); got != want {
+		t.Errorf("end-of-horizon delta = %d, want %d", got, want)
+	}
+}

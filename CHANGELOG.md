@@ -66,6 +66,10 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Planning forecast chart upgraded to a labelled comparison (D10):** the 12-month net-worth forecast
+  now renders with the D3 chart (a proper **dollar** Y axis like C16, not the axis-less sparkline), and
+  when you enter a "trim spending" amount it **overlays the trimmed scenario beside the baseline** (two
+  labelled, color-coded lines + a legend) so you can compare the curves directly.
 - **Account rows are less cluttered (C9):** the six per-row actions are now Transactions / Edit / ✕ inline
   plus a **⋯ overflow menu** holding the secondary actions (Update balance / Mark updated / Archive).
 - **Parent-category budgets now include sub-category spend (D5):** a budget on a parent category (e.g.
