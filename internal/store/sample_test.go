@@ -6,6 +6,31 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
+// TestEmptyDataset checks that a new workspace's starting point is genuinely empty
+// (no financial data), valid, and survives the export→import a new workspace does.
+func TestEmptyDataset(t *testing.T) {
+	ds := EmptyDataset()
+	if len(ds.Accounts) != 0 || len(ds.Transactions) != 0 || len(ds.Budgets) != 0 || len(ds.Goals) != 0 {
+		t.Errorf("empty dataset should carry no financial data: %d acct, %d txn, %d budget, %d goal",
+			len(ds.Accounts), len(ds.Transactions), len(ds.Budgets), len(ds.Goals))
+	}
+	if len(ds.Members) != 1 || ds.Settings.BaseCurrency != "USD" {
+		t.Errorf("want one default member + USD base, got %d members, base %q", len(ds.Members), ds.Settings.BaseCurrency)
+	}
+	// A new workspace persists Export(EmptyDataset()) and boot Imports it.
+	data, err := Export(ds)
+	if err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	back, err := Import(data)
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if len(back.Members) != 1 || len(back.Accounts) != 0 {
+		t.Errorf("round-trip: %d members, %d accounts (want 1, 0)", len(back.Members), len(back.Accounts))
+	}
+}
+
 // TestSampleDatasetIntegrity checks the sample dataset's internal references hold
 // together (beyond per-entity validity): every transaction/budget/goal/task points
 // at entities that actually exist, and the transfer legs balance. This guards

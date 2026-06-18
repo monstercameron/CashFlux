@@ -7,6 +7,7 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/workspace"
 )
 
@@ -140,15 +141,21 @@ func switchWorkspace(targetID string) {
 	reloadPage()
 }
 
-// createWorkspace adds a fresh workspace (seeded with the sample dataset on boot,
-// since its dataset key is cleared) and switches to it.
+// createWorkspace adds a fresh, EMPTY workspace and switches to it: it clears the
+// per-workspace UI keys (back to defaults) and seeds an explicitly empty dataset
+// so the new workspace is a clean slate — not a copy of the current one, and not
+// the demo sample. (Clearing the dataset key alone would make boot re-seed the
+// sample, which looks like a clone of the current sample-based workspace.)
 func createWorkspace(name string) {
 	r := loadRegistry()
 	suspendAutosave = true
 	saveBlob(r.ActiveID, bundleCurrent())
 	newID := id.NewWithPrefix("ws")
 	saveRegistry(r.Add(newID, name).SetActive(newID))
-	applyBundle(map[string]string{}) // empty → boot seeds the sample dataset + default UI
+	applyBundle(map[string]string{}) // clear UI keys → defaults
+	if data, err := store.Export(store.EmptyDataset()); err == nil {
+		lsSet(datasetStoreKey, string(data)) // explicit empty dataset, not the sample
+	}
 	reloadPage()
 }
 

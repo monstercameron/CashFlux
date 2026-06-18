@@ -208,6 +208,14 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **A new workspace now starts empty instead of cloning the current one's data.** "+ New workspace"
+  was clearing only the canonical `cashflux:dataset` key; boot then saw an empty dataset key and
+  re-seeded the Michael Brooks demo sample — so a freshly created workspace looked like a copy of the
+  current (sample-based) one. `createWorkspace` now persists `store.Export(store.EmptyDataset())`
+  explicitly: a clean slate with one default "You" member, USD base currency, and no accounts /
+  transactions / budgets / goals. (`duplicateWorkspace` still copies the current data on purpose;
+  that's the deliberate "clone this workspace" path.) New `store.EmptyDataset()` + `TestEmptyDataset`
+  cover the blank starting point and its export→import round-trip.
 - **All icons now render (and the sidebar collapse button is visible again):** inline SVG icons across
   the app — the left-rail nav glyphs, the top-bar menu/collapse toggle (which is icon-only, so it had
   no visible affordance), the household gear, and the per-tile grip/gear — were invisible. Root cause was

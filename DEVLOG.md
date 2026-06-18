@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: new workspace starts empty (was cloning the current sample)
+
+- Bug (user-reported): "the profile switcher works but it clones all the data from the prior selected
+  account instead of showing empty values." Creating a workspace showed the same accounts/net worth as
+  the one you were on.
+- Root cause: `createWorkspace` cleared the per-workspace UI keys and the `cashflux:dataset` key, then
+  reloaded. Boot's `hydrateDataset` treats an *empty* dataset key as first-run and re-seeds the demo
+  sample — so the "new" workspace came up as the Michael Brooks sample, indistinguishable at a glance
+  from the current sample-based workspace. (Confirmed it was the re-seed path, not an autosave clobber:
+  the `suspendAutosave` guard is correctly set before the reload.)
+- Fix: added `store.EmptyDataset()` (one default "You" member, USD base, no financial data) and made
+  `createWorkspace` persist `store.Export(store.EmptyDataset())` into the dataset key instead of leaving
+  it empty. Now a new workspace boots to a genuine clean slate. `duplicateWorkspace` is untouched — that
+  remains the intentional "copy this workspace's data" action.
+- Tests: `TestEmptyDataset` asserts no accounts/txns/budgets/goals, exactly one member, USD base, and a
+  lossless export→import round-trip (the same path boot takes). `go test ./internal/store/...` +
+  `./internal/workspace/...` green; gofmt clean; wasm rebuilt + probe shows the app healthy (Default ▾,
+  net worth, 0 console errors).
+- Note: the headless probe can't click "+ New workspace" (native prompt + no click driver), so the
+  empty-workspace flow is logic/test-verified; confirm in-browser with a hard reload.
+- Next: re-apply the collapsed-rail polish to `WorkspaceSwitcher` (hide it when the rail is collapsed)
+  once the tree is clear of the parallel custom-pages work.
+
 ## 2026-06-18 — feat: custom pages — "My pages" rail group (Phase A cont.)
 
 - Added `internal/app/custompagesnav.go` (`CustomPagesNav`): renders the "My pages" rail section from

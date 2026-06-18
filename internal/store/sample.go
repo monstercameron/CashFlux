@@ -8,6 +8,18 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
+// EmptyDataset returns a blank starter dataset for a brand-new workspace: a
+// single default member and a base currency, but no accounts, transactions,
+// budgets, goals, or categories — a clean slate to build up, in contrast to
+// SampleDataset's demo data. Used when the user creates a new (non-duplicated)
+// workspace, so it starts empty rather than re-seeding the sample.
+func EmptyDataset() Dataset {
+	return Dataset{
+		Members:  []domain.Member{{ID: "m-you", Name: "You", IsDefault: true, Color: "#4ade80"}},
+		Settings: Settings{BaseCurrency: "USD"},
+	}
+}
+
 // SampleDataset returns a realistic starter dataset for first run or the "load
 // sample data" action: the finances of Michael Brooks, a 46-year-old single
 // homeowner. It carries three months of recurring activity (April–June 2026) so
