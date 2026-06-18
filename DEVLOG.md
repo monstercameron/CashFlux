@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — seed data: a middle-aged single homeowner persona
+
+- User request: seed the data for a middle-aged single man. Confirmed three choices up front (AskUserQuestion):
+  replace the existing sample (vs. add a second seed), homeowner-with-mortgage (vs. renter), and several
+  months of history (vs. one month).
+- Rewrote `store.SampleDataset()` as Michael Brooks, 46, single homeowner. Balance sheet: Everyday Checking,
+  High-Yield Savings, Brokerage/401(k), Home (TypeOther asset), Mortgage, Auto Loan, Credit Card — with
+  liquidity/stability/expected-return scores set so the Allocate screen is meaningful. Three months
+  (Apr–Jun 2026) of recurring activity generated in a loop: salary in, ~14 categorized bills/expenses from
+  checking, and monthly transfers to savings and the brokerage (both legs, so those balances and the
+  net-worth trend climb). Small per-month variation (`v`) keeps charts from being flat; June's later
+  activity is left uncleared to look like a real mid-month ledger.
+- Kept the app's existing convention: liabilities are static balances and their payments are categorized
+  expenses (no payment-transfer plumbing). Five monthly budgets (groceries near-limit, others comfortable),
+  three goals linked to savings/brokerage, three tasks.
+- Net worth lands ~\$354k (≈\$640k assets − \$286k debt) — plausible for the persona. All ids are stable so
+  reload stays idempotent. `TestSampleDatasetIsValid` (validates every entity) passes; full suite 41 green,
+  gofmt clean, wasm builds.
+
 ## 2026-06-18 — fix stray nested wasm re-tracking (.gitignore mid-slash anchoring)
 
 - A clean-state check caught `internal/screens/static/bin/main.wasm` tracked *again* after I thought I'd

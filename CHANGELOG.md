@@ -69,6 +69,13 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Sample data is now a realistic persona:** first-run / "Load sample data" loads the finances of Michael
+  Brooks — a 46-year-old single homeowner — instead of the bare placeholder. It includes a full balance
+  sheet (checking, high-yield savings, brokerage/401(k), home, mortgage, auto loan, credit card), ten
+  spending categories, and **three months of recurring activity** (April–June 2026: salary, mortgage,
+  utilities, groceries, dining, car, insurance, health, subscriptions, shopping, plus monthly transfers to
+  savings and the brokerage) so the trend charts, breakdowns, and net-worth history have real data. Five
+  monthly budgets, three goals (emergency fund, retirement, new-car), and a few tasks round it out.
 - **Spend-breakdown ranking moved into the tested ledger package (internal):** the dashboard's
   sort-categories-by-spend / top-N / collapse-the-rest-into-"Other" logic lived inline in the view. It's now
   `ledger.RankSpending(totals, n) (top, other)` — pure and table-tested — with name resolution and labels

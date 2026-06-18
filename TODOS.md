@@ -1279,6 +1279,19 @@ results are summarized here so the backlog doesn't bloat.
     key-free (the pure `internal/insights.Detect` engine + the dashboard top-highlight widget exist; the
     Insights screen just doesn't render the highlights card). Still sparse without a key.
   - C28 nav icons: still painted `[0,0]` (unchanged).
+- **2026-06-18 #35** — Spot-check, 0 errors. Durable bugs **all unchanged**: C28 icon `[0,0]`; Members,
+  Accounts, **and Rules** add-buttons all no-op (Morgan35/Acct35/rule35 not added). No regressions.
+  _Standing open set is stable across iterations #25→#35; these await a code fix._
+- **2026-06-18 #36** — Transactions Duplicate / Repeat-last / sort (0 console errors). ✅ **All work.**
+  Duplicate → shown **4→5**; Repeat-last prefilled "Fuel" then Add → **5→6**; sort options present
+  (Newest first / Largest amount / Payee A–Z). _Note: the Transactions add-**button** commits fine
+  (Repeat-last+Add worked) — reinforces that the add-button no-op is specific to Members/Accounts/Rules._
+- **2026-06-18 #37** — To-do checkbox semantics (0 console errors). 🐞 **To-do task-completion checkboxes
+  are also non-semantic** (`inputCheckbox=0, roleCheckbox=0`) — same as the Transactions bulk-select
+  squares (#14/#15). So the **non-semantic checkbox is an app-wide shared-component pattern** (at least
+  task-complete + bulk-select): not keyboard-focusable / SR-perceivable. One fix (real `<input
+  type=checkbox>` or `role=checkbox`+`aria-checked`+label in the shared component) covers all call sites.
+  (Hide-done toggle inconclusive — the sample task is open, nothing "done" to hide.)
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so
