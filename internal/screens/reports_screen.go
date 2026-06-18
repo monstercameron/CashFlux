@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
@@ -57,6 +58,15 @@ func Reports() ui.Node {
 	netSeries := make([]float64, len(flows))
 	for i, f := range flows {
 		netSeries[i] = float64(f.Net())
+	}
+
+	// Net-worth trend: net worth as of each period boundary (cumulative, so it
+	// reads the running total rather than per-period flow).
+	accounts := app.Accounts()
+	nwSeries, _ := ledger.NetWorthSeries(accounts, txns, bounds, rates)
+	nw := make([]float64, len(nwSeries))
+	for i, m := range nwSeries {
+		nw[i] = float64(m.Amount)
 	}
 
 	cats := app.Categories()
@@ -124,6 +134,10 @@ func Reports() ui.Node {
 			H2(Class("card-title"), uistate.T("dashboard.cashFlow")),
 			P(Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
 			uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow")}),
+		)),
+		If(len(nw) >= 2, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("dashboard.netWorthTrend")),
+			uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend")}),
 		)),
 	)
 }

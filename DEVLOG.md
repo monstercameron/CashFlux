@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Reports net-worth trend chart (B21)
+
+- Added a second sparkline to the Reports screen: net worth as of each of the same `bounds` boundaries
+  used for the cash-flow trend, via the existing `ledger.NetWorthSeries(accounts, txns, bounds, rates)`
+  (cumulative running total, not per-period flow). Rendered with `uiw.AreaChart` in an accent stroke and
+  its own gradient id, shown only when there are ≥2 points. Reused the `dashboard.netWorthTrend` label.
+  No new logic — pure reuse of the ledger series + the chart shim. wasm build green, gofmt clean.
+
 ## 2026-06-18 — feat: Subscriptions rail icon (B25, step 3)
 
 - Added a Lucide "repeat" `icon.Subscriptions` and wired `/subscriptions` into `railMeta` with the
