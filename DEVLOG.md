@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add backend readiness and graceful shutdown
+
+- Changed `/readyz` from a static liveness response into a real readiness probe backed by the server store:
+  it now requires a configured SQLite handle, a successful ping, and a readable schema version.
+- Kept `/healthz` as the cheap process-liveness check, so orchestration can distinguish "process is alive"
+  from "backend dependencies are ready to serve traffic."
+- Reworked `cmd/cashflux-server` to run an explicit `http.Server` and call `Shutdown` on interrupt/SIGTERM,
+  giving HTTP, websocket bridge, and in-flight requests a drain window before the process exits.
+- Verified the new readiness behavior with server tests for healthy stores, missing stores, and closed stores.
+
 ## 2026-06-18 - docs: document backend auth handshake
 
 - Updated `docs/BACKEND_PLAN.md` from plan-only language to backend-foundation-in-progress and documented the

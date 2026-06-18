@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend readiness and graceful shutdown.** `/readyz` now verifies the SQLite store is configured,
+  pingable, and migrated before reporting ready, while `cashflux-server` now drains through
+  `http.Server.Shutdown` on interrupt or SIGTERM instead of exiting abruptly.
 - **Backend auth handshake documented.** `docs/BACKEND_PLAN.md` now spells out how the Settings backend URL is
   used for HTTP routes and converted to the GoGRPCBridge `/grpc` websocket target, and how the same bearer token
   flows through HTTP `Authorization` and gRPC metadata.

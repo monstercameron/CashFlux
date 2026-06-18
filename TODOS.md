@@ -3970,7 +3970,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] `grpctunnel.Wrap(grpcServer, …)` at `/grpc`: `WithOriginCheck` (SPA origin allow-list),
       `WithKeepalive`, `WithReadLimitBytes`, `WithMaxActiveConnections` / `…PerClient` / `…UpgradesPerMinute`.
 - [ ] TLS / `wss` (server or reverse proxy); confirm WS survives the proxy/LB (keepalive, idle timeout).
-- [ ] Health + readiness endpoints; graceful shutdown that drains active streams.
+- [x] Health + readiness endpoints; graceful shutdown that drains active streams.
 
 ### 7.6 HTTP endpoints (OAuth + blobs)
 - [ ] OAuth: `GET /v1/auth/:provider` (PKCE + `state`) and `…/callback` → upsert `users` → issue session

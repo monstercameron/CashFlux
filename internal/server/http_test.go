@@ -46,7 +46,8 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestHealthReadyAndVersionEndpoints(t *testing.T) {
-	h := NewMux(Config{AuthMode: "token", Billing: false})
+	store := openTestStore(t)
+	h := NewMux(Config{AuthMode: "token", Billing: false}, store)
 	for _, path := range []string{"/healthz", "/readyz"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rr := httptest.NewRecorder()
@@ -74,6 +75,16 @@ func TestHealthReadyAndVersionEndpoints(t *testing.T) {
 	}
 	if body.AuthMode != "token" || body.BillingEnabled {
 		t.Fatalf("mode flags = %+v", body)
+	}
+}
+
+func TestReadyEndpointRequiresStore(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token"})
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("ready without store status = %d, want 503", rr.Code)
 	}
 }
 

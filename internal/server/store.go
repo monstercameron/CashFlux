@@ -40,6 +40,20 @@ func OpenStore(path string) (*Store, error) {
 // Close releases the database.
 func (s *Store) Close() error { return s.db.Close() }
 
+// Ready verifies the backing store can serve requests.
+func (s *Store) Ready() error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("server store: not configured")
+	}
+	if err := s.db.Ping(); err != nil {
+		return fmt.Errorf("server store: ping: %w", err)
+	}
+	if _, err := s.SchemaVersion(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // SchemaVersion returns the current migrated server schema version.
 func (s *Store) SchemaVersion() (int, error) {
 	var v int

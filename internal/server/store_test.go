@@ -53,6 +53,22 @@ INSERT INTO schema_meta(id, version) VALUES(1, 99);`); err != nil {
 	}
 }
 
+func TestStoreReady(t *testing.T) {
+	s, err := OpenStore(filepath.Join(t.TempDir(), "cashflux.db"))
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	if err := s.Ready(); err != nil {
+		t.Fatalf("Ready: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := s.Ready(); err == nil {
+		t.Fatal("Ready succeeded after Close")
+	}
+}
+
 func tableExists(t *testing.T, db *sql.DB, name string) bool {
 	t.Helper()
 	var got string
