@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom widgets — pure engine (groundwork):** two new platform-independent, table-tested packages back
+  the custom-widget feature. `internal/engineenv` builds the "app engine variable surface" (net_worth,
+  income, expense, counts, …) a KPI formula or workflow condition can reference. `internal/widgetspec` is
+  the widget catalog (KPI/List/Chart/Text + list data sources) plus deterministic KPI evaluation
+  (`EvalKPI` over the sandboxed formula engine) and value formatting. Rendering + the grid follow.
 - **Custom pages — page management:** each "My pages" entry now has a "⋯" menu to **rename** (re-slugs and
   follows the page), **hide/show** (a "Hidden pages" sub-section brings hidden ones back), and **delete**
   (with confirm). Rounds out Phase A page management alongside create + drag-reorder.
