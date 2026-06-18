@@ -88,6 +88,29 @@ func ensureWorkspaceRegistry() workspace.Registry {
 	return r
 }
 
+// applyStartupWorkspace runs once at boot (after ensureWorkspaceRegistry, before
+// hydrateDataset) to honor the user's startup preference. When a workspace is
+// pinned and it isn't the one whose data currently sits in the canonical keys, it
+// swaps the pinned workspace's bundle in — bundling the last-active one out first,
+// so nothing is lost. No reload is needed: nothing has mounted or read the keys
+// yet, so hydrateDataset simply loads the swapped-in context.
+func applyStartupWorkspace() {
+	r := loadRegistry()
+	target := r.StartupTarget()
+	if target == "" || target == r.ActiveID {
+		return
+	}
+	saveBlob(r.ActiveID, bundleCurrent())
+	applyBundle(loadBlob(target))
+	saveRegistry(r.SetActive(target))
+}
+
+// setStartupWorkspace records which workspace the app opens on launch ("" =
+// resume the last-active one). No reload — it only takes effect next boot.
+func setStartupWorkspace(wsID string) {
+	saveRegistry(loadRegistry().SetStartup(wsID))
+}
+
 func wsBlobKey(wsID string) string { return wsBlobPrefix + wsID }
 
 // bundleCurrent snapshots the active workspace's per-workspace keys.

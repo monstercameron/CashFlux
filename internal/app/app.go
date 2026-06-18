@@ -30,6 +30,10 @@ func Run() {
 	// "Default" workspace). The active workspace's data already lives in the
 	// canonical localStorage keys, so hydrateDataset below loads it as usual.
 	ensureWorkspaceRegistry()
+	// Honor the startup-workspace preference before hydrating: if a workspace is
+	// pinned, swap its context into the canonical keys so the first paint is the
+	// workspace the user chose to open with (no reload needed pre-mount).
+	applyStartupWorkspace()
 	hydrateDataset()
 	hydrateAIKey()
 

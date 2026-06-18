@@ -88,6 +88,60 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+func TestStartup(t *testing.T) {
+	r := (Registry{}).Add("w1", "One").Add("w2", "Two").SetActive("w2")
+
+	// Default: no pin → launch resumes the active workspace.
+	if r.StartupID != "" {
+		t.Errorf("StartupID should default empty, got %q", r.StartupID)
+	}
+	if got := r.StartupTarget(); got != "w2" {
+		t.Errorf("unpinned StartupTarget should be the active workspace, got %q", got)
+	}
+
+	// Pin to a specific workspace → launch opens it regardless of active.
+	r = r.SetStartup("w1")
+	if r.StartupID != "w1" {
+		t.Errorf("SetStartup failed, got %q", r.StartupID)
+	}
+	if got := r.StartupTarget(); got != "w1" {
+		t.Errorf("pinned StartupTarget should be w1, got %q", got)
+	}
+
+	// Pinning to an unknown id is a no-op (stays on the previous pin).
+	if got := r.SetStartup("nope"); got.StartupID != "w1" {
+		t.Errorf("pinning an unknown id should be a no-op, got %q", got.StartupID)
+	}
+
+	// Clearing the pin (empty id) returns to last-active behaviour.
+	if got := r.SetStartup(""); got.StartupID != "" || got.StartupTarget() != "w2" {
+		t.Errorf("clearing the pin failed: id=%q target=%q", got.StartupID, got.StartupTarget())
+	}
+
+	// A dangling pin (workspace removed out from under it) resolves to active.
+	dangling := Registry{Workspaces: r.Workspaces, ActiveID: "w2", StartupID: "ghost"}
+	if got := dangling.StartupTarget(); got != "w2" {
+		t.Errorf("dangling pin should fall back to active, got %q", got)
+	}
+
+	// Rename/SetActive must preserve the pin (clone() carries StartupID).
+	if got := r.Rename("w1", "Renamed").StartupID; got != "w1" {
+		t.Errorf("Rename dropped the startup pin, got %q", got)
+	}
+	if got := r.SetActive("w1").StartupID; got != "w1" {
+		t.Errorf("SetActive dropped the startup pin, got %q", got)
+	}
+
+	// Removing the pinned workspace clears the pin (never launch into a ghost).
+	if got := r.Remove("w1"); got.StartupID != "" {
+		t.Errorf("removing the pinned workspace should clear the pin, got %q", got.StartupID)
+	}
+	// Removing a different workspace keeps the pin.
+	if got := r.Remove("w2"); got.StartupID != "w1" {
+		t.Errorf("removing a non-pinned workspace should keep the pin, got %q", got.StartupID)
+	}
+}
+
 func equalNames(a, b Registry) bool {
 	if len(a.Workspaces) != len(b.Workspaces) {
 		return false

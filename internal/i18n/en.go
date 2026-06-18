@@ -436,6 +436,8 @@ var english = Catalog{
 	"ws.delete":                  "Delete",
 	"ws.deleteConfirm":           "Delete this workspace and all of its data? This cannot be undone.",
 	"ws.active":                  "Active",
+	"ws.startupLabel":            "On launch, open",
+	"ws.startupLast":             "Last used workspace",
 	"settings.data":              "Data",
 	"settings.exportJSON":        "Export JSON",
 	"settings.exportCSV":         "Export CSV",
@@ -729,6 +731,16 @@ var english = Catalog{
 	"pages.delete":        "Delete page",
 	"pages.deleteConfirm": "Delete this page and its widgets? This can't be undone.",
 	"pages.hiddenSection": "Hidden pages",
+	"pages.addWidget":     "Add widget",
+	"pages.widgetTitle":   "Widget title",
+	"pages.kpiFormula":    "Formula, e.g. net_worth - liabilities",
+	"pages.textContent":   "Text to show",
+	"pages.chartDefault":  "Shows your net-worth trend.",
+	"pages.deleteWidget":  "Remove widget",
+	"pages.unknownWidget": "Unknown widget type.",
+	"pages.pickSource":    "Pick a data source.",
+	"pages.noData":        "Nothing to show yet.",
+	"pages.emptyText":     "No text set.",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

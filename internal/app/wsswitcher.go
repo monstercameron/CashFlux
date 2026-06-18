@@ -7,6 +7,7 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/workspace"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -149,8 +150,9 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 	)
 }
 
-// workspacesSection renders the Settings → Workspaces management list. onChange
-// re-renders the panel after a rename/delete that doesn't reload.
+// workspacesSection renders the Settings → Workspaces management list: a startup
+// preference selector followed by one row per workspace. onChange re-renders the
+// panel after a rename/delete/startup change that doesn't reload.
 func workspacesSection(onChange func()) uic.Node {
 	r := loadRegistry()
 	active, _ := r.Active()
@@ -161,7 +163,39 @@ func workspacesSection(onChange func()) uic.Node {
 			ID: w.ID, Name: w.Name, Active: w.ID == active.ID, CanDelete: canDelete, OnChange: onChange,
 		}))
 	}
-	return Div(Class("flex flex-col"), rows)
+	return Div(Class("flex flex-col"),
+		uic.CreateElement(wsStartupSelect, wsStartupSelectProps{
+			Workspaces: r.Workspaces, StartupID: r.StartupID, OnChange: onChange,
+		}),
+		rows,
+	)
+}
+
+type wsStartupSelectProps struct {
+	Workspaces []workspace.Workspace
+	StartupID  string
+	OnChange   func()
+}
+
+// wsStartupSelect is the "On launch, open" preference: resume the last-used
+// workspace (empty value) or always open a chosen one. Its own component so the
+// OnChange hook stays stable. The setting takes effect on the next launch.
+func wsStartupSelect(props wsStartupSelectProps) uic.Node {
+	onSel := uic.UseEvent(func(e uic.Event) {
+		setStartupWorkspace(e.GetValue())
+		if props.OnChange != nil {
+			props.OnChange()
+		}
+	})
+	opts := make([]uic.Node, 0, len(props.Workspaces)+1)
+	opts = append(opts, Option(Value(""), SelectedIf(props.StartupID == ""), uistate.T("ws.startupLast")))
+	for _, w := range props.Workspaces {
+		opts = append(opts, Option(Value(w.ID), SelectedIf(props.StartupID == w.ID), w.Name))
+	}
+	return Div(Class("flex flex-col gap-1 py-1"),
+		Span(Class("text-xs text-faint"), uistate.T("ws.startupLabel")),
+		Select(Class("set-input"), Title(uistate.T("ws.startupLabel")), OnChange(onSel), opts),
+	)
 }
 
 // promptName shows a browser prompt and returns the trimmed entry ("" on cancel).

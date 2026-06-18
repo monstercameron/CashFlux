@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Startup workspace preference.** Settings → Workspaces now has an **"On launch, open"** selector:
+  *Last used workspace* (the default — resumes whatever you had active) or a specific pinned workspace
+  that the app always opens with, regardless of which one you left it on. The choice lives in the
+  workspace registry (`Registry.StartupID` — empty means last-used) and is applied at boot, before the
+  first paint, by swapping the pinned workspace's context into place (no reload, no data loss — the
+  last-active workspace is bundled out first). A pinned workspace that gets deleted automatically falls
+  back to last-used. New `Registry.SetStartup`/`StartupTarget` with table tests.
 - **Custom widgets — pure engine (groundwork):** two new platform-independent, table-tested packages back
   the custom-widget feature. `internal/engineenv` builds the "app engine variable surface" (net_worth,
   income, expense, counts, …) a KPI formula or workflow condition can reference. `internal/widgetspec` is

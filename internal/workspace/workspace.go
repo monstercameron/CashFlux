@@ -17,9 +17,15 @@ type Workspace struct {
 
 // Registry is the ordered set of workspaces plus the active one's ID. The zero
 // value is a valid empty registry.
+//
+// StartupID controls which workspace the app opens on launch: when empty (the
+// default) it resumes the last-active workspace; when set to a workspace's id it
+// always opens that one. A StartupID pointing at a removed workspace is cleared,
+// so launch never targets a workspace that no longer exists.
 type Registry struct {
 	Workspaces []Workspace `json:"workspaces"`
 	ActiveID   string      `json:"activeId"`
+	StartupID  string      `json:"startupId,omitempty"`
 }
 
 // Has reports whether a workspace with the given id exists.
@@ -94,6 +100,31 @@ func (r Registry) SetActive(id string) Registry {
 	return out
 }
 
+// SetStartup sets the workspace the app opens on launch. An empty id means
+// "resume the last-active workspace" (the default); a non-empty id must name an
+// existing workspace, otherwise the call is a no-op.
+func (r Registry) SetStartup(id string) Registry {
+	if id != "" && !r.Has(id) {
+		return r
+	}
+	out := r.clone()
+	out.StartupID = id
+	return out
+}
+
+// StartupTarget resolves which workspace the app should open on launch: the
+// pinned StartupID when it still names an existing workspace, otherwise the
+// active workspace. Returns "" only for an empty registry.
+func (r Registry) StartupTarget() string {
+	if r.StartupID != "" && r.Has(r.StartupID) {
+		return r.StartupID
+	}
+	if w, ok := r.Active(); ok {
+		return w.ID
+	}
+	return ""
+}
+
 // Remove deletes a workspace. The last remaining workspace cannot be removed
 // (there must always be one), and an unknown id is a no-op. When the active
 // workspace is removed, the first survivor becomes active.
@@ -101,7 +132,7 @@ func (r Registry) Remove(id string) Registry {
 	if !r.Has(id) || len(r.Workspaces) <= 1 {
 		return r
 	}
-	out := Registry{ActiveID: r.ActiveID}
+	out := Registry{ActiveID: r.ActiveID, StartupID: r.StartupID}
 	for _, w := range r.Workspaces {
 		if w.ID != id {
 			out.Workspaces = append(out.Workspaces, w)
@@ -110,11 +141,14 @@ func (r Registry) Remove(id string) Registry {
 	if out.ActiveID == id {
 		out.ActiveID = out.Workspaces[0].ID
 	}
+	if out.StartupID == id {
+		out.StartupID = "" // never pin launch to a removed workspace
+	}
 	return out
 }
 
 func (r Registry) clone() Registry {
-	cp := Registry{ActiveID: r.ActiveID}
+	cp := Registry{ActiveID: r.ActiveID, StartupID: r.StartupID}
 	cp.Workspaces = append([]Workspace(nil), r.Workspaces...)
 	return cp
 }

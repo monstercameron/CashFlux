@@ -3,6 +3,33 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: startup workspace preference (pin a workspace to open with)
+
+- Requested: configure whether the app starts with a specific workspace or resumes the last-used one.
+- Model (`internal/workspace`): added `Registry.StartupID` (empty = resume last-active; set = pin) plus
+  `SetStartup` and `StartupTarget` (resolves the boot target: pinned-if-still-exists else active).
+  Subtlety caught: `clone()` and `Remove()` had to be updated to carry `StartupID`; `Remove()` also
+  clears the pin when the pinned workspace is deleted, so launch never targets a ghost. Table tests cover
+  pin/unpin, unknown-id no-op, dangling-pin fallback, clone preservation across Rename/SetActive, and the
+  remove-clears-pin / remove-other-keeps-pin cases.
+- Boot (`internal/app`): new `applyStartupWorkspace()` runs in `Run()` between `ensureWorkspaceRegistry`
+  and `hydrateDataset`. If a workspace is pinned and isn't the one whose data sits in the canonical keys,
+  it bundles the last-active workspace out and the pinned one in — no reload needed because nothing has
+  mounted/read the keys yet, so `hydrateDataset` just loads the swapped-in context. `setStartupWorkspace`
+  persists the choice (takes effect next launch).
+- UI: `workspacesSection` gained a `wsStartupSelect` component (its own component for a stable OnChange
+  hook) — an "On launch, open" dropdown listing *Last used workspace* + every workspace; mirrors the
+  language `Select`/`Option`/`SelectedIf` pattern. Two i18n keys added.
+- Concurrency note: the parallel custom-pages/widgets session is mid-refactor and currently has the
+  `internal/screens` package non-compiling on disk (moving `kpiBody` into `custompage.go` with a new
+  signature while `dashboard.go` still declares/calls the old one). That breaks a full local wasm build,
+  but it's entirely their uncommitted WIP — my changes have zero wasm build errors. Verified my commit
+  yields a buildable HEAD by copying my six files into a detached worktree at HEAD and building
+  `GOOS=js GOARCH=wasm` there: exit 0, workspace tests green. Could NOT refresh the locally-served wasm
+  (the on-disk screens break blocks `gwc dev`'s rebuild); CI builds HEAD fresh, so the deploy is fine.
+- Other useful settings to consider next (suggested, not yet built): "On launch, open screen" (last
+  screen vs. a fixed landing route), and confirm-before-switch when a workspace has unsaved edits.
+
 ## 2026-06-18 — feat: collapsed-rail variant for the workspace switcher
 
 - Re-applied (cleanly, mine-only) the previously-reverted polish: `WorkspaceSwitcher` now reads
