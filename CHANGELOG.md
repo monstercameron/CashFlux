@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Currency conversion edge coverage.** The `currency` unit tests now cover missing target rates,
+  negative-amount rounding, and repeated cross-rate conversions so D16's pure conversion path has a tighter
+  regression net.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
@@ -212,6 +215,10 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **App lock is now in Settings.** Added a **Settings → App lock** section so the passcode lock is
+  discoverable (it was previously only reachable via the Cmd/Ctrl+K palette). The section shows the current
+  status and adapts: **Set passcode lock** when off; **Lock now / Change passcode / Remove** when on. The
+  in-app setup form now refreshes the section on success.
 - **Keyboard UI is now translatable (§6.6 i18n).** The `?` cheat sheet (title + row labels) and the
   Cmd/Ctrl+K command palette (search placeholder, "No matching commands", and the action labels — toggle
   theme, collapse sidebar, switch/new/export workspace) now go through the language catalog (`uistate.T`,

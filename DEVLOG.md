@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: surface app lock in Settings (user couldn't find it)
+
+- User feedback: no way to set up / toggle the lock from Settings — it was only in the Cmd+K palette, which
+  they didn't discover. Added a **Settings → App lock** section (`appLockSection` in new
+  `applocksettings.go`, wired into globalSettingsForm after the Workspaces section): status line + adaptive
+  buttons (Set when off; Lock now / Change / Remove when on), all reusing the existing handlers.
+- Made the setup form refresh-aware: `showAppLockSetup(onDone func())` stores a package-level callback run
+  on successful enable, so the Settings section updates immediately after you set a passcode. `setPasscodeFlow`
+  (palette) passes nil. 5 new `applock.*` keys (section/hint/status×3, statusOnAuto uses %d).
+- Had to touch shared `settings.go` (3 lines) — the collision I'd been avoiding, but the user explicitly
+  wants it there. gofmt clean, worktree build exit 0, committed by pathspec.
+
+## 2026-06-18 — test: D16 currency conversion edge coverage
+
+- Closed the D16 pure currency unit-test checklist item in `internal/currency/currency_test.go`.
+- Added coverage for missing target-currency rates, negative amount rounding, and repeated cross-rate
+  conversion stability so render loops do not hide conversion drift.
+- Verification: `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — fix: UX polish §6.6 — segmented control arrow keys
 
 - Closed the shared segmented-control keyboard item in `internal/ui/controls.go`: radiogroups now handle

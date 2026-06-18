@@ -117,6 +117,11 @@ var english = Catalog{
 	"applock.autoLabel":     "Auto-lock after (minutes, 0 = off)",
 	"applock.enable":        "Enable",
 	"applock.needPasscode":  "Enter a passcode.",
+	"applock.section":       "App lock",
+	"applock.sectionHint":   "Protect this device with a passcode. It's a soft gate (a deterrent), not encryption — your data stays in this browser. The passcode is stored only as a salted hash.",
+	"applock.statusOn":      "On — a passcode is set (locks on reload and on “Lock now”).",
+	"applock.statusOnAuto":  "On — a passcode is set; auto-locks after %d min of inactivity.",
+	"applock.statusOff":     "Off — no passcode set.",
 
 	// Common actions (shared across screens)
 	"action.add":    "Add",

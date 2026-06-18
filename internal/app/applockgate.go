@@ -97,17 +97,23 @@ func buildAppLockGate(doc js.Value) {
 	resetAppLockInput(doc)
 }
 
-// setPasscodeFlow opens the in-app passcode setup form.
-func setPasscodeFlow() { showAppLockSetup() }
+// setPasscodeFlow opens the in-app passcode setup form (no refresh callback —
+// used from the command palette, which closes on its own).
+func setPasscodeFlow() { showAppLockSetup(nil) }
 
 const appLockSetupID = "cf-applock-setup"
+
+// appLockOnDone is invoked after the setup form successfully enables the lock, so
+// a caller (e.g. the Settings panel) can refresh. Set on each open.
+var appLockOnDone func()
 
 // escT returns an HTML-escaped translated string, for safe innerHTML interpolation.
 func escT(key string) string { return htmlEscaper.Replace(uistate.T(key)) }
 
 // showAppLockSetup opens the passcode setup form — an in-app modal (replacing the
 // MVP's native prompts, per UX audit §6.8) — building it on first use.
-func showAppLockSetup() {
+func showAppLockSetup(onDone func()) {
+	appLockOnDone = onDone
 	doc := js.Global().Get("document")
 	if s := doc.Call("getElementById", appLockSetupID); !s.IsNull() && !s.IsUndefined() {
 		s.Get("style").Set("display", "grid")
@@ -176,6 +182,9 @@ func buildAppLockSetup(doc js.Value) {
 		}
 		if enableAppLock(pass, mins) {
 			hide()
+			if appLockOnDone != nil {
+				appLockOnDone()
+			}
 		}
 	}
 
