@@ -1292,6 +1292,8 @@ results are summarized here so the backlog doesn't bloat.
   task-complete + bulk-select): not keyboard-focusable / SR-perceivable. One fix (real `<input
   type=checkbox>` or `role=checkbox`+`aria-checked`+label in the shared component) covers all call sites.
   (Hide-done toggle inconclusive — the sample task is open, nothing "done" to hide.)
+- **2026-06-18 #38** — Spot-check, 0 errors. **All unchanged:** C28 icon `[0,0]`; Transactions checkboxes
+  non-semantic (`0/0`); Members add-button no-op ("Drew38"). Standing open set stable #25→#38.
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

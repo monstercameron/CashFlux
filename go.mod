@@ -3,7 +3,7 @@ module github.com/monstercameron/CashFlux
 go 1.26.0
 
 require (
-	github.com/monstercameron/GoWebComponents v1.1.1-0.20260613162601-cad8af8cd470
+	github.com/monstercameron/GoWebComponents v1.1.1-0.20260618120835-bfe3011d7f39
 	github.com/ncruces/go-sqlite3 v0.35.0
 )
 
