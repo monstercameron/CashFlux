@@ -12,6 +12,11 @@ and every commit updates this file under `Unreleased`.
   per-period idempotency keys (day/ISO-week/month) and a delivered-log so catch-up-on-wake won't replay
   the same alerts. Pure and table-tested; the in-app center, browser pop-ups, and catch-up engine build
   on this next. No user-visible change yet.
+- **Notifications — the catch-up engine (B19 Phase A, internal).** `notify.CatchUp` turns the candidate
+  occurrences found for the time you were away into the "while you were away" list: it gates by rule
+  (enabled + has a channel), skips anything already delivered, and applies each rule's frequency cap
+  (keeping the most recent and collapsing the rest so a long absence never floods), marking everything it
+  considered as delivered so reopening doesn't replay. Deterministic and table-tested. Still no UI.
 - **Dashboard tiles drill into their data screen (C30).** Each tile's title is now a link — click it (or
   press Enter) to jump to the screen that owns that data: Net worth / Liabilities / Accounts / Upcoming
   bills / Net-worth trend → Accounts; Income / Spending / Recent / Cash flow / Savings rate / Breakdown →

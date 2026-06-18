@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: notify catch-up engine (B19 Phase A, step 2)
+
+- Added `notify.CatchUp(rules, candidates, now, log) → []Notification` — the event-agnostic heart of
+  catch-up-on-wake. A `Candidate` is a potential occurrence the (future) per-event evaluators emit;
+  CatchUp gates by rule (exists + enabled + ≥1 channel), drops already-delivered occurrences (the
+  DeliveredLog), and applies each rule's `FrequencyCap` (keep the most recent N, collapse the rest), then
+  marks *every* fresh occurrence considered — including capped-out ones — as delivered so a long gap
+  collapses and never replays. Results are newest-first with a key tiebreaker for determinism.
+- Design call: quiet hours are NOT applied in CatchUp — a summary shown when the user actively opens the
+  app isn't an interruption; quiet hours gate live in-session firing (`Rule.CanFireAt`). Documented in
+  the func.
+- Keeping the engine candidate-driven means the still-open "which events ship first" decision lives in
+  the per-event candidate generators, not here — so this layer is buildable and testable now. Table tests
+  cover gating, idempotency (re-run → empty), frequency-cap collapse, newest-first order, and nil-log
+  safety. `go vet` clean. Still no UI / not yet wired into the shell.
+
 ## 2026-06-18 — feat: notify package — pure notification core (B19 Phase A, step 1)
 
 - Started the approved B19 Phase A (client-only notifications) bottom-up per the SDLC: model + logic +
