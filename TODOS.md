@@ -1441,7 +1441,7 @@ Savings KPIs) · `period.Window`.
       row shows "Envelope balance: $X" (danger tone when overdrawn) under a note. Verified live: switching
       to Envelope shows the note + per-budget balances (e.g. "$359.45"). _Decision: carry-forward window
       = from the first covered transaction (no budget start date exists), made autonomously._
-- [ ] unit: config-layering test (defaults→household→member). Methodology is household-only today; the
+- [x] unit: config-layering test (defaults→household→member). Methodology is household-only today; the
       per-member layering is a future refinement.
 
 #### D7. Month-boundary rollover correctness ★

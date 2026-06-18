@@ -3,6 +3,7 @@ package appstate
 import (
 	"testing"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -40,5 +41,26 @@ func TestFreshnessWindowsOverrides(t *testing.T) {
 	w := a.FreshnessWindows()
 	if w[domain.TypeChecking] != 5 {
 		t.Errorf("checking window = %d, want 5 (override applied over the default)", w[domain.TypeChecking])
+	}
+}
+
+// TestBudgetMethodologyIsHouseholdOnly documents the current config layering:
+// methodology defaults at read time, then the household Settings value wins.
+// Members do not carry a methodology override today.
+func TestBudgetMethodologyIsHouseholdOnly(t *testing.T) {
+	a := newApp(t, false)
+	if got := budgeting.ParseMethodology(a.Settings().BudgetMethodology); got != budgeting.MethodSimple {
+		t.Errorf("default methodology = %q, want simple", got)
+	}
+	s := a.Settings()
+	s.BudgetMethodology = string(budgeting.MethodZeroBased)
+	if err := a.PutSettings(s); err != nil {
+		t.Fatalf("PutSettings: %v", err)
+	}
+	if err := a.PutMember(domain.Member{ID: "m1", Name: "Alex"}); err != nil {
+		t.Fatalf("PutMember: %v", err)
+	}
+	if got := budgeting.ParseMethodology(a.Settings().BudgetMethodology); got != budgeting.MethodZeroBased {
+		t.Errorf("household methodology = %q, want zero-based", got)
 	}
 }
