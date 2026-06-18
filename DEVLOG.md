@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - test: D19 member ripple behavior
+
+- Added appstate helpers for setting exactly one default member, resolving the member for new transaction
+  forms, and deleting a member after reassigning owned records.
+- Wired Members and Transactions to those helpers so the tested paths are the UI paths. The regression covers
+  default-member attribution, account/budget/goal/transaction reassignment, deleting the old member, no orphaned
+  owner/member ids, and recomputed `ledger.NetByOwner` rollups.
+
 ## 2026-06-18 - test: D18 net-worth assembly behavior
 
 - Added explicit D18 coverage that `ledger.NetWorth` satisfies assets-minus-liabilities and that

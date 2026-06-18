@@ -155,12 +155,7 @@ func Transactions() ui.Node {
 			errMsg.Set(uistate.T("transactions.invalidDate"))
 			return
 		}
-		memberFor := func(a domain.Account) string {
-			if a.Scope == domain.ScopeIndividual {
-				return a.OwnerID
-			}
-			return ""
-		}
+		memberFor := app.MemberForNewTransaction
 		label := strings.TrimSpace(desc.Get())
 
 		if kind.Get() == "Transfer" {

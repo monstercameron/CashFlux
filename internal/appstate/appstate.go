@@ -390,6 +390,55 @@ func (a *App) PutMember(m domain.Member) error {
 }
 func (a *App) DeleteMember(id string) error { return a.del("member", id, a.store.DeleteMember) }
 
+// SetDefaultMember marks exactly one member as the default for new member-scoped
+// forms.
+func (a *App) SetDefaultMember(id string) error {
+	found := false
+	for _, m := range a.Members() {
+		want := m.ID == id
+		if want {
+			found = true
+		}
+		if m.IsDefault == want {
+			continue
+		}
+		m.IsDefault = want
+		if err := a.store.PutMember(m); err != nil {
+			return err
+		}
+	}
+	if !found {
+		return fmt.Errorf("member %q not found", id)
+	}
+	a.log.Info("default member set", "id", id)
+	return nil
+}
+
+// DefaultMemberID returns the configured default member, or the first member as
+// a stable fallback when none is marked default.
+func (a *App) DefaultMemberID() string {
+	members := a.Members()
+	for _, m := range members {
+		if m.IsDefault {
+			return m.ID
+		}
+	}
+	if len(members) > 0 {
+		return members[0].ID
+	}
+	return ""
+}
+
+// MemberForNewTransaction returns the member attribution a new transaction form
+// should use for an account. Individual accounts use their owner; shared/group
+// accounts use the household's default member.
+func (a *App) MemberForNewTransaction(account domain.Account) string {
+	if account.Scope == domain.ScopeIndividual {
+		return account.OwnerID
+	}
+	return a.DefaultMemberID()
+}
+
 // ReassignOwner moves every account, budget, goal, and transaction owned by oldID
 // to newID, returning how many records moved. Scope follows the new owner (shared
 // for the group owner, individual otherwise); transactions attributed to the old
@@ -440,6 +489,22 @@ func (a *App) ReassignOwner(oldID, newID string) (int, error) {
 		}
 	}
 	a.log.Info("reassigned owner", "from", oldID, "to", newID, "moved", moved)
+	return moved, nil
+}
+
+// DeleteMemberAfterReassign moves every owned record away from oldID, deletes the
+// member, and returns the number of records reassigned.
+func (a *App) DeleteMemberAfterReassign(oldID, newID string) (int, error) {
+	if oldID == newID {
+		return 0, fmt.Errorf("new owner must differ from member %q", oldID)
+	}
+	moved, err := a.ReassignOwner(oldID, newID)
+	if err != nil {
+		return moved, err
+	}
+	if err := a.DeleteMember(oldID); err != nil {
+		return moved, err
+	}
 	return moved, nil
 }
 

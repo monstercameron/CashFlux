@@ -2745,9 +2745,9 @@ Savings KPIs) · `period.Window`.
 #### D19. Member add/reassign/delete ripples ★
 **Workstream:** add a member, reassign ownership, then delete a member with owned entities.
 **Touches:** Members · `appstate.ReassignOwner` · Accounts/Budgets/Goals/Transactions (owner) · net worth rollups.
-- [ ] Add a member + set default; assert default-member behavior in new forms.
-- [ ] Reassign owned accounts/budgets/goals/txns to another owner; assert all move.
-- [ ] Delete the member; assert no orphaned `OwnerID`/`MemberID` and rollups recompute.
+- [x] Add a member + set default; assert default-member behavior in new forms.
+- [x] Reassign owned accounts/budgets/goals/txns to another owner; assert all move.
+- [x] Delete the member; assert no orphaned `OwnerID`/`MemberID` and rollups recompute.
 - [x] unit: `ReassignOwner` across all four entity types.
 
 #### D20. Rules auto-categorize on entry & import ★

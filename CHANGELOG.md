@@ -83,6 +83,9 @@ and every commit updates this file under `Unreleased`.
 - **Net-worth assembly behavior coverage.** Ledger tests now explicitly prove household net worth equals
   assets minus liabilities, owner rollups sum back to the household total, and restored archived accounts
   re-enter the net-worth figures.
+- **Member ripple behavior coverage.** Appstate now owns default-member selection, new-transaction member
+  attribution, and reassign-then-delete member cleanup, with tests proving no owner/member orphans and
+  recomputed net-worth rollups.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

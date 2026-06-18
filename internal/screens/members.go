@@ -112,15 +112,7 @@ func Members() ui.Node {
 	confirmReassign := ui.UseEvent(Prevent(func() {
 		from := reassignID.Get()
 		to := reassignTo.Get()
-		if to == from {
-			errMsg.Set(uistate.T("members.pickDifferentOwner"))
-			return
-		}
-		if _, err := app.ReassignOwner(from, to); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		if err := app.DeleteMember(from); err != nil {
+		if _, err := app.DeleteMemberAfterReassign(from, to); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
@@ -130,16 +122,9 @@ func Members() ui.Node {
 	}))
 
 	setDefault := func(memberID string) {
-		for _, m := range app.Members() {
-			want := m.ID == memberID
-			if m.IsDefault == want {
-				continue
-			}
-			m.IsDefault = want
-			if err := app.PutMember(m); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
+		if err := app.SetDefaultMember(memberID); err != nil {
+			errMsg.Set(err.Error())
+			return
 		}
 		bump()
 	}
