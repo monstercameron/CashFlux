@@ -1138,6 +1138,16 @@ results are summarized here so the backlog doesn't bloat.
         Transactions (the bulk-select squares). Same fix as #14.
   - _Not yet audited: `role=switch` on the Settings toggles (panel wasn't opened here) — check next that
     Enable-AI / Compact-density / show-screen toggles expose `role="switch"` + `aria-checked`._
+- **2026-06-18 #16** — A11y audit extended across all form screens + Settings.
+  - ✅ **Settings panel a11y is strong** — `role="dialog"` + `aria-modal="true"`, **16 `role="switch"`**
+    toggles, **28 `aria-checked`**. Confirms B15's dialog + switch ARIA work is done.
+  - ✅ Members & Planning forms: **0 unlabeled inputs**.
+  - [ ] **App-wide gap: unlabeled `<select>` dropdowns** — unlabeled controls per screen: Transactions 5,
+    Customize 3, Accounts 2, Budgets 2, Goals 2 (incl. one `type=date`), Categories 1, Rules 1 (~16
+    total), **nearly all `<select>`** (kind/scope/parent/period/owner/account pickers) with no
+    `aria-label`/label. Add an `aria-label` to every `<select>` (and label the bare `type=date` inputs).
+    One shared fix pattern covers all screens. (Ties B15 forms; extends #15.)
+  - C28 nav icons: still `viewbox` lowercase (unchanged).
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.

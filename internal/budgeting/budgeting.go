@@ -63,11 +63,6 @@ func matchesCovered(budget domain.Budget, t domain.Transaction, start, end time.
 	return true
 }
 
-// matches is the exact-category case (the budget's own category only).
-func matches(budget domain.Budget, t domain.Transaction, start, end time.Time) bool {
-	return matchesCovered(budget, t, start, end, func(id string) bool { return id == budget.CategoryID })
-}
-
 // spentCovered sums spend against the budget for transactions whose category
 // passes covers, in the budget's limit currency.
 func spentCovered(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {

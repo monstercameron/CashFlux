@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Raise budgeting test coverage (83% → 95%)
+
+- Continued the pure-package coverage sweep. `budgeting` was 82.9%; per-function profiling showed two
+  functions at 0% (`matches`, `EvaluateAll`) plus partial error/edge branches in `normalizedLimit`,
+  `spentCovered`, `evaluateWith`, and `EnvelopeAvailable`.
+- `matches` (the exact-category helper) turned out to be **dead** — superseded by the inline cover
+  predicates in `Spent`/`Evaluate`, no callers. Removed it (same call the coverage audit made for `stub`).
+- Added `budgeting_edge_test.go`: `EvaluateAll` happy + error path, the empty-limit-currency default
+  (`normalizedLimit` → base), and the currency-conversion error path threaded through `Spent`, `Evaluate`,
+  `EvaluateAll`, and `EnvelopeAvailable` (a covered expense in a currency the rate table can't resolve).
+  `budgeting` → **95.1%** (`EvaluateAll`/`normalizedLimit` now 100%). The remainder is the defensive
+  `limit.Sub(spent)` mismatch branch, unreachable since spend is always computed in the limit's currency.
+
 ## 2026-06-18 — Repo health check + raise goals test coverage
 
 - Full-repo health pass after the session's commits: `gofmt -l` clean, native `go vet ./...` clean, native

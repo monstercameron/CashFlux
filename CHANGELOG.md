@@ -133,6 +133,9 @@ and every commit updates this file under `Unreleased`.
 ### Removed
 - **Dead `stub` placeholder helper (internal):** the `screens.stub(...)` "Planned · Phase N" placeholder
   is no longer referenced now that every screen is built, so it was deleted (the project bars dead code).
+- **Dead `budgeting.matches` helper (internal):** the exact-category `matches(...)` helper was superseded by
+  inline cover predicates in `Spent`/`Evaluate` and had no callers; surfaced by a coverage audit (0%) and
+  removed.
 
 ### Fixed
 - **A few user-facing strings now go through the language catalog (i18n):** the "Enter a valid opening
