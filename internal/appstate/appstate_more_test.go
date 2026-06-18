@@ -1,0 +1,156 @@
+package appstate
+
+import (
+	"bytes"
+	"testing"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
+)
+
+func TestAccessorsAndHandles(t *testing.T) {
+	a := newApp(t, false)
+	if len(a.Categories()) != 0 || len(a.Tasks()) != 0 || len(a.CustomFieldDefs()) != 0 {
+		t.Error("empty app should have no categories/tasks/custom defs")
+	}
+	if len(a.CustomFieldDefsFor("account")) != 0 {
+		t.Error("no account custom defs expected")
+	}
+	if len(a.FreshnessWindows()) == 0 {
+		t.Error("freshness windows should include the built-in defaults")
+	}
+	if a.Store() == nil || a.Log() == nil || a.LogRing() == nil {
+		t.Error("Store/Log/LogRing handles should be non-nil")
+	}
+}
+
+func TestTaskPutDelete(t *testing.T) {
+	a := newApp(t, false)
+	task := domain.Task{ID: "k1", Title: "Pay rent", Status: domain.StatusOpen, Priority: domain.PriorityMedium}
+	if err := a.PutTask(task); err != nil {
+		t.Fatalf("PutTask: %v", err)
+	}
+	if len(a.Tasks()) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(a.Tasks()))
+	}
+	if err := a.DeleteTask("k1"); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+	if len(a.Tasks()) != 0 {
+		t.Error("task not deleted")
+	}
+	if err := a.PutTask(domain.Task{ID: "bad", Title: ""}); err == nil {
+		t.Error("a task with no title should fail validation")
+	}
+}
+
+func TestDeleteEntities(t *testing.T) {
+	a := newApp(t, false)
+
+	if err := a.PutMember(domain.Member{ID: "m1", Name: "Alice"}); err != nil {
+		t.Fatalf("PutMember: %v", err)
+	}
+	if err := a.DeleteMember("m1"); err != nil {
+		t.Fatalf("DeleteMember: %v", err)
+	}
+
+	if err := a.PutCategory(domain.Category{ID: "c1", Name: "Food", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory: %v", err)
+	}
+	if err := a.DeleteCategory("c1"); err != nil {
+		t.Fatalf("DeleteCategory: %v", err)
+	}
+
+	if err := a.PutAccount(domain.Account{ID: "a1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	if err := a.PutTransaction(domain.Transaction{ID: "t1", AccountID: "a1", Desc: "Coffee", Amount: money.New(-100, "USD"), Date: time.Now()}); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+	if err := a.DeleteTransaction("t1"); err != nil {
+		t.Fatalf("DeleteTransaction: %v", err)
+	}
+
+	if err := a.PutBudget(domain.Budget{ID: "b1", Name: "Food", CategoryID: "c1", Period: domain.PeriodMonthly, Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: money.New(10000, "USD")}); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	if err := a.DeleteBudget("b1"); err != nil {
+		t.Fatalf("DeleteBudget: %v", err)
+	}
+
+	if err := a.PutGoal(domain.Goal{ID: "g1", Name: "Trip", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, TargetAmount: money.New(100000, "USD")}); err != nil {
+		t.Fatalf("PutGoal: %v", err)
+	}
+	if err := a.DeleteGoal("g1"); err != nil {
+		t.Fatalf("DeleteGoal: %v", err)
+	}
+
+	if err := a.PutCustomFieldDef(customfields.Def{ID: "d1", EntityType: "account", Key: "branch", Label: "Branch", Type: customfields.TypeText}); err != nil {
+		t.Fatalf("PutCustomFieldDef: %v", err)
+	}
+	if err := a.DeleteCustomFieldDef("d1"); err != nil {
+		t.Fatalf("DeleteCustomFieldDef: %v", err)
+	}
+}
+
+func TestPutSettingsAndRedactedExport(t *testing.T) {
+	a := newApp(t, false)
+	s := a.Settings()
+	s.OpenAIKey = "sk-secret"
+	s.BaseCurrency = "USD"
+	if err := a.PutSettings(s); err != nil {
+		t.Fatalf("PutSettings: %v", err)
+	}
+	if a.Settings().OpenAIKey != "sk-secret" {
+		t.Error("settings did not persist the key")
+	}
+
+	full, err := a.ExportJSON()
+	if err != nil {
+		t.Fatalf("ExportJSON: %v", err)
+	}
+	if !bytes.Contains(full, []byte("sk-secret")) {
+		t.Error("the manual export should keep the key")
+	}
+	red, err := a.ExportJSONRedacted()
+	if err != nil {
+		t.Fatalf("ExportJSONRedacted: %v", err)
+	}
+	if bytes.Contains(red, []byte("sk-secret")) {
+		t.Error("the redacted export must not contain the key")
+	}
+}
+
+func TestTransactionsCSVAndImport(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutAccount(domain.Account{ID: "a1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	if err := a.PutTransaction(domain.Transaction{ID: "t1", AccountID: "a1", Desc: "Coffee", Amount: money.New(-500, "USD"), Date: time.Now()}); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+
+	csv, err := a.TransactionsCSV(a.Transactions())
+	if err != nil {
+		t.Fatalf("TransactionsCSV: %v", err)
+	}
+	if len(csv) == 0 {
+		t.Fatal("empty CSV")
+	}
+
+	// Round-trip: importing the exported CSV into a fresh app (with the same
+	// account) restores the row through the validated write path.
+	b := newApp(t, false)
+	if err := b.PutAccount(domain.Account{ID: "a1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}); err != nil {
+		t.Fatalf("PutAccount(b): %v", err)
+	}
+	n, err := b.ImportTransactionsCSV(csv)
+	if err != nil {
+		t.Fatalf("ImportTransactionsCSV: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("imported %d, want 1", n)
+	}
+}

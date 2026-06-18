@@ -1167,6 +1167,15 @@ results are summarized here so the backlog doesn't bloat.
     `viewBox` casing — assert on a child shape's painted size (or screenshot), since `hasAttribute` is
     case-insensitive here and reports both `viewBox`/`viewbox` true._
   - ⚠️ **Members "Add member" via button still no-ops** ("Sam" not added) — unchanged.
+- **2026-06-18 #19** — C24 auto-layout + Rules create (0 console errors).
+  - ✅ **C24 (auto-layout) — RESOLVED.** The dashboard layout-mode selector offers all three requested
+    modes: **"Custom layout" / "Auto · default order" / "Auto · by importance"** (value `custom`). The
+    two auto modalities you asked for (default sort + user importance) are implemented. _Next: verify
+    each auto mode actually re-packs and that "by importance" reads a per-tile importance setting._
+  - ⚠️ **Rules "Add" via button did NOT add** ("netflix" rule absent after fill phrase + select category
+    + click). Likely the **same button-commit bug as Members/Accounts** (broken set may be Members,
+    Accounts, **Rules**), OR the rule's category `<select>` didn't commit so the rule was invalid. _Confirm
+    with Enter-vs-click + verify the select value commits; add Rules to the add-button-parity fix list._
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.

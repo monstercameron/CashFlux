@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Cover appstate accessors, deletes, settings, CSV (64% → 82%)
+
+- Largest remaining sweep target. `appstate` was 63.8%; the existing tests covered the rule/recurring/
+  validation paths, but many state-seam methods were at 0%: the entity accessors (Categories/Tasks/
+  CustomFieldDefs/CustomFieldDefsFor/FreshnessWindows), the `Store`/`Log`/`LogRing` handles, `PutTask`/
+  `DeleteTask`, the `Delete*` family (member/category/transaction/budget/goal/customFieldDef), `PutSettings`,
+  `ExportJSONRedacted`, and `TransactionsCSV`/`ImportTransactionsCSV` (with `idResolver`).
+- Added `appstate_more_test.go`: accessor/handle checks on an empty app; a Task put→delete round-trip plus a
+  validation-failure; a delete-each-entity sweep (mirroring the existing tests' valid literals — accounts
+  need owner/scope/type/class, tasks need a valid priority, etc.); a settings round-trip asserting the
+  manual export keeps the OpenAI key while the redacted export strips it; and a CSV export→import round-trip
+  that exercises the name→id resolver. `appstate` → **81.7%**.
+- The residual is store-error and ImportJSON/validateCustom error arms that need fault injection, plus parts
+  of ReassignOwner/ReassignCategory — diminishing returns for now.
+
 ## 2026-06-18 — Cover the untested store CRUD wrappers (76% → 81%)
 
 - Coverage sweep on persistence. `store` was 76.2%; the per-function profile showed the Get/Delete/List (and
