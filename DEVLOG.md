@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: workspaces — Phases 2+3 (engine + UI), wired & browser-verified
+
+- Phase 2 (engine, `internal/app/workspace.go`): the active workspace keeps using the canonical `cashflux:*`
+  keys exactly as before; inactive ones are bundled into `cashflux:ws-data:<id>`. `switchWorkspace` bundles
+  the current keys out, restores the target's, marks it active, and `location.reload()`s so boot rehydrates
+  everything — no per-atom re-seeding and zero changes to the 12 uistate stores. `createWorkspace` clears
+  the per-workspace keys (boot seeds the sample), `duplicateWorkspace` copies the current bundle,
+  `rename`/`delete` operate in place (delete-active reloads to a survivor). `ensureWorkspaceRegistry` (called
+  in `Run` before hydrate) migrates an existing single dataset into a "Default" workspace.
+- Race guard: added `suspendAutosave` in persist.go — set before a switch's reload so the dying page's
+  pagehide/ticker save can't clobber the swapped-in `cashflux:dataset`.
+- Phase 3 (UI): `WorkspaceSwitcher` at the top of the rail (active name + ▾ → menu: switch rows + New +
+  Duplicate; per-row `wsMenuItem` for stable hooks) and a Settings → Workspaces section (`wsManageRow`:
+  rename via prompt, delete via confirm, hidden when only one remains). New `ws.*` i18n keys; names via a
+  browser prompt. The swap reloads the page (sub-second, cached wasm) rather than hot-swapping atoms.
+- Verified via `gwc probe` on the live dev server: fresh session auto-creates "Default", the rail shows
+  "Default ▾", the dashboard renders the seed, zero console errors. Couldn't headlessly click the menu
+  (probe loads+captures only), so the switch/new/duplicate and rename/delete click-throughs rest on the
+  unit-tested registry + a healthy render — flagged for manual confirmation. Full suite 43 green.
+
 ## 2026-06-18 — feat: workspaces — Phase 1 (pure registry)
 
 - User wants multiple independent "workspaces" (e.g. real money vs. an experimental sandbox) with quick

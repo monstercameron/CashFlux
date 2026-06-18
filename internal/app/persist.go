@@ -15,6 +15,11 @@ import (
 // dataset). The OpenAI key is redacted before saving — it stays session-only.
 const datasetStoreKey = "cashflux:dataset"
 
+// suspendAutosave halts the dataset autosave. A workspace switch rewrites the
+// localStorage keys then reloads; without this the dying page's pagehide/ticker
+// save would write the *old* in-memory dataset back over the swapped-in one.
+var suspendAutosave bool
+
 // hydrateDataset loads the saved dataset from localStorage into the store, or
 // seeds the sample dataset on first run (nothing saved yet) so a new household
 // has something to explore. Call it after appstate.Init (with seed=false) and
@@ -68,6 +73,9 @@ func startDatasetAutosave() {
 	}
 	last := ""
 	save := func() {
+		if suspendAutosave {
+			return // a workspace switch is rewriting storage; don't clobber it
+		}
 		// localStorage.setItem can throw (e.g. quota exceeded on a very large
 		// dataset), which surfaces as a Go panic — don't let it crash the app.
 		defer func() {

@@ -423,6 +423,19 @@ var english = Catalog{
 	"settings.sunday":            "Sunday",
 	"settings.monday":            "Monday",
 	"settings.dateFormat":        "Date format",
+	"ws.switch":                  "Switch workspace",
+	"ws.new":                     "+ New workspace",
+	"ws.duplicate":               "Duplicate this workspace",
+	"ws.newPrompt":               "Name the new workspace",
+	"ws.newDefault":              "Experimental",
+	"ws.dupPrompt":               "Name for the duplicated workspace",
+	"ws.section":                 "Workspaces",
+	"ws.sectionHint":             "Each workspace has its own data and layout. Switching swaps everything; your OpenAI key stays available across all of them.",
+	"ws.rename":                  "Rename",
+	"ws.renamePrompt":            "Rename workspace",
+	"ws.delete":                  "Delete",
+	"ws.deleteConfirm":           "Delete this workspace and all of its data? This cannot be undone.",
+	"ws.active":                  "Active",
 	"settings.data":              "Data",
 	"settings.exportJSON":        "Export JSON",
 	"settings.exportCSV":         "Export CSV",
@@ -701,6 +714,11 @@ var english = Catalog{
 	"todo.toggle":           "Toggle complete",
 	"todo.editTitle":        "Edit task",
 	"todo.deleteTitle":      "Delete task",
+
+	// Custom pages
+	"pages.notFound":     "That page doesn't exist. It may have been deleted.",
+	"pages.empty":        "This page is empty. Add a widget to get started.",
+	"pages.sectionTitle": "My pages",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

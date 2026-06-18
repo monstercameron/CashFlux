@@ -1310,13 +1310,52 @@ results are summarized here so the backlog doesn't bloat.
   dataset is NOT in localStorage; it persists via an **origin-scoped store that survives fresh contexts**
   (OPFS / SQLite-wasm persistence, or server-side). Both a brand-new context A and context B showed
   **57 transactions**, and the count held across reload.
-  - ✅ **Implication 1 (feature):** transaction data now **survives reload** (earlier the in-memory store
-    reset to the 4-row sample). Persistence is working.
-  - [ ] **Implication 2 (test hygiene):** the running dev instance has **accumulated 4 → 57** from my ~39
-    iterations of test writes — there's no per-session isolation/reset, so test data piles up in the
-    shared origin store. Future count-based assertions must not assume the 4-row baseline; tests should
-    **reset state** (Wipe data, or a clean fixture) first. Also confirm the persistence layer is
-    intentional + origin-scoped (not unexpectedly shared) and that "Wipe data" fully clears it.
+  - ⚠️ **CORRECTED by #41:** the "accumulation/persistence" reading below was **premature**. #41 shows
+    Load-sample → 57, i.e. **57 is most likely the current sample-dataset size**, not piled-up test data.
+    "Loads the 57-row sample on every boot" explains all of #40's observations (57 on fresh contexts +
+    empty localStorage + survives reload) **without** any persistence. See #41; needs an add→reload test
+    to settle whether real persistence exists.
+  - [ ] _(superseded)_ ~~accumulated 4 → 57 from test writes~~ — likely just a bigger sample.
+- **2026-06-18 #41** — Wipe/Load-sample (0 console errors), **corrects #40.** before-wipe **57** → after
+  Wipe **empty** (summary line gone) → reload **empty** → **Load sample → 57** (not 4). Takeaways:
+  - ✅ **"Wipe data" works** and appears to **persist across reload** (still empty after reload).
+  - ⚠️ **"Load sample" loads 57 rows, not 4** — so the **sample dataset is now ~57 transactions** (it was
+    expanded), which re-explains the "57 everywhere" from #39/#40 as just the sample size — **not test
+    accumulation.** My #40 persistence claim is therefore unconfirmed.
+  - [ ] **Definitive test still needed:** add ONE uniquely-named txn, reload, and check it survives — only
+    that distinguishes real persistence from "re-seed sample on every boot." (If wipe persists but adds
+    don't, persistence is partial/odd — worth confirming.) → **DONE in #42.**
+- **2026-06-18 #42** — Persistence question **RESOLVED** (0 console errors). Added a unique txn
+  ("PersistCheck42"); it **survived a full page reload** → **REAL PERSISTENCE.** Reconciles #40/#41:
+  - ✅ Data persists to a **durable origin store** (OPFS / IndexedDB / SQLite-wasm VFS) — NOT localStorage
+    (#40 showed localStorage empty), and it survives reloads + fresh contexts. #40's persistence claim was
+    correct; #41's was also right that **57 ≈ the expanded sample size**. Both true; the "test
+    accumulation" framing was the only wrong part.
+  - ✅ **This is a real feature win** vs. the original CLAUDE.md "in-memory store resets to sample on
+    boot" — data now durably persists on-device (correct for local-first).
+  - [ ] Test-hygiene note still applies: since adds persist origin-wide, the running dev instance
+    accumulates test writes — reset (Wipe) between automated runs. Also worth confirming "Wipe data"
+    clears the durable store fully (it did clear + persist-empty across reload in #41).
+
+### C30. Dashboard tiles aren't clickable to drill into their data screen ★ (UX — user-reported 2026-06-18)
+**Reported:** no quick way to click a dashboard tile and jump to that data's screen to manipulate it.
+**Confirmed (verified live):** clicking the body of every tile tested (recent, budgets, accounts,
+net-worth KPI, trend) **does nothing** — `navigated=false`, URL unchanged. The tiles have **no
+`<a href>`, no `role`, and `cursor:auto`** (not even a pointer hint that they're interactive). The only
+route to a screen's data is the left nav. (Tiles do have `tabindex="0"` — for drag/keyboard — but no
+navigation behavior.)
+- [ ] Make each tile **drill into its data screen** on click/Enter — e.g. Net worth / Liabilities /
+      Accounts / Upcoming bills → `/accounts`; Recent transactions / Income / Spending / Cash flow /
+      Savings rate / Spending breakdown → `/transactions`; Budgets → `/budgets`; Goal → `/goals`; To-do
+      → `/todo`; Net-worth trend → `/accounts`. (Where useful, deep-link with a filter, e.g. Spending →
+      transactions filtered to expenses for the current period.)
+- [ ] Add the affordance + a11y: `cursor:pointer` + hover state on the tile body, keyboard-activatable
+      (Enter/Space), and an accessible name ("Open Transactions"). Keep it **distinct from the grip
+      (drag) and gear (settings)** so clicking the body navigates while those keep their roles — and so a
+      drag gesture doesn't trigger navigation.
+- [ ] Decide the interaction: whole-body click vs. a small "View →" link in the header. Whole-body is
+      faster but must not swallow drag/resize; a header link is unambiguous. _Confirm preference before
+      building._
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

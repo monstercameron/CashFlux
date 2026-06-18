@@ -199,6 +199,7 @@ func Sidebar() uic.Node {
 			Span(Class("grid place-items-center w-7 h-7 rounded bg-fg text-base font-display font-semibold text-[13px] shrink-0"), "C"),
 			Span(Class("brand-name font-display text-lg font-semibold tracking-tight"), uistate.T("app.name")),
 		),
+		uic.CreateElement(WorkspaceSwitcher),
 		Nav(Class("flex-1 overflow-y-auto p-3 flex flex-col gap-0.5 text-dim text-[13.5px]"), Attr("aria-label", uistate.T("nav.primaryLabel")),
 			MapKeyed(visibleNav,
 				func(it railItem) any { return it.Path },

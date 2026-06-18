@@ -6,6 +6,7 @@ package app
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/pages"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -25,6 +26,10 @@ func Run() {
 	if err := appstate.Init(nil, false); err != nil {
 		panic(err)
 	}
+	// Initialize the workspace registry (migrates an existing single dataset into a
+	// "Default" workspace). The active workspace's data already lives in the
+	// canonical localStorage keys, so hydrateDataset below loads it as usual.
+	ensureWorkspaceRegistry()
 	hydrateDataset()
 	hydrateAIKey()
 
@@ -43,6 +48,23 @@ func Run() {
 			})
 		})
 	}
+	// User-authored custom pages all ride one pattern route; the slug resolves the
+	// page from app state at render time, so new pages are reachable without
+	// re-registering routes (the router can't be mutated after mount).
+	r.Register("/p/:slug", func(attrs router.Attrs) *router.Element {
+		slug, _ := attrs["slug"].(string)
+		title := "Page"
+		if app := appstate.Default; app != nil {
+			if p, ok := pages.BySlug(app.CustomPages(), slug); ok {
+				title = p.Name
+			}
+		}
+		return ui.CreateElement(Shell, ShellProps{
+			Title: title,
+			View:  func() ui.Node { return screens.CustomPage(slug) },
+		})
+	})
+
 	// Unknown paths fall back to the dashboard.
 	r.Register("*", func(router.Attrs) *router.Element {
 		home := screens.All()[0]
