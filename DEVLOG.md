@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: workspace management commands in the palette + HEAD health check
+
+- Health check (repo is churning fast under the parallel session): `go test ./...` on disk showed 3
+  appstate FAILs, but those are the parallel session's UNCOMMITTED WIP — committed HEAD passes appstate in
+  a clean worktree (exit 0), and all pure-logic packages are green. No pushed regression.
+- Feature: added New / Export current / Import workspace commands to the Cmd+K palette (alongside the
+  per-workspace Switch entries), all via existing app-package funcs (createWorkspace / exportWorkspace /
+  importWorkspace / pickFile / promptName) — so full workspace management is keyboard-reachable. Entirely
+  in `shortcuts.go`, no en.go, zero collision.
+- Verified gofmt clean + worktree build exit 0 (disk build still red only on the parallel session's
+  custompage.go unused-imports WIP). Committed by pathspec.
+
+## 2026-06-18 — fix: UX polish §6.2 — rail section label legibility
+
+- Closed the non-custom rail label part of §6.2 in `internal/app/shell.go`: rail section labels moved from
+  `text-[10px] tracking-[0.16em]` to `text-[11px] tracking-[0.08em]`.
+- Left custom-page label contrast work untouched because another agent owns custom-page TODOs.
+
 ## 2026-06-18 — feat: switch workspaces from the command palette
 
 - Enriched the Cmd/Ctrl+K palette with "Switch to workspace: <name>" entries (one per non-active
