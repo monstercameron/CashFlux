@@ -76,6 +76,8 @@ and every commit updates this file under `Unreleased`.
   account, and backed by pure tests that reset the dismissal after a balance update.
 - **Transfer behavior coverage.** Ledger and budgeting tests now prove paired transfers move both account
   balances while staying neutral to net worth, income/spending totals, and budget spend.
+- **FX aggregate coverage.** A shared ledger/budgeting test now proves a foreign-currency account and
+  transactions re-convert net worth, period totals, and budget spend when the FX rate changes.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

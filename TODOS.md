@@ -1535,10 +1535,10 @@ Savings KPIs) · `period.Window`.
 #### D16. Multi-currency FX across every aggregate ★
 **Workstream:** add a foreign-currency account + txns and confirm base-currency conversion everywhere.
 **Touches:** Settings (base currency + FX rates) · `currency.Rates.Convert/ToBase` · `ledger` (net worth, totals) · Budgets · `forecast` · displays.
-- [ ] Add a non-base account + foreign txns; assert net worth, period totals, and budgets convert to base.
-- [ ] Edit an FX rate; assert every aggregate re-converts live.
-- [ ] Assert a missing/zero rate surfaces a clear error, not a silent wrong total.
-- [ ] Assert rounding is to target minor units and is stable (no drift on re-render).
+- [x] Add a non-base account + foreign txns; assert net worth, period totals, and budgets convert to base.
+- [x] Edit an FX rate; assert every aggregate re-converts live.
+- [x] Assert a missing/zero rate surfaces a clear error, not a silent wrong total.
+- [x] Assert rounding is to target minor units and is stable (no drift on re-render).
 - [x] unit: `currency` cross-rate + rounding + missing-rate tests (extend existing).
 
 #### D17. Staleness → nudge → task ★

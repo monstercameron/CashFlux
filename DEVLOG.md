@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - test: D16 FX aggregates
+
+- Added one aggregate-level FX regression that uses the same EUR account and EUR transactions across
+  `ledger.NetWorth`, `ledger.PeriodTotals`, and `budgeting.Spent`.
+- The test runs those aggregates at two different EUR rates, proving an edited rate recomputes every figure.
+  Existing currency and aggregate error tests already cover missing/zero rates and stable target-minor-unit
+  rounding, so the D16 behavior checklist can close without duplicating those paths.
+
 ## 2026-06-18 — feat: complete custom-page widget management (reorder/resize/edit)
 
 - Closed the last custom-page gaps from the plan: widgets were add/delete only. Added, in `custompage.go`:

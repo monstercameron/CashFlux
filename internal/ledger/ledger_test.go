@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -303,6 +304,50 @@ func TestNetWorth(t *testing.T) {
 	if !net.Equal(usd(140000)) {
 		t.Errorf("net = %v, want 140000 USD", net)
 	}
+}
+
+func TestFXAggregatesRecomputeWithRateChange(t *testing.T) {
+	accounts := []domain.Account{
+		{ID: "checking", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(100000)},
+		{ID: "travel", Class: domain.ClassAsset, Currency: "EUR", OpeningBalance: money.New(10000, "EUR")},
+	}
+	txns := []domain.Transaction{
+		{
+			ID: "eur-expense", AccountID: "travel", CategoryID: "food",
+			Amount: money.New(-2000, "EUR"), Date: mustDate("2026-06-04"),
+		},
+		{
+			ID: "eur-income", AccountID: "travel",
+			Amount: money.New(5000, "EUR"), Date: mustDate("2026-06-05"),
+		},
+	}
+	budget := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, Limit: usd(100000)}
+	start, end := dateutil.MonthRange(mustDate("2026-06-15"))
+
+	assertAggregates := func(t *testing.T, rates currency.Rates, wantNet, wantIncome, wantExpense, wantSpent money.Money) {
+		t.Helper()
+		net, _, _, err := NetWorth(accounts, txns, rates)
+		if err != nil {
+			t.Fatalf("NetWorth: %v", err)
+		}
+		income, expense, err := PeriodTotals(txns, start, end, rates)
+		if err != nil {
+			t.Fatalf("PeriodTotals: %v", err)
+		}
+		spent, err := budgeting.Spent(budget, txns, start, end, rates)
+		if err != nil {
+			t.Fatalf("Spent: %v", err)
+		}
+		if !net.Equal(wantNet) || !income.Equal(wantIncome) || !expense.Equal(wantExpense) || !spent.Equal(wantSpent) {
+			t.Fatalf("net/income/expense/spent = %v/%v/%v/%v, want %v/%v/%v/%v",
+				net, income, expense, spent, wantNet, wantIncome, wantExpense, wantSpent)
+		}
+	}
+
+	assertAggregates(t, currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.20}},
+		usd(115600), usd(6000), usd(2400), usd(2400))
+	assertAggregates(t, currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.50}},
+		usd(119500), usd(7500), usd(3000), usd(3000))
 }
 
 func TestNetByOwner(t *testing.T) {
