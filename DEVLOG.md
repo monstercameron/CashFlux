@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — untrack stray bin/ screenshots; ignore bin/ wholesale
+
+- Follow-on to the wasm untracking. The four `bin/*.png` review screenshots (dash/dash2/mobile/mobile2)
+  were the only remaining tracked things under `bin/`. Grepped the repo — nothing references them (only my
+  own prior DEVLOG note), and review captures are meant to live in the already-ignored
+  `.review-screenshots/`. So they're misplaced strays. Untracked them (`git rm --cached`, local kept) and
+  simplified `.gitignore` to ignore `/bin/` wholesale (matching CLAUDE.md's "bin/ is git-ignored"),
+  replacing the earlier per-extension `/bin/*.wasm` patterns. `bin/` now has nothing tracked.
+
 ## 2026-06-18 — stop committing wasm build artifacts (stale .gitignore)
 
 - The full-suite check's `git diff --stat` kept showing `static/bin/main.wasm | Bin 27MB` change every

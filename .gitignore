@@ -4,8 +4,7 @@
 /web/wasm_exec.js
 static/bin/
 /static/wasm_exec.js
-/bin/*.wasm
-/bin/*.hotreload-manifest.json
+/bin/
 
 # Dev tooling (built gwc binary lives here; rebuild from the framework checkout)
 /.tools/
