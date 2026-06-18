@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend usage counters are ready for rate limits.** Server storage now tracks per-user UTC-day
+  request and token counters with helpers for daily limit checks and tests for increments, isolation,
+  empty users, and invalid caps.
 - **Backend AI keys are encrypted at rest.** Server storage now accepts an env-provided AES master key,
   stores per-user provider keys with AES-GCM, and tests rotation, wrong-key failure, and plaintext
   avoidance.

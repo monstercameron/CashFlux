@@ -282,6 +282,79 @@ func TestAIKeyRejectsBadMasterAndWrongAAD(t *testing.T) {
 	}
 }
 
+func TestUsageCountersIncrementAndLimit(t *testing.T) {
+	s := openTestStore(t)
+	day := time.Date(2026, time.June, 18, 23, 30, 0, 0, time.FixedZone("offset", -4*60*60))
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: day}); err != nil {
+		t.Fatalf("UpsertUser u1: %v", err)
+	}
+	if err := s.UpsertUser(User{ID: "u2", Provider: "github", Subject: "bob", CreatedAt: day}); err != nil {
+		t.Fatalf("UpsertUser u2: %v", err)
+	}
+
+	usage, err := s.AddUsage("u1", day, 1, 50)
+	if err != nil {
+		t.Fatalf("AddUsage first: %v", err)
+	}
+	if usage.Day != "2026-06-19" || usage.Requests != 1 || usage.Tokens != 50 {
+		t.Fatalf("first usage = %+v", usage)
+	}
+	usage, err = s.AddUsage("u1", day, 2, 75)
+	if err != nil {
+		t.Fatalf("AddUsage second: %v", err)
+	}
+	if usage.Requests != 3 || usage.Tokens != 125 {
+		t.Fatalf("incremented usage = %+v", usage)
+	}
+	ok, err := s.UsageWithinLimit("u1", day, 3, 125)
+	if err != nil || !ok {
+		t.Fatalf("UsageWithinLimit exact = %v/%v, want true", ok, err)
+	}
+	ok, err = s.UsageWithinLimit("u1", day, 2, 125)
+	if err != nil || ok {
+		t.Fatalf("UsageWithinLimit request cap = %v/%v, want false", ok, err)
+	}
+	ok, err = s.UsageWithinLimit("u2", day, 0, 0)
+	if err != nil || !ok {
+		t.Fatalf("empty user UsageWithinLimit = %v/%v, want true", ok, err)
+	}
+}
+
+func TestUsageCountersValidateAndIsolateDays(t *testing.T) {
+	s := openTestStore(t)
+	day := time.Date(2026, time.June, 18, 10, 0, 0, 0, time.UTC)
+	nextDay := day.Add(24 * time.Hour)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: day}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if _, err := s.AddUsage("u1", day, -1, 0); err == nil {
+		t.Fatal("negative request increment accepted")
+	}
+	if _, err := s.AddUsage("u1", day, 0, -1); err == nil {
+		t.Fatal("negative token increment accepted")
+	}
+	if _, err := s.AddUsage("", day, 1, 1); err == nil {
+		t.Fatal("blank user accepted")
+	}
+	if _, err := s.AddUsage("u1", day, 1, 10); err != nil {
+		t.Fatalf("AddUsage day: %v", err)
+	}
+	if _, err := s.AddUsage("u1", nextDay, 4, 40); err != nil {
+		t.Fatalf("AddUsage next day: %v", err)
+	}
+	usage, ok, err := s.GetUsage("u1", day)
+	if err != nil || !ok || usage.Requests != 1 || usage.Tokens != 10 {
+		t.Fatalf("day usage = %+v/%v/%v", usage, ok, err)
+	}
+	usage, ok, err = s.GetUsage("u1", nextDay)
+	if err != nil || !ok || usage.Requests != 4 || usage.Tokens != 40 {
+		t.Fatalf("next day usage = %+v/%v/%v", usage, ok, err)
+	}
+	if _, err := s.UsageWithinLimit("u1", day, -1, 0); err == nil {
+		t.Fatal("negative request limit accepted")
+	}
+}
+
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	s, err := OpenStore(filepath.Join(t.TempDir(), "cashflux.db"))

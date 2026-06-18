@@ -55,6 +55,14 @@ type Blob struct {
 	CreatedAt time.Time
 }
 
+// Usage is a per-user daily server usage counter.
+type Usage struct {
+	UserID   string
+	Day      string
+	Requests int64
+	Tokens   int64
+}
+
 // UpsertUser stores an OAuth identity, keyed by provider+subject.
 func (s *Store) UpsertUser(u User) error {
 	if strings.TrimSpace(u.ID) == "" || strings.TrimSpace(u.Provider) == "" || strings.TrimSpace(u.Subject) == "" {
@@ -447,6 +455,64 @@ func aesGCM(masterKey []byte) (cipher.AEAD, error) {
 	return gcm, nil
 }
 
+// AddUsage increments a user's daily request and token counters.
+func (s *Store) AddUsage(userID string, day time.Time, requests, tokens int64) (Usage, error) {
+	if strings.TrimSpace(userID) == "" {
+		return Usage{}, fmt.Errorf("server store: user id is required")
+	}
+	if requests < 0 || tokens < 0 {
+		return Usage{}, fmt.Errorf("server store: usage increments must be non-negative")
+	}
+	key := usageDay(day)
+	if _, err := s.db.Exec(`
+INSERT INTO usage(user_id, day, requests, tokens)
+VALUES(?, ?, ?, ?)
+ON CONFLICT(user_id, day) DO UPDATE SET
+  requests = requests + excluded.requests,
+  tokens = tokens + excluded.tokens`,
+		userID, key, requests, tokens); err != nil {
+		return Usage{}, fmt.Errorf("server store: add usage: %w", err)
+	}
+	usage, ok, err := s.GetUsage(userID, day)
+	if err != nil {
+		return Usage{}, err
+	}
+	if !ok {
+		return Usage{}, fmt.Errorf("server store: usage row missing after increment")
+	}
+	return usage, nil
+}
+
+// GetUsage returns a user's usage for the UTC day.
+func (s *Store) GetUsage(userID string, day time.Time) (Usage, bool, error) {
+	key := usageDay(day)
+	var usage Usage
+	err := s.db.QueryRow(`SELECT user_id, day, requests, tokens FROM usage WHERE user_id = ? AND day = ?`, userID, key).
+		Scan(&usage.UserID, &usage.Day, &usage.Requests, &usage.Tokens)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Usage{}, false, nil
+	}
+	if err != nil {
+		return Usage{}, false, fmt.Errorf("server store: get usage: %w", err)
+	}
+	return usage, true, nil
+}
+
+// UsageWithinLimit reports whether the user has not exceeded the supplied daily limits.
+func (s *Store) UsageWithinLimit(userID string, day time.Time, maxRequests, maxTokens int64) (bool, error) {
+	if maxRequests < 0 || maxTokens < 0 {
+		return false, fmt.Errorf("server store: usage limits must be non-negative")
+	}
+	usage, ok, err := s.GetUsage(userID, day)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return true, nil
+	}
+	return usage.Requests <= maxRequests && usage.Tokens <= maxTokens, nil
+}
+
 func trimSnapshotHistory(tx *sql.Tx, workspaceID string, limit int) error {
 	if limit <= 0 {
 		if _, err := tx.Exec(`DELETE FROM snapshot_history WHERE workspace_id = ?`, workspaceID); err != nil {
@@ -507,6 +573,8 @@ func boolInt(v bool) int {
 func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
 
 func parseTime(s string) (time.Time, error) { return time.Parse(time.RFC3339Nano, s) }
+
+func usageDay(t time.Time) string { return t.UTC().Format("2006-01-02") }
 
 func scanSnapshot(row snapshotScanner) (Snapshot, error) {
 	var snapshot Snapshot

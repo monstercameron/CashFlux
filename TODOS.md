@@ -3943,7 +3943,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Blob metadata + on-disk **content-addressed** store (sha256, path-sharded); `workspace_blobs`
       refcount; GC sweep for unreferenced blobs.
 - [x] `ai_keys`: AES-GCM encrypt/decrypt helper; master key from env/secret manager; rotation note.
-- [ ] `usage`: per-user/day request + token counters; helpers for rate-limit checks.
+- [x] `usage`: per-user/day request + token counters; helpers for rate-limit checks.
 
 ### 7.3 SyncService (last-write-wins) ★
 - [ ] Auth interceptor: read bearer token from gRPC metadata → validate → put user in context.
