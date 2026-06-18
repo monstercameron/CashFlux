@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - test: D17 freshness reminder task
+
+- Moved the dashboard stale-balance "Remind me" task shape into `appstate.CreateFreshnessReminderTask`,
+  keeping the localized title in the UI while making the generated task native-testable.
+- Added appstate coverage that the reminder gets an ID, persists, and is open/medium/source=nudge. The
+  D17 browser assertions for stale badges/counts and mark-updated behavior remain open.
+
 ## 2026-06-18 - test: D16 FX aggregates
 
 - Added one aggregate-level FX regression that uses the same EUR account and EUR transactions across

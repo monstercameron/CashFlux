@@ -78,6 +78,8 @@ and every commit updates this file under `Unreleased`.
   balances while staying neutral to net worth, income/spending totals, and budget spend.
 - **FX aggregate coverage.** A shared ledger/budgeting test now proves a foreign-currency account and
   transactions re-convert net worth, period totals, and budget spend when the FX rate changes.
+- **Freshness reminder task coverage.** The dashboard's "Remind me" stale-balance nudge now goes through
+  appstate, with a native test proving it creates an open medium-priority task from a nudge source.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

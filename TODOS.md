@@ -537,6 +537,725 @@ relying on the (already extensive) pure-logic unit tests. Run the suite in CI on
 - [ ] Organize as story files; gate CI on them once the browser lane is available; aim for full
       standard-path coverage of every feature.
 
+### B17. Privacy: app lock — passcode gate + inactivity lock + recovery ★ (feature spec, researched 2026-06-18)
+
+**Want (user):** on a shared/family computer the app shouldn't be visible without a gate. Add an
+**on-load passcode/PIN screen**, a **non-activity timeout lock screen**, **settings** to configure both,
+and a **clear recovery strategy** so data is never lost forever. Greenfield — no auth/crypto exists today.
+
+**★ Principle — fully OPTIONAL, OFF by default, opt-out-able (user, 2026-06-18):** the lock is a
+convenience for those who want it; users who don't care must never be forced to deal with it.
+- [ ] **Off by default.** Fresh install boots **straight into the app** with no gate, no passcode, no
+      inactivity lock — identical to today. (No encryption either, in option (b): default = plaintext as
+      now; encryption only switches on when the user enables the lock.)
+- [ ] **No nagging.** At most a single, dismissible, *non-blocking* hint that privacy lock exists (e.g. a
+      one-line note in Settings → Privacy); never a modal/interstitial pushing the user to set it up, and
+      "dismiss" means gone for good.
+- [ ] **Easy, complete opt-out at any time.** Settings → Privacy → turn off (requires the current
+      passcode). Disabling must **fully revert**: remove the gate + inactivity lock, and in option (b)
+      **decrypt the dataset back to plaintext** and discard the keys/verifier, so the app returns exactly
+      to the no-lock state (no residual encrypted blob that could strand data).
+- [ ] Each piece independently toggleable: a user can enable the **passcode gate** without the
+      **inactivity lock** (and vice-versa) — don't force the bundle.
+
+**★ Decision to confirm FIRST (drives everything): soft gate vs. encrypted-at-rest.**
+CashFlux is local-first with **no backend**, and data persists in a **durable origin store** (OPFS /
+IndexedDB / SQLite-wasm — verified #42). Therefore:
+- **(a) Soft gate** — the passcode only hides the UI; the dataset stays **plaintext on disk**, readable
+  via DevTools/IndexedDB or the export file. Easy to build; **not real privacy** against anyone technical.
+  If chosen, the lock screen MUST honestly say "hides the screen; does not encrypt your data."
+- **(b) Encrypted-at-rest (recommended)** — passcode → KDF → key; the dataset is **encrypted in the
+  store**, decrypted only after unlock. Real privacy on a shared machine, but a meaningful change
+  (encrypt/decrypt the persisted dataset + key management + recovery). _Confirm (a) vs (b) before building._
+
+**Threat-model note (state plainly in UI):** even with (b), this protects against casual access by family
+members, not a forensic attacker; WebCrypto needs a **secure context** (https / localhost — GitHub Pages
+is https, OK). There is **no server, so no "password reset"** — recovery must be designed in (below).
+
+**Bottom-up plan (per SDLC):**
+- [ ] **Pure logic `internal/lock` (or `vault`)** — no `syscall/js`, table-tested: KDF (PBKDF2 via
+      WebCrypto, or Argon2id if a pure-Go/wasm impl is acceptable) with a random per-install **salt**;
+      a **verifier** (so a wrong passcode is detected without decrypting); for (b): AES-GCM
+      encrypt/decrypt of the dataset blob with a random **data key**, and **envelope/key-wrapping** so the
+      data key is wrapped under BOTH the passcode-derived key AND a recovery key (either can unlock);
+      recovery-key generation (high-entropy, human-readable groups). Tests: round-trip, wrong-passcode
+      rejected, recovery-key unlocks, tamper detection.
+- [ ] **State/persistence** — store lock config + salt + verifier + wrapped keys as a small **always-
+      readable** blob (separate from the encrypted dataset, so the gate can verify before decrypting).
+      Decide what's gated: dataset, **and** the persisted OpenAI key (it's sensitive — encrypt it too),
+      prefs can stay clear.
+- [ ] **On-load passcode screen** — first run: optional "Set a passcode" (opt-in; offer Skip). If set,
+      boot shows a gate before the app; verify → derive key → (b) decrypt into memory. Real
+      `<input type=password>`/PIN (so password managers work); PIN vs password choice; rate-limit/backoff
+      on repeated wrong attempts (and a long delay, not lockout-that-destroys).
+- [ ] **Inactivity-timeout lock** (`syscall/js`): configurable timeout (Off / 1 / 5 / 15 / 30 min),
+      reset on pointer/key/visibility activity (debounced); on timeout → show lock screen **and clear the
+      decrypted dataset from memory** (so plaintext isn't resident); optional **lock-on-tab-hidden** and an
+      explicit **"Lock now"** button. Sync lock state across tabs (BroadcastChannel/storage event).
+- [ ] **Settings → Privacy** — enable/disable lock; set / change (requires current) / remove passcode;
+      passcode type (PIN/password); inactivity timeout; lock-on-blur toggle; "Lock now"; **view/regenerate
+      recovery key**; "Forgot passcode?" entry. Plain-English copy; accessible (labelled, keyboard, SR).
+- [ ] **★ Recovery strategy (avoid losing data forever)** — REQUIRED for option (b):
+      - [ ] **Recovery key**: generated at setup, shown once with **download/print + "save this"**;
+            unlocks the data independently of the passcode (envelope key-wrapping). Re-generatable while
+            unlocked.
+      - [ ] **Encrypted/plaintext backup**: lean on the existing **Export JSON** (`cashflux.json`, #31) as
+            the escape hatch — prompt periodic backups; recovery = re-import a backup (relates to the C33
+            import-mechanism portability fix). Optionally offer an **encrypted** export.
+      - [ ] **Honest setup warning**: "There is no password reset. If you lose your passcode AND your
+            recovery key AND your backups, your data cannot be recovered." Shown before enabling the lock.
+      - [ ] **"Forgot passcode" paths**, clearly distinct: **Recover** (enter recovery key / import backup →
+            keep data) vs. **Reset** (wipe + start fresh → **destructive**, last resort, double-confirm).
+- [ ] **E2E + verify:** set passcode → reload → gated; correct PIN unlocks, wrong rejected; inactivity
+      → locks + memory cleared; recovery key unlocks; reset wipes; backup re-import restores; lock state
+      syncs across tabs; gate is keyboard/SR accessible. (Add a D-style workstream story.)
+- _Cross-links:_ pairs with **C27** (persist OpenAI key — should be encrypted under the lock),
+  **C33** (import mechanism — recovery depends on a working, portable import), and the export round-trip.
+
+**B17.1 — Lock-screen experience: smart quotes, opt-in glanceable data, locking/unlocking animations (user, 2026-06-18).**
+A rich, configurable lock screen (replaces the native `prompt`/`alert` setup — see C42/#65). All content
+configurable; **privacy-first defaults**.
+- [ ] **Smart quotes (default ON):** a curated, rotating set of finance/motivation quotes (pure
+      `internal/lockquotes`, table-tested; deterministic rotation by day/index since `Math.random` is
+      banned in logic; no network). Toggle off in Settings.
+- [ ] **Safe metadata (default ON, no sensitive data):** clock/date, greeting, day — nothing financial.
+- [ ] **★ Opt-in glanceable data (default OFF — privacy guardrail):** like a phone lock screen, optionally
+      surface **notifications/reminders (B19)** and **timing-based events** (next bill due, payday in N
+      days, budget-period countdown). **The lock screen is visible to anyone at the device,** so gate behind
+      explicit, *tiered* opt-in:
+      - **Off** (default) → quotes + time only.
+      - **Counts only** → "3 reminders · 1 bill due soon" (NO amounts/payees).
+      - **Previews** → reminder text + event timing, still **no balances/amounts** unless a separate
+        "show amounts on lock screen" toggle is on (with a clear warning).
+      Never show balances/account numbers by default. Data comes from the B19 notify/catch-up engine +
+      a `freshness`/bills timing source; the encrypted store stays locked — only the allowed, redacted
+      summary is surfaced.
+- [ ] **Locking / unlocking animations (several, selectable):** fade, **frosted-glass blur→sharpen** on
+      unlock, **iris/circle reveal**, slide/curtain, the existing **FlipPanel `rotateY`** flip, and a
+      "vault door" close/open. User picks in Settings (ties **B20** theming). **Respect
+      `prefers-reduced-motion`** (instant/fade fallback); keep unlock **snappy** (animation must not delay
+      access after a correct passcode). Lock animation on auto-lock/Lock-now; unlock animation on correct entry.
+- [ ] **A11y:** the lock gate is a real focusable form (passcode input autofocused, Enter submits, labelled,
+      SR-announced); animations are decorative (`aria-hidden`), never block input. _Cross-links: B19 (data
+      source), B20 (animation/theming), C42 (no native prompt), C26 (text size on the gate)._
+
+**B17.2 — Enable/disable toggle that preserves creds + recovery setup at password creation (user, 2026-06-18).**
+**Separate "Configured" from "Enabled".** State: `LockConfig{ Configured bool, Enabled bool, KDFParams,
+Salt, Verifier, WrappedDK[]{method,blob}, RecoveryMethods[], AutoLockMinutes }`. *Configured* = creds
+exist; *Enabled* = the gate is active. Toggling Enabled must **NOT** wipe creds (no forced re-create).
+- [ ] **Settings → Privacy → "Lock screen" toggle** that flips `Enabled` **without touching** Salt/
+      Verifier/WrappedDK/recovery. Re-enabling needs **no new passcode**.
+- [ ] **★ Toggle is gated behind the passcode** — changing `Enabled` (especially **OFF**) prompts for the
+      **current passcode** (verified against `Verifier`) **even if the session is already unlocked**, so a
+      passer-by at an unlocked screen can't silently disable protection. Use the FlipPanel passcode modal
+      (C42), not a native prompt.
+- [ ] **Three DISTINCT actions — don't conflate:** (1) **Lock ON/OFF** (keep creds; behind passcode);
+      (2) **Change passcode** (requires current → re-wrap DK under the new passcode-KEK); (3) **Remove/forget
+      passcode entirely** (requires current; wipes creds + recovery; decrypts data → plaintext = full
+      opt-out, B17 principle).
+- [ ] **Encryption interaction (honest design):** with encrypted-at-rest (B17 option b), "disabled" can't
+      both keep data encrypted *and* skip the prompt — so on **disable**, wrap the data key (DK) under a
+      locally-stored **device key** so the app auto-unlocks while off; on **enable**, drop the
+      device-wrapped copy. **State plainly:** *disabled = no gate, data accessible on this device* (a
+      deliberate convenience trade-off) while creds/recovery stay intact for instant re-enable. (Soft-gate
+      model: disable just hides the gate — trivial.)
+- [ ] **★ Recovery setup AT password creation — multi-strategy via envelope / multi-KEK.** The random
+      **data key (DK)** is wrapped under several **KEKs**, any of which unlocks → then reset the passcode
+      (re-wrap DK under a new passcode-KEK). Strategies chosen at setup:
+      - **Recovery code (default, strongest):** auto-generated high-entropy code, shown once + download/print;
+        `KEK = KDF(code, salt)`. Zero-knowledge, no server.
+      - **Security questions (optional, weaker):** user picks **≥3** questions + answers; normalize answers
+        (trim/lowercase/strip punctuation) → `KEK = KDF(normalized answers, salt)`. **Low entropy /
+        guessable** → warn it's weaker than the code, recommend pairing (not sole), allow N-of-M if desired.
+      - **Backup file (always available):** the existing Export JSON (#31) — recovery = re-import.
+      Adding a recovery method = add a `wrap(DK, KEK_method)` entry; removing = drop it. "Forgot passcode"
+      offers each configured method → unwrap DK → set a new passcode.
+- [ ] **Verify/E2E:** toggle off→on keeps the same passcode (no re-create); toggling off requires the
+      passcode even when unlocked; change-passcode keeps data + recovery; recovery code unlocks; security
+      questions unlock (and wrong answers don't); remove-passcode fully reverts to plaintext. _Cross-links:
+      B17 (a/b decision, recovery), C42 (FlipPanel passcode modal), B19 (lock-screen data)._
+
+**B17.3 — Credential types (password / passphrase / numeric code) + a NIST-aligned strength/hygiene layer (user, 2026-06-18).**
+The lock secret can be one of three **types** (chosen at setup, changeable):
+- [ ] **Numeric code (PIN):** digits only, **min 6** (recommend 6+), reject trivial — `1234`, `0000`,
+      all-same, sequential, and the published common-PIN list. Fast for shared/tablet use.
+- [ ] **Password:** any printable + unicode, **min 8**, strength-metered.
+- [ ] **Passphrase:** multiple words, **min ~12 chars / ≥4 words**, length encouraged over symbols.
+- [ ] **Pure `internal/pwcheck`** (no `syscall/js`, table-tested): `Validate(kind, value) →
+      {ok, score 0–4, issues[], suggestions[]}`. Embed a **bundled common/breached blocklist** (top-N
+      passwords + common PINs) for offline screening; a **zxcvbn-style guessability estimator** for the
+      score + actionable feedback.
+- [ ] **Validation layer — follow modern NIST SP 800-63B (the industry standard):**
+      - **Length over composition:** enforce a **min length** (per type above); **no forced composition
+        rules**, **no mandatory rotation/expiry**, **no password hints**, **no truncation** — allow long,
+        allow spaces, allow paste, allow unicode (all per NIST).
+      - **Screen against breached/common values** (bundled blocklist) — **hard-reject** known-common
+        passwords/PINs and the context-specific weak ones (app name, member/household names, repeats,
+        sequences).
+      - **Strength meter + tips** ("add another word", "avoid 1234") to **urge** good hygiene — primarily
+        *urge* (meter + warnings, can proceed above the floor), with a sane **hard floor** = min length +
+        not-on-blocklist + not-trivial. Optionally offer an **online HaveIBeenPwned k-anonymity** check
+        when online + opted-in (default offline = bundled list only).
+- [ ] **Honest security caveat (state in UI):** a **PIN/numeric code is low-entropy** → weak against
+      *offline* brute-force of an exfiltrated encrypted blob (B17 option b). Mitigate with a **strong KDF
+      cost** + the B17 rate-limit/backoff, but **recommend a password/passphrase** for real at-rest
+      protection; the PIN is "casual-access" deterrence. All types feed the same KDF→KEK (B17.2).
+- [ ] **Verify:** each type validates per its rules; common/breached values rejected; trivial PINs
+      rejected; meter + suggestions render; the floor blocks but otherwise urges; change-passcode
+      re-validates. _Cross-links: B17/B17.2 (KDF/KEK, threat model), C42 (FlipPanel input modal), C26 (text size)._
+
+**B17.4 — Optional password hint (user, 2026-06-18; "not great but saves folks who forget").**
+A simple, **opt-in, off-by-default** memory-jog — explicitly **NOT** a recovery method (the real recovery
+is the code/security-questions/backup in B17.2). Designed with guardrails because hints cut against the
+NIST guidance in B17.3 (hints leak info, doubly so on a shared family screen):
+- [ ] User-set free-text hint stored with the lock config (plaintext, since it's a hint by design;
+      included in backups). One per credential.
+- [ ] **Don't show it for free:** reveal only behind a deliberate **"Forgot? Show hint"** link **after
+      N failed attempts** (e.g. 3) — not sitting on the lock screen for any passer-by.
+- [ ] **Guardrail validation:** reject a hint that **contains or equals the passcode** (case-insensitive,
+      and normalized for PINs) so users can't accidentally write the password as the hint. Warn that a hint
+      is visible to anyone with the device and **weakens** the lock.
+- [ ] **Framing:** present as a last-ditch jog *below* the real recovery options; never call it "recovery."
+      _Cross-links: B17.2 (recovery — the actual safety net), B17.3 (hygiene/validation), C42 (modal UI)._
+
+**B17.5 — Biometric / passkey unlock (Face ID · fingerprint · Windows Hello) — browser API details (user, 2026-06-18).**
+**Yes, available — only via WebAuthn.** Browsers expose **NO raw fingerprint/face API** (privacy by design;
+biometric data never reaches the page); the OS does the match and returns a crypto assertion.
+- [ ] **API:** `navigator.credentials.create()/.get()` with `authenticatorAttachment:"platform"` +
+      `userVerification:"required"` → triggers **Touch ID / Face ID (macOS/iOS), Windows Hello, Android
+      biometric**. Add as an **optional unlock method alongside the passcode** (never sole; offer where a
+      platform authenticator exists).
+- [ ] **Use the PRF extension (strong path):** the WebAuthn **`prf` extension** returns a stable secret
+      bound to the passkey+biometric → use as a **KEK that wraps the data key (B17.2)**, so biometrics truly
+      decrypt the vault (not just a bypassable boolean gate). Client-side, no server.
+- [ ] **Constraints:** secure context (HTTPS/localhost — Pages ✓); **PRF is Chromium-forward** (Chrome/Edge;
+      Safari/FF partial) → **fall back to passcode (B17.3)** when unavailable; require a platform
+      authenticator. _Soft-gate-only (no PRF) = casual deterrence (bypassable via devtools) — note that._
+- [ ] **Native (Capacitor, B32 Cluster 5):** use native biometric plugins directly (more reliable than
+      WebAuthn-in-WebView) — the mobile path. _Cross-links: B17.2 (KEK/envelope), B17.3 (passcode fallback),
+      B32 C1 (passkeys) + C5 (Capacitor)._
+
+### B18. Onboarding + optional quick guide + strong splash screen — ✅ APPROVED (2026-06-18)
+**Status: APPROVED — full scope, tour = SIMPLE SLIDESHOW.** Ready to build (bottom-up, one feature per
+commit). Want: an onboarding section with an **optional** quick guide and a **strong (branded, polished)
+splash screen**. **Approved decisions:** (i) scope = **full** (splash + welcome + tour + checklist +
+empty-state CTAs); (ii) tour style = **simple slideshow** (welcome cards with Next/Back/Skip — no
+spotlight-coachmark overlay machinery); (iii)/(iv) first-run sample-vs-fresh choice + checklist placement
+= builder's discretion (sensible defaults: keep the sample-vs-fresh choice; checklist as a dismissible
+dashboard card).
+**Principles (inherit B17's ethos): optional, skippable, never blocks, remembered (don't re-show), re-runnable.**
+
+- **1) Strong splash / boot screen.** Today `web/index.html` shows a minimal "CashFlux · Getting your
+  money in order…" loader while wasm boots. Upgrade to a **branded splash**: logo/wordmark, accent, a calm
+  progress/shimmer, tagline; fades smoothly into the app (or into the welcome). Must (a) appear instantly
+  (it's plain HTML/CSS before wasm loads — keep it dependency-free), (b) respect `prefers-reduced-motion`,
+  (c) not add perceptible delay (fade out as soon as the app is interactive), (d) be themed (dark/light).
+- **2) First-run welcome.** On the very first load only, a dismissible welcome panel (reuse `ui.FlipPanel`/
+  dialog): one-line what-it-is + primary choices — **Explore with sample data** (default; sample already
+  ships) · **Start fresh** (wipe to empty) · **Take a quick tour** · **Skip** (✕). Persist an
+  `onboardingSeen` flag so it never reappears.
+- **3) Optional quick guide (product tour) — SIMPLE SLIDESHOW (approved).** A short skippable slideshow
+  of welcome cards in a panel (reuse `ui.FlipPanel`/dialog): a few slides on what CashFlux is + key areas
+  (sidebar nav, dashboard tiles + drill-in C30, period control, "+ Add", Settings/household, Documents AI,
+  Privacy lock B17). Controls: **Next / Back / Skip**, progress dots, Esc exits. Re-runnable from
+  **Settings/Help → "Replay quick tour."** No spotlight-coachmark overlay (keeps it simple). A11y:
+  keyboard-navigable, focus-managed, `prefers-reduced-motion`, labelled dialog.
+- **4) Optional "Get started" checklist (non-blocking).** Small dismissible card (dashboard or a
+  self-removing "Get started" page) with first tasks that auto-check from app state: add accounts, set
+  base currency, create a budget, add a goal, (optional) set a privacy lock (B17), (optional) add OpenAI
+  key. Each links to its screen; dismiss = gone for good.
+- **5) Empty states as always-on onboarding.** Ensure each screen's empty state has a clear primary CTA
+  (several already do) — the lightweight, ever-present guidance with zero nagging.
+- **Build-order (SDLC, when approved):** pure `internal/onboarding` (data-driven step/checklist defs +
+  completion predicates from app state, table-tested) → persisted onboarding atom (seen/dismissed/step/
+  checklist; store in the always-readable config blob if B17 encryption is on) → splash (HTML/CSS) →
+  welcome panel → coachmark tour → checklist card → Settings "Replay tour".
+- **Decisions to confirm (the approval):** (i) scope — **full** (splash + welcome + tour + checklist) vs.
+  **minimal** (strong splash + welcome + better empty-state CTAs); (ii) tour style — **spotlight
+  coachmarks** vs. a simple **slideshow** vs. a short **"what's here" panel**; (iii) does the first-run
+  **sample-vs-fresh** choice belong, given sample data already ships; (iv) checklist placement (dashboard
+  card vs. dedicated page).
+
+### B19. Communications & notifications — ✅ APPROVED: Phase A only (client-only, NO backend), 2026-06-18
+**Status: APPROVED scope = Phase A only (fully client-side; NO backend).** External SMS/email (Phase B)
+is **deferred** — if ever revisited, hosting = **BYO serverless** (user-hosted). Want: a notification
+system, cost tracking, and notification rules — all client-side.
+
+**No-backend reality (settled with user):** notifications fire **only while the app is open** — in-app
+center/toasts + browser `Notification` (desktop pop-ups while a tab is open). There is **no dependable
+"closed-app" reminder** without a server (Web Push needs VAPID + a push server = a backend, rejected;
+Periodic Background Sync is Chromium-only, PWA-only, throttled, unreliable).
+- **Wake Lock API note (user asked "is there a browser API that stops sleep?"):**
+  `navigator.wakeLock.request('screen')` keeps the **screen** awake **only while the tab is visible**
+  (auto-released when hidden); it does **not** run the app in the background or enable closed-app
+  notifications. Useful only for an **always-on/kiosk dashboard** (e.g. pinned on a kitchen display) —
+  offer it as an optional "Keep screen awake" toggle on the dashboard, not as a notification mechanism.
+
+**★ Catch-up-on-wake (core Phase A mechanism — user-directed 2026-06-18):** since we can't wake the
+device, the app **reconciles on open/return** — check the current time and "catch up" on whatever would
+have fired while it was closed.
+- [ ] Persist **`lastSeenAt`** (last time the app was open/active) in the durable store.
+- [ ] On **load** and on **wake** (`visibilitychange`→visible / window focus), compute the gap
+      **[lastSeenAt, now]** and run the rules engine over it: for each rule, compute the scheduled
+      occurrences in that window and evaluate current data conditions (bill due date passed, budget crossed
+      a threshold, account went stale, weekly/monthly digest came due). Then set `lastSeenAt = now`.
+- [ ] **Surface as a "While you were away" summary** in the notification center — collapsed/deduped/capped
+      (e.g. "3 things happened…"), never a flood. Long gaps (away a month) collapse to one digest.
+- [ ] **Idempotency:** keep a **delivered-log** keyed by rule+period so reopening repeatedly doesn't
+      re-fire the same catch-up; respect already-acknowledged items.
+- [ ] Also run rule evaluation on a **timer while open**, so a noon bill-due fires during an active session
+      too (not only on next open).
+- [ ] **Pure + testable:** `notify.CatchUp(rules, lastSeenAt, now, dataSnapshot, deliveredLog) → []Notification`
+      — deterministic given inputs; table tests for gap windows, scheduled-occurrence math (timezone/clock
+      changes), dedupe, and long-gap collapsing. No `syscall/js`.
+
+**★ Electron path (user note 2026-06-18 — relates to §5.1 desktop wrapper):** the **Electron build can
+bypass CORS** (the main/Node process makes server-side HTTP calls — no browser CORS) and can run a
+**tray/background process** with OS-level notifications. So Electron could enable the deferred **Phase B
+(direct SMS/email + scheduled/closed-app reminders) WITHOUT a hosted relay** — the desktop app acts as its
+own local "backend," keys stored on-device.
+- [ ] Treat Electron as the **Phase-B enabler** for external comms: provider adapters run in the Electron
+      main process; the wasm/web build keeps Phase A (client-only catch-up) as the baseline.
+- [ ] **Caveats to design for:** provider **keys live on the local machine** → **encrypt them under the
+      B17 lock**; true closed-app/background delivery needs the **Electron process running** (tray +
+      launch-at-login), else it's still catch-up-on-wake; keep the same `Notifier`/rules core so web (Phase
+      A) and Electron (Phase B) share logic and only the transport differs.
+
+**Original draft retained below for context (SMS/email = the deferred Phase B).** Want: integrations to
+send comms (SMS: Twilio/Telnyx/Plivo/Vonage; Email: Resend/SES/Mailgun/Postmark), a notification system,
+cost tracking, and notification rules.
+
+**★ Architectural reality (decide FIRST):** CashFlux is local-first, client-side wasm, **no backend**.
+SMS/email providers are **server-side only** — calling them from the browser is **blocked by CORS** and
+would **expose the API secret in the browser** (readable on a shared family computer — directly
+contradicts B17 privacy). Also, a **closed app can't send scheduled reminders** (no server to run the
+schedule). So external SMS/email inherently needs a server/relay.
+- (a) **Hosted relay/backend (recommended if external comms are required):** small service holds provider
+  keys + adapters; the app posts notification requests; it runs schedules for when-app-is-closed
+  reminders. Could live with the Phase-3 sync server. Adds hosting + cost + a privacy boundary.
+- (b) **BYO serverless relay:** user deploys a Cloudflare Worker / Lambda with their own keys; app calls
+  that endpoint. Keeps "no shared backend" but high setup friction.
+- (c) **Direct browser BYO-key (like the OpenAI key): NOT viable** — SMS CORS-blocked; keys exposed for
+  both. Reject for SMS/email.
+
+**Phased strategy:**
+- **Phase A — buildable now, fully client-side (no infra):**
+  - Pure `internal/notify`: notification types/events; a **rules engine** (trigger + condition + channel +
+    threshold + quiet-hours + frequency cap); templates; a notification **log/queue**. Table-tested, no
+    `syscall/js`.
+  - **In-app notification center** (bell + list) + toasts (extend `uistate.Notice`/Toast) + **browser
+    Notifications API** (`Notification.requestPermission`; fires only while the app is open).
+  - **Channel abstraction** `Notifier` interface (InApp, Browser now; Email, SMS later via relay).
+  - **Cost-tracking model** (pure): per-provider price-per-message, usage log, monthly estimate + optional
+    budget cap + an "off until configured" guardrail — mirrors `ai.EstimateCostUSD` (C27). Surfaced in
+    Settings.
+  - **Notification rules UI** (Settings): events = bill due soon, budget near/over (`budgeting`), goal
+    milestone/pace (`goals`), stale balance (`freshness`), large transaction, weekly/monthly digest;
+    per-rule enable + channel + threshold + quiet hours + frequency cap.
+  - **Privacy guardrails (ties B17):** external messages carry **minimal/no sensitive detail** ("A budget
+    is near its limit — open CashFlux"); explicit **opt-in** + "this leaves your device" notice; default
+    **OFF**.
+- **Phase B — needs infra (relay/backend):**
+  - Relay with provider **adapters** behind one interface — Email: **Resend** (easiest) / **SES**
+    (cheapest at scale) / Mailgun / Postmark; SMS: **Telnyx** (cheap) / **Twilio** (easiest) / Plivo /
+    Vonage. Keys live on the relay, **never the browser**.
+  - **Scheduled delivery** for when the app is closed (relay runs the cron); reconcile cost tracking with
+    provider usage/webhooks.
+  - Settings: choose provider + relay endpoint/credentials + verify-send test.
+
+**Decisions — RESOLVED (2026-06-18):** (1) **Phase A only — client-only, no backend** ✅; (2) external
+relay (if ever) = **BYO serverless**, deferred; (3)/(4) — N/A until Phase B. _Cross-links: B17
+(privacy/secrets), C27 (AI cost-surfacing pattern), freshness nudge (#30)._
+**Still open to confirm before building Phase A:** which client-side events ship first (recommend: bill
+due, budget near/over, stale balance, weekly digest), and whether "cost tracking" is even relevant for
+Phase A (in-app/browser notifications are **free** — so the cost-tracking model is really a Phase-B
+concern; for Phase A, drop it or keep only a stub for future external channels). _Confirm before build._
+
+### B20. Theming engine — colors, fonts, sizes, header images, icon packs — ✅ APPROVED (2026-06-18)
+**Status: APPROVED — FULL scope.** Decisions locked: (1) **Full** (color tokens + fonts + font-size +
+radius + presets + custom-save + import/export + contrast **AND** header images + app icon packs +
+per-widget colors); (2) fonts = **allow custom font-file upload** (plus the curated list) — handle font
+asset storage (size-capped in the durable store, under B17 lock), perf, and a graceful fallback if a
+font fails to load; (3) **unify** — the engine **subsumes** today's theme/accent/density/display-scale
+prefs into one system (migrate existing prefs → theme tokens; update the Settings UI accordingly).
+Ready to build bottom-up (one feature per commit). Want: a theming engine covering border color,
+background colors, widget colors, fonts, font sizes, header images, app icon packs, etc.
+
+**Foundation (already exists — extend, don't reinvent):** `internal/prefs` + `uistate.ApplyPrefs`
+already drive **CSS custom properties** for theme (dark/light/system), **accent** (swatch), **density**
+(compact), **display scale** (B6 `--ui-scale`), week-start, date format — reload-persistent. Tokens live
+in `web/index.html` `<style>` + Tailwind config (`--bg-base/--bg-card/--border/--text/--accent/--cell`…).
+The engine generalizes this into a full, user-editable **design-token theme**.
+
+**Architecture (bottom-up, SDLC):**
+- [ ] **Pure `internal/theme`** (no `syscall/js`, table-tested): a typed `Theme` struct of tokens —
+      colors (`bgBase, bgCard/widget, border, text, textDim, accent`, semantic up/down, per-widget
+      optional), **radius**, **font family** (UI + display), **font-size scale**, density, header image
+      ref, icon-pack id; `Validate()` (valid colors + **contrast AA** checks, ties B15); `Default()` +
+      built-in **presets** (e.g. Midnight / Paper / Forest); `CSSVars()` → the var map; JSON
+      **import/export** (shareable themes); merge/override semantics.
+- [ ] **State:** persist the **active theme** + **user custom themes** (durable store / localStorage;
+      under the B17 lock if encryption is on). Extend `ApplyPrefs` → `ApplyTheme` to set every token on
+      `:root`/`#app`. Subsume the existing theme/accent/density/scale prefs into the engine (one system).
+- [ ] **UI — Theme editor** (Settings → Appearance, or a dedicated "Theme" panel): pick a preset → tweak
+      tokens via color pickers / font selectors / size sliders / radius; **live preview**; save as a named
+      custom theme; **reset to default**; import/export theme JSON. Plain-English, accessible.
+- [ ] **Fonts:** offer a **curated list** (the already-loaded Inter + Fraunces, plus a few web-safe/
+      bundled options) for UI + display fonts, and a **font-size scale** slider. _Note: arbitrary custom
+      **font-file upload** is heavy (font assets) — defer; curated list first._ Ties C25 (density) + C26
+      (text-size); the px-heavy styling means size theming needs the **px→rem token cleanup** to fully
+      bite — note the dependency.
+- [ ] **Header images:** optional dashboard/app **banner image** — store as a size-capped data/object URL
+      in the durable store; apply as a CSS background on a header band; offer a few built-ins + upload with
+      a cap. Perf/size caveat noted.
+- [ ] **App icon packs:** selectable icon set — depends on **B13** (typed `internal/icon`, now rendering
+      since C28 fixed `viewBox`). Feasible scope: an **icon style** (stroke width / outline-vs-filled) or
+      a small set of curated packs mapped behind `icon.Name`; full third-party packs are larger. Note
+      feasibility per pack.
+- [ ] **A11y guardrails (must-keep, ties B15):** validate text/bg **contrast** and warn or auto-nudge so
+      a custom theme can't become unreadable; always keep a **Reset to default**; respect
+      `prefers-reduced-motion`; don't let header images reduce text legibility.
+- [ ] **Verify/E2E:** apply preset → tokens change live; edit + save custom theme → persists across
+      reload; import/export round-trip; contrast warning fires on a bad combo; reset restores default.
+**Decisions — RESOLVED (2026-06-18):** (1) **Full** scope (incl. header images + icon packs + per-widget
+colors); (2) **custom font-file upload allowed** (+ curated list); (3) per-widget colors **in scope**;
+(4) **unify** — engine subsumes theme/accent/density/scale prefs (with migration). _Cross-links: B6
+(display scale), C25/C26 (density/text-size + px→rem), B13 (icons), B15 (contrast), B17 (persist under
+lock)._
+- [ ] **Custom font upload (now approved) — design notes:** store uploaded font files size-capped in the
+      durable store (under the B17 lock); apply via `@font-face` from an object/data URL; **graceful
+      fallback** to a curated font if load fails; note licensing is the user's responsibility; cap count/size.
+
+### B21. Reports engine — charts, narrative, change-% , shareable — ✅ APPROVED (2026-06-18)
+**Status: APPROVED.** Decisions locked: (1) charts = **adopt D3** → this **activates B14** (D3 charting
+behind the typed `chartspec` interface; pin + SW-cache D3 for offline); (2) narrative = **both**
+(deterministic default + optional AI enhance); (3) shareable = **all four** — Print-to-PDF + standalone
+HTML + PNG image + CSV/JSON; (4)/(5) builder's discretion (recommend Spending + Net-worth history +
+Year-end/tax first; new **Reports** nav screen). Ready to build bottom-up.
+- [ ] **★ Export design note (D3 + shareable):** D3 is a live JS dep — for the **standalone HTML / PNG /
+      PDF** exports, embed the **already-rendered static SVG** (snapshot the chart's SVG markup), NOT a
+      live-D3 dependency, so shared files open anywhere offline with no JS. In-app reports use live D3;
+      exports use the rendered SVG snapshot. Pin D3 + add it to the service-worker cache (B14) for the
+      app's own offline use.
+Want: a reports engine — charts, descriptions, number-change percents, polished graphical style, **shareable**.
+
+**Concept:** a **Reports** section that turns the ledger/budgets/accounts into structured, visual reports
+with hero KPIs + period-over-period **change %**, charts, and plain-English narrative — distinct from the
+dense dashboard and the AI-narrative Insights.
+
+**Architecture (bottom-up, SDLC):**
+- [ ] **Pure `internal/reports`** (no `syscall/js`, table-tested): each report = a function over
+      (dataset, period) → a typed `Report{ Title, Description, KPIs[]{label,value,delta%,tone}, Series[]
+      (for charts), Tables[] }`. Reuses existing logic (`ledger.PeriodTotals`/`NetWorthSeries`/
+      `CategorySpendSeries`, `budgeting`, `goals`). **Period-over-period delta**: this vs last period/year
+      → % change + up/down tone. Deterministic → fully unit-testable.
+- [ ] **Report catalog:** Spending (by category, top movers, vs last period), Income-vs-Expense / cash
+      flow (+ savings rate), **Net-worth history** (over time, by class/account), Budget performance
+      (actual vs budgeted, over/under), Category trends (sparklines + biggest movers %), **Year-end / tax
+      summary** (annual category totals, exportable), Member breakdown, Goals progress.
+- [ ] **Charts:** needs richer kinds than today's area/bar — **line, stacked bar, donut/pie, sparkline**.
+      _Decision: grow the **pure-Go SVG** chart helpers (no dep, offline, testable — fits local-first) vs
+      adopt **D3** (B14 — richer/interactive but JS dep + vdom-portal complexity)._ The C16 fix already
+      makes charts plot dollars correctly.
+- [ ] **Narrative descriptions:** **deterministic** templates from the numbers ("You spent $X, up Y% from
+      last month, driven by Groceries") — works offline, no key; **optionally AI-enhanced** via the
+      existing `ai`/Insights path. Default = deterministic.
+- [ ] **Change-% component:** a "stat with delta" (▲/▼ + % + color) reusing `figTone`/accounting format
+      (and the color+text a11y rule from B15).
+- [ ] **Polished graphical style:** a clean, print-friendly "report" layout (hero KPIs → charts →
+      tables), distinct from the dashboard; themeable (ties **B20**).
+- [ ] **★ Shareable (no backend — local-first):** options —
+      (a) **Print-to-PDF** via a print stylesheet (`window.print()`) → save/share a PDF;
+      (b) **Standalone HTML export** — self-contained file with inline SVG charts, opens anywhere;
+      (c) **Image export** (render the report SVG/DOM → PNG);
+      (d) **CSV/JSON** of the underlying period data.
+      A true **shareable link needs a backend** (rejected) — could encode small reports in a URL hash but
+      it's fragile; skip. **Privacy (ties B17):** shared reports contain financial data — warn before
+      sharing; offer **aggregates-only / redact amounts** mode.
+- [ ] **UI:** a new **"Reports" nav item** (vs extending Insights) — pick report + period + (compare-to),
+      view, export/share. A11y: keyboard, chart `role=img`+alt (extend the existing `ui.AreaChart` aria).
+- [ ] **Verify/E2E:** each report's numbers match the ledger; delta % correct vs prior period; charts
+      render + theme; PDF/HTML export produces a correct file; tax summary totals reconcile; offline works.
+**Decisions — RESOLVED (2026-06-18):** (1) **D3** (activates B14); (2) **both** narrative modes; (3) **all
+four** share formats (PDF + standalone HTML + PNG + CSV/JSON); (4) first reports = Spending + Net-worth
+history + Year-end/tax; (5) **new Reports nav screen**. _Cross-links: **B14 (now active — D3)**, B20
+(theming/print style), B17 (share privacy / redact mode), C38 (the "Reports" home-use gap), Insights (AI)._
+
+### B22. Bills & due-date tracker + calendar — SPEC (from C38, 2026-06-18)
+**Want:** a real bills surface beyond the dashboard "upcoming bills" widget — a list with due dates,
+amounts, paid/unpaid status, and a **month calendar** view.
+- [ ] **Pure `internal/bills`** (no `syscall/js`, tested): derive bills from liability accounts'
+      due-day/min-payment **and** Planning recurring items; compute next-due, overdue, days-until,
+      paid-this-cycle; month-grid layout helper (which bills fall on which day). Reuse `dateutil`,
+      `freshness`, `domain.Recurring`.
+- [ ] **State:** mark-paid per cycle (creates/links a transaction); persist paid status.
+- [ ] **UI:** Bills screen — upcoming/overdue list + a **month calendar** with bill dots; "mark paid" →
+      logs the payment; ties **B19** (bill-due reminders) + the dashboard widget.
+- [ ] _Decision:_ bills as a first-class entity vs. purely derived from liabilities+recurring (recommend
+      derived first, with an optional manual "add a bill").
+
+### B23. Receipt / document attachments linked to transactions — SPEC (from C38, 2026-06-18)
+**Want:** attach a receipt/document to a specific transaction (Artifacts stores images, but nothing links
+them to a txn).
+- [ ] **Model:** `Attachments []AttachmentRef` (or reuse `SourceDocID`) on `Transaction` → stored
+      Artifacts; store CRUD + dataset round-trip + export/import.
+- [ ] **UI:** from a transaction row/edit, attach an existing artifact or upload new; paperclip indicator;
+      view/preview from the ledger; Documents/Artifacts import can auto-link.
+- [ ] _Notes:_ size caps; encrypt under **B17** lock; included in backups/export.
+
+### B24. Split / shared expenses & settle-up between members — SPEC (from C38, 2026-06-18)
+**Want:** split a transaction across members ("50/50") and track **who owes whom** with a settle-up view.
+- [ ] **Pure `internal/split`** (tested): a transaction split (by member, share/%/amount); per-member
+      balances ("X owes Y $Z"); settle-up suggestions (minimal transfers). Reuses members + `money`.
+- [ ] **Model:** a `Split` on transactions + settlement records.
+- [ ] **UI:** "Split…" on a transaction (equal / % / custom); a **Settle up** view of net balances +
+      "record a settlement" (creates a transfer).
+- [ ] _Decision:_ split at txn level vs. a separate shared-ledger; start with equal/percent + net-balance.
+
+### B25. Subscriptions tracker — SPEC (from C38, 2026-06-18)
+**Want:** a view of recurring monthly spend (what am I paying for) + renewal/cancel reminders.
+- [ ] **Pure `internal/subscriptions`** (tested): detect/aggregate recurring charges (Planning `Recurring`
+      and/or repeated payees); monthly + annualized totals; next renewal date.
+- [ ] **UI:** Subscriptions list (name, cadence, amount, monthly/yearly total, next renewal); "cancel
+      reminder" → **B19** task; show total monthly subscription burden.
+- [ ] _Notes:_ a focused view over the same recurring data, not a new store.
+
+### B26. Budget rollover / sinking funds — SPEC (from C38, 2026-06-18)
+**Want:** envelope **rollover** (unspent carries over) + **sinking funds** (save toward periodic large
+expenses).
+- [ ] **Verify first:** does the current budget engine roll unspent over? If not, add it.
+- [ ] **Pure `internal/budgeting`** extension (tested): per-budget `Rollover bool`; carry-forward math
+      (prev remaining + this limit); sinking-fund accrual (target ÷ months). 
+- [ ] **State/UI:** per-budget rollover toggle; "carried over $X"; a sinking-fund type. Ties the
+      methodology selector (envelope/zero-based, D6).
+- [ ] _Decision:_ sinking funds as a budget feature vs. reuse `goals`.
+
+### B27. Investment / holdings tracking — SPEC (possibly out-of-scope, from C38, 2026-06-18)
+**Want (maybe):** brokerage/401k hold a **balance only** — no holdings/cost-basis/performance.
+- [ ] _Decision FIRST (scope):_ keep investments as a single balance (budgeting app) vs. track holdings.
+      Full holdings = symbols/qty/cost-basis/**live price** (needs a price feed = online dep, tension with
+      local-first/offline). **Recommend out of core**; if pursued, a lightweight **manual** holdings list
+      (symbol, qty, manual price), no live feed — purely local. Confirm before any build.
+
+### B28. Automated backup reminders — SPEC (from C38, 2026-06-18)
+**Want:** nudge periodic backups so data isn't lost (ties B17 recovery + Export #31).
+- [ ] Track `lastBackupAt`; given a cadence (Off/weekly/monthly), decide if a nudge is due (reuse the
+      **B19 catch-up-on-wake** evaluation).
+- [ ] **UI:** gentle, dismissible "Back up your data" nudge (one-tap → Export JSON `cashflux.json`);
+      Settings cadence. Non-naggy (B17/B18 ethos). _Could ship as a B19 notification rule._
+
+### B29. Multi-device / shared-household sync — SPEC (expands Phase 3 §3.1/3.2; #1 home-use gap)
+**Want:** the same household data on multiple devices/people (today: single-device, local-only). Records
+concrete options given the no-shared-backend ethos.
+- [ ] **Approaches (decide):** (a) **self-hosted / BYO sync backend** (Phase-3 Go server: pull/push
+      deltas, household auth, conflict resolution) — user-owned but user must run it; (b) **E2E-encrypted
+      sync via a generic store** (user cloud folder / Dropbox / WebDAV / thin relay) where the device
+      encrypts with the **B17** key and the relay never sees plaintext; (c) **manual export/import handoff**
+      (already possible — interim, no realtime).
+- [ ] **Core (pure, tested):** a **CRDT/merge or delta-sync** model (per-entity LWW + tombstones, or
+      vector clocks) so two edited copies merge losslessly; offline mutation queue + replay (§3.2).
+- [ ] **Privacy:** sync payloads **encrypted with the B17 key** (zero-knowledge relay); never plaintext
+      off-device.
+- [ ] _Decision FIRST:_ largest, infra-touching item — confirm appetite + approach before any build.
+      **Deferred design** for now; manual export/import (c) is the interim path.
+
+### B30. GitHub Pages subpath routing — router has no basename (deep analysis 2026-06-18) ★★
+**Problem (user):** the deployed spawn point is `https://monstercameron.github.io/CashFlux/`. When the
+router navigates it **drops `/CashFlux/` and pushes the route at the origin root** (e.g. `/accounts`)
+instead of keeping the base and appending (`/CashFlux/accounts`).
+**Root cause (verified in code):**
+- ✅ **Assets are fine** — `web/index.html` (lines 13–21) computes `<base href>` = `/<firstSegment>/` on
+  `*.github.io` (→ `/CashFlux/`), `/` elsewhere, so `./bin/main.wasm`/`./wasm_exec.js`/`./chart.js`
+  resolve at any route depth. **404 fallback** is generated by the Pages deploy (§0).
+- 🐞 **Routing is NOT base-aware.** `router.RouterOptions` (GoWebComponents `router/router.go:62`) has
+  **only `DefaultRoute` — no `Basename`/`BasePath`**. The history router reads `window.location.pathname`
+  directly (router.go:377) and `Navigate` does `history.pushState(nil, "", normalizedPath)`
+  (router.go:782). So:
+  - **Match fails:** at `/CashFlux/accounts` the router compares the raw pathname to routes registered as
+    `/accounts` → no match; `/CashFlux/` ≠ `/` (home won't resolve either).
+  - **Navigate strips the base:** `Navigate("/accounts")` pushes the **absolute** `/accounts`, which the
+    History API resolves against the **origin** — **`<base href>` does NOT apply to absolute-path
+    pushState** (only relative URLs / asset loads). Result: `monstercameron.github.io/accounts`,
+    `/CashFlux/` gone. (Exactly the user's symptom; also worsens B1/B3 deep-link behavior.)
+**Fix options (ranked):**
+- [ ] **A. Add basename support to the framework router (cleanest).** `RouterOptions.Basename` (e.g.
+      `/CashFlux`): **strip** it from `location.pathname` before matching, **prepend** it on
+      `Navigate`/`pushState` and the popstate handler. Benefits every app; the proper fix. (Framework
+      change in GoWebComponents `router.go`.)
+- [ ] **B. App-side base-prefix (no framework change).** Compute the base at runtime in Go (read
+      `document.querySelector('base').href` / `location`, mirroring the index.html logic → `/CashFlux` on
+      Pages, `` locally). **Register every route as `base + route`** (drive from `screens.All()`), set
+      `DefaultRoute = base + "/"`, and route all `nav.Navigate` calls through a `routePath(base, …)` helper.
+      Choke points: the `screens.All()` table + the `nav.Navigate("/…")` sites (addmenu.go,
+      custompagesnav.go, settings.go, shell breadcrumb).
+- [ ] **C. Hash routing** (`#/accounts`) — sidesteps subpath + 404 entirely, but **rejected by B1/B3's
+      "clean URLs, no hash router"**; list only as a fallback if A/B stall.
+- [ ] **Verify after fix:** cold load + refresh at `/CashFlux/`, `/CashFlux/accounts`, `/CashFlux/p/<slug>`
+      all resolve; in-app nav keeps the `/CashFlux/` prefix; local dev (base `/`) still works; 404.html
+      boots the shell and the base-aware router matches. Add a router test for a non-empty basename
+      (strip + prepend round-trip). _Cross-links: **B1/B3** (deep-link/SPA fallback), §0 (Pages deploy)._
+
+### B31. Full responsive strategy — phone → tablet → desktop → ultra-wide → portrait monitors (research 2026-06-18) ★
+**Want:** responsive across the whole aspect-ratio range (tablets, desktops, ultra-wide side monitors,
+portrait monitors). **Measured live (8 viewports):** ✅ **no horizontal overflow at any size**, but the
+**bento column count is wrong at the extremes:**
+| Viewport | bento cols | bento width | verdict |
+|---|---|---|---|
+| phone-landscape 844×390 | 2 | 584 | ok |
+| tablet-landscape 1024×768 | 2 | 764 | ok |
+| desktop 1440×900 | 4 | 1180 | ok |
+| fhd 1920 / qhd 2560 | 4 | 1660 / 2300 | getting wide |
+| **ultra-wide 3440×1440** | **4** | **3180** | ❌ 4 tiles stretched edge-to-edge, vast whitespace |
+| **super-wide 5120×1440** | **4** | **4860** | ❌ absurd tile widths |
+| **portrait 1080×1920** | **4** | **820** | ❌ 4 cols crammed into 820px (tiles too narrow) |
+
+**Two real bugs found:**
+- [ ] **Ultra-wide: content/bento stretches with no cap, no extra columns** — at 3440/5120 the 4 tiles fill
+      the whole width (≈800–1200px each), sparse + poor readability (screenshot-confirmed). Fix: **cap the
+      content measure** (max-width + center) and/or **add bento columns** at wide breakpoints (6–8 for the
+      dashboard; cap max-width for forms/tables/reading so inputs & text don't stretch past ~70–100ch).
+      Recommend capped, centered content shell + wider bento.
+- [ ] **Portrait/narrow-desktop: bento columns key off raw viewport, not usable width** — 1024px → 2 cols
+      (good) but **1080px → 4 cols** though only ~820px is usable after the 240px rail → cramped. Fix:
+      derive bento columns from **content width (viewport − rail)**, ideally via **CSS container queries** on
+      the content area. The B2/`pack.go` engine should take a responsive column count.
+
+**Strategy (modern, component-level CSS):**
+- [ ] **Breakpoints by *content* width** (**container queries** on `main`, not only viewport `@media`):
+      <640 phone (1 col, drawer rail) · 640–1024 tablet (2 col, icon rail) · 1024–1600 desktop (4 col, full
+      rail) · 1600–2200 wide (4–6) · >2200 ultra-wide (6–8 **or** capped+centered).
+- [ ] **Rail:** drawer/hidden (phone) → 58px icon rail (tablet/narrow) → full 240 (desktop). Today it only
+      collapses at phone width — **also collapse on tablet/portrait-narrow** (it stays 240 at 1024/1080).
+- [ ] **Top bar:** wrap/condense at every width (fixes **C34**/**C19**; **B10** control redesign helps);
+      `@media (aspect-ratio)` / short-height handling for phone-landscape + split windows.
+- [ ] **Fluid type & spacing:** `clamp()` type/gaps, **`dvh`/`svh`** heights; pairs with **C25/C26**
+      (px→rem) so scaling responds. Bento via `grid auto-fit/minmax` + a capped `--content-max`.
+- [ ] **Split-screen/snapped windows** = narrow widths → content-width breakpoints cover them.
+- [ ] **Test matrix:** phone P/L, tablet P/L, 1440, 1920, 2560, **3440 & 5120 ultra-wide**, **1080×1920
+      portrait**, 960 split — assert no overflow, sensible columns, capped reading width, rail state per
+      width. _Cross-links: C10 (mobile done), C19/C34 (tablet/top-bar), B2/pack.go, C25/C26, B6._
+
+### B32. Deals/Savings/Education/Security/Mobile — research & design (pending approval, 2026-06-18)
+**Status: RESEARCH/DESIGN for approval — build nothing yet.** Big batch; grouped by feasibility against
+the **local-first, no-backend, offline, BYO-key** architecture. **The recurring constraint:** anything
+needing external data feeds, OAuth to banks/issuers, web search/scraping, or sanctioned offer/points APIs
+**cannot be client-only** (CORS, secret-holding, no public APIs) → needs a **backend or Electron** + paid/
+licensed data + AI. Split into "buildable client-side now" vs "needs infra/data."
+
+**Cluster 1 — Security research (answers + how they apply):**
+- [ ] **Passkeys (WebAuthn/FIDO2):** passwordless, device-bound public-key auth (biometrics/PIN; private
+      key never leaves the authenticator). For CashFlux's *local* lock there's no server, so the useful
+      pattern is the **WebAuthn `prf` extension** → derive a stable secret from the passkey → use it as a
+      **KEK to wrap the data key (B17.2)**. Adds a **biometric/device unlock** option, stronger + more
+      convenient than a passcode. Secure-context only; PRF is Chromium-forward → fallback to passcode.
+      **Add as a B17 unlock method.**
+- [ ] **CIA triad** = Confidentiality / Integrity / Availability — adopt as the security framework: C =
+      encryption-at-rest (B17) + minimal AI/notification egress; I = AES-GCM auth tag (tamper detection) +
+      validated/checksummed backups; A = recovery (B17.2) + backups + offline-first.
+- [ ] **OWASP Top 10** — most don't apply (no server: no access-control/SSRF/server-injection). **Relevant
+      ones:** Cryptographic Failures (use vetted KDF/AES-GCM, no roll-your-own — B17), Insecure Design
+      (lock/recovery), **Vulnerable & Outdated Components** (D3/Tailwind-CDN/Go-mod deps), **Software/Data
+      Integrity Failures** (wasm/SW supply chain — **add SRI to the CDN scripts**), Auth Failures (lock),
+      and **XSS/injection** (sanitize any user-data rendered as HTML). Action: a security pass on these.
+- [ ] **CSRF tokens: NOT APPLICABLE** — CSRF is a server/cookie/session attack; CashFlux has none. Becomes
+      relevant **only if** a sync backend (B29) / notification relay (B19) lands → protect those endpoints then.
+- [ ] **OTP (TOTP/HOTP): low local value** — no server to verify against, and the secret would sit on the
+      same device. Only meaningful as a B17 recovery factor or once cloud accounts (B29) exist.
+
+**Cluster 2 — Education & retrospective (BUILDABLE client-side now — recommended first):**
+- [ ] **Financial teaching:** curated, contextual lessons/tips + glossary (e.g. "no emergency fund — here's
+      why"), optionally AI-personalized from the user's data. Pure content + existing data + optional AI.
+- [ ] **Financial retrospective review + spending-optimization guide:** uses the user's OWN ledger →
+      period-over-period analysis, "where your money went," and actionable suggestions (cut subscriptions,
+      attack high-APR debt, fix over-budget categories). Builds on **B21 Reports** + **Insights** +
+      `internal/insights`. Largely client-side. **Strong in-scope win.**
+
+**Cluster 3 — Optimizer logic (BUILDABLE client-side IF data is user-entered; the data-fed parts need infra):**
+- [ ] **Discount stacking:** pure `internal/dealstack` optimizer — combine coupons + card rewards + portal
+      cashback into the best legal stack, GIVEN offer data. The *optimizer* is pure/testable now; the
+      *offer data* needs a feed (Cluster 4).
+- [ ] **Credit-card selection min-maxing:** pure `internal/cardoptimizer` — "use card X for this category"
+      ranking GIVEN the user's manually-entered cards + reward categories. Client-side now. (The
+      *auto-add-offers / points-sync* part needs OAuth — Cluster 4, and likely no sanctioned API.)
+
+**Cluster 4 — Data-fed agent layer (NEEDS backend or Electron + paid/licensed data + AI — defer):**
+- [ ] **AI decision engine + curated chain of deal-stacking agents:** a pipeline of specialized agents
+      (deal-finder · card-optimizer · APY-finder · locale-deals) → a synthesizer ranks/stacks. Needs each
+      agent's **data source** + an LLM + a runtime the browser can't provide (CORS) → backend/Electron.
+- [ ] **Market search / banking-APY search / locale events & deals:** require **paid/licensed data feeds**
+      (or scraping — ToS/legal risk) + geolocation + a server. Surface results in-app.
+- [ ] **Savings agent:** the user-facing orchestrator over the above — proactive "you could save $X by…".
+- [ ] **Auto-add offers ("max platinum — add all Amex offers") + points/discount tracking via OAuth:**
+      ⚠️ **research finding:** there is **no sanctioned public API** to auto-enroll card offers or read
+      points for Amex/Chase/etc.; "add all offers" tools use **undocumented endpoints / browser extensions**
+      (ToS-violating, brittle, account-risk). OAuth/aggregation for *read-only* balances/points exists via
+      **Plaid/MX/Finicity** (paid, requires a backend + their approval; covers transactions/balances, not
+      offer-enrollment). **Recommend:** if pursued, read-only aggregation via Plaid-style providers (backend),
+      and DROP "auto-add offers" as unsupported/risky — or relegate to an optional Electron/extension the
+      user installs at their own risk. State the legal/ToS limits to the user.
+
+**Cluster 5 — Mobile (research):**
+- [ ] **PWA (already): the mobile story today** — installable on iOS/Android, offline, responsive (C10).
+      Cheapest path; ship as-is + the B31 responsive work.
+- [ ] **Capacitor (recommended for native store apps):** wrap the **existing web/wasm build** in a native
+      WebView shell → App Store / Play Store, plus native APIs (**biometrics** for passkey unlock B17,
+      **push notifications** for B19, filesystem for import/export). Reuses the entire bundle — no UI rewrite.
+- [ ] **gomobile: NOT suitable** — it builds Go *native-UI* libs for mobile; it can't run the GoWebComponents
+      **DOM/wasm** UI. So "mobile with Golang" = keep the Go→wasm app, wrap it (PWA → Capacitor), not gomobile.
+
+**Decisions — APPROVED (2026-06-18):**
+- (1) **All clusters approved, phased:** **now** = Cluster 2 (education/retrospective) + Cluster 3 (pure
+  optimizers); **next** = Cluster 1 (security pass + passkeys); **deferred** = Cluster 4 (data/agents);
+  Cluster 5 = PWA now, Capacitor later.
+- (2) **Tiered backend strategy: "as much locally as possible → Electron → hosted server."** Each Cluster-4
+  capability should be built at the **lowest tier that can do it**: (a) **local/client** where feasible
+  (pure optimizers, user-entered data); (b) **Electron** for things blocked only by CORS / needing on-device
+  keys (deal/APY/market fetches, the agent chain calling data APIs); (c) **hosted server** only for what
+  truly needs it (shared aggregation, scheduled jobs, secrets that can't live on-device). Design each
+  feature to **degrade**: full on hosted, most on Electron, optimizers-only on web.
+- (3) **"Auto-add offers" → converted to a research task** (below), not dropped, not committed.
+- [ ] **RESEARCH (logged per user): credit-card offer-enrollment & points/rewards access per issuer.**
+      For each main-line issuer — **Amex, Chase, Citi, Capital One, Discover, Bank of America, Wells Fargo,
+      U.S. Bank, Barclays, Synchrony** (+ networks Visa/Mastercard offers, and aggregators Plaid/MX/Finicity)
+      — document: is there a **sanctioned API** for (i) reading points/rewards balances, (ii) reading
+      statement-credit "offers," (iii) **enrolling/auto-adding offers**? Note auth model (OAuth? partner-only?
+      none), ToS/legality, and whether it requires partner approval / a backend. Output: a per-issuer
+      feasibility matrix → decides what's buildable vs. extension-only vs. impossible. _This is the gating
+      research before any Cluster-4 offers/points work._
+_Cross-links: B17/B17.2/B17.3 (lock/crypto + passkey KEK), B19 (push/relay), B21 (reports/retrospective),
+B29 (sync backend), §5.1 (Electron), Insights (AI)._
+
+### B33. Security hardening — data-at-rest & secrets ★ (from C45 audit, user-requested fix 2026-06-18)
+Actionable fixes for the security issues found in the C45 source audit. SQL injection was audited **clean**
+(all user-data queries use `?` bind params — no work needed there), so this item is about **data-at-rest
+confidentiality, secret handling, and durability**. Ordered by severity; build bottom-up per CLAUDE.md
+(crypto in a pure tested `internal/crypto` package first, then wire persistence, then UI).
+
+- [ ] **B33.1 — Encrypt the at-rest dataset snapshot (🔴 highest).** Today `persist.go:92` writes the full
+      dataset as **plaintext JSON** to `localStorage["cashflux:dataset"]`. Build an AES-256-GCM envelope in a
+      pure `internal/crypto` package (table-driven tests: encrypt→decrypt round-trip, tamper/auth-fail, wrong
+      key). Key derived from the B17 passphrase via **Argon2id** (or PBKDF2 fallback), or a WebAuthn-PRF KEK.
+      When lock is **enabled**, persist the encrypted blob (with salt + nonce + KDF params) instead of plaintext;
+      decrypt on unlock. When lock is **disabled**, keep today's plaintext snapshot (explicit user opt-out).
+      _Depends on / extends B17 (lock + recovery). Live DB stays `:memory:` so no plaintext DB file on disk._
+- [ ] **B33.2 — Zeroize plaintext on lock/timeout (🔴).** On inactivity-lock/manual-lock (B17), drop the derived
+      key, clear the cached plaintext snapshot string, and ideally re-init the `:memory:` DB so a memory scrape
+      after auto-lock yields nothing. Add a test/inspection hook proving the key + snapshot are cleared.
+- [ ] **B33.3 — Stop storing the OpenAI key in plaintext (🟠).** `aikey.go:15` puts the key in
+      `localStorage["cashflux:openai-key"]` in cleartext when "remember on device" is on. Fold the key into the
+      B33.1 encrypted envelope when lock is enabled; when lock is off, add explicit warning copy to the
+      remember-key toggle ("stored unencrypted on this device") so the exposure is informed-consent.
+- [ ] **B33.4 — Handle localStorage quota instead of silently losing data (🟠).** `persist.go:81-84` swallows a
+      `setItem` quota throw with only a log line → autosave silently stops and unsaved data is lost on reload.
+      Detect the quota failure path and surface a persistent visible warning (banner/toast) + "export now" nudge.
+      Stretch: migrate bulk dataset storage to **IndexedDB** (much larger quota); pairs naturally with B33.1.
+- [ ] **B33.5 — Keep the SQL layer injection-free (guardrail, no code today).** Document in the store package
+      that all user values MUST use `?` bind params and any future dynamic identifier (column/ORDER BY/table)
+      MUST come from a hard-coded allow-list — never string-interpolated user text. Add a brief test or comment
+      asserting the invariant so a future contributor can't regress it.
+_Cross-links: C45 (source audit), B17/B17.2/B17.3 (lock/crypto/passkey KEK + recovery), C44 (XSS surface that
+makes plaintext-at-rest reachable), B32 Cluster (CIA/OWASP), B29 (sync — encrypt-before-send reuses B33.1)._
+
 ---
 
 ## C. Live UI/UX review findings — 2026-06-16 (sample data) ★
@@ -943,7 +1662,8 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
 - [ ] Not yet exercised (queue for the browser E2E lane): cancel/abort mid-call, retry/backoff on
       429/5xx, and the error message shown on a bad/empty key.
 
-### C28. ROOT CAUSE — every `ui.Icon` SVG renders blank (`viewBox` is lowercased to `viewbox`) ★★ (bug)
+### C28. ✅ RESOLVED (#43) — every `ui.Icon` SVG rendered blank (`viewBox` was lowercased to `viewbox`) ★★ (bug)
+**RESOLVED 2026-06-18 (#43): nav icons now render — `viewBox` correct, icon child paints `[9,9]`, screenshot confirms.**
 **Reported three symptoms — analyzed individually against the live DOM (2026-06-18):**
 
 1. **"The icons don't show."** ✅ confirmed + root-caused. The icon `<svg>` is emitted with the
@@ -1356,6 +2076,470 @@ navigation behavior.)
 - [ ] Decide the interaction: whole-body click vs. a small "View →" link in the header. Whole-body is
       faster but must not swallow drag/resize; a header link is unambiguous. _Confirm preference before
       building._
+
+- **2026-06-18 #43** — 🎉 **C28 (nav icons) — RESOLVED (verified visually).** The nav rail now renders
+  icons next to every item; `viewBox="0 0 24 24"` and the icon child shape paints **`[9,9]`** (was
+  `[0,0]`). Screenshot confirms (not a #18-style false positive — used painted-size + image). **This was
+  the #1 standing bug** and unblocks the collapsed-rail (C15/C20) and mobile-nav (C10) usability that
+  depended on icons rendering. 0 console errors.
+  - Also observed: the **sample dataset is now much richer** (net worth $354,070; 7 accounts incl.
+    Mortgage/Home/Brokerage; multiple budgets) — confirms #41's expanded-sample; and a **"My pages / New
+    page"** section reappeared in the rail (custom-pages feature progressing — the dashboard-as-template
+    work). Members/Accounts add-buttons still no-op (unchanged).
+- **2026-06-18 #44** — ✅ **C15 / C20 (collapsed rail) — RESOLVED** (cascade from the C28 fix), 0 console
+  errors. Collapse works (rail **240→58px**), **icons render in the collapsed state** (33 icon shapes
+  still painted at 58px — screenshot confirms a clean icon column), the **menu-toggle icon renders**, and
+  **hovering a collapsed item reveals its flyout label** ("Transactions" — B5). The original user
+  complaint ("can't collapse / icons don't show / no button") is now **fully addressed**. _Remaining
+  C20 nicety (optional): an on-panel collapse affordance vs. the top-bar toggle._
+
+### C31. Left rail shows a scrollbar when content overflows — hide it but keep scrollability ★ (UX — user-reported 2026-06-18)
+**Reported:** the rail content is long enough to scroll, but a visible scrollbar isn't wanted.
+**Confirmed (verified live, 760px-tall viewport):** the rail `<nav class="flex-1 overflow-y-auto">`
+overflows (**scrollHeight 707 > clientHeight 583**) with default `scrollbar-width:auto` — so a native
+scrollbar appears (overlay in headless Chromium = 0px, but a **classic ~15px bar on Windows / when
+actively scrolling**). The rail will overflow more as "My pages"/custom pages grow.
+**Best-UX options (ranked):**
+- [ ] **Recommended — hide the native scrollbar + add an edge-fade mask.** Hide the bar
+      (`scrollbar-width:none` for FF; `nav::-webkit-scrollbar{ width:0; display:none }` for Chromium/
+      Safari) so it stays scrollable (wheel/trackpad/keyboard) with no bar, **and** add a subtle
+      top/bottom fade so users still see there's more:
+      `mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%)`
+      — ideally only when actually overflowing/scrolled (toggle a class on scroll). This is the modern
+      sidebar pattern (VS Code / Linear): clean *and* discoverable.
+- [ ] **Add (optional) — reveal a thin scrollbar on hover** for power users/discoverability: transparent
+      thumb by default, a 6px muted thumb on `aside.rail:hover`. Keeps it invisible at rest.
+- [ ] **Alternative — thin always-on styled scrollbar** (6px, transparent track, muted thumb matching the
+      dark theme). Less clean than hiding, but unambiguous; good fallback if the fade-mask is too subtle.
+- [ ] **Reduce the need to scroll** (complementary): tighten nav item vertical padding/gap a touch, and/or
+      let group sections (Tools/System/My pages) collapse — so the common case fits without scrolling at
+      all.
+- [ ] **A11y guardrails (must-keep):** hiding the bar must NOT remove keyboard/wheel scroll (`overflow:auto`
+      keeps it); ensure Tab-focusing an off-screen nav item still scrolls it into view; respect
+      `prefers-reduced-motion` for any fade transition. Don't set `overflow:hidden` (that would trap items).
+
+### C32. Custom pages ("My pages / New page") are scaffolded but incomplete ★ (UX)
+**Found (verified live, #45):** "New page" exists and works partway — it prompts "Name your new page",
+creates a route **`/p/{slug}`**, sets the breadcrumb ("Dashboard › My Test Page"), and shows an
+empty-state "This page is empty. Add a widget to get started." But:
+- [ ] **The new page isn't added to the rail's "MY PAGES" list** (only "+ New page" shows) — so after
+      navigating away there's **no way back to it** from the nav. Created pages must appear under MY PAGES.
+- [ ] **No "add widget" affordance on the page** — the empty state says "Add a widget" but there's no
+      visible control to do so (the top-bar "+ Add" is quick-add-*transaction*, not add-widget-to-page).
+      So custom pages **can't be populated** yet — they're non-functional. This is the
+      dashboard-bento-as-template work (relates to B2/C22 grid + C23 add affordance): a custom page should
+      reuse the `Widget`/`Pack` bento and offer a widget picker.
+- [ ] **Naming uses `window.prompt`** (unstyled/inaccessible — same pattern as Goals "Contribute" #14 and
+      Quick-add #1x). Replace with an in-app inline field/flip-panel.
+  _Note: pairs with the user's earlier ask that the dashboard grid be the template for custom pages — the
+  page shell + routing exist; the grid reuse + widget-add + nav-listing are the missing pieces._
+
+### C34. Header top-bar shows a scrollbar (`overflow:auto`) when controls overflow ★ (UX — user-reported 2026-06-18)
+**Reported:** the header section with the date pickers has a scroll bar. **Confirmed (verified live):**
+the top bar (`div.topbar.h-14`) has **`overflow-x:auto` AND `overflow-y:auto`**. When the resolution
+control + date pickers + "+ Add" exceed the bar width (e.g. ~**1100px** window, especially in **Custom
+range** mode which adds two date steppers), `scrollWidth 922 > clientWidth 860` → the **header becomes a
+scroll container and shows a scrollbar** (the `overflow-y:auto` on a fixed 56px header is the worst part —
+it steals vertical space). Oddly, at ~**1000px** the bar instead **wraps to two rows** (no scrollbar) — so
+there's an awkward middle width that scrolls rather than wraps.
+- [ ] **Remove `overflow:auto` from `.topbar`** (at minimum drop `overflow-y:auto` — a fixed-height header
+      should never scroll vertically). Let the controls **wrap** consistently (the `flex-wrap` that
+      already kicks in at 1000px) or **condense**, instead of scrolling.
+- [ ] Pairs with **B10** (resolution-control redesign — single stepper + presets, less width) and **C19**
+      (top-bar overflow at narrow widths): the real fix is a top bar that wraps/condenses at every width.
+- [ ] If horizontal scroll is ever intentional on very narrow screens, **hide the scrollbar**
+      (`scrollbar-width:none` + `::-webkit-scrollbar{display:none}`, like the C31 rail) — but wrapping is
+      the better UX.
+
+### C35. New nav screens observed — "Artifacts" and "Workflows" (note)
+**Observed (2026-06-18):** the rail now lists **"Artifacts"** and **"Workflows"** under Tools (new screens
+since the 14-route baseline). Not yet exercised. _Next sweeps: include them in the all-routes error sweep
++ a flow check; confirm one `<h1>`, an empty/loaded state, and no console errors._
+- **2026-06-18 #46** — Spot-check, 0 errors. **Unchanged:** Members/Accounts add-buttons still no-op
+  (Sky46/Acct46); Transactions checkboxes still non-semantic (`0/0`). (C28 stays fixed.) The remaining
+  open defects: add-button no-ops (Members/Accounts/Rules), non-semantic checkboxes (B15), unlabeled
+  `<select>`s (B15), + the C30/C31/C32 UX items.
+- **2026-06-18 #47** — Visual sweep, Accounts + Budgets with richer sample data (0 console errors).
+  - ✅ **C7 (Budgets) appears RESOLVED** — budget rows show just the name (Dining/Groceries/…) with **no
+    "Food · Food" duplicate label**, and **no duplicate month stepper** in the card (only the top-bar
+    period control). Bars are color+text ("On track"/"Near limit" — good a11y); summary "0 over · 2 near".
+  - ✅ Accounts clean: grouped money (C2), `···` overflow menus (C9), rail icons (C28). Money consistent
+    (NET WORTH $354,070.00, Auto Loan ($15,000.00)).
+  - 🔸 Minor (not a bug): **all 7 accounts show a STALE badge** (sample `BalanceAsOf` dates are old vs.
+    today) — visually noisy "wall of STALE"; expected for dated sample data, clears on update. Consider a
+    softer treatment when *every* account is stale (e.g. a single summary nudge vs. a badge on each row).
+- **2026-06-18 #48** — Feature-scan + spot-check, 0 errors. No new B17/B18 features yet (welcome/tour/
+  passcode/get-started all absent — they're still designs). Members add-button still no-op ("Val48").
+  No regressions.
+- **2026-06-18 #49** — Spot-check, 0 errors. **C30 (tile-click drill-in) NOT implemented yet** — the
+  "recent" tile still has `cursor:auto`, no anchor, no navigation on click. Members add-button still
+  no-op ("Lee49"). No regressions. (Standing open: add-button no-ops, C30 tiles, B15 checkbox/selects.)
+- **2026-06-18 #50** — Full-route health sweep: all 14 routes one `<h1>`, **0 errors**; C28 icons paint.
+  (Header-scrollbar finding logged as C34; new Artifacts/Workflows screens as C35.)
+- **2026-06-18 #51** — Exercised the new **Artifacts** + **Workflows** screens (C35), 0 console errors,
+  one `<h1>` each, correct titles, clean empty states.
+  - **Artifacts** = image/CSV **artifact store**: "Upload image" / "Import CSV" + a **"Local storage in
+    use: 28.9 KB"** meter; empty "No artifacts yet."
+  - **Workflows** = **trigger→condition→action automation builder**: name + "When I run it" trigger +
+    optional condition (e.g. `expense > income`) + action ("Create a task") + Save; empty "No workflows yet."
+  - 🔸 _Observation (not a bug):_ **Workflows overlaps conceptually with Rules (auto-categorize) and the
+    proposed B19 notification rules** — three rule/automation systems. Consider whether they should share a
+    common trigger/condition engine or be unified to avoid user confusion + duplicated logic.
+  - [ ] Next: test their **Add/Save buttons** (may share the Members/Accounts add-button commit bug) and
+    the Artifacts upload/import flows; include both in the standard all-routes sweep going forward.
+
+### C36. Keyboard support / a11y compliance audit ★ (user-requested 2026-06-18)
+Targeted keyboard audit ("proper keyboard support: navigation, Esc-closes-modals, full compliance").
+**Verified GOOD:**
+- ✅ **Settings panel** and **Widget-settings panel**: `role="dialog"`, **focus moves into the dialog** on
+  open, **Esc closes** (confirmed #27 + #52). Segmented control = `role=radio`; Settings toggles =
+  `role=switch`+`aria-checked` (#16); skip-link is first Tab on clean load (#27); all buttons have
+  accessible names (#15).
+**GAPS to fix for full keyboard compliance:**
+- [ ] **Quick-add ("+ Add") panel lacks dialog ARIA** — refined #53: it **does open and Esc DOES close
+      it**, but it exposes **no `role="dialog"` / `aria-modal="true"`** (unlike Settings/widget panels), so
+      screen readers won't announce it as a modal and focus likely isn't trapped/moved-in. Add the dialog
+      semantics + focus-move-in + focus-return-to-trigger to match the other two panels.
+- [ ] **Dashboard widget tiles are focusable but inert** — `tabindex="0"` puts every tile in the tab order,
+      but they have **no role and no keyboard activation** (a focus stop that does nothing; SR announces a
+      generic group). Either make them keyboard-activatable (Enter/Space → drill-in, ties **C30**) or
+      remove from the tab order if purely decorative; if focusable for drag, expose a keyboard
+      move/resize alternative (B2/B15).
+- [ ] **Non-semantic checkboxes** (Transactions bulk-select, To-do complete — #14/#37): `0` real
+      `<input type=checkbox>`/`[role=checkbox]` → **not keyboard-operable or SR-perceivable**. Use a real
+      checkbox or `role=checkbox`+`aria-checked`+Space-toggle.
+- [ ] **Unlabeled `<select>`s** across forms (#16): no accessible name → SR users can't tell what they
+      set. Add `aria-label`/label.
+- [ ] **Add/Save not keyboard-submittable on some forms** — Members/Accounts add only via Enter not button
+      (#8); **Rules** + **Workflows** add fail via BOTH click *and* Enter (#20, #52) — keyboard users can't
+      complete them; needs a working submit + visible validation.
+- [ ] **Not yet verified (do next):** full **focus *trap*** in dialogs (Tab wraps at last element),
+      **focus return to the trigger** on dialog close, visible focus ring on every interactive element,
+      and arrow-key operation of the segmented/radio groups. Run an **axe-core** pass once the browser
+      lane is wired (B15/§0) for exhaustive WCAG coverage — this manual audit is a spot-check, not a
+      proof of "fully compliant."
+  _Cross-links: subsumes/overlaps **B15** (a11y program); pairs with C30 (tiles), the add-button bugs._
+
+### C37. Workflows "Save workflow" does not persist (button or Enter) (bug)
+**Found (#52, 0 console errors):** filling Workflow name + Task title and clicking **Save workflow** added
+nothing (still "No workflows yet"); **Enter** also failed. Likely the multi-step form needs **"Add action"**
+clicked first (no action added → invalid → silent no-op), or the same select/commit issue as **Rules**
+(#20). Either way there's **no validation feedback** on a failed save. _Confirm the required-fields flow;
+surface a reason when Save can't proceed; ensure it's keyboard-completable (C36)._
+- **2026-06-18 #52** — Workflows Save test + keyboard-support audit (0 console errors). Findings logged as
+  **C36** (keyboard/a11y audit) + **C37** (Workflows Save no-op). Good: Settings/widget dialogs do
+  focus-in + Esc-close. Gaps: quick-add panel missing dialog semantics; tiles focusable-but-inert; Rules/
+  Workflows not keyboard-submittable.
+- **2026-06-18 #54** — Spot-check, 0 errors. Standing defects **all unchanged**: C30 tile inert
+  (`cursor:auto`, no anchor); Transactions checkboxes non-semantic (`0/0`); Members add-button no-op
+  ("Pat54"). No regressions. (Open set stable; the action now is building the approved B17–B29 backlog.)
+- **2026-06-18 #55** — Full-route health sweep across **all 16 routes** (now incl. Artifacts + Workflows):
+  one `<h1>` each, **0 console/network/pageerror**; C28 icons paint. No regressions. _(Loop re-invoked but
+  cron `3e5d7ea6` already runs this every 10 min — no duplicate created.)_
+- **2026-06-18 #56** — Artifacts import mechanism, 0 console errors. ✅ **Artifacts "Import CSV" opens a
+  NATIVE file chooser** (via a dynamically-created input — `fileInputs:0` at rest, chooser opens on
+  click). This is the proper, accessible/automatable pattern — **contrast with the Settings JSON import
+  (C33/#33) which did NOT open a chooser.** Refines C33: the fix is to make the Settings JSON import use
+  the **same dynamically-created native `<input type=file>`** pattern Artifacts already uses (rather than
+  a File System Access picker). Storage meter reads "28.9 KB". Upload-image likely uses the same pattern.
+- **2026-06-18 #57** — Spot-check, 0 errors. Standing add-button defects **unchanged**: C30 tile cursor
+  `auto`; Members ("Mem57") + Accounts ("Acct57") add-buttons no-op. No regressions.
+- **2026-06-18 #58** — Planning "Add plan" round-trip, 0 errors. ✅ **Works** — "Plan58" created, "No plans
+  yet" cleared. (Exact projection unverified — the "Monthly change" placeholder didn't match my selector
+  so that field stayed empty; harness miss, not a bug.) Add-button works here — consistent: add works on
+  **Planning/Budgets/Goals/Categories/To-do**, broken on **Members/Accounts/Rules/Workflows**.
+- **2026-06-18 #59** — Corroborated **B30** locally, 0 errors: `base href = "/"` on localhost, and nav
+  produces clean `/accounts`, `/budgets`, `/transactions` — **correct locally** (base is root). Confirms
+  B30 is **subpath-specific** (only breaks under Pages' `/CashFlux/`), which is why 58 local iterations
+  never hit it. No approved features (reports/notifications/passcode/onboarding/theme-editor) landed yet.
+
+### C40. Budget "Quarter" spend is LESS than "Month" spend — likely period-window bug ★ (correctness)
+**Found (#60, 0 console errors):** on Budgets, switching the top-bar period re-windows the SPENT summary
+(good): **Month $1,579.00 → Week $1,518.00 → Quarter $1,457.00.** But **Quarter < Month is impossible** —
+the current quarter (Apr–Jun) *contains* the current month (June), so quarterly spend must be **≥**
+monthly. (Week ≤ Month is fine.) So the **Quarter window is excluding transactions it should include** —
+a boundary/anchoring bug in the quarter period math (possibly the same UTC-vs-local boundary family as
+**C1**, or `period.Truncate`/`Range` for quarter mis-anchoring).
+- [ ] Verify `period` quarter range = [quarter-start 00:00, next-quarter-start) covering the whole
+      current month; assert with a table test (a June txn must be in Q2). Reconcile Budgets SPENT across
+      Week ⊆ Month ⊆ Quarter (each wider period ≥ the narrower).
+- **NARROWED (#61):** the shared **period engine is CORRECT** — the **Dashboard** shows Month spending
+  $4,088 (14 txns) → **Quarter $12,030 (42 txns)** (Quarter > Month ✓, proper counts). So this anomaly is
+  **isolated to the Budgets screen's SPENT-summary computation**, NOT `period`/`ledger.PeriodTotals`.
+  Investigate the Budgets-specific spent-vs-view-period logic (likely per-budget configured period —
+  "Monthly" — interacting oddly with the view selector / proration). Dashboard is fine.
+- **CONFIRMED real (#63), NOT a C41 artifact:** re-tested with a **clean direct Month→Quarter switch** (no
+  intermediate Week, so no C41 drift; period label verified **Q2 2026**): SPENT still **$1,579 (Jun) →
+  $1,457 (Q2)**. Quarter < Month survives the clean test → a genuine **Budgets SPENT** bug, not a
+  measurement artifact. The bug is in how the Budgets screen sums spend under the Quarter view (each
+  budget is "Monthly"; the quarter view appears to under-count vs. the month view).
+
+### C41. Resolution switch re-anchors to the window START → drifts backward in time ★★ (bug, systematic)
+**Found (#61) + fully characterized (#62).** On a resolution change the window re-anchors to the **start
+of the current window** and truncates to the new granularity. Since a window's start is ≤ now, this
+**drifts backward** and compounds. From a fresh "Jun 2026" (today 2026-06-18):
+- Month→**Week** → "May 31 – Jun 6" (June's *first* week, not the current week ~Jun 15–21)
+- Week→**Month** → **"May 2026"** (that week starts May 31 → truncates to May, **not June**)
+- Month→**Quarter** → "Q2 2026" ✓
+- Quarter→**Week** → "Mar 29 – Apr 4" (Q2's *first* week)
+- Week→**Quarter** → **"Q1 2026"** (that week starts Mar 29 → Q1, **not Q2**)
+→ a few switches and you're in Q1/March instead of June.
+- [ ] **Fix:** on resolution change, re-anchor to the period **containing `now`** (this week/month/
+      quarter) — use `time.Now()`, **not the prior window's `from`**. (`period.SetResolution` currently
+      truncates the existing anchor, which is the window start.) Add a test: every Week/Month/Quarter
+      switch yields a window that **contains `now`**. _(Distinct from the engine itself, which is correct —
+      C40/#61.)_
+- **Workaround confirmed (#64):** the **Jump-to → "This period" preset re-anchors correctly** — drifted
+  "Mar 29 – Apr 4" → "This period" → **"Jun 14 – Jun 20"** (current week). So users can recover, but the
+  switch still drifts (the bug), and the reset is **buried in a dropdown** — B10 envisioned a one-tap
+  "This {period}" reset button; surface one.
+- **2026-06-18 #65** — B17 lock progress (read-only check; did NOT set a passcode — store is origin-shared
+  per #42, so committing one would lock the live instance). ✅ **No lock gate on load** (off by default
+  per B17 opt-out). ⚠️ **No Settings/Privacy UI** — Settings has no passcode/lock/privacy control; the
+  lock is wired only via a **keyboard shortcut + native prompts** (`app/shortcuts.go` + `app/applockgate.go`,
+  backend `internal/applock`). So it's **not discoverable/configurable** by users yet → B17 still needs its
+  **Settings → Privacy** surface, and the native prompts → FlipPanel (C42). 0 console errors.
+- **2026-06-18 #66** — Nav enumeration + health, 0 errors. Nav stable: Dashboard, Accounts, Transactions,
+  Budgets, Goals, To-do, Planning, Allocate, Insights, Documents, Customize, Artifacts, Workflows,
+  Members, Categories, Rules, + "New page" (16 screens; no new ones since Artifacts/Workflows #50).
+  - [ ] 🔸 **Keyboard shortcuts have no discoverability** — `app/shortcuts.go` wires shortcuts (new
+    workspace, passcode lock, etc.) but there's **no shortcuts help/cheatsheet** (no "?" overlay / Help
+    list). Users can't find them (and the B17 lock is shortcut-only, #65). Add a discoverable shortcuts
+    help (e.g. "?" opens a FlipPanel cheatsheet) — pairs with B18 onboarding + C42 modal system.
+- **2026-06-18 #67** — Custom pages re-check (C32), 0 errors. Created "QAPage67" → routed to
+  **`/p/qapage67`** (page created + persisted) but it is **STILL NOT listed in the rail "MY PAGES"**
+  (only "New page" shows) and **can't be returned to** after navigating away. **C32's first gap is
+  unchanged** despite `app/custompagesnav.go` existing — the created page isn't added to the nav list.
+  (Selector caught "New page" in the same section, so the custom page is very likely genuinely unlisted.)
+
+### C44. CDN scripts lack SRI + Tailwind-CDN-in-production + offline dependency ★ (security/prod — OWASP A08, from B32)
+**Verified live (`web/index.html`):** external CDN resources are loaded with **no Subresource Integrity**:
+`<script src="https://cdn.tailwindcss.com">` and `<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js">`
+have **no `integrity=` / `crossorigin`**; Google Fonts CSS likewise.
+**RESOLVED APPROACH (user, 2026-06-18): bundle ALL of these into the app at build time — NO CDNs.**
+Vendoring/compiling at build time is strictly better than SRI+CDN: no external fetch → no supply-chain/MITM
+risk (OWASP A08 moot), genuinely **offline**, no Tailwind-prod issue, zero runtime CDN dependency.
+- [ ] **D3 — vendor it:** commit `d3.min.js` (pinned 7.9.0) into `web/` (e.g. `web/vendor/d3.min.js`),
+      load locally (`./vendor/d3.min.js`); drop the jsdelivr CDN. (Or a build step copies it from the
+      module/npm into the bundle.) → offline, no SRI needed.
+- [ ] **Tailwind — compile to static CSS at build:** run the **`gwc tailwind`** path (CLAUDE.md) to emit a
+      static `web/app.css`, reference it locally, **remove the `cdn.tailwindcss.com` script** (dev-only per
+      Tailwind's docs). → offline + proper production CSS, no in-browser JIT.
+- [ ] **Fonts — self-host:** download Fraunces + Inter woff2 into `web/fonts/`, local `@font-face`; drop
+      the Google Fonts `<link>`/preconnect. → offline, no external request.
+- [ ] **Build wiring:** make the `gwc`/Pages build produce these bundled assets (D3 vendored, Tailwind
+      compiled, fonts local) so every deploy ships a self-contained app; the SW just caches local files.
+- [ ] **Verify:** cold **offline** load renders fully (styles + fonts) and **charts work**, with the
+      network panel showing **only same-origin requests** (no CDN). (Ties B14/B21 D3 offline.)
+**Empirically confirmed (2026-06-18, Playwright network capture on cold load):** the running app fetches
+**4 distinct external hosts** before it is interactive — `cdn.tailwindcss.com`, `cdn.jsdelivr.net` (D3),
+`fonts.googleapis.com` and `fonts.gstatic.com` (Google Fonts). So today a network outage, CDN tamper, or
+air-gapped/offline launch degrades or breaks the UI (no Tailwind styles, no D3 charts, no brand fonts).
+This is the concrete proof behind the bundling action items above — target is **0 external hosts on load**.
+_Cross-links: B32 Cluster 1 (OWASP/security pass), B14/B21 (D3 offline), §3.3 (PWA offline), §0 (build/deploy)._
+
+### C45. Security review — data-at-rest & SQL layer (in-memory SQLite + persistence) ★ (security research, user-requested 2026-06-18)
+**Scope:** how the in-memory SQLite store builds queries and how the dataset is persisted/loaded. Source-audited
+`internal/store/{crud,sqlitestore,manage}.go`, `internal/app/persist.go`, `internal/uistate/aikey.go`.
+
+**Empirically confirmed (2026-06-18, Playwright `localStorage` inspection of the running app):** what's persisted
+is **not a SQLite file at all — it's plaintext JSON**. `cashflux:dataset` = ~30 KB, head `{ "schemaVersion": 1,
+"members": [ …`, `parsesAsJSON: true`, **no `SQLite format 3` magic** (`isSQLiteMagic: false`), top-level keys
+`members, accounts, categories, transactions, budgets, goals, tasks, workflows, settings` — the entire household.
+**Reading it needs zero tooling:** DevTools → Application → Local Storage, or console
+`localStorage.getItem('cashflux:dataset')`. The `:memory:` engine therefore adds **no confidentiality** — its
+contents are exposed via the plaintext snapshot (and, more laboriously, via the wasm `WebAssembly.Memory` buffer
+while unlocked). Net: the in-memory DB is not a protection; B33.1/B33.2 (encrypt-at-rest + zeroize-on-lock) are
+the only mitigations. (Other keys present: `cashflux:workspaces`. `cashflux:openai-key` absent this run — toggle off.)
+
+**✅ SQL injection — NOT a vulnerability (verified).** The live DB is opened `:memory:` (`sqlitestore.go:49`),
+and **every query that touches user data uses `?` bind parameters** — inserts/upserts (`crud.go:27-28`),
+reads (`:40`), deletes (`:55`), and all `json_extract(data,'$.x') = ?` filters (`:139-226`). The only string
+concatenation in SQL is the **table name** (`"… FROM "+table+" …"`), and `table` is supplied by internal
+generic dispatch (compile-time Go type → fixed table name), never by user input. **No injection vector** —
+record this as an audited-clean control, not a TODO. (Keep it clean: any future dynamic `ORDER BY`/column or
+free-text filter MUST stay parameterized or use a hard-coded allow-list — never interpolate user text into SQL.)
+
+**🔴 Data-at-rest is plaintext (the real finding).** Persistence is **`localStorage`**, not OPFS/IndexedDB as
+previously assumed (corrects the #42 note). `persist.go:92` writes the *entire* dataset as a plaintext JSON
+string to `localStorage["cashflux:dataset"]` on a 4s ticker + pagehide. localStorage is **unencrypted on disk**
+in the browser profile and readable by **any same-origin script (incl. any XSS), any browser extension with host
+access, and devtools**. On a shared/family computer every account, balance, and transaction is recoverable
+without the app. This is exactly what B17's encryption must cover.
+- [ ] **Encrypt the at-rest snapshot.** Recommended architecture (fits B17 + the `:memory:` design): keep the
+      live DB in-memory (no plaintext DB file on disk), and when lock is **enabled**, persist an **AES-GCM
+      encrypted** snapshot (key = passphrase via Argon2id/PBKDF2 KDF, or WebAuthn-PRF KEK) instead of the raw
+      JSON. Lock **disabled** = today's plaintext snapshot (explicitly the user's opt-out). Decrypt on unlock.
+- [ ] **Clear plaintext from memory on lock/timeout.** The `:memory:` DB holds plaintext in wasm linear memory
+      while unlocked; on inactivity-lock (B17) the snapshot/derived key and ideally the in-memory rows should be
+      zeroized/dropped so a memory-scrape after auto-lock yields nothing.
+
+**🟠 OpenAI key stored in plaintext localStorage.** `aikey.go:15` writes the key to `localStorage["cashflux:openai-key"]`
+when "remember on this device" is on. The dataset autosave correctly **redacts** the key (`ExportJSONRedacted`,
+`persist.go:86`), but the separate key store is plaintext → an XSS or extension can exfiltrate a live billable
+API credential. - [ ] Fold the key into the same encrypted-at-rest envelope as the dataset when lock is enabled;
+when lock is off, at minimum document the exposure in the remember-key toggle's help text.
+
+**🟠 Silent persistence loss at quota.** `persist.go:81-84` swallows a `localStorage.setItem` quota throw with a
+logged recover. localStorage is ~5–10 MB; a large household/long history can hit it, after which **autosave
+silently stops** and unsaved data is lost on reload. - [ ] Detect quota failure and surface a visible warning
+(toast/banner) + nudge to export; consider migrating bulk storage to IndexedDB (much larger quota) — this also
+pairs well with the encrypted-snapshot work.
+_Cross-links: B17 (app lock / encryption / recovery), C44 (XSS surface ↔ CDN supply-chain), B32 Cluster (CIA/OWASP)._
+
+### C43. "+ Add" menu z-index broken — trapped in the sticky topbar's stacking context ★ (bug — user-reported 2026-06-18)
+**Reported:** the add button's z-index is broken. **Root cause (verified live):** `.add-menu` is
+**`z-index:50`**, but its **stacking ancestor is `.topbar` (`position:sticky; z-index:20`)** — a sticky
+element with a z-index forms a **stacking context**, so the menu's z-50 is **clamped to the topbar's z-20
+layer**. Anything rendered at the **document root** with z-index > 20 then covers it: `.flip-backdrop`
+(modals, **z-50**), the toast (**z-60**), the install prompt (**z-30**). **Compounding:** the topbar also
+has **`overflow:auto` (C34)** which **clips** the `.add-menu` dropdown (positioned `top:calc(100%+6px)`,
+*below* the bar). _(Also: "+ Add" now opens the **B11 add-menu** of action cards — B11 progressed.)_
+- [ ] **Fix:** **portal `.add-menu` + `.add-backdrop` to the document root** (render outside the topbar,
+      like `SettingsHost`/`QuickAddHost` do for the flip panels) so their z-index competes at the document
+      level and the topbar's `overflow:auto` (C34) can't clip them. (Fixing C34's overflow alone wouldn't
+      fix the stacking-context clamp — portaling fixes both.)
+- **VISUALLY CONFIRMED (#68):** with the menu open in the DOM (per #67), the screenshot shows **no visible
+  menu** below "+ Add" — clicking "+ Add" appears to **do nothing** to the user (`.add-menu` is in the DOM
+  but clipped/hidden by the topbar `overflow:auto` + z-20 context). More severe than "covered" — the
+  add-action menu is effectively **non-functional/invisible**. High priority.
+- **Update (#70, CORRECTED by #75):** the #70 "visible" read was a **false positive** — it checked the
+  element's *layout box* (210×196) which ignores the **ancestor overflow clip**.
+- **Re-confirmed STILL INVISIBLE (#75):** screenshot with the menu open shows **nothing** below "+ Add",
+  even though the DOM box is [x1206, y50, 210×196] z-50 with full content
+  ("New transaction / New account / New budget / New goal / Scan a document" — B11). The **topbar's
+  `overflow:auto` (C34) clips everything below its 56px height**, so the menu (y50→246) is clipped to a
+  ~6px sliver = effectively invisible. **Still a blocking bug — high priority.** Fix = portal to root
+  (escapes both the C34 overflow clip and the z-20 stacking clamp).
+- **Functionality OK (#77):** the menu's **actions work** — clicking "New account" (force, since clipped)
+  navigated `/` → `/accounts`. So C43 is **purely a CSS clip/stacking bug**; the B11 add-menu is sound.
+  The portal fix unblocks a fully-working feature (no logic changes needed). 0 console errors.
+**App-wide z-index audit (collisions + no scale):** by layer — `3` widget grip/gear/resize · `5`/`10`
+minor stickies · **`20`** topbar (sticky, stacking ctx) · `30` install-prompt + custompages menu +
+wsswitcher menu · `40` add-backdrop + wsswitcher submenu · **`50`** flip-backdrop **AND** add-menu
+(**duplicate**) · **`60`** toast **AND** `index.html:296` overlay (**duplicate**) · `200`/`210` shortcuts
+overlays · `1000`/`1001` app-lock gate/overlay.
+- [ ] **Duplicate z-values** (z-50 flip-backdrop vs add-menu; z-60 toast vs :296) → ambiguous ordering
+      when concurrent.
+- [ ] **No z-index system** — ad-hoc 3→1001. **Define z-index tokens/layers** (base / sticky-header /
+      dropdown / modal-backdrop / modal / toast / overlay / lock) and route all `z-*` through them. Lesson:
+      a high z-index inside a low-z-index stacking-context ancestor is still capped — the root cause here.
+- **Scoped (#69):** checked other dropdowns — the **workspace-switcher menu is NOT trapped** (z-30, no
+  low-z stacking ancestor → competes at root; only clip ancestor is the full-screen app-root
+  `flex h-screen overflow-hidden`, which doesn't clip a top-positioned menu). So **C43 is specific to the
+  topbar-hosted `.add-menu`** — the portal fix is localized. _(Note: app root is `overflow-hidden`
+  h-screen — the outer clip boundary; a dropdown extending past the viewport edge would be clipped by it,
+  so portal-to-root + edge-aware positioning is the general pattern for menus.)_
+- **2026-06-18 #71** — Re-check of period bugs, 0 errors. Both **still present**: **C41** Month(Jun)→Week→
+  Month → "May 2026" (drift unchanged); **C40** Budgets SPENT Quarter ($1,457) < Month ($1,518) — still
+  anomalous (this reading was itself C41-drifted to May, but #63's clean direct test already confirmed C40).
+- **2026-06-18 #72** — Allocate Save-profile test, 0 errors. ➕ 5 built-in preset profiles present
+  (Balanced / Maximize returns / Safety & access / Pay down debt / Finish goals). ❔ Save-profile commit
+  **inconclusive** — the "Save these weights as…" name placeholder didn't match my selector (ellipsis
+  char), so I couldn't fill it; re-test with the exact placeholder to judge if it shares the add-button no-op.
+- **2026-06-18 #73** — Full-route health sweep (regression check during active dev): all 16 routes one
+  `<h1>`, **0 console/network/pageerror**; C28 icons paint. No regressions from the in-flight changes.
+- **2026-06-18 #74** — Spot-check, 0 errors. **C41** still drifts (Jun→Week→Month = "May 2026");
+  **Members** add-button still no-op ("Mem74"). Unchanged.
+- **2026-06-18 #78** — Spot-check, 0 errors. **C41 MAY be fixed** — Jun→Week→Month now reads "Jun 2026"
+  (not the #74 "May 2026" drift). _Ambiguous:_ the Week reading also came back "Jun 2026" (a week should
+  show a date range) → could be a parser artifact / different switch behavior — **re-verify with a clean
+  read of the stepper label + confirm Week shows the current week range** before marking C41 fixed.
+  **C43** add-menu still `insideTopbar=true` (not portaled); **Members** add-button still no-op ("Mem78").
+- **2026-06-18 #79** — Clean C41 re-test via the **stepper label** (resolves #78): **C41 STILL BROKEN.**
+  fresh "Jun 2026" → Week **"May 31 – Jun 6"** → Month **"May 2026"** (drift) → Quarter "Q2 2026" → Week
+  **"Mar 29 – Apr 4"** — exactly the #62 drift table. #78's "may be fixed" was an **income-subline parser
+  artifact** (that subline shows the month, not the stepper's week range); the stepper label is ground
+  truth → drift persists. 0 console errors.
+
+### C42. Replace native browser popups (prompt/confirm/alert) with the FlipPanel modal system ★ (user-asked 2026-06-18)
+**Want:** every browser-native popup/modal should instead use the **`ui.FlipPanel`** modal + animation
+that Settings uses (lift-to-center, `rotateY`, dim/blur backdrop), with **full a11y + keyboard support**.
+**Canonical system to standardize on:** `ui.FlipPanel` (`internal/ui/flippanel.go`) driven by atoms
+(`uistate.UseSettings`/`UseQuickAdd`) + hosts (`SettingsHost`/`QuickAddHost`) — has `role="dialog"` +
+`aria-modal` + Esc-close + focus-in (per C27/C36). Need: an **input modal** (replaces `prompt`), a
+**confirm modal** (replaces `confirm`), and reuse the existing **toast** for notices (replaces `alert`).
+**Full inventory of native dialogs to convert (grep-verified):**
+- [ ] **`prompt()` (text input):**
+  - `app/wsswitcher.go` — workspace **new / duplicate / rename** (`promptName` ×3) + `app/shortcuts.go:241` new.
+  - `app/custompagesnav.go:77,96` — custom page **new / rename** (`promptName`).
+  - `screens/goals.go:373` — Goals **"Contribute"** amount (`window.prompt`). [seen #14]
+  - `app/applockgate.go:101,109,115` — **B17 passcode setup**: set passcode, confirm passcode, auto-lock
+    minutes. (B17 lock has STARTED building with native prompts — replace with a proper styled lock UI.)
+- [ ] **`confirm()` (yes/no):**
+  - `app/download.go:33` `confirmAction` → `app/settings.go:710` **"Erase all data"** (Wipe).
+  - `app/custompagesnav.go:270` — custom page **delete** confirm.
+  - `app/wsswitcher.go:180` — workspace **delete** confirm.
+- [ ] **`alert()` (notice):**
+  - `app/wsswitcher.go:248` + `app/shortcuts.go:249` — **import error**.
+  - `app/shortcuts.go:262` — "Passcode lock removed."
+  - `app/applockgate.go:111,121` — passcode **mismatch** / **enabled** notices.
+- [ ] **Plan:** add reusable `ui.ConfirmModal` + `ui.PromptModal` (FlipPanel-based, atom-driven like
+      Settings); route `promptName`/`confirmAction`/`alert` through them (single choke point); replace
+      `alert` notices with the existing Toast/Notice. **Native dialogs block the JS/wasm thread, can't be
+      themed, and are inconsistent with the app** — converting fixes all three.
+- [ ] **A11y + keyboard (must-keep):** `role="dialog"` + `aria-modal="true"`, **move focus into the modal**
+      (the input for prompt; the safe/Cancel button for confirm), **Esc cancels**, **Enter confirms/
+      submits**, **focus trap**, **return focus to the trigger** on close, labelled. (The quick-add panel
+      itself still needs `role=dialog` per **C36** — fix as part of this.) Verify each converted site.
+  _Cross-links: C27/C36 (dialog a11y), C36 (quick-add missing dialog ARIA), B17 (lock UI shouldn't use
+  native prompt), B18 (onboarding uses FlipPanel too), the Goals-contribute prompt note (#14)._
+
+### C38. Home/family-use feature-gap analysis (user-asked 2026-06-18)
+What's missing for a typical household, given the (extensive) current feature set. Grouped by type.
+**A. The big architectural gap:**
+- [ ] **Multi-device / shared-household sync** — currently single-device, local-only (Phase 3 sync is
+      deferred/out-of-scope). For a *family*, multiple people on multiple devices can't share the same
+      data — which undercuts the "household" promise. The #1 home-use gap. (Electron + a sync backend, or
+      the Phase-3 server, would address it.)
+**B. Designed but not yet built (already specced — just need building):**
+- [ ] **Notifications/reminders (B19)** — bill due, budget over/near, goal pace; catch-up-on-wake. Critical
+      for "don't miss a bill." **Onboarding + splash (B18)**, **privacy lock (B17)** (family computer),
+      **theming engine (B20)**.
+**C. Genuinely-absent household features (not yet specced):**
+- [ ] **Bills & due-date tracker / calendar view** — beyond the dashboard "upcoming bills" widget: a
+      proper bills list with due dates, paid/unpaid status, and a month calendar. (Recurring cash flows
+      exist in Planning, but no bills-calendar/pay-tracking surface.)
+- [ ] **Reports** — structured spending-over-time, category trends across months, **net-worth history**,
+      and a **year-end / tax summary export** (category totals for the year). Insights is AI-narrative;
+      there's no deterministic reports section.
+- [ ] **Receipt attachments linked to transactions** — Artifacts stores images, but attaching a receipt
+      to a specific transaction (and viewing it from the ledger) appears missing.
+- [ ] **Split / shared expenses & settle-up between members** — members + individual/group scope exist,
+      but not "split this expense 50/50" or "who owes whom" settle-up (common for couples/roommates).
+- [ ] **Subscriptions tracker** — a dedicated view of recurring monthly spend (what am I paying for) +
+      cancel/renewal reminders; partially covered by Recurring but not surfaced as subscriptions.
+- [ ] **Budget rollover / sinking funds** — does unspent budget carry to next month (envelope rollover)?
+      Methodology selector exists; confirm rollover behavior, add sinking funds if absent.
+- [ ] **Investment/holdings tracking** — brokerage/401k accounts hold a balance only; no holdings,
+      cost-basis, or performance (may be out of scope for a budgeting app — flag, don't assume).
+- [ ] **Automated backup reminders** — export/import exists; nudge periodic backups (ties B17 recovery).
+**Already strong (no gap):** accounts (assets/liabilities, multi-currency, reconcile), transactions
+(transfers/filters/tags/bulk/duplicate/CSV+AI import), budgets (periods/thresholds), goals (contribute/
+pace), categories (sub/colors/reassign), planning (forecast/recurring/debt payoff), allocate, AI insights,
+custom fields + formulas, rules, workflows, configurable dashboard, theme/density/scale, PWA/offline,
+on-device persistence.
+- _Recommendation order for home use:_ **B19 notifications → bills calendar → reports → B17 lock →
+  receipt attachments → sync (largest).**
+
+### C39. Long lists aren't paginated/virtualized — Transactions especially ★ (UX/perf — user-asked 2026-06-18)
+**Audited (verified live):** the **Transactions ledger renders a long flat list with NO pagination,
+load-more, or virtualization** — `57 transactions shown`, no page/next controls anywhere. With the
+current 57-row sample it's already a long scroll; at hundreds/thousands of transactions this is a real
+**performance + UX** problem (matches the deferred SPEC items **§1.11** "virtualization for large sets
+later" and **§1.20** "Performance: large dataset (10k+ txns) virtualization").
+- [ ] **Paginate or virtualize the Transactions list** — windowed rendering (virtual scroll) or
+      page/load-more. Virtualization is better here (keeps filter/sort/scroll fluid); pagination is
+      simpler. Either way, render only what's visible.
+- [ ] **Verify the 57-shown vs 45-rendered discrepancy** — only ~45 rows had a Duplicate button while the
+      summary says "57 shown." **Most likely** the 12 difference is **transfer legs** (transfers have no
+      Duplicate/Edit), i.e. all 57 render and only non-transfers get a Duplicate button — but **confirm
+      it's not a silent row cap** (which would hide transactions without telling the user — a real bug).
+- [ ] **Other lists:** Categories (10), Budgets (5), Accounts (7), Members (1) are small today — fine, but
+      **Categories, Documents import-history, and Artifacts can grow unbounded**; give them pagination
+      once they exceed a threshold. (The "of" pagination matches on Accounts/Documents were **false
+      positives** — "17% of limit used" / "X of Y" text, not real pagination controls.)
+- [ ] Pairs with the **Reports** engine (B21) for "view all" / export when a list is too long to scroll.
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so
@@ -1545,7 +2729,7 @@ Savings KPIs) · `period.Window`.
 **Workstream:** let an account go stale, get nudged, and turn the nudge into a to-do.
 **Touches:** `freshness.IsStale` · Accounts (Stale badge, Mark updated) · Dashboard freshness widget · To-do (create-from-nudge).
 - [ ] Age a balance past its window; assert the Stale badge + dashboard "N balances need a refresh".
-- [ ] "Remind me"; assert a nudge task is created in To-do.
+- [x] "Remind me"; assert a nudge task is created in To-do.
 - [ ] "Mark updated" / update balance; assert staleness clears and the nudge count drops.
 - [ ] Assert recurring-bill exemption is respected.
 - [x] unit: `freshness.IsStale` windows + exemption; **1.15** dismissal-state test (gap).
@@ -2133,7 +3317,10 @@ Shared control components (from mockup):
 
 ## 3. Phase 3 — Sync & PWA
 
-### 3.1 Sync server (Go)
+> **§3.1–3.2 are superseded by [§7. Backend server](#7-backend-server--sync--ai-proxy-grpc-bridge-hybrid-)**
+> (gRPC-bridge hybrid: LWW sync + AI proxy over gRPC; OAuth + blobs over HTTP). Stubs kept for history.
+
+### 3.1 Sync server (Go) — superseded by §7
 
 - [ ] HTTP service sharing client domain structs
 - [ ] Household account/auth model
@@ -2192,3 +3379,525 @@ bundle and `web/` shell. Local-first; no behavior change — just a native windo
       AppImage/deb
 - [ ] Build script / CI job to produce the desktop artifacts from the same wasm build (don't hand-copy)
 - [ ] Verify: app installs and launches natively, loads offline, and matches the PWA behavior
+
+---
+
+## 6. UX / UI polish pass (2026-06-18 audit — static review of shell, screens, controls, CSS)
+
+Findings from a full static UX/UI sweep (typography, shapes/sizing/weights, fonts, legibility/contrast,
+shortcuts, click-to-item speed). Grouped by theme; `[H]/[M]/[L]` = severity. File refs are starting
+points — verify exact lines before editing.
+
+### 6.1 Touch / click targets (WCAG 2.5.5 / 2.5.8)
+
+- [ ] **[H]** Form fields below comfortable target height — `.field` padding `0.4rem 0.55rem` (~32px),
+      drops to ~28px under compact density (`web/index.html:261`, `:192`). Raise base to ~`0.5rem 0.6rem`;
+      floor compact at ~36px; treat 44px as the mobile minimum.
+- [ ] **[H]** Transaction row checkbox `.check` is a sub-24px target with left-only padding
+      (`transactions.go:653`, `web/index.html:322`). Add `min-width:24px;min-height:24px;display:inline-grid;place-items:center;`
+      (mirror the `.btn-del` fix at `web/index.html:279`).
+- [ ] **[H]** Custom-page "⋯" menu button has no min size (`custompagesnav.go:261`). Add
+      `min-w-6 min-h-6 inline-grid place-items-center`.
+- [ ] **[M]** Rail nav items rely on Tailwind padding with no min guard; icon-only collapsed rail may
+      fall under 24px (`shell.go:274`). Add explicit `min-w-10 min-h-10`.
+- [ ] **[M]** `.btn-del` is a tight 24×24 with `padding:0 0.3rem` (`web/index.html:275`). Bump to
+      ~`0.25rem 0.4rem`.
+- [ ] **[L]** Color input is 46×34px (`web/index.html:265`; used `categories.go:138`, `members.go:237`).
+      Enlarge toward 44×44 or wrap in a larger hit area.
+
+### 6.2 Legibility & contrast (WCAG AA)
+
+- [ ] **[H]** `--text-faint` `#6c6c72` on base `#0e0e0f` ≈3.1:1 — fails AA for text. Used for rail
+      section headers, breadcrumb separators, "New page" link (`web/index.html:43`, `shell.go:131`,
+      `custompagesnav.go:152`). Lighten to ≥4.5:1 (e.g. `#7d7d85`) or restrict faint to truly decorative use.
+- [ ] **[M]** `--text-dim` `#a6a6ac` ≈4.2:1 — just under AA; affects `.row-meta`, `.budget-sub`
+      (`web/index.html:254`, `:314`). Brighten dim slightly (~`#ababb3`).
+- [ ] **[M]** Rail section labels at `text-[10px]` with `0.16em` tracking risk descender clipping and poor
+      legibility (`shell.go:131`). Bump to ≥11px and/or reduce tracking to ~0.08em.
+- [ ] **[M]** Tiny type elsewhere: priority badges `0.68rem` (`web/index.html:326`), segmented buttons
+      `0.8rem` (`web/index.html:362`), member/status chips `0.8rem` (`dashboard.go:174`). Raise toward
+      0.75–0.85rem and loosen cramped gaps (`.task-meta`).
+- [ ] **[L]** `.insight-dot` `1.05rem` is larger than body 14.5px, unbalancing the ↑/↓ arrows
+      (`web/index.html:187`). Drop to 1rem.
+
+### 6.3 Display-scale & formatting consistency
+
+- [ ] **[M]** Hardcoded pixel type bypasses the user display-scale: dashboard KPI `text-[34px]`
+      (`dashboard.go:363`), chart legend `text-[12px]` (`dashboard.go:328`). Use relative/Tailwind scale units.
+- [ ] **[M]** Numeric figures not uniformly `tabular-nums` — row-meta "· $X" and some amounts skip the
+      `.amount` class (`transactions.go:635`, `accounts.go:559`, `budgets.go:379`). Apply tabular figures
+      to all monetary text for column alignment.
+- [ ] **[L]** Upcoming-bills date uses hardcoded `Format("Jan 2")` instead of the user date-format pref
+      (`dashboard.go:224`). Route through `pr.FormatDate(...)` like `todo.go`.
+- [ ] **[L]** Chart heights hardcoded 120–180px illegible on narrow bento tiles
+      (`planning.go:270`, `dashboard.go:498`). Add responsive min-height.
+- [ ] **[L]** Progress track `h-1.5` (6px) thin in dense layouts (`ui/progress.go:34`). Bump to `h-2`.
+
+### 6.4 Shapes / consistency / states
+
+- [ ] **[M]** Add-menu button mixes inline `Style{border-radius:4px}` with Tailwind classes
+      (`addmenu.go:40`); switch to `rounded-[4px]` for consistency (and to avoid clobbering the focus ring).
+- [ ] **[M]** No shared disabled-button style — `.btn:disabled { opacity:.5; cursor:not-allowed; }` is
+      missing, so "Thinking…" (`insights.go:186`) and default-state buttons (`goals.go:316`) don't read as
+      disabled. Add it and render real disabled buttons rather than hiding them.
+- [ ] **[M]** Bulk-action toolbar wraps unevenly on narrow screens (`transactions.go:541`). Give it a
+      robust responsive layout.
+- [ ] **[L]** Selected transaction checkbox has only a subtle glyph swap, no highlight
+      (`transactions.go:643`). Add a selected background/border.
+- [ ] **[L]** Workspace-switcher action group separator is a faint 1px line (`wsswitcher.go:46`); add
+      `my-2 pt-2` spacing. Rule shadow-conflict warning is text-only (`rules.go:287`) — add a colored badge/left border.
+- [ ] **[L]** Custom-page menu can clip at the viewport edge on narrow screens (`custompagesnav.go:249`);
+      add max-width/overflow or boundary detection.
+
+### 6.5 Empty / loading / async states
+
+- [ ] **[M]** Empty states are bare italic text with no call-to-action across screens
+      (`transactions.go:482`, `accounts.go:336`, `dashboard.go:523`, etc.). Wrap in a block with a heading
+      and an "Add first…" button.
+- [ ] **[M]** AI result area vanishes while "Thinking" (`insights.go:184`) — add a skeleton/shimmer.
+- [ ] **[L]** Add/edit/delete handlers have no in-flight state — no button disable/spinner
+      (`accounts.go:134`). Add a `saving` state that disables controls during the op.
+
+### 6.6 Keyboard shortcuts & discoverability
+
+- [ ] **[H]** No command palette. Add `Cmd/Ctrl+K` to search screens/actions/entities with a keyboard-
+      navigable result list. (No existing keybinding registry found.)
+- [ ] **[H]** No "?" help overlay documenting shortcuts. Add a `?`-key cheat sheet + a Settings → Keyboard
+      Shortcuts entry; consider a first-run "Press ? for help" hint.
+- [ ] **[M]** No quick-add hotkey — adding a transaction is button→menu→form. Add e.g. `Cmd/Ctrl+Shift+A`
+      to open the quick-add panel directly (`quickadd.go`, `addmenu.go`).
+- [ ] **[M]** No shortcut to focus search/filter — bind `Cmd/Ctrl+F` to the nearest search input per screen.
+- [ ] **[M]** No section-jump shortcuts — add `Alt+1..9` mapped to primary rail nav (`shell.go:207`).
+- [ ] **[M]** FlipPanel handles Esc/Tab-trap/focus-restore well but has no Enter-to-submit
+      (`ui/flippanel.go`); add Enter→Save (skip when focus is in a textarea).
+- [x] **[L]** Segmented controls (radiogroups) lack arrow-key navigation (`ui/controls.go:32`). Add
+      Arrow Left/Right/Up/Down to move selection.
+- [ ] **[L]** Inline forms could expose a small "Enter to save · Esc to cancel" hint.
+
+### 6.7 Focus management & click-to-item speed
+
+- [ ] **[M]** Entering inline edit doesn't move focus into the edit form
+      (`transactions.go:598`, and the other entity screens). Focus the first field on edit.
+- [ ] **[M]** After save/delete, focus isn't restored predictably (`transactions.go:606`, `accounts.go:572`,
+      and peers). Return focus to the row/Edit button on save; to the next/prev row on delete.
+- [ ] **[M]** Quick-add form has no autofocus (`quickadd.go:118`). Autofocus the first meaningful field.
+- [ ] **[L]** Dashboard exposes every widget as its own tab stop (`ui/widget.go:121`); with 12+ tiles the
+      tab path to main content is long. Consider one logical focus group with arrow-key nav inside.
+
+### 6.8 Replace native dialogs & destructive-action safety
+
+- [ ] **[H]** "Set Balance" (`accounts.go:435`) and "Contribute" (`goals.go:294`) use native
+      `window.prompt()` — poor on mobile, no validation, not keyboard-consistent. Replace with in-app
+      modal/inline forms.
+- [ ] **[M]** Deletes have no confirmation or undo. Add a confirm step and/or an Undo toast (and focus the
+      next row afterward).
+
+### 6.9 ARIA & announcements
+
+- [ ] **[M]** Toast container likely lacks `role="status"` / `aria-live="polite"` (`toast.go`) — additions
+      aren't announced. Also differentiate auto-dismiss: keep errors longer (~6–8s) or require manual
+      dismiss (`toast.go:14`, `toastTimeoutMS=4500`).
+- [ ] **[M]** Ensure every dynamic result list has a count live region (transactions has one at
+      `transactions.go:551`; verify accounts/budgets/goals/categories/members parity).
+- [ ] **[L]** Icon-only buttons rely on `title` rather than `aria-label` (e.g. `.btn-del` at
+      `accounts.go:572`). Standardize `aria-label` on all icon buttons.
+- [ ] **[L]** Collapsed-rail hover flyout label has `pointer-events:none` (`web/index.html:439`) so clicking
+      it doesn't navigate; either make it clickable or make the intent clear.
+
+### 6.10 Misc
+
+- [ ] **[L]** Allocate score bar has no inline value label or `role="progressbar"`/`aria-valuenow`
+      (`allocate.go:56`). Allocate profile select has no "Choose a profile…" placeholder (`allocate.go:362`).
+- [ ] **[L]** Custom-field key input has no client-side format validation (`customfields.go:69`); add a
+      pattern (alphanumeric + underscore) / reserved-name check.
+
+> **Live-app pass still TODO:** the above is static review. A follow-up should run the app via the `gwc`
+> browser tools and screenshot each screen (light + dark, compact + comfortable, narrow + wide) to catch
+> rendered issues — wrapping, overflow, real contrast, animation jank — that source review can't see.
+
+### 6.11 Light-theme & design-system CSS (2026-06-18 pass 2 — `web/index.html` deep read)
+
+- [ ] **[M]** Light-theme icon controls are too faint: `.gear-inline`/`.gear-abs`/`.menu-btn` set to
+      `#8a8a90` and `.set-close` to `#8a8a92` on the `#f7f6f3` light bg ≈ ~2.7:1 — below the 3:1 AA
+      non-text/UI threshold (`web/index.html:218`, `:400`). Darken the light-theme idle color (e.g. `#6a6a72`).
+- [ ] **[M]** Settings toggle switch is a 36×21px hit area — the 21px height is under the 24px minimum
+      (`web/index.html:406`, `.switch`). Enlarge the switch or pad its clickable wrapper to ≥24px.
+- [ ] **[L]** Settings accent swatches are 22×22px (`web/index.html:409`, `.swatch`) — just under 24px.
+      Nudge to ≥24px or add padding around the hit area.
+- [ ] **[L]** `.badge-soon` uses a fixed dark-blue palette (`#1e293b`/`#93c5fd`, `web/index.html:233`)
+      with no light-theme override — reads as a dark chip on a light card. Add a `[data-theme="light"]` variant.
+- [ ] **[L]** `.check` has asymmetric padding `0 0.5rem 0 0` (right side flush) (`web/index.html:322`),
+      compounding the sub-24px target in 6.1 — center the glyph when you add the min-size box.
+- [ ] **[L]** Squared-progress override `.bento [class*="rounded-full"][class*="overflow-hidden"]
+      { border-radius:2px }` (`web/index.html:420`) is a fragile attribute-substring hack tied to Tailwind
+      class names; a rename silently breaks it. Replace with an explicit component class.
+
+> **Next pass (pass 3):** Settings flip-panel content/copy (`internal/app/settings.go`) + a plain-English
+> microcopy sweep of `internal/i18n/en.go` (labels, empty states, errors, nudges). Still solo, paced.
+
+### 6.12 Settings flip-panel (2026-06-18 pass 3 — `internal/app/settings.go`)
+
+- [ ] **[H]** Base-currency `<select>` is a **dead control** — it has no `OnChange`
+      (`settings.go:383`), so picking EUR/GBP changes nothing and never persists `BaseCurrency`. Wire it to
+      update settings + bump the data revision (and re-derive FX display base).
+- [ ] **[H]** FX-rate inputs are **dead** — `rateRow`'s `Input` has no `OnInput`/`OnChange`
+      (`settings.go:617`), so edited exchange rates are discarded. Add a handler that writes
+      `Settings.FXRates[code]` and persists.
+- [ ] **[M]** "Enable AI" toggle is local-only `UseState` that gates nothing (`settings.go:236`, `:414`) —
+      turning it off leaves the key field active and AI calls available. Either wire it to actually
+      enable/disable AI (and disable/hide the key+model when off) or remove the toggle.
+- [ ] **[M]** Hidden-screen labels are hardcoded English (`hideableScreens`, `settings.go:214-228`) and fed
+      to `settings.showScreen` — screen names don't localize despite the language system. Use i18n keys.
+- [ ] **[M]** The whole global panel is one dense 2-column scroll (members, currency, budget method, FX,
+      screens, freshness, AI, appearance, prefs, data, workspaces, languages, **plus a debug log**) in a
+      760×560 flip card with no section tabs/index (`settings.go:535`). Finding a setting means scrolling a
+      wall. Add grouped tabs or an in-panel section nav to cut click/scroll-to-setting time.
+- [ ] **[L]** Developer debug-log ring is surfaced inside user-facing Settings (`settings.go:527`). Move it
+      behind an "Advanced/Developer" disclosure or a separate route.
+- [ ] **[L]** Hardcoded non-localized microcopy in settings rows: `"days (0 = never)"` (`settings.go:206`),
+      `"1 "+code+" ="` and base label (`settings.go:616-618`), and the base-currency option text
+      (`settings.go:384-386`). Route through i18n.
+- [ ] **[L]** Destructive "Wipe" uses native `confirmAction`/`window.confirm` (`settings.go:710`) — same
+      native-dialog concern as 6.8; consider an in-app confirm with a typed-confirm or undo window given it
+      erases all data.
+
+> **Next pass (pass 4):** plain-English microcopy sweep of `internal/i18n/en.go` (labels, empty states,
+> errors, nudges) — deferred from this pass to keep it economical. Still solo, paced.
+
+### 6.13 Microcopy (2026-06-18 pass 4 — `internal/i18n/en.go`)
+
+Overall the copy is strong — friendly, plain-English, consistent terminal punctuation, good empty states and
+nudges. Only minor nits found:
+
+- [ ] **[L]** Awkward `(s)` pluralization in reassign-before-delete strings: `categories.reassignDesc`
+      (`en.go:109`, "%d transaction(s) or budget(s)") and `members.reassignDesc` (`en.go:707`,
+      "%d account(s), budget(s), or goal(s)"). Use a proper singular/plural helper.
+- [ ] **[L]** Count strings read wrong at 1: `dashboard.staleCount` (`en.go:613`, "1 balances could use a
+      refresh") and `dashboard.accountsCount` (`en.go:626`, "1 accounts"). Pluralize on the count.
+- [ ] **[L]** "APR" abbreviation appears as a bare label (`accounts.apr` "Interest APR %", `en.go:546`;
+      `planning.*`, `accounts.expReturnTitle`). CLAUDE.md asks for no undecoded abbreviations — consider
+      "Interest rate (APR)" or a tooltip expansion.
+
+> **Next pass (pass 5):** consolidation — re-read Section 6, dedupe overlapping items, and order them into a
+> single prioritized fix list (high-impact/low-effort first) so the backlog is actionable. Still solo, paced.
+
+### 6.14 Prioritized fix order (2026-06-18 pass 5 — consolidation of 6.1–6.13)
+
+Suggested execution order for the UX/UI backlog above, ranked by impact × effort. Each line points back to
+its detailed subsection. Knock out P0/P1 first — they're mostly small, high-confidence wins.
+
+**P0 — broken/dead controls (correctness; small):**
+- [ ] Wire base-currency `<select>` (no `OnChange`) — §6.12
+- [ ] Wire FX-rate inputs (no `OnInput`) — §6.12
+- [ ] Make "Enable AI" toggle actually gate AI, or remove it — §6.12
+
+**P1 — accessibility & contrast, high-impact / low-effort:**
+- [ ] Fix failing text contrast: `--text-faint` (~3.1:1), `--text-dim` (~4.2:1), light-theme icon controls (~2.7:1) — §6.2, §6.11
+- [ ] Raise form-field height + small touch targets (`.field`, `.check`, ⋯ button, `.switch`, swatches, rail items) — §6.1, §6.11
+- [ ] Add shared `.btn:disabled` style — §6.4
+- [ ] Toast `role="status"`/`aria-live` + longer error dismiss — §6.9
+- [ ] Replace native `prompt()`/`confirm()` (Set Balance, Contribute, Wipe) with in-app dialogs — §6.8, §6.12
+
+**P2 — high-value UX, medium effort:**
+- [ ] Focus management: into inline edit, restore after save/delete, quick-add autofocus, Enter-to-submit in dialogs — §6.6, §6.7
+- [ ] Empty states with a clear CTA; AI skeleton + in-flight button disable — §6.5
+- [ ] Delete confirmation + undo toast — §6.8
+- [ ] Settings panel section nav/tabs (cut scroll-to-setting) + move debug log to Advanced — §6.12
+- [ ] Responsive bulk-action toolbar — §6.4
+
+**P3 — efficiency / power-user, larger:**
+- [ ] Command palette (Cmd+K) — §6.6
+- [ ] "?" keyboard-shortcut help overlay — §6.6
+- [ ] Quick-add hotkey, search-focus (Cmd+F), section jumps (Alt+1-9), segmented arrow-key nav — §6.6
+- [ ] Display-scale-safe type, uniform tabular figures, date-format pref, responsive chart heights — §6.3
+
+**P4 — polish / low severity:**
+- [ ] Tiny-type bumps (badges, insight-dot, rail labels, seg buttons) — §6.2
+- [ ] Shape/consistency (inline radius, fragile bento CSS hack, `.badge-soon` light variant) — §6.4, §6.11
+- [ ] Icon-button `aria-label`s, collapsed-rail flyout pointer-events, allocate bar a11y, custom-field validation — §6.9, §6.10, §6.12
+- [ ] Microcopy: `(s)` pluralization, count-at-1 strings, "APR" abbreviation — §6.13
+
+### 6.15 Live-app render pass (2026-06-18 pass 6 — Playwright + sample data)
+
+Captured the running app (Playwright/Chromium, sample data loaded) across dark/light/compact and
+desktop/mobile — screenshots in `.review-screenshots/live-*.png`, zero console errors. New issues that only
+show up rendered:
+
+- [ ] **[H]** **Compact density does nothing on the dashboard.** Compact and comfortable bento views are
+      pixel-identical (`live-dashboard-compact.png` vs `-dark.png`) — `[data-density="compact"]` CSS only
+      targets legacy `.card/.row/.field/.btn`, not the bento `.w` tiles (`web/index.html:190-194`). Add
+      compact rules for the dashboard tiles (padding, figure sizes) or document that Compact excludes the dashboard.
+- [ ] **[H]** **Mobile top bar eats the whole first screen.** On 390px the period controls
+      (Week/Month/Quarter + Jump to + ‹ Jun 2026 › stepper + Custom range + Add) stack into ~6 rows, pushing
+      all content below the fold (`live-dashboard-mobile.png`). Collapse the period controls into a single
+      compact control/popover on narrow widths.
+- [ ] **[M]** **Allocate breakdown missing a separator:** renders "Score 60%returns 100 · stability 100 …"
+      — no space/`·` between the score % and "returns N" (`live-allocate-dark.png`; `screens/allocate.go`
+      breakdown line). Insert "· " after the score.
+- [ ] **[M]** **Allocate criterion-weight inputs are unlabeled** — five number boxes all showing "1" under
+      "CRITERION WEIGHTS" with no per-input label, so you can't tell which weight is returns/stability/
+      liquidity/etc. (`live-allocate-dark.png`; `allocate.go`). Add a label above/beside each weight.
+- [ ] **[M]** **Net-worth-trend tile degenerates to a flat block** — with the sample dataset the chart is a
+      solid filled rectangle (axis 0–4, no visible line/trend) in both themes (`live-dashboard-dark/light.png`;
+      `screens/dashboard.go` trend chart). Draw a real series or show an empty/"not enough history" state.
+- [ ] **[M]** **Dashboard header controls collide on mobile** — "Custom layout ▾ / Reset layout" overlap the
+      "Your dashboard" title + hint and truncate ("Custom ⌄") (`live-dashboard-mobile.png`). Stack them below
+      the title on narrow widths; the "Drag tiles … grab the edge handles" hint is also meaningless on touch.
+- [ ] **[L]** "▲ 0% this month" on the Net worth KPI shows an up-triangle with a 0% change
+      (`live-dashboard-*.png`) — suppress the trend arrow (or use a neutral dash) when the delta is zero.
+- [ ] **[L]** Allocate field placeholder "Keep back (emergency buffer" is clipped mid-word in the input
+      (`live-allocate-dark.png`); shorten the placeholder or widen the field.
+- [x] Visual confirmation of §6.2: light-theme "TOOLS"/"SYSTEM" rail section labels are barely legible
+      against the light background (`live-dashboard-light.png`) — already tracked as the `--text-faint` contrast fix.
+
+> **UX/UI analysis backlog complete.** Static passes (§6.1–6.13) + prioritization (§6.14) + live render pass
+> (§6.15) done. Reproduce the live pass anytime: `node .tools/server.mjs web 8799 &` then `node .tools/shot.mjs`
+> (Playwright + Chromium in `.tools/`, screenshots to `.review-screenshots/`).
+
+### 6.16 UI interaction & motion polish (2026-06-18 pass 7 — animations, hover, micro-interactions)
+
+The motion **foundation is good**: FLIP-animated bento reorder/resize (`web/flip.js`), the settings flip-panel
+(`transform .55s cubic-bezier`), boot loader + `#app` settle-in, toast enter, collapsed-rail flyout, switch
+toggle, and a thorough `prefers-reduced-motion` block. The gap is the **micro-interaction layer** — the small
+feedbacks that make a UI feel responsive and alive. Mostly enhancement-grade ([M]/[L]), ordered by bang-for-buck.
+All additions must be wrapped in `@media (prefers-reduced-motion: no-preference)` (or no-op'd in the existing
+reduced-motion block) to stay consistent with the app's a11y stance.
+
+**Press / tactile feedback**
+- [ ] **[M]** No `:active` press state on *any* button — only `.ghandle`/scrollbar have one (`web/index.html:355`).
+      Add a subtle `active:scale-[.97]` / `:active { transform: translateY(1px) }` or opacity dip to `.btn`,
+      `.btn-primary`, `.nav-link`, `.nv`, `.seg-btn`, `.data-btn`, `.menu-btn`, `.check`, `.btn-del`. Biggest
+      single "feels responsive" win.
+
+**Hover affordances**
+- [ ] **[M]** List rows (`.row`) have **no hover state** (`web/index.html:245`) — transaction/account/budget
+      rows don't highlight under the cursor, hurting scannability and click targeting. Add
+      `.row:hover { background: var(--hover) }` with a short `background` transition (and a pointer cursor on
+      rows that drill in, e.g. accounts → ledger).
+- [ ] **[L]** Tile hover snaps — `.w:hover` changes `border-color` but `.w` declares no `transition`
+      (`web/index.html:345`), so it jumps. Add `transition: border-color .15s ease` (and consider a faint
+      `background` lift on hover for depth).
+- [ ] **[L]** `.btn` hover is a blunt `filter: brightness(1.12)` (`web/index.html:272`). Consider a gentler
+      `background`/`border` hover + tiny shadow for primary actions so hover reads as elevation, not just brightness.
+
+**Data-viz & progress animation**
+- [ ] **[M]** Progress/score bars **snap** to width — `.bar-fill` (budgets) and the Allocate score bar have no
+      width transition (`web/index.html:316`; `screens/allocate.go`). Add `transition: width .45s cubic-bezier(.2,.75,.2,1)`
+      so bars grow in on load/update. High polish-per-line.
+- [ ] **[M]** Charts render instantly — `web/chart.js` has no draw-in animation (no transition/raf). Animate
+      line-draw (`stroke-dashoffset`) and bar grow-up on first paint / data change so the dashboard feels alive.
+- [ ] **[L]** KPI figures (net worth, income, …) update instantly. Optional count-up tween on value change would
+      elevate the headline numbers (gate behind reduced-motion; keep it fast, ≤400ms).
+
+**Enter / exit transitions**
+- [ ] **[M]** Toasts enter (`@keyframes toast-in`) but **never animate out** — they vanish at the auto-dismiss
+      deadline (`web/index.html:307`, `app/toast.go:14`). Add a fade/slide-out (~160ms) before removal so they
+      don't blink away.
+- [ ] **[M]** Inline row edit swaps in/out with no transition — the row instantly becomes the edit form
+      (`screens/transactions.go` & peers). A short height/opacity transition (or a subtle background flash on the
+      saved row) would make edits feel smooth and confirm the save landed.
+- [ ] **[L]** Newly added list items appear instantly. A brief highlight-fade ("flash" the new row) on add would
+      confirm where the item landed.
+
+**Stateful micro-interactions**
+- [ ] **[L]** Segmented controls (`.seg-btn.active`) and the week-start/theme pickers snap the active background
+      (`web/index.html:364`). A sliding active-pill indicator (animate a shared highlight) would feel premium.
+- [ ] **[L]** Active nav pill (`.nav-link.active` / `.nv`) jumps between items on route change. Consider animating
+      a shared active indicator that slides to the selected item.
+- [ ] **[L]** Accent swatches (`.swatch.sel`) and the gear/handle reveals pop in instantly — add a quick
+      `transform: scale` / opacity transition on selection and on `.rz` handle reveal for refinement.
+
+> **Note:** animations/hover are hard to verify from still screenshots; this pass is a CSS/JS interaction audit.
+> A future check could record short Playwright videos (`recordVideo`) of hover/drag/toast flows to confirm feel.
+
+### 6.17 Re-verification on fresh build (2026-06-18 pass 8 — Playwright, build 13:40)
+
+Re-captured against the latest build (now includes commit `fix: make the multi-currency (FX) editor functional
+(D16)`), plus a new Settings-panel shot (`.review-screenshots/live-settings-dark.png`). Zero console errors.
+
+- [x] **§6.12 FX/base-currency dead controls — FIXED.** The Exchange Rates section now renders editable rows
+      ("1 AUD = [input] USD", CAD, CHF…) and the base-currency select is wired (commit D16). Verified rendered.
+- [ ] **[STILL OPEN] §6.15 Allocate "Score 60%returns 100"** missing separator — reproduced on this build
+      (`live-allocate-dark.png`); not yet addressed.
+- [ ] **[M]** AI "Enable AI features" toggle semantics still unclear: the new helper copy says "AI features stay
+      off until you add a key," which implies the *key* gates AI — so what does the toggle do when a key is
+      present? Either make the toggle the single source of truth (and gray out key/model when off) or drop it
+      and let key-presence gate AI. (refines §6.12)
+- [ ] **[L]** Settings panel shows **Save / Cancel** buttons, but appearance/preferences apply **live** on each
+      change (`settings.go` savePrefs-on-change). "Save" is then ambiguous — clarify what it commits vs. the
+      live changes, or drop Save and make Cancel a "Done/Close" (`live-settings-dark.png`).
+
+> The other session is actively fixing logged items (D16 FX fix landed). This re-verification loop is useful:
+> on each fresh build, re-run `node .tools/shot.mjs` to confirm fixes render and catch regressions.
+
+### 6.18 Lock screen — interaction review (2026-06-18 pass 10 — new surface, B17/B17.1)
+
+Reviewed the new app-lock gate + passcode-setup modal (`internal/app/applockgate.go`). Functionally **solid**:
+focus-trap, Enter-to-submit, autofocus, ARIA labels, hint-after-3-fails, forgot→wipe recovery, idle auto-lock.
+But against the current animation/hover/interaction focus it's the least-polished surface in the app and breaks
+the patterns used everywhere else:
+
+- [ ] **[M]** **No focus ring on the passcode/setup inputs.** Their inline style sets `outline:none`
+      (`applockgate.go:84`, and the shared `inputStyle` at `:301`); inline styles beat the global
+      `:focus-visible { outline: 2px solid }` stylesheet rule, so these inputs show **no keyboard focus
+      indicator** — an a11y regression on the one screen that is keyboard-only. Drop `outline:none` (or set a
+      focus border/ring explicitly). (related to the inline-style focus concern in §6.1)
+- [ ] **[M]** **Gate has no enter/exit transition.** It's shown/hidden via `display:grid`/`none`
+      (`applockgate.go:45,106`), so it pops in and snaps away — inconsistent with the boot loader (fade+scale),
+      flip panel (`.55s`), and toast. Add a fade/scale on show and a polished fade-up on unlock (mirror
+      `#boot.hidden`), gated behind `prefers-reduced-motion`.
+- [ ] **[M]** **Wrong-passcode feedback is text-only** — sets message text + red color
+      (`applockgate.go:114-117`) with no shake. The expected micro-interaction is a horizontal shake of the
+      input on a failed attempt. Add a `shake` keyframe applied to `#cf-applock-input` on failure.
+- [ ] **[M]** **Lock-screen buttons have zero hover/active feedback.** Unlock/Forgot/Show-hint and the setup
+      OK/Cancel are built as raw DOM with inline `cssText` and `cursor:pointer` but no `:hover`/`:active`
+      (they aren't `.btn`, so global button styles don't apply) — they're completely static under the pointer.
+      Give them hover/active states (reuse the `.btn`/`.btn-primary` classes, or add JS hover handlers).
+- [ ] **[L]** **Setup modal backdrop appears instantly** (`rgba(0,0,0,0.6)`, `applockgate.go:299`) whereas the
+      flip-panel backdrop fades (`.flip-backdrop … transition:opacity .28s`). Add a matching backdrop fade-in so
+      modals feel consistent.
+
+> Positives worth keeping: the gate correctly traps focus, submits on Enter, autofocuses the field, reveals the
+> hint only after 3 misses, and offers an honest forgot→wipe path. Only the *motion/feedback* layer is missing.
+
+### 6.19 Re-verification (2026-06-18 pass 11 — build 15:15)
+
+The other session is fixing logged items fast. Status deltas verified from source/diffs:
+
+- [x] **§6.8 native dialogs — COMPLETE.** Both browser prompts are gone: in-app "Set balance" form (commit
+      `99c4be8`, "remove last native prompt (6.8 complete)") and in-app goal-contribute form (`bc59900`). The
+      new forms use the framework field classes (no `outline:none`), so they keep the focus ring — good.
+- [x] **§6.18 unlock exit animation — DONE.** Correct passcode now dismisses the gate via `unlockGate` with a
+      blur+scale opacity fade (~0.35s, self-releasing `setTimeout`), and it **respects `prefers-reduced-motion`**
+      (`applockgate.go:28-37`) — exactly as recommended (mirrors `#boot.hidden`).
+- [ ] **[STILL OPEN] §6.18 remaining lock items:** the gate *enter*/show still pops (`display:grid` instantly,
+      `applockgate.go:75` — only the exit animates); no wrong-passcode shake; lock-screen buttons still have no
+      hover/active feedback.
+- [ ] **[M] Focus-ring `outline:none` regression generalizes to 3 raw-DOM inputs**, not just the lock gate:
+      `applockgate.go:114` & `:331` (passcode/setup) **and `shortcuts.go:360`** (command-palette/quick input).
+      All three suppress the global `:focus-visible` ring via inline style. Fix all raw-DOM overlay inputs
+      together (drop `outline:none`, or set an explicit focus border).
+
+> Progress so far: §6.8 fully closed; §6.12 FX fixed (§6.17); §6.18 unlock-exit done. Remaining UX backlog is
+> mostly the motion-polish items (§6.16) + the lock-screen feedback gaps (§6.18) + the focus-ring fix above.
+
+---
+
+## 7. Backend server — sync + AI proxy (gRPC bridge hybrid) ★
+
+> Supersedes the stubs in §3.1–3.2. Design: [`docs/BACKEND_PLAN.md`](./docs/BACKEND_PLAN.md).
+> **Locked decisions:** last-write-wins sync (newest-by-timestamp) · per-user **BYO** OpenAI key
+> stored **encrypted at rest** · auth via **OAuth (Google/GitHub)** · artifacts in a
+> **content-addressed blob store** (refs only in the synced snapshot) · **gRPC over the GWC
+> `GoGRPCBridge`** (WebSocket) for the app's data/AI RPCs · **plain HTTP** for OAuth + blobs.
+> Thin server: it stores and forwards, never interprets the dataset. App stays local-first; the
+> backend is an optional sync/proxy tier. Build bottom-up (proto/contract → storage → services →
+> transport → client), one feature per commit, tests with each layer.
+
+### 7.0 Foundations & toolchain
+- [ ] Decide layout: `cmd/cashflux-server/` in this module vs a sibling `server/` module. ★
+- [ ] Add deps: `GoGRPCBridge` (grpctunnel), `google.golang.org/grpc`, `google.golang.org/protobuf`,
+      `golang.org/x/oauth2`, `ncruces/go-sqlite3` (already used client-side).
+- [ ] protoc + `protoc-gen-go` + `protoc-gen-go-grpc` (or `buf`); add a codegen step (Makefile / `gwc`-style)
+      and a CI **proto-drift check** (generated code matches `.proto`).
+- [ ] Pin server Go toolchain (1.26) and confirm the client gRPC code builds for `js/wasm`.
+
+### 7.1 Proto contracts (shared client+server) ★
+- [ ] `proto/` package + gen output dir; versioning policy (no breaking changes; reserve removed fields).
+- [ ] Common messages: `Workspace{id,name,color,sort,deleted,version,updatedAt,deviceId}`,
+      `DatasetEnvelope{schemaVersion, gzippedJson bytes}`, `BlobRef{hash,mime,size,name}`.
+- [ ] Keep the dataset as an opaque **bytes/gzip JSON** field (reuse `store.ExportJSON`) — do **not**
+      re-model every entity in proto; only the sync/AI envelopes are typed.
+- [ ] `SyncService`: `ListWorkspaces`, `GetWorkspace`, `PutWorkspace`, `DeleteWorkspace`,
+      `WatchWorkspaces` (server stream).
+- [ ] `AIService`: `SetKey`, `ListModels`, `Chat` (server stream), `Vision` (server stream).
+- [ ] Error model: map to gRPC `codes` / `google.rpc.Status` (unauthenticated; failed-precondition for a
+      stale push when `force` is off; resource-exhausted for quota).
+
+### 7.2 Server storage layer (pure, tested) ★
+- [ ] SQLite schema (ncruces, WAL) + stepwise migrations (own `schemaVersion`, reject newer-than-supported):
+      `users`, `workspaces`, `snapshots` (current + last-N history), `blobs`, `workspace_blobs`,
+      `ai_keys`, `usage`.
+- [ ] Repository layer with table-driven tests on native Go (no transport/proto deps).
+- [ ] Snapshot store: put/get current, retain last **N** prior snapshots per workspace (LWW recovery),
+      enforce a dataset size cap.
+- [ ] Blob metadata + on-disk **content-addressed** store (sha256, path-sharded); `workspace_blobs`
+      refcount; GC sweep for unreferenced blobs.
+- [ ] `ai_keys`: AES-GCM encrypt/decrypt helper; master key from env/secret manager; rotation note.
+- [ ] `usage`: per-user/day request + token counters; helpers for rate-limit checks.
+
+### 7.3 SyncService (last-write-wins) ★
+- [ ] Auth interceptor: read bearer token from gRPC metadata → validate → put user in context.
+- [ ] `List`/`Get`/`Delete` (soft-delete tombstone) strictly scoped to the caller's `user_id`.
+- [ ] `PutWorkspace` LWW: accept when `clientUpdatedAt >= stored.updatedAt` (newest wins, so a stale
+      device can't clobber newer data); server-stamp `updatedAt`; bump `version`; honor a `force` flag;
+      return the new `{version, updatedAt}` (and current state when rejected so the client re-pulls).
+- [ ] `WatchWorkspaces` server stream: in-proc per-user pub/sub notifies other devices of a change;
+      heartbeat/keepalive; clean unsubscribe on disconnect.
+- [ ] Tests: LWW accept/reject by timestamp, tombstone propagation, cross-user isolation, watch fan-out,
+      oversized-payload rejection.
+
+### 7.4 AIService (per-user encrypted BYO key) ★
+- [ ] `SetKey`: validate, AES-GCM encrypt, store; never return the key.
+- [ ] `Chat`/`Vision` server-streaming: load+decrypt the user's key, call OpenAI (reuse the
+      `internal/ai` request builders where possible), stream chunks back; map upstream errors → status.
+- [ ] Model allow-list; per-user rate limit + usage metering; request-size caps; **redact key in logs**.
+- [ ] Cancellation: propagate client `ctx` cancel to the upstream call (stop billing on disconnect).
+- [ ] Tests: streaming passthrough against a mock upstream, key encrypt round-trip, rate-limit trip,
+      missing-key → clear error.
+
+### 7.5 gRPC bridge transport ★
+- [ ] `grpctunnel.Wrap(grpcServer, …)` at `/grpc`: `WithOriginCheck` (SPA origin allow-list),
+      `WithKeepalive`, `WithReadLimitBytes`, `WithMaxActiveConnections` / `…PerClient` / `…UpgradesPerMinute`.
+- [ ] TLS / `wss` (server or reverse proxy); confirm WS survives the proxy/LB (keepalive, idle timeout).
+- [ ] Health + readiness endpoints; graceful shutdown that drains active streams.
+
+### 7.6 HTTP endpoints (OAuth + blobs)
+- [ ] OAuth: `GET /v1/auth/:provider` (PKCE + `state`) and `…/callback` → upsert `users` → issue session
+      (short-lived JWT access + httpOnly refresh cookie); `refresh` + `logout`.
+- [ ] Provider config (Google, GitHub) per environment (client id/secret, redirect URIs).
+- [ ] Blobs: `PUT /v1/blobs/:hash` (verify the bytes hash to `:hash`, size cap, store if absent),
+      `GET /v1/blobs/:hash` (immutable / long cache headers), `HEAD` for existence; auth + refcount on link.
+- [ ] WS origin policy / CORS aligned to the SPA origin.
+- [ ] Document the handshake: HTTP-issued token → carried as gRPC metadata on every RPC.
+
+### 7.7 Client integration (wasm app) ★
+- [ ] gRPC client over the bridge: `BuildTunnelConn` (wss to backend) + a metadata interceptor that
+      attaches the auth token.
+- [ ] Sync client layered over the existing autosave: push the active workspace (debounced) + on
+      reconnect; pull on load/focus; apply newest-by-`updatedAt`; map `internal/app/workspace.go`
+      registry ↔ server workspace ids.
+- [ ] Offline-first: a mutation/queue so the app works offline; flush on reconnect; status surface
+      (synced / offline / syncing / error) + a "Sync now" action.
+- [ ] **Artifact extraction (client schema change):** move `domain.Artifact.Bytes` out of the synced
+      snapshot → upload via blob `PUT` (sha256), download via `GET`, keep a local cache; the dataset
+      carries a `BlobRef`. Migrate existing inline artifacts on first sync.
+- [ ] AI via proxy: replace `internal/ai` direct OpenAI calls with `AIService` streams; key setup →
+      `SetKey`; retire (or make optional/local-only) the client-side key storage path.
+- [ ] OAuth login UI + token handling, preserving offline-first (no login required to use locally).
+- [ ] Settings: backend URL, sign in/out, sync status; conflict/LWW UX ("a newer version was on the
+      server — pulled it").
+
+### 7.8 Security & privacy ★
+- [ ] AES-GCM key management (master-key source + rotation); AI keys encrypted at rest.
+- [ ] Strict per-user data isolation enforced in every query (with isolation tests).
+- [ ] Request-size limits (dataset + blob), rate limiting, the bridge's abuse controls enabled.
+- [ ] TLS everywhere; OAuth `state`/PKCE; never log secrets; threat-model pass; `govulncheck` + `gosec` in CI.
+
+### 7.9 Deploy & ops
+- [ ] Single binary + data dir; Dockerfile; config via env.
+- [ ] TLS (Caddy / managed) + `wss`; reverse-proxy WS keepalive/timeouts tuned.
+- [ ] Backups: WAL-checkpoint the SQLite file + copy the blobs dir; documented restore runbook.
+- [ ] Migrations run on boot; structured logs + OpenTelemetry (the bridge supports it); basic per-user usage metrics.
+- [ ] CI: build server, run server tests, proto-drift check, lint + vuln scan.
+
+### 7.10 Testing & phased rollout
+- [ ] Unit: storage, LWW, encryption, rate-limit, blob hashing + refcount/GC.
+- [ ] Integration: in-proc `grpc.Server` behind the bridge over a real WS; client↔server round-trips
+      (sync push/pull, `WatchWorkspaces`, AI stream, blob up/down).
+- [ ] e2e: two-device sync (LWW + tombstone), offline→reconnect flush, OAuth login, artifact blob
+      round-trip, AI proxy streaming with a real key.
+- [ ] Load/abuse: connection caps, oversized payloads, rate limits.
+- [ ] **Rollout (each independently shippable; app works without the backend throughout):**
+      (1) OAuth + snapshot sync (artifacts still inline) → (2) blob store + client artifact extraction →
+      (3) AI proxy + encrypted keys + metering.

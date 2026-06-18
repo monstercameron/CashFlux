@@ -18,7 +18,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/goals"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -101,10 +100,7 @@ func Dashboard() ui.Node {
 	noticeAtom := uistate.UseNotice()
 	freshnessDismissals := uistate.UseFreshnessDismissals()
 	remindToUpdate := ui.UseEvent(func() {
-		if err := app.PutTask(domain.Task{
-			ID: id.New(), Title: uistate.T("dashboard.staleTaskTitle"),
-			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceNudge,
-		}); err != nil {
+		if _, err := app.CreateFreshnessReminderTask(uistate.T("dashboard.staleTaskTitle")); err != nil {
 			noticeAtom.Set(noticeAtom.Get().With(uistate.T("dashboard.reminderErr", err.Error()), true))
 			return
 		}

@@ -46,6 +46,25 @@ func TestTaskPutDelete(t *testing.T) {
 	}
 }
 
+func TestCreateFreshnessReminderTask(t *testing.T) {
+	a := newApp(t, false)
+	task, err := a.CreateFreshnessReminderTask("Update stale account balances")
+	if err != nil {
+		t.Fatalf("CreateFreshnessReminderTask: %v", err)
+	}
+	if task.ID == "" {
+		t.Fatal("task ID should be generated")
+	}
+	if task.Title != "Update stale account balances" || task.Status != domain.StatusOpen ||
+		task.Priority != domain.PriorityMedium || task.Source != domain.SourceNudge {
+		t.Fatalf("task = %+v, want open medium nudge reminder", task)
+	}
+	tasks := a.Tasks()
+	if len(tasks) != 1 || tasks[0].ID != task.ID || tasks[0].Source != domain.SourceNudge {
+		t.Fatalf("persisted tasks = %+v, want generated nudge task", tasks)
+	}
+}
+
 func TestDeleteEntities(t *testing.T) {
 	a := newApp(t, false)
 

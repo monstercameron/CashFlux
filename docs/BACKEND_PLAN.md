@@ -1,0 +1,133 @@
+# CashFlux Backend — Design Plan
+
+> Status: **plan only, no code.** A thin server for two jobs: **dataset sync** and an
+> **AI API proxy**. All business logic stays in the wasm client; the app remains
+> local-first and fully usable offline — the backend is an optional sync/proxy tier.
+
+## Decisions (locked)
+- **Sync conflicts:** last-write-wins (newest snapshot wins).
+- **AI key:** per-user, bring-your-own, stored **encrypted at rest** server-side.
+- **Auth:** OAuth (Google / GitHub).
+- **Artifacts:** separate **content-addressed blob store**; the synced dataset holds
+  only references (hash + metadata), never image/dataset bytes.
+
+## Scope
+**In:** account auth, per-user/per-workspace dataset sync, blob upload/download, AI
+proxy with per-user keys + metering.
+**Out (for now):** real-time/collaborative editing, multi-account sharing of one
+workspace, server-side business logic, server-side reporting. The server never
+interprets the dataset — it stores and forwards.
+
+## Architecture
+- **Single Go binary** (matches the stack), `net/http` + a light router (chi), behind
+  TLS (Caddy / managed platform). Stateless app tier; state lives in the DB + blob dir.
+- **Server store:** SQLite via **`ncruces/go-sqlite3`** (same pure-Go driver the client
+  uses — consistent, no cgo), WAL mode. One DB file.
+- **Blob store:** content-addressed files on disk (`blobs/<sha256>`), pluggable to an
+  S3-compatible bucket later. Dedup + integrity for free (hash = name).
+- **Streaming:** Server-Sent Events for AI responses.
+
+## Data model (server SQLite)
+- `users(id, provider, subject, email, created_at)` — one row per OAuth identity.
+- `workspaces(id, user_id, name, color, sort, deleted, version, updated_at, device_id)`
+  — mirrors the client's workspace registry; `deleted` is a tombstone so other devices
+  learn of removals; `version` is a monotonic counter; `updated_at` drives LWW.
+- `snapshots(workspace_id, dataset_json, version, updated_at)` — the current dataset
+  blob per workspace (gzipped). Keep the **last N** prior snapshots per workspace for
+  recovery (cheap insurance against LWW clobber).
+- `blobs(hash, size, mime, created_at)` + `workspace_blobs(workspace_id, hash)` for
+  refcount/GC. Bytes live on disk by hash.
+- `ai_keys(user_id, provider, ciphertext, nonce)` — encrypted BYO key (AES-GCM).
+- `usage(user_id, day, requests, tokens)` — per-user metering for rate limits.
+
+## Sync (last-write-wins, snapshot-based)
+The dataset is already a single JSON snapshot (`store.ExportJSON`), so sync ships that
+blob — no per-entity protocol needed. All endpoints are authenticated and scoped to the
+caller's `user_id`.
+
+- `GET  /v1/workspaces` → list `{id, name, color, sort, version, updatedAt, deleted}`.
+- `GET  /v1/workspaces/:id` → `{version, updatedAt, dataset}` (gzipped).
+- `PUT  /v1/workspaces/:id` `{dataset, clientUpdatedAt, deviceId}` → **LWW**: accept and
+  bump `version` when `clientUpdatedAt >= stored.updatedAt` (newest-wins, so a stale
+  device can't clobber newer data); otherwise return the current `{version, updatedAt}`
+  and let the client re-pull. An explicit `?force=1` overrides (manual "use mine").
+- `DELETE /v1/workspaces/:id` → soft-delete (tombstone), so other devices remove it.
+
+**Client behavior (offline-first):** push the active workspace's dataset on the existing
+debounced autosave and on reconnect; pull on load and on tab focus; apply the newest by
+`updatedAt`. Works fully offline; syncs opportunistically when signed in.
+
+> LWW caveat (accepted): concurrent edits on two devices lose one side. Mitigations:
+> newest-wins-by-timestamp (not raw last-to-arrive) + keep last-N server snapshots for
+> recovery. A later, cheap upgrade is optimistic concurrency (client sends its base
+> `version`; server 409s on mismatch) without changing the wire format.
+
+## Artifacts (content-addressed blobs)
+Keeps the synced snapshot small even with images/datasets.
+- Client computes `sha256` of artifact bytes; the dataset stores
+  `{id, hash, mime, size, name}` only (no `Bytes`).
+- `POST /v1/blobs` (idempotent; skips if hash exists) → stored by hash.
+- `GET  /v1/blobs/:hash` → bytes (cacheable, immutable).
+- Sync transfers only the small dataset; blobs upload on save and download on demand,
+  deduped by hash across workspaces. Refcount via `workspace_blobs`; GC unreferenced.
+
+## AI proxy (per-user encrypted BYO key)
+- `POST /v1/ai/key {provider, key}` → encrypt with AES-GCM (master key from env/secret
+  manager) → store ciphertext. Entered once over TLS; never returned to the client.
+- `POST /v1/ai/chat` and `/v1/ai/vision` → server loads + decrypts the user's key, calls
+  OpenAI, **streams SSE** back. Enforces a model allow-list, per-user rate limit + usage
+  metering, and request-size caps.
+- The client stops calling OpenAI directly and calls the proxy with its session token, so
+  the key never lives in the browser after setup.
+
+## Auth (OAuth)
+- `GET /v1/auth/:provider` (google|github) → redirect with PKCE + `state`.
+- `GET /v1/auth/:provider/callback` → upsert `users` row → issue a session (short-lived
+  JWT access token + httpOnly refresh cookie).
+- Auth middleware validates the token and scopes every query by `user_id`.
+- SPA flow: redirect-based login; CORS locked to the app origin. (The `<base href>` fix
+  already in place keeps deep-link routes working through the redirect round-trip.)
+
+## Security
+TLS only; OAuth PKCE + `state`; AI keys encrypted at rest; strict per-user data isolation
+in every query; request-size limits (dataset + blob caps); per-user rate limiting; CORS
+restricted to the app origin; no secrets in logs; usage/audit logging.
+
+## Tech stack
+Go · `net/http` + chi · `ncruces/go-sqlite3` (WAL) · `golang.org/x/oauth2` · AES-GCM ·
+SSE streaming · blobs on disk (S3 adapter later). Ships as one binary + a data dir.
+
+## Deployment & ops
+- Single binary + SQLite file + `blobs/` dir behind TLS (Caddy) or a managed host
+  (fly.io). Backups = WAL-checkpoint the SQLite file + copy `blobs/`.
+- Schema migrations versioned like the client's `store.SchemaVersion` (stepwise, reject
+  newer-than-supported).
+- Health/readiness endpoints; structured logs; basic per-user usage metrics.
+
+## Required client adaptations (so the plan is honest about cost)
+1. **Sync client** layered over the existing autosave: push/pull, debounce, offline queue,
+   newest-wins apply. Maps the existing `internal/app/workspace.go` registry to server
+   workspace ids.
+2. **Artifact extraction:** move `domain.Artifact.Bytes` out of the synced snapshot —
+   dataset carries the hash/metadata; bytes go to the blob endpoints (kept locally as a
+   cache). This is the one schema-shaped change to the client.
+3. **AI calls via proxy:** replace direct OpenAI calls (`internal/ai`) with proxy calls;
+   key setup posts to `/v1/ai/key`.
+4. **OAuth login + token handling**, while preserving offline-first (no login required to
+   use the app locally; sync/AI activate when signed in).
+
+## Phasing (each independently shippable)
+1. **Auth + snapshot sync (LWW)** — datasets sync; artifacts still inline. Smallest useful.
+2. **Blob store + client artifact extraction** — keeps sync small as artifacts grow.
+3. **AI proxy + encrypted keys + metering** — removes the key from the browser.
+
+The local-first app keeps working at every phase; the backend only adds sync/proxy.
+
+## Risks / open items
+- **LWW data loss** across simultaneous-device edits (accepted) — mitigated by
+  newest-wins + last-N server snapshots; optimistic-version check is an easy later upgrade.
+- **Clock skew** affects timestamp LWW — consider server-stamped `updated_at` on accept
+  and treating client time as advisory.
+- **Blob GC / refcounting** correctness as workspaces are deleted/duplicated.
+- **OAuth provider config** (client IDs/secrets, redirect URIs per environment).
+- **Multi-device AI metering** fairness and abuse limits on the proxy.

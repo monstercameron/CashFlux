@@ -1104,6 +1104,22 @@ func (a *App) PutTask(t domain.Task) error {
 	a.log.Info("task saved", "id", t.ID)
 	return nil
 }
+
+// CreateFreshnessReminderTask creates the to-do generated from the dashboard's
+// stale-balance nudge.
+func (a *App) CreateFreshnessReminderTask(title string) (domain.Task, error) {
+	t := domain.Task{
+		ID:       id.New(),
+		Title:    title,
+		Status:   domain.StatusOpen,
+		Priority: domain.PriorityMedium,
+		Source:   domain.SourceNudge,
+	}
+	if err := a.PutTask(t); err != nil {
+		return domain.Task{}, err
+	}
+	return t, nil
+}
 func (a *App) DeleteTask(id string) error { return a.del("task", id, a.store.DeleteTask) }
 
 // PutCustomFieldDef validates and saves a custom-field definition. The Def must
