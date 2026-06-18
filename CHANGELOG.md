@@ -20,6 +20,9 @@ and every commit updates this file under `Unreleased`.
   turns a spending report into a short plain-English summary ("You spent $X across N categories. Your
   biggest expense was Rent at $Y. Fun fell 100% to $0 versus the prior period.") — template-based, not AI,
   so it's stable and testable. Formatter/name callbacks keep it decoupled from the UI. Pure, table-tested.
+- **Reports engine — top movers (B21, internal).** `reports.TopMovers` ranks the categories that changed
+  most versus the prior period (largest absolute change first, deterministic ties); the narrative summary
+  now reuses it. Pure, table-tested.
 - **Notifications foundation — the pure rules core (B19 Phase A, internal).** New `internal/notify`
   package with notification/rule types, channel selection, daily quiet-hours (with past-midnight wrap),
   per-period idempotency keys (day/ISO-week/month) and a delivered-log so catch-up-on-wake won't replay

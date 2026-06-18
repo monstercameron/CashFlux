@@ -66,28 +66,14 @@ func SpendingNarrative(rows []CategorySpend, compared bool, format func(int64) s
 	return b.String()
 }
 
-// topMover returns the row with the largest absolute change versus the prior
-// period among rows that have a meaningful delta and actually changed. ok is
-// false when no row qualifies.
+// topMover returns the single biggest change versus the prior period, or ok
+// false when nothing moved. It delegates to TopMovers so the ranking rule lives
+// in one place.
 func topMover(rows []CategorySpend) (CategorySpend, bool) {
-	var best CategorySpend
-	bestAbs := int64(-1)
-	for _, r := range rows {
-		if !r.HasDelta {
-			continue
-		}
-		change := r.Amount - r.Prior
-		if change < 0 {
-			change = -change
-		}
-		if change > bestAbs {
-			bestAbs, best = change, r
-		}
+	if m := TopMovers(rows, 1); len(m) > 0 {
+		return m[0], true
 	}
-	if bestAbs <= 0 {
-		return CategorySpend{}, false
-	}
-	return best, true
+	return CategorySpend{}, false
 }
 
 // plural renders "n singular" or "n plural" with the count.

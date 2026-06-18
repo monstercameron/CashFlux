@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: reports — top movers + narrative DRY (B21, step 4)
+
+- Added `reports.TopMovers(rows, n)`: ranks compared categories by absolute change vs the prior period
+  (largest first, ties by id, n<=0 = all), excluding unchanged/no-delta rows — the "top movers" catalog
+  item. Refactored the narrative's `topMover` to delegate to it so the ranking rule lives in one place.
+- Tests cover ranking, tie-break determinism, exclusion of unchanged/no-delta rows, the n limit, and the
+  empty case. `go vet` clean. The reports engine now covers spending-by-category, cash-flow, top-movers,
+  and narrative as pure tested cores; the Reports screen/charts are the remaining (UI-last) piece.
+
 ## 2026-06-18 — feat: reports — deterministic spending narrative (B21, step 3)
 
 - Added `reports.SpendingNarrative(rows, compared, format, name)` — the "narrative descriptions" piece of
