@@ -12,6 +12,10 @@ and every commit updates this file under `Unreleased`.
   the prior period (each category's prior amount + percent change, and a union so a category that dropped
   to zero still shows as a mover). Base-currency, transfers excluded, deterministic and table-tested. The
   Reports screen + charts build on this next.
+- **Reports engine — income-vs-expense / cash-flow report (B21, internal).** `reports.IncomeVsExpense`
+  for a single period and `reports.IncomeExpenseSeries` across consecutive buckets (for the cash-flow
+  trend chart), each carrying net and savings-rate, reusing the shared ledger totals so figures match the
+  dashboard. Pure and table-tested.
 - **Notifications foundation — the pure rules core (B19 Phase A, internal).** New `internal/notify`
   package with notification/rule types, channel selection, daily quiet-hours (with past-midnight wrap),
   per-period idempotency keys (day/ISO-week/month) and a delivered-log so catch-up-on-wake won't replay

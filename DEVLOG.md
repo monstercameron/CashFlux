@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: reports — income-vs-expense / cash-flow (B21, step 2)
+
+- Added `internal/reports/cashflow.go`: `PeriodFlow` (income/expense + `Net()` + `SavingsRate()` via the
+  shared `ledger.SavingsRate`), `IncomeVsExpense` for one period, and `IncomeExpenseSeries` for the
+  cash-flow trend across `bounds` buckets. Reuses `ledger.PeriodTotals` so the numbers match the
+  dashboard exactly (transfers excluded, base-currency converted). Table tests cover the single-period
+  totals/net/savings-rate, the multi-bucket series (incl. a net-negative month), and the too-few-bounds
+  guard. `go vet` clean, pure package, not yet wired.
+
 ## 2026-06-18 — feat: reports engine — pure core (B21, step 1)
 
 - Started the approved B21 reports engine bottom-up per the SDLC: a pure `internal/reports` (no
