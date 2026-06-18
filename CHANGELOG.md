@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Workflow engine — pure core + persistence (Phase D groundwork):** new `internal/workflow` package
+  models user automations (a trigger, an optional sandboxed-formula condition, and write-safe actions —
+  create task, apply rules, notify) and plans them deterministically into explainable Effects without side
+  effects (`Match`/`Eval`/`Plan`, table-tested). Workflows and their run history persist in the dataset
+  (new `workflows` + `workflowruns` tables, CRUD, appstate accessors; round-trip tested). `appstate.
+  RunWorkflow` plans against live figures and, unless it's a dry run, applies the effects and records an
+  audit Run; `RunTriggered` fires enabled workflows for an event (e.g. txn-added). The Workflows screen
+  follows.
 - **Reorder workspaces.** Each row in Settings → Workspaces has up/down arrows to arrange the list; the
   order flows through to the rail switcher's dropdown so your most-used workspaces sit where you want them.
   Backed by `Registry.Move` (clamped, order-preserving, leaves the active/startup selections untouched —

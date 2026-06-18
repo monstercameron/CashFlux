@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
 // --- generic helpers ---
@@ -358,4 +359,29 @@ func (s *SQLiteStore) DeleteArtifact(id string) (bool, error) {
 }
 func (s *SQLiteStore) ListArtifacts() ([]domain.Artifact, error) {
 	return loadRows[domain.Artifact](s.db, "artifacts")
+}
+
+// --- Workflows + run history ---
+
+func (s *SQLiteStore) PutWorkflow(w workflow.Workflow) error {
+	return putJSON(s.db, "workflows", w.ID, w)
+}
+func (s *SQLiteStore) GetWorkflow(id string) (workflow.Workflow, bool, error) {
+	return getJSON[workflow.Workflow](s.db, "workflows", id)
+}
+func (s *SQLiteStore) DeleteWorkflow(id string) (bool, error) {
+	return deleteRow(s.db, "workflows", id)
+}
+func (s *SQLiteStore) ListWorkflows() ([]workflow.Workflow, error) {
+	return loadRows[workflow.Workflow](s.db, "workflows")
+}
+
+func (s *SQLiteStore) PutWorkflowRun(r workflow.Run) error {
+	return putJSON(s.db, "workflowruns", r.ID, r)
+}
+func (s *SQLiteStore) DeleteWorkflowRun(id string) (bool, error) {
+	return deleteRow(s.db, "workflowruns", id)
+}
+func (s *SQLiteStore) ListWorkflowRuns() ([]workflow.Run, error) {
+	return loadRows[workflow.Run](s.db, "workflowruns")
 }

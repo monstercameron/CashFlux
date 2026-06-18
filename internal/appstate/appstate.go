@@ -15,14 +15,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/logging"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/validate"
+	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
 // App holds the live application state.
@@ -299,6 +302,20 @@ func (a *App) CustomPages() []domain.CustomPage {
 func (a *App) Artifacts() []domain.Artifact {
 	v, err := a.store.ListArtifacts()
 	a.logErr("artifacts", err)
+	return v
+}
+
+// Workflows returns every user-defined automation.
+func (a *App) Workflows() []workflow.Workflow {
+	v, err := a.store.ListWorkflows()
+	a.logErr("workflows", err)
+	return v
+}
+
+// WorkflowRuns returns the audit history of workflow executions.
+func (a *App) WorkflowRuns() []workflow.Run {
+	v, err := a.store.ListWorkflowRuns()
+	a.logErr("workflowRuns", err)
 	return v
 }
 
@@ -650,6 +667,94 @@ func (a *App) PutArtifact(art domain.Artifact) error {
 // DeleteArtifact removes a user artifact.
 func (a *App) DeleteArtifact(id string) error {
 	return a.del("artifact", id, a.store.DeleteArtifact)
+}
+
+// PutWorkflow saves a user automation (needs an ID and a name).
+func (a *App) PutWorkflow(w workflow.Workflow) error {
+	if w.ID == "" {
+		return fmt.Errorf("appstate: workflow needs an id")
+	}
+	if strings.TrimSpace(w.Name) == "" {
+		return fmt.Errorf("appstate: workflow needs a name")
+	}
+	if err := a.store.PutWorkflow(w); err != nil {
+		return err
+	}
+	a.log.Info("workflow saved", "id", w.ID)
+	return nil
+}
+
+// DeleteWorkflow removes a workflow.
+func (a *App) DeleteWorkflow(id string) error {
+	return a.del("workflow", id, a.store.DeleteWorkflow)
+}
+
+// engineVars builds the workflow/widget variable surface from the current dataset.
+func (a *App) engineVars() map[string]float64 {
+	base := a.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	return engineenv.Vars(engineenv.Data{
+		Accounts: a.Accounts(), Transactions: a.Transactions(), Members: a.Members(),
+		Budgets: a.Budgets(), Goals: a.Goals(), Tasks: a.Tasks(),
+		Rates: currency.Rates{Base: base, Rates: a.Settings().FXRates}, Now: time.Now(),
+	})
+}
+
+// RunWorkflow plans a workflow against the current figures and, unless dryRun,
+// applies its effects (creating tasks, applying rules, recording notices) and
+// saves a Run to the audit history. It returns the Run so the UI can show what
+// happened (or would happen). Planning is the pure engine; this is the only place
+// the effects actually change state, keeping runs explainable and dry-runnable.
+func (a *App) RunWorkflow(w workflow.Workflow, dryRun bool) (workflow.Run, error) {
+	effects, matched, err := workflow.Plan(w, a.engineVars())
+	if err != nil {
+		return workflow.Run{}, err
+	}
+	run := workflow.Run{
+		ID: id.New(), WorkflowID: w.ID, At: time.Now().Format(time.RFC3339),
+		DryRun: dryRun, Matched: matched, Effects: effects,
+	}
+	if !dryRun && matched {
+		for _, e := range effects {
+			a.applyEffect(e)
+		}
+		if err := a.store.PutWorkflowRun(run); err != nil {
+			a.logErr("workflowRun", err)
+		}
+	}
+	return run, nil
+}
+
+// applyEffect performs one planned effect. Effects are deliberately write-safe and
+// never create transactions, so a txn-added workflow can't trigger itself.
+func (a *App) applyEffect(e workflow.Effect) {
+	switch e.Kind {
+	case workflow.ActionCreateTask:
+		_ = a.PutTask(domain.Task{
+			ID: id.New(), Title: e.Title, Notes: e.Notes,
+			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceManual,
+		})
+	case workflow.ActionApplyRules:
+		if _, err := a.ApplyRules(); err != nil {
+			a.logErr("workflowApplyRules", err)
+		}
+	case workflow.ActionNotify:
+		a.log.Info("workflow notice", "message", e.Message)
+	}
+}
+
+// RunTriggered runs every enabled workflow whose trigger matches the given event,
+// applying effects. Used by event hooks (e.g. after a transaction is added).
+func (a *App) RunTriggered(event workflow.TriggerKind) {
+	for _, w := range a.Workflows() {
+		if w.Enabled && workflow.Match(w.Trigger, event) {
+			if _, err := a.RunWorkflow(w, false); err != nil {
+				a.logErr("workflowTriggered", err)
+			}
+		}
+	}
 }
 
 // DatasetBytes reports the serialized size of the whole dataset in bytes — what

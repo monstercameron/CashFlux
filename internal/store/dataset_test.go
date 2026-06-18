@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
+	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
 func sampleDataset() Dataset {
@@ -56,6 +57,15 @@ func sampleDataset() Dataset {
 		}, {
 			ID: "art2", Name: "Import", Kind: "csv",
 			Columns: []string{"date", "amount"}, Rows: [][]string{{"2026-06-01", "12.50"}},
+		}},
+		Workflows: []workflow.Workflow{{
+			ID: "wf1", Name: "Overspend alert", Enabled: true,
+			Trigger: workflow.Trigger{Kind: workflow.TriggerTxnAdded}, Condition: "expense > income",
+			Actions: []workflow.Action{{Kind: workflow.ActionCreateTask, Title: "Review spending"}},
+		}},
+		WorkflowRuns: []workflow.Run{{
+			ID: "run1", WorkflowID: "wf1", At: "2026-06-01T00:00:00Z", Matched: true,
+			Effects: []workflow.Effect{{Kind: workflow.ActionCreateTask, Summary: "Create task: Review spending", Title: "Review spending"}},
 		}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
@@ -150,6 +160,15 @@ func TestExportImportRoundTrip(t *testing.T) {
 		imported.Artifacts[1].Kind != "csv" || len(imported.Artifacts[1].Rows) != 1 ||
 		imported.Artifacts[1].Rows[0][1] != "12.50" {
 		t.Errorf("artifact content lost: %+v", imported.Artifacts)
+	}
+	if len(imported.Workflows) != 1 || imported.Workflows[0].Name != "Overspend alert" ||
+		!imported.Workflows[0].Enabled || imported.Workflows[0].Trigger.Kind != workflow.TriggerTxnAdded ||
+		len(imported.Workflows[0].Actions) != 1 || imported.Workflows[0].Actions[0].Title != "Review spending" {
+		t.Errorf("workflow lost: %+v", imported.Workflows)
+	}
+	if len(imported.WorkflowRuns) != 1 || !imported.WorkflowRuns[0].Matched ||
+		len(imported.WorkflowRuns[0].Effects) != 1 {
+		t.Errorf("workflow run lost: %+v", imported.WorkflowRuns)
 	}
 }
 

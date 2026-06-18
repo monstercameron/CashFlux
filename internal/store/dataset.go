@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
 // SchemaVersion is the current on-disk dataset schema version. Bump it when the
@@ -48,6 +49,8 @@ type Dataset struct {
 	Plans         []domain.Plan              `json:"plans,omitempty"`
 	CustomPages   []domain.CustomPage        `json:"customPages,omitempty"`
 	Artifacts     []domain.Artifact          `json:"artifacts,omitempty"`
+	Workflows     []workflow.Workflow        `json:"workflows,omitempty"`
+	WorkflowRuns  []workflow.Run             `json:"workflowRuns,omitempty"`
 	Settings      Settings                   `json:"settings"`
 }
 
