@@ -47,13 +47,25 @@ func AllocRow(props allocRowProps) ui.Node {
 	if props.Amount != "" {
 		headRight = props.Amount + " · " + headRight
 	}
+	scorePct := int(r.Score*100 + 0.5)
+	if scorePct < 0 {
+		scorePct = 0
+	}
+	if scorePct > 100 {
+		scorePct = 100
+	}
+	scoreLabel := uistate.T("allocate.scoreLabel", float64(scorePct))
 	return Div(Class("budget"),
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), r.Candidate.Name),
 			Span(Class("budget-amount fig"), headRight),
 			Button(Class("btn"), Type("button"), Title(uistate.T("allocate.excludeTitle")), OnClick(excl), uistate.T("allocate.exclude")),
 		),
-		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", int(r.Score*100))))),
+		Div(Class("bar"), Attr("role", "progressbar"), Attr("aria-label", scoreLabel),
+			Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-valuenow", strconv.Itoa(scorePct)),
+			Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", scorePct))),
+		),
+		Span(Class("budget-sub fig"), scoreLabel),
 		Span(Class("budget-sub"), uistate.T("allocate.breakdown",
 			r.Breakdown.Returns*100, r.Breakdown.Stability*100, r.Breakdown.Liquidity*100, note)),
 	)

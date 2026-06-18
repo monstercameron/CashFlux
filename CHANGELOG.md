@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"?" keyboard help overlay (§6.6).** Press `?` anywhere (outside a text field) to pop a cheat sheet of
+  the keyboard shortcuts — Alt+1–9 section jump, Enter to save a panel, Esc to close, hold Shift for resize
+  handles. Dismiss with `?` again, Esc, the ✕, or a click on the backdrop. Self-contained (built and
+  toggled entirely by the shortcut layer), so it adds no per-screen wiring.
 - **Enter submits settings panels (§6.6).** Pressing Enter in a FlipPanel (per-widget and global settings,
   and every flip-panel form) now triggers Save and closes, like a native form. It's skipped while focus is
   in a multi-line textarea, on a button (so the button clicks normally), or in a select, and on close-only
@@ -283,6 +287,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Allocate score bars are labelled for sighted and assistive users (UX audit §6.10).** Each allocation
+  suggestion now shows an inline `Score N%` label and exposes its bar as a real `progressbar` with
+  `aria-valuenow`, so the rank score is no longer a purely visual fill.
 - **Add-menu button uses the shared radius utility (UX audit §6.4).** The top-bar **+ Add** button no
   longer carries an inline `border-radius` style; it now uses `rounded-[4px]` with the rest of the app's
   utility-class styling and keeps its visual shape in the same class-based path as neighboring controls.

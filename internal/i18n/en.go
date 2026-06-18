@@ -314,6 +314,7 @@ var english = Catalog{
 	"allocate.exclude":                "Exclude",
 	"allocate.excludeTitle":           "Leave this out of the suggestions",
 	"allocate.paysDebt":               " · pays debt",
+	"allocate.scoreLabel":             "Score %.0f%%",
 	"allocate.breakdown":              "returns %.0f · stability %.0f · liquidity %.0f%s",
 	"allocate.goalNote":               " · goal %.0f%%",
 	"allocate.restore":                "Restore",

@@ -28,10 +28,23 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		e := args[0]
-		if !e.Get("altKey").Bool() || e.Get("ctrlKey").Bool() || e.Get("metaKey").Bool() {
+		key := e.Get("key").String()
+		// Esc dismisses the help overlay (no-op when it's closed); FlipPanel keeps
+		// handling Esc for open settings panels independently.
+		if key == "Escape" {
+			closeHelpOverlay()
 			return nil
 		}
 		if isEditableTarget(doc) {
+			return nil
+		}
+		// "?" toggles the keyboard cheat sheet.
+		if key == "?" {
+			e.Call("preventDefault")
+			toggleHelpOverlay()
+			return nil
+		}
+		if !e.Get("altKey").Bool() || e.Get("ctrlKey").Bool() || e.Get("metaKey").Bool() {
 			return nil
 		}
 		code := e.Get("code").String()
@@ -70,4 +83,80 @@ func isEditableTarget(doc js.Value) bool {
 		return true
 	}
 	return false
+}
+
+const helpOverlayID = "cf-help-overlay"
+
+// helpHTML is the shortcuts cheat sheet body. (English for now — a follow-up can
+// route these through the i18n catalog like the rest of the UI.)
+const helpHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:0.8rem;">
+  <strong style="font-size:1rem;">Keyboard shortcuts</strong>
+  <button id="cf-help-close" type="button" aria-label="Close" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:1.15rem;line-height:1;min-width:24px;min-height:24px;">&times;</button>
+</div>
+<table style="width:100%;border-collapse:collapse;">
+  <tr><td style="padding:0.28rem 0;opacity:0.85;">Jump to a section</td><td style="text-align:right;white-space:nowrap;">Alt + 1&ndash;9</td></tr>
+  <tr><td style="padding:0.28rem 0;opacity:0.85;">Save the open settings panel</td><td style="text-align:right;white-space:nowrap;">Enter</td></tr>
+  <tr><td style="padding:0.28rem 0;opacity:0.85;">Close a panel / this help</td><td style="text-align:right;white-space:nowrap;">Esc</td></tr>
+  <tr><td style="padding:0.28rem 0;opacity:0.85;">Show dashboard resize handles</td><td style="text-align:right;white-space:nowrap;">Hold Shift</td></tr>
+  <tr><td style="padding:0.28rem 0;opacity:0.85;">Toggle this help</td><td style="text-align:right;white-space:nowrap;">?</td></tr>
+</table>`
+
+// toggleHelpOverlay shows or hides the keyboard cheat sheet, building it on first
+// use. It's a self-contained DOM overlay (not a framework component), so the
+// shortcut layer owns it end to end and nothing else has to mount it.
+func toggleHelpOverlay() {
+	doc := js.Global().Get("document")
+	ov := doc.Call("getElementById", helpOverlayID)
+	if ov.IsNull() || ov.IsUndefined() {
+		buildHelpOverlay(doc)
+		return
+	}
+	style := ov.Get("style")
+	if style.Get("display").String() == "none" {
+		style.Set("display", "grid")
+	} else {
+		style.Set("display", "none")
+	}
+}
+
+// closeHelpOverlay hides the cheat sheet if it's open (a no-op otherwise).
+func closeHelpOverlay() {
+	doc := js.Global().Get("document")
+	if ov := doc.Call("getElementById", helpOverlayID); !ov.IsNull() && !ov.IsUndefined() {
+		ov.Get("style").Set("display", "none")
+	}
+}
+
+// buildHelpOverlay creates the overlay once and appends it to <body>, visible.
+// Subsequent opens just toggle its display. The click/close js.Funcs live for the
+// app's lifetime (intentionally not released), matching the persistent overlay.
+func buildHelpOverlay(doc js.Value) {
+	ov := doc.Call("createElement", "div")
+	ov.Set("id", helpOverlayID)
+	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:rgba(0,0,0,0.55);")
+
+	card := doc.Call("createElement", "div")
+	card.Get("style").Set("cssText", "background:var(--bg-elev,#1a1a1d);color:var(--text,#f4f4f5);border:1px solid var(--border,#2a2a2c);border-radius:10px;padding:1.1rem 1.35rem;max-width:min(92vw,440px);box-shadow:0 12px 40px rgba(0,0,0,0.5);font-size:0.9rem;line-height:1.5;")
+	card.Set("innerHTML", helpHTML)
+	ov.Call("appendChild", card)
+
+	// Click the dimmed backdrop (not the card) to dismiss.
+	backdropCb := js.FuncOf(func(_ js.Value, a []js.Value) any {
+		if len(a) > 0 && a[0].Get("target").Equal(ov) {
+			ov.Get("style").Set("display", "none")
+		}
+		return nil
+	})
+	ov.Call("addEventListener", "click", backdropCb)
+
+	doc.Get("body").Call("appendChild", ov)
+
+	// Wire the ✕ button inside the card.
+	if x := doc.Call("getElementById", "cf-help-close"); !x.IsNull() && !x.IsUndefined() {
+		closeCb := js.FuncOf(func(js.Value, []js.Value) any {
+			ov.Get("style").Set("display", "none")
+			return nil
+		})
+		x.Call("addEventListener", "click", closeCb)
+	}
 }

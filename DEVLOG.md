@@ -3,6 +3,32 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: §6.6 "?" keyboard help overlay (self-contained DOM)
+
+- Added `?`-to-toggle (and Esc/✕/backdrop-to-close) a shortcuts cheat sheet, documenting the Alt+1..9,
+  Enter, Esc, and Shift bindings. Built as a pure-DOM overlay created/toggled entirely in `shortcuts.go`
+  (createElement + innerHTML + display toggle) — deliberately NOT a framework component, so it needs no
+  shell mount point and stays zero-collision while the parallel session churns §6 (it just shipped §6.10).
+- Wiring: extended the existing global keydown handler — Esc calls `closeHelpOverlay` (no-op if closed;
+  FlipPanel still owns Esc for panels), and `?` (guarded by isEditableTarget) toggles. The overlay is
+  built once and thereafter shown/hidden via `style.display`; its click/close js.Funcs live for the app
+  lifetime (like the boot listeners), so no release bookkeeping.
+- English strings hardcoded for now (consistent with FlipPanel's hardcoded Save/Cancel); noted an i18n
+  follow-up in the source. Verified gofmt clean, wasm build exit 0, probe ok/200. The `?` toggle can't be
+  exercised headlessly — logic-verified; confirm in-browser.
+- §6.6 keyboard set now: Alt+1..9 jump, Enter-save, and this help overlay. Remaining 6.6: quick-add hotkey
+  (touches quick-add state) and Cmd/Ctrl+K palette (bigger). Next I'll likely step to other low-collision
+  §6 items or a quick-add hotkey.
+
+## 2026-06-18 — fix: UX polish §6.10 — Allocate score bar labelling
+
+- Picked a narrow clean-screen item from §6.10: allocation score bars were visual-only fills. `AllocRow`
+  now computes one clamped whole-percent score, shows it as a localized inline `Score N%` label, and
+  exposes the track as `role="progressbar"` with `aria-valuenow/min/max` and an `aria-label`.
+- Kept the existing right-aligned score/amount header unchanged; the new label makes the score readable
+  next to the bar and gives assistive tech the same value. Added `allocate.scoreLabel` so the new visible
+  text stays in the language catalog.
+
 ## 2026-06-18 — feat: §6.6 FlipPanel Enter-to-submit
 
 - Added an Enter case to the FlipPanel's existing document keydown handler (the one that already does
