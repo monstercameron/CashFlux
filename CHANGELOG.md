@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Notifications foundation — the pure rules core (B19 Phase A, internal).** New `internal/notify`
+  package with notification/rule types, channel selection, daily quiet-hours (with past-midnight wrap),
+  per-period idempotency keys (day/ISO-week/month) and a delivered-log so catch-up-on-wake won't replay
+  the same alerts. Pure and table-tested; the in-app center, browser pop-ups, and catch-up engine build
+  on this next. No user-visible change yet.
 - **Dashboard tiles drill into their data screen (C30).** Each tile's title is now a link — click it (or
   press Enter) to jump to the screen that owns that data: Net worth / Liabilities / Accounts / Upcoming
   bills / Net-worth trend → Accounts; Income / Spending / Recent / Cash flow / Savings rate / Breakdown →

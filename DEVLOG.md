@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: notify package — pure notification core (B19 Phase A, step 1)
+
+- Started the approved B19 Phase A (client-only notifications) bottom-up per the SDLC: model + logic +
+  tests first, no UI. New pure `internal/notify`:
+  - Types: `Channel` (in-app/browser; email/SMS are deferred Phase B and absent here), `Event` (the
+    recommended first slice — bill-due, budget-threshold, goal-milestone, stale-balance, large-txn,
+    digest), `Severity`, `Rule` (enabled + channels + threshold + quiet hours + frequency cap),
+    `Notification`.
+  - Logic: `Rule.HasChannel`, `Rule.InQuietHours` (half-open window, handles past-midnight wrap),
+    `Rule.CanFireAt` (enabled ∧ has-channel ∧ not-quiet), `DedupeKey` + `Day/Week/MonthKey` occurrence
+    keys, and a `DeliveredLog` map for idempotent catch-up. All table-tested; `go vet` clean.
+- Deliberately did NOT build event-specific evaluation or `CatchUp` yet — the TODO leaves "which events
+  ship first / is cost-tracking in scope for Phase A" open to confirm, so I kept this first step to the
+  event-agnostic core (types + gating + idempotency) that those decisions don't affect. Not yet imported
+  by the wasm shell, so no behavior change; bumped SW cache for ritual consistency only.
+
 ## 2026-06-18 — a11y: label the top-bar "Jump to…" select (C47 tail)
 
 - Closed the last concrete C47 gap in the app chrome: the resolution control's "Jump to…" `<select>`
