@@ -1168,10 +1168,10 @@ results are summarized here so the backlog doesn't bloat.
     case-insensitive here and reports both `viewBox`/`viewbox` true._
   - ⚠️ **Members "Add member" via button still no-ops** ("Sam" not added) — unchanged.
 - **2026-06-18 #19** — C24 auto-layout + Rules create (0 console errors).
-  - ✅ **C24 (auto-layout) — RESOLVED.** The dashboard layout-mode selector offers all three requested
-    modes: **"Custom layout" / "Auto · default order" / "Auto · by importance"** (value `custom`). The
-    two auto modalities you asked for (default sort + user importance) are implemented. _Next: verify
-    each auto mode actually re-packs and that "by importance" reads a per-tile importance setting._
+  - 🟡 **C24 (auto-layout) — selector present (see #20: modes don't visibly re-pack yet).** The dashboard
+    layout-mode selector offers all three requested modes: **"Custom layout" / "Auto · default order" /
+    "Auto · by importance"** (value `custom`). _Originally logged "RESOLVED" — corrected in #20: switching
+    modes did not change tile placement._
   - ⚠️ **Rules "Add" via button did NOT add** ("netflix" rule absent after fill phrase + select category
     + click). Likely the **same button-commit bug as Members/Accounts** (broken set may be Members,
     Accounts, **Rules**), OR the rule's category `<select>` didn't commit so the rule was invalid. _Confirm

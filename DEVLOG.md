@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — payoff negative-APR branch (92% → 96%); coverage sweep complete
+
+- Last reachable-gap package. `payoff` was 91.7%; the untested branch was the interest floor (a negative
+  APR implies negative monthly interest, floored to 0). Added `payoff_edge_test.go` covering
+  Project(100000, -12, 10000) → 10 months, no interest. `payoff` → **95.8%**; the only residual is the
+  `maxMonths` safety cap, unreachable without a contrived >100-year simulation.
+- **Coverage sweep summary.** Pure logic packages after the sweep: domain 100, validate 99, insights 98,
+  budgeting/goals 95, payoff 96, ledger 94, formula 93, id 91; plus the already-high money/currency/
+  customfields/i18n/etc. The infra packages (store 81, appstate 82) are capped by error-injection paths
+  that would need a fault-injecting store mock — deliberately not added just for coverage. The wasm/UI
+  packages (ui/screens/app/uistate) can't be measured natively and need the browser lane (unavailable here).
+
 ## 2026-06-18 — insights down-anomaly coverage (92% → 98%)
 
 - Coverage sweep, anomaly detection. `insights` was 92.0%; the untested branches were the *down* path of
