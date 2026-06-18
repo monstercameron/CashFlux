@@ -1530,7 +1530,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Use "Update balance" with a different real balance; assert a cleared adjustment txn for the diff is
       created and `BalanceAsOf` is set.
 - [ ] Assert the staleness badge clears after the update (ties D17).
-- [ ] unit: `ledger.ClearedBalance` + adjustment-amount math.
+- [x] unit: `ledger.ClearedBalance` + adjustment-amount math.
 
 #### D16. Multi-currency FX across every aggregate ★
 **Workstream:** add a foreign-currency account + txns and confirm base-currency conversion everywhere.

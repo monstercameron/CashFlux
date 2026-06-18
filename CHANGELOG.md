@@ -21,6 +21,8 @@ and every commit updates this file under `Unreleased`.
   last payment is capped at the remaining balance plus interest, completing the D9 payoff/allocate unit item.
 - **Net-worth rollup coverage.** The `ledger` unit tests now cover multi-member, group, multi-currency, and
   archived-account net-worth rollups in one D18 regression case.
+- **Reconcile adjustment math is tested.** Balance-update adjustment calculation now lives in `ledger` and is
+  covered alongside `ClearedBalance`, closing the D15 pure unit item.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

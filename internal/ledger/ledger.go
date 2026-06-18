@@ -71,6 +71,16 @@ func ClearedBalance(account domain.Account, all []domain.Transaction) (money.Mon
 	return bal, nil
 }
 
+// AdjustmentToTarget returns the cleared adjustment needed to make current
+// equal target. ok=false means no adjustment is needed.
+func AdjustmentToTarget(current money.Money, targetMinor int64) (money.Money, bool) {
+	delta := targetMinor - current.Amount
+	if delta == 0 {
+		return money.Money{}, false
+	}
+	return money.New(delta, current.Currency), true
+}
+
 // RunningBalances returns the cumulative balance after each of the account's
 // transactions, in the order given. Sort by date beforehand for a chronological
 // series.

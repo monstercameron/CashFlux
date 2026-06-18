@@ -60,6 +60,19 @@ func TestClearedBalance(t *testing.T) {
 	}
 }
 
+func TestAdjustmentToTarget(t *testing.T) {
+	adj, ok := AdjustmentToTarget(usd(14000), 12500)
+	if !ok {
+		t.Fatal("expected an adjustment")
+	}
+	if !adj.Equal(usd(-1500)) {
+		t.Errorf("adjustment = %v, want -1500 USD", adj)
+	}
+	if none, ok := AdjustmentToTarget(usd(14000), 14000); ok || none != (money.Money{}) {
+		t.Errorf("no-op adjustment = %v ok=%v, want zero/false", none, ok)
+	}
+}
+
 func TestBalanceZeroOpening(t *testing.T) {
 	acc := domain.Account{ID: "a1", Currency: "USD"} // no opening balance
 	bal, err := Balance(acc, []domain.Transaction{{AccountID: "a1", Amount: usd(250)}})

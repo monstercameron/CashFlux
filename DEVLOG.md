@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — test: D15 cleared balance adjustment math
+
+- Closed the D15 pure ledger unit-test checklist item by extracting `ledger.AdjustmentToTarget` and covering
+  both adjustment and no-op cases in `internal/ledger/ledger_test.go`.
+- The Accounts reconcile flow now calls the helper before posting a cleared balance-adjustment transaction,
+  keeping the UI behavior unchanged while making the math testable.
+- Verification: `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — test: D18 net-worth rollups
 
 - Closed the D18 pure ledger unit-test checklist item with a combined `NetWorth`/`NetByOwner` case in

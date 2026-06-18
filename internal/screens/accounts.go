@@ -282,10 +282,10 @@ func Accounts() ui.Node {
 		}
 		// Post an adjustment transaction for the difference, so the computed
 		// balance equals the figure entered (e.g. matching a statement).
-		if delta := target - currentBal.Amount; delta != 0 {
+		if amount, ok := ledger.AdjustmentToTarget(currentBal, target); ok {
 			adj := domain.Transaction{
 				ID: id.New(), AccountID: ac.ID, Date: time.Now(), Desc: uistate.T("accounts.balanceAdjustment"),
-				Amount: money.New(delta, ac.Currency), Cleared: true,
+				Amount: amount, Cleared: true,
 			}
 			if err := app.PutTransaction(adj); err != nil {
 				errMsg.Set(err.Error())
