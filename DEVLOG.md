@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: reports engine — pure core (B21, step 1)
+
+- Started the approved B21 reports engine bottom-up per the SDLC: a pure `internal/reports` (no
+  syscall/js, table-tested). First report `SpendingByCategory(txns, start, end, compare, priorStart,
+  priorEnd, rates)` → `[]CategorySpend` sorted largest-first, with optional prior-period comparison
+  (prior amount + percent change via `ledger.PercentChange`). Built on the existing ledger conventions:
+  base-currency conversion through `currency.Rates`, transfers/income excluded via `domain.IsExpense`,
+  `dateutil.InRange` bounds. Took the union of current+prior category ids so a category that fell to zero
+  this period still surfaces as a top mover. Added a `Total` helper for the headline figure.
+- Tests cover sorting, range/income/transfer exclusion, the headline total, and the comparison cases
+  (increase %, drop-to-zero -100%, new category with no baseline → HasDelta false). `go vet` clean. Pure
+  package, not yet imported — no behavior change; the Reports nav/screen + richer chart kinds come next.
+
+## 2026-06-18 - feat: upload OpenAI key to backend
+
+- Connected the wasm Settings panel to the local backend with device-local backend URL/token prefs and an
+  "Upload key to backend" action for the current OpenAI key.
+- Added `/v1/ai/key`: it accepts localhost/CASHFLUX_SERVER_APP_ORIGIN CORS, requires bearer auth and
+  `CASHFLUX_SERVER_MASTER_KEY`, hashes the bearer into a server user, and stores the OpenAI key via the existing
+  AES-GCM `ai_keys` repository path without ever returning the secret.
+- Verified native tests, wasm build, server build, full `go test ./...`, live POST to `127.0.0.1:8081`, and that
+  the dev SQLite file does not contain the uploaded test key plaintext.
+
 ## 2026-06-18 — feat: notify catch-up engine (B19 Phase A, step 2)
 
 - Added `notify.CatchUp(rules, candidates, now, log) → []Notification` — the event-agnostic heart of

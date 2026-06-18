@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reports engine — the pure reporting core (B21, internal).** New `internal/reports` package with the
+  first report: spending by category over a period, sorted largest-first, with an optional comparison to
+  the prior period (each category's prior amount + percent change, and a union so a category that dropped
+  to zero still shows as a mover). Base-currency, transfers excluded, deterministic and table-tested. The
+  Reports screen + charts build on this next.
 - **Notifications foundation — the pure rules core (B19 Phase A, internal).** New `internal/notify`
   package with notification/rule types, channel selection, daily quiet-hours (with past-midnight wrap),
   per-period idempotency keys (day/ISO-week/month) and a delivered-log so catch-up-on-wake won't replay
@@ -312,6 +317,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Client OpenAI keys can be handed to the backend securely.** Settings now has backend URL/token controls and
+  an upload action that sends the current OpenAI key to `/v1/ai/key`; the server requires bearer auth plus an AES
+  master key, stores the key encrypted in SQLite, and never returns it.
 - **Backend SyncService applies LWW workspace puts.** Workspace updates now accept fresh client timestamps,
   reject stale writes with the current server state, support a force override, bump server versions, and block
   cross-user workspace ID takeover.
