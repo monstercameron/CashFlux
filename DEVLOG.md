@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — appstate error-path coverage via a closed store (82% → 87%)
+
+- Same seam-free technique as store: close the App's underlying store (`a.Store().Close()`) and the
+  store-backed methods hit their error arms. Valid entities pass validation first, so each reaches the
+  failing store call; accessors return nil but exercise `logErr`'s error branch.
+- Added `errors_test.go`: a table of `Put*`/`Delete*`/`PutSettings` calls plus `ImportJSON` (fed valid JSON
+  from a second open app so the *Load* fails, not the parse), `LoadSample`, `Wipe`, and `ExportJSON`, then
+  the nil-returning accessors. `appstate` → **86.6%**. The residual is reassign/validateCustom partial
+  branches and per-loop error arms — genuinely marginal now.
+
 ## 2026-06-18 — store error-path coverage via a closed DB (81% → 84%)
 
 - Revisited the store error arms I'd earlier written off as needing a fault-injecting mock. They don't: a
