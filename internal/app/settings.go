@@ -203,7 +203,7 @@ func freshnessRow(props freshnessRowProps) uic.Node {
 	return Div(Class("rate-row"),
 		Span(Style(map[string]string{"width": "110px"}), props.Label),
 		Input(Class("rate-in"), Type("number"), Value(strconv.Itoa(props.Days)), OnInput(on)),
-		Span(Class("text-faint"), "days (0 = never)"),
+		Span(Class("text-faint"), uistate.T("settings.freshNever")),
 	)
 }
 
@@ -695,7 +695,7 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 	}
 	return Div(Class("rate-row"),
 		Span(Style(map[string]string{"width": "40px"}), props.Code),
-		Span(Class("text-faint"), "1 "+props.Code+" ="),
+		Span(Class("text-faint"), uistate.T("settings.fxRateLabel", props.Code)),
 		Input(Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Value(val), OnChange(on)),
 		Span(Class("text-faint"), props.Base),
 	)
@@ -710,11 +710,11 @@ func exportJSON(notify func(string, bool)) {
 	}
 	data, err := app.ExportJSON()
 	if err != nil {
-		notify("Couldn't export your data: "+err.Error(), true)
+		notify(uistate.T("settings.exportDataErr", err.Error()), true)
 		return
 	}
 	downloadBytes("cashflux.json", "application/json", data)
-	notify("Exported your data as cashflux.json.", false)
+	notify(uistate.T("settings.exportedData", "cashflux.json"), false)
 }
 
 // exportCSV downloads all transactions as a CSV file.
@@ -725,11 +725,11 @@ func exportCSV(notify func(string, bool)) {
 	}
 	data, err := app.ExportCSV()
 	if err != nil {
-		notify("Couldn't export your transactions: "+err.Error(), true)
+		notify(uistate.T("settings.exportTxnErr", err.Error()), true)
 		return
 	}
 	downloadBytes("transactions.csv", "text/csv", data)
-	notify("Exported your transactions as transactions.csv.", false)
+	notify(uistate.T("settings.exportedTxn", "transactions.csv"), false)
 }
 
 // exportLanguages downloads the whole language bundle (every supported language)
@@ -737,11 +737,11 @@ func exportCSV(notify func(string, bool)) {
 func exportLanguages(notify func(string, bool)) {
 	data, err := uistate.ExportLanguages()
 	if err != nil {
-		notify("Couldn't export languages: "+err.Error(), true)
+		notify(uistate.T("settings.exportLangsErr", err.Error()), true)
 		return
 	}
 	downloadBytes("cashflux-languages.json", "application/json", data)
-	notify("Exported the language bundle.", false)
+	notify(uistate.T("settings.exportedLangs"), false)
 }
 
 // importLanguages picks a language-bundle JSON file and merges it into the app,
@@ -749,10 +749,10 @@ func exportLanguages(notify func(string, bool)) {
 func importLanguages(notify func(string, bool)) {
 	pickFile(".json", func(data []byte) {
 		if err := uistate.ImportLanguages(data); err != nil {
-			notify("Couldn't import languages: "+err.Error(), true)
+			notify(uistate.T("settings.importLangsErr", err.Error()), true)
 			return
 		}
-		notify("Imported languages — reload to apply.", false)
+		notify(uistate.T("settings.importedLangs"), false)
 	})
 }
 
@@ -765,11 +765,11 @@ func importJSON(onChange func(), notify func(string, bool)) {
 			return
 		}
 		if err := app.ImportJSON(data); err != nil {
-			notify("Couldn't import that file: "+err.Error(), true)
+			notify(uistate.T("settings.importErr", err.Error()), true)
 			return
 		}
 		onChange()
-		notify("Imported your data.", false)
+		notify(uistate.T("settings.importedData"), false)
 	})
 }
 
@@ -780,16 +780,16 @@ func loadSample(onChange func(), notify func(string, bool)) {
 		return
 	}
 	if err := app.LoadSample(); err != nil {
-		notify("Couldn't load the sample data: "+err.Error(), true)
+		notify(uistate.T("settings.loadSampleErr", err.Error()), true)
 		return
 	}
 	onChange()
-	notify("Loaded the sample data.", false)
+	notify(uistate.T("settings.loadedSample"), false)
 }
 
 // wipeData clears all data after a confirmation, then refreshes.
 func wipeData(onChange func(), notify func(string, bool)) {
-	if !confirmAction("Erase all CashFlux data on this device? This cannot be undone.") {
+	if !confirmAction(uistate.T("settings.wipeConfirm")) {
 		return
 	}
 	app := appstate.Default
@@ -797,11 +797,11 @@ func wipeData(onChange func(), notify func(string, bool)) {
 		return
 	}
 	if err := app.Wipe(); err != nil {
-		notify("Couldn't erase your data: "+err.Error(), true)
+		notify(uistate.T("settings.wipeErr", err.Error()), true)
 		return
 	}
 	onChange()
-	notify("Erased all data on this device.", false)
+	notify(uistate.T("settings.wiped"), false)
 }
 
 // dataBtnProps configures a data-action button.

@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — chore: route settings.go strings through i18n (copy pass, file 1)
+
+- First file in the "all text through i18n + improve copy" sweep. `internal/app/settings.go` had ~16 hardcoded
+  English strings outside the language store: every export/import/load-sample/wipe `notify(...)` toast, the wipe
+  `confirmAction` text, the FX-rate row label (`"1 USD ="`), and the freshness unit hint (`"days (0 = never)"`).
+- Added `settings.*` keys to `internal/i18n/en.go` and replaced the literals with `uistate.T(...)`. Copy
+  improvements: success toasts now take the filename as a `%s` arg (one place, rebrand-friendly), and the
+  freshness hint reads "days · 0 means never" (clearer than the parenthetical). Error toasts keep the existing
+  "Couldn't … : %s" voice for consistency.
+- Note: the en.go additions were picked up by the other session's commit; this commit lands the settings.go
+  half. Both packages build under `GOOS=js GOARCH=wasm`. Next file in the sweep: the next-highest hardcoded-copy
+  view (e.g. `internal/screens/screens.go`).
+
 ## 2026-06-18 — feat: Subscriptions screen — wire the B25 core into the UI (B25, step 2)
 
 - New `screens.Subscriptions()` registered as `/subscriptions` in the Tools group: runs

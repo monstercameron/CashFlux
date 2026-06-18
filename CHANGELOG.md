@@ -342,6 +342,10 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Settings data-actions now route through i18n (copy pass).** The export/import/load-sample/wipe toasts and
+  the wipe confirmation, the FX-rate row label, and the freshness "0 = never" hint were hardcoded English; they
+  now go through the language store (`settings.*` keys) so they localize and read consistently. Success toasts
+  take the filename as a parameter (rebrand-friendly), and the freshness hint reads "days · 0 means never".
 - **Backend AI proxy can call OpenAI with the encrypted server key.** Added a server-side AI service plus
   `/v1/ai/chat` and `/v1/ai/vision` endpoints that authenticate the caller, decrypt the user's stored BYO key,
   reuse the existing request builders, forward to OpenAI, map upstream failures, and record usage totals.
