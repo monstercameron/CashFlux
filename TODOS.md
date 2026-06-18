@@ -1518,9 +1518,9 @@ Savings KPIs) · `period.Window`.
 #### D14. Transfer between accounts (paired, excluded from totals) ★
 **Workstream:** transfer money between two accounts and confirm it's balance-neutral to income/expense.
 **Touches:** Transactions (transfer) · `domain.IsTransfer` · `ledger` (Balance, PeriodTotals exclude transfers) · Dashboard · net worth.
-- [ ] Create a transfer; assert both account balances move and net worth is unchanged.
-- [ ] Assert Income/Spending KPIs and budgets are **not** affected by the transfer.
-- [ ] Delete one leg; assert the paired leg is removed too.
+- [x] Create a transfer; assert both account balances move and net worth is unchanged.
+- [x] Assert Income/Spending KPIs and budgets are **not** affected by the transfer.
+- [x] Delete one leg; assert the paired leg is removed too.
 - [x] unit: `ledger.PeriodTotals`/Balance transfer-exclusion + paired-delete.
 
 #### D15. Reconciliation: clear → cleared balance → update-balance adjustment ★

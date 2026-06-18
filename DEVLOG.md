@@ -33,6 +33,13 @@ problems and fixes, and what's next.
 - Wired the Dashboard Freshness widget to persist dismissals in localStorage and added a Dismiss action beside
   the existing Remind flow.
 
+## 2026-06-18 - test: D14 transfer behavior
+
+- Added ledger coverage for a two-leg transfer: checking decreases, savings increases, household net worth
+  stays unchanged, and `PeriodTotals` reports zero income and zero expense.
+- Added budgeting coverage that a transfer leg with a budget category is still ignored by `Spent`, closing
+  the D14 budget/KPI exclusion assertion alongside the paired-delete appstate regression.
+
 ## 2026-06-18 — fix: hide the left-rail scrollbar (C31)
 
 - The rail's `nav` (`overflow-y-auto`) had no scrollbar styling, so it showed the default OS bar once it

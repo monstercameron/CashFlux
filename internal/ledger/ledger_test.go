@@ -148,6 +148,54 @@ func TestPeriodTotals(t *testing.T) {
 	}
 }
 
+func TestTransferBalancesNetWorthAndTotals(t *testing.T) {
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{}}
+	checking := domain.Account{ID: "checking", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(100000)}
+	savings := domain.Account{ID: "savings", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(50000)}
+	txns := []domain.Transaction{
+		{
+			ID: "out", AccountID: "checking", TransferAccountID: "savings",
+			Date: mustDate("2026-06-10"), Amount: usd(-25000),
+		},
+		{
+			ID: "in", AccountID: "savings", TransferAccountID: "checking",
+			Date: mustDate("2026-06-10"), Amount: usd(25000),
+		},
+	}
+
+	checkingBal, err := Balance(checking, txns)
+	if err != nil {
+		t.Fatalf("checking Balance: %v", err)
+	}
+	if !checkingBal.Equal(usd(75000)) {
+		t.Errorf("checking balance = %v, want 75000 USD", checkingBal)
+	}
+	savingsBal, err := Balance(savings, txns)
+	if err != nil {
+		t.Fatalf("savings Balance: %v", err)
+	}
+	if !savingsBal.Equal(usd(75000)) {
+		t.Errorf("savings balance = %v, want 75000 USD", savingsBal)
+	}
+
+	net, assets, liabilities, err := NetWorth([]domain.Account{checking, savings}, txns, rates)
+	if err != nil {
+		t.Fatalf("NetWorth: %v", err)
+	}
+	if !net.Equal(usd(150000)) || !assets.Equal(usd(150000)) || !liabilities.Equal(usd(0)) {
+		t.Errorf("net/assets/liabilities = %v/%v/%v, want 150000/150000/0 USD", net, assets, liabilities)
+	}
+
+	start, end := dateutil.MonthRange(mustDate("2026-06-15"))
+	income, expense, err := PeriodTotals(txns, start, end, rates)
+	if err != nil {
+		t.Fatalf("PeriodTotals: %v", err)
+	}
+	if !income.Equal(usd(0)) || !expense.Equal(usd(0)) {
+		t.Errorf("transfer totals = income %v expense %v, want both zero", income, expense)
+	}
+}
+
 func TestCategorySpendSeries(t *testing.T) {
 	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.10}}
 	tx := func(cat string, amount int64, cur, day string, transfer bool) domain.Transaction {

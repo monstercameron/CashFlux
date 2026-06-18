@@ -74,6 +74,8 @@ and every commit updates this file under `Unreleased`.
   regression coverage that leaves unrelated same-account transfer decoys intact.
 - **Freshness nudge dismissal coverage.** The dashboard freshness nudge is now dismissible, persisted per
   account, and backed by pure tests that reset the dismissal after a balance update.
+- **Transfer behavior coverage.** Ledger and budgeting tests now prove paired transfers move both account
+  balances while staying neutral to net worth, income/spending totals, and budget spend.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

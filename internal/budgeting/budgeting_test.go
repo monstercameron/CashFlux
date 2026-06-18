@@ -95,6 +95,27 @@ func TestSpentSharedScope(t *testing.T) {
 	}
 }
 
+func TestSpentIgnoresTransfers(t *testing.T) {
+	start, end := june()
+	rates := currency.Rates{Base: "USD"}
+	budget := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: usd(50000)}
+	all := []domain.Transaction{
+		expense(2000, "USD", "food", "", "2026-06-03"),
+		{
+			AccountID: "checking", TransferAccountID: "savings", CategoryID: "food",
+			Amount: usd(-9000), Date: mustDate("2026-06-04"),
+		},
+	}
+
+	spent, err := Spent(budget, all, start, end, rates)
+	if err != nil {
+		t.Fatalf("Spent: %v", err)
+	}
+	if !spent.Equal(usd(2000)) {
+		t.Errorf("spent with transfer = %v, want 2000 USD", spent)
+	}
+}
+
 func TestSpentScopeAggregationMixedMembers(t *testing.T) {
 	start, end := june()
 	rates := currency.Rates{Base: "USD"}
