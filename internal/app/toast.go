@@ -10,13 +10,17 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
 
-// toastTimeoutMS is how long a notice stays on screen before auto-dismissing.
-const toastTimeoutMS = 4500
+// How long a notice stays on screen before auto-dismissing. Errors linger longer
+// than ordinary notices so there's time to read what went wrong.
+const (
+	toastTimeoutMS    = 4500
+	toastErrTimeoutMS = 7500
+)
 
 // Toast renders the app-wide notice surface: a single dismissible message
 // pinned to the bottom of the viewport, driven by the shared uistate.Notice
-// atom. It auto-dismisses after toastTimeoutMS; errors persist styling but
-// still time out (the action that caused them has already failed safely).
+// atom. Ordinary notices auto-dismiss after toastTimeoutMS; errors linger for
+// toastErrTimeoutMS (and can always be dismissed by hand).
 func Toast() uic.Node {
 	atom := uistate.UseNotice()
 	n := atom.Get()
@@ -32,7 +36,11 @@ func Toast() uic.Node {
 			atom.Set(n.Cleared()) // keeps Seq, so this effect does not re-run
 			return nil
 		})
-		id := js.Global().Call("setTimeout", cb, toastTimeoutMS)
+		timeout := toastTimeoutMS
+		if n.Err {
+			timeout = toastErrTimeoutMS
+		}
+		id := js.Global().Call("setTimeout", cb, timeout)
 		// Cleanup runs only on the next post (Seq change) or unmount — by then
 		// the timer has either fired or is pending; clear it and release once.
 		return func() {
@@ -60,7 +68,7 @@ func Toast() uic.Node {
 	}
 	return Div(Class(cls), Attr("role", role), Attr("aria-live", live),
 		Span(Class("toast-msg"), n.Text),
-		Button(Class("toast-x"), Attr("type", "button"), Attr("title", "Dismiss"),
+		Button(Class("toast-x"), Attr("type", "button"), Attr("title", "Dismiss"), Attr("aria-label", "Dismiss"),
 			OnClick(func() { atom.Set(n.Cleared()) }), "×"),
 	)
 }

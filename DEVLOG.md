@@ -1,6 +1,21 @@
 # CashFlux — Developer Journal
 
 
+## 2026-06-18 — fix: §6.9 toast — error notices linger + labelled dismiss
+
+- `toast.go` already had the role/aria-live work (status/polite for info, alert/assertive for errors, plus
+  a persistent live region). Closed the remaining §6.9 item: split the auto-dismiss timeout —
+  `toastErrTimeoutMS` 7500ms for errors vs 4500ms for ordinary notices — so error text isn't whisked away
+  before it's read. Added `aria-label="Dismiss"` to the close button (§6.9 [L], to go with its title).
+- Single file (`internal/app/toast.go`); gofmt clean, wasm build exit 0, probe ok/200.
+- Process: committing via `git commit -- <paths>` now (not `git add` then commit) so the parallel session's
+  pre-staged files don't get swept into my commit — last time my "?" overlay commit absorbed their
+  en.go/allocate.go because `git commit` writes the whole shared index.
+- §6 progress (mine): 6.1, 6.2, 6.3, 6.4(switcher), 6.6(Alt+1..9/Enter/?-overlay), 6.9(toast), 6.11.
+
+Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
+problems and fixes, and what's next.
+
 ## 2026-06-18 — test: 10 user stories e2e for custom pages + workflows
 
 - Wrote `docs/CUSTOM_PAGES_STORIES.md` (10 stories + acceptance + edge cases) and
@@ -27,9 +42,6 @@ problems and fixes, and what's next.
   spaces, punctuation, and case-insensitive reserved names.
 - Added a matching browser hint on the Custom Fields add form (`pattern="[A-Za-z0-9_]+"` + localized
   title), so users see the allowed format before appstate rejects the save.
-
-Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
-problems and fixes, and what's next.
 
 ## 2026-06-18 — feat: §6.6 "?" keyboard help overlay (self-contained DOM)
 
