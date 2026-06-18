@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: focus-trap the lock gate (B17 modality complete)
+
+- Closed the residual from the previous commit: the unlock gate now traps Tab within its controls
+  (input → Unlock → Forgot, wrapping at both ends via a keydown listener on the gate, mirroring
+  FlipPanel's trap), so Tab can't move focus to the covered background. Combined with the opaque
+  click-blocking overlay and the shortcut suppression, the locked state is now fully modal.
+- gofmt clean, disk wasm build green (served wasm rebuilt). Committed by pathspec. B17 lock is now
+  robust end-to-end.
+
 ## 2026-06-18 — fix: lock gate suppresses global keyboard shortcuts (B17 hardening)
 
 - Spotted a bypass: the unlock gate is a visual/click overlay, but the keyboard shortcuts are document-level
@@ -19,6 +28,8 @@ problems and fixes, and what's next.
   `internal/forecast/forecast_test.go`.
 - The test derives a starting net worth from `ledger.NetWorthSeries`, then projects recurring and one-time
   future changes with `forecast.Project`, covering the dashboard/planning overlap at the pure layer.
+- Rechecked after the B17 shortcut hardening commit landed and kept this docs delta attached to the
+  forecast test/TODO commit.
 - Verification: `go test ./...`, wasm build, and `gwc verify` passed.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math

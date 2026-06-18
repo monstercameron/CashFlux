@@ -122,6 +122,29 @@ func buildAppLockGate(doc js.Value) {
 	})
 	forgot.Call("addEventListener", "click", forgotCb)
 
+	// Focus trap: keep Tab within the gate's controls so a locked app's covered
+	// background can't be reached by keyboard (mirrors the FlipPanel trap).
+	focusables := []js.Value{inp, btn, forgot}
+	trapCb := js.FuncOf(func(_ js.Value, a []js.Value) any {
+		if len(a) == 0 || a[0].Get("key").String() != "Tab" {
+			return nil
+		}
+		e := a[0]
+		active := doc.Get("activeElement")
+		first, last := focusables[0], focusables[len(focusables)-1]
+		if e.Get("shiftKey").Bool() {
+			if active.Equal(first) {
+				e.Call("preventDefault")
+				last.Call("focus")
+			}
+		} else if active.Equal(last) {
+			e.Call("preventDefault")
+			first.Call("focus")
+		}
+		return nil
+	})
+	gate.Call("addEventListener", "keydown", trapCb)
+
 	resetAppLockInput(doc)
 }
 
