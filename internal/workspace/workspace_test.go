@@ -142,6 +142,42 @@ func TestStartup(t *testing.T) {
 	}
 }
 
+func TestSetColor(t *testing.T) {
+	r := (Registry{}).Add("w1", "One").Add("w2", "Two")
+
+	r = r.SetColor("w1", "#2e8b57")
+	if w, _ := r.Get("w1"); w.Color != "#2e8b57" {
+		t.Errorf("SetColor failed, got %q", w.Color)
+	}
+	// Other workspaces are untouched.
+	if w, _ := r.Get("w2"); w.Color != "" {
+		t.Errorf("SetColor leaked to w2, got %q", w.Color)
+	}
+	// Unknown id is a no-op.
+	if got := r.SetColor("nope", "#fff"); !equalColors(got, r) {
+		t.Error("SetColor on an unknown id should be a no-op")
+	}
+	// Clearing works, and the color survives a rename (clone copies it).
+	if w, _ := r.SetColor("w1", "").Get("w1"); w.Color != "" {
+		t.Errorf("clearing the color failed, got %q", w.Color)
+	}
+	if w, _ := r.Rename("w1", "Renamed").Get("w1"); w.Color != "#2e8b57" {
+		t.Errorf("rename dropped the color, got %q", w.Color)
+	}
+}
+
+func equalColors(a, b Registry) bool {
+	if len(a.Workspaces) != len(b.Workspaces) {
+		return false
+	}
+	for i := range a.Workspaces {
+		if a.Workspaces[i] != b.Workspaces[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func equalNames(a, b Registry) bool {
 	if len(a.Workspaces) != len(b.Workspaces) {
 		return false

@@ -6,11 +6,43 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
+
+// workspacePalette is the set of accent colors auto-assigned to new workspaces
+// (cycled by creation order) and offered in the color picker. Chosen to read on
+// the dark shell and stay distinct from one another.
+var workspacePalette = []string{
+	"#2e8b57", // seagreen
+	"#cfa14e", // amber
+	"#7c83ff", // indigo
+	"#d8716f", // coral
+	"#38bdf8", // sky
+	"#c084fc", // violet
+}
+
+// paletteColor returns a palette color for the given index, cycling.
+func paletteColor(i int) string {
+	if len(workspacePalette) == 0 {
+		return ""
+	}
+	return workspacePalette[i%len(workspacePalette)]
+}
+
+// wsColorDot is a small filled circle in the workspace's color (a faint neutral
+// when none is set), so workspaces are distinguishable at a glance.
+func wsColorDot(color string) uic.Node {
+	c := color
+	if c == "" {
+		c = "#6c6c72"
+	}
+	return Span(Class("inline-block w-2.5 h-2.5 rounded-full shrink-0"),
+		Style(map[string]string{"background-color": c}))
+}
 
 // WorkspaceSwitcher is the rail's quick workspace picker: a button showing the
 // active workspace that opens a menu to switch to another, create a fresh one, or
@@ -27,7 +59,7 @@ func WorkspaceSwitcher() uic.Node {
 
 	rows := make([]uic.Node, 0, len(r.Workspaces))
 	for _, w := range r.Workspaces {
-		rows = append(rows, uic.CreateElement(wsMenuItem, wsMenuItemProps{ID: w.ID, Name: w.Name, Active: w.ID == active.ID}))
+		rows = append(rows, uic.CreateElement(wsMenuItem, wsMenuItemProps{ID: w.ID, Name: w.Name, Color: w.Color, Active: w.ID == active.ID}))
 	}
 
 	onNew := func() {
@@ -59,12 +91,17 @@ func WorkspaceSwitcher() uic.Node {
 	}
 
 	if collapsed {
+		// Tint the glyph's border with the workspace color so the active context is
+		// recognizable even in the icon-only rail.
+		glyph := []any{Class("w-9 h-9 grid place-items-center rounded-[4px] border border-line text-[13px] font-medium hover:bg-hover"),
+			Type("button"), Title(active.Name + " · " + uistate.T("ws.switch")),
+			OnClick(func() { open.Set(!open.Get()) }),
+			workspaceInitial(active.Name)}
+		if active.Color != "" {
+			glyph = append(glyph, Style(map[string]string{"border-color": active.Color}))
+		}
 		return Div(Class("ws-switch relative mx-auto mt-3 w-9"),
-			Button(Class("w-9 h-9 grid place-items-center rounded-[4px] border border-line text-[13px] font-medium hover:bg-hover"),
-				Type("button"), Title(active.Name+" · "+uistate.T("ws.switch")),
-				OnClick(func() { open.Set(!open.Get()) }),
-				workspaceInitial(active.Name),
-			),
+			Button(glyph...),
 			menu,
 		)
 	}
@@ -73,7 +110,10 @@ func WorkspaceSwitcher() uic.Node {
 		Button(Class("w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[4px] border border-line text-[13px] hover:bg-hover"),
 			Type("button"), Title(uistate.T("ws.switch")),
 			OnClick(func() { open.Set(!open.Get()) }),
-			Span(Class("truncate"), active.Name),
+			Span(Class("flex items-center gap-2 min-w-0"),
+				wsColorDot(active.Color),
+				Span(Class("truncate"), active.Name),
+			),
 			Span(Class("text-faint"), "▾"),
 		),
 		menu,
@@ -92,6 +132,7 @@ func workspaceInitial(name string) string {
 type wsMenuItemProps struct {
 	ID     string
 	Name   string
+	Color  string
 	Active bool
 }
 
@@ -99,26 +140,31 @@ type wsMenuItemProps struct {
 // hook stays stable across the list (the On*-hooks-in-loops rule).
 func wsMenuItem(props wsMenuItemProps) uic.Node {
 	id := props.ID
-	cls := "w-full text-left px-2 py-1.5 rounded hover:bg-hover flex items-center justify-between"
+	cls := "w-full text-left px-2 py-1.5 rounded hover:bg-hover flex items-center justify-between gap-2"
 	if props.Active {
 		cls += " bg-hover text-fg font-medium"
 	}
 	return Button(Class(cls), Type("button"),
 		OnClick(func() { switchWorkspace(id) }),
-		Span(Class("truncate"), props.Name),
+		Span(Class("flex items-center gap-2 min-w-0"),
+			wsColorDot(props.Color),
+			Span(Class("truncate"), props.Name),
+		),
 		If(props.Active, Span(Class("text-up"), "✓")),
 	)
 }
 
 type wsManageRowProps struct {
 	ID, Name  string
+	Color     string
 	Active    bool
 	CanDelete bool
 	OnChange  func() // re-render the settings panel after an in-place change
 }
 
-// wsManageRow is one row in the Settings → Workspaces list: the name (marked when
-// active) plus rename and delete actions. Its own component for stable hooks.
+// wsManageRow is one row in the Settings → Workspaces list: a color swatch + the
+// name (marked when active) plus rename and delete actions. Its own component for
+// stable hooks.
 func wsManageRow(props wsManageRowProps) uic.Node {
 	id, onChange := props.ID, props.OnChange
 	rename := func() {
@@ -137,13 +183,23 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 			}
 		}
 	}
-	actions := []any{Class("flex gap-2"), dataBtn(uistate.T("ws.rename"), false, rename)}
+	pickColor := func(c string) {
+		setWorkspaceColor(id, c)
+		if onChange != nil {
+			onChange()
+		}
+	}
+	actions := []any{Class("flex items-center gap-2"),
+		ui.SwatchPicker(ui.SwatchPickerProps{Colors: workspacePalette, Selected: props.Color, OnSelect: pickColor}),
+		dataBtn(uistate.T("ws.rename"), false, rename),
+	}
 	if props.CanDelete {
 		actions = append(actions, dataBtn(uistate.T("ws.delete"), true, del))
 	}
 	return Div(Class("flex items-center justify-between gap-2 py-1"),
-		Span(Class("flex items-center gap-2"),
-			Span(props.Name),
+		Span(Class("flex items-center gap-2 min-w-0"),
+			wsColorDot(props.Color),
+			Span(Class("truncate"), props.Name),
 			If(props.Active, Span(Class("text-xs text-up"), uistate.T("ws.active"))),
 		),
 		Span(actions...),
@@ -160,7 +216,7 @@ func workspacesSection(onChange func()) uic.Node {
 	rows := make([]uic.Node, 0, len(r.Workspaces))
 	for _, w := range r.Workspaces {
 		rows = append(rows, uic.CreateElement(wsManageRow, wsManageRowProps{
-			ID: w.ID, Name: w.Name, Active: w.ID == active.ID, CanDelete: canDelete, OnChange: onChange,
+			ID: w.ID, Name: w.Name, Color: w.Color, Active: w.ID == active.ID, CanDelete: canDelete, OnChange: onChange,
 		}))
 	}
 	return Div(Class("flex flex-col"),

@@ -3,6 +3,28 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: per-workspace color (tell contexts apart at a glance)
+
+- Followed the user's "add other useful settings like this" invite with a self-contained, isolated
+  workspace feature (deliberately avoided the obvious "open to screen X" startup setting — its boot-time
+  routing is entangled with the parallel session's just-landed base-href/deep-link work, high collision
+  risk). Color lives entirely in my layer: model + app state + the switcher UI I own.
+- Model (`internal/workspace`): `Workspace.Color` (CSS color string, omitempty) + `Registry.SetColor`
+  (unknown-id no-op; clone copies it by value so it survives Rename/SetActive). Table test covers set,
+  isolation to one workspace, no-op, clear, and rename-preserves-color.
+- App: `setWorkspaceColor`; a six-swatch `workspacePalette` + `paletteColor(i)` cycling helper. New
+  workspaces (createWorkspace/duplicateWorkspace) and the initial Default auto-get a distinct palette
+  color by creation order, so they're visually distinguishable out of the box.
+- UI (`wsswitcher.go`): a `wsColorDot` helper; the expanded switcher trigger and each dropdown row show
+  the dot; the collapsed-rail glyph tints its border with the color; `wsManageRow` gains the reusable
+  `ui.SwatchPicker` to change a workspace's color (writes through `setWorkspaceColor`, re-renders via the
+  panel's bump). No new i18n key (the swatch is inline). No `en.go`/`settings.go`/`app.go` changes —
+  smaller shared-file surface than the last two commits.
+- Verified: workspace tests pass, gofmt clean, full `GOOS=js GOARCH=wasm` build exit 0 (the parallel
+  `internal/screens` build is healthy again), probe ok=true / status 200 / switcher + dashboard render.
+  Couldn't headlessly open the switcher dropdown or settings to eyeball the swatches (probe is read-only),
+  so the dot/picker are build-verified — confirm visually after a hard reload.
+
 ## 2026-06-18 — feat: custom pages — widget engine + grid rendering (Phase B)
 
 - `internal/screens/custompage.go` now renders a page's `[]PageWidget` as a bento grid: `dashlayout.Pack`

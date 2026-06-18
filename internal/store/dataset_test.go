@@ -50,6 +50,13 @@ func sampleDataset() Dataset {
 				Binding: domain.WidgetBinding{Expr: "(income - expense) / income * 100"},
 			}},
 		}},
+		Artifacts: []domain.Artifact{{
+			ID: "art1", Name: "Receipt", Kind: "image", MIME: "image/png",
+			Bytes: []byte{0x89, 0x50, 0x4e, 0x47}, Size: 4, CreatedAt: asOf,
+		}, {
+			ID: "art2", Name: "Import", Kind: "csv",
+			Columns: []string{"date", "amount"}, Rows: [][]string{{"2026-06-01", "12.50"}},
+		}},
 		Settings: Settings{
 			BaseCurrency:       "USD",
 			FXRates:            map[string]float64{"EUR": 1.1},
@@ -135,6 +142,14 @@ func TestExportImportRoundTrip(t *testing.T) {
 		cp.Widgets[0].Config["format"] != "percent" ||
 		cp.Widgets[0].Binding.Expr != "(income - expense) / income * 100" {
 		t.Errorf("custom page lost: %+v", cp)
+	}
+	if len(imported.Artifacts) != 2 {
+		t.Fatalf("artifacts lost: %+v", imported.Artifacts)
+	}
+	if imported.Artifacts[0].Kind != "image" || len(imported.Artifacts[0].Bytes) != 4 ||
+		imported.Artifacts[1].Kind != "csv" || len(imported.Artifacts[1].Rows) != 1 ||
+		imported.Artifacts[1].Rows[0][1] != "12.50" {
+		t.Errorf("artifact content lost: %+v", imported.Artifacts)
 	}
 }
 

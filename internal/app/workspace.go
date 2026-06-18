@@ -82,7 +82,7 @@ func saveRegistry(r workspace.Registry) {
 func ensureWorkspaceRegistry() workspace.Registry {
 	r := loadRegistry()
 	if len(r.Workspaces) == 0 {
-		r = workspace.Registry{}.Add(defaultWSID, defaultWSName)
+		r = workspace.Registry{}.Add(defaultWSID, defaultWSName).SetColor(defaultWSID, paletteColor(0))
 		saveRegistry(r)
 	}
 	return r
@@ -109,6 +109,12 @@ func applyStartupWorkspace() {
 // resume the last-active one). No reload — it only takes effect next boot.
 func setStartupWorkspace(wsID string) {
 	saveRegistry(loadRegistry().SetStartup(wsID))
+}
+
+// setWorkspaceColor records a workspace's accent color ("" clears it). No reload —
+// the switcher reads the registry on its next render.
+func setWorkspaceColor(wsID, color string) {
+	saveRegistry(loadRegistry().SetColor(wsID, color))
 }
 
 func wsBlobKey(wsID string) string { return wsBlobPrefix + wsID }
@@ -174,7 +180,7 @@ func createWorkspace(name string) {
 	suspendAutosave = true
 	saveBlob(r.ActiveID, bundleCurrent())
 	newID := id.NewWithPrefix("ws")
-	saveRegistry(r.Add(newID, name).SetActive(newID))
+	saveRegistry(r.Add(newID, name).SetActive(newID).SetColor(newID, paletteColor(len(r.Workspaces))))
 	applyBundle(map[string]string{}) // clear UI keys → defaults
 	if data, err := store.Export(store.EmptyDataset()); err == nil {
 		lsSet(datasetStoreKey, string(data)) // explicit empty dataset, not the sample
@@ -191,7 +197,7 @@ func duplicateWorkspace(name string) {
 	saveBlob(r.ActiveID, cur)
 	newID := id.NewWithPrefix("ws")
 	saveBlob(newID, cur)
-	saveRegistry(r.Add(newID, name).SetActive(newID))
+	saveRegistry(r.Add(newID, name).SetActive(newID).SetColor(newID, paletteColor(len(r.Workspaces))))
 	applyBundle(cur) // already current, but explicit
 	reloadPage()
 }

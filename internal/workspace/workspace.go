@@ -9,10 +9,13 @@
 // the caller's job (so this stays deterministic and testable) — Add takes an id.
 package workspace
 
-// Workspace is one named context.
+// Workspace is one named context. Color is an optional accent (a CSS color
+// string) used to tell workspaces apart at a glance in the switcher; empty means
+// "no color set" and the UI falls back to a neutral.
 type Workspace struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color,omitempty"`
 }
 
 // Registry is the ordered set of workspaces plus the active one's ID. The zero
@@ -85,6 +88,21 @@ func (r Registry) Rename(id, name string) Registry {
 	for i := range out.Workspaces {
 		if out.Workspaces[i].ID == id {
 			out.Workspaces[i].Name = name
+		}
+	}
+	return out
+}
+
+// SetColor sets a workspace's accent color (a CSS color string; "" clears it).
+// Unknown ids are left unchanged.
+func (r Registry) SetColor(id, color string) Registry {
+	if !r.Has(id) {
+		return r
+	}
+	out := r.clone()
+	for i := range out.Workspaces {
+		if out.Workspaces[i].ID == id {
+			out.Workspaces[i].Color = color
 		}
 	}
 	return out

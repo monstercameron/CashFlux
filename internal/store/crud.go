@@ -344,3 +344,18 @@ func (s *SQLiteStore) DeleteCustomPage(id string) (bool, error) {
 func (s *SQLiteStore) ListCustomPages() ([]domain.CustomPage, error) {
 	return loadRows[domain.CustomPage](s.db, "custompages")
 }
+
+// --- Artifacts (user-stored images and datasets) ---
+
+func (s *SQLiteStore) PutArtifact(a domain.Artifact) error {
+	return putJSON(s.db, "artifacts", a.ID, a)
+}
+func (s *SQLiteStore) GetArtifact(id string) (domain.Artifact, bool, error) {
+	return getJSON[domain.Artifact](s.db, "artifacts", id)
+}
+func (s *SQLiteStore) DeleteArtifact(id string) (bool, error) {
+	return deleteRow(s.db, "artifacts", id)
+}
+func (s *SQLiteStore) ListArtifacts() ([]domain.Artifact, error) {
+	return loadRows[domain.Artifact](s.db, "artifacts")
+}

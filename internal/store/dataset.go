@@ -47,6 +47,7 @@ type Dataset struct {
 	Formulas      []domain.Formula           `json:"formulas,omitempty"`
 	Plans         []domain.Plan              `json:"plans,omitempty"`
 	CustomPages   []domain.CustomPage        `json:"customPages,omitempty"`
+	Artifacts     []domain.Artifact          `json:"artifacts,omitempty"`
 	Settings      Settings                   `json:"settings"`
 }
 

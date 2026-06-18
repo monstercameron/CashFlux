@@ -349,6 +349,24 @@ type CustomPage struct {
 	CreatedAt time.Time         `json:"createdAt,omitempty"`
 }
 
+// Artifact is a user-stored binary or tabular asset — an uploaded image or an
+// imported dataset (CSV/JSON) — kept in the dataset so custom widgets (Image,
+// Table) can reference it by ID and so it travels with export/import. Images keep
+// their raw Bytes + MIME (base64-encoded in JSON); datasets keep parsed Columns +
+// Rows (and may keep Bytes for re-parsing). Size is the byte length, cached so the
+// UI can show a storage meter without re-measuring.
+type Artifact struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Kind      string     `json:"kind"` // see internal/artifacts: image | csv | json
+	MIME      string     `json:"mime,omitempty"`
+	Bytes     []byte     `json:"bytes,omitempty"`
+	Columns   []string   `json:"columns,omitempty"`
+	Rows      [][]string `json:"rows,omitempty"`
+	Size      int        `json:"size,omitempty"`
+	CreatedAt time.Time  `json:"createdAt,omitempty"`
+}
+
 // Task is a budgeting-related to-do item.
 type Task struct {
 	ID          string         `json:"id"`

@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **User artifacts — persisted images & datasets (Phase C groundwork):** new `domain.Artifact` plus a pure,
+  tested `internal/artifacts` package (kinds, CSV parsing to columns+rows, image data-URL building, byte-
+  size accounting, validation). Artifacts persist in the dataset (new `artifacts` table + CRUD + appstate
+  accessors), so uploaded images and imported datasets survive reload and travel with export/import
+  (round-trip tested, including raw image bytes). Added `App.DatasetBytes()` so the UI can warn as storage
+  approaches the browser quota. Artifacts manager + Image/Table widgets follow.
+- **Per-workspace color.** Each workspace can carry an accent color so you can tell contexts apart at a
+  glance: a colored dot next to the name in the rail switcher and its dropdown, and a color-tinted border
+  on the collapsed-rail glyph. New workspaces (and the initial "Default") are auto-assigned a distinct
+  color from a six-swatch palette, cycling by creation order; you can change it any time via the swatch
+  picker in Settings → Workspaces. Stored as `Workspace.Color` in the registry (`Registry.SetColor` +
+  table test); empty falls back to a neutral dot.
 - **Custom pages now render custom widgets (Phase B).** A custom page shows a bento grid of user-authored
   widgets bound to the app engine: **KPI** (a formula over your figures — net_worth, income, …, formatted
   as number/percent/currency), **List** (rows from transactions/accounts/budgets/goals/tasks), **Chart**

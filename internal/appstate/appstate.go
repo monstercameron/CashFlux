@@ -295,6 +295,13 @@ func (a *App) CustomPages() []domain.CustomPage {
 	return v
 }
 
+// Artifacts returns every user-stored artifact (uploaded images, datasets).
+func (a *App) Artifacts() []domain.Artifact {
+	v, err := a.store.ListArtifacts()
+	a.logErr("artifacts", err)
+	return v
+}
+
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
 	v, err := a.store.ListCustomFieldDefs()
@@ -620,6 +627,42 @@ func (a *App) PutCustomPage(p domain.CustomPage) error {
 // DeleteCustomPage removes a user-authored page.
 func (a *App) DeleteCustomPage(id string) error {
 	return a.del("customPage", id, a.store.DeleteCustomPage)
+}
+
+// PutArtifact saves a user artifact (needs an ID, a name, and a kind).
+func (a *App) PutArtifact(art domain.Artifact) error {
+	if art.ID == "" {
+		return fmt.Errorf("appstate: artifact needs an id")
+	}
+	if strings.TrimSpace(art.Name) == "" {
+		return fmt.Errorf("appstate: artifact needs a name")
+	}
+	if art.Kind == "" {
+		return fmt.Errorf("appstate: artifact needs a kind")
+	}
+	if err := a.store.PutArtifact(art); err != nil {
+		return err
+	}
+	a.log.Info("artifact saved", "id", art.ID, "kind", art.Kind, "size", art.Size)
+	return nil
+}
+
+// DeleteArtifact removes a user artifact.
+func (a *App) DeleteArtifact(id string) error {
+	return a.del("artifact", id, a.store.DeleteArtifact)
+}
+
+// DatasetBytes reports the serialized size of the whole dataset in bytes — what
+// gets written to browser storage. The UI uses it for a storage meter/warning,
+// since large artifacts inflate the single autosaved blob toward the localStorage
+// quota. Returns 0 on a marshal error (logged).
+func (a *App) DatasetBytes() int {
+	b, err := a.ExportJSON()
+	if err != nil {
+		a.logErr("datasetBytes", err)
+		return 0
+	}
+	return len(b)
 }
 
 // PostDueRecurring posts a transaction for each autopost recurring whose NextDue
