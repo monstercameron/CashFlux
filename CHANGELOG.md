@@ -65,6 +65,8 @@ and every commit updates this file under `Unreleased`.
   account, category, and member names while preserving amount/date/tags metadata.
 - **Config layering coverage.** Appstate tests now document the current defaults-to-household settings
   behavior for budget methodology, including the absence of member-level methodology overrides.
+- **Transfer delete pairing coverage.** Appstate now owns deleting the reciprocal leg of a transfer, with
+  regression coverage that leaves unrelated same-account transfer decoys intact.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

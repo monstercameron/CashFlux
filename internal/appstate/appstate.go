@@ -1029,6 +1029,41 @@ func (a *App) DeleteTransaction(id string) error {
 	return a.del("transaction", id, a.store.DeleteTransaction)
 }
 
+// DeleteTransactionWithTransferPair removes a transaction and, when it is one
+// leg of a transfer, also removes the reciprocal leg so balances stay paired.
+func (a *App) DeleteTransactionWithTransferPair(id string) error {
+	all := a.Transactions()
+	var target domain.Transaction
+	found := false
+	for _, t := range all {
+		if t.ID == id {
+			target, found = t, true
+			break
+		}
+	}
+	if err := a.DeleteTransaction(id); err != nil {
+		return err
+	}
+	if !found || !target.IsTransfer() {
+		return nil
+	}
+	for _, t := range all {
+		if isReciprocalTransferLeg(target, t) {
+			return a.DeleteTransaction(t.ID)
+		}
+	}
+	return nil
+}
+
+func isReciprocalTransferLeg(target, candidate domain.Transaction) bool {
+	return candidate.ID != target.ID &&
+		candidate.IsTransfer() &&
+		candidate.AccountID == target.TransferAccountID &&
+		candidate.TransferAccountID == target.AccountID &&
+		candidate.Amount.Amount == -target.Amount.Amount &&
+		candidate.Date.Equal(target.Date)
+}
+
 func (a *App) PutBudget(b domain.Budget) error {
 	if is := validate.ValidateBudget(b); !is.OK() {
 		return is

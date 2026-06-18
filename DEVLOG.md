@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - test: transfer paired delete
+
+- Moved reciprocal transfer-leg deletion from the wasm Transactions screen into appstate so the behavior is
+  native-testable and reusable from any delete caller.
+- Added a regression that deletes one transfer leg, removes only its exact reciprocal, and keeps a same-account
+  decoy on another date plus a standalone transaction.
+
 ## 2026-06-18 — fix: hide the left-rail scrollbar (C31)
 
 - The rail's `nav` (`overflow-y-auto`) had no scrollbar styling, so it showed the default OS bar once it

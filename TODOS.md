@@ -1521,7 +1521,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Create a transfer; assert both account balances move and net worth is unchanged.
 - [ ] Assert Income/Spending KPIs and budgets are **not** affected by the transfer.
 - [ ] Delete one leg; assert the paired leg is removed too.
-- [ ] unit: `ledger.PeriodTotals`/Balance transfer-exclusion + paired-delete.
+- [x] unit: `ledger.PeriodTotals`/Balance transfer-exclusion + paired-delete.
 
 #### D15. Reconciliation: clear → cleared balance → update-balance adjustment ★
 **Workstream:** clear transactions, reconcile against a real balance, and let the app post an adjustment.

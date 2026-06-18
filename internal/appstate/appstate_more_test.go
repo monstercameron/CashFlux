@@ -95,6 +95,53 @@ func TestDeleteEntities(t *testing.T) {
 	}
 }
 
+func TestDeleteTransactionWithTransferPair(t *testing.T) {
+	a := newApp(t, false)
+	for _, account := range []domain.Account{
+		{ID: "checking", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared},
+		{ID: "savings", Name: "Savings", Currency: "USD", Type: domain.TypeSavings, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared},
+	} {
+		if err := a.PutAccount(account); err != nil {
+			t.Fatalf("PutAccount(%s): %v", account.ID, err)
+		}
+	}
+	day := time.Date(2026, 6, 18, 0, 0, 0, 0, time.UTC)
+	txns := []domain.Transaction{
+		{ID: "out", AccountID: "checking", TransferAccountID: "savings", Desc: "Transfer", Amount: money.New(-5000, "USD"), Date: day},
+		{ID: "in", AccountID: "savings", TransferAccountID: "checking", Desc: "Transfer", Amount: money.New(5000, "USD"), Date: day},
+		{ID: "decoy", AccountID: "savings", TransferAccountID: "checking", Desc: "Other day", Amount: money.New(5000, "USD"), Date: day.AddDate(0, 0, 1)},
+		{ID: "solo", AccountID: "checking", Desc: "Coffee", Amount: money.New(-700, "USD"), Date: day},
+	}
+	for _, tx := range txns {
+		if err := a.PutTransaction(tx); err != nil {
+			t.Fatalf("PutTransaction(%s): %v", tx.ID, err)
+		}
+	}
+
+	if err := a.DeleteTransactionWithTransferPair("out"); err != nil {
+		t.Fatalf("DeleteTransactionWithTransferPair: %v", err)
+	}
+	remaining := map[string]bool{}
+	for _, tx := range a.Transactions() {
+		remaining[tx.ID] = true
+	}
+	if remaining["out"] || remaining["in"] {
+		t.Fatalf("transfer pair still present after delete: %v", remaining)
+	}
+	if !remaining["decoy"] || !remaining["solo"] {
+		t.Fatalf("unrelated transactions should remain: %v", remaining)
+	}
+
+	if err := a.DeleteTransactionWithTransferPair("solo"); err != nil {
+		t.Fatalf("DeleteTransactionWithTransferPair(solo): %v", err)
+	}
+	for _, tx := range a.Transactions() {
+		if tx.ID == "solo" {
+			t.Fatal("solo transaction still present after delete")
+		}
+	}
+}
+
 func TestPutSettingsAndRedactedExport(t *testing.T) {
 	a := newApp(t, false)
 	s := a.Settings()

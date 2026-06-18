@@ -273,35 +273,9 @@ func Transactions() ui.Node {
 	}
 
 	deleteTxn := func(txnID string) {
-		all := app.Transactions()
-		var target domain.Transaction
-		found := false
-		for _, t := range all {
-			if t.ID == txnID {
-				target, found = t, true
-				break
-			}
-		}
-		if err := app.DeleteTransaction(txnID); err != nil {
+		if err := app.DeleteTransactionWithTransferPair(txnID); err != nil {
 			errMsg.Set(err.Error())
 			return
-		}
-		// A transfer is two paired legs; delete the reciprocal so balances stay
-		// consistent. The pair has the accounts swapped, the amount negated, and
-		// the same date.
-		if found && target.IsTransfer() {
-			for _, t := range all {
-				if t.ID != txnID && t.IsTransfer() &&
-					t.AccountID == target.TransferAccountID &&
-					t.TransferAccountID == target.AccountID &&
-					t.Amount.Amount == -target.Amount.Amount &&
-					t.Date.Equal(target.Date) {
-					if err := app.DeleteTransaction(t.ID); err != nil {
-						notifyErr(uistate.T("transactions.pairedTransferErr", err.Error()))
-					}
-					break
-				}
-			}
 		}
 		bump()
 	}
