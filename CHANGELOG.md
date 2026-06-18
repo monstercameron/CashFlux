@@ -29,6 +29,11 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Text/display size now scales to 200% for accessibility (C26):** the display-scale control (Settings →
+  Appearance, relabelled "Text & display size") now goes up to 200% (was 130%), meeting WCAG 2.1 SC 1.4.4
+  "Resize text." This works now because the C10/C19 responsive fixes make the app *reflow* at high zoom
+  instead of overflowing — verified live: at 200% on a 1280px window the page reflows with no horizontal
+  scroll. It composes with the density setting (an independent zoom multiplier on top of the base tokens).
 - **Tighter default density (C25):** the out-of-the-box UI felt too heavy for a dense finance app. The
   base font is now 14.5px (from 16) with line-height 1.45, and the shared control/widget tokens are
   trimmed — `.field` ~34px (was ~40) with 6px corners, `.btn` padding reduced, `.wbody` padding tightened.

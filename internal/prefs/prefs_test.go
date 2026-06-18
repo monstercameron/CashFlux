@@ -31,8 +31,9 @@ func TestScaleNormalize(t *testing.T) {
 		100: 100,
 		70:  70,
 		130: 130,
+		200: 200,      // 200% is in range (accessibility text-resize, C26)
 		50:  ScaleMin, // below range clamps up
-		200: ScaleMax, // above range clamps down
+		250: ScaleMax, // above range clamps down to 200
 		90:  90,
 	}
 	for in, want := range cases {

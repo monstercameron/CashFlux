@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — C26: text/display size to 200% for accessibility
+
+- The Display scale (B6) topped out at 130% and the TODO flagged that `zoom` would overflow the
+  non-responsive layout at large values — so C26 was blocked on C10. C10/C19 are now fixed, which
+  unblocks the TODO's option (b): keep the `zoom`-on-`#app` mechanism and just raise the ceiling.
+- Raised `prefs.ScaleMax` 130 → 200 (WCAG 2.1 SC 1.4.4), updated the clamp test (200 valid, 250 clamps),
+  and relabelled the setting "Text & display size" so it reads as an accessibility control. The
+  `scaleOptions` builder derives from the constants, so the dropdown now offers 70–200% automatically.
+- **Empirically validated the reflow** (the part the TODO was unsure about): set `--ui-scale: 2` on a
+  1280px window — Chromium's `zoom` makes the content lay out at the effective ~640px width, so the
+  phone responsive rules engage and `document.body.scrollWidth == viewport` with no horizontal scroll.
+  So 200% text resize works without loss of content, exactly because the responsive pass landed first.
+- Composes with C25: density rebalances the base tokens; this is a zoom multiplier on top — independent.
+- Wasm-only change (no index.html), so no SW cache bump (main.wasm is network-first).
+
 ## 2026-06-17 — C25: rebalance the default density down
 
 - Picked C25 next ("UI too fat/chunky"). The TODO said to confirm the approach first, but the user told

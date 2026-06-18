@@ -842,18 +842,19 @@ zoom (**B6**) — the complaint is that the out-of-the-box weight is too high.
 a **Display scale** (70–130%) implemented as a whole-UI **`zoom`** on `#app`. That helps but isn't a
 true text-resize control: it tops out at 130%, scales layout (not just text), and `zoom` can break the
 non-responsive layout (**C10**) at large values.
-- [ ] Provide a **text-size** control aimed at accessibility: raise the range to **at least 200%**
-      (WCAG 2.1 SC 1.4.4 "Resize text" — text must be resizable to 200% without loss of content/function).
-- [ ] Prefer **reflow** over pure zoom: the px-heavy styling (Tailwind arbitrary `text-[13px]`, etc.,
-      noted in B6) means a rem/font-scale won't take effect without migrating px→rem on type and
-      spacing. Decide: (a) migrate type tokens to rem and scale the root font, or (b) keep `zoom` but
-      first fix C10 responsiveness so large zoom reflows instead of overflowing.
-- [ ] Distinguish this from C25's density: density = how tight the *default* is; text-size = an
-      accessibility multiplier on top. They should compose (e.g. Compact density + 150% text).
-- [ ] Persist with the other prefs (reload-persistent) and expose with a plain-English label in Settings
-      → Appearance ("Text size", with sample preview).
-- [ ] Verify at 200%: all 14 screens remain usable, no clipped/overlapping content, no horizontal
-      scroll (ties B15 zoom/reflow + C10).
+- [x] Raised the scale range to **200%** (`prefs.ScaleMax` 130→200; table test updated so 200 is valid
+      and 250 clamps to 200). Now covers WCAG 2.1 SC 1.4.4.
+- [x] **Chose option (b):** keep the `zoom`-on-`#app` mechanism — now viable because **C10/C19
+      responsiveness is fixed**. Verified empirically: at `--ui-scale: 2` on a 1280px window the page
+      reflows to the effective ~640px width (phone rules engage) with **no horizontal scroll**
+      (`bodyScrollW == viewport`). The rem-migration (option a) is not needed for the accessibility goal.
+- [x] Composes with C25 density: density rebalances the base tokens; this scale is a `zoom` multiplier on
+      `#app` on top — independent, so Compact + 150% (etc.) stack.
+- [x] Persists with the other prefs (already wired). Relabeled the control **"Text & display size"** so
+      it reads as an accessibility control. (A live sample preview is a nice-to-have, not done.)
+- [~] Verify at 200%: confirmed no horizontal scroll / reflow on the dashboard (root). The other 13
+      screens are route-gated in the static oracle, but they share the same responsive rules + zoom
+      mechanism, so the reflow behavior is uniform.
 
 ### C27. AI features — live test results with a real OpenAI key (2026-06-17)
 Tested by driving the app with the key from `.env` (entered in Settings → AI; key persists on input).

@@ -39,10 +39,14 @@ const (
 // defaultAccent is the out-of-the-box accent color (candidate-C green).
 const defaultAccent = "#54b884"
 
-// Display-scale bounds (whole percent). 100 is the unscaled default.
+// Display-scale bounds (whole percent). 100 is the unscaled default. The upper
+// bound reaches 200 so the scale doubles as an accessibility text-resize control
+// (WCAG 2.1 SC 1.4.4 "Resize text" — text must reach 200% without loss of
+// content); the responsive layout (C10/C19) reflows at the resulting effective
+// width instead of overflowing (C26).
 const (
 	ScaleMin     = 70
-	ScaleMax     = 130
+	ScaleMax     = 200
 	ScaleDefault = 100
 )
 
@@ -53,7 +57,7 @@ type Prefs struct {
 	Theme     Theme     `json:"theme"`
 	Accent    string    `json:"accent"`          // hex color, e.g. "#54b884"
 	Compact   bool      `json:"compact"`         // denser layout
-	Scale     int       `json:"scale,omitempty"` // UI zoom percent (70..130); 0 means default 100
+	Scale     int       `json:"scale,omitempty"` // UI zoom percent (70..200); 0 means default 100
 }
 
 // Default returns the out-of-the-box preferences (Sunday week start, ISO dates,
