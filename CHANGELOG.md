@@ -103,6 +103,10 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Accessibility polish (B15):** the icon-only widget gear and the accounts "⋯" overflow button now carry
+  explicit `aria-label`s, and the decorative drag grip is `aria-hidden`, so screen readers announce the
+  controls correctly. (Reduced-motion already covers the new tile animations, and the layout reflows at
+  200% zoom — both verified.)
 - **Budgets has a single period control now (C7):** the Budgets card had its own `‹ January 2006 ›`
   month stepper competing with the global top-bar resolution control (and in a different format). The
   in-card stepper is removed; the screen now follows the shared top-bar period, so there's one control

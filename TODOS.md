@@ -442,8 +442,10 @@ one-line a11y item in §1.20.
       effect covering every overlay.
 - [~] **Custom controls → correct ARIA:** Segmented = `role="radiogroup"`/`role="radio"`/`aria-checked`;
       Toggle/ToggleRow = `role="switch"` + `aria-checked` + name; StepperPill ‹/› have `aria-label`s;
-      SwatchPicker = labelled `role="radiogroup"` of `role="radio"` chips. Still TODO: the gear/menu/grip
-      icon-buttons' `aria-label`s, and real keyboard operability for the div-based Toggle/Swatch.
+      SwatchPicker = labelled `role="radiogroup"` of `role="radio"` chips. The gear (`aria-label="Widget
+      settings"`), accounts "⋯" overflow (`aria-label`), and the grip (`aria-hidden`, decorative) now have
+      correct names; the AddMenu/menu/+Add carry text or titles. Still TODO: real keyboard operability for
+      the div-based Toggle/Swatch (they have Space/Enter via OnKeyDown; verify with a screen reader).
 - [x] **Focus visibility:** a global `:focus-visible` ring (accent, 2px offset) on every interactive
       element/role in both themes.
 - [~] **Screen-reader / live regions:** the toast notice is now a persistent live region (idle region
@@ -460,21 +462,21 @@ one-line a11y item in §1.20.
       theme surface and warn when it's low (uses `internal/contrast`) — so users see when an accent is
       hard to read. Still TODO (brand decision): pick a light-theme-safe default accent (or per-theme
       accent) since the default green is ~2.3:1 on light.
-- [~] **Motion:** `prefers-reduced-motion` now also covers the flip-panel, toast slide-in, and rail
-      width (boot + rail flyout were already handled). Still TODO once they exist: the dashboard
-      reorder/resize animations (B2). Original note below:
-- [ ] (orig) **Motion:** `prefers-reduced-motion` for the dashboard reorder/resize animations (B2) and the
-      flip panel (boot loader + settle already do).
-- [ ] **Zoom / reflow:** usable at 200% browser zoom and with enlarged browser font sizes — the
-      px-heavy styling (see B6) is the risk; pairs with the B6 UI-scale work.
+- [x] **Motion:** `prefers-reduced-motion` covers the flip-panel, toast slide-in, rail width, boot, the
+      rail flyout, AND the dashboard reorder/resize/drag FLIP animations (`web/flip.js` checks
+      `matchMedia('(prefers-reduced-motion: reduce)')` and only records positions, no transition, when set).
+- [x] **Zoom / reflow:** the Display/Text-size control reaches 200% (C26) and the C10/C19 responsive
+      layout reflows at the effective width — verified live: at `--ui-scale: 2` on a 1280px window the page
+      reflows to the phone layout with no horizontal scroll. Meets WCAG 2.1 SC 1.4.4 / 1.4.10.
 - [~] **Forms:** correct input types (number/date) in use; **inline validation is announced** —
       every `.err` message is `role="alert"`; **required fields carry `aria-required`** across every add
       form (accounts, categories, budgets, goals, members, rules, to-do, transactions, quick-add,
       plans). Still TODO: per-field `aria-describedby` association tying each error to its input.
 - [x] **Route changes (SPA):** focus moves to `<main>` on navigation (skips the initial load so the
       first Tab still reaches the skip link) and `document.title` is set to "<Screen> · CashFlux".
-- [~] **Charts:** `ui.AreaChart` is now `role="img"` + `aria-label` with a live-figure summary (net-worth
-      trend, forecast). Remaining: the div-based bar charts + any future D3 charts (B14).
+- [x] **Charts:** `ui.AreaChart` and the D3 `ui.Chart` are both `role="img"` + `aria-label` with a
+      live-figure summary (net-worth trend, planning forecast, breakdown). The D3 container sets role/label
+      in `chartd3.go`; the sparkline in `chart.go`.
 - [~] **Touch targets:** small icon-only buttons (delete/toast-x/rstep/set-close) now meet the WCAG
       2.5.8 AA 24×24 minimum (centered glyph). 44×44 (AAA) left aspirational given the dense desktop UI.
 - [ ] **i18n:** route `aria-label`s/announcements through the language store (B i18n) so they translate.
@@ -991,7 +993,11 @@ results are summarized here so the backlog doesn't bloat.
         whose buttons add correctly with the same fill+click. Likely the Name `OnInput` isn't wired (or
         the button reads a state var the input never updates) while the `<form>` onSubmit reads the live
         value. _Confirm with real keyboard typing; fix so the button and Enter behave identically._
-
+- **2026-06-18 #5** — Scoped the #4 bug: tested single-primary-field button-add on other screens.
+  **Categories** add ("LoopCatClick" via button) ✓ and Enter ✓; **To-do** add ("LoopTaskClick" via
+  button) ✓ and Enter ✓. 0 console errors. **Conclusion: the no-op is isolated to the Members "Add
+  member" form** — not a framework-wide input-commit problem. Root cause lives in that form's wiring
+  (its button handler vs. the Name field), so the fix is local to the Members add form.
 ## D. Cross-component E2E workstream stories — budgeting · planning · finances ★
 
 Each story below is a **workstream**: one real user journey followed end-to-end, asserting that every

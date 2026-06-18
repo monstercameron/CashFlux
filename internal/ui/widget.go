@@ -150,7 +150,7 @@ func widget(props WidgetProps) uic.Node {
 	}
 	args = append(args,
 		Div(Class("wh"),
-			Span(Class("grip"), "⠿"), // ⠿ drag grip
+			Span(Class("grip"), Attr("aria-hidden", "true"), "⠿"), // decorative drag grip
 			H3(props.Title),
 			gear,
 		),
@@ -225,11 +225,12 @@ func gearButton(props gearButtonProps) uic.Node {
 		Class("gear-inline"),
 		Type("button"),
 		Attr("title", "Widget settings"),
+		Attr("aria-label", "Widget settings"), // icon-only button → explicit name (B15)
 		OnClick(func() {
 			if onClick != nil {
 				onClick()
 			}
 		}),
-		"⚙", // ⚙
+		Span(Attr("aria-hidden", "true"), "⚙"),
 	)
 }

@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B15 a11y: icon-button labels + closing satisfied items
+
+- Added explicit `aria-label`s to the icon-only buttons the spike flagged: the widget gear ("Widget
+  settings", glyph wrapped in `aria-hidden`), the accounts "⋯" overflow ("More actions"); made the
+  decorative drag grip `aria-hidden`. Verified live (gear aria-label present, grip aria-hidden=true).
+- Closed B15 items now satisfied by recent work: reduced-motion covers the dashboard FLIP animations
+  (flip.js checks matchMedia), 200% zoom reflows (C26, verified), and the D3 `ui.Chart` is already
+  role=img + aria-label (chartd3.go) alongside the sparkline. Updated the checklist.
+- Remaining B15: the bento drag/resize keyboard alternative, per-field `aria-describedby`, the
+  light-theme accent brand decision, and the axe-in-CI tooling (needs the browser lane).
+
 ## 2026-06-18 — feature D10: forecast scenario comparison + dollar axis
 
 - The Planning 12-month forecast used the axis-less sparkline and showed the trim scenario as text only.

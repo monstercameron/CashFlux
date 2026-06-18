@@ -556,7 +556,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		Button(Class("btn"), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uistate.T("nav.transactions")),
 		Button(Class("btn"), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
 		Div(Class("add-wrap"),
-			Button(Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), OnClick(toggleMenu), "⋯"),
+			Button(Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), OnClick(toggleMenu), Span(Attr("aria-hidden", "true"), "⋯")),
 			Div(Class("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(Class("add-menu"+menuHidden), Attr("role", "menu"),
 				If(!a.Archived, Button(Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),
