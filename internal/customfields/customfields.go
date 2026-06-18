@@ -5,6 +5,8 @@
 package customfields
 
 import (
+	"strings"
+
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 )
 
@@ -44,6 +46,10 @@ func (d Def) Validate() []string {
 	}
 	if d.Key == "" {
 		issues = append(issues, "Field key is required.")
+	} else if !ValidKey(d.Key) {
+		issues = append(issues, "Field key can use only letters, numbers, and underscores.")
+	} else if ReservedKey(d.Key) {
+		issues = append(issues, "Field key is reserved.")
 	}
 	if d.Label == "" {
 		issues = append(issues, "Field label is required.")
@@ -61,6 +67,37 @@ func (d Def) Validate() []string {
 func (t FieldType) Valid() bool {
 	switch t {
 	case TypeText, TypeNumber, TypeDate, TypeBool, TypeSelect:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidKey reports whether key is safe for the custom{} map: ASCII letters,
+// digits, and underscores only. It intentionally stays stricter than JSON keys so
+// custom fields are easy to reference from formulas, imports, and future sync.
+func ValidKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// ReservedKey reports keys that would be confusing or unsafe as user-defined
+// custom fields because they shadow core metadata names.
+func ReservedKey(key string) bool {
+	switch strings.ToLower(key) {
+	case "id", "entitytype", "type", "key", "label", "custom", "options", "required":
 		return true
 	default:
 		return false

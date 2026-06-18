@@ -1,5 +1,7 @@
 # CashFlux — Developer Journal
 
+Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
+problems and fixes, and what's next.
 
 ## 2026-06-18 — fix: §6.9 toast — error notices linger + labelled dismiss
 
@@ -12,9 +14,6 @@
   pre-staged files don't get swept into my commit — last time my "?" overlay commit absorbed their
   en.go/allocate.go because `git commit` writes the whole shared index.
 - §6 progress (mine): 6.1, 6.2, 6.3, 6.4(switcher), 6.6(Alt+1..9/Enter/?-overlay), 6.9(toast), 6.11.
-
-Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
-problems and fixes, and what's next.
 
 ## 2026-06-18 — test: 10 user stories e2e for custom pages + workflows
 
@@ -30,9 +29,6 @@ problems and fixes, and what's next.
   the hidden-pages section, and inter-page navigation — all correct.
 - Bug found + fixed: currency KPIs truncated `value×100` to int, so float error could drop a cent
   ($15,343.50 → $15,343.49). Now `math.Round`. No other defects surfaced.
-
-Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
-problems and fixes, and what's next.
 
 ## 2026-06-18 — fix: UX polish §6.10 — custom-field key validation
 

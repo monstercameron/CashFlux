@@ -112,7 +112,7 @@ func CustomFieldsManager() ui.Node {
 		P(Class("muted"), uistate.T("cf.addDesc")),
 		Form(Class("form-grid"), OnSubmit(add),
 			Select(Class("field"), OnChange(onEntity), entityOptions),
-			Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
+			Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
 			Input(Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
 			Select(Class("field"), OnChange(onType), typeOptions),
 			If(isChoice, Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),

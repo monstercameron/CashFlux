@@ -68,6 +68,37 @@ func TestDefValidate(t *testing.T) {
 	}
 }
 
+func TestDefValidateKeyFormat(t *testing.T) {
+	base := Def{ID: "f1", EntityType: "account", Label: "Reference", Type: TypeText}
+	tests := []struct {
+		name string
+		key  string
+		ok   bool
+	}{
+		{"letters", "branch", true},
+		{"digits", "field2", true},
+		{"underscore", "branch_code", true},
+		{"space", "branch code", false},
+		{"hyphen", "branch-code", false},
+		{"punctuation", "branch.code", false},
+		{"reserved", "id", false},
+		{"reserved case insensitive", "EntityType", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := base
+			d.Key = tt.key
+			issues := d.Validate()
+			if tt.ok && len(issues) != 0 {
+				t.Fatalf("expected key %q to be valid, got %v", tt.key, issues)
+			}
+			if !tt.ok && len(issues) == 0 {
+				t.Fatalf("expected key %q to be invalid", tt.key)
+			}
+		})
+	}
+}
+
 func TestFieldTypeValid(t *testing.T) {
 	for _, ty := range []FieldType{TypeText, TypeNumber, TypeDate, TypeBool, TypeSelect} {
 		if !ty.Valid() {

@@ -296,7 +296,7 @@ and every commit updates this file under `Unreleased`.
   stories, `internal/appstate/scenarios_test.go` + browser verification; see `docs/CUSTOM_PAGES_STORIES.md`).
 - **Custom-field keys are validated before they can pollute data (UX audit §6.10).** Custom field
   definitions now reject keys with spaces, punctuation, or reserved metadata names; the add-field form
-  also exposes the allowed letters/numbers/underscore pattern to the browser.
+  also exposes the allowed letters/numbers/underscore pattern to the browser before save.
 - **Allocate score bars are labelled for sighted and assistive users (UX audit §6.10).** Each allocation
   suggestion now shows an inline `Score N%` label and exposes its bar as a real `progressbar` with
   `aria-valuenow`, so the rank score is no longer a purely visual fill.
