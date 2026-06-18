@@ -5,6 +5,7 @@ package app
 import (
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -24,6 +25,18 @@ const (
 func Toast() uic.Node {
 	atom := uistate.UseNotice()
 	n := atom.Get()
+
+	// Wire the app's workflow "notify" action to this toast surface, once. The
+	// captured atom lets a notice posted from event time (a workflow run) show up
+	// here without calling a hook outside render.
+	uic.UseEffect(func() func() {
+		if appstate.Default != nil {
+			appstate.Default.Notifier = func(msg string) {
+				atom.Set(atom.Get().With(msg, false))
+			}
+		}
+		return nil
+	}, "wire-notifier")
 
 	// Re-arm the auto-dismiss timer whenever a new notice is posted (keyed on
 	// Seq). The cleanup clears a still-pending timer and releases its callback

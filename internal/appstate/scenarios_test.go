@@ -221,9 +221,9 @@ func TestStory9_OverspendAlert(t *testing.T) {
 	now := thisMonth()
 	// Small income, large expense this month → expense > income.
 	_ = a.PutTransaction(domain.Transaction{ID: "i1", AccountID: "acc1", Date: now, Desc: "Side gig", Amount: money.New(10000, "USD")})
+	// PutTransaction fires the txn-added trigger itself; the qualifying expense add
+	// (expense > income for the month) is what creates the task.
 	_ = a.PutTransaction(domain.Transaction{ID: "e1", AccountID: "acc1", Date: now, Desc: "Big buy", Amount: money.New(-90000, "USD")})
-
-	a.RunTriggered(workflow.TriggerTxnAdded)
 
 	tasks := a.Tasks()
 	found := false

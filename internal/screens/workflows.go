@@ -59,6 +59,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 	actions := ui.UseState([]workflow.Action(nil))
 	draftKind := ui.UseState(string(workflow.ActionCreateTask))
 	draftText := ui.UseState("")
+	draftCat := ui.UseState("")
 	msg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
@@ -66,6 +67,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 	onCondition := ui.UseEvent(func(v string) { condition.Set(v) })
 	onDraftKind := ui.UseEvent(func(v string) { draftKind.Set(v) })
 	onDraftText := ui.UseEvent(func(v string) { draftText.Set(v) })
+	onDraftCat := ui.UseEvent(func(e ui.Event) { draftCat.Set(e.GetValue()) })
 
 	addAction := func() {
 		a := workflow.Action{Kind: workflow.ActionKind(draftKind.Get())}
@@ -74,6 +76,10 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			a.Title = draftText.Get()
 		case workflow.ActionNotify:
 			a.Message = draftText.Get()
+		case workflow.ActionAddTag:
+			a.Tag = draftText.Get()
+		case workflow.ActionSetCategory:
+			a.CategoryID = draftCat.Get()
 		}
 		actions.Set(append(append([]workflow.Action(nil), actions.Get()...), a))
 		draftText.Set("")
@@ -102,6 +108,24 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		}
 	}
 
+	// The action parameter control depends on the chosen action kind.
+	var paramControl ui.Node
+	switch workflow.ActionKind(draftKind.Get()) {
+	case workflow.ActionSetCategory:
+		opts := []ui.Node{Option(Value(""), uistate.T("workflows.chooseCategory"))}
+		if appstate.Default != nil {
+			for _, c := range appstate.Default.Categories() {
+				opts = append(opts, Option(Value(c.ID), SelectedIf(draftCat.Get() == c.ID), c.Name))
+			}
+		}
+		paramControl = Select(Class("field"), OnChange(onDraftCat), opts)
+	case workflow.ActionApplyRules, workflow.ActionFlagReview:
+		paramControl = P(Class("muted"), uistate.T("workflows.noParam"))
+	default: // createTask / notify / addTag
+		paramControl = Input(Class("field"), Attr("placeholder", uistate.T("workflows.actionText")),
+			Value(draftText.Get()), OnInput(onDraftText))
+	}
+
 	// Rendered list of staged actions.
 	var staged []ui.Node
 	for i, a := range actions.Get() {
@@ -121,14 +145,19 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			),
 			Input(Class("field"), Attr("placeholder", uistate.T("workflows.condition")), Value(condition.Get()), OnInput(onCondition)),
 		),
-		// Action builder.
+		// Action builder. The parameter control depends on the chosen action:
+		// a category picker for "set category", a text field for create-task /
+		// notify / add-tag, and nothing for apply-rules / flag-for-review.
 		Div(Class("form-grid mt-2"),
 			Select(Class("field"), OnChange(onDraftKind),
 				Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
+				Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
+				Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
+				Option(Value(string(workflow.ActionFlagReview)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagReview)), uistate.T("workflows.actFlagReview")),
 				Option(Value(string(workflow.ActionApplyRules)), SelectedIf(draftKind.Get() == string(workflow.ActionApplyRules)), uistate.T("workflows.actApplyRules")),
 				Option(Value(string(workflow.ActionNotify)), SelectedIf(draftKind.Get() == string(workflow.ActionNotify)), uistate.T("workflows.actNotify")),
 			),
-			Input(Class("field"), Attr("placeholder", uistate.T("workflows.actionText")), Value(draftText.Get()), OnInput(onDraftText)),
+			paramControl,
 			Button(Class("btn"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
 		),
 		If(len(staged) > 0, Div(Class("rows"), staged)),
@@ -263,6 +292,12 @@ func actionLabel(a workflow.Action) string {
 		return uistate.T("workflows.actApplyRules")
 	case workflow.ActionNotify:
 		return uistate.T("workflows.actNotify") + ": " + a.Message
+	case workflow.ActionSetCategory:
+		return uistate.T("workflows.actSetCategory")
+	case workflow.ActionAddTag:
+		return uistate.T("workflows.actAddTag") + ": " + a.Tag
+	case workflow.ActionFlagReview:
+		return uistate.T("workflows.actFlagReview")
 	default:
 		return string(a.Kind)
 	}

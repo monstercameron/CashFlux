@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -41,6 +42,9 @@ type App struct {
 	// now returns the current time; overridable in tests for deterministic
 	// month-scoped figures. Defaults to time.Now.
 	now func() time.Time
+	// Notifier, if set, surfaces a workflow "notify" message to the user (e.g. a
+	// toast). The wasm app wires this; when nil, notices go only to the log.
+	Notifier func(string)
 }
 
 // Default is the process-wide App, set by Init and read by screens.
@@ -714,13 +718,55 @@ func (a *App) engineVars() map[string]float64 {
 	})
 }
 
+// txnContext builds the workflow context for a transaction-triggered run: the
+// engine variable surface plus the triggering transaction's own fields, so a
+// condition can reference txn_amount/txn_abs (major units) and txn_payee/txn_desc/
+// txn_category/txn_account/txn_tags, and transaction-mutating actions know which
+// transaction to change.
+func (a *App) txnContext(t domain.Transaction) workflow.Context {
+	ctx := workflow.Context{Vars: a.engineVars(), Strs: map[string]string{}, TxnID: t.ID}
+	div := 1.0
+	for i := 0; i < currency.Decimals(t.Amount.Currency); i++ {
+		div *= 10
+	}
+	amt := float64(t.Amount.Amount) / div
+	ctx.Vars["txn_amount"] = amt
+	ctx.Vars["txn_abs"] = math.Abs(amt)
+	ctx.Strs["txn_payee"] = t.Payee
+	ctx.Strs["txn_desc"] = t.Desc
+	ctx.Strs["txn_tags"] = strings.Join(t.Tags, ",")
+	for _, ac := range a.Accounts() {
+		if ac.ID == t.AccountID {
+			ctx.Strs["txn_account"] = ac.Name
+			break
+		}
+	}
+	for _, c := range a.Categories() {
+		if c.ID == t.CategoryID {
+			ctx.Strs["txn_category"] = c.Name
+			break
+		}
+	}
+	return ctx
+}
+
 // RunWorkflow plans a workflow against the current figures and, unless dryRun,
 // applies its effects (creating tasks, applying rules, recording notices) and
 // saves a Run to the audit history. It returns the Run so the UI can show what
 // happened (or would happen). Planning is the pure engine; this is the only place
 // the effects actually change state, keeping runs explainable and dry-runnable.
 func (a *App) RunWorkflow(w workflow.Workflow, dryRun bool) (workflow.Run, error) {
-	effects, matched, err := workflow.Plan(w, a.engineVars())
+	return a.runWorkflow(w, workflow.Context{Vars: a.engineVars()}, dryRun)
+}
+
+// RunWorkflowOn runs a workflow in the context of a specific transaction, so its
+// condition and transaction-mutating actions see that transaction.
+func (a *App) RunWorkflowOn(w workflow.Workflow, t domain.Transaction, dryRun bool) (workflow.Run, error) {
+	return a.runWorkflow(w, a.txnContext(t), dryRun)
+}
+
+func (a *App) runWorkflow(w workflow.Workflow, ctx workflow.Context, dryRun bool) (workflow.Run, error) {
+	effects, matched, err := workflow.Plan(w, ctx)
 	if err != nil {
 		return workflow.Run{}, err
 	}
@@ -764,9 +810,46 @@ func (a *App) applyEffect(e workflow.Effect) {
 		if _, err := a.ApplyRules(); err != nil {
 			a.logErr("workflowApplyRules", err)
 		}
+	case workflow.ActionSetCategory:
+		a.mutateTxn(e.TxnID, func(t *domain.Transaction) { t.CategoryID = e.CategoryID })
+	case workflow.ActionAddTag, workflow.ActionFlagReview:
+		a.mutateTxn(e.TxnID, func(t *domain.Transaction) { t.Tags = addTagUnique(t.Tags, e.Tag) })
 	case workflow.ActionNotify:
 		a.log.Info("workflow notice", "message", e.Message)
+		if a.Notifier != nil {
+			a.Notifier(e.Message)
+		}
 	}
+}
+
+// mutateTxn loads the transaction with id, applies fn, and saves it via the
+// store (below the trigger layer, so a transaction-mutating action can't re-fire
+// the txn-added trigger). A no-op when id is empty or the transaction is gone.
+func (a *App) mutateTxn(id string, fn func(*domain.Transaction)) {
+	if id == "" {
+		return
+	}
+	t, ok, err := a.store.GetTransaction(id)
+	if err != nil || !ok {
+		return
+	}
+	fn(&t)
+	if err := a.store.PutTransaction(t); err != nil {
+		a.logErr("workflowMutateTxn", err)
+	}
+}
+
+// addTagUnique appends tag to tags if not already present (case-sensitive).
+func addTagUnique(tags []string, tag string) []string {
+	if strings.TrimSpace(tag) == "" {
+		return tags
+	}
+	for _, x := range tags {
+		if x == tag {
+			return tags
+		}
+	}
+	return append(append([]string(nil), tags...), tag)
 }
 
 // clock returns the current time via the injectable seam (a.now), defaulting to
@@ -778,14 +861,24 @@ func (a *App) clock() time.Time {
 	return time.Now()
 }
 
-// RunTriggered runs every enabled workflow whose trigger matches the given event,
-// applying effects. Used by event hooks (e.g. after a transaction is added).
-func (a *App) RunTriggered(event workflow.TriggerKind) {
+// RunTriggered runs every enabled workflow whose trigger matches the given event.
+// When the event concerns a specific transaction (txn-added), pass it so the
+// workflow's condition and transaction-mutating actions see it; pass nil for
+// aggregate/bulk events (the workflow then runs against the dataset-wide figures
+// only, and transaction-mutating actions no-op).
+func (a *App) RunTriggered(event workflow.TriggerKind, t *domain.Transaction) {
 	for _, w := range a.Workflows() {
-		if w.Enabled && workflow.Match(w.Trigger, event) {
-			if _, err := a.RunWorkflow(w, false); err != nil {
-				a.logErr("workflowTriggered", err)
-			}
+		if !w.Enabled || !workflow.Match(w.Trigger, event) {
+			continue
+		}
+		var err error
+		if t != nil {
+			_, err = a.RunWorkflowOn(w, *t, false)
+		} else {
+			_, err = a.RunWorkflow(w, false)
+		}
+		if err != nil {
+			a.logErr("workflowTriggered", err)
 		}
 	}
 }
@@ -914,7 +1007,7 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	}
 	a.log.Info("transaction saved", "id", t.ID)
 	if !existed && !a.triggersSuspended {
-		a.RunTriggered(workflow.TriggerTxnAdded)
+		a.RunTriggered(workflow.TriggerTxnAdded, &t)
 	}
 	return nil
 }
@@ -928,7 +1021,8 @@ func (a *App) WithoutTriggers(fn func()) {
 	fn()
 	a.triggersSuspended = prev
 	if !a.triggersSuspended {
-		a.RunTriggered(workflow.TriggerTxnAdded)
+		// Bulk add: fire aggregate workflows once (no single triggering txn).
+		a.RunTriggered(workflow.TriggerTxnAdded, nil)
 	}
 }
 func (a *App) DeleteTransaction(id string) error {

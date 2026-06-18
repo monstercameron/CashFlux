@@ -3,6 +3,51 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: make workflows genuinely valuable (acted on a value critique)
+
+- A product critic judged the workflow engine "a demo with one real button": txn-added conditions/actions
+  were blind to the triggering transaction (only month aggregates), notify just logged, applyRules
+  duplicated rules. Implemented the Tier-1 fixes that turn it into real transaction automation:
+  - **formula engine:** `Env` gained `Strs` (string variables) and a `contains()` (case-insensitive) +
+    `lower()` function — so conditions can match text, not just numbers.
+  - **workflow engine:** `Eval`/`Plan` now take a `Context{Vars, Strs, TxnID}`. New write-safe actions
+    `setCategory`/`addTag`/`flagReview` carry the triggering txn id. Validate covers them.
+  - **appstate:** `txnContext` builds per-txn vars (`txn_amount`/`txn_abs` major + `txn_payee`/`txn_desc`/
+    `txn_category`/`txn_account`/`txn_tags`); `RunWorkflowOn` runs with that context; `RunTriggered`
+    threads the triggering txn; `applyEffect` mutates the txn via a below-trigger `mutateTxn` (loop-safe).
+    `notify` now calls an injectable `Notifier` hook, wired from the `Toast` component to a real toast.
+  - **UI:** the action picker offers the new actions with a category picker / tag field; the condition
+    hint shows per-txn examples.
+  - Tests: per-txn Eval (amount + contains), txn-mutating Plan, and an appstate routing test (bistro→
+    Dining; big spend→needs-review) + a notify-hook test. All green.
+- **Verification rabbit hole worth recording:** the browser showed "no workflows" even with a fresh
+  binary. Native tests passed, so I traced it: my throwaway seed harness embedded the exported JSON in a
+  **JS backtick template literal**, which un-escaped the `\"` inside a condition string
+  (`contains(txn_payee, "bistro")`), corrupting the JSON; `ImportJSON` correctly rejected it and fell back
+  to the sample (a 1-member household — which mimicked "members load, workflows don't"). Switched the
+  harness to `fetch()` a `.json` file (no escaping) and the workflows render correctly. App was never at
+  fault. Also confirmed via the debug page that custom pages/artifacts persist fine in wasm.
+
+## 2026-06-18 — feat: app-lock pure-logic core (B17 groundwork)
+
+- The user kept re-invoking /loop (wants continuous output), and the isolated app/keyboard/workspace work
+  is done — so I started B17 from the bottom with a NEW, zero-collision package `internal/applock`.
+  Deliberately built only the UX-agnostic pure layer (no modal/recovery-flow assumptions, respecting the
+  confirm-specs rule): `Config{Enabled,Salt,Hash,AutoLockMinutes}`, `HashPasscode` (salted SHA-256, hex),
+  `WithPasscode`/`Cleared`, constant-time `Verify` (crypto/subtle), and `ShouldAutoLock(idleMinutes)`.
+- Table tests cover determinism + salt/passcode sensitivity, verify correct/wrong/empty/disabled, empty
+  passcode-or-salt rejected, negative window clamped, cleared-can't-verify, and the auto-lock thresholds.
+- Pure native package (no wasm, no served-asset change → no SW bump); `go test ./internal/applock` green,
+  gofmt clean. Committed by pathspec. Next (needs a quick UX nod): persist the config, a lock-screen
+  overlay + Settings toggle, and wire crypto/rand salt + idle timing.
+
+## 2026-06-18 — fix: UX polish §6.4 — selected transaction checkbox state
+
+- Closed the selected-transaction checkbox item across `internal/screens/transactions.go` and
+  `web/index.html`: selected rows now carry `row selected`, and `.row.selected .check` gets an accent
+  background/border.
+- The base `.check` now has a transparent border to avoid layout shift when selection turns the border on.
+
 ## 2026-06-18 — fix: UX polish §6.11 — light-theme soon badge
 
 - Closed the fixed dark-blue `.badge-soon` item in `web/index.html`: light theme now overrides the badge

@@ -29,8 +29,9 @@ type Trigger struct {
 	Kind TriggerKind `json:"kind"`
 }
 
-// ActionKind is one effect a workflow can perform. The set is deliberately small
-// and write-safe (no action creates transactions, so txn-added can't loop).
+// ActionKind is one effect a workflow can perform. The set is write-safe (no
+// action creates transactions, so a txn-added workflow can't loop). SetCategory,
+// AddTag, and FlagReview act on the transaction that triggered the workflow.
 type ActionKind string
 
 const (
@@ -38,17 +39,40 @@ const (
 	ActionCreateTask ActionKind = "createTask"
 	// ActionApplyRules categorizes uncategorized transactions via the rules engine.
 	ActionApplyRules ActionKind = "applyRules"
-	// ActionNotify records a message (surfaced in the run result / as a notice).
+	// ActionNotify shows the user a message (in-app notice).
 	ActionNotify ActionKind = "notify"
+	// ActionSetCategory sets the triggering transaction's category.
+	ActionSetCategory ActionKind = "setCategory"
+	// ActionAddTag adds a tag to the triggering transaction.
+	ActionAddTag ActionKind = "addTag"
+	// ActionFlagReview tags the triggering transaction for review.
+	ActionFlagReview ActionKind = "flagReview"
 )
 
+// ReviewTag is the tag ActionFlagReview adds.
+const ReviewTag = "needs-review"
+
 // Action is one step in a workflow. Fields are interpreted per Kind: CreateTask
-// uses Title/Notes, Notify uses Message, ApplyRules uses none.
+// uses Title/Notes, Notify uses Message, SetCategory uses CategoryID, AddTag uses
+// Tag; ApplyRules and FlagReview use none.
 type Action struct {
-	Kind    ActionKind `json:"kind"`
-	Title   string     `json:"title,omitempty"`
-	Notes   string     `json:"notes,omitempty"`
-	Message string     `json:"message,omitempty"`
+	Kind       ActionKind `json:"kind"`
+	Title      string     `json:"title,omitempty"`
+	Notes      string     `json:"notes,omitempty"`
+	Message    string     `json:"message,omitempty"`
+	CategoryID string     `json:"categoryId,omitempty"`
+	Tag        string     `json:"tag,omitempty"`
+}
+
+// Context is what a workflow is evaluated against: numeric variables (the engine
+// surface plus, for a txn-added run, the triggering transaction's amount), string
+// variables (the triggering transaction's payee/description/category/account), and
+// the triggering transaction's id (empty for manual/aggregate runs). Per-
+// transaction variables are prefixed "txn_".
+type Context struct {
+	Vars  map[string]float64
+	Strs  map[string]string
+	TxnID string
 }
 
 // Workflow is a user-defined automation: when Trigger fires and Condition holds,
@@ -66,12 +90,16 @@ type Workflow struct {
 
 // Effect is the planned result of one action: a human-readable summary (for the
 // dry-run preview and the run log) plus the typed fields the apply layer needs.
+// TxnID is the transaction a transaction-mutating effect targets (empty otherwise).
 type Effect struct {
-	Kind    ActionKind `json:"kind"`
-	Summary string     `json:"summary"`
-	Title   string     `json:"title,omitempty"`
-	Notes   string     `json:"notes,omitempty"`
-	Message string     `json:"message,omitempty"`
+	Kind       ActionKind `json:"kind"`
+	Summary    string     `json:"summary"`
+	Title      string     `json:"title,omitempty"`
+	Notes      string     `json:"notes,omitempty"`
+	Message    string     `json:"message,omitempty"`
+	TxnID      string     `json:"txnId,omitempty"`
+	CategoryID string     `json:"categoryId,omitempty"`
+	Tag        string     `json:"tag,omitempty"`
 }
 
 // Run is the audit record of one workflow execution: what it did (or would do, if
@@ -90,15 +118,15 @@ func Match(t Trigger, event TriggerKind) bool {
 	return t.Kind == event
 }
 
-// Eval evaluates a workflow condition over the variable surface and returns
-// whether it holds. An empty condition always holds. A boolean result is used
-// directly; a number is truthy when non-zero; a string condition is an error
-// (conditions must be logical). Deterministic — a thin wrapper over the sandbox.
-func Eval(condition string, vars map[string]float64) (bool, error) {
+// Eval evaluates a workflow condition over the context and returns whether it
+// holds. An empty condition always holds. A boolean result is used directly; a
+// number is truthy when non-zero; a string condition is an error (conditions must
+// be logical). Deterministic — a thin wrapper over the sandbox.
+func Eval(condition string, ctx Context) (bool, error) {
 	if strings.TrimSpace(condition) == "" {
 		return true, nil
 	}
-	v, err := formula.Eval(condition, formula.Env{Vars: vars})
+	v, err := formula.Eval(condition, formula.Env{Vars: ctx.Vars, Strs: ctx.Strs})
 	if err != nil {
 		return false, err
 	}
@@ -112,13 +140,13 @@ func Eval(condition string, vars map[string]float64) (bool, error) {
 	}
 }
 
-// Plan computes the Effects a workflow would produce given the current variables,
+// Plan computes the Effects a workflow would produce given the current context,
 // without performing them. It returns (effects, matched, error): matched is false
 // (and effects nil) when the condition doesn't hold. This is the engine's core —
 // the same planning powers both dry-run preview and a real run (the apply layer
 // just executes the returned Effects). Pure and deterministic.
-func Plan(wf Workflow, vars map[string]float64) (effects []Effect, matched bool, err error) {
-	ok, err := Eval(wf.Condition, vars)
+func Plan(wf Workflow, ctx Context) (effects []Effect, matched bool, err error) {
+	ok, err := Eval(wf.Condition, ctx)
 	if err != nil {
 		return nil, false, err
 	}
@@ -126,14 +154,16 @@ func Plan(wf Workflow, vars map[string]float64) (effects []Effect, matched bool,
 		return nil, false, nil
 	}
 	for _, a := range wf.Actions {
-		effects = append(effects, planAction(a))
+		effects = append(effects, planAction(a, ctx))
 	}
 	return effects, true, nil
 }
 
 // planAction turns one action into its Effect, including a plain-English summary.
-func planAction(a Action) Effect {
-	e := Effect{Kind: a.Kind, Title: a.Title, Notes: a.Notes, Message: a.Message}
+// Transaction-mutating effects carry the triggering transaction's id from ctx.
+func planAction(a Action, ctx Context) Effect {
+	e := Effect{Kind: a.Kind, Title: a.Title, Notes: a.Notes, Message: a.Message,
+		CategoryID: a.CategoryID, Tag: a.Tag, TxnID: ctx.TxnID}
 	switch a.Kind {
 	case ActionCreateTask:
 		e.Summary = "Create task: " + fallback(a.Title, "(untitled)")
@@ -141,6 +171,13 @@ func planAction(a Action) Effect {
 		e.Summary = "Categorize uncategorized transactions with your rules"
 	case ActionNotify:
 		e.Summary = "Notify: " + a.Message
+	case ActionSetCategory:
+		e.Summary = "Set the transaction's category"
+	case ActionAddTag:
+		e.Summary = "Tag the transaction: " + a.Tag
+	case ActionFlagReview:
+		e.Tag = ReviewTag
+		e.Summary = "Flag the transaction for review"
 	default:
 		e.Summary = "Unknown action: " + string(a.Kind)
 	}
@@ -173,8 +210,19 @@ func Validate(wf Workflow) []string {
 		errs = append(errs, "Add at least one action.")
 	}
 	for _, a := range wf.Actions {
-		if a.Kind == ActionCreateTask && strings.TrimSpace(a.Title) == "" {
-			errs = append(errs, "A \"create task\" action needs a title.")
+		switch a.Kind {
+		case ActionCreateTask:
+			if strings.TrimSpace(a.Title) == "" {
+				errs = append(errs, "A \"create task\" action needs a title.")
+			}
+		case ActionSetCategory:
+			if strings.TrimSpace(a.CategoryID) == "" {
+				errs = append(errs, "A \"set category\" action needs a category.")
+			}
+		case ActionAddTag:
+			if strings.TrimSpace(a.Tag) == "" {
+				errs = append(errs, "An \"add tag\" action needs a tag.")
+			}
 		}
 	}
 	return errs

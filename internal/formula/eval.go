@@ -3,16 +3,19 @@ package formula
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 // Value is a formula result: float64, string, or bool. Nothing else can be
 // produced — the language has no objects, pointers, or host references.
 type Value interface{}
 
-// Env supplies the variables a formula may reference. Only these names resolve;
-// anything else is an "unknown variable" error.
+// Env supplies the variables a formula may reference. Numeric names resolve from
+// Vars, string names from Strs; anything else is an "unknown variable" error. A
+// name present in both resolves as a number (Vars wins).
 type Env struct {
 	Vars map[string]float64
+	Strs map[string]string
 }
 
 // Eval parses and evaluates an expression against env, returning a number,
@@ -35,6 +38,9 @@ func eval(n Node, env Env) (Value, error) {
 	case Ident:
 		if num, ok := env.Vars[v.Name]; ok {
 			return num, nil
+		}
+		if s, ok := env.Strs[v.Name]; ok {
+			return s, nil
 		}
 		return nil, fmt.Errorf("formula: unknown variable %q", v.Name)
 	case Unary:
@@ -211,6 +217,27 @@ func evalCall(c Call, env Env) (Value, error) {
 			return args[1], nil
 		}
 		return args[2], nil
+	case "contains":
+		// contains(haystack, needle) → case-insensitive substring test; the
+		// everyday matcher for payee/description rules ("merchant" in payee).
+		if len(args) != 2 {
+			return nil, fmt.Errorf("formula: contains() takes 2 arguments")
+		}
+		hay, ok1 := args[0].(string)
+		needle, ok2 := args[1].(string)
+		if !ok1 || !ok2 {
+			return nil, fmt.Errorf("formula: contains() expects strings")
+		}
+		return strings.Contains(strings.ToLower(hay), strings.ToLower(needle)), nil
+	case "lower":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("formula: lower() takes 1 argument")
+		}
+		s, ok := args[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("formula: lower() expects a string")
+		}
+		return strings.ToLower(s), nil
 	default:
 		return nil, fmt.Errorf("formula: unknown function %q", c.Name)
 	}

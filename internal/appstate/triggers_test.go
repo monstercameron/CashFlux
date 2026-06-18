@@ -144,6 +144,68 @@ func TestMultiActionApplyAndNotify(t *testing.T) {
 	}
 }
 
+// The keystone value: a txn-added workflow can see the triggering transaction and
+// act on it — categorize by payee, flag by amount.
+func TestTransactionRouting(t *testing.T) {
+	a := newApp(t, false)
+	seedAccount(t, a, 0)
+	_ = a.PutCategory(domain.Category{ID: "dining", Name: "Dining", Kind: domain.KindExpense})
+	// Route: anything from a bistro → Dining category.
+	_ = a.PutWorkflow(workflow.Workflow{
+		ID: "route", Name: "Dining router", Enabled: true,
+		Trigger: workflow.Trigger{Kind: workflow.TriggerTxnAdded}, Condition: `contains(txn_payee, "bistro")`,
+		Actions: []workflow.Action{{Kind: workflow.ActionSetCategory, CategoryID: "dining"}},
+	})
+	// Flag big spends for review.
+	_ = a.PutWorkflow(workflow.Workflow{
+		ID: "flag", Name: "Big spend flag", Enabled: true,
+		Trigger: workflow.Trigger{Kind: workflow.TriggerTxnAdded}, Condition: "txn_abs > 200",
+		Actions: []workflow.Action{{Kind: workflow.ActionFlagReview}},
+	})
+
+	// A small bistro charge: categorized, not flagged.
+	_ = a.PutTransaction(domain.Transaction{ID: "t1", AccountID: "acc1", Date: thisMonth(), Payee: "Bistro Roma", Desc: "dinner", Amount: money.New(-3000, "USD")})
+	t1, _, _ := a.store.GetTransaction("t1")
+	if t1.CategoryID != "dining" {
+		t.Errorf("bistro txn not routed to Dining: %q", t1.CategoryID)
+	}
+	if hasTag(t1.Tags, workflow.ReviewTag) {
+		t.Error("small txn should not be flagged for review")
+	}
+
+	// A large non-bistro charge: flagged, not categorized by the router.
+	_ = a.PutTransaction(domain.Transaction{ID: "t2", AccountID: "acc1", Date: thisMonth(), Payee: "Electronics Store", Desc: "laptop", Amount: money.New(-150000, "USD")})
+	t2, _, _ := a.store.GetTransaction("t2")
+	if !hasTag(t2.Tags, workflow.ReviewTag) {
+		t.Errorf("big txn not flagged: tags=%v", t2.Tags)
+	}
+	if t2.CategoryID == "dining" {
+		t.Error("non-bistro txn wrongly routed to Dining")
+	}
+}
+
+func hasTag(tags []string, tag string) bool {
+	for _, x := range tags {
+		if x == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// notify fires the Notifier hook so the message reaches the user.
+func TestNotifyHook(t *testing.T) {
+	a := newApp(t, false)
+	var got string
+	a.Notifier = func(m string) { got = m }
+	wf := workflow.Workflow{ID: "n", Name: "Ping", Enabled: true, Trigger: workflow.Trigger{Kind: workflow.TriggerManual},
+		Actions: []workflow.Action{{Kind: workflow.ActionNotify, Message: "hello"}}}
+	_, _ = a.RunWorkflow(wf, false)
+	if got != "hello" {
+		t.Errorf("notifier got %q, want hello", got)
+	}
+}
+
 // m1: the clock seam makes month-scoped figures deterministic.
 func TestClockSeamDrivesMonthScope(t *testing.T) {
 	a := newApp(t, false)

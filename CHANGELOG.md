@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Workflows are now real transaction automation (was: a demo).** Acting on a product critique that the
+  engine couldn't see the transaction that triggered it, "when a transaction is added" workflows now get
+  **per-transaction condition variables** — `txn_amount`/`txn_abs` (major units) and string fields
+  `txn_payee`/`txn_desc`/`txn_category`/`txn_account`/`txn_tags` — plus a `contains()` matcher in the
+  formula engine. New **transaction-mutating actions** act on the triggering transaction: **set category**,
+  **add tag**, and **flag for review**. So you can finally express things like *"when a transaction's payee
+  contains 'bistro', set its category to Dining"* or *"when txn_abs > 200, flag it for review."* The
+  **notify** action now shows a real in-app toast (it previously only logged). Browser-verified end to end.
+- **App-lock — pure passcode core (B17 groundwork).** New platform-independent `internal/applock` package:
+  a salted **SHA-256** passcode hash (never stores the passcode in the clear), constant-time `Verify`,
+  enable/clear, and inactivity `ShouldAutoLock` logic, all table-tested. This is the deterministic
+  foundation for the optional passcode gate; the salt (crypto/rand), idle timing, and the lock-screen UI
+  come in follow-ups. (It's a soft deterrent for a local-first app, not encryption.)
 - **Command palette: Cmd/Ctrl+K (§6.6).** Press Cmd/Ctrl+K to open a searchable palette — type to filter,
   ↑/↓ to move, Enter to run, Esc or a backdrop click to close. It lists every screen (jump to Dashboard,
   Accounts, Planning, Workflows, …), quick actions (Add a transaction, toggle light/dark theme, collapse
@@ -303,6 +316,8 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Selected transaction rows have a real visual state (UX audit §6.4).** Bulk-selection checkboxes now get
+  an accent background/border when selected instead of relying on the glyph alone.
 - **Soon badges now adapt to light theme (UX audit §6.11).** `.badge-soon` keeps its dark badge treatment
   in dark mode and gains a light-theme color override.
 - **Form fields have comfortable touch targets (UX audit §6.1).** Shared `.field` controls now default to
