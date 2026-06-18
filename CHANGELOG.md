@@ -105,6 +105,14 @@ and every commit updates this file under `Unreleased`.
   the resize handle then "stopped working." Resize handles cycle the span (tooltips now say so). The
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
+### Added
+- **Screen readers hear the filtered transaction count (B15):** the Transactions list gained a polite
+  `role="status"` live region that announces how many transactions match the current filters — e.g.
+  "Showing 12 transactions, net −$340.00" or "No transactions match your filters" — and updates as you
+  change the search, account, category, member, date range, or cleared filter. It stays mounted (so the
+  zero-results case is announced too), and the existing visible summary is now `aria-hidden` to avoid a
+  double read.
+
 ### Fixed
 - **Form errors are tied to their input for screen readers (B15):** each add-form's validation error now
   carries a stable `id` and the form's primary input references it via `aria-describedby` (plus

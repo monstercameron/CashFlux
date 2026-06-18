@@ -461,6 +461,20 @@ func Transactions() ui.Node {
 		}
 	}
 
+	// Status text for the screen-reader live region: how many transactions match
+	// the current filters, announced as the filters change. Mirrors the visible
+	// summary, but also covers the zero-results case (the visible summary hides at
+	// zero, so without this the "no matches" outcome would never be announced).
+	filterStatus := ""
+	switch {
+	case len(txns) == 0:
+		filterStatus = ""
+	case len(shown) == 0:
+		filterStatus = uistate.T("transactions.noMatch")
+	default:
+		filterStatus = uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))
+	}
+
 	var listBody ui.Node
 	switch {
 	case len(txns) == 0:
@@ -532,7 +546,10 @@ func Transactions() ui.Node {
 				Button(Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
 				Button(Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
 			)),
-			If(len(shown) > 0, P(Class("muted"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))))),
+			If(len(shown) > 0, P(Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))))),
+			// Screen-reader live region announcing the match count as filters change
+			// (stays mounted across renders, so the zero-results case is announced too).
+			P(Class("sr-only"), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus)),
 			listBody,
 		),
 	)

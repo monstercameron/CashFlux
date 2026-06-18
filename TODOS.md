@@ -454,7 +454,9 @@ one-line a11y item in §1.20.
 - [~] **Screen-reader / live regions:** the toast notice is now a persistent live region (idle region
       stays mounted; errors are `assertive`/`role=alert`, normal notices polite) so async outcomes are
       announced. Form errors are now associated to their inputs via `aria-describedby`, and required
-      fields are marked (`aria-required`). Still TODO: announce filtered-result counts / balance updates inline.
+      fields are marked (`aria-required`). The Transactions list now has a `role="status"`/`aria-live=polite`
+      region that announces the **filtered match count** (incl. the zero-results case) as filters change.
+      Still TODO: announce inline balance updates after edits.
 - [x] **Color is never the only cue:** audited every color-coded state. Budget bars carry
       "On track/Near limit/Over budget" text, net-worth/highlights use ▲/▼ arrows, stale accounts show
       a "Stale" badge, cleared shows a ✓; the one offender — the To-do widget's priority dots (high vs

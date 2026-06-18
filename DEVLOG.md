@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B15 a11y: announce filtered transaction count via live region
+
+- The Transactions list already rendered a visible count+net summary, but it wasn't a live region and it
+  unmounted at zero results, so a screen-reader user changing filters heard nothing — and never learned a
+  filter produced no matches.
+- Added an always-mounted `P(Class("sr-only"), role=status, aria-live=polite, aria-atomic=true)` carrying a
+  `filterStatus` string: the count+net summary when there are matches, the localized `transactions.noMatch`
+  text at zero, empty when there are no transactions at all. Staying mounted is the key — `aria-live`
+  announces on *change*, so toggling the container in/out with `If(...)` would miss updates.
+- Marked the existing visible summary `aria-hidden="true"` so SR users get the live region's announcement
+  once, not the static summary too. Reused existing i18n keys (`transactions.summary`/`transactions.noMatch`)
+  — no new strings. Scoped to Transactions (the only screen with a real filter bar). wasm build + vet green.
+- Remaining live-region item: announcing inline balance updates after an edit.
+
 ## 2026-06-18 — B15 a11y: per-field aria-describedby for form errors
 
 - Last forms-a11y item: tie each form's error to its input via `aria-describedby` so a screen reader
