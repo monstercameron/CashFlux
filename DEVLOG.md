@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: bill payment reminder → to-do (B22)
+
+- Added a **Remind me** action to each bill row (extracted a `BillRow` component owning its click hook).
+  It creates a `domain.Task` ("Pay bill: <name>", priority medium, source nudge) due on the bill's due
+  date via `app.PutTask`, then toasts through `uistate.UseNotice()`. Same pattern as the subscription
+  reminder; reuses the existing to-do system.
+- Deferred mark-paid: per the spec it "creates/links a transaction" + persists paid-this-cycle status —
+  that's the State layer (a new store field) plus liability-payment accounting, too much to infer safely
+  here. The reminder gives immediate value via to-do without those decisions. New `bills.{remind,
+  remindTitle,reminderTitle,reminderNote,reminderAdded}` keys. wasm build green, gofmt clean.
+
 ## 2026-06-18 — feat: Bills rail icon (B22)
 
 - Added a Lucide calendar `icon.Bills` and wired `/bills` into `railMeta` with the `nav.bills` key, so the

@@ -13,8 +13,9 @@ and every commit updates this file under `Unreleased`.
   on Feb 28/29) and days-until, soonest first. Pure, table-tested.
 - **Bills screen (B22).** A new **Bills** item in the Tools nav lists those upcoming payments — name, next
   due date, how soon it's due ("due today / tomorrow / in N days"), and the amount — with the total due
-  soon and the next due date up top. It has its own calendar icon in the rail. Read-only; the month
-  calendar and mark-paid come next.
+  soon and the next due date up top. It has its own calendar icon in the rail, and each bill has a
+  **Remind me** button that adds a to-do dated to the bill's due date. The month calendar and mark-paid
+  come next.
 - **Subscriptions detection — the pure core (B25, internal).** New `internal/subscriptions` package that
   finds recurring charges in your transaction history: it groups identical repeated expenses, infers a
   cadence (weekly / monthly / yearly) from the spacing between them, and reports each one's normalized

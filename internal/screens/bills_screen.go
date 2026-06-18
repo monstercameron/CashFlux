@@ -9,6 +9,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -33,29 +35,53 @@ func Bills() ui.Node {
 
 	upcoming := bills.Upcoming(app.Accounts(), time.Now())
 
+	// remind creates a to-do dated to the bill's due date, so a "pay this" task
+	// surfaces in time (B22, via the existing to-do system).
+	notice := uistate.UseNotice()
+	remind := func(b bills.Bill, shown money.Money, dueLabel string) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		task := domain.Task{
+			ID:       id.New(),
+			Title:    uistate.T("bills.reminderTitle", b.Name),
+			Notes:    uistate.T("bills.reminderNote", fmtMoney(shown), dueLabel),
+			Status:   domain.StatusOpen,
+			Priority: domain.PriorityMedium,
+			Due:      b.DueDate,
+			Source:   domain.SourceNudge,
+		}
+		if err := app.PutTask(task); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		notice.Set(notice.Get().With(uistate.T("bills.reminderAdded", b.Name), false))
+	}
+
 	var total int64
-	var rowNodes []ui.Node
+	billRows := make([]billRowData, 0, len(upcoming))
 	for _, b := range upcoming {
 		amt, err := rates.Convert(b.Amount, base)
 		if err != nil {
 			amt = money.New(b.Amount.Amount, base)
 		}
 		total += amt.Amount
-		meta := pr.FormatDate(b.DueDate) + " · " + daysUntilLabel(b.DaysUntil)
-		rowNodes = append(rowNodes, Div(Class("row"),
-			Div(Class("row-main"),
-				Span(Class("row-desc"), b.Name),
-				Span(Class("row-meta"), meta),
-			),
-			Span(Class("budget-amount"), fmtMoney(amt)),
-		))
+		billRows = append(billRows, billRowData{Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate)})
 	}
 
+	rows := MapKeyed(billRows,
+		func(r billRowData) any { return r.Bill.AccountID },
+		func(r billRowData) ui.Node {
+			return ui.CreateElement(BillRow, billRowProps{Data: r, OnRemind: remind})
+		},
+	)
+
 	var body ui.Node
-	if len(rowNodes) == 0 {
+	if len(billRows) == 0 {
 		body = P(Class("empty"), uistate.T("bills.empty"))
 	} else {
-		body = Div(Class("rows"), rowNodes)
+		body = Div(Class("rows"), rows)
 	}
 
 	nextDue := "—"
@@ -73,6 +99,34 @@ func Bills() ui.Node {
 			H2(Class("card-title"), uistate.T("nav.bills")),
 			body,
 		),
+	)
+}
+
+// billRowData is one bill plus its display-ready amount and date.
+type billRowData struct {
+	Bill     bills.Bill
+	Shown    money.Money // amount converted to the base currency
+	DueLabel string      // pre-formatted due date
+}
+
+type billRowProps struct {
+	Data     billRowData
+	OnRemind func(b bills.Bill, shown money.Money, dueLabel string)
+}
+
+// BillRow renders one upcoming bill with a "remind me" action. It owns its click
+// hook (per the On*-hooks-in-loops rule) so the list can render many rows safely.
+func BillRow(props billRowProps) ui.Node {
+	d := props.Data
+	remind := ui.UseEvent(Prevent(func() { props.OnRemind(d.Bill, d.Shown, d.DueLabel) }))
+	meta := d.DueLabel + " · " + daysUntilLabel(d.Bill.DaysUntil)
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), d.Bill.Name),
+			Span(Class("row-meta"), meta),
+		),
+		Span(Class("budget-amount"), fmtMoney(d.Shown)),
+		Button(Class("btn"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
 	)
 }
 
