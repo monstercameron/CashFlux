@@ -100,3 +100,26 @@ The backend ships in phases (auth+sync → blobs → AI proxy). Recommended mone
 - Storage fair-use cap (and overage behavior)?
 - Refund policy; annual-only vs monthly availability at launch.
 - Entity/tax setup for taking payments (Stripe account, jurisdiction).
+
+## 13. Self-hosting & the open-source model
+
+CashFlux (app **and** server) is open source, so anyone can run their own private server for free.
+This is deliberate, not a leak in the model — it's the **Actual / Bitwarden / Obsidian-Sync pattern**:
+the software is free and self-hostable; the paid product is *managed convenience*.
+
+- **What you pay for is operations, not features:** CashFlux Cloud = zero-ops hosting, backups,
+  uptime, OAuth, billing, and "it just works" across devices. Self-hosters trade money for time + a
+  server.
+- **It strengthens, not weakens, the brand.** Self-hosting is the ultimate proof of the data-ownership
+  promise; it builds trust that converts the *non*-technical majority to the paid tier. Most users who
+  *could* self-host still won't — the convenience gap is the business.
+- **Pricing implication:** self-host caps how high we can price (the free alternative is always there),
+  which is exactly why the plan targets a **low, convenience-justified price** (~$35/yr) rather than
+  competing on locked-up features. Don't gate core capability behind Cloud — gate *operations*.
+- **Support boundary:** self-host is community-supported (docs + issues); paid support is part of Cloud.
+- **Risk it mitigates:** lock-in fear and "what if the company dies" — answered by "run it yourself."
+- **GTM upside:** the open-source + self-host story is itself marketing in privacy/self-host communities
+  (r/selfhosted, HN), feeding the top of the free-app funnel that Cloud monetizes.
+
+Net: self-hosting and the paid Cloud are complementary. Keep the server genuinely runnable (single
+binary, simple token auth option, Docker quickstart), and let Cloud win on convenience.

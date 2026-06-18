@@ -3988,3 +3988,33 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Monetize at the **sync milestone** (auth + snapshot sync + Stripe + trial); AI proxy + blobs land
       as later Cloud upgrades (no price change). Household plan is a later phase.
 - [ ] Analytics: trial starts, trial→paid, MRR/ARR, churn, ARPU, storage/user, gross margin (privacy-respecting).
+
+### 7.12 Self-hosting — first-class server choice ★
+
+> The server is open source; self-hosting is a first-class, free alternative to paid Cloud (Actual/
+> Bitwarden model). Design: [`docs/CLOUD_UX.md`](./docs/CLOUD_UX.md) "Server choice" +
+> [`docs/CLOUD_BUSINESS_PLAN.md`](./docs/CLOUD_BUSINESS_PLAN.md) §13. Gate *operations*, not features.
+
+#### Client
+- [ ] **Settings → Cloud** leads with a segmented **Server: Cloud / Self-hosted** control; the rest of
+      the section adapts to the choice.
+- [ ] Self-hosted: **base-URL field** + **Test connection** (reachability + version/compat ping) before
+      save; persist the URL; use it for the gRPC bridge (`wss`) and HTTP OAuth/blob endpoints.
+- [ ] Hide all billing surfaces (pricing, trial banner, manage-subscription, storage cap) when a custom
+      server is selected; entitlement = always-on for self-host.
+- [ ] **Auth method adapts to the server:** support a lighter **single-user access-token** mode (paste
+      a token the server printed) in addition to OAuth; show whichever the chosen server advertises.
+- [ ] **Switch-server flow:** changing the URL signs out of the old server and re-points sync; local
+      data untouched; clear "only changes where it syncs" copy.
+- [ ] Sync chip tooltip names the active server; onboarding mentions both paths once.
+
+#### Server
+- [ ] Config-driven auth mode: **token (default for self-host)** vs OAuth (providers configured);
+      print/rotate the access token on first run for token mode.
+- [ ] Make billing/Stripe + entitlement gating **optional / disabled** in self-host mode (a config
+      flag); `IsCloudActive` returns true when billing is disabled.
+- [ ] **Version/compat endpoint** for the client's Test-connection + too-old/too-new warnings (reuse a
+      schemaVersion-style ping).
+- [ ] **Docker quickstart** + one-command run; sample config (.env) with TLS notes; docs linked from
+      Settings.
+- [ ] Self-host docs: backups (SQLite WAL + blobs), upgrade path, optional OAuth setup.
