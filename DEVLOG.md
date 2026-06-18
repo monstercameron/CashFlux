@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: §6.6 FlipPanel Enter-to-submit
+
+- Added an Enter case to the FlipPanel's existing document keydown handler (the one that already does
+  Esc-close + Tab-trap), captured `onSaveRef`/`closeOnly` alongside the existing `onCloseRef`. Enter runs
+  save→close; skipped when `activeElement` is TEXTAREA (multi-line), BUTTON (let it click natively), or
+  SELECT, and when CloseOnly (nothing to save). One file, `internal/ui/flippanel.go`.
+- Picked an `internal/ui` item deliberately: the parallel session is also in §6 now, so I'm taking the
+  new-file / ui-package keyboard items it's unlikely to touch, leaving it the screen/CSS one-liners.
+- Verified: gofmt clean (ran `gofmt -w` after the insert), wasm build exit 0, probe ok/200. Keystroke can't
+  be sent headlessly — Enter-save is logic-verified; confirm in-browser.
+- Next §6.6: a "?" help overlay (needs a shell mount + small overlay component) and a quick-add hotkey.
+
 ## 2026-06-18 — feat: §6.6 keyboard shortcut — Alt+1..9 section jump
 
 - First of the §6.6 keyboard-shortcut items. New file `internal/app/shortcuts.go` +
@@ -29,7 +41,9 @@ problems and fixes, and what's next.
 - Completed another low-collision §6.4 item in `internal/app/addmenu.go`: the top-bar **+ Add** button
   no longer uses an inline `Style{"border-radius": "4px"}` and now carries `rounded-[4px]` in its class
   list with the rest of the app styling. This keeps visual shape in the shared utility path and avoids
-  clobbering focus/hover styling with ad-hoc inline CSS.
+  clobbering focus/hover styling with ad-hoc inline CSS. The docs text was swept into the parallel
+  keyboard-shortcut commit first; this atom carries the implementation and a small wording refinement so
+  the commit still updates both journals.
 - Scope is intentionally one-line UI cleanup + docs. `TODOS.md` is dirty from the parallel backlog/spec
   expansion, so I did not edit or stage it for this atom.
 

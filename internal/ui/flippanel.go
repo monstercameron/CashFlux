@@ -49,6 +49,8 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	// The listener is added on mount and removed on unmount, which (since the panel
 	// mounts fresh each open and unmounts on close) matches the dialog's lifetime.
 	onCloseRef := props.OnClose
+	onSaveRef := props.OnSave
+	closeOnly := props.CloseOnly
 	uic.UseEffect(func() func() {
 		doc := js.Global().Get("document")
 		if doc.IsNull() || doc.IsUndefined() {
@@ -91,6 +93,26 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			e := args[0]
 			switch e.Get("key").String() {
 			case "Escape":
+				if onCloseRef != nil {
+					onCloseRef()
+				}
+			case "Enter":
+				// Enter submits (Save) like a native form. Skip when focus is on a
+				// button (let it click), in a textarea (multi-line) or a select, and
+				// when the panel has nothing to save (CloseOnly).
+				if closeOnly {
+					return nil
+				}
+				if active := doc.Get("activeElement"); !active.IsNull() && !active.IsUndefined() {
+					switch active.Get("tagName").String() {
+					case "TEXTAREA", "BUTTON", "SELECT":
+						return nil
+					}
+				}
+				e.Call("preventDefault")
+				if onSaveRef != nil {
+					onSaveRef()
+				}
 				if onCloseRef != nil {
 					onCloseRef()
 				}

@@ -37,7 +37,7 @@ func AddMenu() uic.Node {
 		)
 	}
 	return Div(Class("add-wrap"),
-		Button(Class("px-3 py-1.5 border border-line text-fg hover:bg-hover"), Style(map[string]string{"border-radius": "4px"}),
+		Button(Class("px-3 py-1.5 rounded-[4px] border border-line text-fg hover:bg-hover"),
 			Attr("title", uistate.T("topbar.add")),
 			Attr("aria-haspopup", "menu"),
 			OnClick(func() { open.Set(!open.Get()) }),
