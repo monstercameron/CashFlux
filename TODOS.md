@@ -976,10 +976,17 @@ Savings KPIs) · `period.Window`.
 #### D5. Sub-category rollup into parent budget & breakdown
 **Workstream:** add a sub-category under a parent, spend on the sub, and confirm rollup.
 **Touches:** Categories (parentId tree) · `categorytree` · Dashboard breakdown (rolls sub→parent) · Budgets.
-- [ ] Create a sub-category; add spend on it; assert the dashboard breakdown rolls it up to the parent.
-- [ ] Assert a parent-category budget includes sub-category spend (define + assert the intended rule).
-- [ ] Reassign the sub's parent; assert rollup follows.
-- [ ] unit: `categorytree` rollup test (multi-level, reparent).
+- [ ] Create a sub-category; add spend on it; assert the dashboard **breakdown** rolls it up to the
+      parent. _(The spending-breakdown widget rollup is still pending; the budget rollup below is done.)_
+- [x] **Parent-category budget includes sub-category spend** — DONE. New `categorytree.Descendants`
+      (rootID + all nested ids, cycle-safe) feeds a new `budgeting.EvaluateRollup` (the budget counts
+      spend in its category or any descendant, still respecting period + owner scope). Both the Budgets
+      screen and the dashboard Budgets widget now evaluate with rollup.
+- [x] Reassign the sub's parent; rollup follows — `Descendants` recomputes from the live `ParentID`, so a
+      reparented sub-category rolls up under its new parent (covered by `TestDescendantsReparent`).
+- [x] unit: `categorytree` rollup test (multi-level, reparent) — `TestDescendantsMultiLevel`/
+      `TestDescendantsReparent`/`TestDescendantsEdgeCases` + `budgeting` `TestEvaluateRollup*` (3 cases:
+      descendants counted, empty covers = own category, scope respected).
 
 #### D6. Budget methodology selector (envelope / zero-based / simple) — gap
 **Workstream:** pick a methodology and confirm the UI affordances and presets adapt.

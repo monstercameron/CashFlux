@@ -73,3 +73,33 @@ func Flatten(cats []domain.Category) []Flat {
 	walk(Build(cats), 0)
 	return out
 }
+
+// Descendants returns the set of category ids made up of rootID plus every
+// category nested beneath it at any depth — so callers can roll a sub-category's
+// data (spend, budget coverage) up into its parent. It is cycle-safe (each id is
+// visited at most once) and returns just {rootID} when the category has no
+// children. An empty rootID returns an empty set.
+func Descendants(cats []domain.Category, rootID string) map[string]bool {
+	if rootID == "" {
+		return map[string]bool{}
+	}
+	byParent := make(map[string][]string, len(cats))
+	for _, c := range cats {
+		if c.ParentID != "" && c.ParentID != c.ID {
+			byParent[c.ParentID] = append(byParent[c.ParentID], c.ID)
+		}
+	}
+	out := make(map[string]bool, 1)
+	var walk func(id string)
+	walk = func(id string) {
+		if out[id] {
+			return // already placed — guards against cycles
+		}
+		out[id] = true
+		for _, child := range byParent[id] {
+			walk(child)
+		}
+	}
+	walk(rootID)
+	return out
+}

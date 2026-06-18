@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -177,11 +178,13 @@ func Budgets() ui.Node {
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	viewMonth := periodWin.Get().From
-	// Each budget is evaluated over its own period window around the viewed date.
+	cats := app.Categories()
+	// Each budget is evaluated over its own period window around the viewed date,
+	// and a parent-category budget rolls up its sub-categories' spend (D5).
 	statuses := make([]budgeting.Status, 0, len(budgets))
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRange(b.Period, viewMonth, weekStart)
-		st, err := budgeting.Evaluate(b, txns, bs, be, rates, budgeting.DefaultNearThreshold)
+		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
 		if err != nil {
 			continue
 		}

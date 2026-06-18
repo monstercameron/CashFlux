@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature D5: parent-category budgets roll up sub-category spend
+
+- Found a real gap behind the D5 "rollup test" item: `budgeting.matches` compared `t.CategoryID ==
+  budget.CategoryID` exactly, so a parent-category budget ("Food") did NOT count spend on its
+  sub-categories ("Groceries"). Implemented the rollup.
+- Pure foundation: `categorytree.Descendants(cats, rootID)` returns rootID + every nested id (cycle-safe),
+  so callers can roll a subtree up. Tested: multi-level, mid-tree, leaf, reparent (rollup follows the new
+  parent), empty/unknown root, and a cycle.
+- Budgeting: refactored the matcher around a `covers func(string) bool` predicate (`matchesCovered` /
+  `spentCovered` / `evaluateWith`), kept `Spent`/`Evaluate` byte-for-byte (exact predicate), and added
+  `EvaluateRollup(..., covers map[string]bool)` — counts spend in the budget's category OR any covered
+  category, still applying the period window and individual-owner scope. Tests: descendants counted,
+  empty covers == own category, scope respected under rollup.
+- Decoupling: budgeting takes the covered-id *set*, not the category tree, so it stays independent of
+  `categorytree`. The callers (Budgets screen + dashboard Budgets widget) build the set via
+  `categorytree.Descendants(app.Categories(), b.CategoryID)` and call `EvaluateRollup`.
+- For a budget whose category has no sub-categories, `Descendants` = {id} and `EvaluateRollup` is
+  identical to `Evaluate` — so no behavior change on flat category sets (verified the dashboard still
+  renders cleanly). The rollup itself is proven by the unit tests. (The spending-breakdown widget already
+  rolled up; this aligns budgets with it.)
+
 ## 2026-06-18 — tests D2: budgeting threshold boundaries
 
 - With the tractable feature backlog thin (remaining items are the B10 redesign, B2 FLIP animations, and

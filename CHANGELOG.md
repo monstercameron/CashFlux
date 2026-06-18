@@ -53,6 +53,12 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Parent-category budgets now include sub-category spend (D5):** a budget on a parent category (e.g.
+  "Food") counts spend in its sub-categories (e.g. "Groceries", "Restaurants") too, rolling the subtree
+  up. Period and per-owner scope are still respected, and reparenting a sub-category moves its spend to
+  the new parent. Backed by a new pure `categorytree.Descendants` + `budgeting.EvaluateRollup` (table-
+  tested: multi-level, reparent, scope). Budgets with no sub-categories are unaffected. (The spending-
+  breakdown widget already rolled sub-categories up; this brings budgets in line.)
 - **Text/display size now scales to 200% for accessibility (C26):** the display-scale control (Settings →
   Appearance, relabelled "Text & display size") now goes up to 200% (was 130%), meeting WCAG 2.1 SC 1.4.4
   "Resize text." This works now because the C10/C19 responsive fixes make the app *reflow* at high zoom

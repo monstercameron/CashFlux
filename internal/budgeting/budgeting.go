@@ -46,11 +46,12 @@ func normalizedLimit(budget domain.Budget, rates currency.Rates) money.Money {
 	return limit
 }
 
-// matches reports whether a transaction counts toward the budget: it must be an
-// expense in the budget's category within [start, end), and for an individual
-// budget it must belong to the owning member.
-func matches(budget domain.Budget, t domain.Transaction, start, end time.Time) bool {
-	if !t.IsExpense() || t.CategoryID != budget.CategoryID {
+// matchesCovered reports whether a transaction counts toward the budget: it must
+// be an expense within [start, end) whose category passes covers, and for an
+// individual budget it must belong to the owning member. The covers predicate
+// lets a parent-category budget also count its descendant categories (D5).
+func matchesCovered(budget domain.Budget, t domain.Transaction, start, end time.Time, covers func(string) bool) bool {
+	if !t.IsExpense() || !covers(t.CategoryID) {
 		return false
 	}
 	if !dateutil.InRange(t.Date, start, end) {
@@ -62,13 +63,18 @@ func matches(budget domain.Budget, t domain.Transaction, start, end time.Time) b
 	return true
 }
 
-// Spent returns the total spent against a budget within [start, end), in the
-// budget's limit currency.
-func Spent(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates) (money.Money, error) {
+// matches is the exact-category case (the budget's own category only).
+func matches(budget domain.Budget, t domain.Transaction, start, end time.Time) bool {
+	return matchesCovered(budget, t, start, end, func(id string) bool { return id == budget.CategoryID })
+}
+
+// spentCovered sums spend against the budget for transactions whose category
+// passes covers, in the budget's limit currency.
+func spentCovered(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
 	total := money.Zero(limit.Currency)
 	for _, t := range all {
-		if !matches(budget, t, start, end) {
+		if !matchesCovered(budget, t, start, end, covers) {
 			continue
 		}
 		conv, err := rates.Convert(t.Amount.Abs(), limit.Currency)
@@ -82,12 +88,16 @@ func Spent(budget domain.Budget, all []domain.Transaction, start, end time.Time,
 	return total, nil
 }
 
-// Evaluate returns the full Status for a budget over [start, end). nearThreshold
-// is the fraction of the limit considered "near"; pass DefaultNearThreshold for
-// the standard 80%.
-func Evaluate(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) (Status, error) {
+// Spent returns the total spent against a budget within [start, end), in the
+// budget's limit currency (the budget's own category only).
+func Spent(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates) (money.Money, error) {
+	return spentCovered(budget, all, start, end, rates, func(id string) bool { return id == budget.CategoryID })
+}
+
+// evaluateWith builds the Status using the given category-cover predicate.
+func evaluateWith(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers func(string) bool) (Status, error) {
 	limit := normalizedLimit(budget, rates)
-	spent, err := Spent(budget, all, start, end, rates)
+	spent, err := spentCovered(budget, all, start, end, rates, covers)
 	if err != nil {
 		return Status{}, err
 	}
@@ -102,6 +112,24 @@ func Evaluate(budget domain.Budget, all []domain.Transaction, start, end time.Ti
 		Percent:   percent(spent, limit),
 		State:     classify(spent, limit, nearThreshold),
 	}, nil
+}
+
+// Evaluate returns the full Status for a budget over [start, end), counting only
+// the budget's own category. nearThreshold is the fraction of the limit
+// considered "near"; pass DefaultNearThreshold for the standard 80%.
+func Evaluate(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) (Status, error) {
+	return evaluateWith(budget, all, start, end, rates, nearThreshold, func(id string) bool { return id == budget.CategoryID })
+}
+
+// EvaluateRollup is like Evaluate but the budget also counts spend in any
+// category in covers — typically the budget's category plus its descendants
+// (from categorytree.Descendants) — so a parent-category budget includes its
+// sub-categories' spend (D5). An empty covers falls back to the budget's own
+// category.
+func EvaluateRollup(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers map[string]bool) (Status, error) {
+	return evaluateWith(budget, all, start, end, rates, nearThreshold, func(id string) bool {
+		return id == budget.CategoryID || covers[id]
+	})
 }
 
 // PeriodRange returns the half-open [start, end) range for the budget period of

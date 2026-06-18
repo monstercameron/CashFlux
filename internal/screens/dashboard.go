@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
@@ -666,7 +667,14 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 	}
 	budgets := app.Budgets()
 	start, end := dateutil.MonthRange(time.Now())
-	statuses, _ := budgeting.EvaluateAll(budgets, txns, start, end, rates, budgeting.DefaultNearThreshold)
+	// Parent-category budgets roll up their sub-categories' spend (D5).
+	cats := app.Categories()
+	statuses := make([]budgeting.Status, 0, len(budgets))
+	for _, b := range budgets {
+		if st, err := budgeting.EvaluateRollup(b, txns, start, end, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); err == nil {
+			statuses = append(statuses, st)
+		}
+	}
 
 	// When "at-risk only" is on, drop budgets that are comfortably on track.
 	if atRisk {
