@@ -161,9 +161,9 @@ func Budgets() ui.Node {
 			H2(Class("card-title"), uistate.T("budgets.add")),
 			Form(Class("form-grid"), OnSubmit(add),
 				Input(append([]any{Class("field"), Attr("id", "budget-add"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...),
-				Select(Class("field"), OnChange(onCat), catOptions),
-				Select(Class("field"), OnChange(onOwner), ownerOptions),
-				Select(Class("field"), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get())),
+				Select(Class("field"), Attr("aria-label", uistate.T("budgets.categoryLabel")), OnChange(onCat), catOptions),
+				Select(Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions),
+				Select(Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get())),
 				Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
 				MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
@@ -340,8 +340,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Form(Class("form-grid"), OnSubmit(saveEdit),
 				Input(Class("field"), Attr("id", "budget-edit-"+s.Budget.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
-				Select(Class("field"), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(periodS.Get())),
-				Select(Class("field"), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
+				Select(Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(periodS.Get())),
+				Select(Class("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),

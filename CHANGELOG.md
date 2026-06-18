@@ -467,7 +467,9 @@ and every commit updates this file under `Unreleased`.
 - **Transactions form controls are now labelled for screen readers (C47).** The filter/sort/bulk bar and
   the add/edit forms had bare `<select>`s and date inputs that a screen reader announced as just "combo
   box" / "edit text". Each now carries an `aria-label` (Type, Account, Category, Member, From/To date,
-  Cleared status, Sort by, Filter by account/category, …). Other screens follow.
+  Cleared status, Sort by, Filter by account/category, …). The same fix now also covers the **budgets,
+  goals, and accounts** add/edit forms (category, owner, period, type, linked-account, and target/lock
+  date controls).
 - **The top bar no longer shows a scrollbar — it wraps instead (C34).** When the breadcrumb, time
   controls, and "+ Add" don't fit (notably in Custom-range mode around 1100px wide), the bar now wraps
   onto a second row at any width instead of becoming a horizontal scroll container that stole height.

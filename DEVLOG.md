@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — a11y: label budgets/goals/accounts form controls (C47, batch 2)
+
+- Extended the C47 aria-label pass to the budgets, goals, and accounts add + inline-edit forms: category,
+  owner, period, account-type, linked-account selects and the target-date / lock-until date inputs.
+  Reused existing label/tooltip keys where present; added `budgets.categoryLabel`, `goals.dateLabel`,
+  `accounts.typeLabel`.
+- Remaining C47 screens: planning (projection/plan selects), dashboard (2 controls), settings (1). Build
+  green, gofmt clean.
+
 ## 2026-06-18 — a11y: label transactions form controls (C47, batch 1)
 
 - The C47 audit flagged ~12 unlabeled controls on /transactions (the worst offender). Added `aria-label`
