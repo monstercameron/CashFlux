@@ -3,8 +3,10 @@ package domain
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 )
 
 // GroupOwnerID is the owner identifier used for shared (household-level) entities.
@@ -294,6 +296,57 @@ type Goal struct {
 	TargetDate    time.Time      `json:"targetDate,omitempty"`
 	AccountID     string         `json:"accountId,omitempty"`
 	Custom        map[string]any `json:"custom,omitempty"`
+}
+
+// WidgetBinding declares where a custom widget gets its data, kept as plain,
+// declarative fields so the binding is config — not code — and stays inspectable
+// and JSON-serializable. The pure evaluator (internal/widgetspec) interprets it
+// against the live engine context; an empty binding renders an empty widget.
+//
+//   - Source    names the data the widget reads (e.g. "transactions", "accounts",
+//     "budgets", "goals", "tasks", "" for a pure-formula KPI, or "artifact").
+//   - Filter    is an optional txnfilter-style criterion string for list/table widgets.
+//   - Expr      is an optional sandboxed formula (internal/formula) — the value for a
+//     KPI widget, or a derived column/condition for others.
+//   - ArtifactID references a stored Artifact (image or dataset) for Image/Table widgets.
+//   - Columns   names the fields/columns a list or table widget displays, in order.
+type WidgetBinding struct {
+	Source     string   `json:"source,omitempty"`
+	Filter     string   `json:"filter,omitempty"`
+	Expr       string   `json:"expr,omitempty"`
+	ArtifactID string   `json:"artifactId,omitempty"`
+	Columns    []string `json:"columns,omitempty"`
+}
+
+// PageWidget is one widget instance placed on a custom page. Type selects a
+// registered widget template (KPI/list/chart/text/table/image); Config holds the
+// template's settings (the same widgetcfg.Config shape the dashboard widgets use);
+// Binding declares the widget's data source. The instance is identified by ID,
+// which is also the id dashlayout.Pack uses to place it on the page's grid.
+type PageWidget struct {
+	ID      string           `json:"id"`
+	Type    string           `json:"type"`
+	Title   string           `json:"title,omitempty"`
+	Config  widgetcfg.Config `json:"config,omitempty"`
+	Binding WidgetBinding    `json:"binding,omitempty"`
+}
+
+// CustomPage is a user-authored page: its own left-rail entry (Name + Icon),
+// user-controlled position (Order) and visibility (Hidden), and a bento grid of
+// custom widgets. Unlike the built-in dashboard — whose layout lives in
+// localStorage — a custom page is user content, so its Layout and Widgets live in
+// the dataset and travel with export/import. Slug is the stable URL segment
+// (the page is reached at /p/<slug>); ID is the stable storage key.
+type CustomPage struct {
+	ID        string            `json:"id"`
+	Slug      string            `json:"slug"`
+	Name      string            `json:"name"`
+	Icon      string            `json:"icon,omitempty"`
+	Order     int               `json:"order,omitempty"`
+	Hidden    bool              `json:"hidden,omitempty"`
+	Layout    []dashlayout.Item `json:"layout,omitempty"`
+	Widgets   []PageWidget      `json:"widgets,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitempty"`
 }
 
 // Task is a budgeting-related to-do item.

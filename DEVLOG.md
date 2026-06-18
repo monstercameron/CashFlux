@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: custom pages — Phase A starts (data model + pure logic)
+
+- Kicked off the big "custom pages + widget engine + workflow engine + artifacts" feature (plan agreed
+  with the user first, per the spec rule; decisions: widgets config-driven first then scripting, workflows
+  = rules AND sequences, artifacts in the SQLite dataset, read+write access with dry-run+audit).
+- Bottom-up, started at the data model. Added `domain.CustomPage` (id/slug/name/icon/order/hidden + a
+  per-page `[]dashlayout.Item` layout + `[]PageWidget`), `PageWidget` (type/title/`widgetcfg.Config`/
+  binding), and `WidgetBinding` (declarative data source: source/filter/expr/artifactId/columns). Chose to
+  store page layout/widgets **in the dataset** (not localStorage like the built-in dashboard) because a
+  custom page is user content that must export/import — keeps it consistent with "persist artifacts."
+- `domain` now imports `dashlayout` + `widgetcfg`; both are dependency-free leaf packages, so no import
+  cycle. Verified the dependency direction before wiring it.
+- New pure `internal/pages` package mirrors the `navorder` style: `Slug`/`UniqueSlug` (deterministic,
+  collision-suffixed), `Ordered`/`Visible`/`NextOrder`, `Reorder` (move + renumber Order so the caller can
+  persist every page), `BySlug`/`ByID`, `Validate`. Avoided pulling in `strconv` for one int format.
+- Tests: table-driven, green; `gofmt`/`go vet` clean; full `go test ./...` still passes (the domain change
+  is additive). Committed as one feature.
+- Next (Phase A cont.): persist pages in the store (custompages table + CRUD + roundtrip), then `/p/:slug`
+  routing + an empty page screen, then the "My pages" nav group with create/rename/delete/reorder/hide.
+
 ## 2026-06-18 — fix: invisible icons (SVG namespace bug in the framework)
 
 - Report: can't see the left-rail icons, and can't see the button that collapses the sidebar.

@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom pages — data model + ordering logic (groundwork):** new `domain.CustomPage`/`PageWidget`/
+  `WidgetBinding` types model user-authored pages (their own rail entry, order, visibility, and a bento
+  grid of custom widgets), stored in the dataset so they export/import with everything else. A new pure
+  `internal/pages` package handles slugging (`Slug`/`UniqueSlug`), display ordering (`Ordered`/`Visible`/
+  `NextOrder`), drag-reorder (`Reorder`, renumbering positions), lookup (`BySlug`/`ByID`), and validation —
+  all table-tested on native Go, no `syscall/js`. First slice of the custom-pages / widget / workflow
+  feature; persistence, routing, nav, and UI follow.
 - **Dashboard tiles are fully keyboard-operable (B15):** focus a tile (Tab), use the arrow keys to move
   it one slot earlier/later, and **Shift+Arrow to resize** it — a keyboard alternative to drag-and-resize
   (WCAG 2.1.1), animated by the same FLIP and persisted. Tiles expose `aria-keyshortcuts`.
