@@ -31,7 +31,7 @@ func ProgressBar(props ProgressBarProps) uic.Node {
 	if tone == "" {
 		tone = "bg-up"
 	}
-	track := "h-1.5 bg-line rounded-full overflow-hidden"
+	track := "h-2 bg-line rounded-full overflow-hidden"
 	if props.Class != "" {
 		track += " " + props.Class
 	}

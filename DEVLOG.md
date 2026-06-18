@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.3/§6.4 — progress bar height + switcher separator
+
+- Two tiny low-collision §6 items in non-screen files: `ui/progress.go` track `h-1.5`→`h-2`, and the
+  workspace-switcher dropdown separator `my-1`→`my-2` (`wsswitcher.go`). Go changes, so wasm rebuilt;
+  gofmt clean, build exit 0. Atomic commit.
+- Remaining §6 is mostly in the parallel session's hot screen files (transactions/accounts/dashboard/
+  shell) and the bigger 6.6 keyboard-shortcut features (command palette, ? overlay, Alt+1..9) which need
+  shell/router wiring — those next, checking each target file is clean before editing.
+
 ## 2026-06-18 — fix: UX polish §6.11 — light-theme contrast + toggle size (CSS)
 
 - Continued section 6, again pure `web/index.html` CSS (single shared file, no rebuild). Light-theme idle

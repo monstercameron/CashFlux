@@ -275,6 +275,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Small UX polish (§6.3/§6.4).** Progress bars are a touch thicker (`h-1.5` → `h-2`) so they read in
+  dense layouts; the workspace-switcher dropdown's action-group separator gets more breathing room
+  (`my-1` → `my-2`).
 - **Light-theme contrast & toggle target size (WCAG, §6.11 CSS).** The light theme's idle icon controls
   (`.gear-inline`/`.gear-abs`/`.menu-btn`/`.set-close`) were `#8a8a90`/`#8a8a92` on the `#f7f6f3` light
   background (~2.7:1, below the 3:1 UI threshold) — darkened to `#6a6a72` (~5:1). The Settings toggle
