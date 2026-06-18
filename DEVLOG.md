@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B15 a11y: per-field aria-describedby for form errors
+
+- Last forms-a11y item: tie each form's error to its input via `aria-describedby` so a screen reader
+  re-announces it on focus (the `role="alert"` only fires once, when the error first appears).
+- The architecture has **one form-level error string per add-form** (an `errMsg`/`rErr`/`plErr` atom), not
+  per-field errors, so the honest association is error ↔ the form's **primary input** (the name/first field).
+- Built a shared pair in `internal/screens/aria.go` (package `screens`, not `internal/ui` — the screens
+  import the *framework's* `ui` package under that name, so a helper there would collide): `errAttrs(id,msg)`
+  returns the `aria-describedby`+`aria-invalid` options (nil when no error — so spreading it after the input's
+  `OnInput` keeps the hook count stable), and `errText(id,msg)` is the drop-in for the old
+  `If(msg!="", P(Class("err"), role=alert, …))` but adds the matching `id`.
+- Wired into all 11 add-forms: accounts, budgets, categories, custom-fields, goals, members, rules, to-do,
+  transactions, and planning's recurring + plan forms, each with a stable error id (acct-err, budget-err, …).
+  Spread pattern: `Input(append([]any{…, OnInput(on)}, errAttrs(id, msg)...)...)`.
+- wasm build + `go vet ./internal/screens ./internal/ui` green. (Gotcha: a stray `cd` into a subdir persisted
+  across PowerShell calls and broke the relative vet paths; reset with Set-Location to the repo root.)
+
 ## 2026-06-18 — B15 a11y: a light-theme-safe default accent
 
 - The last open contrast item: the default accent `#54b884` (a light mint) only cleared ~2.1:1 against the

@@ -425,7 +425,7 @@ func Transactions() ui.Node {
 		formCard = Section(Class("card"),
 			H2(Class("card-title"), uistate.T("transactions.addTitle")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)),
+				Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)}, errAttrs("txn-err", errMsg.Get())...)...),
 				Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(Class("field"), OnChange(onKind), kindOptions),
 				Select(Class("field"), Title(accLabel), OnChange(onAcc), accOptions),
@@ -441,7 +441,7 @@ func Transactions() ui.Node {
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.repeatLastTitle")), OnClick(repeatLast), uistate.T("transactions.repeatLast")),
 			),
-			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
+			errText("txn-err", errMsg.Get()),
 		)
 	}
 

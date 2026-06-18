@@ -160,7 +160,7 @@ func Budgets() ui.Node {
 		formCard = Section(Class("card"),
 			H2(Class("card-title"), uistate.T("budgets.add")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
+				Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...),
 				Select(Class("field"), OnChange(onCat), catOptions),
 				Select(Class("field"), OnChange(onOwner), ownerOptions),
 				Select(Class("field"), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get())),
@@ -170,7 +170,7 @@ func Budgets() ui.Node {
 				}),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 			),
-			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
+			errText("budget-err", errMsg.Get()),
 		)
 	}
 

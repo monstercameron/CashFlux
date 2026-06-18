@@ -111,7 +111,7 @@ func CustomFieldsManager() ui.Node {
 		P(Class("muted"), uistate.T("cf.addDesc")),
 		Form(Class("form-grid"), OnSubmit(add),
 			Select(Class("field"), OnChange(onEntity), entityOptions),
-			Input(Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Value(key.Get()), OnInput(onKey)),
+			Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
 			Input(Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
 			Select(Class("field"), OnChange(onType), typeOptions),
 			If(isChoice, Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
@@ -121,7 +121,7 @@ func CustomFieldsManager() ui.Node {
 			),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
 		),
-		If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
+		errText("cf-err", errMsg.Get()),
 	)
 
 	// Group existing defs by entity type for a tidy list.

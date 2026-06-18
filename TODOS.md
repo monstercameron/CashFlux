@@ -453,8 +453,8 @@ one-line a11y item in §1.20.
       element/role in both themes.
 - [~] **Screen-reader / live regions:** the toast notice is now a persistent live region (idle region
       stays mounted; errors are `assertive`/`role=alert`, normal notices polite) so async outcomes are
-      announced. Still TODO: announce filtered-result counts / balance updates inline; associate form
-      errors via `aria-describedby`; mark required fields.
+      announced. Form errors are now associated to their inputs via `aria-describedby`, and required
+      fields are marked (`aria-required`). Still TODO: announce filtered-result counts / balance updates inline.
 - [x] **Color is never the only cue:** audited every color-coded state. Budget bars carry
       "On track/Near limit/Over budget" text, net-worth/highlights use ▲/▼ arrows, stale accounts show
       a "Stale" badge, cleared shows a ✓; the one offender — the To-do widget's priority dots (high vs
@@ -473,10 +473,14 @@ one-line a11y item in §1.20.
 - [x] **Zoom / reflow:** the Display/Text-size control reaches 200% (C26) and the C10/C19 responsive
       layout reflows at the effective width — verified live: at `--ui-scale: 2` on a 1280px window the page
       reflows to the phone layout with no horizontal scroll. Meets WCAG 2.1 SC 1.4.4 / 1.4.10.
-- [~] **Forms:** correct input types (number/date) in use; **inline validation is announced** —
+- [x] **Forms:** correct input types (number/date) in use; **inline validation is announced** —
       every `.err` message is `role="alert"`; **required fields carry `aria-required`** across every add
       form (accounts, categories, budgets, goals, members, rules, to-do, transactions, quick-add,
-      plans). Still TODO: per-field `aria-describedby` association tying each error to its input.
+      plans). Each form's error is now also **associated with its primary input** via `aria-describedby`
+      (+ `aria-invalid`) when present, so a screen reader re-announces the error on focus, not just once
+      via `role="alert"`. Done with a shared `errAttrs`/`errText` pair (`internal/screens/aria.go`) wired
+      into all 11 add-forms (accounts/budgets/categories/custom-fields/goals/members/rules/to-do/
+      transactions + planning's recurring & plan forms), each with a stable error id.
 - [x] **Route changes (SPA):** focus moves to `<main>` on navigation (skips the initial load so the
       first Tab still reaches the skip link) and `document.title` is set to "<Screen> · CashFlux".
 - [x] **Charts:** `ui.AreaChart` and the D3 `ui.Chart` are both `role="img"` + `aria-label` with a
@@ -1046,8 +1050,16 @@ results are summarized here so the backlog doesn't bloat.
         succeeds on every entity form.
   - _Caveat: verify with real keyboard typing — if a human's typing updates the bound state, the button
     may work for them; but the wiring is still inconsistent across forms and worth aligning._
-
-## D. Cross-component E2E workstream stories — budgeting · planning · finances ★
+- **2026-06-18 #9** — Delete round-trip + Planning (0 console errors).
+  - ✅ **Transactions delete works** — clicking a row's ✕ dropped "transactions shown" **4 → 3** (no
+    confirm-dialog blockage; harness auto-accepts dialogs).
+  - ➕ Corroborates **C1 fix**: Planning's forecast now reads "net cash flow **($2,459.45)** … projected
+    to **$50,322.85**" — **positive** net flow (was negative before income was counted). Forecast chart
+    Y-axis is in dollars ($0–$50k), consistent with the C16 fix.
+  - [ ] **Debt-payoff calculator result NOT verified** — the calculator sits at the bottom; inputs
+    (5000 / 19.99% / 250) accept fine but the months/interest **output is below the fold** and wasn't
+    captured (the "12 months" a text scan caught was the unrelated "Net worth in 12 months" header).
+    Next pass: full-page capture or scroll to assert payoff months ≈ 25 + interest for these inputs.
 
 Each story below is a **workstream**: one real user journey followed end-to-end, asserting that every
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the

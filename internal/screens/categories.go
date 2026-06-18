@@ -132,13 +132,13 @@ func Categories() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("categories.add")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
+			Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
 			Select(Class("field"), OnChange(onKind), kindOptions),
 			Select(Class("field"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
 			Input(Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(color.Get()), OnInput(onColor)),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
-		If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
+		errText("cat-err", errMsg.Get()),
 	)
 
 	cats := app.Categories()

@@ -185,7 +185,7 @@ func Goals() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("goals.add")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)),
+			Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...),
 			Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget)),
 			Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)),
 			Select(Class("field"), OnChange(onOwner), ownerOptions),
@@ -196,7 +196,7 @@ func Goals() ui.Node {
 			}),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
-		If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
+		errText("goal-err", errMsg.Get()),
 	)
 
 	goals := app.Goals()

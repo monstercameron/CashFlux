@@ -106,6 +106,12 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Form errors are tied to their input for screen readers (B15):** each add-form's validation error now
+  carries a stable `id` and the form's primary input references it via `aria-describedby` (plus
+  `aria-invalid`) while the error is showing. Previously the error only announced once via `role="alert"`;
+  now a screen reader re-announces it whenever focus returns to the field. Applied to all 11 add-forms
+  (accounts, budgets, categories, custom fields, goals, members, rules, to-do, transactions, and the
+  planning recurring & plan forms) via a shared `errAttrs`/`errText` helper.
 - **Default accent now passes contrast on both themes (B15):** the out-of-the-box accent changed from the
   mint green `#54b884` (which failed WCAG AA-UI on the light theme at ~2.1:1) to seagreen `#2e8b57`, chosen
   with `internal/contrast` to clear the 3:1 UI/large threshold against **both** surfaces (dark 4.09:1,

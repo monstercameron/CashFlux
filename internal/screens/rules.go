@@ -92,12 +92,12 @@ func Rules() ui.Node {
 		H2(Class("card-title"), uistate.T("rules.add")),
 		P(Class("muted"), uistate.T("rules.hint")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)),
+			Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
 			Select(Class("field"), OnChange(onCategory), categoryOptions(cats, categoryID.Get())),
 			Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
-		If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
+		errText("rule-err", errMsg.Get()),
 	)
 
 	applyExisting := ui.UseEvent(Prevent(func() {

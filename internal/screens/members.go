@@ -233,14 +233,14 @@ func Members() ui.Node {
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("members.add")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)),
+				Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
 				Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
 				MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.add")),
 			),
-			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
+			errText("member-err", errMsg.Get()),
 		),
 		reassignPanel,
 		Section(Class("card"),
