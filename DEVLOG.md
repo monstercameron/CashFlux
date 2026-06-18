@@ -18,6 +18,16 @@ problems and fixes, and what's next.
   Updated the icon curated-set test (17→18). gofmt realigned the (now wider) `railMeta` and icon maps.
   Native icon test green, wasm build green.
 
+## 2026-06-18 — chore: route lock-screen greeting through i18n (copy pass, file 2)
+
+- `internal/app/applockgate.go` set the lock-screen greeting from hardcoded English ("Good evening" default,
+  "Good morning"/"Good afternoon" by hour). Added `applock.greetingMorning/Afternoon/Evening` to en.go and
+  resolved them via `uistate.T`, so the greeting localizes with the rest of the lock screen. Builds under
+  `GOOS=js GOARCH=wasm`.
+- Deferred `internal/screens/screens.go`: its route registry hardcodes every screen's Label/Title/Subtitle and
+  is consumed in several places (app.go Shell props, shell.go rail) — needs a registry-level i18n refactor
+  (store keys, resolve centrally), not a quick literal swap. Flagged for a dedicated pass.
+
 ## 2026-06-18 — chore: route settings.go strings through i18n (copy pass, file 1)
 
 - First file in the "all text through i18n + improve copy" sweep. `internal/app/settings.go` had ~16 hardcoded

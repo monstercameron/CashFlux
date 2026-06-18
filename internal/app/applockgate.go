@@ -246,12 +246,12 @@ func refreshLockMeta(doc js.Value) {
 		}
 	}
 	now := js.Global().Get("Date").New()
-	greeting := "Good evening"
+	greeting := uistate.T("applock.greetingEvening")
 	switch h := now.Call("getHours").Int(); {
 	case h < 12:
-		greeting = "Good morning"
+		greeting = uistate.T("applock.greetingMorning")
 	case h < 18:
-		greeting = "Good afternoon"
+		greeting = uistate.T("applock.greetingAfternoon")
 	}
 	showMeta := !cfg.HideMeta
 	set("cf-lock-greeting", greeting, showMeta)

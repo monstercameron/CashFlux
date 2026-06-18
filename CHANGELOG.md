@@ -343,6 +343,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Lock-screen greeting routes through i18n (copy pass).** The time-of-day greeting ("Good morning/
+  afternoon/evening") on the passcode lock screen was hardcoded English; it now uses `applock.greeting*`
+  keys so it localizes with the rest of the lock screen.
 - **Settings data-actions now route through i18n (copy pass).** The export/import/load-sample/wipe toasts and
   the wipe confirmation, the FX-rate row label, and the freshness "0 = never" hint were hardcoded English; they
   now go through the language store (`settings.*` keys) so they localize and read consistently. Success toasts
