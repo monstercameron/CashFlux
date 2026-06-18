@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: in-app passcode setup form (B17 final; UX audit §6.8)
+
+- Replaced the set-passcode native `prompt()`s with an in-app modal form (`showAppLockSetup`/
+  `buildAppLockSetup` in `applockgate.go`): passcode + confirm password inputs, an auto-lock-minutes
+  number field, inline error (empty / mismatch), Cancel/Enable, Enter-to-submit. `setPasscodeFlow` is now
+  a thin wrapper that opens it, so the palette's Set/Change commands route here. 6 new `applock.*` form
+  keys (escaped via a small `escT` helper). This closes the §6.8 "replace native dialogs" item for app-lock
+  and finishes B17 (the old `applock.setPrompt/confirmPrompt/autoPrompt/enabled` keys are now unused data —
+  harmless, left in place).
+- gofmt clean, worktree build at HEAD exit 0, committed by pathspec. B17 done: core+tests → gate → palette
+  → auto-lock → i18n → in-app form.
+
 ## 2026-06-18 — refactor: i18n the app-lock strings (B17 polish)
 
 - Routed the passcode-lock UI through the catalog (13 new `applock.*` keys): the unlock gate, the
@@ -18,6 +30,7 @@ problems and fixes, and what's next.
 - This leaves the shared 24px minimum for smaller non-delete icon controls intact.
 - Browser verification initially caught the cascade order overriding width back to 24px; the final rule now
   computes to 32×32px.
+- Re-ran `go test ./...`, the wasm build, and `gwc verify` after the app-lock i18n commit landed; all passed.
 
 ## 2026-06-18 — feat: app-lock idle auto-lock (B17 cont.)
 

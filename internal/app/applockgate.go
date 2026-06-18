@@ -97,31 +97,102 @@ func buildAppLockGate(doc js.Value) {
 	resetAppLockInput(doc)
 }
 
-// setPasscodeFlow prompts for a passcode (twice, to confirm) and enables the lock.
-// Uses native prompts for the MVP; a proper in-app form is a follow-up.
-func setPasscodeFlow() {
-	p := js.Global().Call("prompt", uistate.T("applock.setPrompt"))
-	if p.IsNull() || p.IsUndefined() {
+// setPasscodeFlow opens the in-app passcode setup form.
+func setPasscodeFlow() { showAppLockSetup() }
+
+const appLockSetupID = "cf-applock-setup"
+
+// escT returns an HTML-escaped translated string, for safe innerHTML interpolation.
+func escT(key string) string { return htmlEscaper.Replace(uistate.T(key)) }
+
+// showAppLockSetup opens the passcode setup form — an in-app modal (replacing the
+// MVP's native prompts, per UX audit §6.8) — building it on first use.
+func showAppLockSetup() {
+	doc := js.Global().Get("document")
+	if s := doc.Call("getElementById", appLockSetupID); !s.IsNull() && !s.IsUndefined() {
+		s.Get("style").Set("display", "grid")
+		resetSetupFields(doc)
 		return
 	}
-	pass := strings.TrimSpace(p.String())
-	if pass == "" {
-		return
-	}
-	c := js.Global().Call("prompt", uistate.T("applock.confirmPrompt"))
-	if c.IsNull() || c.IsUndefined() || strings.TrimSpace(c.String()) != pass {
-		js.Global().Call("alert", uistate.T("applock.mismatch"))
-		return
-	}
-	mins := 0
-	if m := js.Global().Call("prompt", uistate.T("applock.autoPrompt"), "0"); !m.IsNull() && !m.IsUndefined() {
-		if v, err := strconv.Atoi(strings.TrimSpace(m.String())); err == nil && v > 0 {
-			mins = v
+	buildAppLockSetup(doc)
+}
+
+func resetSetupFields(doc js.Value) {
+	for _, id := range []string{"cf-al-pass", "cf-al-confirm"} {
+		if e := doc.Call("getElementById", id); !e.IsNull() && !e.IsUndefined() {
+			e.Set("value", "")
 		}
 	}
-	if enableAppLock(pass, mins) {
-		js.Global().Call("alert", uistate.T("applock.enabled"))
+	if e := doc.Call("getElementById", "cf-al-mins"); !e.IsNull() && !e.IsUndefined() {
+		e.Set("value", "0")
 	}
+	if e := doc.Call("getElementById", "cf-al-err"); !e.IsNull() && !e.IsUndefined() {
+		e.Set("textContent", "")
+	}
+	if e := doc.Call("getElementById", "cf-al-pass"); !e.IsNull() && !e.IsUndefined() {
+		e.Call("focus")
+	}
+}
+
+func buildAppLockSetup(doc js.Value) {
+	ov := doc.Call("createElement", "div")
+	ov.Set("id", appLockSetupID)
+	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:1001;display:grid;place-items:center;background:rgba(0,0,0,0.6);")
+
+	const inputStyle = "width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#2a2a2c);border-radius:8px;color:inherit;font:inherit;outline:none;"
+	card := doc.Call("createElement", "div")
+	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.7rem;width:min(90vw,340px);padding:1.2rem;background:var(--bg-elev,#1a1a1d);color:var(--text,#f4f4f5);border:1px solid var(--border,#2a2a2c);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,0.5);")
+	card.Set("innerHTML",
+		`<div style="font-size:1.05rem;font-weight:600;">`+escT("applock.setTitle")+`</div>`+
+			`<input id="cf-al-pass" type="password" inputmode="numeric" aria-label="`+escT("applock.passcode")+`" placeholder="`+escT("applock.passcode")+`" style="`+inputStyle+`">`+
+			`<input id="cf-al-confirm" type="password" inputmode="numeric" aria-label="`+escT("applock.confirm")+`" placeholder="`+escT("applock.confirm")+`" style="`+inputStyle+`">`+
+			`<label style="font-size:0.82rem;opacity:0.85;display:flex;flex-direction:column;gap:0.3rem;">`+escT("applock.autoLabel")+
+			`<input id="cf-al-mins" type="number" min="0" value="0" style="`+inputStyle+`"></label>`+
+			`<div id="cf-al-err" style="color:var(--danger,#d8716f);font-size:0.82rem;min-height:1em;"></div>`+
+			`<div style="display:flex;gap:0.5rem;justify-content:flex-end;">`+
+			`<button id="cf-al-cancel" type="button" style="padding:0.5rem 0.9rem;border-radius:8px;border:1px solid var(--border,#2a2a2c);background:transparent;color:inherit;cursor:pointer;">`+escT("action.cancel")+`</button>`+
+			`<button id="cf-al-ok" type="button" style="padding:0.5rem 0.9rem;border-radius:8px;border:0;background:var(--accent,#2e8b57);color:#052e13;font-weight:600;cursor:pointer;">`+escT("applock.enable")+`</button>`+
+			`</div>`)
+	ov.Call("appendChild", card)
+	doc.Get("body").Call("appendChild", ov)
+
+	get := func(id string) js.Value { return doc.Call("getElementById", id) }
+	hide := func() { ov.Get("style").Set("display", "none") }
+	submit := func() {
+		pass := strings.TrimSpace(get("cf-al-pass").Get("value").String())
+		conf := strings.TrimSpace(get("cf-al-confirm").Get("value").String())
+		errEl := get("cf-al-err")
+		switch {
+		case pass == "":
+			errEl.Set("textContent", uistate.T("applock.needPasscode"))
+			return
+		case pass != conf:
+			errEl.Set("textContent", uistate.T("applock.mismatch"))
+			return
+		}
+		mins := 0
+		if v, err := strconv.Atoi(strings.TrimSpace(get("cf-al-mins").Get("value").String())); err == nil && v > 0 {
+			mins = v
+		}
+		if enableAppLock(pass, mins) {
+			hide()
+		}
+	}
+
+	cancelCb := js.FuncOf(func(js.Value, []js.Value) any { hide(); return nil })
+	get("cf-al-cancel").Call("addEventListener", "click", cancelCb)
+	okCb := js.FuncOf(func(js.Value, []js.Value) any { submit(); return nil })
+	get("cf-al-ok").Call("addEventListener", "click", okCb)
+	enterCb := js.FuncOf(func(_ js.Value, a []js.Value) any {
+		if len(a) > 0 && a[0].Get("key").String() == "Enter" {
+			a[0].Call("preventDefault")
+			submit()
+		}
+		return nil
+	})
+	get("cf-al-confirm").Call("addEventListener", "keydown", enterCb)
+
+	resetSetupFields(doc)
 }
 
 // wireAutoLock arms an inactivity timer that re-shows the gate after the

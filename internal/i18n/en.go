@@ -111,6 +111,12 @@ var english = Catalog{
 	"applock.cmdLock":       "Lock now",
 	"applock.cmdChange":     "Change passcode…",
 	"applock.cmdRemove":     "Remove passcode lock",
+	"applock.setTitle":      "Set a passcode",
+	"applock.passcode":      "Passcode",
+	"applock.confirm":       "Confirm passcode",
+	"applock.autoLabel":     "Auto-lock after (minutes, 0 = off)",
+	"applock.enable":        "Enable",
+	"applock.needPasscode":  "Enter a passcode.",
 
 	// Common actions (shared across screens)
 	"action.add":    "Add",
