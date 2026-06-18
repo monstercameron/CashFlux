@@ -310,6 +310,13 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 	onSource := ui.UseEvent(func(e ui.Event) { source.Set(e.GetValue()) })
 	onArtifact := ui.UseEvent(func(e ui.Event) { artifact.Set(e.GetValue()) })
 
+	// The form mounts only while editing, so focus the title field on mount so the
+	// cursor lands there without a click (§6.7). The stable dep runs it just once.
+	ui.UseEffect(func() func() {
+		focusByID("widget-edit-" + w.ID)
+		return nil
+	}, w.ID)
+
 	save := func() {
 		app := appstate.Default
 		if app == nil {
@@ -387,7 +394,7 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 	}
 
 	return Div(Class("flex flex-col gap-2"),
-		Input(Class("field"), Attr("placeholder", uistate.T("pages.widgetTitle")), Value(title.Get()), OnInput(onTitle)),
+		Input(Class("field"), Attr("id", "widget-edit-"+w.ID), Attr("placeholder", uistate.T("pages.widgetTitle")), Value(title.Get()), OnInput(onTitle)),
 		bindCtl,
 		Div(Class("flex gap-2"),
 			Button(Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("action.save")),

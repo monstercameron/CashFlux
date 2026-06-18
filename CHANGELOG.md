@@ -324,9 +324,10 @@ and every commit updates this file under `Unreleased`.
 - **Rules auto-fill now shares one tested path.** Transaction entry and CSV import now both run through
   the appstate auto-categorization helper, preserving manual category/tags while first-match rules fill
   empty fields; coverage also asserts imported budget impact, apply-to-existing, and conflict warnings.
-- **Inline editors now put the cursor in the first field (§6.7).** Opening an inline edit form — on a goal
-  (incl. *Contribute*), account (incl. *Update balance*), transaction, budget, category, or member —
-  focuses the first input automatically, so you can start typing without reaching for the mouse.
+- **Inline editors now put the cursor in the first field (§6.7).** Opening any inline edit form — goals
+  (incl. *Contribute*), accounts (incl. *Update balance*), transactions, budgets, categories, members,
+  to-do tasks, rules, document drafts, and custom-page widgets — focuses the first input automatically,
+  so you can start typing without reaching for the mouse.
 - **Lock-screen content is now toggleable (B17.1).** Settings → App lock has two switches — *Show greeting
   & date* and *Show a daily quote* — both ON by default; turning one off hides it on the unlock screen.
 - **App lock is now in Settings.** Added a **Settings → App lock** section so the passcode lock is

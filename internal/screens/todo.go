@@ -222,10 +222,22 @@ func TaskRow(props taskRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when the inline editor opens (§6.7).
+	editKey := "closed"
+	if editing.Get() {
+		editKey = "open"
+	}
+	ui.UseEffect(func() func() {
+		if editing.Get() {
+			focusByID("task-edit-" + t.ID)
+		}
+		return nil
+	}, editKey)
+
 	if editing.Get() {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
+				Input(Class("field field-wide"), Attr("id", "task-edit-"+t.ID), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
 				Select(Class("field"), OnChange(onPrio),
 					Option(Value(string(domain.PriorityHigh)), SelectedIf(prioS.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
 					Option(Value(string(domain.PriorityMedium)), SelectedIf(prioS.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),

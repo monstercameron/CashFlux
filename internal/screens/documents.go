@@ -4,6 +4,7 @@ package screens
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"syscall/js"
 	"time"
@@ -354,10 +355,24 @@ func DraftRow(props draftRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when the inline editor opens (§6.7).
+	// Draft rows have no stable id, so key the element by its list index.
+	draftFieldID := "draft-edit-" + strconv.Itoa(props.Index)
+	editKey := "closed"
+	if editing.Get() {
+		editKey = "open"
+	}
+	ui.UseEffect(func() func() {
+		if editing.Get() {
+			focusByID(draftFieldID)
+		}
+		return nil
+	}, editKey)
+
 	if editing.Get() {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("date"), Value(dateS.Get()), OnInput(onDate)),
+				Input(Class("field"), Attr("id", draftFieldID), Type("date"), Value(dateS.Get()), OnInput(onDate)),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), Value(amtS.Get()), OnInput(onAmt)),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.categoryPlaceholder")), Value(catS.Get()), OnInput(onCat)),

@@ -260,10 +260,22 @@ func RuleRow(props ruleRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when the inline editor opens (§6.7).
+	editKey := "closed"
+	if editing.Get() {
+		editKey = "open"
+	}
+	ui.UseEffect(func() func() {
+		if editing.Get() {
+			focusByID("rule-edit-" + r.ID)
+		}
+		return nil
+	}, editKey)
+
 	if editing.Get() {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch)),
+				Input(Class("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch)),
 				Select(Class("field"), OnChange(onCat), categoryOptions(props.Categories, catS.Get())),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),

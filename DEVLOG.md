@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: focus-on-edit for todo/rules/documents/custom pages — §6.7 complete
+
+- Final batch of the §6.7 focus-on-edit feature: `TaskRow`, `RuleRow`, `DraftRow`, and the custom-page
+  `editWidgetForm`. Same open/closed-keyed `ui.UseEffect` → `focusByID` on the first input.
+- `DraftRow` has no stable entity id (it's an `extract.Row`), so it keys the field by list index
+  (`draft-edit-<i>`); added a `strconv` import for that.
+- `editWidgetForm` mounts only while editing, so it focuses on mount with a stable `w.ID` dep (runs once).
+- §6.7 now covers every inline editor in the app. Build green, gofmt clean.
+
 ## 2026-06-18 — feat: focus-on-edit for categories + members (§6.7 cont.)
 
 - Same pattern applied to `CategoryRow` and `MemberRow`: open/closed-keyed `ui.UseEffect` → `focusByID`
