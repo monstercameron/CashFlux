@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — a11y: label transactions form controls (C47, batch 1)
+
+- The C47 audit flagged ~12 unlabeled controls on /transactions (the worst offender). Added `aria-label`
+  to every bare `<select>` and `<input type=date>` in the add form, the filter/sort bar, the bulk-action
+  row, and the inline-edit row. Where a `Title` tooltip existed I reused its text for the label (and kept
+  the tooltip); added `transactions.{kindLabel,categoryLabel,dateLabel,filterAccount,filterCategory}`
+  i18n keys for the rest.
+- Note: `<select>` can't use a placeholder as a name, so aria-label is the right tool here. Remaining C47
+  screens (budgets, planning, accounts, goals, dashboard, settings) follow in subsequent commits. Build
+  green, gofmt clean.
+
 ## 2026-06-18 — feat: dashboard tiles drill into their data screen (C30)
 
 - Tiles had no click behavior (no href/role, cursor:auto). Made each tile's **title** a navigation link
