@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: backend snapshot store
+
+- Added server snapshot methods for opaque gzipped dataset payloads: put current, get current, list
+  retained history newest-first, and trim prior versions to a configured limit.
+- Covered last-N recovery history, history drop mode, current snapshot replacement, and dataset size-cap
+  rejection with native server tests.
+
 ## 2026-06-18 - feat: backend repository layer
 
 - Added typed server repository structs and methods for OAuth users and workspace registry rows:

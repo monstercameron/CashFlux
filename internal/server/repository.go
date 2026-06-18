@@ -30,6 +30,14 @@ type Workspace struct {
 	DeviceID  string
 }
 
+// Snapshot is an opaque gzipped dataset payload for one workspace version.
+type Snapshot struct {
+	WorkspaceID string
+	Dataset     []byte
+	Version     int64
+	UpdatedAt   time.Time
+}
+
 // UpsertUser stores an OAuth identity, keyed by provider+subject.
 func (s *Store) UpsertUser(u User) error {
 	if strings.TrimSpace(u.ID) == "" || strings.TrimSpace(u.Provider) == "" || strings.TrimSpace(u.Subject) == "" {
@@ -137,7 +145,124 @@ WHERE user_id = ? AND id = ?`, formatTime(updatedAt), deviceID, userID, workspac
 	return n > 0, nil
 }
 
+// PutSnapshot stores the current dataset snapshot, retaining the previous
+// current snapshot in history and trimming that history to historyLimit entries.
+func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error {
+	if strings.TrimSpace(snapshot.WorkspaceID) == "" {
+		return fmt.Errorf("server store: snapshot workspace id is required")
+	}
+	if maxBytes > 0 && len(snapshot.Dataset) > maxBytes {
+		return fmt.Errorf("server store: snapshot dataset is %d bytes, exceeds limit %d", len(snapshot.Dataset), maxBytes)
+	}
+	if snapshot.UpdatedAt.IsZero() {
+		snapshot.UpdatedAt = time.Now().UTC()
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var current Snapshot
+	var updated string
+	row := tx.QueryRow(`SELECT workspace_id, dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, snapshot.WorkspaceID)
+	err = row.Scan(&current.WorkspaceID, &current.Dataset, &current.Version, &updated)
+	if err == nil {
+		current.UpdatedAt, err = parseTime(updated)
+		if err != nil {
+			return fmt.Errorf("server store: parse current snapshot time: %w", err)
+		}
+		if _, err := tx.Exec(`INSERT INTO snapshot_history(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)`,
+			current.WorkspaceID, current.Dataset, current.Version, formatTime(current.UpdatedAt)); err != nil {
+			return fmt.Errorf("server store: snapshot history: %w", err)
+		}
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("server store: read current snapshot: %w", err)
+	}
+
+	if _, err := tx.Exec(`
+INSERT INTO snapshots(workspace_id, dataset_json, version, updated_at)
+VALUES(?, ?, ?, ?)
+ON CONFLICT(workspace_id) DO UPDATE SET
+  dataset_json = excluded.dataset_json,
+  version = excluded.version,
+  updated_at = excluded.updated_at`,
+		snapshot.WorkspaceID, snapshot.Dataset, snapshot.Version, formatTime(snapshot.UpdatedAt)); err != nil {
+		return fmt.Errorf("server store: put snapshot: %w", err)
+	}
+	if err := trimSnapshotHistory(tx, snapshot.WorkspaceID, historyLimit); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// GetSnapshot returns the current dataset snapshot for a workspace.
+func (s *Store) GetSnapshot(workspaceID string) (Snapshot, bool, error) {
+	row := s.db.QueryRow(`SELECT workspace_id, dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, workspaceID)
+	snapshot, err := scanSnapshot(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Snapshot{}, false, nil
+	}
+	if err != nil {
+		return Snapshot{}, false, err
+	}
+	return snapshot, true, nil
+}
+
+// SnapshotHistory returns retained prior snapshots newest-first.
+func (s *Store) SnapshotHistory(workspaceID string, limit int) ([]Snapshot, error) {
+	query := `SELECT workspace_id, dataset_json, version, updated_at FROM snapshot_history WHERE workspace_id = ? ORDER BY version DESC, id DESC`
+	args := []any{workspaceID}
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("server store: snapshot history: %w", err)
+	}
+	defer rows.Close()
+	var out []Snapshot
+	for rows.Next() {
+		snapshot, err := scanSnapshot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, snapshot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: snapshot history rows: %w", err)
+	}
+	return out, nil
+}
+
+func trimSnapshotHistory(tx *sql.Tx, workspaceID string, limit int) error {
+	if limit <= 0 {
+		if _, err := tx.Exec(`DELETE FROM snapshot_history WHERE workspace_id = ?`, workspaceID); err != nil {
+			return fmt.Errorf("server store: trim snapshot history: %w", err)
+		}
+		return nil
+	}
+	_, err := tx.Exec(`
+DELETE FROM snapshot_history
+WHERE workspace_id = ?
+  AND id NOT IN (
+    SELECT id FROM snapshot_history
+    WHERE workspace_id = ?
+    ORDER BY version DESC, id DESC
+    LIMIT ?
+  )`, workspaceID, workspaceID, limit)
+	if err != nil {
+		return fmt.Errorf("server store: trim snapshot history: %w", err)
+	}
+	return nil
+}
+
 type workspaceScanner interface {
+	Scan(dest ...any) error
+}
+
+type snapshotScanner interface {
 	Scan(dest ...any) error
 }
 
@@ -167,3 +292,17 @@ func boolInt(v bool) int {
 func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
 
 func parseTime(s string) (time.Time, error) { return time.Parse(time.RFC3339Nano, s) }
+
+func scanSnapshot(row snapshotScanner) (Snapshot, error) {
+	var snapshot Snapshot
+	var updated string
+	if err := row.Scan(&snapshot.WorkspaceID, &snapshot.Dataset, &snapshot.Version, &updated); err != nil {
+		return Snapshot{}, err
+	}
+	t, err := parseTime(updated)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("server store: parse snapshot updated_at: %w", err)
+	}
+	snapshot.UpdatedAt = t
+	return snapshot, nil
+}

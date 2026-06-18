@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend snapshot storage retains recovery history.** Server storage now writes current workspace
+  snapshots, preserves prior versions in last-N history, and rejects oversized dataset payloads before
+  they reach SyncService.
 - **Backend repository layer has native coverage.** Added typed server-store methods for users and
   workspace registry rows, including per-user listing/getting and soft-delete tombstones for the
   future SyncService.

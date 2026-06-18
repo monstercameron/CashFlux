@@ -90,6 +90,68 @@ func TestRepositoryValidationAndSoftDelete(t *testing.T) {
 	}
 }
 
+func TestSnapshotStoreCurrentHistoryAndSizeLimit(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.June, 18, 16, 30, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	for i, payload := range [][]byte{[]byte("v1"), []byte("v2"), []byte("v3")} {
+		if err := s.PutSnapshot(Snapshot{
+			WorkspaceID: "w1",
+			Dataset:     payload,
+			Version:     int64(i + 1),
+			UpdatedAt:   now.Add(time.Duration(i) * time.Minute),
+		}, 16, 2); err != nil {
+			t.Fatalf("PutSnapshot %d: %v", i+1, err)
+		}
+	}
+	current, ok, err := s.GetSnapshot("w1")
+	if err != nil || !ok {
+		t.Fatalf("GetSnapshot = %+v/%v/%v", current, ok, err)
+	}
+	if current.Version != 3 || string(current.Dataset) != "v3" {
+		t.Fatalf("current snapshot = %+v/%q, want v3", current, current.Dataset)
+	}
+	history, err := s.SnapshotHistory("w1", 0)
+	if err != nil {
+		t.Fatalf("SnapshotHistory: %v", err)
+	}
+	if len(history) != 2 || history[0].Version != 2 || string(history[0].Dataset) != "v2" || history[1].Version != 1 {
+		t.Fatalf("history = %+v, want versions 2,1", history)
+	}
+	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("too-large"), Version: 4, UpdatedAt: now}, 4, 2); err == nil {
+		t.Fatal("oversized snapshot accepted")
+	}
+}
+
+func TestSnapshotStoreCanDropHistory(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.June, 18, 16, 40, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("v1"), Version: 1, UpdatedAt: now}, 16, 1); err != nil {
+		t.Fatalf("PutSnapshot v1: %v", err)
+	}
+	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("v2"), Version: 2, UpdatedAt: now.Add(time.Minute)}, 16, 0); err != nil {
+		t.Fatalf("PutSnapshot v2: %v", err)
+	}
+	history, err := s.SnapshotHistory("w1", 0)
+	if err != nil {
+		t.Fatalf("SnapshotHistory: %v", err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("history with limit 0 = %+v, want empty", history)
+	}
+}
+
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	s, err := OpenStore(filepath.Join(t.TempDir(), "cashflux.db"))

@@ -3938,7 +3938,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `users`, `workspaces`, `snapshots` (current + last-N history), `blobs`, `workspace_blobs`,
       `ai_keys`, `usage`.
 - [x] Repository layer with table-driven tests on native Go (no transport/proto deps).
-- [ ] Snapshot store: put/get current, retain last **N** prior snapshots per workspace (LWW recovery),
+- [x] Snapshot store: put/get current, retain last **N** prior snapshots per workspace (LWW recovery),
       enforce a dataset size cap.
 - [ ] Blob metadata + on-disk **content-addressed** store (sha256, path-sharded); `workspace_blobs`
       refcount; GC sweep for unreferenced blobs.
