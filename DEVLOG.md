@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B15: announce account balance updates (reconcile was silent)
+
+- Last open live-region sub-item: announce inline balance updates. Found that `accounts.go`'s `setBalance`
+  (the reconcile / Update-balance flow) succeeded *silently* — it posted the adjustment txn, set
+  `BalanceAsOf`, cleared the error, and bumped, but gave no confirmation. Mark-updated already posted a
+  notice; reconcile didn't.
+- Reused the existing `noticeAtom` toast (already a persistent polite live region) — on success it now sets
+  `…With(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(target, ac.Currency))), false)`
+  (the `false` = not-an-error → polite, not assertive). New i18n key `accounts.balanceUpdated` = "Updated
+  %s to %s." So the new balance is both visibly acknowledged and announced to screen readers.
+- i18n catalog test + wasm build + `go vet ./internal/screens` green. Closes the live-regions checklist item.
+
 ## 2026-06-18 — C28 (blank icons): root-caused to the framework, not app code
 
 - Tried to fix C28 (every `ui.Icon` SVG renders blank; the live DOM shows `viewbox` lowercase). Audited

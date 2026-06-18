@@ -542,6 +542,7 @@ var english = Catalog{
 	"accounts.markErr":            "Couldn't mark some balances updated: %s",
 	"accounts.invalidBalance":     "Enter a valid balance amount.",
 	"accounts.balanceAdjustment":  "Balance adjustment",
+	"accounts.balanceUpdated":     "Updated %s to %s.",
 	"accounts.setBalancePrompt":   "Actual balance of %s (%s)?",
 	"accounts.lockUntilEdit":      "Locked until",
 	"accounts.archive":            "Archive",

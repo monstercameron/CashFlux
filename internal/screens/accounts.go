@@ -298,6 +298,10 @@ func Accounts() ui.Node {
 		}
 		errMsg.Set("")
 		bump()
+		// Confirm the update through the toast live region (a polite notice), so the
+		// new balance is announced to screen readers and visibly acknowledged — the
+		// reconcile flow was previously silent on success.
+		noticeAtom.Set(noticeAtom.Get().With(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(target, ac.Currency))), false))
 	}
 
 	nav := router.UseNavigate()

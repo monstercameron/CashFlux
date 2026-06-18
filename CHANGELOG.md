@@ -111,6 +111,10 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Added
+- **Updating an account balance now confirms it out loud (B15):** the reconcile / "Update balance" flow
+  used to apply the change silently. It now posts a polite toast — "Updated <account> to $X" — so the
+  result is visibly acknowledged and announced to screen readers via the live region, matching what
+  "Mark updated" already did.
 - **Dashboard tiles can be shrunk with the mouse, not just grown (C14/#1032):** the edge resize handles
   used to only grow a tile's span (clicking cycled up and wrapped to 1 at the max). Now **Shift+click
   shrinks** the span one step directly (clamped at 1), while a plain click still grows. It mirrors the

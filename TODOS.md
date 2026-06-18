@@ -455,12 +455,14 @@ one-line a11y item in §1.20.
       the div-based Toggle/Swatch (they have Space/Enter via OnKeyDown; verify with a screen reader).
 - [x] **Focus visibility:** a global `:focus-visible` ring (accent, 2px offset) on every interactive
       element/role in both themes.
-- [~] **Screen-reader / live regions:** the toast notice is now a persistent live region (idle region
+- [x] **Screen-reader / live regions:** the toast notice is now a persistent live region (idle region
       stays mounted; errors are `assertive`/`role=alert`, normal notices polite) so async outcomes are
       announced. Form errors are now associated to their inputs via `aria-describedby`, and required
       fields are marked (`aria-required`). The Transactions list now has a `role="status"`/`aria-live=polite`
       region that announces the **filtered match count** (incl. the zero-results case) as filters change.
-      Still TODO: announce inline balance updates after edits.
+      The account **reconcile/update-balance** flow now also posts a polite toast notice ("Updated
+      <account> to $X") — it previously succeeded silently — so balance updates are announced and visibly
+      acknowledged like Mark-updated already was.
 - [x] **Color is never the only cue:** audited every color-coded state. Budget bars carry
       "On track/Near limit/Over budget" text, net-worth/highlights use ▲/▼ arrows, stale accounts show
       a "Stale" badge, cleared shows a ✓; the one offender — the To-do widget's priority dots (high vs
@@ -1107,6 +1109,14 @@ results are summarized here so the backlog doesn't bloat.
   - ⚠️ **Still open (unchanged):** C28 nav icons (`viewbox` lowercase) and Members "Add member" button
     no-op ("Riley" not added). _These two are stable/known — will stop re-verifying every iteration and
     only re-check when something suggests they changed._
+- **2026-06-18 #13** — Reconcile + Allocate split + bulk (0 console errors).
+  - ✅ **Reconcile works** — clicking a row's "Mark cleared" moved counts "Mark cleared" 2→1 and
+    "Cleared ✓" 2→3 (the txn flipped to cleared).
+  - ✅ **Allocate amount-split works** — entering $1,000 produced a per-destination split with a
+    **"Kept back: $0.01 (buffer plus anything caps or rounding left over)"** note (rounding remainder).
+  - ❔ **Bulk select NOT verified** — checking `input[type='checkbox']` surfaced no bulk-action bar /
+    "selected" text; the row checkboxes may be custom (non-`<input>`) elements. _Re-test next pass with a
+    role/label-based selector to confirm bulk select + bulk delete/recategorize/clear work._
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.
