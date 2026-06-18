@@ -18,6 +18,11 @@ import (
 // from the map, or mapped to a value <= 0, is never considered stale.
 type Windows map[domain.AccountType]int
 
+// Dismissals records when a stale-account nudge was dismissed, keyed by account
+// ID. A dismissal only applies while the account's BalanceAsOf is older than the
+// dismissal; once the balance is marked updated, future stale nudges can return.
+type Dismissals map[string]time.Time
+
 // DefaultWindows returns CashFlux's default staleness windows. Debt-like
 // balances drift fastest and so have the shortest windows.
 func DefaultWindows() Windows {
@@ -87,6 +92,43 @@ func StaleAccounts(accounts []domain.Account, windows Windows, now time.Time) []
 	var out []domain.Account
 	for _, a := range accounts {
 		if IsStale(a, windows, now) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// Dismiss marks the given accounts dismissed as of at, returning a copy so UI
+// state can update immutably.
+func (d Dismissals) Dismiss(accounts []domain.Account, at time.Time) Dismissals {
+	out := make(Dismissals, len(d)+len(accounts))
+	for id, dismissedAt := range d {
+		out[id] = dismissedAt
+	}
+	for _, a := range accounts {
+		if a.ID != "" {
+			out[a.ID] = at
+		}
+	}
+	return out
+}
+
+// IsDismissed reports whether account's current stale state has been dismissed.
+func (d Dismissals) IsDismissed(account domain.Account) bool {
+	dismissedAt, ok := d[account.ID]
+	if !ok {
+		return false
+	}
+	return account.BalanceAsOf.IsZero() || !dismissedAt.Before(account.BalanceAsOf)
+}
+
+// VisibleStaleAccounts returns stale accounts whose current stale state has not
+// been dismissed.
+func VisibleStaleAccounts(accounts []domain.Account, windows Windows, dismissals Dismissals, now time.Time) []domain.Account {
+	stale := StaleAccounts(accounts, windows, now)
+	out := make([]domain.Account, 0, len(stale))
+	for _, a := range stale {
+		if !dismissals.IsDismissed(a) {
 			out = append(out, a)
 		}
 	}

@@ -1548,7 +1548,7 @@ Savings KPIs) · `period.Window`.
 - [ ] "Remind me"; assert a nudge task is created in To-do.
 - [ ] "Mark updated" / update balance; assert staleness clears and the nudge count drops.
 - [ ] Assert recurring-bill exemption is respected.
-- [ ] unit: `freshness.IsStale` windows + exemption; **1.15** dismissal-state test (gap).
+- [x] unit: `freshness.IsStale` windows + exemption; **1.15** dismissal-state test (gap).
 
 #### D18. Net-worth assembly across members & group ★
 **Workstream:** mix individual and shared assets/liabilities and verify the net-worth breakdown.
@@ -1903,7 +1903,7 @@ Shared control components (from mockup):
 - [ ] One-tap "update balance" from nudge
 - [ ] Per-account staleness badges
 - [ ] Configurable windows in settings; recurring-bill exemption respected
-- [ ] Tests already in `internal/freshness`; add dismissal-state tests
+- [x] Tests already in `internal/freshness`; add dismissal-state tests
 
 ### 1.16 Custom fields (extensibility)
 

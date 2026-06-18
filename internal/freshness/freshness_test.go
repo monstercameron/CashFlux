@@ -90,6 +90,31 @@ func TestStaleAccounts(t *testing.T) {
 	}
 }
 
+func TestDismissalsHideOnlyCurrentStaleState(t *testing.T) {
+	w := DefaultWindows()
+	stale := domain.Account{ID: "cc", Type: domain.TypeCreditCard, BalanceAsOf: daysAgo(20)}
+	other := domain.Account{ID: "checking", Type: domain.TypeChecking, BalanceAsOf: daysAgo(40)}
+
+	d := Dismissals{}.Dismiss([]domain.Account{stale}, now)
+	got := VisibleStaleAccounts([]domain.Account{stale, other}, w, d, now)
+	if len(got) != 1 || got[0].ID != "checking" {
+		t.Fatalf("visible stale after dismissal = %+v, want only checking", got)
+	}
+
+	updated := stale
+	updated.BalanceAsOf = now.Add(time.Hour)
+	if d.IsDismissed(updated) {
+		t.Fatal("a later balance update should clear the old dismissal")
+	}
+
+	later := updated
+	future := updated.BalanceAsOf.AddDate(0, 0, 20)
+	got = VisibleStaleAccounts([]domain.Account{later}, w, d, future)
+	if len(got) != 1 || got[0].ID != "cc" {
+		t.Fatalf("later stale state should be visible again, got %+v", got)
+	}
+}
+
 func TestMergeDoesNotMutate(t *testing.T) {
 	base := DefaultWindows()
 	_ = base.Merge(Windows{domain.TypeChecking: 99})

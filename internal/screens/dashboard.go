@@ -99,6 +99,7 @@ func Dashboard() ui.Node {
 	// "Remind me" on the freshness nudge → create a to-do and jump to the list.
 	nav := router.UseNavigate()
 	noticeAtom := uistate.UseNotice()
+	freshnessDismissals := uistate.UseFreshnessDismissals()
 	remindToUpdate := ui.UseEvent(func() {
 		if err := app.PutTask(domain.Task{
 			ID: id.New(), Title: uistate.T("dashboard.staleTaskTitle"),
@@ -108,6 +109,12 @@ func Dashboard() ui.Node {
 			return
 		}
 		nav.Navigate("/todo")
+	})
+	dismissFreshness := ui.UseEvent(func() {
+		stale := freshness.StaleAccounts(accounts, app.FreshnessWindows(), time.Now())
+		next := freshnessDismissals.Get().Dismiss(stale, time.Now())
+		freshnessDismissals.Set(next)
+		uistate.PersistFreshnessDismissals(next)
 	})
 
 	// Net-worth change since the start of this month (end of last month).
@@ -154,7 +161,7 @@ func Dashboard() ui.Node {
 		savingsRateWidget(income, expense, widgetCfgs.For("savings")),
 		spendingBreakdownWidget(app, txns, rates, start, end, widgetCfgs.For("breakdown")),
 		upcomingBillsWidget(app),
-		freshnessWidget(accounts, app.FreshnessWindows(), remindToUpdate),
+		freshnessWidget(accounts, app.FreshnessWindows(), freshnessDismissals.Get(), remindToUpdate, dismissFreshness),
 		topHighlightWidget(txns, app.Categories(), rates),
 	)
 }
@@ -162,9 +169,9 @@ func Dashboard() ui.Node {
 // freshnessWidget is the full-width Freshness nudge: a friendly reminder of which
 // account balances look stale (via internal/freshness), with how long since each
 // was last updated.
-func freshnessWidget(accounts []domain.Account, windows freshness.Windows, onRemind ui.Handler) ui.Node {
+func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismissals freshness.Dismissals, onRemind, onDismiss ui.Handler) ui.Node {
 	now := time.Now()
-	stale := freshness.StaleAccounts(accounts, windows, now)
+	stale := freshness.VisibleStaleAccounts(accounts, windows, dismissals, now)
 	var body ui.Node
 	if len(stale) == 0 {
 		body = P(Class("text-up text-[13px]"), uistate.T("dashboard.allFresh"))
@@ -179,7 +186,10 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, onRem
 		body = Div(
 			P(Class("text-dim text-[13px] mb-2"), uistate.T("dashboard.staleCount", len(stale))),
 			Div(Class("flex flex-wrap gap-2 items-center"), chips),
-			Button(Class("btn mt-2"), Type("button"), Title(uistate.T("dashboard.remindTitle")), OnClick(onRemind), uistate.T("dashboard.remind")),
+			Div(Class("flex gap-2 mt-2"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("dashboard.remindTitle")), OnClick(onRemind), uistate.T("dashboard.remind")),
+				Button(Class("btn"), Type("button"), OnClick(onDismiss), uistate.T("action.dismiss")),
+			),
 		)
 	}
 	return uiw.Widget(uiw.WidgetProps{
