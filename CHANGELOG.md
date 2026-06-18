@@ -69,6 +69,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Account-by-id lookup consolidated into a tested `domain.AccountByID` (internal):** the documents view's
+  `accByIDFrom` and the goals view's `accountName` each re-implemented the same linear scan. Both now use one
+  pure, table-tested `domain.AccountByID(accounts, id) (Account, bool)`. No behavior change.
 - **`firstNonEmpty` display fallback moved to a tested helper (internal):** the documents view's untested
   `firstNonEmpty(a, b)` is now `textutil.FirstNonEmpty` (pure, table-tested, treats whitespace as empty).
 - **Numeric form parsing consolidated into tested helpers (internal):** the view layer had untested

@@ -272,10 +272,8 @@ func goalAccountOptions(accounts []domain.Account, selected string) []ui.Node {
 
 // accountName returns an account's name by id, or "" when not found.
 func accountName(accounts []domain.Account, id string) string {
-	for _, a := range accounts {
-		if a.ID == id {
-			return a.Name
-		}
+	if a, ok := domain.AccountByID(accounts, id); ok {
+		return a.Name
 	}
 	return ""
 }

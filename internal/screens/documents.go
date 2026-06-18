@@ -158,7 +158,7 @@ func Documents() ui.Node {
 
 	importDraft := ui.UseEvent(Prevent(func() {
 		rows := draft.Get()
-		acc, ok := accByIDFrom(accounts, importAcct.Get())
+		acc, ok := domain.AccountByID(accounts, importAcct.Get())
 		if !ok {
 			aiErr.Set(uistate.T("documents.chooseAccount"))
 			return
@@ -306,7 +306,7 @@ func Documents() ui.Node {
 		if cur == "" {
 			cur = "USD"
 		}
-		if acc, ok := accByIDFrom(accounts, importAcct.Get()); ok && acc.Currency != "" {
+		if acc, ok := domain.AccountByID(accounts, importAcct.Get()); ok && acc.Currency != "" {
 			cur = acc.Currency
 		}
 		months := spendsummary.Summarize(rows, currency.Decimals(cur))
@@ -345,7 +345,7 @@ func Documents() ui.Node {
 				func(d domain.Document) any { return d.ID },
 				func(d domain.Document) ui.Node {
 					name := ""
-					if a, ok := accByIDFrom(accounts, d.AccountID); ok {
+					if a, ok := domain.AccountByID(accounts, d.AccountID); ok {
 						name = a.Name
 					}
 					return ui.CreateElement(DocHistoryRow, docHistoryRowProps{Doc: d, AccountName: name, OnDelete: deleteDoc})
@@ -521,15 +521,6 @@ func toDocumentRows(rows []extract.Row) []domain.DocumentRow {
 	return out
 }
 
-// accByIDFrom finds an account by id in a slice.
-func accByIDFrom(accounts []domain.Account, id string) (domain.Account, bool) {
-	for _, a := range accounts {
-		if a.ID == id {
-			return a, true
-		}
-	}
-	return domain.Account{}, false
-}
 
 // pickImageDataURL opens a file picker for images and calls onData with the
 // chosen file as a base64 data: URL. The data never leaves the device except to

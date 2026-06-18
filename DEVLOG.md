@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — consolidate account-by-id lookup into domain.AccountByID
+
+- `accByIDFrom` (documents, 3 uses) and `accountName` (goals) each had their own linear "find account by id"
+  scan. Added `domain.AccountByID(accounts, id) (Account, bool)` — pure, table-tested; chose `domain` as the
+  home because both files already import it (no new imports) and it's a query over a core type. documents
+  calls it directly (local `accByIDFrom` removed); goals' `accountName` now delegates to it.
+- Gotcha: the test first compared the not-found result with `!= Account{}`, which doesn't compile —
+  `Account` has a `map[string]any` (Custom) field and so isn't comparable. Switched to checking `a.ID == ""`.
+  domain tests + wasm build green.
+
 ## 2026-06-18 — move firstNonEmpty to textutil; view-logic extraction wrapping up
 
 - Moved the documents view's `firstNonEmpty(a,b)` to `textutil.FirstNonEmpty` (pure, table-tested,
