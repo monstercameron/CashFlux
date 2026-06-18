@@ -208,6 +208,13 @@ var (
 
 var htmlEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
 
+// paletteNotify posts a toast from a palette action (the data-action helpers take
+// a notify callback). The Notice atom is global, so this works outside a render.
+func paletteNotify(msg string, isErr bool) {
+	a := uistate.UseNotice()
+	a.Set(a.Get().With(msg, isErr))
+}
+
 // buildPaletteCommands enumerates the searchable commands: jump to any screen
 // (primary, tools, system groups) plus a couple of direct actions.
 func buildPaletteCommands() []paletteCmd {
@@ -251,8 +258,11 @@ func buildPaletteCommands() []paletteCmd {
 			})
 		}},
 	)
-	// Passcode lock (adaptive to current state). Labels are hardcoded for the MVP;
-	// an i18n pass over the app-lock UI is a follow-up.
+	cmds = append(cmds,
+		paletteCmd{label: uistate.T("settings.exportJSON"), run: func() { exportJSON(paletteNotify) }},
+		paletteCmd{label: uistate.T("settings.exportCSV"), run: func() { exportCSV(paletteNotify) }},
+	)
+	// Passcode lock (adaptive to current state).
 	if loadAppLock().Enabled {
 		cmds = append(cmds,
 			paletteCmd{label: uistate.T("applock.cmdLock"), run: showAppLockGate},
