@@ -1294,6 +1294,17 @@ results are summarized here so the backlog doesn't bloat.
   (Hide-done toggle inconclusive — the sample task is open, nothing "done" to hide.)
 - **2026-06-18 #38** — Spot-check, 0 errors. **All unchanged:** C28 icon `[0,0]`; Transactions checkboxes
   non-semantic (`0/0`); Members add-button no-op ("Drew38"). Standing open set stable #25→#38.
+- **2026-06-18 #39** — CSV dedupe attempt; **inconclusive + a signal to investigate** (0 console errors).
+  - Dedupe **unverified**: my status-line scan matched the **"Skip to content"** link (contains "skip")
+    instead of the import "Skipped/Imported" message — harness bug. _Fix: match the literal "Skipped"/
+    "Imported" status text, not substring "skip"._
+  - [ ] ⚠️ **Investigate: fresh load showed "57 transactions shown"** (sample data is only **4**), and the
+    count didn't change across two imports. Either (a) a regex false-match, or (b) **real cross-session
+    data accumulation** — if transactions now persist to localStorage, my ~39 iterations of test writes
+    (Duplicate/Repeat-last/CSV imports) may be piling up, since the dataset would survive page reloads.
+    Worth confirming whether the store persists across reloads and whether "Wipe data" / fresh-context
+    resets it; if it accumulates unboundedly that's a real concern. _Re-check with a clean profile + a
+    precise count assertion next pass._
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

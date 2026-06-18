@@ -69,6 +69,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Service-worker cache bumped to v16** so clients re-fetch the updated wasm after the sample-data change
+  (it's network-first, but the bump evicts any stale cached `main.wasm`). To populate the new persona at
+  runtime, use **Settings → Data → "Load sample"**, which replaces the current data with the fresh seed.
 - **Sample data is now a realistic persona:** first-run / "Load sample data" loads the finances of Michael
   Brooks — a 46-year-old single homeowner — instead of the bare placeholder. It includes a full balance
   sheet (checking, high-yield savings, brokerage/401(k), home, mortgage, auto loan, credit card), ten
