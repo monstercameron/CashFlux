@@ -24,6 +24,7 @@ type Settings struct {
 	OpenAIKey          string             `json:"openAiKey,omitempty"`
 	OpenAIModel        string             `json:"openAiModel,omitempty"`
 	FreshnessOverrides map[string]int     `json:"freshnessOverrides,omitempty"`
+	BudgetMethodology  string             `json:"budgetMethodology,omitempty"` // budgeting.Methodology; empty = simple
 }
 
 // Dataset is the complete CashFlux dataset: every entity plus settings. It is

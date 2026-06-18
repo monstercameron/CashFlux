@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature D6: budgeting method (Simple / Zero-based)
+
+- Built the budget-methodology selector. Model: `budgeting.Methodology` (simple/zero-based/envelope) +
+  `Valid`/`ParseMethodology` (unknown/empty → simple) + `ToAssign(income, totalBudgeted)`, all pure and
+  table-tested. Config: `store.Settings.BudgetMethodology` (household-level, so it persists with the
+  dataset and now survives reload via the autosave).
+- UI: a Settings → household "Budgeting method" selector (Simple · Zero-based; Envelope reserved in the
+  type but not offered yet — it needs the carry-forward view). On the Budgets screen, when zero-based,
+  a banner shows income-for-the-month minus total budgeted: "$X left to assign" / "Every dollar is
+  assigned" / "Over-assigned by $X". Income comes from `ledger.PeriodTotals` over the month range of the
+  globally-selected period (`budgeting.PeriodRange(PeriodMonthly, viewMonth, weekStart)`).
+- Verified live end-to-end: set Zero-based in Settings, navigated to /budgets (client-side), and the
+  banner read "$3,600.00 left to assign this month" (sample income − total budgeted).
+- Deferred: the Envelope view (carry-forward) and the per-member config-layering — noted in TODOS.
+
 ## 2026-06-18 — cleanup C7: one period control for Budgets
 
 - The Budgets card carried its own `‹ January 2006 ›` month stepper (a `monthOffset` UseState +

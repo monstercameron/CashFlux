@@ -982,10 +982,16 @@ Savings KPIs) · `period.Window`.
 #### D6. Budget methodology selector (envelope / zero-based / simple) — gap
 **Workstream:** pick a methodology and confirm the UI affordances and presets adapt.
 **Touches:** Settings (methodology — **not yet built**, §1.18/1.19) · Categories presets (`catscheme`) · Budgets.
-- [ ] **fix/build first:** add the methodology selector (currently missing) + persisted config.
-- [ ] Apply "zero-based"; assert the budgets view surfaces "assign every dollar" affordance.
-- [ ] Apply "envelope"; assert envelope-style view; switching methodologies doesn't corrupt data.
-- [ ] unit: config-layering test that methodology resolves defaults→household→member.
+- [x] **Methodology selector + persisted config built.** `budgeting.Methodology` (simple/zero-based/
+      envelope) + `ParseMethodology`/`ToAssign` (pure, table-tested); `store.Settings.BudgetMethodology`
+      (household config, persists with the dataset); a Settings → household selector (Simple · Zero-based).
+- [x] Apply "zero-based": the Budgets screen surfaces an "assign every dollar" banner — income for the
+      month minus total budgeted ("$X left to assign" / "Every dollar is assigned" / "Over-assigned by
+      $X"). Verified live: switching to zero-based and visiting Budgets shows "$3,600.00 left to assign".
+- [ ] Apply "envelope": envelope-style carry-forward view — deferred. `MethodEnvelope` exists in the type
+      but isn't offered in the selector yet (behaves like simple); needs the carry-forward computation.
+- [ ] unit: config-layering test (defaults→household→member). Methodology is household-only today; the
+      per-member layering is a future refinement.
 
 #### D7. Month-boundary rollover correctness ★
 **Workstream:** step the period across a month/quarter/week boundary with transactions on the edges.

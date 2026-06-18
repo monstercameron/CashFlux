@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Budgeting method: Simple or Zero-based (D6):** Settings now has a budgeting-method selector. Under
+  **Zero-based**, the Budgets screen shows how much of the month's income is still unassigned —
+  "$X left to assign", "Every dollar is assigned", or "Over-assigned by $X". The choice is household
+  config and persists. Backed by `budgeting.Methodology`/`ToAssign` (pure, table-tested). Verified live.
 - **Reorder the sidebar by dragging (B8):** drag a primary nav item onto another to reorder the menu;
   the order persists across reloads. New screens append and hidden ones are skipped automatically.
   (Clicking a nav item still navigates as before.) Backed by a new pure `navorder` package with table

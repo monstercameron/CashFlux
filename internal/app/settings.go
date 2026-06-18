@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/contrast"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -300,6 +301,18 @@ func globalSettingsForm() uic.Node {
 			_ = a.PutSettings(s)
 		}
 	})
+	curMethod := budgeting.MethodSimple
+	if a := appstate.Default; a != nil {
+		curMethod = budgeting.ParseMethodology(a.Settings().BudgetMethodology)
+	}
+	onMethod := uic.UseEvent(func(e uic.Event) {
+		if a := appstate.Default; a != nil {
+			s := a.Settings()
+			s.BudgetMethodology = e.GetValue()
+			_ = a.PutSettings(s)
+			bump() // re-render the budgets view with the new methodology
+		}
+	})
 
 	var members []domain.Member
 	base := "USD"
@@ -372,6 +385,12 @@ func globalSettingsForm() uic.Node {
 			Option(Value("EUR"), SelectedIf(base == "EUR"), "EUR — Euro"),
 			Option(Value("GBP"), SelectedIf(base == "GBP"), "GBP — British Pound"),
 		),
+		Div(Class("set-label"), uistate.T("settings.budgetMethod")),
+		Select(Class("set-input"), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
+			Option(Value(string(budgeting.MethodSimple)), SelectedIf(curMethod == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
+			Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(curMethod == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
+		),
+		P(Class("text-faint text-[12px]"), uistate.T("settings.budgetMethodNote")),
 		Div(Class("set-label"), uistate.T("settings.exchangeRates")),
 		If(len(fxRows) == 0, P(Class("text-faint text-[12px]"), uistate.T("settings.noRates"))),
 		Div(fxRows),

@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -200,6 +201,23 @@ func Budgets() ui.Node {
 		totalLimit += s.Spent.Amount + s.Remaining.Amount // limit = spent + remaining
 	}
 
+	// Zero-based budgeting surfaces how much of the period's income is still
+	// unassigned to a budget (D6). Other methodologies show no banner.
+	var assignBanner ui.Node = Fragment()
+	if budgeting.ParseMethodology(app.Settings().BudgetMethodology) == budgeting.MethodZeroBased {
+		ms, me := budgeting.PeriodRange(domain.PeriodMonthly, viewMonth, weekStart)
+		income, _, _ := ledger.PeriodTotals(txns, ms, me, rates)
+		toAssign := budgeting.ToAssign(income.Amount, totalLimit)
+		switch {
+		case toAssign > 0:
+			assignBanner = P(Class("budget-sub font-display"), uistate.T("budgets.toAssign", fmtMoney(money.New(toAssign, base))))
+		case toAssign == 0:
+			assignBanner = P(Class("budget-sub font-display"), uistate.T("budgets.allAssigned"))
+		default:
+			assignBanner = P(Class("budget-sub font-display text-down"), uistate.T("budgets.overAssigned", fmtMoney(money.New(-toAssign, base))))
+		}
+	}
+
 	var listBody ui.Node
 	if len(statuses) == 0 {
 		listBody = P(Class("empty"), uistate.T("budgets.empty"))
@@ -224,6 +242,7 @@ func Budgets() ui.Node {
 			Div(Class("budget-head"),
 				H2(Class("card-title"), uistate.T("nav.budgets")),
 			),
+			assignBanner,
 			If(overCount > 0 || nearCount > 0, P(Class("budget-sub"), uistate.T("budgets.overNear", overCount, nearCount))),
 			listBody,
 		),
