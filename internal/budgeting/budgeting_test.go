@@ -95,6 +95,34 @@ func TestSpentSharedScope(t *testing.T) {
 	}
 }
 
+func TestSpentScopeAggregationMixedMembers(t *testing.T) {
+	start, end := june()
+	rates := currency.Rates{Base: "USD"}
+	txns := []domain.Transaction{
+		expense(10000, "USD", "food", "m1", "2026-06-03"),
+		expense(5000, "USD", "food", "m2", "2026-06-04"),
+		expense(3000, "USD", "rent", "m1", "2026-06-05"),
+	}
+	individual := domain.Budget{CategoryID: "food", Scope: domain.ScopeIndividual, OwnerID: "m1", Limit: usd(50000)}
+	group := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: usd(50000)}
+
+	indivSpent, err := Spent(individual, txns, start, end, rates)
+	if err != nil {
+		t.Fatalf("individual Spent error: %v", err)
+	}
+	if !indivSpent.Equal(usd(10000)) {
+		t.Errorf("individual spent = %v, want 10000 USD", indivSpent)
+	}
+
+	groupSpent, err := Spent(group, txns, start, end, rates)
+	if err != nil {
+		t.Fatalf("group Spent error: %v", err)
+	}
+	if !groupSpent.Equal(usd(15000)) {
+		t.Errorf("group spent = %v, want 15000 USD", groupSpent)
+	}
+}
+
 func TestSpentMultiCurrency(t *testing.T) {
 	start, end := june()
 	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.10}}

@@ -1408,7 +1408,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Add expenses by different members; assert the individual budget counts only its owner's spend.
 - [ ] Assert the group budget counts the household's spend.
 - [ ] Edit a budget's owner inline; assert spend recomputes for the new scope.
-- [ ] unit: `budgeting` scope-aggregation test (individual vs group, mixed members).
+- [x] unit: `budgeting` scope-aggregation test (individual vs group, mixed members).
 
 #### D5. Sub-category rollup into parent budget & breakdown
 **Workstream:** add a sub-category under a parent, spend on the sub, and confirm rollup.

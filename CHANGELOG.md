@@ -10,6 +10,8 @@ and every commit updates this file under `Unreleased`.
 - **Currency conversion edge coverage.** The `currency` unit tests now cover missing target rates,
   negative-amount rounding, and repeated cross-rate conversions so D16's pure conversion path has a tighter
   regression net. The missing-rate coverage now checks both the source and target sides of a conversion.
+- **Budget scope aggregation coverage.** The `budgeting` unit tests now pin the mixed-member D4 case: an
+  individual budget counts only its owner while a group budget counts the whole household for the same category.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

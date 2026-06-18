@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — test: D4 budget scope aggregation
+
+- Closed the D4 pure budgeting unit-test checklist item with a mixed-member scenario in
+  `internal/budgeting/budgeting_test.go`.
+- The test evaluates the same food transactions through an individual member budget and a group budget,
+  proving owner-only spend and household-wide spend stay distinct.
+- Verification: `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — feat: app-lock "Forgot passcode?" recovery (close lockout gap)
 
 - A forgotten passcode previously meant permanent lockout (no recovery — the B17 spec called for one).
