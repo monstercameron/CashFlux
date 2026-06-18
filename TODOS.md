@@ -1223,6 +1223,10 @@ results are summarized here so the backlog doesn't bloat.
     "LoopBookshop", but the transactions list shows the *Description* column (empty for this row), so the
     miss is a false negative. _Re-test by asserting the "N transactions shown" count increments, or by
     searching the payee column specifically._
+- **2026-06-18 #25** — Status re-check of the 3 durable open bugs (0 console errors). **All unchanged:**
+  C28 nav-icon child paints `[0,0]` (still not rendering); Members "Add member" button no-op ("Pat" not
+  added); Rules "Add" no-op ("disney" not added). No regressions elsewhere. _These three are the standing
+  open defects; will spot-check periodically rather than every sweep._
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

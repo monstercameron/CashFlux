@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — custom-field validation enforced on every write (91% → 92%)
+
+- Verified the data-integrity guarantee that a required custom field is enforced on every entity write that
+  supports custom fields, not just accounts. Added `custom_validation_test.go`: registers a required custom
+  def for member/transaction/budget/goal, then confirms an otherwise-valid entity that omits the value is
+  rejected — the `validateCustom`-rejection branch each of those `Put*` methods had left uncovered (they were
+  at 75%; PutAccount was already covered by `TestPutAccountValidatesCustomFields`). Those methods → 87.5%;
+  `appstate` → **91.8%**.
+- **Coverage work concluded.** Every native package now sits at 84–100% (domain/validate ~100; insights 98;
+  budgeting/goals/payoff 95–96; ledger 94; formula 93; id 91; appstate 92; store 84), error paths included
+  (via the closed-DB/store technique). The remaining slivers are duplicative base-validation branches,
+  construction-error injection, and unreachable safety backstops — not worth further churn. wasm/UI packages
+  still need the browser lane (unavailable here).
+
 ## 2026-06-18 — appstate resolver + freshness-override paths (90% → 91%)
 
 - Two more reachable feature paths: `idResolver` (the C27 name→id CSV resolver, callable directly since the
