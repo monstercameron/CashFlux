@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — appstate business-logic branches (87% → 90%)
+
+- The reachable business-logic gaps after the error-path pass: `PutCustomFieldDef`'s rejection of an
+  invalid definition (55.6%) and `ReassignOwner`'s per-entity move loops + individual-target path (62.5% —
+  the existing test only reassigned an account+goal to the group owner).
+- Added `logic_test.go`: rejecting an incomplete custom-field def (and asserting it isn't stored), and a
+  full `ReassignOwner` from one member to another with an account, budget, goal, and transaction (moved=4,
+  ownership/scope flipped). `appstate` → **89.7%** (`PutCustomFieldDef` 100%, `ReassignOwner` 87.5%). The
+  residual is mid-loop store-error returns (error injection partway through a reassign) — marginal.
+
 ## 2026-06-18 — appstate error-path coverage via a closed store (82% → 87%)
 
 - Same seam-free technique as store: close the App's underlying store (`a.Store().Close()`) and the

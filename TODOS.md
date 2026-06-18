@@ -1215,7 +1215,14 @@ results are summarized here so the backlog doesn't bloat.
   - Customize formula builder + variables panel render fine. _(Minor: the "Available variables" panel
     shows raw figures `assets 21599.25` / `expense 1800.75` — acceptable since they're numeric formula
     inputs, not display money.)_
-UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
+- **2026-06-18 #24** — CSV import → ledger (D21 workstream), 0 console errors.
+  - ✅ **C27 CSV currency-default fix CONFIRMED live.** Pasting the documented `date,payee,amount,account`
+    (no `currency` column) showed **"Imported"** with **no error** — the old "amount and currency are
+    required" failure is gone.
+  - ❔ **Ledger round-trip inconclusive (harness flaw, not a bug):** I searched the ledger for the *payee*
+    "LoopBookshop", but the transactions list shows the *Description* column (empty for this row), so the
+    miss is a false negative. _Re-test by asserting the "N transactions shown" count increments, or by
+    searching the payee column specifically._
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so
