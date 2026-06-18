@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Bills — month-calendar layout (B22, internal).** `bills.MonthCalendar` lays out a month as a grid of
+  whole weeks (starting on the user's week-start), placing each bill on its due day and padding the first
+  and last weeks with adjacent-month days. Pure, table-tested; the calendar view renders on this next.
 - **Bills tracker — the pure core (B22, internal).** New `internal/bills` package that derives upcoming
   bills from your liability accounts: each account with a statement due-day and a minimum payment becomes a
   monthly bill with its next due date (correctly clamped for short months — a "due on the 31st" bill lands

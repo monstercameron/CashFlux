@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: bills month-calendar layout helper (B22)
+
+- Added `bills.MonthCalendar(bills, year, month, weekStart) [][]CalendarDay` — the pure month-grid layout
+  the calendar UI needs. Computes the week-start offset, ceils to whole weeks (`(offset+daysInMonth+6)/7`),
+  pads leading/trailing cells from the adjacent months (`InMonth=false`, never carrying bills), and buckets
+  each bill onto its due day via a date-only key. Reuses the existing `daysInMonth`.
+- Tests: grid shape (7/row, first cell = weekStart on/before the 1st), Monday vs Sunday week-start, the 1st
+  appears once and in-month, bill placement on the right cell, and that out-of-grid / out-of-month days
+  carry no bills. `go vet` clean. The calendar view (rendering this grid with due-day dots) is next.
+
 ## 2026-06-18 — feat: bill payment reminder → to-do (B22)
 
 - Added a **Remind me** action to each bill row (extracted a `BillRow` component owning its click hook).
