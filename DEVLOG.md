@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — C28 (blank icons): root-caused to the framework, not app code
+
+- Tried to fix C28 (every `ui.Icon` SVG renders blank; the live DOM shows `viewbox` lowercase). Audited
+  both ends. App side is correct: `internal/ui.Icon` passes `Attr("viewBox", "0 0 24 24")`, the framework
+  auto-injects `xmlns`, and the framework's *SSR string* renderer preserves the camelCase (its own
+  `shorthand_more_test.go` asserts `viewBox="0 0 16 16"`).
+- Framework side is the defect: grepped the entire GoWebComponents module — **there is no `createElementNS`
+  anywhere**. So the wasm renderer makes `<svg>` in the HTML namespace. Two consequences: (1) per the DOM
+  spec, `setAttribute("viewBox", v)` on an HTML-namespaced element lowercases the qualified name to
+  `viewbox`; (2) the node isn't a real `SVGSVGElement`, so SVG geometry doesn't render at all. Text nodes
+  still paint — which explains why chart *axis labels* looked fine (C16) while icon glyphs are blank: same
+  bug, only the geometry is lost.
+- No app-level workaround: `Attr` is the lowercasing path; `Props.Raw` can set odd attribute keys but
+  can't add an element namespace; and the framework exposes no raw-HTML/`innerHTML`/dangerouslySetInnerHTML
+  node that would let me hand the browser a pre-parsed (correctly-namespaced) SVG string. The fix has to be
+  upstream (create `svg`/`math` subtrees via `createElementNS`, keep SVG camelCase attrs).
+- Marked C28 **framework-blocked** (alongside B1/B3 SPA routing). Couldn't live-verify the current state
+  either — the gwc browser oracle isn't available in the headless loop environment. No code change made;
+  fabricating an app-side "fix" for a renderer bug would be dishonest and wouldn't work. Documented the
+  root cause so it's actionable the moment the framework dependency or a browser lane is available.
+
 ## 2026-06-18 — #1032: explicit mouse shrink on the dashboard resize handle
 
 - Open grid item: the resize handle only *grew* (click cycles span up, wraps to 1 at the max), so the only

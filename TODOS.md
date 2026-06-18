@@ -957,6 +957,18 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
    SVG camelCase attributes — verify `preserveAspectRatio` on `ui.Chart` SVGs isn't similarly mangled._
    - [ ] Emit `viewBox` (and other camelCase SVG attrs) with correct case in the DOM; re-check nav, menu
          toggle, and chart SVGs all render.
+   - **BLOCKED — upstream framework fix (investigated 2026-06-18, loop):** root cause is *not* in
+     `internal/ui.Icon` (it correctly passes `Attr("viewBox", "0 0 24 24")`, and the framework auto-adds
+     `xmlns`; the SSR string renderer even preserves the camelCase — see GoWebComponents
+     `shorthand_more_test.go`). The defect is the **wasm DOM renderer: there is no `createElementNS`
+     anywhere in the framework**, so `<svg>` is created in the HTML namespace. On an HTML-namespaced
+     element the DOM spec *lowercases* `setAttribute("viewBox", …)` → `viewbox`, and the node isn't a real
+     `SVGSVGElement`, so geometry never renders (text labels still paint — which is why chart axis labels
+     looked fine while icon glyphs are blank). No app-level workaround exists: `Attr` is lowercased,
+     `Props.Raw` can't add a namespace, and the framework exposes no raw-HTML/`innerHTML` node to hand the
+     browser a pre-parsed SVG string. **Fix must land in GoWebComponents** (create `svg`/`math` subtrees
+     with `createElementNS` + preserve SVG camelCase attrs). Tracked alongside B1/B3 as framework-blocked.
+     Re-verify here once that ships (needs the browser oracle, unavailable in the headless loop env).
 
 2. **"There is no collapse button."** ⚠️ partly a consequence of #1. The toggle **does exist** — a 28×28
    `.menu-btn` in the top bar with an `icon.Menu` `<svg>` — but that glyph is blank for the same
@@ -1089,8 +1101,12 @@ results are summarized here so the backlog doesn't bloat.
     lost on reload" finding (lets the key persist; off by default with a plain-English notice).
   - ⚠️ **C28 (icons) still OPEN** — nav `<svg>` still `viewbox` (lowercase); icons blank.
   - ⚠️ **Members "Add member" via button still no-ops** ("Casey" not added) — #4/#8 unchanged.
-
-Each story below is a **workstream**: one real user journey followed end-to-end, asserting that every
+- **2026-06-18 #12** — Customize formula builder + re-checks (0 console errors).
+  - ✅ **Formula builder works** — typing `1000 + 1` shows live result **1001**; `income - expense`
+    renders a computed Result. Reactive, no submit needed.
+  - ⚠️ **Still open (unchanged):** C28 nav icons (`viewbox` lowercase) and Members "Add member" button
+    no-op ("Riley" not added). _These two are stable/known — will stop re-verifying every iteration and
+    only re-check when something suggests they changed._
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.
