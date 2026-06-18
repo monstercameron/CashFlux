@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Workflows screen — build, run, and audit automations (Phase D).** A new **Workflows** screen (Tools)
+  lets you create an automation (name, trigger — *when I run it* or *when a transaction is added* — an
+  optional condition formula, and write-safe actions: create a task, apply rules, notify), enable/disable
+  it, **Dry run** it to preview exactly what it would do, **Run now** to apply it, and review a **run
+  history**. Adding a transaction now fires enabled "transaction added" workflows automatically. Apply +
+  dry-run + condition-gating are unit-tested (a real run creates the task and records an audit run; a dry
+  run changes nothing).
 - **Workflow engine — pure core + persistence (Phase D groundwork):** new `internal/workflow` package
   models user automations (a trigger, an optional sandboxed-formula condition, and write-safe actions —
   create task, apply rules, notify) and plans them deterministically into explainable Effects without side
