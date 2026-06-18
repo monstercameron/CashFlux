@@ -12,6 +12,17 @@ import (
 
 const appLockGateID = "cf-applock-gate"
 
+// appLockActive reports whether the unlock gate is currently covering the app.
+// Global shortcut handlers consult it so a locked app can't be driven by keyboard.
+func appLockActive() bool {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return false
+	}
+	g := doc.Call("getElementById", appLockGateID)
+	return !g.IsNull() && !g.IsUndefined() && g.Get("style").Get("display").String() != "none"
+}
+
 // maybeLockOnBoot shows the passcode gate at startup when the lock is enabled, so
 // the app's content stays covered until the right passcode is entered. Called once
 // from Run after mount.

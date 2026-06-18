@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: lock gate suppresses global keyboard shortcuts (B17 hardening)
+
+- Spotted a bypass: the unlock gate is a visual/click overlay, but the keyboard shortcuts are document-level
+  listeners, so while "locked" you could still Alt+1–9 navigate or Cmd+K the palette (behind the gate).
+  Added `appLockActive()` (gate exists + display != none) and made `wireKeyboardShortcuts` bail when it's
+  true — the gate's own input listeners are on the gate elements, so passcode entry still works.
+- Residual (noted, not done): no full focus-trap, so Tab could still move focus to covered background
+  controls; for a soft gate the click + shortcut blocking is the main protection. gofmt clean, disk wasm
+  build green (served wasm rebuilt). Committed by pathspec.
+
+## 2026-06-18 — test: D13 forecast net-worth feed
+
+- Closed the D13 pure forecast unit-test checklist item by adding a net-worth-feed bridge in
+  `internal/forecast/forecast_test.go`.
+- The test derives a starting net worth from `ledger.NetWorthSeries`, then projects recurring and one-time
+  future changes with `forecast.Project`, covering the dashboard/planning overlap at the pure layer.
+- Verification: `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 
 - Closed the D15 pure ledger unit-test checklist item by extracting `ledger.AdjustmentToTarget` and covering

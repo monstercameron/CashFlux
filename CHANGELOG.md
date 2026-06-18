@@ -23,6 +23,8 @@ and every commit updates this file under `Unreleased`.
   archived-account net-worth rollups in one D18 regression case.
 - **Reconcile adjustment math is tested.** Balance-update adjustment calculation now lives in `ledger` and is
   covered alongside `ClearedBalance`, closing the D15 pure unit item.
+- **Forecast net-worth feed coverage.** The `forecast` unit tests now bridge from `ledger.NetWorthSeries`
+  into `Project`, extending D13 horizon coverage to the dashboard/planning feed shape.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
@@ -350,6 +352,10 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Passcode lock now actually blocks the keyboard (B17).** While the unlock gate is up, the global
+  shortcuts (Alt+1–9, Alt+N, Cmd/Ctrl+K) were still firing as document-level listeners — so a "locked" app
+  could be navigated or have the command palette opened behind the gate. The shortcut handler now bails
+  whenever the gate is showing; the gate's own passcode input keeps working.
 - **The multi-currency editor actually works now.** Settings → Base currency and the exchange-rate inputs
   were inert stubs — the base-currency `<select>` had no change handler and the rate inputs no handler, so
   neither could be changed (and there was no way to add a rate for a currency not already in the table).

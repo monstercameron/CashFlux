@@ -32,6 +32,12 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		e := args[0]
+		// While the passcode gate is up, swallow all global shortcuts so a locked
+		// app can't be navigated or driven from the keyboard (the gate's own input
+		// keeps working — its listeners are on the gate elements, not here).
+		if appLockActive() {
+			return nil
+		}
 		key := e.Get("key").String()
 		// Esc dismisses the help/command overlays (no-op when closed); FlipPanel
 		// keeps handling Esc for open settings panels independently.
