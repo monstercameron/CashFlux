@@ -187,46 +187,50 @@ func Documents() ui.Node {
 			autoRules = append(autoRules, rules.Rule{Match: c.Name, SetCategoryID: c.ID})
 		}
 		n := 0
-		for _, r := range rows {
-			amt, err := money.ParseMinor(strings.TrimSpace(r.Amount), dec)
-			if err != nil || amt == 0 {
-				continue
-			}
-			date, derr := dateutil.ParseDate(strings.TrimSpace(r.Date))
-			if derr != nil {
-				date = time.Now()
-			}
-			desc := strings.TrimSpace(r.Description)
-			cid := catByName[strings.ToLower(r.Category)]
-			// Fuzzy fallback: the model often returns a near-name ("Food & Drink"
-			// for the user's "Food"), so if the exact name doesn't match, accept a
-			// substring match either way (min length 3 to avoid spurious hits),
-			// scanning categories in order for determinism (C27).
-			if cid == "" && strings.TrimSpace(r.Category) != "" {
-				aiCat := strings.ToLower(strings.TrimSpace(r.Category))
-				for _, c := range app.Categories() {
-					cn := strings.ToLower(c.Name)
-					if len(cn) >= 3 && (strings.Contains(aiCat, cn) || strings.Contains(cn, aiCat)) {
-						cid = c.ID
-						break
+		// Suspend per-row workflow triggering during the bulk import; the trigger
+		// fires once afterward instead of once per imported row.
+		app.WithoutTriggers(func() {
+			for _, r := range rows {
+				amt, err := money.ParseMinor(strings.TrimSpace(r.Amount), dec)
+				if err != nil || amt == 0 {
+					continue
+				}
+				date, derr := dateutil.ParseDate(strings.TrimSpace(r.Date))
+				if derr != nil {
+					date = time.Now()
+				}
+				desc := strings.TrimSpace(r.Description)
+				cid := catByName[strings.ToLower(r.Category)]
+				// Fuzzy fallback: the model often returns a near-name ("Food & Drink"
+				// for the user's "Food"), so if the exact name doesn't match, accept a
+				// substring match either way (min length 3 to avoid spurious hits),
+				// scanning categories in order for determinism (C27).
+				if cid == "" && strings.TrimSpace(r.Category) != "" {
+					aiCat := strings.ToLower(strings.TrimSpace(r.Category))
+					for _, c := range app.Categories() {
+						cn := strings.ToLower(c.Name)
+						if len(cn) >= 3 && (strings.Contains(aiCat, cn) || strings.Contains(cn, aiCat)) {
+							cid = c.ID
+							break
+						}
 					}
 				}
-			}
-			var tags []string
-			if cid == "" {
-				if mr := rules.FirstMatch(autoRules, desc); mr != nil {
-					cid = mr.SetCategoryID
-					tags = mr.SetTags
+				var tags []string
+				if cid == "" {
+					if mr := rules.FirstMatch(autoRules, desc); mr != nil {
+						cid = mr.SetCategoryID
+						tags = mr.SetTags
+					}
+				}
+				t := domain.Transaction{
+					ID: id.New(), AccountID: acc.ID, Date: date, Desc: desc,
+					CategoryID: cid, Tags: tags, Amount: money.New(amt, acc.Currency),
+				}
+				if err := app.PutTransaction(t); err == nil {
+					n++
 				}
 			}
-			t := domain.Transaction{
-				ID: id.New(), AccountID: acc.ID, Date: date, Desc: desc,
-				CategoryID: cid, Tags: tags, Amount: money.New(amt, acc.Currency),
-			}
-			if err := app.PutTransaction(t); err == nil {
-				n++
-			}
-		}
+		})
 		if n > 0 {
 			recordDocument(domain.DocImage, acc.ID, rows)
 		}

@@ -297,6 +297,17 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **"When a transaction is added" workflows now fire from every add path (was: quick-add only).** The
+  trigger was wired into a single screen, so adding a transaction via the inline editor, a transfer, a
+  duplicate, or CSV/image import never ran the workflow. Firing is now centralized in `PutTransaction`
+  (on genuinely new transactions, not edits), so all add paths honor the trigger. Bulk imports fire it
+  once (not once per row) via a suspend guard, and applying a workflow's effects can't recursively
+  re-fire it.
+- **Workflow "create task" no longer piles up duplicates.** A repeatedly-firing workflow (e.g. on every
+  transaction in a month) created a new identical task each time; it now skips when an open task with the
+  same title already exists.
+- **Currency KPI widgets never drop a cent** (now rounds `value × 100` instead of truncating) — confirmed
+  by the new `internal/widgetdata` tests rather than only a screenshot.
 - **Rail section labels are easier to read (UX audit §6.2).** Sidebar group labels now use 11px type with
   calmer tracking, reducing clipping risk while keeping the compact rail rhythm. Browser verification covered
   the rendered "Tools" label class.

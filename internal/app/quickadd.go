@@ -14,7 +14,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/CashFlux/internal/workflow"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -103,9 +102,8 @@ func QuickAddHost() uic.Node {
 			post(err.Error(), true)
 			return
 		}
-		// Fire any enabled "when a transaction is added" workflows (write-safe
-		// actions only, so this can't loop back into adding transactions).
-		app.RunTriggered(workflow.TriggerTxnAdded)
+		// PutTransaction now fires the "transaction added" workflow trigger itself
+		// (for every add path), so no explicit RunTriggered call here.
 		dataRev.Update(func(v int) int { return v + 1 })
 		post(uistate.T("quickAdd.added"), false)
 	}

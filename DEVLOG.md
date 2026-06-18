@@ -3,6 +3,37 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — harden custom pages + workflows (acted on an adversarial test critique)
+
+- Ran a critic subagent against the e2e suite; it found real gaps. Acted on them:
+  - **M1 (real bug):** the txn-added trigger was wired into quick-add only. Centralized it in
+    `appstate.PutTransaction`, firing on genuinely-new txns (GetTransaction existence check, so edits don't
+    fire) — now every add path (inline editor, transfer, duplicate, CSV + image import) honors it. Added a
+    `triggersSuspended` flag + `WithoutTriggers` so bulk imports fire once, and so a workflow applying its
+    own effects can't recursively re-fire. (ApplyRules uses `store.PutTransaction`, below the trigger, so
+    it was already loop-safe; the guard is belt-and-suspenders.)
+  - **M2:** `applyEffect` createTask is now idempotent — skips when an open task with the same title
+    exists, so a per-add workflow doesn't spawn a task storm.
+  - **C1/C2 (false confidence):** the widget renderers were `js && wasm`-only and untested; the "story"
+    tests re-implemented their logic. Extracted the real logic into a pure `internal/widgetdata` package
+    (`ListRows` newest-first + cap + formatting, `KPIText`, `ChartWindow`) and made the renderers thin
+    shells over it. Now the actual code path users see is table-tested natively (ordering, truncation,
+    currency rounding, unknown-source).
+  - **M4/m1:** added an injectable clock seam (`App.now`/`clock()`) so month-scoped figures are
+    deterministic in tests; added trigger/dedupe/disabled/multi-action/notify tests; tightened the
+    rename test to assert the exact `gamma-2` slug.
+- Discovered while writing tests: `ValidateTransaction` requires a non-empty `desc`, so seed txns must set
+  it (was silently skipping rows). Browser re-verified the refactored render path (KPI/list/chart correct).
+
+## 2026-06-18 — fix: UX polish §6.3 — upcoming bill dates use preferences
+
+- Closed the dashboard upcoming-bills date-format item in `internal/screens/dashboard.go`: the widget now
+  reads `uistate.UsePrefs().Get()` and renders due dates with `Prefs.FormatDate`.
+- This keeps the widget aligned with the existing Settings date-style preference instead of hardcoding
+  `Jan 2`.
+- Browser verification set `cashflux:prefs.dateStyle` to `us` and confirmed the bills widget rendered
+  slash-form dates such as `06/18/2026`.
+
 ## 2026-06-18 — feat: workspace management commands in the palette + HEAD health check
 
 - Health check (repo is churning fast under the parallel session): `go test ./...` on disk showed 3

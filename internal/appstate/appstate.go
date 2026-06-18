@@ -33,6 +33,14 @@ type App struct {
 	store *store.SQLiteStore
 	log   *slog.Logger
 	ring  *logging.Ring
+	// triggersSuspended pauses automatic workflow firing from PutTransaction while
+	// a bulk operation (import) or a workflow's own effects are running, so a single
+	// user-facing "add a transaction" fires triggers but a 500-row import doesn't
+	// fire 500 times (and workflow effects can't recursively re-trigger).
+	triggersSuspended bool
+	// now returns the current time; overridable in tests for deterministic
+	// month-scoped figures. Defaults to time.Now.
+	now func() time.Time
 }
 
 // Default is the process-wide App, set by Init and read by screens.
@@ -50,7 +58,7 @@ func New(w io.Writer, seed bool) (*App, error) {
 		return nil, err
 	}
 	logger, ring := logging.New(w, 500, slog.LevelInfo)
-	app := &App{store: st, log: logger, ring: ring}
+	app := &App{store: st, log: logger, ring: ring, now: time.Now}
 	if seed {
 		if err := st.Load(store.SampleDataset()); err != nil {
 			return nil, err
@@ -162,11 +170,15 @@ func (a *App) ImportTransactionsCSV(data []byte) (int, error) {
 	}
 
 	n := 0
-	for _, t := range txns {
-		if err := a.PutTransaction(t); err == nil {
-			n++
+	// Suspend per-row trigger firing during the bulk import; WithoutTriggers fires
+	// the txn-added trigger once afterward instead of once per imported row.
+	a.WithoutTriggers(func() {
+		for _, t := range txns {
+			if err := a.PutTransaction(t); err == nil {
+				n++
+			}
 		}
-	}
+	})
 	a.log.Info("imported transactions from CSV", "imported", n, "rows", len(txns))
 	return n, nil
 }
@@ -698,7 +710,7 @@ func (a *App) engineVars() map[string]float64 {
 	return engineenv.Vars(engineenv.Data{
 		Accounts: a.Accounts(), Transactions: a.Transactions(), Members: a.Members(),
 		Budgets: a.Budgets(), Goals: a.Goals(), Tasks: a.Tasks(),
-		Rates: currency.Rates{Base: base, Rates: a.Settings().FXRates}, Now: time.Now(),
+		Rates: currency.Rates{Base: base, Rates: a.Settings().FXRates}, Now: a.clock(),
 	})
 }
 
@@ -713,13 +725,18 @@ func (a *App) RunWorkflow(w workflow.Workflow, dryRun bool) (workflow.Run, error
 		return workflow.Run{}, err
 	}
 	run := workflow.Run{
-		ID: id.New(), WorkflowID: w.ID, At: time.Now().Format(time.RFC3339),
+		ID: id.New(), WorkflowID: w.ID, At: a.clock().Format(time.RFC3339),
 		DryRun: dryRun, Matched: matched, Effects: effects,
 	}
 	if !dryRun && matched {
+		// Suspend triggers while applying so an action that writes data can't
+		// recursively re-fire workflows.
+		prev := a.triggersSuspended
+		a.triggersSuspended = true
 		for _, e := range effects {
 			a.applyEffect(e)
 		}
+		a.triggersSuspended = prev
 		if err := a.store.PutWorkflowRun(run); err != nil {
 			a.logErr("workflowRun", err)
 		}
@@ -732,6 +749,13 @@ func (a *App) RunWorkflow(w workflow.Workflow, dryRun bool) (workflow.Run, error
 func (a *App) applyEffect(e workflow.Effect) {
 	switch e.Kind {
 	case workflow.ActionCreateTask:
+		// Idempotent: don't pile up duplicate open tasks with the same title when a
+		// txn-added workflow fires repeatedly (e.g. across many adds in a month).
+		for _, tk := range a.Tasks() {
+			if tk.Status == domain.StatusOpen && tk.Title == e.Title {
+				return
+			}
+		}
 		_ = a.PutTask(domain.Task{
 			ID: id.New(), Title: e.Title, Notes: e.Notes,
 			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceManual,
@@ -743,6 +767,15 @@ func (a *App) applyEffect(e workflow.Effect) {
 	case workflow.ActionNotify:
 		a.log.Info("workflow notice", "message", e.Message)
 	}
+}
+
+// clock returns the current time via the injectable seam (a.now), defaulting to
+// time.Now when unset (e.g. an App built without New).
+func (a *App) clock() time.Time {
+	if a.now != nil {
+		return a.now()
+	}
+	return time.Now()
 }
 
 // RunTriggered runs every enabled workflow whose trigger matches the given event,
@@ -872,11 +905,31 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	if err := a.validateCustom("transaction", t.Custom); err != nil {
 		return err
 	}
+	// Detect whether this is a brand-new transaction (vs. an edit) so the
+	// "transaction added" trigger fires only on real additions, from every add
+	// path (quick-add, inline add, transfer, duplicate, import), not on edits.
+	_, existed, _ := a.store.GetTransaction(t.ID)
 	if err := a.store.PutTransaction(t); err != nil {
 		return err
 	}
 	a.log.Info("transaction saved", "id", t.ID)
+	if !existed && !a.triggersSuspended {
+		a.RunTriggered(workflow.TriggerTxnAdded)
+	}
 	return nil
+}
+
+// WithoutTriggers runs fn with automatic transaction-added workflow firing paused
+// (so a bulk add doesn't fire per row), then, if any transactions may have been
+// added, fires the trigger once. Used by import paths.
+func (a *App) WithoutTriggers(fn func()) {
+	prev := a.triggersSuspended
+	a.triggersSuspended = true
+	fn()
+	a.triggersSuspended = prev
+	if !a.triggersSuspended {
+		a.RunTriggered(workflow.TriggerTxnAdded)
+	}
 }
 func (a *App) DeleteTransaction(id string) error {
 	return a.del("transaction", id, a.store.DeleteTransaction)
