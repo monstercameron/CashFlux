@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — move firstNonEmpty to textutil; view-logic extraction wrapping up
+
+- Moved the documents view's `firstNonEmpty(a,b)` to `textutil.FirstNonEmpty` (pure, table-tested,
+  whitespace-as-empty); rewired its two call sites, removed the local def. wasm build + tests green.
+- This effectively wraps the view-logic extraction vein. The genuinely-pure, logic-bearing helpers that were
+  buried in `screens` are now extracted and tested: `recentTransactions`→`ledger.Recent`,
+  `parseTags`/`parseOptions`→`textutil.CommaFields`, `parseFloatOrZero`/`parseIntOrZero`/`parseWeight`→
+  `textutil.ParseFloat`/`ParseInt`, and `firstNonEmpty`→`textutil.FirstNonEmpty`. What remains in the view
+  (`fmtMoney`, `figTone`, `amountClass`, `accentFor`, `humanizeType`, `*Label`, `catColor`, `indentLabel`,
+  the insights `highlight*` mappers, `toDocumentRows`' 1:1 field copy) is legitimately presentation/glue —
+  extracting it would add coupling for no real logic, so it stays.
+
 ## 2026-06-18 — consolidate numeric form parsing into textutil
 
 - Continued the view-logic extraction. `parseFloatOrZero`/`parseIntOrZero` (accounts.go) and `parseWeight`

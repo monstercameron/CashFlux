@@ -1250,6 +1250,11 @@ results are summarized here so the backlog doesn't bloat.
 - **2026-06-18 #30** — Freshness nudge → task (D17), 0 console errors. ✅ **Works.** Clicking the dashboard
   Freshness widget's **"Remind me"** created a To-do task: task count **1 → 2**, and the new task carries a
   refresh/balance keyword. Cross-component flow (freshness → To-do) verified.
+- **2026-06-18 #31** — Settings data export (0 console errors). ✅ **Works.** Data buttons all present
+  (Export JSON/CSV · Import · Load sample · Wipe · Export/Import languages). **Export JSON → download
+  `cashflux.json`**; **Export CSV → download `transactions.csv`**. Verifies the export half of the
+  export→import round-trip (§1.18 / B16). _Next: import the exported JSON back and assert a lossless
+  round-trip._
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

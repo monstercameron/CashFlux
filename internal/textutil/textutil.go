@@ -34,3 +34,12 @@ func ParseInt(s string) int {
 	n, _ := strconv.Atoi(strings.TrimSpace(s))
 	return n
 }
+
+// FirstNonEmpty returns a when it has non-whitespace content, otherwise b — for
+// display fallbacks like "use the description, else a placeholder".
+func FirstNonEmpty(a, b string) string {
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
+	return b
+}

@@ -38,6 +38,21 @@ func TestParseInt(t *testing.T) {
 	}
 }
 
+func TestFirstNonEmpty(t *testing.T) {
+	cases := []struct{ a, b, want string }{
+		{"name", "fallback", "name"},
+		{"", "fallback", "fallback"},
+		{"   ", "fallback", "fallback"}, // whitespace counts as empty
+		{"a", "", "a"},
+		{"", "", ""},
+	}
+	for _, c := range cases {
+		if got := FirstNonEmpty(c.a, c.b); got != c.want {
+			t.Errorf("FirstNonEmpty(%q,%q) = %q, want %q", c.a, c.b, got, c.want)
+		}
+	}
+}
+
 func TestCommaFields(t *testing.T) {
 	cases := []struct {
 		name string

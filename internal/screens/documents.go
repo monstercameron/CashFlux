@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/spendsummary"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -450,7 +451,7 @@ func DraftRow(props draftRowProps) ui.Node {
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), firstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
+			Span(Class("row-desc"), textutil.FirstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class("amount fig"), amtText),
@@ -479,7 +480,7 @@ func DocHistoryRow(props docHistoryRowProps) ui.Node {
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), firstNonEmpty(d.Filename, docKindLabel(d.Kind))),
+			Span(Class("row-desc"), textutil.FirstNonEmpty(d.Filename, docKindLabel(d.Kind))),
 			Span(Class("row-meta"), meta),
 		),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("documents.deleteHistTitle")), OnClick(del), "✕"),
@@ -528,14 +529,6 @@ func accByIDFrom(accounts []domain.Account, id string) (domain.Account, bool) {
 		}
 	}
 	return domain.Account{}, false
-}
-
-// firstNonEmpty returns a if non-empty, else b.
-func firstNonEmpty(a, b string) string {
-	if strings.TrimSpace(a) != "" {
-		return a
-	}
-	return b
 }
 
 // pickImageDataURL opens a file picker for images and calls onData with the
