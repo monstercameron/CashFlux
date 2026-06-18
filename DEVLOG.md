@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — widgetcfg IDs() to 100%
+
+- Last pure package under 90%. `widgetcfg` was 88.1% with one untested function, `IDs()` (the sorted
+  registered-widget list). Added `ids_test.go` asserting it's non-empty, sorted, every id is a real schema
+  (consistent with Has/SchemaFor), and includes the known widgets. `widgetcfg` → **100%**.
+- With this, every pure logic package is ≥90% (the great majority 95–100%); only `store` sits lower (84%),
+  capped by partial-failure injection paths in Load/Snapshot that aren't cleanly reachable. The coverage
+  sweep is genuinely complete.
+
 ## 2026-06-18 — custom-field validation enforced on every write (91% → 92%)
 
 - Verified the data-integrity guarantee that a required custom field is enforced on every entity write that
