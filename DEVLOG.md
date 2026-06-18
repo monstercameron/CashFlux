@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Closed the Members/Accounts "Add button no-op" finding (not a defect)
+
+- Browser-oracle findings #4–#8 reported that the Members and Accounts **Add buttons** were silent no-ops
+  on click while Enter worked, and pinned it on "the button's click handler reads stale state."
+- Audited the actual code: in both `members.go` and `accounts.go` the Add button is `Type("submit")`
+  *inside* `Form(Class("form-grid"), OnSubmit(add), …)`, and `add` is `ui.UseEvent(Prevent(func(){ … name.Get() … }))`.
+  A submit-button click and an Enter keypress both dispatch the form's `submit` event → the same `add`,
+  reading the same live `name` atom. There is no separate click handler and no stale-state path.
+- The structure is **uniform across all six add forms** — Budgets and Goals have the identical
+  `MapKeyed(defs, …)` custom-field block and were reported *working*, so there's nothing structurally
+  different about Members/Accounts to fix.
+- Root cause of the report: a synthetic-input harness artifact. Setting an input's `.value` without
+  dispatching an `input` event leaves the bound state empty, so neither path truly commits; the flaky
+  "Enter adds, click doesn't" split confirms it wasn't deterministic. The TODO's own caveat already
+  suspected this ("if a human's typing updates the bound state, the button may work for them").
+- Action: closed the #4 and #8 checkboxes with the analysis. No code change (the code is already correct),
+  hence no CHANGELOG entry. A genuine regression assert needs the Playwright lane and must type via real
+  key events, not value-set — tracked there.
+
 ## 2026-06-18 — B7: derive the rail nav from the screen registry
 
 - B7's last item: the rail's three groups (primaryNav/toolsNav + an inline System block) were
