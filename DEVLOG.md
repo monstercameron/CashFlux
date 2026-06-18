@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: subscription cancel-reminder → to-do (B25)
+
+- Added the B25 "cancel reminder → task" action. Extracted a `SubscriptionRow` component (owns its click
+  hook per the On*-hooks-in-loops rule) with a **Remind me** button; the list now renders via `MapKeyed`
+  (key = name + amount). The handler creates a `domain.Task` (status open, priority medium, source nudge)
+  titled "Review subscription: <name>", due on the subscription's `NextRenewal`, via `app.PutTask`, then
+  toasts a confirmation through the shared `uistate.UseNotice()` atom. No B19 dependency — reuses the
+  existing to-do system.
+- New `subs.{remind,remindTitle,reminderTitle,reminderNote,reminderAdded}` i18n keys. wasm build green,
+  gofmt clean.
+
 ## 2026-06-18 — feat: Reports net-worth trend chart (B21)
 
 - Added a second sparkline to the Reports screen: net worth as of each of the same `bounds` boundaries

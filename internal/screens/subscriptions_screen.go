@@ -7,6 +7,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -36,26 +38,42 @@ func Subscriptions() ui.Node {
 		annual += s.AnnualAmount()
 	}
 
-	// Rows are plain text (no interactive controls), so building them in a loop is
-	// safe (no On* hooks involved).
-	var rowNodes []ui.Node
-	for _, s := range subs {
-		meta := subscriptionCadenceLabel(s.Cadence) + " · " + uistate.T("subs.next", pr.FormatDate(s.NextRenewal))
-		rowNodes = append(rowNodes, Div(Class("row"),
-			Div(Class("row-main"),
-				Span(Class("row-desc"), s.Name),
-				Span(Class("row-meta"), meta),
-			),
-			Span(Class("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), base)))),
-			Span(Class("budget-amount"), fmtMoney(money.New(s.Amount, base))),
-		))
+	// remind creates a to-do dated to the subscription's next renewal, so a
+	// "should I keep this?" task surfaces before the next charge (B25).
+	notice := uistate.UseNotice()
+	remind := func(s subscriptions.Subscription) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		task := domain.Task{
+			ID:       id.New(),
+			Title:    uistate.T("subs.reminderTitle", s.Name),
+			Notes:    uistate.T("subs.reminderNote", fmtMoney(money.New(s.Amount, base)), subscriptionCadenceLabel(s.Cadence)),
+			Status:   domain.StatusOpen,
+			Priority: domain.PriorityMedium,
+			Due:      s.NextRenewal,
+			Source:   domain.SourceNudge,
+		}
+		if err := app.PutTask(task); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		notice.Set(notice.Get().With(uistate.T("subs.reminderAdded", s.Name), false))
 	}
 
+	rows := MapKeyed(subs,
+		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
+		func(s subscriptions.Subscription) ui.Node {
+			return ui.CreateElement(SubscriptionRow, subscriptionRowProps{Sub: s, Base: base, NextDate: pr.FormatDate(s.NextRenewal), OnRemind: remind})
+		},
+	)
+
 	var body ui.Node
-	if len(rowNodes) == 0 {
+	if len(subs) == 0 {
 		body = P(Class("empty"), uistate.T("subs.empty"))
 	} else {
-		body = Div(Class("rows"), rowNodes)
+		body = Div(Class("rows"), rows)
 	}
 
 	return Div(
@@ -68,6 +86,31 @@ func Subscriptions() ui.Node {
 			H2(Class("card-title"), uistate.T("nav.subscriptions")),
 			body,
 		),
+	)
+}
+
+type subscriptionRowProps struct {
+	Sub      subscriptions.Subscription
+	Base     string
+	NextDate string // pre-formatted next-renewal date
+	OnRemind func(subscriptions.Subscription)
+}
+
+// SubscriptionRow renders one detected subscription with a "remind me to cancel"
+// action. It owns its click hook (per the On*-hooks-in-loops rule), so the list
+// can render many rows without reordering hooks.
+func SubscriptionRow(props subscriptionRowProps) ui.Node {
+	s := props.Sub
+	remind := ui.UseEvent(Prevent(func() { props.OnRemind(s) }))
+	meta := subscriptionCadenceLabel(s.Cadence) + " · " + uistate.T("subs.next", props.NextDate)
+	return Div(Class("row"),
+		Div(Class("row-main"),
+			Span(Class("row-desc"), s.Name),
+			Span(Class("row-meta"), meta),
+		),
+		Span(Class("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base)))),
+		Span(Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),
+		Button(Class("btn"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
 	)
 }
 

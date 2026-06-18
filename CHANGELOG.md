@@ -14,8 +14,9 @@ and every commit updates this file under `Unreleased`.
   ignores one-offs and irregular spacing, deterministic and table-tested.
 - **Subscriptions screen (B25).** A new **Subscriptions** item in the Tools nav lists those detected
   recurring charges — name, cadence, charge, normalized monthly cost, and next renewal date — with your
-  total monthly and yearly subscription burden up top. Read-only; no setup needed. It has its own
-  repeat-cycle icon in the rail.
+  total monthly and yearly subscription burden up top. It has its own repeat-cycle icon in the rail, and
+  each row has a **Remind me** button that adds a to-do dated to that subscription's next renewal so you
+  can decide whether to keep or cancel it before the next charge.
 - **Reports screen (B21).** A new **Reports** item in the Tools nav: for the period chosen in the top bar
   it shows income / spending / net / savings-rate, a plain-English summary of where the money went, and
   spending by category compared to the prior period (each category's amount with a green ▼ / red ▲ change
