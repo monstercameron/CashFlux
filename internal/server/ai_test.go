@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestAIServiceChatUsesEncryptedKeyAndRecordsUsage(t *testing.T) {
@@ -191,5 +193,51 @@ func TestAIServiceEnforcesDailyUsageLimits(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "daily ai token limit reached") {
 		t.Fatalf("token limit err = %v", err)
+	}
+}
+
+type cancelAwareClient struct {
+	sawDone chan struct{}
+}
+
+func (c cancelAwareClient) Do(req *http.Request) (*http.Response, error) {
+	<-req.Context().Done()
+	close(c.sawDone)
+	return nil, req.Context().Err()
+}
+
+func TestAIServiceCancellationPropagatesToUpstream(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	if err := store.UpsertUser(User{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u1", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	sawDone := make(chan struct{})
+	svc := NewAIService(store, AIServiceConfig{MasterKey: master, Client: cancelAwareClient{sawDone: sawDone}})
+	ctx, cancel := context.WithCancel(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}))
+	errc := make(chan error, 1)
+	go func() {
+		_, err := svc.Chat(ctx, AIChatRequest{
+			Model:    "gpt-4o-mini",
+			Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+		})
+		errc <- err
+	}()
+	cancel()
+	select {
+	case <-sawDone:
+	case <-time.After(time.Second):
+		t.Fatal("upstream request context was not canceled")
+	}
+	select {
+	case err := <-errc:
+		if status.Code(err) != codes.Canceled {
+			t.Fatalf("cancel error = %v code %v", err, status.Code(err))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Chat did not return after cancellation")
 	}
 }

@@ -356,6 +356,8 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend AI proxy cancellation is pinned by tests.** Canceling an AI request context now has regression
+  coverage proving the upstream OpenAI request sees the canceled context and the service returns `Canceled`.
 - **AI screens can use the backend proxy instead of browser OpenAI calls.** Insights, Allocate, and Documents now
   route chat/vision requests through the configured backend URL/token when present, keeping direct browser OpenAI
   as the local-only fallback.

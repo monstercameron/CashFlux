@@ -3962,9 +3962,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `internal/ai` request builders), map upstream errors to status, and count usage. Remaining: stream chunks
       back over the final server-streaming surface.
 - [x] Model allow-list; per-user rate limit + usage metering; request-size caps; **redact key in logs**.
-- [ ] Cancellation: propagate client `ctx` cancel to the upstream call (stop billing on disconnect).
-- [ ] Tests: streaming passthrough against a mock upstream, key encrypt round-trip, rate-limit trip,
-      missing-key → clear error.
+- [x] Cancellation: propagate client `ctx` cancel to the upstream call (stop billing on disconnect).
+- [~] Tests: mock upstream chat/vision, key encrypt round-trip, rate-limit trip, missing-key clear error, and
+      cancellation are covered. Remaining: streaming passthrough once the final server-streaming transport exists.
 
 ### 7.5 gRPC bridge transport ★
 - [ ] `grpctunnel.Wrap(grpcServer, …)` at `/grpc`: `WithOriginCheck` (SPA origin allow-list),

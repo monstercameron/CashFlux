@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - test: pin backend AI cancellation
+
+- Added a cancel-aware mock HTTP client around `server.AIService.Chat` to prove the request context reaches the
+  upstream OpenAI call and that canceling the client context returns a gRPC `Canceled` error.
+- This closes the cancellation-propagation checklist item for the current HTTP proxy path; streaming chunk cancel
+  behavior remains tied to the later gRPC/server-streaming transport.
+
 ## 2026-06-18 - feat: route AI screens through backend proxy
 
 - Added a wasm backend AI transport in `internal/ai` for `/v1/ai/chat` and `/v1/ai/vision`, with the same
