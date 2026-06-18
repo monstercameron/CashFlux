@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: toggle lock-screen quote/metadata in Settings (B17.1)
+
+- Made the lock-screen content configurable. Added `HideQuotes`/`HideMeta` to `applock.Config` (stored as
+  "hide" flags so the zero value / older configs default to shown = ON, per spec). Two `ui.ToggleRow`s in
+  the App-lock settings section flip them via `setLockHideQuotes`/`setLockHideMeta`; `refreshLockMeta` now
+  shows/hides the greeting+date and quote elements accordingly (display none when off). 2 new keys.
+- gofmt clean, applock tests green, disk wasm build green (served wasm rebuilt). Committed by pathspec.
+
 ## 2026-06-18 — feat: passcode hint (revealed after failed attempts) (B17)
 
 - Optional hint that surfaces only after 3 wrong tries, never sitting on the gate for a passer-by. Pure
@@ -86,6 +94,7 @@ problems and fixes, and what's next.
   formula, then export/imports the dataset.
 - The test validates the imported custom map and evaluates the imported formula against the imported custom
   value, tying the already-covered formula sandbox to custom-field persistence.
+- Rechecked after the B17 passcode-hint commit landed and kept a fresh docs delta for this test/TODO commit.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 

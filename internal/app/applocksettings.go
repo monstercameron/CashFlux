@@ -5,6 +5,7 @@ package app
 import (
 	"fmt"
 
+	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -32,6 +33,18 @@ func appLockSection(onChange func()) uic.Node {
 					}
 				}),
 			),
+			ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("applock.toggleMeta"), On: !c.HideMeta, OnChange: func(v bool) {
+				setLockHideMeta(!v)
+				if onChange != nil {
+					onChange()
+				}
+			}}),
+			ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("applock.toggleQuotes"), On: !c.HideQuotes, OnChange: func(v bool) {
+				setLockHideQuotes(!v)
+				if onChange != nil {
+					onChange()
+				}
+			}}),
 		)
 	}
 	return Div(Class("flex flex-col gap-1"),

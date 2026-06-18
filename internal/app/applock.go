@@ -57,3 +57,19 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 
 // disableAppLock removes the passcode lock.
 func disableAppLock() { saveAppLock(applock.Config{}) }
+
+// setLockHideQuotes / setLockHideMeta flip the lock-screen content toggles on the
+// current (enabled) config. No-op when the lock isn't set.
+func setLockHideQuotes(hide bool) {
+	if c := loadAppLock(); c.Enabled {
+		c.HideQuotes = hide
+		saveAppLock(c)
+	}
+}
+
+func setLockHideMeta(hide bool) {
+	if c := loadAppLock(); c.Enabled {
+		c.HideMeta = hide
+		saveAppLock(c)
+	}
+}

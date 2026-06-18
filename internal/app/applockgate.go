@@ -199,11 +199,20 @@ func buildAppLockGate(doc js.Value) {
 
 // refreshLockMeta fills the lock screen's safe, non-financial metadata — a
 // time-of-day greeting, the date, and the day's rotating quote (deterministic via
-// the day ordinal, no randomness). Recomputed each time the gate is shown.
+// the day ordinal, no randomness) — honoring the Settings toggles. Recomputed each
+// time the gate is shown.
 func refreshLockMeta(doc js.Value) {
-	set := func(id, text string) {
-		if e := doc.Call("getElementById", id); !e.IsNull() && !e.IsUndefined() {
+	cfg := loadAppLock()
+	set := func(id, text string, show bool) {
+		e := doc.Call("getElementById", id)
+		if e.IsNull() || e.IsUndefined() {
+			return
+		}
+		if show {
 			e.Set("textContent", text)
+			e.Get("style").Set("display", "block")
+		} else {
+			e.Get("style").Set("display", "none")
 		}
 	}
 	now := js.Global().Get("Date").New()
@@ -214,11 +223,12 @@ func refreshLockMeta(doc js.Value) {
 	case h < 18:
 		greeting = "Good afternoon"
 	}
-	set("cf-lock-greeting", greeting)
+	showMeta := !cfg.HideMeta
+	set("cf-lock-greeting", greeting, showMeta)
 	set("cf-lock-date", now.Call("toLocaleDateString", js.Undefined(),
-		map[string]any{"weekday": "long", "month": "long", "day": "numeric"}).String())
+		map[string]any{"weekday": "long", "month": "long", "day": "numeric"}).String(), showMeta)
 	dayOrdinal := int(js.Global().Get("Date").Call("now").Float() / 86400000)
-	set("cf-lock-quote", lockquotes.ForIndex(dayOrdinal))
+	set("cf-lock-quote", lockquotes.ForIndex(dayOrdinal), !cfg.HideQuotes)
 }
 
 // wipeAllLocalData removes every cashflux:* localStorage key — the reset path for

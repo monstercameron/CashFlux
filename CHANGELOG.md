@@ -48,6 +48,8 @@ and every commit updates this file under `Unreleased`.
   the completed checklist item, after the lock-screen quote commit landed.
 - **Formula/custom-field bridge coverage.** Appstate tests now export/import a custom field definition,
   account custom value, and saved formula, then validate and evaluate the imported data together.
+- **Formula/custom-field TODO closeout.** The bridge test now has a post-B17 hint commit docs delta so the
+  test and completed checklist entry remain atomic.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
@@ -254,6 +256,8 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Lock-screen content is now toggleable (B17.1).** Settings → App lock has two switches — *Show greeting
+  & date* and *Show a daily quote* — both ON by default; turning one off hides it on the unlock screen.
 - **App lock is now in Settings.** Added a **Settings → App lock** section so the passcode lock is
   discoverable (it was previously only reachable via the Cmd/Ctrl+K palette). The section shows the current
   status and adapts: **Set passcode lock** when off; **Lock now / Change passcode / Remove** when on. The

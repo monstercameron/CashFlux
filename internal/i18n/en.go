@@ -129,6 +129,8 @@ var english = Catalog{
 	"applock.hintLeaks":       "The hint can't contain your passcode.",
 	"applock.showHint":        "Show hint",
 	"applock.hintPrefix":      "Hint: ",
+	"applock.toggleMeta":      "Show greeting & date on the lock screen",
+	"applock.toggleQuotes":    "Show a daily quote on the lock screen",
 
 	// Common actions (shared across screens)
 	"action.add":    "Add",

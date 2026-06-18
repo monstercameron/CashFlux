@@ -24,6 +24,10 @@ type Config struct {
 	Hash            string `json:"hash"`            // hex SHA-256 of Salt+passcode
 	AutoLockMinutes int    `json:"autoLockMinutes"` // 0 = lock only on reload / manual lock
 	Hint            string `json:"hint,omitempty"`  // optional reminder, revealed only after failed tries
+	// Lock-screen content toggles. Stored as "hide" flags so the default (zero
+	// value / older configs) is "shown" — both default ON per the B17.1 spec.
+	HideQuotes bool `json:"hideQuotes,omitempty"`
+	HideMeta   bool `json:"hideMeta,omitempty"`
 }
 
 // ValidHint reports whether hint is safe to store with the given passcode. An
