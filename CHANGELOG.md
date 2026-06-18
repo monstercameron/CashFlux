@@ -464,6 +464,10 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Saving a workflow no longer silently drops the action you just typed (C37).** If you fill in an
+  action and click *Save workflow* without first clicking *Add action*, that action is now folded into the
+  saved workflow instead of being lost (which previously made Save look like a no-op). *Add action* also
+  tells you when a field is empty rather than staging a blank action.
 - **Transactions form controls are now labelled for screen readers (C47).** The filter/sort/bulk bar and
   the add/edit forms had bare `<select>`s and date inputs that a screen reader announced as just "combo
   box" / "edit text". Each now carries an `aria-label` (Type, Account, Category, Member, From/To date,

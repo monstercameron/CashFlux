@@ -5,6 +5,7 @@ package screens
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -69,27 +70,51 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 	onDraftText := ui.UseEvent(func(v string) { draftText.Set(v) })
 	onDraftCat := ui.UseEvent(func(e ui.Event) { draftCat.Set(e.GetValue()) })
 
-	addAction := func() {
+	// buildDraft turns the current action-builder fields into an Action, reporting
+	// whether it's complete enough to add (so an empty draft isn't staged, and a
+	// half-filled one gives a reason rather than failing silently).
+	buildDraft := func() (workflow.Action, bool) {
 		a := workflow.Action{Kind: workflow.ActionKind(draftKind.Get())}
 		switch a.Kind {
 		case workflow.ActionCreateTask:
-			a.Title = draftText.Get()
+			a.Title = strings.TrimSpace(draftText.Get())
+			return a, a.Title != ""
 		case workflow.ActionNotify:
-			a.Message = draftText.Get()
+			a.Message = strings.TrimSpace(draftText.Get())
+			return a, a.Message != ""
 		case workflow.ActionAddTag:
-			a.Tag = draftText.Get()
+			a.Tag = strings.TrimSpace(draftText.Get())
+			return a, a.Tag != ""
 		case workflow.ActionSetCategory:
 			a.CategoryID = draftCat.Get()
+			return a, a.CategoryID != ""
+		default: // applyRules / flagReview need no parameter
+			return a, true
+		}
+	}
+	addAction := func() {
+		a, ok := buildDraft()
+		if !ok {
+			msg.Set(uistate.T("workflows.actionNeedsValue"))
+			return
 		}
 		actions.Set(append(append([]workflow.Action(nil), actions.Get()...), a))
 		draftText.Set("")
+		draftCat.Set("")
+		msg.Set("")
 	}
 	save := func() {
 		app := appstate.Default
+		// Fold in a still-pending action the user typed but didn't click "Add
+		// action" for, so a filled-but-unstaged action isn't silently lost (C37).
+		acts := append([]workflow.Action(nil), actions.Get()...)
+		if a, ok := buildDraft(); ok {
+			acts = append(acts, a)
+		}
 		w := workflow.Workflow{
 			ID: id.New(), Name: name.Get(), Enabled: true,
 			Trigger:   workflow.Trigger{Kind: workflow.TriggerKind(trigger.Get())},
-			Condition: condition.Get(), Actions: actions.Get(),
+			Condition: condition.Get(), Actions: acts,
 		}
 		if errs := workflow.Validate(w); len(errs) > 0 {
 			msg.Set(errs[0])
@@ -102,6 +127,8 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		name.Set("")
 		condition.Set("")
 		actions.Set(nil)
+		draftText.Set("")
+		draftCat.Set("")
 		msg.Set("")
 		if props.Refresh != nil {
 			props.Refresh()

@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: workflow Save folds in a pending action (C37)
+
+- Root cause of the "Save workflow is a no-op" report: the action builder stages an action only on *Add
+  action*; if the user typed an action and went straight to *Save*, `actions` was empty, `Validate`
+  returned "Add at least one action", and the typed action was discarded. (Validation feedback already
+  existed via the `msg`/`role=alert` line — the report predated it — but the silent loss was the real bug.)
+- Extracted `buildDraft()` (draft fields → Action + ok), used by both *Add action* (now refuses an empty
+  draft with a message instead of staging a blank) and *Save* (folds a valid pending draft into the saved
+  actions). Also reset the draft fields after a successful save. Added `workflows.actionNeedsValue` key.
+- Left Enter-to-submit out: it's a multi-step builder (Enter in the action field should mean "add action",
+  not "save"), and the Save button is already Tab+Enter reachable. Build green, gofmt clean.
+
 ## 2026-06-18 — a11y: label planning + settings controls — C47 complete
 
 - Final C47 batch: the planning recurring-item selects (cadence/account/category) and all six settings
