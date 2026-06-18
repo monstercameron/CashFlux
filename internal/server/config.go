@@ -17,13 +17,14 @@ const (
 
 // Config contains the runtime settings for the optional CashFlux backend.
 type Config struct {
-	Addr      string
-	DataDir   string
-	AuthMode  string
-	Billing   bool
-	AppOrigin string
-	MasterKey string
-	Token     string
+	Addr          string
+	DataDir       string
+	AuthMode      string
+	Billing       bool
+	AppOrigin     string
+	MasterKey     string
+	Token         string
+	OpenAIBaseURL string
 }
 
 // FromEnv builds server config from CASHFLUX_SERVER_* environment variables.
@@ -37,6 +38,7 @@ func FromEnv() (Config, error) {
 	cfg.AppOrigin = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_APP_ORIGIN"))
 	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))
 	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
+	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}

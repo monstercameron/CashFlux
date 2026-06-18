@@ -3958,8 +3958,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 ### 7.4 AIService (per-user encrypted BYO key) ★
 - [x] `SetKey`: validate, AES-GCM encrypt, store; never return the key.
-- [ ] `Chat`/`Vision` server-streaming: load+decrypt the user's key, call OpenAI (reuse the
-      `internal/ai` request builders where possible), stream chunks back; map upstream errors → status.
+- [~] `Chat`/`Vision` server proxy path: load+decrypt the user's key, call OpenAI (reusing the
+      `internal/ai` request builders), map upstream errors to status, and count usage. Remaining: stream chunks
+      back over the final server-streaming surface.
 - [ ] Model allow-list; per-user rate limit + usage metering; request-size caps; **redact key in logs**.
 - [ ] Cancellation: propagate client `ctx` cancel to the upstream call (stop billing on disconnect).
 - [ ] Tests: streaming passthrough against a mock upstream, key encrypt round-trip, rate-limit trip,

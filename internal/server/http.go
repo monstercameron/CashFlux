@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // VersionResponse is returned by /v1/version for client compatibility checks.
@@ -97,6 +100,40 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		}
 		writeJSON(w, AIKeyResponse{Stored: true, Provider: body.Provider})
 	})
+	mux.HandleFunc("POST /v1/ai/chat", func(w http.ResponseWriter, r *http.Request) {
+		user, ok := authorizedAIRequest(w, r, cfg, store)
+		if !ok {
+			return
+		}
+		var body AIChatRequest
+		if !readJSON(w, r, &body) {
+			return
+		}
+		svc := NewAIService(store, AIServiceConfig{MasterKey: []byte(cfg.MasterKey), BaseURL: cfg.OpenAIBaseURL})
+		result, err := svc.Chat(ContextWithAuthUser(r.Context(), user), body)
+		if err != nil {
+			writeStatusError(w, err)
+			return
+		}
+		writeJSON(w, result)
+	})
+	mux.HandleFunc("POST /v1/ai/vision", func(w http.ResponseWriter, r *http.Request) {
+		user, ok := authorizedAIRequest(w, r, cfg, store)
+		if !ok {
+			return
+		}
+		var body AIVisionRequest
+		if !readJSON(w, r, &body) {
+			return
+		}
+		svc := NewAIService(store, AIServiceConfig{MasterKey: []byte(cfg.MasterKey), BaseURL: cfg.OpenAIBaseURL})
+		result, err := svc.Vision(ContextWithAuthUser(r.Context(), user), body)
+		if err != nil {
+			writeStatusError(w, err)
+			return
+		}
+		writeJSON(w, result)
+	})
 	return mux
 }
 
@@ -104,6 +141,66 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func authorizedAIRequest(w http.ResponseWriter, r *http.Request, cfg Config, store *Store) (AuthUser, bool) {
+	if !writeCORS(w, r, cfg) {
+		http.Error(w, "origin not allowed", http.StatusForbidden)
+		return AuthUser{}, false
+	}
+	if store == nil {
+		http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+		return AuthUser{}, false
+	}
+	if strings.TrimSpace(cfg.MasterKey) == "" {
+		http.Error(w, "master key is not configured", http.StatusServiceUnavailable)
+		return AuthUser{}, false
+	}
+	user, ok := httpBearerUser(r, cfg)
+	if !ok {
+		http.Error(w, "missing bearer token", http.StatusUnauthorized)
+		return AuthUser{}, false
+	}
+	return user, true
+}
+
+func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(dst); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+func writeStatusError(w http.ResponseWriter, err error) {
+	if st, ok := status.FromError(err); ok {
+		http.Error(w, st.Message(), grpcHTTPStatus(st.Code()))
+		return
+	}
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+}
+
+func grpcHTTPStatus(code codes.Code) int {
+	switch code {
+	case codes.InvalidArgument:
+		return http.StatusBadRequest
+	case codes.Unauthenticated:
+		return http.StatusUnauthorized
+	case codes.PermissionDenied:
+		return http.StatusForbidden
+	case codes.NotFound:
+		return http.StatusNotFound
+	case codes.FailedPrecondition:
+		return http.StatusPreconditionFailed
+	case codes.ResourceExhausted:
+		return http.StatusTooManyRequests
+	case codes.Canceled:
+		return 499
+	case codes.Unavailable:
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusInternalServerError
 	}
 }
 

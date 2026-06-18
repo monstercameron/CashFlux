@@ -130,3 +130,45 @@ func TestAIKeyEndpointCORS(t *testing.T) {
 		t.Fatalf("forbidden cors status = %d", rr.Code)
 	}
 }
+
+func TestAIChatEndpoint(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-secret" {
+			t.Fatalf("authorization = %q", got)
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"server says hi"}}],"usage":{"total_tokens":11}}`))
+	}))
+	defer upstream.Close()
+
+	store := openTestStore(t)
+	cfg := Config{AuthMode: "token", MasterKey: "0123456789abcdef0123456789abcdef", Token: "dev-token", OpenAIBaseURL: upstream.URL}
+	reqForUser := httptest.NewRequest(http.MethodPost, "/v1/ai/key", bytes.NewBufferString(`{}`))
+	reqForUser.Header.Set("Authorization", "Bearer dev-token")
+	user, ok := httpBearerUser(reqForUser, cfg)
+	if !ok {
+		t.Fatal("bearer user missing")
+	}
+	if err := store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey(user.ID, "openai", "sk-secret", []byte(cfg.MasterKey)); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/ai/chat", bytes.NewBufferString(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("chat status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var body AICompletion
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode chat response: %v", err)
+	}
+	if body.Content != "server says hi" || body.Usage.TotalTokens != 11 {
+		t.Fatalf("chat response = %+v", body)
+	}
+}

@@ -83,6 +83,25 @@ func TestApplySort(t *testing.T) {
 	}
 }
 
+func TestApplyTieOrderingIsDeterministic(t *testing.T) {
+	// Same date and same amount across rows: order must fall back to ID, stable
+	// across input arrangements.
+	mk := func(order []string) []domain.Transaction {
+		out := make([]domain.Transaction, len(order))
+		for i, id := range order {
+			out[i] = domain.Transaction{ID: id, Desc: "Same", Amount: money.New(-100, "USD"), Date: d("2026-06-01")}
+		}
+		return out
+	}
+	for _, sortKey := range []string{"date", "amount", "payee"} {
+		a := Apply(mk([]string{"c", "a", "b"}), Criteria{Sort: sortKey})
+		b := Apply(mk([]string{"b", "c", "a"}), Criteria{Sort: sortKey})
+		if ids(a) != "abc" || ids(b) != "abc" {
+			t.Errorf("sort %q: got %q and %q, want both abc", sortKey, ids(a), ids(b))
+		}
+	}
+}
+
 func TestApplyDoesNotMutate(t *testing.T) {
 	all := sample()
 	_ = Apply(all, Criteria{Sort: "amount"})
