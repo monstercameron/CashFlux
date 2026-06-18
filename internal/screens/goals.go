@@ -290,13 +290,22 @@ func GoalRow(props goalRowProps) ui.Node {
 	}
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(g.ID) }))
-	contribute := ui.UseEvent(Prevent(func() {
-		if v := promptText(uistate.T("goals.contributePrompt", g.Name)); v != "" {
-			props.OnContribute(g, v)
-		}
-	}))
 	pr := uistate.UsePrefs().Get()
 	editing := ui.UseState(false)
+	contributing := ui.UseState(false)
+	contribAmtS := ui.UseState("")
+	contribute := ui.UseEvent(Prevent(func() {
+		contribAmtS.Set("")
+		contributing.Set(true)
+	}))
+	onContribAmt := ui.UseEvent(func(v string) { contribAmtS.Set(v) })
+	doContribute := ui.UseEvent(Prevent(func() {
+		if v := strings.TrimSpace(contribAmtS.Get()); v != "" {
+			props.OnContribute(g, v)
+		}
+		contributing.Set(false)
+	}))
+	cancelContribute := ui.UseEvent(Prevent(func() { contributing.Set(false) }))
 	nameS := ui.UseState(g.Name)
 	targetS := ui.UseState(targetMajor)
 	dateS := ui.UseState(dateISO)
@@ -321,6 +330,16 @@ func GoalRow(props goalRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	if contributing.Get() {
+		return Div(Class("budget"),
+			Div(Class("budget-head"), Span(Class("row-desc"), g.Name)),
+			Form(Class("form-grid"), OnSubmit(doContribute),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.contributeAmount")), Value(contribAmtS.Get()), Step("0.01"), OnInput(onContribAmt)),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("goals.contribute")),
+				Button(Class("btn"), Type("button"), OnClick(cancelContribute), uistate.T("action.cancel")),
+			),
+		)
+	}
 	if editing.Get() {
 		return Div(Class("budget"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
@@ -369,10 +388,11 @@ func GoalRow(props goalRowProps) ui.Node {
 }
 
 // promptText shows a browser prompt and returns the entered text ("" if cancelled).
+// Still used by the Accounts "Set balance" flow (its in-app form is a follow-up).
 func promptText(message string) string {
 	v := js.Global().Get("window").Call("prompt", message)
 	if v.IsNull() || v.IsUndefined() {
 		return ""
 	}
-	return v.String()
+	return strings.TrimSpace(v.String())
 }

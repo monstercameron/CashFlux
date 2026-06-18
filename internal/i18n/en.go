@@ -243,6 +243,7 @@ var english = Catalog{
 	"goals.contribute":        "Contribute",
 	"goals.contributeTitle":   "Add to this goal",
 	"goals.contributePrompt":  "Contribute how much to %s?",
+	"goals.contributeAmount":  "Amount to add",
 	"goals.editTitle":         "Edit goal",
 	"goals.deleteTitle":       "Delete goal",
 	"goals.progressFmt":       "%d%% · %s to go",

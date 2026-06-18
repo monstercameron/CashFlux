@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: in-app goal-contribute form (§6.8, branched off lock-screen)
+
+- Branched for breadth per the user's "tonnes of todos". Replaced the Goals "Contribute" native
+  `window.prompt` with an inline form in `GoalRow` (mirrors the existing inline-edit toggle: a `contributing`
+  state + amount input + Add/Cancel). Removed the prompt path there.
+- Gotcha: `promptText` was a SHARED helper — accounts.go's "Set balance" also calls it — so removing it broke
+  the build (`accounts.go:435 undefined: promptText`). Restored `promptText` + the `js` import; accounts
+  keeps it for now (its in-app form is the next §6.8 follow-up). 1 new i18n key.
+- gofmt clean, disk wasm build green (served wasm rebuilt). Committed by pathspec. Screens were clean (the
+  parallel session is on tests), so no collision.
+
 ## 2026-06-18 — feat: suspend/resume the lock without wiping creds (B17)
 
 - Implemented the spec's "Lock screen toggle that flips Enabled without touching the credentials."
