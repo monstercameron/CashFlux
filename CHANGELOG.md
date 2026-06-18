@@ -14,10 +14,11 @@ and every commit updates this file under `Unreleased`.
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
   categories" (apply rules). They demonstrate per-transaction conditions and transaction-mutating actions.
-- **Passcode lock (B17, MVP).** You can now set a passcode that gates the app: a full-screen unlock screen
-  covers everything at startup (and on demand via the command palette's **Lock now**) until the right
-  passcode is entered. Manage it from Cmd/Ctrl+K — **Set passcode lock**, **Change passcode**, **Lock now**,
-  **Remove passcode lock**. The passcode is stored only as a salted SHA-256 hash (user-global, shared
+- **Passcode lock (B17).** You can now set a passcode that gates the app: a full-screen unlock screen
+  covers everything at startup (and on demand via **Lock now**) until the right passcode is entered. Manage
+  it from **Settings → App lock** or the Cmd/Ctrl+K palette — **Set passcode lock**, **Change passcode**,
+  **Lock now**, **Remove passcode lock**. The unlock screen has a **Forgot passcode?** reset (erases local
+  data — the honest recovery for a soft, unencrypted gate). The passcode is stored only as a salted SHA-256 hash (user-global, shared
   across workspaces) and verified in constant time; it's a soft deterrent for a local-first app, not
   encryption. **Optional auto-lock** re-shows the gate after a chosen number of minutes of inactivity
   (pointer/key/scroll resets the idle clock); set the window when you create the passcode. Setting a

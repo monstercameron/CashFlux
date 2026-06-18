@@ -122,6 +122,8 @@ var english = Catalog{
 	"applock.statusOn":      "On — a passcode is set (locks on reload and on “Lock now”).",
 	"applock.statusOnAuto":  "On — a passcode is set; auto-locks after %d min of inactivity.",
 	"applock.statusOff":     "Off — no passcode set.",
+	"applock.forgot":        "Forgot passcode?",
+	"applock.forgotConfirm": "Forgot your passcode? Resetting erases all CashFlux data on this device — the lock isn't encryption, so this is the only way to recover. Continue?",
 
 	// Common actions (shared across screens)
 	"action.add":    "Add",

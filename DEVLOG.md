@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: app-lock "Forgot passcode?" recovery (close lockout gap)
+
+- A forgotten passcode previously meant permanent lockout (no recovery — the B17 spec called for one).
+  Added a "Forgot passcode?" link on the unlock gate → `confirmAction` → `wipeAllLocalData()` (removes every
+  `cashflux:*` localStorage key) → reload (boot re-seeds a fresh sample). For a soft, unencrypted gate,
+  wipe-to-reset is the honest recovery — "just remove the lock" would let anyone bypass it. 2 new
+  `applock.*` keys. In `applockgate.go` + en.go only.
+- gofmt clean; disk build green this time so I rebuilt the served `web/bin/main.wasm` directly. Committed by
+  pathspec. B17 is now genuinely complete (no lockout dead-end).
+
 ## 2026-06-18 — fix: surface app lock in Settings (user couldn't find it)
 
 - User feedback: no way to set up / toggle the lock from Settings — it was only in the Cmd+K palette, which

@@ -67,6 +67,12 @@ func buildAppLockGate(doc js.Value) {
 	btn.Get("style").Set("cssText", "padding:0.6rem 0.8rem;border-radius:8px;border:0;background:var(--accent,#2e8b57);color:#052e13;font-weight:600;cursor:pointer;")
 	card.Call("appendChild", btn)
 
+	forgot := doc.Call("createElement", "button")
+	forgot.Set("type", "button")
+	forgot.Set("textContent", uistate.T("applock.forgot"))
+	forgot.Get("style").Set("cssText", "background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;text-decoration:underline;")
+	card.Call("appendChild", forgot)
+
 	gate.Call("appendChild", card)
 	doc.Get("body").Call("appendChild", gate)
 
@@ -94,7 +100,37 @@ func buildAppLockGate(doc js.Value) {
 	})
 	inp.Call("addEventListener", "keydown", keyCb)
 
+	// Forgot passcode → wipe & reset. The gate is a soft, unencrypted deterrent,
+	// so erasing local data is the only honest recovery from a lost passcode.
+	forgotCb := js.FuncOf(func(js.Value, []js.Value) any {
+		if confirmAction(uistate.T("applock.forgotConfirm")) {
+			wipeAllLocalData()
+			reloadPage()
+		}
+		return nil
+	})
+	forgot.Call("addEventListener", "click", forgotCb)
+
 	resetAppLockInput(doc)
+}
+
+// wipeAllLocalData removes every cashflux:* localStorage key — the reset path for
+// a forgotten passcode. The caller reloads afterward (boot then re-seeds a fresh
+// sample, as on first run).
+func wipeAllLocalData() {
+	ls := js.Global().Get("localStorage")
+	if ls.IsNull() || ls.IsUndefined() {
+		return
+	}
+	var keys []string
+	for i := 0; i < ls.Get("length").Int(); i++ {
+		if k := ls.Call("key", i); !k.IsNull() && !k.IsUndefined() && strings.HasPrefix(k.String(), "cashflux:") {
+			keys = append(keys, k.String())
+		}
+	}
+	for _, k := range keys {
+		ls.Call("removeItem", k)
+	}
 }
 
 // setPasscodeFlow opens the in-app passcode setup form (no refresh callback —
