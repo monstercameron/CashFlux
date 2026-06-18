@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: bills tracker — pure core (B22, step 1)
+
+- New pure `internal/bills` (no syscall/js, table-tested), derived-first per the spec's recommendation:
+  `Upcoming(accounts, now)` returns the next bill for each active liability account that has a
+  `DueDayOfMonth` and a non-zero `MinPayment` — amount, next due date, and days-until — soonest first.
+  `NextDue(dueDay, from)` finds the next occurrence on/after `from`'s date with month-end clamping
+  (`daysInMonth` via the day-0-of-next-month trick), so a 31st-due bill lands on Feb 28/29 and rolls the
+  year correctly. Assets, archived, and no-due-day / no-min-payment accounts are skipped.
+- Tests: NextDue (this-month / today / passed→next / Feb clamp non-leap+leap / 31-day month / year
+  rollover) and Upcoming (filtering, ordering, amount, days-until). `go vet` clean.
+- Deferred to later steps: Planning-recurring-derived bills, paid-this-cycle status + mark-paid (the State
+  layer), and the Bills screen + month calendar (UI). Pure, not yet wired.
+
 ## 2026-06-18 — feat: subscription cancel-reminder → to-do (B25)
 
 - Added the B25 "cancel reminder → task" action. Extracted a `SubscriptionRow` component (owns its click

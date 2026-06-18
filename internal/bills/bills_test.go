@@ -1,0 +1,71 @@
+package bills
+
+import (
+	"testing"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
+)
+
+func d(y int, m time.Month, day int) time.Time {
+	return time.Date(y, m, day, 0, 0, 0, 0, time.UTC)
+}
+
+func TestNextDue(t *testing.T) {
+	cases := []struct {
+		name   string
+		dueDay int
+		from   time.Time
+		want   time.Time
+	}{
+		{"later this month", 15, d(2026, time.June, 10), d(2026, time.June, 15)},
+		{"due today", 15, d(2026, time.June, 15), d(2026, time.June, 15)},
+		{"already passed -> next month", 15, d(2026, time.June, 20), d(2026, time.July, 15)},
+		{"month-end clamp Feb non-leap", 31, d(2026, time.February, 5), d(2026, time.February, 28)},
+		{"month-end clamp Feb leap", 31, d(2024, time.February, 5), d(2024, time.February, 29)},
+		{"31st in a 31-day month", 31, d(2026, time.January, 5), d(2026, time.January, 31)},
+		{"year rollover", 10, d(2026, time.December, 20), d(2027, time.January, 10)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NextDue(tc.dueDay, tc.from); !got.Equal(tc.want) {
+				t.Errorf("NextDue(%d, %s) = %s, want %s", tc.dueDay,
+					tc.from.Format("2006-01-02"), got.Format("2006-01-02"), tc.want.Format("2006-01-02"))
+			}
+		})
+	}
+}
+
+func liability(id, name string, dueDay int, minPay int64) domain.Account {
+	return domain.Account{
+		ID: id, Name: name, Class: domain.ClassLiability,
+		DueDayOfMonth: dueDay, MinPayment: money.New(minPay, "USD"),
+	}
+}
+
+func TestUpcoming(t *testing.T) {
+	now := d(2026, time.June, 10)
+	accounts := []domain.Account{
+		liability("card", "Visa", 15, 5000),     // due Jun 15
+		liability("loan", "Car loan", 1, 30000), // due Jul 1 (the 1st already passed this month)
+		{ID: "checking", Name: "Checking", Class: domain.ClassAsset},
+		liability("nodue", "No due day", 0, 5000),   // no due day → skipped
+		liability("nopay", "No min payment", 20, 0), // no min payment → skipped
+		func() domain.Account { a := liability("arch", "Archived", 5, 1000); a.Archived = true; return a }(),
+	}
+	got := Upcoming(accounts, now)
+	if len(got) != 2 {
+		t.Fatalf("got %d bills, want 2 (Visa, Car loan): %+v", len(got), got)
+	}
+	// Soonest first: Visa Jun 15 before Car loan Jul 1.
+	if got[0].AccountID != "card" || !got[0].DueDate.Equal(d(2026, time.June, 15)) || got[0].DaysUntil != 5 {
+		t.Errorf("bill 0 = %+v, want Visa due Jun 15 in 5 days", got[0])
+	}
+	if got[1].AccountID != "loan" || !got[1].DueDate.Equal(d(2026, time.July, 1)) {
+		t.Errorf("bill 1 = %+v, want Car loan due Jul 1", got[1])
+	}
+	if got[0].Amount.Amount != 5000 {
+		t.Errorf("Visa amount = %d, want 5000", got[0].Amount.Amount)
+	}
+}

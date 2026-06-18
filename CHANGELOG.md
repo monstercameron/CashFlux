@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Bills tracker — the pure core (B22, internal).** New `internal/bills` package that derives upcoming
+  bills from your liability accounts: each account with a statement due-day and a minimum payment becomes a
+  monthly bill with its next due date (correctly clamped for short months — a "due on the 31st" bill lands
+  on Feb 28/29) and days-until, soonest first. Pure, table-tested. The Bills screen + calendar build on
+  this next.
 - **Subscriptions detection — the pure core (B25, internal).** New `internal/subscriptions` package that
   finds recurring charges in your transaction history: it groups identical repeated expenses, infers a
   cadence (weekly / monthly / yearly) from the spacing between them, and reports each one's normalized
