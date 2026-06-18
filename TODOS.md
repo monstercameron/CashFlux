@@ -1005,11 +1005,14 @@ Savings KPIs) · `period.Window`.
 #### D7. Month-boundary rollover correctness ★
 **Workstream:** step the period across a month/quarter/week boundary with transactions on the edges.
 **Touches:** `period.Window`/`Range`/`Truncate` · `dateutil` · `ledger.PeriodTotals` · Budgets · Dashboard.
-- [ ] Place txns on the **first** and **last** day of a month; step the window; assert each lands in
-      exactly one period (no drop, no double-count). **(C1: day-1 UTC txns currently dropped.)**
-- [ ] Repeat for week (honoring week-start) and quarter boundaries.
-- [ ] fix: adopt a single UTC-calendar-date convention across `period`/`dateutil`/`ledger`; unit-test
-      boundary membership under a **non-UTC** `time.Local`.
+- [x] Place txns on the **first** and **last** day of a month; assert each lands in exactly one period
+      (no drop, no double-count) — `ledger.TestPeriodTotalsMonthBoundary` (May 31 / Jun 1 / Jun 30 / Jul
+      1 across three consecutive windows; their sum equals every amount once).
+- [x] Repeat for week (honoring week-start) and quarter boundaries —
+      `TestPeriodTotalsWeekBoundary`/`TestPeriodTotalsQuarterBoundary` (half-open window: start day in,
+      next start day out).
+- [x] fix: single UTC-calendar-date convention across `period`/`dateutil`/`ledger` — done in C1, with
+      `dateutil.TestPeriodBoundariesAreUTCRegardlessOfZone` exercising membership under non-UTC zones.
 
 ### Planning workstreams
 

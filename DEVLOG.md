@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — tests D7: month/week/quarter boundary membership
+
+- Hardened the period-boundary correctness that C1 was about, at the `ledger.PeriodTotals` (totals)
+  level. `internal/ledger/boundary_test.go`: income txns placed on the first and last day of each window
+  must land in exactly one period across consecutive windows — no drop, no double-count.
+  - Month: May 31 / Jun 1 / Jun 30 / Jul 1 → May=100, June=600, July=800, and the three windows sum to
+    every amount once (1500). This is the totals-level regression home for C1.
+  - Week (Sunday-start): the week-start day and the Saturday before the next start are in; the next
+    Sunday rolls to the following week.
+  - Quarter: Q2 [Apr 1, Jul 1) includes Apr 1 and Jun 30; Jul 1 rolls to Q3.
+- All pin the half-open `[start, end)` semantics. The underlying UTC-convention fix + a non-UTC-zone
+  membership test landed earlier (C1). Test-only.
+
 ## 2026-06-18 — feature D5: parent-category budgets roll up sub-category spend
 
 - Found a real gap behind the D5 "rollup test" item: `budgeting.matches` compared `t.CategoryID ==
