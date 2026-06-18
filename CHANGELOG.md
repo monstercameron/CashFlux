@@ -297,6 +297,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend SyncService applies LWW workspace puts.** Workspace updates now accept fresh client timestamps,
+  reject stale writes with the current server state, support a force override, bump server versions, and block
+  cross-user workspace ID takeover.
 - **Backend SyncService scopes workspace reads and tombstones.** Added authenticated-user service helpers for
   workspace list/get/delete that route through the store with caller `user_id` isolation and reject unauthenticated
   or malformed requests.
@@ -456,6 +459,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **The top bar no longer shows a scrollbar — it wraps instead (C34).** When the breadcrumb, time
+  controls, and "+ Add" don't fit (notably in Custom-range mode around 1100px wide), the bar now wraps
+  onto a second row at any width instead of becoming a horizontal scroll container that stole height.
 - **The left rail no longer shows a scrollbar (C31).** When the nav overflows (e.g. as "My pages" grows)
   it stays scrollable by wheel/trackpad/keyboard, but the native scrollbar is hidden, matching the clean
   sidebar look.

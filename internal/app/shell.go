@@ -367,7 +367,7 @@ func TopBar(props topBarProps) uic.Node {
 	periodAware := map[string]bool{
 		"/": true, "/transactions": true, "/budgets": true, "/planning": true, "/insights": true,
 	}[curPath]
-	return Div(Class("topbar h-14 border-b border-line flex items-center px-6 gap-3 sticky top-0 bg-base z-20"),
+	return Div(Class("topbar border-b border-line flex flex-wrap items-center px-6 gap-3 sticky top-0 bg-base z-20"),
 		Button(Class("menu-btn w-7 h-7 -ml-1"), Attr("title", uistate.T("topbar.menu")),
 			OnClick(func() {
 				next := !collapsed.Get()

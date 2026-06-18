@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: top bar wraps instead of scrolling (C34)
+
+- `.topbar` had `overflow-x: auto`, so at the awkward ~1000–1100px band (esp. Custom-range mode, which
+  adds two date steppers) `scrollWidth > clientWidth` turned the fixed-height header into a scroll
+  container. Replaced `overflow-x:auto` with `flex-wrap: wrap; row-gap; min-height:3.5rem`, added
+  `.topbar-controls { flex-wrap: wrap }`, and dropped the fixed `h-14` utility in `shell.go` (CSS
+  `min-height` now governs) so a wrapped second row isn't clipped.
+- Chose wrap over hide-the-scrollbar (the C31 trick): a horizontal hidden-scroll header would leave
+  controls off-screen with no indicator. Wrapping is the better UX and matches the existing <1000px
+  media query, just extended to all widths. CSS + one class change; build green.
+
+## 2026-06-18 - feat: add backend sync LWW puts
+
+- Added the `SyncService.PutWorkspace` path for last-write-wins workspace updates: it scopes writes to
+  `AuthUser.ID`, rejects cross-user ID takeover, server-stamps `updatedAt`, bumps versions, and returns current
+  state on stale rejection so clients can re-pull.
+- Covered initial create, stale reject, fresh accept, force override, version increments, and cross-user collision
+  protection with native server tests.
+
 ## 2026-06-18 — feat: empty-state CTAs for transactions + categories (§6.5, batch 2)
 
 - Extended `EmptyStateCTA` to transactions (truly-empty case only — the filtered no-match case keeps a

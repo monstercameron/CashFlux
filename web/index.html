@@ -153,8 +153,11 @@
         display: flex; align-items: center; gap: 1.25rem;
         padding: 0.75rem 1.25rem; background: rgba(11,16,32,0.85);
         backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
-        overflow-x: auto;
+        /* Wrap controls onto a second row when they don't fit, rather than
+           turning a fixed-height header into a scroll container (C34). */
+        flex-wrap: wrap; row-gap: 0.4rem; min-height: 3.5rem;
       }
+      .topbar-controls { flex-wrap: wrap; row-gap: 0.4rem; }
       .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 800; white-space: nowrap; }
       .brand-mark {
         display: grid; place-items: center; width: 1.6rem; height: 1.6rem;
