@@ -3,8 +3,6 @@
 package screens
 
 import (
-	"math"
-	"sort"
 	"strconv"
 	"time"
 
@@ -13,16 +11,14 @@ import (
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
-	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
-	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pages"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/widgetdata"
 	"github.com/monstercameron/CashFlux/internal/widgetspec"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -230,78 +226,33 @@ func cpKPIBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	if err != nil {
 		return P(Class("err"), Attr("role", "alert"), err.Error())
 	}
-	format := w.Config["format"]
-	var text string
-	if format == widgetspec.FormatCurrency {
-		div := minorPerMajor(ctx.Base)
-		// Round to the nearest minor unit; a bare int64(val*div) truncates and can
-		// drop a cent due to float representation (e.g. 15343.50 → 1534349).
-		text = fmtMoney(money.New(int64(math.Round(val*div)), ctx.Base))
-	} else {
-		text = widgetspec.Format(val, format)
-	}
 	return Div(Class("flex flex-col justify-center h-full"),
-		Div(Class("font-display fig text-[28px]"), text),
+		Div(Class("font-display fig text-[28px]"), widgetdata.KPIText(val, w.Config["format"], ctx.Base)),
 	)
 }
 
-// listBody shows up to N rows from the widget's data source.
+// listBody shows up to N rows from the widget's data source. The row data
+// (source selection, newest-first ordering, formatting, cap) is computed by the
+// pure internal/widgetdata package; this just renders the rows.
 func listBody(w domain.PageWidget, ctx pageCtx) ui.Node {
-	n := 5
-	app := ctx.App
-	var rows []ui.Node
-	add := func(label, value string) {
-		rows = append(rows, Div(Class("row"),
-			Span(Class("row-desc truncate"), label),
-			Span(Class("amount fig"), value),
-		))
-	}
-	switch w.Binding.Source {
-	case widgetspec.SourceTransactions:
-		txns := append([]domain.Transaction(nil), app.Transactions()...)
-		sort.SliceStable(txns, func(i, j int) bool { return txns[i].Date.After(txns[j].Date) })
-		for i, t := range txns {
-			if i >= n {
-				break
-			}
-			add(firstNonEmpty(t.Desc, t.Payee), fmtMoney(t.Amount))
-		}
-	case widgetspec.SourceAccounts:
-		for i, a := range app.Accounts() {
-			if i >= n {
-				break
-			}
-			bal, _ := ledger.Balance(a, app.Transactions())
-			add(a.Name, fmtMoney(bal))
-		}
-	case widgetspec.SourceBudgets:
-		for i, b := range app.Budgets() {
-			if i >= n {
-				break
-			}
-			add(b.Name, fmtMoney(b.Limit))
-		}
-	case widgetspec.SourceGoals:
-		for i, g := range app.Goals() {
-			if i >= n {
-				break
-			}
-			add(g.Name, itoaPct(goals.Percent(g)))
-		}
-	case widgetspec.SourceTasks:
-		for i, tk := range app.Tasks() {
-			if i >= n {
-				break
-			}
-			add(tk.Title, string(tk.Status))
-		}
-	default:
+	rows, ok := widgetdata.ListRows(w.Binding.Source, widgetdata.Data{
+		Transactions: ctx.App.Transactions(), Accounts: ctx.App.Accounts(),
+		Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(), Rates: ctx.Rates,
+	}, widgetdata.DefaultListRows)
+	if !ok {
 		return P(Class("empty"), uistate.T("pages.pickSource"))
 	}
 	if len(rows) == 0 {
 		return P(Class("empty"), uistate.T("pages.noData"))
 	}
-	return Div(Class("rows"), rows)
+	nodes := make([]ui.Node, 0, len(rows))
+	for _, r := range rows {
+		nodes = append(nodes, Div(Class("row"),
+			Span(Class("row-desc truncate"), r.Label),
+			Span(Class("amount fig"), r.Value),
+		))
+	}
+	return Div(Class("rows"), nodes)
 }
 
 // chartBody renders the net-worth trend over the last six months — a sensible
@@ -310,12 +261,7 @@ func chartBody(ctx pageCtx) ui.Node {
 	app := ctx.App
 	accounts, txns := app.Accounts(), app.Transactions()
 	net, _, _, _ := ledger.NetWorth(accounts, txns, ctx.Rates)
-	months := 6
-	start := dateutil.MonthStart(time.Now())
-	cutoffs := make([]time.Time, 0, months)
-	for i := 0; i < months; i++ {
-		cutoffs = append(cutoffs, dateutil.AddMonths(start, i-(months-2)))
-	}
+	cutoffs := widgetdata.ChartWindow(time.Now(), 6)
 	series, _ := ledger.NetWorthSeries(accounts, txns, cutoffs, ctx.Rates)
 	div := minorPerMajor(net.Currency)
 	pts := make([]chartspec.Point, len(series))

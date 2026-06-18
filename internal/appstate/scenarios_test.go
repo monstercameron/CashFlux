@@ -198,8 +198,8 @@ func TestStory7_OrganizePages(t *testing.T) {
 	alpha.Slug = pages.UniqueSlug("Gamma", a.CustomPages(), alpha.ID)
 	_ = a.PutCustomPage(alpha)
 	got, _, _ := a.store.GetCustomPage("p1")
-	if got.Slug == "gamma" {
-		t.Errorf("rename should have produced a unique slug, got %q", got.Slug)
+	if got.Slug != "gamma-2" {
+		t.Errorf("rename should produce the unique slug gamma-2, got %q", got.Slug)
 	}
 	if _, ok := pages.BySlug(a.CustomPages(), got.Slug); !ok {
 		t.Error("renamed page not reachable by its slug")
