@@ -1261,6 +1261,17 @@ results are summarized here so the backlog doesn't bloat.
   or "Import…" uses a non-native picker (inline paste?). **Round-trip import half unverified.** _Harness
   fix: target the data-section "Import…" precisely (or whatever control it opens) and re-test lossless
   round-trip; the export half is confirmed (#31)._
+- **2026-06-18 #33** — Root-caused #32: **JSON import uses no native `<input type=file>`** — the settings
+  panel has **0 file inputs**, so both `ExpectFileChooser` and `SetInputFiles` fail. The "Import…" button
+  uses a non-standard mechanism (dynamically-created input or the **File System Access API**
+  `showOpenFilePicker`). Implications worth flagging:
+  - [ ] **Portability:** if it's `showOpenFilePicker`, JSON import is **Chromium-only** (unsupported in
+    Firefox/Safari) — a real concern for a local-first app meant to run anywhere. Verify the mechanism;
+    consider a standard `<input type=file>` fallback.
+  - [ ] **Testability/a11y:** a non-native picker can't be driven by automation and may not be
+    keyboard/SR-friendly. A real `<input type=file>` (visually hidden, label-triggered) fixes both.
+  - [ ] Round-trip import still **unverified by harness** — confirm lossless import manually for now.
+  - (Export half confirmed #31; data intact $20,749.25 / $4,200.00 — but no import actually occurred.)
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

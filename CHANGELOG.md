@@ -152,6 +152,11 @@ and every commit updates this file under `Unreleased`.
   double read.
 
 ### Removed
+- **Committed wasm build artifacts untracked (repo hygiene):** `static/bin/main.wasm` (≈27 MB, rebuilt and
+  re-committed on every change), the stale `bin/main.wasm` + its hot-reload manifest, and a stray
+  `internal/screens/static/bin/main.wasm` were all git-tracked because `.gitignore` only ignored the old
+  `/web/bin/` path. They're now untracked and ignored (`static/bin/`, `/bin/*.wasm`, …). Deploy is
+  unaffected — GitHub Pages CI rebuilds `web/bin/main.wasm` fresh and serves `web/`, never these files.
 - **Dead `stub` placeholder helper (internal):** the `screens.stub(...)` "Planned · Phase N" placeholder
   is no longer referenced now that every screen is built, so it was deleted (the project bars dead code).
 - **Dead `budgeting.matches` helper (internal):** the exact-category `matches(...)` helper was superseded by

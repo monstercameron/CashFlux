@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — stop committing wasm build artifacts (stale .gitignore)
+
+- The full-suite check's `git diff --stat` kept showing `static/bin/main.wasm | Bin 27MB` change every
+  commit — I'd been re-committing a 27 MB binary each cycle via `git add -A`. Root cause: `.gitignore`
+  ignored `/web/bin/` (an old path) but the local build command writes to `static/bin/main.wasm`, which
+  wasn't ignored, so it got tracked.
+- Verified deployment safety before touching it: `.github/workflows/deploy-pages.yml` builds the wasm fresh
+  in CI (`go build -o web/bin/main.wasm`), copies wasm_exec.js, and uploads `web/` as the Pages artifact —
+  it never uses the committed `static/bin` or root `bin` wasm. So those are local-only and safe to untrack.
+- Found four tracked wasm artifacts: `static/bin/main.wasm`, `bin/main.wasm`,
+  `bin/main.wasm.hotreload-manifest.json`, and a stray `internal/screens/static/bin/main.wasm` (collateral
+  from the earlier persisted-`cd` mishap). `git rm --cached` all four (local files kept), and fixed
+  `.gitignore`: `static/bin/` (unanchored, so it also catches the nested stray), `/static/wasm_exec.js`,
+  `/bin/*.wasm`, `/bin/*.hotreload-manifest.json`. Left `bin/*.png` (screenshots — possibly referenced).
+- Net: no tracked `.wasm` remains; future commits won't carry the binary. Full suite still 41 green, gofmt
+  clean, wasm builds. (Process note to self: gofmt every hand-edited .go file before committing — two prior
+  commits slipped through dirty.)
+
 ## 2026-06-18 — extract spend-breakdown ranking into ledger.RankSpending (+ i18n the labels)
 
 - The broader scan found one more real chunk of view-embedded logic: the dashboard breakdown widget's

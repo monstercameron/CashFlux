@@ -1,6 +1,11 @@
-# Build output (wasm + Go runtime glue live under web/)
+# Build output (wasm + Go runtime glue). CI rebuilds web/bin/ fresh on deploy;
+# static/bin and root bin/ are local-only build artifacts (not served).
 /web/bin/
 /web/wasm_exec.js
+static/bin/
+/static/wasm_exec.js
+/bin/*.wasm
+/bin/*.hotreload-manifest.json
 
 # Dev tooling (built gwc binary lives here; rebuild from the framework checkout)
 /.tools/
