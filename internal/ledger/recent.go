@@ -11,7 +11,14 @@ import (
 // returns all of them.
 func Recent(txns []domain.Transaction, n int) []domain.Transaction {
 	cp := append([]domain.Transaction(nil), txns...)
-	sort.Slice(cp, func(i, j int) bool { return cp[i].Date.After(cp[j].Date) })
+	// Newest first, breaking ties on ID so equal-dated transactions order
+	// deterministically rather than depending on the input's arrangement.
+	sort.Slice(cp, func(i, j int) bool {
+		if !cp[i].Date.Equal(cp[j].Date) {
+			return cp[i].Date.After(cp[j].Date)
+		}
+		return cp[i].ID < cp[j].ID
+	})
 	if n < 0 {
 		n = 0
 	}

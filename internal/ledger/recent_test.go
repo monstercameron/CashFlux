@@ -39,6 +39,31 @@ func TestRecent(t *testing.T) {
 	}
 }
 
+func TestRecentSameDateIsDeterministic(t *testing.T) {
+	// Equal dates must order by ID regardless of input arrangement.
+	d := mustDate("2026-05-01")
+	a := []domain.Transaction{{ID: "c", Date: d}, {ID: "a", Date: d}, {ID: "b", Date: d}}
+	b := []domain.Transaction{{ID: "b", Date: d}, {ID: "c", Date: d}, {ID: "a", Date: d}}
+	if got, want := ids(Recent(a, 3)), []string{"a", "b", "c"}; !equalStrings(got, want) {
+		t.Errorf("Recent(a) = %v, want %v", got, want)
+	}
+	if got, want := ids(Recent(b, 3)), []string{"a", "b", "c"}; !equalStrings(got, want) {
+		t.Errorf("Recent(b) = %v, want %v", got, want)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func ids(txns []domain.Transaction) []string {
 	out := make([]string, len(txns))
 	for i, t := range txns {
