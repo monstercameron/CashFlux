@@ -112,12 +112,39 @@ func (a *App) TransactionsCSV(txns []domain.Transaction) ([]byte, error) {
 
 // ImportTransactionsCSV parses CSV transaction rows and stores each via the
 // validated write path (best-effort: invalid rows are skipped), returning how
-// many were imported. A parse error (malformed CSV) is returned as-is.
+// many were imported. A parse error (malformed CSV) is returned as-is. Missing
+// currencies default to the household base currency, and account/category/member
+// cells given as names (a hand-written CSV) are resolved to ids (C27).
 func (a *App) ImportTransactionsCSV(data []byte) (int, error) {
-	txns, err := store.TransactionsFromCSV(data)
+	base := "USD"
+	if s := a.Settings(); s.BaseCurrency != "" {
+		base = s.BaseCurrency
+	}
+	txns, err := store.TransactionsFromCSV(data, base)
 	if err != nil {
 		return 0, err
 	}
+
+	accPairs := make([][2]string, 0, len(a.Accounts()))
+	for _, ac := range a.Accounts() {
+		accPairs = append(accPairs, [2]string{ac.ID, ac.Name})
+	}
+	catPairs := make([][2]string, 0, len(a.Categories()))
+	for _, c := range a.Categories() {
+		catPairs = append(catPairs, [2]string{c.ID, c.Name})
+	}
+	memPairs := make([][2]string, 0, len(a.Members()))
+	for _, m := range a.Members() {
+		memPairs = append(memPairs, [2]string{m.ID, m.Name})
+	}
+	resolveAcc, resolveCat, resolveMem := idResolver(accPairs), idResolver(catPairs), idResolver(memPairs)
+	for i := range txns {
+		txns[i].AccountID = resolveAcc(txns[i].AccountID)
+		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
+		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
+		txns[i].MemberID = resolveMem(txns[i].MemberID)
+	}
+
 	n := 0
 	for _, t := range txns {
 		if err := a.PutTransaction(t); err == nil {
@@ -126,6 +153,30 @@ func (a *App) ImportTransactionsCSV(data []byte) (int, error) {
 	}
 	a.log.Info("imported transactions from CSV", "imported", n, "rows", len(txns))
 	return n, nil
+}
+
+// idResolver builds a function that maps a CSV reference cell to an entity id:
+// an exact id passes through, a case-insensitive name match resolves to its id,
+// and anything else (including "") is returned unchanged so the validated write
+// path can accept or skip it. pairs are the entities' {id, name} tuples.
+func idResolver(pairs [][2]string) func(string) string {
+	ids := make(map[string]bool, len(pairs))
+	byName := make(map[string]string, len(pairs))
+	for _, p := range pairs {
+		ids[p[0]] = true
+		if p[1] != "" {
+			byName[strings.ToLower(strings.TrimSpace(p[1]))] = p[0]
+		}
+	}
+	return func(v string) string {
+		if v == "" || ids[v] {
+			return v
+		}
+		if id, ok := byName[strings.ToLower(v)]; ok {
+			return id
+		}
+		return v
+	}
 }
 
 // LoadSample replaces all data with the built-in sample dataset (the "load

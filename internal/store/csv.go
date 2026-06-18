@@ -57,8 +57,14 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 
 // TransactionsFromCSV parses transactions from CSV. Columns are matched by their
 // header name (case-insensitive), so column order and extra columns are
-// tolerated. Rows missing an id get a fresh one. amount + currency are required.
-func TransactionsFromCSV(data []byte) ([]domain.Transaction, error) {
+// tolerated. Rows missing an id get a fresh one. Only amount is required: when a
+// row has no currency column/value, defaultCurrency is used (the caller passes
+// the base currency), so the documented `date,payee,amount,account` shape works
+// without an explicit currency column (C27). The account/category/member columns
+// are read from either the export's `*_id` headers or the friendly `account`/
+// `category`/`member` names; values given as names are resolved to ids by the
+// caller (appstate), which has the entity lists.
+func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transaction, error) {
 	r := csv.NewReader(bytes.NewReader(data))
 	r.FieldsPerRecord = -1
 	records, err := r.ReadAll()
@@ -79,15 +85,29 @@ func TransactionsFromCSV(data []byte) ([]domain.Transaction, error) {
 		}
 		return ""
 	}
+	// colID reads an entity reference from either the export header (`<base>_id`)
+	// or the friendly documented name (`<base>`), preferring the explicit id.
+	colID := func(row []string, base string) string {
+		if v := col(row, base+"_id"); v != "" {
+			return v
+		}
+		return col(row, base)
+	}
 
 	out := make([]domain.Transaction, 0, len(records)-1)
 	for n, row := range records[1:] {
 		line := n + 2
 
-		curr := col(row, "currency")
 		amtStr := col(row, "amount")
-		if amtStr == "" || curr == "" {
-			return nil, fmt.Errorf("store: csv line %d: amount and currency are required", line)
+		if amtStr == "" {
+			return nil, fmt.Errorf("store: csv line %d: amount is required", line)
+		}
+		curr := col(row, "currency")
+		if curr == "" {
+			curr = defaultCurrency
+		}
+		if curr == "" {
+			return nil, fmt.Errorf("store: csv line %d: currency is required (add a currency column or set a base currency)", line)
 		}
 		amt, err := money.ParseMinor(amtStr, currency.Decimals(curr))
 		if err != nil {
@@ -124,16 +144,16 @@ func TransactionsFromCSV(data []byte) ([]domain.Transaction, error) {
 
 		out = append(out, domain.Transaction{
 			ID:                tid,
-			AccountID:         col(row, "account_id"),
+			AccountID:         colID(row, "account"),
 			Date:              date,
 			Payee:             col(row, "payee"),
 			Desc:              col(row, "desc"),
-			CategoryID:        col(row, "category_id"),
+			CategoryID:        colID(row, "category"),
 			Amount:            money.New(amt, curr),
-			TransferAccountID: col(row, "transfer_account_id"),
+			TransferAccountID: colID(row, "transfer_account"),
 			Cleared:           cleared,
 			Tags:              tags,
-			MemberID:          col(row, "member_id"),
+			MemberID:          colID(row, "member"),
 		})
 	}
 	return out, nil

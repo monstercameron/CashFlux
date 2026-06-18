@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C27: CSV import accepts its documented format
+
+- The starred C27 bug: pasting the on-screen `date,payee,amount,account` example failed with a leaked
+  `store: csv line 2: amount and currency are required` — the parser hard-required a `currency` column the
+  docs never mentioned, and it read `account_id`/`category_id`/`member_id` while the docs say
+  `account`/`category`/`member`.
+- Store fix (`TransactionsFromCSV` gained a `defaultCurrency` param): only amount is required now; a
+  missing currency falls back to the passed default; a new `colID` helper reads `<base>_id` (export) or
+  `<base>` (friendly), preferring the explicit id. Pure + table-tested (default-currency + friendly
+  columns; id-wins-over-name; still errors on no-currency-and-no-default, bad amount/date, missing amount).
+- appstate fix: `ImportTransactionsCSV` passes the household base currency and resolves account/category/
+  member cells that were given as **names** to their ids (case-insensitive, via a small `idResolver`),
+  so a hand-written CSV with `account=Checking` lands on the right account. Unknown values pass through to
+  the validated write path, which skips genuinely-invalid rows.
+- UI: strip the internal `store:` prefix from the import error, and updated `documents.csvDesc` to say
+  currency is optional and account/category/member accept a name or an ID.
+- All logic-package tests + the wasm build green. (Route-gated screen, but this is a logic fix proven by
+  unit tests.) Remaining C27 items: vision category aliasing, review-row accounting format (= C2),
+  AI-key persistence, and the save-as-task title trimming.
+
 ## 2026-06-17 — C26: text/display size to 200% for accessibility
 
 - The Display scale (B6) topped out at 130% and the TODO flagged that `zoom` would overflow the

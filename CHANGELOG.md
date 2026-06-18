@@ -54,6 +54,13 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **CSV import accepts its own documented format (C27):** pasting the on-screen example
+  `date,payee,amount,account` failed demanding an undocumented `currency` column (and leaked a raw
+  `store:` error). Currency is now optional — it defaults to your base currency — and the account /
+  category / member columns accept either an ID or a **name** (resolved case-insensitively to the right
+  entity). The friendly `account`/`category`/`member` headers work alongside the export's `*_id` headers
+  (the explicit ID wins). The import error no longer shows the internal `store:` prefix. Covered by new
+  table tests.
 - **List-row action buttons wrap instead of overlapping at narrow widths (C19):** on a phone/tablet the
   transaction row's buttons (Mark cleared / Edit / Duplicate / ✕) overlapped the description and date.
   Rows now wrap below 1024px so the actions flow under the text. Shared by every list screen; a no-op

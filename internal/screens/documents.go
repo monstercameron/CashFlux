@@ -99,7 +99,9 @@ func Documents() ui.Node {
 		}
 		n, err := app.ImportTransactionsCSV([]byte(data))
 		if err != nil {
-			msg.Set(uistate.T("documents.csvError", err.Error()))
+			// Don't surface the internal "store:" package prefix to the user (C27).
+			friendly := strings.TrimPrefix(err.Error(), "store: ")
+			msg.Set(uistate.T("documents.csvError", friendly))
 			return
 		}
 		if n > 0 {

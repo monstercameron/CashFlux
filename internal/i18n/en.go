@@ -284,7 +284,7 @@ var english = Catalog{
 	"documents.reading":             "Reading…",
 	"documents.readAI":              "Read with AI",
 	"documents.csvTitle":            "Import transactions from CSV",
-	"documents.csvDesc":             "Paste rows with a header line. Columns are matched by name (date, payee/desc, amount, account, category, member); extra columns are ignored. Amounts are decimal — negative for expenses.",
+	"documents.csvDesc":             "Paste rows with a header line. Columns are matched by name: date, payee, amount, account, category, member (each by name or ID); currency is optional and defaults to your base currency; extra columns are ignored. Amounts are decimal — negative for expenses.",
 	"documents.import":              "Import",
 	"documents.descPlaceholder":     "Description",
 	"documents.amountPlaceholder":   "Amount",

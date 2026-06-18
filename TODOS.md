@@ -870,12 +870,12 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
       −8.25, Cookie −2.00 (2026-06-10), review screen + monthly summary "out $14.75 · net ($14.75)".
 
 **Not working / rough edges found (fix):**
-- [ ] **CSV import rejects the documented format** ★ — pasting the on-screen example shape
-      `date,payee,amount,account` fails with a leaked store error: *"Couldn't read that CSV: store: csv
-      line 2: amount and currency are required."* It only succeeds when an undocumented **`currency`**
-      column is added. Fix: default the currency (to the target account's or the base currency) when the
-      column is absent, **and/or** update `documents.csvDesc` to list currency; never surface the raw
-      `store:` validation string to the user.
+- [x] **CSV import rejects the documented format** ★ — FIXED. `TransactionsFromCSV(data, defaultCurrency)`
+      now defaults the currency to the household base when the column is absent (only amount stays
+      required), and reads `account`/`category`/`member` (the documented friendly names) as well as the
+      export's `*_id` headers — appstate resolves any **names** to ids case-insensitively. The UI strips
+      the `store:` prefix from import errors. `documents.csvDesc` updated (currency optional, names or IDs).
+      New table tests: default-currency + friendly columns, and id-wins-over-name.
 - [ ] **Vision category names don't match the app's categories** — the model returns "Food & Drink" but
       the household category is "Food", so name-matching ("Categories are matched by name") likely imports
       these uncategorized. Fix: fuzzy/alias category matching, or constrain the vision prompt/schema to the
@@ -890,8 +890,8 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
       entire first sentence** of the answer (long, "…"-truncated) — derive a short title (the question or
       a trimmed summary) and keep the prose in notes.
 - [x] **Insights "Pin"** — verified: pins to the "Pinned insights" list.
-- [ ] Re-confirmed on re-test (2026-06-17): OpenAI calls 200, vision works, **CSV documented format
-      still fails** (currency-required bug above — not yet fixed).
+- [x] Re-confirmed on re-test (2026-06-17): OpenAI calls 200, vision works. The **CSV documented-format
+      failure is now fixed** (see the currency-default + name-resolution item above).
 - [ ] Not yet exercised (queue for the browser E2E lane): cancel/abort mid-call, retry/backoff on
       429/5xx, and the error message shown on a bad/empty key.
 
