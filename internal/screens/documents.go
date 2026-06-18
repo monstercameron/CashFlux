@@ -521,7 +521,6 @@ func toDocumentRows(rows []extract.Row) []domain.DocumentRow {
 	return out
 }
 
-
 // pickImageDataURL opens a file picker for images and calls onData with the
 // chosen file as a base64 data: URL. The data never leaves the device except to
 // OpenAI when the user clicks Read.

@@ -844,4 +844,3 @@ func kpiBody(figure, figTone, subline, subTone string) ui.Node {
 		Div(Class("pt-1.5 text-[12px] "+subTone), subline),
 	)
 }
-
