@@ -17,6 +17,8 @@ and every commit updates this file under `Unreleased`.
   recurring monthly inflow so the final balance proves both inputs compose correctly.
 - **Goal pace coverage.** The `goals` unit tests now prove `MonthlyNeeded` feeds `Project` back to the goal's
   target date, complementing the existing allocate goal-progress scorer tests for D12.
+- **Payoff final-month coverage.** The `payoff` unit tests now pin the exact final payoff month where the
+  last payment is capped at the remaining balance plus interest, completing the D9 payoff/allocate unit item.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

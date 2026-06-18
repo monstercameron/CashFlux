@@ -1475,7 +1475,7 @@ Savings KPIs) · `period.Window`.
 - [ ] On Allocate, assert the card ranks high under the debt-reduction criterion and `Distribute` honors
       the emergency buffer + max-per-destination.
 - [ ] Post a payment; assert the liability balance and net worth update consistently.
-- [ ] unit: `payoff` boundary tests (payment==interest, payoff month) + `allocate.Distribute` reserve/cap.
+- [x] unit: `payoff` boundary tests (payment==interest, payoff month) + `allocate.Distribute` reserve/cap.
 
 #### D10. What-if trim-spending → forecast curve vs actuals
 **Workstream:** apply a "trim monthly spending by X" what-if and compare the projected net-worth curve.

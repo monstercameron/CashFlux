@@ -69,6 +69,19 @@ func TestProjectLargePaymentClearsInOneMonth(t *testing.T) {
 	}
 }
 
+func TestProjectFinalPayoffMonthCapsPayment(t *testing.T) {
+	// $1000 at 12% APR with a $600 payment:
+	// month 1: +$10 interest, pay $600 -> $410 remaining.
+	// month 2: +$4.10 interest, final payment is capped at $414.10 owed.
+	r, ok := Project(100000, 12, 60000)
+	if !ok {
+		t.Fatal("expected viable payoff")
+	}
+	if r.Months != 2 || r.TotalInterest != 1410 || r.TotalPaid != 101410 {
+		t.Errorf("got months=%d interest=%d paid=%d, want 2/1410/101410", r.Months, r.TotalInterest, r.TotalPaid)
+	}
+}
+
 func TestProjectPaymentEqualsInterestNotViable(t *testing.T) {
 	// $1000 at 12% → first interest exactly $10; a $10 payment never reduces the balance.
 	if _, ok := Project(100000, 12, 1000); ok {

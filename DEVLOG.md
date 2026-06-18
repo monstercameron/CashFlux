@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — test: D9 payoff final-month boundary
+
+- Closed the D9 pure unit-test checklist item by adding an exact final-payoff-month case in
+  `internal/payoff/payoff_test.go`.
+- Existing tests already covered payment-equals-interest as non-viable and `allocate.Distribute` reserve/cap;
+  this pins the remaining payoff-month boundary where the last payment is capped at the amount owed.
+- Verification: `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — test: D12 goal pace projection
 
 - Closed the D12 pure unit-test checklist item by linking `goals.MonthlyNeeded` to `goals.Project` in
