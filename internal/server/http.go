@@ -73,6 +73,8 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("OPTIONS /v1/ai/chat", handleCORSPreflight(cfg))
+	mux.HandleFunc("OPTIONS /v1/ai/vision", handleCORSPreflight(cfg))
 	mux.HandleFunc("POST /v1/ai/key", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
@@ -149,6 +151,16 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		writeJSON(w, result)
 	})
 	return mux
+}
+
+func handleCORSPreflight(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 func newHTTPAIService(store *Store, cfg Config) *AIService {
@@ -260,6 +272,8 @@ func writeCORS(w http.ResponseWriter, r *http.Request, cfg Config) bool {
 	w.Header().Set("Vary", "Origin")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, POST, OPTIONS")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, ETag")
+	w.Header().Set("Access-Control-Max-Age", "600")
 	return true
 }
 

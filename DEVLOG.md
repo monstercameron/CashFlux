@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - fix: allow backend ai proxy cors
+
+- Added explicit `OPTIONS` handlers for `/v1/ai/chat` and `/v1/ai/vision`; browser preflight no longer falls
+  through without `Access-Control-Allow-Origin`.
+- Expanded the shared CORS helper to expose `Content-Length`, `Content-Type`, and `ETag`, and to cache
+  successful preflight checks for 10 minutes.
+- Verified the allowed-origin preflight path for both AI proxy routes with server tests and a live dev-server probe.
+
 ## 2026-06-18 - feat: add backend readiness and graceful shutdown
 
 - Changed `/readyz` from a static liveness response into a real readiness probe backed by the server store:

@@ -3979,7 +3979,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] Blobs: `PUT /v1/blobs/:hash` (verify the bytes hash to `:hash`, size cap, store if absent),
       `GET /v1/blobs/:hash` (immutable / long cache headers), `HEAD` for existence; auth + refcount on link.
       Raw authenticated PUT/GET/HEAD is done; remaining: link blob hashes to workspaces from the sync/artifact flow.
-- [ ] WS origin policy / CORS aligned to the SPA origin.
+- [x] WS origin policy / CORS aligned to the SPA origin.
 - [x] Document the handshake: HTTP-issued token → carried as gRPC metadata on every RPC.
 
 ### 7.7 Client integration (wasm app) ★

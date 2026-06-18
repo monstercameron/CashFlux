@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend AI proxy CORS preflight.** The backend now answers local SPA preflight requests for
+  `/v1/ai/chat` and `/v1/ai/vision`, exposes response metadata headers, and caches successful preflights
+  so browser-based AI proxy calls can reach the local dev server.
 - **Backend readiness and graceful shutdown.** `/readyz` now verifies the SQLite store is configured,
   pingable, and migrated before reporting ready, while `cashflux-server` now drains through
   `http.Server.Shutdown` on interrupt or SIGTERM instead of exiting abruptly.

@@ -162,6 +162,33 @@ func TestAIKeyEndpointCORS(t *testing.T) {
 	}
 }
 
+func TestAIProxyEndpointCORS(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token", AppOrigin: "http://127.0.0.1:8080"})
+	for _, path := range []string{"/v1/ai/chat", "/v1/ai/vision"} {
+		req := httptest.NewRequest(http.MethodOptions, path, nil)
+		req.Header.Set("Origin", "http://127.0.0.1:8080")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Headers", "authorization,content-type")
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("%s preflight status = %d, want 204", path, rr.Code)
+		}
+		if rr.Header().Get("Access-Control-Allow-Origin") != "http://127.0.0.1:8080" {
+			t.Fatalf("%s allow-origin = %q", path, rr.Header().Get("Access-Control-Allow-Origin"))
+		}
+		if !strings.Contains(rr.Header().Get("Access-Control-Allow-Methods"), "POST") {
+			t.Fatalf("%s allow-methods = %q", path, rr.Header().Get("Access-Control-Allow-Methods"))
+		}
+		if !strings.Contains(rr.Header().Get("Access-Control-Expose-Headers"), "ETag") {
+			t.Fatalf("%s expose-headers = %q", path, rr.Header().Get("Access-Control-Expose-Headers"))
+		}
+		if rr.Header().Get("Access-Control-Max-Age") != "600" {
+			t.Fatalf("%s max-age = %q", path, rr.Header().Get("Access-Control-Max-Age"))
+		}
+	}
+}
+
 func TestGRPCBridgeEndpointMountedAndOriginChecked(t *testing.T) {
 	cfg := Config{
 		AuthMode:              "token",
