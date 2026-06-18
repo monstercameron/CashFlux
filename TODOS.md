@@ -58,16 +58,19 @@ ordered reflow + size-aware packing.
       reflow, resize calls `ResizeItem` + reflow. Verified in-browser: default arrangement pixel-identical.
 - [ ] UI polish (deferred): live drag-over reflow PREVIEW (currently reflows on drop, not during drag);
       prefer pointer events over HTML5 DnD for touch.
-- [ ] **Animate reorder**: tiles that shift during a reflow move smoothly, iOS-home-screen style.
-      CSS-grid placement changes don't transition natively → use a FLIP technique (measure old/new
-      rects, transform from old→new, transition the transform to zero) keyed by widget id.
-- [ ] **Animate resize**: growing/shrinking a tile's span scales smoothly rather than snapping
-      (transition the cell, FLIP the neighbors that reflow around it). Pairs with the reorder FLIP.
+- [x] **Animate reorder** AND **animate resize**: DONE via a FLIP shim (`web/flip.js`,
+      `cashfluxFlipBento`) — it records each tile's screen position, and on the next layout change jumps
+      moved tiles back to their old spot (transition:none) then transitions the offset to zero next frame,
+      so any reflow (drag-reorder, resize, auto-layout switch) glides. A `ui.UseEffect` in the dashboard
+      fires it, keyed on a layout signature (items order/spans/importance + mode). Stateful in JS
+      (leak-free) and honors `prefers-reduced-motion`. Verified: forcing a tile to move then calling the
+      shim applies the inverse `translate(...)` with transition:none (the FLIP invert step).
 - [x] **Resize handles only while holding Shift**: `.rz` hidden by default, revealed when the root has
       `data-resize` (toggled by a global Shift keydown/keyup listener + window-blur clear in
       `internal/app/resizereveal.go`), with an opacity fade. Keeps the bento visually calm.
 - [~] Verify: multi-cell tiles never overlap + resize re-packs — **done** (Pack model + render verified
-      in-browser). Still TODO: smooth FLIP animations and a live drag-over preview (reflow is on drop).
+      in-browser); smooth FLIP animations — **done** (above). Still open: a live drag-over preview (reflow
+      lands on drop) and pointer-events over HTML5 DnD for touch (the deferred top item).
 
 ### B3. Routing sometimes duplicates the whole page ★
 
@@ -944,6 +947,15 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
 
 _Note: C15's CSS fix (scoping `nav .rail-section`) was correct for its issue, but the "empty collapsed
 rail" is really this `viewBox` bug — C28 supersedes the icon symptom._
+
+### C29. Automated loop test log (Playwright sweeps, analyze-only)
+Running log of the recurring 10-min Playwright sweep. New defects get their own C-item; routine
+results are summarized here so the backlog doesn't bloat.
+- **2026-06-18 #1** — Console/network/pageerror sweep across all 14 routes: **0 errors**. Every route
+  loads with the correct `document.title` and exactly **one `<h1>`** (good for SR heading nav).
+  **B1 deep-link refresh appears RESOLVED:** a hard `reload()` of `/accounts` returns **HTTP 200**
+  (no "404 page not found") — previously the open B1 item. _Verify the other deep-link routes + offline
+  before checking B1 off._ No new UI/UX defects this pass.
 
 ---
 

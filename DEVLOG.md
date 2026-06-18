@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature B2: FLIP animations for the dashboard bento
+
+- Grid placement changes don't transition, so animating tile reorder/resize needs FLIP. Did it with a
+  stateful JS shim `web/flip.js` (`cashfluxFlipBento`): it remembers each `.bento > .w[data-widget]`
+  tile's screen position; on the next call it measures the new position, jumps the tile back to the old
+  spot (transition:none + translate), forces a reflow, then on the next frame transitions the offset to
+  zero — the classic FLIP. State lives in JS, so there are no per-move Go `js.FuncOf` callbacks to leak.
+  Honors prefers-reduced-motion (records positions only).
+- Go side: a `ui.UseEffect` in `Dashboard` invokes the shim, keyed on a layout signature (mode + each
+  item's id/spans/importance) so it fires exactly when the arrangement could change — not on every data
+  tick. Loaded flip.js in index.html + SW CORE (cache v12→v13).
+- Covers both "animate reorder" and "animate resize" (any reflow animates), and the auto-layout switch.
+- Verified the mechanism in the oracle: `cashfluxFlipBento` is loaded; after forcing a tile to a new
+  grid-row and calling it, the tile gets the inverse `translate(250px,-1221px)` with transition:none (the
+  FLIP invert) — the rAF then plays it to zero. (The time-based glide itself isn't headless-observable.)
+- Still open under B2: a live drag-over *preview* (reflow lands on drop) and pointer-events for touch.
+
 ## 2026-06-18 — C9: accounts-row overflow menu
 
 - Account rows exposed six actions each — visually busy. Kept the primary three inline (Transactions /

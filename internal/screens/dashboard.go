@@ -5,6 +5,7 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -36,6 +37,23 @@ func Dashboard() ui.Node {
 		return Div(Class("bento"), Div(Class("w"), Div(Class("wbody"), P(Class("empty"), "App state is not ready yet."))))
 	}
 	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
+
+	// Smoothly animate tiles when the bento arrangement changes (drag-reorder,
+	// resize, auto-layout switch) via the FLIP shim (web/flip.js). Keyed on a
+	// signature of the layout, so it fires exactly when the arrangement could
+	// move — not on every data tick. (B2)
+	layoutItems := uistate.UseLayoutItems().Get()
+	layoutMode := uistate.UseLayoutMode().Get()
+	flipSig := string(layoutMode)
+	for _, it := range layoutItems {
+		flipSig += fmt.Sprintf("|%s:%dx%d:%d", it.ID, it.ColSpan, it.RowSpan, it.Importance)
+	}
+	ui.UseEffect(func() func() {
+		if fn := js.Global().Get("cashfluxFlipBento"); fn.Type() == js.TypeFunction {
+			fn.Invoke()
+		}
+		return nil
+	}, flipSig)
 
 	accounts := app.Accounts()
 	txns := app.Transactions()

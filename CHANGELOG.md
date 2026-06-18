@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Dashboard tiles animate when they rearrange (B2):** dragging, resizing, or switching the auto-layout
+  mode now glides the tiles to their new spots instead of snapping, via a FLIP shim (`web/flip.js`).
+  Honors "reduce motion." Backed by a layout-signature-keyed effect so it fires only when the arrangement
+  actually changes.
 - **Envelope budgeting (D6):** the budgeting-method selector now offers **Envelope** — each budget's
   unspent funds carry forward to the next period. The Budgets screen shows a per-budget "Envelope
   balance: $X" (red when overdrawn) under a note. The balance accumulates `limit − spent` over every
