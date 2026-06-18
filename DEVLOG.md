@@ -33,6 +33,8 @@ problems and fixes, and what's next.
   `Jan 2`.
 - Browser verification set `cashflux:prefs.dateStyle` to `us` and confirmed the bills widget rendered
   slash-form dates such as `06/18/2026`.
+- Kept the implementation isolated to `dashboard.go`; the parallel workflow commit landed while this was
+  waiting on cooldown.
 
 ## 2026-06-18 — feat: workspace management commands in the palette + HEAD health check
 

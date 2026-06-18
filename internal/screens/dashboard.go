@@ -192,6 +192,7 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, onRem
 // minimum payment for each liability account that has them, soonest first.
 func upcomingBillsWidget(app *appstate.App) ui.Node {
 	now := time.Now()
+	pr := uistate.UsePrefs().Get()
 	type bill struct {
 		name   string
 		due    time.Time
@@ -221,7 +222,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 			}
 			rows = append(rows, Div(Class("flex justify-between"),
 				Span(b.name),
-				Span(Class(dueTone), b.due.Format("Jan 2")),
+				Span(Class(dueTone), pr.FormatDate(b.due)),
 				Span(Class("font-display fig text-down w-24 text-right"), fmtMoney(b.amount.Neg())),
 			))
 		}

@@ -9,7 +9,8 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - **Command palette: Cmd/Ctrl+K (§6.6).** Press Cmd/Ctrl+K to open a searchable palette — type to filter,
   ↑/↓ to move, Enter to run, Esc or a backdrop click to close. It lists every screen (jump to Dashboard,
-  Accounts, Planning, Workflows, …), quick actions (Add a transaction, Keyboard shortcuts), and a
+  Accounts, Planning, Workflows, …), quick actions (Add a transaction, toggle light/dark theme, collapse
+  the sidebar, Keyboard shortcuts), and a
   full **workspace management** — switch to any other workspace, or create / export / import one — straight
   from the keyboard. Built as a self-contained DOM overlay owned by the shortcut layer, with delegated row
   clicks (no per-row listeners); the command list rebuilds on each open so the workspace entries stay current.
@@ -297,6 +298,8 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Upcoming bill dates honor the display preference (UX audit §6.3).** The dashboard bills widget now uses
+  the shared date formatter instead of hardcoding `Jan 2`.
 - **"When a transaction is added" workflows now fire from every add path (was: quick-add only).** The
   trigger was wired into a single screen, so adding a transaction via the inline editor, a transfer, a
   duplicate, or CSV/image import never ran the workflow. Firing is now centralized in `PutTransaction`
