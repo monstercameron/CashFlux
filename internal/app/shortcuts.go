@@ -251,6 +251,20 @@ func buildPaletteCommands() []paletteCmd {
 			})
 		}},
 	)
+	// Passcode lock (adaptive to current state). Labels are hardcoded for the MVP;
+	// an i18n pass over the app-lock UI is a follow-up.
+	if loadAppLock().Enabled {
+		cmds = append(cmds,
+			paletteCmd{label: "Lock now", run: showAppLockGate},
+			paletteCmd{label: "Change passcode…", run: setPasscodeFlow},
+			paletteCmd{label: "Remove passcode lock", run: func() {
+				disableAppLock()
+				js.Global().Call("alert", "Passcode lock removed.")
+			}},
+		)
+	} else {
+		cmds = append(cmds, paletteCmd{label: "Set passcode lock…", run: setPasscodeFlow})
+	}
 	return cmds
 }
 

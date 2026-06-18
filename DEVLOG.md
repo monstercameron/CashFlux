@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: passcode lock MVP (B17) — gate + palette management, collision-free
+
+- Built the functional lock on top of the pure `applock` core, deliberately keeping it out of the parallel
+  session's hot files: persistence in a new `internal/app/applock.go` (load/save Config at user-global
+  `cashflux:applock`, `crypto/rand` salt, enable/disable); a self-contained DOM unlock gate in new
+  `internal/app/applockgate.go` (full-screen `var(--bg)` cover, password input, Enter/Unlock → constant-time
+  Verify → hide); and management via the Cmd+K palette (adaptive: Set / Change / Lock now / Remove) rather
+  than settings.go. Boot wiring is a single `maybeLockOnBoot()` line in `app.go`.
+- MVP scope: lock-on-reload + manual "Lock now"; passcode set via native prompt×2 (confirm). Deferred:
+  idle auto-lock (the pure `ShouldAutoLock` is ready), an in-app passcode form, focus-trap, and i18n of the
+  app-lock strings (hardcoded for now — flagged).
+- New files were untracked, so committed via `git add` then `git commit -- <paths>` (learned that from the
+  pure-core commit). Verified gofmt + worktree build at HEAD (exit 0); disk build red only on parallel WIP.
+
 ## 2026-06-18 — feat: make workflows genuinely valuable (acted on a value critique)
 
 - A product critic judged the workflow engine "a demo with one real button": txn-added conditions/actions
@@ -47,6 +61,8 @@ problems and fixes, and what's next.
   `web/index.html`: selected rows now carry `row selected`, and `.row.selected .check` gets an accent
   background/border.
 - The base `.check` now has a transparent border to avoid layout shift when selection turns the border on.
+- Browser verification confirmed the selected checkbox computes to the accent background, border, and text
+  color with `box-sizing:border-box`.
 
 ## 2026-06-18 — fix: UX polish §6.11 — light-theme soon badge
 

@@ -83,6 +83,9 @@ func Run() {
 	// Global keyboard shortcuts (Alt+1..9 → primary nav sections).
 	wireKeyboardShortcuts()
 
+	// If a passcode lock is set, cover the app with the unlock gate.
+	maybeLockOnBoot()
+
 	// Persist the dataset to localStorage so it survives a reload.
 	startDatasetAutosave()
 
