@@ -287,6 +287,16 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Error toasts linger longer + a labelled dismiss (§6.9).** Error notices now stay up 7.5s (vs 4.5s for
+  ordinary notices) so there's time to read what failed, and the toast's dismiss button gained an
+  `aria-label` to go with its title. (Errors already announced assertively via `role="alert"`/`aria-live`.)
+- **Currency KPI widgets no longer drop a cent.** A custom-page KPI formatted as currency truncated
+  `value × 100` to an int, which floating-point error could round down (e.g. $15,343.50 → $15,343.49). It
+  now rounds to the nearest minor unit. Found during the custom-pages/workflow end-to-end pass (10 user
+  stories, `internal/appstate/scenarios_test.go` + browser verification; see `docs/CUSTOM_PAGES_STORIES.md`).
+- **Custom-field keys are validated before they can pollute data (UX audit §6.10).** Custom field
+  definitions now reject keys with spaces, punctuation, or reserved metadata names; the add-field form
+  also exposes the allowed letters/numbers/underscore pattern to the browser.
 - **Allocate score bars are labelled for sighted and assistive users (UX audit §6.10).** Each allocation
   suggestion now shows an inline `Score N%` label and exposes its bar as a real `progressbar` with
   `aria-valuenow`, so the rank score is no longer a purely visual fill.

@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -233,7 +234,9 @@ func cpKPIBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	var text string
 	if format == widgetspec.FormatCurrency {
 		div := minorPerMajor(ctx.Base)
-		text = fmtMoney(money.New(int64(val*div), ctx.Base))
+		// Round to the nearest minor unit; a bare int64(val*div) truncates and can
+		// drop a cent due to float representation (e.g. 15343.50 → 1534349).
+		text = fmtMoney(money.New(int64(math.Round(val*div)), ctx.Base))
 	} else {
 		text = widgetspec.Format(val, format)
 	}

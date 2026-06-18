@@ -1,5 +1,33 @@
 # CashFlux — Developer Journal
 
+
+## 2026-06-18 — test: 10 user stories e2e for custom pages + workflows
+
+- Wrote `docs/CUSTOM_PAGES_STORIES.md` (10 stories + acceptance + edge cases) and
+  `internal/appstate/scenarios_test.go` driving every story through the real appstate API: KPI dashboards
+  (formula eval), recent-activity list source, page persist + non-overlapping `Pack` + widget delete,
+  artifacts (CSV parse → table rows, image data URL), page organize (reorder/hide/unique re-slug),
+  overspend alert firing on a qualifying txn (and not otherwise), manual apply-rules workflow with dry-run
+  (no change) then real run (categorizes), plus edge cases (bad formula errors, false condition no-ops,
+  export→import round trip). All green.
+- Browser e2e: seeded a multi-page workspace and screenshotted a stress page with all six widget types
+  (4 KPIs + list + chart + table + text + image) packed without overlap, a second page (accounts list),
+  the hidden-pages section, and inter-page navigation — all correct.
+- Bug found + fixed: currency KPIs truncated `value×100` to int, so float error could drop a cent
+  ($15,343.50 → $15,343.49). Now `math.Round`. No other defects surfaced.
+
+Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
+problems and fixes, and what's next.
+
+## 2026-06-18 — fix: UX polish §6.10 — custom-field key validation
+
+- Moved custom-field key format rules into the pure `internal/customfields` layer: keys must be ASCII
+  letters/numbers/underscores and cannot shadow reserved metadata names (`id`, `entityType`, `type`,
+  `custom`, etc.). `Def.Validate` now enforces this before persistence; table tests cover valid keys,
+  spaces, punctuation, and case-insensitive reserved names.
+- Added a matching browser hint on the Custom Fields add form (`pattern="[A-Za-z0-9_]+"` + localized
+  title), so users see the allowed format before appstate rejects the save.
+
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
