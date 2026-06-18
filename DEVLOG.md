@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Raise ledger test coverage (87% → 94%)
+
+- Next package in the coverage sweep. `ledger` was 86.5%; the misses were the error branches of the
+  money-aggregation functions — opening-balance currency mismatch, a transaction currency that differs from
+  its account (failing `Add`), and a balance the base-only rate table can't convert.
+- Added `ledger_edge_test.go`: opening-mismatch + Add-mismatch errors for `ClearedBalance`/`RunningBalances`;
+  the unconvertible-currency error in `PeriodTotals`; both `NetWorth` and `NetByOwner` error paths
+  (balance-compute and convert); plus a positive `NetByOwner` test for same-owner accumulation and the
+  archived-account skip. `ledger` → **93.6%** (`ClearedBalance` 100%). The residual uncovered lines are
+  defensive `Add`/`Sub` mismatch branches that can't trigger — conversions always return base currency, so
+  the accumulator and operand always share it.
+
 ## 2026-06-18 — Raise budgeting test coverage (83% → 95%)
 
 - Continued the pure-package coverage sweep. `budgeting` was 82.9%; per-function profiling showed two
