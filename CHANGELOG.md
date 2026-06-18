@@ -297,7 +297,7 @@ and every commit updates this file under `Unreleased`.
 ### Fixed
 - **Rail navigation items have a real minimum hit area (UX audit §6.1).** Sidebar nav rows now carry
   explicit `min-w-10 min-h-10` guards, so icon-only collapsed items stay comfortably tappable instead of
-  relying only on padding.
+  relying only on padding. Browser verification covered the Dashboard row carrying both guards.
 - **Error toasts linger longer + a labelled dismiss (§6.9).** Error notices now stay up 7.5s (vs 4.5s for
   ordinary notices) so there's time to read what failed, and the toast's dismiss button gained an
   `aria-label` to go with its title. (Errors already announced assertively via `role="alert"`/`aria-live`.)

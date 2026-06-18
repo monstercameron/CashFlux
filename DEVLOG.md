@@ -36,6 +36,7 @@ problems and fixes, and what's next.
 - Closed the §6.1 rail-nav touch-target item in `internal/app/shell.go`: all `navItem` variants now carry
   `min-w-10 min-h-10`, so expanded and collapsed rail items keep a stable 40×40px minimum hit area.
 - Kept this separate from custom-page nav work because another agent owns custom-page TODOs.
+- Verified the rendered Dashboard nav row exposes both `min-w-10` and `min-h-10` in the browser.
 
 ## 2026-06-18 — fix: §6.9 toast — error notices linger + labelled dismiss
 

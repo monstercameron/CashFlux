@@ -273,12 +273,12 @@ type navItemProps struct {
 // of how the nav list changes (the On*-hooks-in-loops rule).
 func navItem(props navItemProps) uic.Node {
 	nav := router.UseNavigate()
-	cls := "nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer"
+	cls := "nav nv flex min-w-10 min-h-10 items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer"
 	switch {
 	case props.Active:
-		cls = "nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer bg-[#1c1c1e] text-fg font-medium"
+		cls = "nv flex min-w-10 min-h-10 items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer bg-[#1c1c1e] text-fg font-medium"
 	case props.Muted:
-		cls = "nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer text-faint"
+		cls = "nav nv flex min-w-10 min-h-10 items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer text-faint"
 	}
 	iconClass := props.IconClass
 	if iconClass == "" {
