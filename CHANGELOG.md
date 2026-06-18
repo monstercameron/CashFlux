@@ -80,6 +80,9 @@ and every commit updates this file under `Unreleased`.
   transactions re-convert net worth, period totals, and budget spend when the FX rate changes.
 - **Freshness reminder task coverage.** The dashboard's "Remind me" stale-balance nudge now goes through
   appstate, with a native test proving it creates an open medium-priority task from a nudge source.
+- **Net-worth assembly behavior coverage.** Ledger tests now explicitly prove household net worth equals
+  assets minus liabilities, owner rollups sum back to the household total, and restored archived accounts
+  re-enter the net-worth figures.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

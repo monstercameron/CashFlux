@@ -417,6 +417,56 @@ func TestNetWorthRollupsMultiMemberMultiCurrencyArchived(t *testing.T) {
 	}
 }
 
+func TestNetWorthRollupsSumToHouseholdAndRestoreArchived(t *testing.T) {
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.20}}
+	accounts := []domain.Account{
+		{ID: "m1asset", OwnerID: "m1", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(100000)},
+		{ID: "m2asset", OwnerID: "m2", Class: domain.ClassAsset, Currency: "EUR", OpeningBalance: money.New(50000, "EUR")},
+		{ID: "shared", OwnerID: domain.GroupOwnerID, Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(25000)},
+		{ID: "m1debt", OwnerID: "m1", Class: domain.ClassLiability, Currency: "USD", OpeningBalance: usd(-30000)},
+		{ID: "restored", OwnerID: "m2", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(40000), Archived: true},
+	}
+
+	net, assets, liabilities, err := NetWorth(accounts, nil, rates)
+	if err != nil {
+		t.Fatalf("NetWorth archived: %v", err)
+	}
+	if got, err := assets.Sub(liabilities); err != nil || !got.Equal(net) {
+		t.Fatalf("assets - liabilities = %v/%v, want net %v", got, err, net)
+	}
+	byOwner, err := NetByOwner(accounts, nil, rates)
+	if err != nil {
+		t.Fatalf("NetByOwner archived: %v", err)
+	}
+	sum := money.Zero("USD")
+	for owner, bal := range byOwner {
+		var err error
+		sum, err = sum.Add(bal)
+		if err != nil {
+			t.Fatalf("sum owner %q: %v", owner, err)
+		}
+	}
+	if !sum.Equal(net) {
+		t.Fatalf("owner rollups sum = %v, want household net %v", sum, net)
+	}
+
+	accounts[4].Archived = false
+	restoredNet, _, _, err := NetWorth(accounts, nil, rates)
+	if err != nil {
+		t.Fatalf("NetWorth restored: %v", err)
+	}
+	if !restoredNet.Equal(usd(195000)) {
+		t.Fatalf("restored net = %v, want 195000 USD", restoredNet)
+	}
+	restoredByOwner, err := NetByOwner(accounts, nil, rates)
+	if err != nil {
+		t.Fatalf("NetByOwner restored: %v", err)
+	}
+	if !restoredByOwner["m2"].Equal(usd(100000)) {
+		t.Fatalf("m2 restored rollup = %v, want 100000 USD", restoredByOwner["m2"])
+	}
+}
+
 func TestUtilization(t *testing.T) {
 	cases := []struct {
 		name           string

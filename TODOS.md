@@ -2737,9 +2737,9 @@ Savings KPIs) · `period.Window`.
 #### D18. Net-worth assembly across members & group ★
 **Workstream:** mix individual and shared assets/liabilities and verify the net-worth breakdown.
 **Touches:** Accounts (scope/owner/class) · `ledger.NetWorth` + per-member/group rollups · Members ("Net worth by member") · Dashboard.
-- [ ] Assert net worth = assets − liabilities in base currency, matching the Accounts header and KPI.
-- [ ] Assert per-member rollup sums to the household total (individual + group).
-- [ ] Archive an account; assert it drops out of net worth but is restorable.
+- [x] Assert net worth = assets − liabilities in base currency, matching the Accounts header and KPI.
+- [x] Assert per-member rollup sums to the household total (individual + group).
+- [x] Archive an account; assert it drops out of net worth but is restorable.
 - [x] unit: `ledger.NetWorth` + rollup tests (multi-member, multi-currency, archived).
 
 #### D19. Member add/reassign/delete ripples ★

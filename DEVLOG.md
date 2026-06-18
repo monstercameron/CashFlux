@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - test: D18 net-worth assembly behavior
+
+- Added explicit D18 coverage that `ledger.NetWorth` satisfies assets-minus-liabilities and that
+  `NetByOwner` per-owner rollups sum to the household net-worth total.
+- The same test keeps an account archived, verifies it is excluded from the rollups, then restores it and
+  proves the account re-enters both household net worth and the owning member's rollup.
+
 ## 2026-06-18 - test: D17 freshness reminder task
 
 - Moved the dashboard stale-balance "Remind me" task shape into `appstate.CreateFreshnessReminderTask`,
