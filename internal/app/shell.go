@@ -469,7 +469,7 @@ func ResolutionControl() uic.Node {
 				atom.Set(w.SetResolution(r, time.Now()))
 			},
 		}),
-		Select(Class("rstep text-[12px]"), Attr("title", uistate.T("resolution.jumpTo")), OnChange(onPreset),
+		Select(Class("rstep text-[12px]"), Attr("aria-label", uistate.T("resolution.jumpTo")), Attr("title", uistate.T("resolution.jumpTo")), OnChange(onPreset),
 			Option(Value(""), SelectedIf(true), uistate.T("resolution.jumpTo")),
 			Option(Value("this"), uistate.T("resolution.presetThis")),
 			Option(Value("last"), uistate.T("resolution.presetLast")),

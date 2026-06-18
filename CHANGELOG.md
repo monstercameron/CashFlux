@@ -478,8 +478,8 @@ and every commit updates this file under `Unreleased`.
   Cleared status, Sort by, Filter by account/category, …). The same fix now also covers the **budgets,
   goals, and accounts** add/edit forms (category, owner, period, type, linked-account, and target/lock
   date controls), the **planning** recurring-item form (cadence/account/category), and the **settings**
-  panel (base currency, budget method, AI model, display scale, date format, language) — completing the
-  C47 form-labelling pass.
+  panel (base currency, budget method, AI model, display scale, date format, language), and the top-bar
+  time-period **"Jump to…" select** — completing the C47 form-labelling pass.
 - **The top bar no longer shows a scrollbar — it wraps instead (C34).** When the breadcrumb, time
   controls, and "+ Add" don't fit (notably in Custom-range mode around 1100px wide), the bar now wraps
   onto a second row at any width instead of becoming a horizontal scroll container that stole height.

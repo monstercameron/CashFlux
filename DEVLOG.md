@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — a11y: label the top-bar "Jump to…" select (C47 tail)
+
+- Closed the last concrete C47 gap in the app chrome: the resolution control's "Jump to…" `<select>`
+  (shell.go) had only a `title`, no programmatic name. Added `aria-label`. Audited the rest of the top
+  bar — the segmented Week/Month/Quarter control and the from/to steppers are labeled buttons, and the
+  jump-to select was the only bare control — so the dashboard chrome is now clean.
+- While here, confirmed C41's "one-tap This period reset" (asked for in #64) already exists in the
+  resolution control (shown when the window isn't the current period), and that C34's overflow fix
+  already un-clips the "+ Add" menu (C43's remaining z-index portal is a separate, larger refactor —
+  left for now). Build green.
+
 ## 2026-06-18 — fix: resolution switch re-anchors to now, not the window start (C41)
 
 - `Window.SetResolution(r)` re-snapped `w.From`/`w.To` (the existing window start, which is ≤ now) to the
