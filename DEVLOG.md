@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Reports screen — wire the reports core into the UI (B21, step 5)
+
+- The UI-last step for the first reports: a new `screens.Reports()` (`reports_screen.go`) registered as
+  `/reports` in the Tools group. It reads the shared top-bar period window (`uistate.UsePeriod().Get()`,
+  `.Range()` for the period and `.Shift(-1).Range()` for the prior comparison), then renders
+  `reports.IncomeVsExpense` as a stat grid (income/spending/net/savings-rate), `reports.SpendingNarrative`
+  as a plain-English paragraph, and `reports.SpendingByCategory(compare=true)` as a category list with a
+  green ▼ / red ▲ percent-change badge. Category rows are plain text (no On* hooks), so the loop is safe.
+- Reused existing helpers (`fmtMoney`, `stat`, `accentFor`, the `text-up/down` tones) and labels
+  (`dashboard.income/spending/savingsRate`); added `reports.{net,byCategory,empty,uncategorized}`. No
+  charts yet (follow-up). Surgical one-line route registration to keep the shared `screens.go` merge-safe.
+  wasm build green, gofmt clean, full native suite still green.
+
 ## 2026-06-18 — feat: reports — top movers + narrative DRY (B21, step 4)
 
 - Added `reports.TopMovers(rows, n)`: ranks compared categories by absolute change vs the prior period

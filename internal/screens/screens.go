@@ -43,6 +43,7 @@ func All() []Route {
 		{Path: "/todo", Label: "To-do", Title: "To-do", Subtitle: "Budgeting tasks and reminders", Phase: 1, Group: GroupPrimary, View: Todo},
 		{Path: "/planning", Label: "Planning", Title: "Planning", Subtitle: "Scenarios and projections", Phase: 2, Group: GroupTools, View: Planning},
 		{Path: "/allocate", Label: "Allocate", Title: "Allocate", Subtitle: "Where to put your money next", Phase: 2, Group: GroupTools, View: Allocate},
+		{Path: "/reports", Label: "Reports", Title: "Reports", Subtitle: "Spending, income, and trends for the period", Phase: 2, Group: GroupTools, View: Reports},
 		{Path: "/insights", Label: "Insights", Title: "Insights", Subtitle: "AI analysis and advice", Phase: 2, Group: GroupTools, View: Insights},
 		{Path: "/documents", Label: "Documents", Title: "Documents", Subtitle: "Import statements and receipts with AI", Phase: 2, Group: GroupTools, View: Documents},
 		{Path: "/customize", Label: "Customize", Title: "Customize", Subtitle: "Custom fields and formulas", Phase: 2, Group: GroupTools, View: Customize},

@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reports screen (B21).** A new **Reports** item in the Tools nav: for the period chosen in the top bar
+  it shows income / spending / net / savings-rate, a plain-English summary of where the money went, and
+  spending by category compared to the prior period (each category's amount with a green ▼ / red ▲ change
+  badge). Works with no AI key — it's all from the deterministic reports core, so the figures match the
+  dashboard. Charts are a follow-up.
 - **Reports engine — the pure reporting core (B21, internal).** New `internal/reports` package with the
   first report: spending by category over a period, sorted largest-first, with an optional comparison to
   the prior period (each category's prior amount + percent change, and a union so a category that dropped
