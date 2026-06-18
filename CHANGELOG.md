@@ -63,6 +63,8 @@ and every commit updates this file under `Unreleased`.
   animation commit so this test/TODO closeout still updates the changelog.
 - **Extract/CSV import coverage.** The CSV import unit path now proves reordered friendly columns resolve
   account, category, and member names while preserving amount/date/tags metadata.
+- **Config layering coverage.** Appstate tests now document the current defaults-to-household settings
+  behavior for budget methodology, including the absence of member-level methodology overrides.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
@@ -392,6 +394,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **The left rail no longer shows a scrollbar (C31).** When the nav overflows (e.g. as "My pages" grows)
+  it stays scrollable by wheel/trackpad/keyboard, but the native scrollbar is hidden, matching the clean
+  sidebar look.
 - **No more browser prompts — Goal "Contribute" and Account "Set balance" use in-app forms (§6.8).** Both
   now reveal an inline amount field (Add/Cancel), matching the inline-edit pattern, instead of a native
   `window.prompt` — better on mobile, keyboard-consistent, and styled. This removes the last `window.prompt`

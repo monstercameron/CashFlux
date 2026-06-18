@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: hide the left-rail scrollbar (C31)
+
+- The rail's `nav` (`overflow-y-auto`) had no scrollbar styling, so it showed the default OS bar once it
+  overflowed. Added `aside.rail nav { scrollbar-width:none }` + `::-webkit-scrollbar{width:0;display:none}`
+  — hidden but still scrollable by wheel/trackpad/keyboard. CSS-only (web/index.html). (Skipped the
+  optional edge-fade mask to avoid clipping the top/bottom nav items.)
+- Disk wasm build not needed (CSS); served via index.html. Committed by pathspec.
+
 ## 2026-06-18 — fix: in-app "Set balance" form; remove the last native prompt (§6.8 complete)
 
 - Converted Accounts "Set balance" to an inline form in `AccountRow` (settingBal state + amount input +
@@ -142,6 +150,12 @@ problems and fixes, and what's next.
   `account`/`category`/`member` names.
 - The test asserts those names resolve to IDs and the imported row keeps amount, date, cleared state, and
   semicolon-separated tags, complementing the existing `extract.ParseRows` parsing/dedupe tests.
+
+## 2026-06-18 — test: config layering current contract
+
+- Added a resolver-layer test for budget methodology: empty settings parse to the simple default, household
+  settings override to zero-based, and member records do not change methodology because there is no
+  member-level override model today.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 

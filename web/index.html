@@ -423,6 +423,11 @@
       /* squared progress bars (consistent radii) */
       .bento [class*="rounded-full"][class*="overflow-hidden"] { border-radius:2px; }
 
+      /* Hide the left-rail's scrollbar but keep it scrollable (wheel/trackpad/
+         keyboard) — the nav overflows once "My pages" grows (C31). */
+      aside.rail nav { scrollbar-width: none; }
+      aside.rail nav::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
       /* sidebar collapse */
       aside.rail { transition:width .18s ease; }
       aside.rail.collapsed { width:58px; }
