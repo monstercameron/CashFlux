@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — tests D2: budgeting threshold boundaries
+
+- With the tractable feature backlog thin (remaining items are the B10 redesign, B2 FLIP animations, and
+  the envelope carry-forward view — all large or hard to verify headlessly), spent this iteration
+  hardening the package I just extended. Added `internal/budgeting/threshold_test.go`: white-box boundary
+  tests for `classify` (`==limit` → Over, `==near%` → Near, one cent below → OK; two thresholds) and
+  `percent` (including the zero-limit guard that returns 100/0 instead of dividing by zero). 12 cases.
+- Test-only, native — guards the exact-boundary behavior so a future tweak to the `>=` comparisons can't
+  silently shift a budget's state off by a cent. Closes the D2 "unit" item.
+
 ## 2026-06-18 — feature D6: budgeting method (Simple / Zero-based)
 
 - Built the budget-methodology selector. Model: `budgeting.Methodology` (simple/zero-based/envelope) +

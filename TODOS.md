@@ -952,7 +952,9 @@ Savings KPIs) · `period.Window`.
 - [ ] Cross "over"; assert "Over budget" text + tone, and the summary "left" goes negative correctly.
 - [ ] Delete/adjust the txn back under; assert all indicators revert.
 - [ ] Assert the state is conveyed by **text + shape**, not color alone (B15 color-cue rule).
-- [ ] unit: `budgeting` threshold table test covers exact boundary (==limit, ==near%) values.
+- [x] unit: `budgeting` threshold table test covers exact boundary (==limit, ==near%) values — added
+      `TestClassifyBoundaries`/`TestClassifyZeroLimit`/`TestPercentBoundaries` (12 cases): `==limit` is
+      Over, `==near%` is Near, one-cent-below is OK, plus the zero-limit guards (no divide-by-zero).
 
 #### D3. Category reassign-on-delete ripples into budgets & ledger ★
 **Workstream:** delete a category that has both transactions and a budget; reassign to a replacement.
