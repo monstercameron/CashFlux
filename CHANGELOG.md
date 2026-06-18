@@ -130,6 +130,10 @@ and every commit updates this file under `Unreleased`.
   zero-results case is announced too), and the existing visible summary is now `aria-hidden` to avoid a
   double read.
 
+### Removed
+- **Dead `stub` placeholder helper (internal):** the `screens.stub(...)` "Planned · Phase N" placeholder
+  is no longer referenced now that every screen is built, so it was deleted (the project bars dead code).
+
 ### Fixed
 - **A few user-facing strings now go through the language catalog (i18n):** the "Enter a valid opening
   balance" validation message, the dashboard "Couldn't create the reminder" toast, and the dashboard

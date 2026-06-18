@@ -52,17 +52,6 @@ func All() []Route {
 	}
 }
 
-// stub renders a consistent placeholder for a not-yet-built screen.
-func stub(phase int, description string, points ...string) ui.Node {
-	return Section(Class("card"),
-		Div(Class("badge badge-soon"), Textf("Planned · Phase %d", phase)),
-		P(Class("muted"), description),
-		If(len(points) > 0,
-			Ul(Class("muted"), MapKeyed(points, func(s string) any { return s }, func(s string) ui.Node { return Li(s) })),
-		),
-	)
-}
-
 func stat(label, value, accent string) ui.Node {
 	return Div(Class("stat"),
 		Div(Class("stat-label"), label),

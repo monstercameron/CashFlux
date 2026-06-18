@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Remove dead `stub` screen placeholder
+
+- Swept the Go source for `TODO`/`FIXME`/`HACK`/`XXX`/`BUG` markers — none (clean). The one real find was
+  `screens.stub(...)`, the "Planned · Phase N" placeholder for not-yet-built screens. Grepped its call
+  sites: zero (every screen is now a real component). Unused package-level funcs don't fail the Go build,
+  so it had quietly become dead code, which CLAUDE.md forbids.
+- Deleted it. `stat(...)` next to it is still used widely, so it stays. The dot-imported shorthand helpers
+  it used (`Textf`/`Ul`/`Li`/`If`) are still imported for other functions, so no import churn. wasm build +
+  `go vet ./internal/screens` green. (Left the now-orphaned `.badge-soon` CSS class in place — harmless and
+  cheap to keep for any future placeholder.)
+
 ## 2026-06-18 — Move dashboard span math into pure dashlayout (with tests)
 
 - The tile resize arithmetic (`cycleSpan` grow/shrink/wrap, `clampSpan` bound) lived as unexported helpers
