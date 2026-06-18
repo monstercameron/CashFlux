@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Keyboard shortcut: Alt+1…9 jumps to a primary section (§6.6).** Press Alt+1 for Dashboard, Alt+2 for
+  Accounts, and so on down the primary rail nav — move between sections without the mouse. Keys off
+  `KeyboardEvent.code` so it's keyboard-layout independent and never collides with numpad alt-codes, and
+  it stays inert while you're typing in a field. Installed once at boot (`wireKeyboardShortcuts`).
 - **Workflows screen — build, run, and audit automations (Phase D).** A new **Workflows** screen (Tools)
   lets you create an automation (name, trigger — *when I run it* or *when a transaction is added* — an
   optional condition formula, and write-safe actions: create a task, apply rules, notify), enable/disable
@@ -275,6 +279,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Add-menu button uses the shared radius utility (UX audit §6.4).** The top-bar **+ Add** button no
+  longer carries an inline `border-radius` style; it now uses `rounded-[4px]` with the rest of the app's
+  utility-class styling.
 - **Small UX polish (§6.3/§6.4).** Progress bars are a touch thicker (`h-1.5` → `h-2`) so they read in
   dense layouts; the workspace-switcher dropdown's action-group separator gets more breathing room
   (`my-1` → `my-2`).

@@ -80,6 +80,9 @@ func Run() {
 	// Reveal the widgets' resize handles only while Shift is held.
 	wireResizeReveal()
 
+	// Global keyboard shortcuts (Alt+1..9 → primary nav sections).
+	wireKeyboardShortcuts()
+
 	// Persist the dataset to localStorage so it survives a reload.
 	startDatasetAutosave()
 

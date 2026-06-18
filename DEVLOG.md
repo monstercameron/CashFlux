@@ -3,6 +3,36 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: §6.6 keyboard shortcut — Alt+1..9 section jump
+
+- First of the §6.6 keyboard-shortcut items. New file `internal/app/shortcuts.go` +
+  `wireKeyboardShortcuts()` wired in `Run()` after `wireResizeReveal()` (same once-at-boot global-listener
+  pattern). Navigates via the package-level `router.Navigate` (UseNavigate just wraps it, so no component
+  context is needed) to `primaryNav()[n-1].Path`.
+- Robustness: keys off `KeyboardEvent.code` ("Digit1".."Digit9") — layout-independent and excludes the
+  numpad (Alt+numpad = OS alt-codes, which report "Numpad1"); requires Alt without Ctrl/Meta; and bails
+  when focus is in INPUT/TEXTAREA/SELECT/contentEditable so it never eats a keystroke mid-typing.
+- Chose canonical `primaryNav()` order (not the user's reordered/hidden-filtered visible list) — that
+  ordering logic lives in Sidebar via hooks I can't call from a global handler, and canonical order is
+  stable/predictable. Navigating to a hidden screen still works (the route exists).
+- Coordination note: the parallel session is ALSO picking §6 items now (it shipped a §6.4 add-menu radius
+  fix). To avoid duplicate/colliding work I'm steering to the larger new-file 6.6 features rather than the
+  CSS one-liners it's grabbing. New file = minimal collision surface; only `app.go` is shared (one added
+  line). Atomic commit.
+- Verified: gofmt clean, wasm build exit 0, probe ok/200. Can't send Alt+1 headlessly, so the nav itself
+  is logic-verified — confirm in-browser.
+- Next §6.6: a "?" help overlay documenting shortcuts (needs a shell mount point + a small overlay
+  component), and a quick-add hotkey.
+
+## 2026-06-18 — fix: UX polish §6.4 — add-menu radius utility
+
+- Completed another low-collision §6.4 item in `internal/app/addmenu.go`: the top-bar **+ Add** button
+  no longer uses an inline `Style{"border-radius": "4px"}` and now carries `rounded-[4px]` in its class
+  list with the rest of the app styling. This keeps visual shape in the shared utility path and avoids
+  clobbering focus/hover styling with ad-hoc inline CSS.
+- Scope is intentionally one-line UI cleanup + docs. `TODOS.md` is dirty from the parallel backlog/spec
+  expansion, so I did not edit or stage it for this atom.
+
 ## 2026-06-18 — fix: UX polish §6.3/§6.4 — progress bar height + switcher separator
 
 - Two tiny low-collision §6 items in non-screen files: `ui/progress.go` track `h-1.5`→`h-2`, and the
