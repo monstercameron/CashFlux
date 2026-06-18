@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — a11y: label planning + settings controls — C47 complete
+
+- Final C47 batch: the planning recurring-item selects (cadence/account/category) and all six settings
+  selects (base currency, budget method, AI model, display scale, date format, language). Settings rows
+  use a `set-label` *div* (not a `<label for>`), so the selects were programmatically nameless despite the
+  visible text — added `aria-label` from the same key (kept the visible div as the visual label; no double
+  announcement since the div isn't associated).
+- Dashboard's audit-reported "2" controls: the dashboard's interactive chrome (resolution control) is
+  segmented buttons + steppers that already carry names; no bare select/date input remained in
+  dashboard.go — treating C47 as complete for the form-control gap. Build green, gofmt clean.
+
 ## 2026-06-18 — a11y: label budgets/goals/accounts form controls (C47, batch 2)
 
 - Extended the C47 aria-label pass to the budgets, goals, and accounts add + inline-edit forms: category,
