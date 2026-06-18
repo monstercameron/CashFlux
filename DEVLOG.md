@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.9 — collapsed rail flyout clicks
+
+- Closed the collapsed-rail flyout clickability item in `web/index.html`: the hover/focus label now uses
+  `pointer-events:auto` instead of `none`.
+- Because the label is an absolutely positioned child of the nav item, hovering/clicking the label keeps
+  the parent nav item's interactive state available.
+- Browser verification checked the hovered flyout label (`display:block`, `position:absolute`,
+  `pointer-events:auto`); `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — feat: export-data commands in the command palette
 
 - Added "Export JSON" / "Export CSV" to the Cmd+K palette (reusing the existing `exportJSON`/`exportCSV`

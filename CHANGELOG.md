@@ -329,6 +329,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Collapsed rail flyout labels are clickable (UX audit §6.9).** Hover/focus labels in the icon-only rail
+  now accept pointer events instead of letting clicks fall through; hover-state browser verification and
+  `gwc verify` both passed.
 - **Delete buttons have a larger touch target (UX audit §6.1).** `.btn-del` controls now carry an explicit
   32×32px floor instead of relying on the shared 24px icon-button minimum; browser verification confirmed
   the computed size, and `gwc verify` stayed green after the app-lock setup form landed.
