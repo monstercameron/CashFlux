@@ -88,3 +88,13 @@ const dragSrcAtomID = "dashboard:drag-source"
 func UseDragSource() state.Atom[string] {
 	return state.UseAtom(dragSrcAtomID, "")
 }
+
+const dragPreviewAtomID = "dashboard:drag-preview"
+
+// UseDragPreview returns the shared atom holding the id of the widget currently
+// dragged *over* ("" when none). The render reorders the dragged tile in front
+// of it for a live preview, without touching the persisted layout — so the
+// reflow shows during the drag and reverts cleanly if the drop is cancelled (B2).
+func UseDragPreview() state.Atom[string] {
+	return state.UseAtom(dragPreviewAtomID, "")
+}

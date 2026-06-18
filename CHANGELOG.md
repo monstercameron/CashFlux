@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Live drag-over preview on the dashboard (B2):** while dragging a tile, the grid now reflows *during*
+  the drag to show where it will land (FLIP-animated), instead of only rearranging on drop. It's a
+  render-only preview — the saved layout isn't touched, so dropping keeps the arrangement and releasing
+  outside reverts it.
 - **Dashboard tiles animate when they rearrange (B2):** dragging, resizing, or switching the auto-layout
   mode now glides the tiles to their new spots instead of snapping, via a FLIP shim (`web/flip.js`).
   Honors "reduce motion." Backed by a layout-signature-keyed effect so it fires only when the arrangement

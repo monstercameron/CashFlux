@@ -48,6 +48,9 @@ func Dashboard() ui.Node {
 	for _, it := range layoutItems {
 		flipSig += fmt.Sprintf("|%s:%dx%d:%d", it.ID, it.ColSpan, it.RowSpan, it.Importance)
 	}
+	// Include the live drag preview so the FLIP also animates the reflow that
+	// happens while dragging over tiles, not just on drop (B2).
+	flipSig += "|" + uistate.UseDragSource().Get() + ">" + uistate.UseDragPreview().Get()
 	ui.UseEffect(func() func() {
 		if fn := js.Global().Get("cashfluxFlipBento"); fn.Type() == js.TypeFunction {
 			fn.Invoke()

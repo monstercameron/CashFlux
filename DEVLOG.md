@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature B2: live drag-over preview
+
+- The reorder previously only happened on drop; added a live preview during the drag. Clean,
+  low-regression design: a new `uistate.UseDragPreview` atom (the tile under the cursor, set in
+  `OnDragOver`) drives a *render-time* `Move(arranged, dragSrc, indexOf(previewTarget))` in `ui.widget`,
+  so the grid reflows live. Crucially this never touches the persisted `items` — so the drop path is
+  unchanged (still bakes + persists), and a drag-end-without-drop just clears the atoms and the render
+  reverts. No revert-of-persistence bookkeeping needed.
+- Made the FLIP fire during the preview by adding the drag atoms to the dashboard's flip signature, so
+  each dragover animates the reflow.
+- Verified with synthetic DnD: dragstart on kpi-income + dragover on kpi-networth moves income to column
+  1 (preview); dragend without drop reverts it to column 2. Drop persistence path untouched.
+- Remaining B2: pointer-events over HTML5 DnD for touch.
+
 ## 2026-06-18 — B10 closed: resolution control verified + responsive
 
 - Picked up B10 (the "drastic" resolution-control redesign) expecting a big build, but found the redesign

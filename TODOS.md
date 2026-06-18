@@ -56,8 +56,12 @@ ordered reflow + size-aware packing.
       migrates for free (unmarshal into `Item` ignores col/row).
 - [x] UI wired: `widget.go` renders via `Pack(items,4)` (header row offset), drag-drop calls `Move` +
       reflow, resize calls `ResizeItem` + reflow. Verified in-browser: default arrangement pixel-identical.
-- [ ] UI polish (deferred): live drag-over reflow PREVIEW (currently reflows on drop, not during drag);
-      prefer pointer events over HTML5 DnD for touch.
+- [x] Live drag-over reflow PREVIEW — DONE. A `uistate.UseDragPreview` atom (set on `OnDragOver`) drives a
+      render-time `Move` of the dragged tile in front of the tile under the cursor, so the grid reflows
+      *during* the drag (FLIP-animated). Render-only — the persisted layout is untouched, so a drop keeps
+      it and a drag-end-without-drop reverts cleanly. Verified: dragging Income over Net worth moves it to
+      column 1, and cancelling reverts to column 2.
+- [ ] Prefer pointer events over HTML5 DnD for touch (the remaining drag-input refinement).
 - [x] **Animate reorder** AND **animate resize**: DONE via a FLIP shim (`web/flip.js`,
       `cashfluxFlipBento`) — it records each tile's screen position, and on the next layout change jumps
       moved tiles back to their old spot (transition:none) then transitions the offset to zero next frame,
@@ -971,6 +975,11 @@ results are summarized here so the backlog doesn't bloat.
         always start flows from `/` and SPA-navigate, when scripting flow tests.
   - [ ] (Flow test add-transaction + filter round-trip: **not exercised** — blocked by the 404; retry
         next iteration starting from `/`.)
+- **2026-06-18 #3** — Transactions flow round-trip (SPA-navigated from `/`, no 404): **all pass, 0
+  console errors.** Add transaction → "transactions shown" went **4 → 5** and the new row appeared;
+  text filter "coffee" → **1 shown** (only the match); Clear restored the list; inline-edit opened with
+  a Save control. Confirms the add/filter/inline-edit flow works correctly — the only blocker is the
+  cold deep-link 404 (#2), not the flow itself. No new defects.
 
 ---
 

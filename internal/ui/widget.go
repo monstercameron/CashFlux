@@ -78,13 +78,30 @@ func widget(props WidgetProps) uic.Node {
 		gear = Span(Class("gear-inline"), Attr("aria-hidden", "true"), Style(map[string]string{"visibility": "hidden"}), "⚙")
 	}
 
-	packed := dashlayout.Pack(dashlayout.Arrange(items, mode), gridCols)
+	dragSrc := uistate.UseDragSource()
+	dragPreview := uistate.UseDragPreview()
+	// Live drag-over preview (B2): while dragging, show the dragged tile moved in
+	// front of the tile under the cursor — a render-time reorder only, so the
+	// persisted layout is untouched and the preview reverts cleanly on cancel.
+	arranged := dashlayout.Arrange(items, mode)
+	if src, tgt := dragSrc.Get(), dragPreview.Get(); src != "" && tgt != "" && src != tgt {
+		ti := -1
+		for i, it := range arranged {
+			if it.ID == tgt {
+				ti = i
+				break
+			}
+		}
+		if ti >= 0 {
+			arranged = dashlayout.Move(arranged, src, ti)
+		}
+	}
+	packed := dashlayout.Pack(arranged, gridCols)
 	gridCol, gridRow := props.GridColumn, props.GridRow
 	if p, ok := packed.Get(props.ID); ok {
 		gridCol = p.GridColumn()
 		gridRow = dashlayout.Placement{Row: p.Row + 1, RowSpan: p.RowSpan}.GridRow()
 	}
-	dragSrc := uistate.UseDragSource()
 
 	cellClass := "w"
 	if dragSrc.Get() == props.ID && props.ID != "" {
@@ -99,7 +116,7 @@ func widget(props WidgetProps) uic.Node {
 		args = append(args,
 			Attr("draggable", "true"),
 			OnDragStart(func() { dragSrc.Set(id) }),
-			OnDragOver(Prevent(func() {})), // allow drop
+			OnDragOver(Prevent(func() { dragPreview.Set(id) })), // allow drop + live preview
 			OnDrop(Prevent(func() {
 				// Reorder the dragged tile to the drop target's position, then the
 				// grid re-Packs around it (iOS-home-screen reflow) instead of a
@@ -126,8 +143,9 @@ func widget(props WidgetProps) uic.Node {
 					}
 				}
 				dragSrc.Set("")
+				dragPreview.Set("")
 			})),
-			OnDragEnd(func() { dragSrc.Set("") }), // clear if dropped outside a target
+			OnDragEnd(func() { dragSrc.Set(""); dragPreview.Set("") }), // clear (reverts preview if dropped outside)
 		)
 	}
 	args = append(args,
