@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — i18n: route the last hardcoded user-facing messages through the catalog
+
+- Audited the screens for user-facing strings that bypass `uistate.T`. Grepped the error/notice setters
+  (`errMsg.Set`, `notifyErr`, `noticeAtom…With`, `promptText`). Almost all were already i18n'd or just
+  `errMsg.Set("")` clears; three real offenders remained:
+  - `accounts.go` validation `"Enter a valid opening balance."` → new key `accounts.invalidOpening`.
+  - `dashboard.go` reminder failure toast `"Couldn't create the reminder: "+err` → `dashboard.reminderErr`
+    (`"Couldn't create the reminder: %s"`).
+  - the two dashboard-tile resize-handle tooltips I'd added in the #1032 commit (kept hardcoded then for
+    consistency with the surrounding tooltips) → `widget.resizeWidth` / `widget.resizeHeight`.
+- All now resolve via `uistate.T`. i18n catalog test + wasm build + `go vet ./internal/ui ./internal/screens`
+  green. (`promptText` call sites were already i18n'd; the `aria-keyshortcuts` token list is literal key
+  names by spec, not translatable, so left as-is.)
+
 ## 2026-06-18 — B15: announce account balance updates (reconcile was silent)
 
 - Last open live-region sub-item: announce inline balance updates. Found that `accounts.go`'s `setBalance`

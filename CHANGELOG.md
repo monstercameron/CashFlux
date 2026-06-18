@@ -127,6 +127,10 @@ and every commit updates this file under `Unreleased`.
   double read.
 
 ### Fixed
+- **A few user-facing strings now go through the language catalog (i18n):** the "Enter a valid opening
+  balance" validation message, the dashboard "Couldn't create the reminder" toast, and the dashboard
+  tile resize-handle tooltips were hardcoded English. They're now resolved via `uistate.T` like the rest
+  of the UI, so they translate with everything else.
 - **Form errors are tied to their input for screen readers (B15):** each add-form's validation error now
   carries a stable `id` and the form's primary input references it via `aria-describedby` (plus
   `aria-invalid`) while the error is showing. Previously the error only announced once via `role="alert"`;

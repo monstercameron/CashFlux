@@ -104,7 +104,7 @@ func Dashboard() ui.Node {
 			ID: id.New(), Title: uistate.T("dashboard.staleTaskTitle"),
 			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceNudge,
 		}); err != nil {
-			noticeAtom.Set(noticeAtom.Get().With("Couldn't create the reminder: "+err.Error(), true))
+			noticeAtom.Set(noticeAtom.Get().With(uistate.T("dashboard.reminderErr", err.Error()), true))
 			return
 		}
 		nav.Navigate("/todo")

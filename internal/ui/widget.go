@@ -245,12 +245,12 @@ func widget(props WidgetProps) uic.Node {
 			// cycling all the way around (#1032) — mirroring the keyboard Shift+Arrow
 			// resize. With Pack the grid reflows around the new size, so growing never
 			// overlaps. Tooltip says so.
-			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", "Resize width — click grows, Shift+click shrinks"),
+			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", uistate.T("widget.resizeWidth")),
 				OnClick(func(e uic.MouseEvent) {
 					resize(cycleSpan(curCol, maxColSpan, e.JSValue().Get("shiftKey").Bool()), curRow)
 				}),
 			),
-			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", "Resize height — click grows, Shift+click shrinks"),
+			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", uistate.T("widget.resizeHeight")),
 				OnClick(func(e uic.MouseEvent) {
 					resize(curCol, cycleSpan(curRow, maxRowSpan, e.JSValue().Get("shiftKey").Bool()))
 				}),

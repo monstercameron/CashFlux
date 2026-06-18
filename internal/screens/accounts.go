@@ -86,7 +86,7 @@ func Accounts() ui.Node {
 		c := strings.ToUpper(strings.TrimSpace(curr.Get()))
 		amt, err := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(c))
 		if err != nil {
-			errMsg.Set("Enter a valid opening balance.")
+			errMsg.Set(uistate.T("accounts.invalidOpening"))
 			return
 		}
 		typ := domain.AccountType(accType.Get())
