@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: theme + sidebar toggle commands in the palette
+
+- Added "Toggle light / dark theme" and "Collapse / expand sidebar" to the Cmd+K palette — standard
+  palette affordances. `toggleTheme` flips `prefs.Theme` (non-light → dark) then Set/Persist/ApplyPrefs
+  (CSS reacts via the data-theme attr immediately); `toggleSidebar` flips `UseRailCollapsed` + persists.
+  Both use global uistate atoms, so they work from the palette callback. All in `shortcuts.go` (+prefs
+  import); no en.go, no screen files — zero collision.
+- The parallel session keeps churning many files (custompage.go, then formula/eval.go unused imports on
+  disk); verified my change via worktree build at HEAD (exit 0) rather than the red disk build. Committed
+  by pathspec.
+
 ## 2026-06-18 — harden custom pages + workflows (acted on an adversarial test critique)
 
 - Ran a critic subagent against the e2e suite; it found real gaps. Acted on them:

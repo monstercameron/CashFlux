@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/router"
 )
@@ -216,6 +217,8 @@ func buildPaletteCommands() []paletteCmd {
 	add(systemNav())
 	cmds = append(cmds,
 		paletteCmd{label: uistate.T("addmenu.transaction"), run: func() { uistate.UseQuickAdd().Set(true) }},
+		paletteCmd{label: "Toggle light / dark theme", run: toggleTheme},
+		paletteCmd{label: "Collapse / expand sidebar", run: toggleSidebar},
 		paletteCmd{label: "Keyboard shortcuts", run: toggleHelpOverlay},
 	)
 	// Workspace management straight from the palette.
@@ -243,6 +246,29 @@ func buildPaletteCommands() []paletteCmd {
 		}},
 	)
 	return cmds
+}
+
+// toggleTheme flips between light and dark themes (anything non-light becomes
+// dark), persisting and applying the choice immediately.
+func toggleTheme() {
+	a := uistate.UsePrefs()
+	p := a.Get()
+	if p.Theme == prefs.ThemeLight {
+		p.Theme = prefs.ThemeDark
+	} else {
+		p.Theme = prefs.ThemeLight
+	}
+	a.Set(p)
+	uistate.PersistPrefs(p)
+	uistate.ApplyPrefs(p)
+}
+
+// toggleSidebar collapses or expands the left rail, persisting the choice.
+func toggleSidebar() {
+	a := uistate.UseRailCollapsed()
+	v := !a.Get()
+	a.Set(v)
+	uistate.PersistRailCollapsed(v)
 }
 
 // toggleCommandPalette shows or hides the command palette, building it on first
