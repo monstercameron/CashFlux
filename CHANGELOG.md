@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Empty dashboard tiles now offer an "Add" button (C23):** an empty Accounts / Goals / Budgets / To-do
+  widget shows an in-context "Add a …" button that jumps to the relevant screen, so you can create data
+  from the dashboard. The Budgets tile only offers it when there are genuinely no budgets (not when the
+  at-risk filter is simply empty).
 - **Opt-in "Remember my key on this device" (C27):** Settings → AI now has a toggle (off by default) to
   keep your OpenAI key across reloads. When off, the key stays session-only (the dataset autosave always
   redacts it); when on, the key is saved to its own localStorage entry and restored on boot, so AI stays

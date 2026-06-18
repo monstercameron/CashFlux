@@ -489,6 +489,25 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 // balances (accounting figures, negatives toned red) via ledger.Balance. How
 // many accounts to show, and whether to show only cleared balances, are
 // configurable.
+type emptyAddProps struct {
+	Message string
+	Label   string
+	Path    string
+}
+
+// emptyAddCTA renders a dashboard widget's empty state with an in-context "add"
+// button that routes to the relevant screen, so a user can create data from the
+// dashboard instead of hunting for the screen (C23). Its own component so the
+// navigate hook stays at a stable position.
+func emptyAddCTA(props emptyAddProps) ui.Node {
+	nav := router.UseNavigate()
+	path := props.Path
+	return Div(Class("empty text-dim text-[13px] flex flex-col items-start gap-2"),
+		Span(props.Message),
+		Button(Class("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(path) }), props.Label),
+	)
+}
+
 func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 	limit, cleared := 6, false
 	if sch, ok := widgetcfg.SchemaFor("accounts"); ok {
@@ -524,7 +543,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.
 	}
 	var body ui.Node
 	if len(cells) == 0 {
-		body = P(Class("empty text-dim text-[13px]"), "No accounts yet.")
+		body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No accounts yet.", Label: uistate.T("dashboard.addAccount"), Path: "/accounts"})
 	} else {
 		body = Div(Class("grid grid-cols-3 gap-4 text-[13px]"), cells)
 	}
@@ -552,7 +571,7 @@ func todoWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	}
 	var body ui.Node
 	if len(open) == 0 {
-		body = P(Class("empty text-dim text-[13px]"), "Nothing to do — nice.")
+		body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "Nothing to do — nice.", Label: uistate.T("dashboard.addTodo"), Path: "/todo"})
 	} else {
 		if len(open) > count {
 			open = open[:count]
@@ -599,7 +618,7 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	if len(list) == 0 {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "goals", Title: uistate.T("nav.goals"), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
-			Body: P(Class("empty text-dim text-[13px]"), "No goals yet."),
+			Body: ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No goals yet.", Label: uistate.T("dashboard.addGoal"), Path: "/goals"}),
 		})
 	}
 	g := list[0]
@@ -667,11 +686,13 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 
 	var body ui.Node
 	if len(statuses) == 0 {
-		empty := "No budgets yet."
-		if atRisk {
-			empty = "Nothing near or over budget."
+		if len(app.Budgets()) == 0 {
+			// Genuinely no budgets — offer to add one in context.
+			body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No budgets yet.", Label: uistate.T("dashboard.addBudget"), Path: "/budgets"})
+		} else {
+			// Budgets exist but none match the at-risk filter — not an add case.
+			body = P(Class("empty text-dim text-[13px]"), "Nothing near or over budget.")
 		}
-		body = P(Class("empty text-dim text-[13px]"), empty)
 	} else {
 		if len(statuses) > limit {
 			statuses = statuses[:limit]

@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature: per-widget "add" affordances on empty dashboard tiles (C23)
+
+- Completed the open part of C23: empty Accounts/Goals/Budgets/To-do dashboard tiles now show an
+  in-context "Add a …" button. Added a reusable `emptyAddCTA` component (its own component so the
+  `router.UseNavigate` hook stays stable) that renders the message + a primary button routing to the
+  screen. The Budgets widget distinguishes genuinely-empty (`len(app.Budgets()) == 0` → CTA) from the
+  at-risk filter being empty (budgets exist → plain "Nothing near or over budget.").
+- Verified: i18n + wasm build green; the sample dataset populates all four tiles so the CTA isn't visible
+  by default, but I confirmed the navigation mechanism live (clicking a nav item routes client-side —
+  /goals renders the Goals screen), which is exactly what the CTA does.
+
 ## 2026-06-18 — feature: opt-in "remember my key on this device" (C27 closed)
 
 - Followed the dataset-persistence feature with the small, isolated piece it left: an opt-in to persist

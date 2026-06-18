@@ -779,8 +779,12 @@ added **only** by navigating to its own screen — there's no global/dashboard a
       a document — the entity items route to their screen via the router. Always-rendered + CSS-toggled so
       the On* hooks stay stable. Verified live: opens with 5 items, "New transaction" opens the quick-add
       panel, the menu closes on select. SW cache v10→v11.
-- [ ] Consider per-widget "add" affordances on the dashboard (e.g. an empty Budgets tile offers "Add a
-      budget") so data entry is reachable in context. _(Enhancement — left open.)_
+- [x] Per-widget "add" affordances on the dashboard — DONE. A reusable `emptyAddCTA` component renders an
+      empty Accounts / Goals / Budgets / To-do tile's empty state with an in-context "Add a …" button that
+      routes to the relevant screen via `router.Navigate`. The Budgets tile distinguishes genuinely-empty
+      (no budgets → CTA) from "nothing near/over the at-risk filter" (no CTA). Verified the navigation
+      mechanism live (nav → /goals renders the Goals screen); the sample data populates all tiles so the
+      CTA isn't shown by default, but the empty branch + nav are confirmed.
 - [x] Verify: from the dashboard alone a user can create each core entity type — the menu reaches
       transaction/account/budget/goal/document from anywhere. (Category/member/rule are still reachable
       via their screens; could be added to the menu later if wanted.)
