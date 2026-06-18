@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — refactor: i18n the app-lock strings (B17 polish)
+
+- Routed the passcode-lock UI through the catalog (13 new `applock.*` keys): the unlock gate, the
+  set-passcode flow (set/confirm/auto-lock prompts, mismatch + enabled alerts), and the palette commands
+  (Set/Lock now/Change/Remove). Added a `uistate` import to `applockgate.go`. The whole keyboard + app-lock
+  UI is now translatable; only a proper in-app passcode form (vs native prompts) remains.
+- gofmt clean, worktree build at HEAD exit 0, committed by pathspec.
+
+## 2026-06-18 — fix: UX polish §6.1 — delete button hit area
+
+- Closed the `.btn-del` target-size item in `web/index.html`: delete icon buttons now have an explicit
+  `min-width:32px` and `min-height:32px`, while keeping their existing transparent visual treatment.
+- This leaves the shared 24px minimum for smaller non-delete icon controls intact.
+- Browser verification initially caught the cascade order overriding width back to 24px; the final rule now
+  computes to 32×32px.
+
 ## 2026-06-18 — feat: app-lock idle auto-lock (B17 cont.)
 
 - Wired the pure `ShouldAutoLock` into a real timer. `setPasscodeFlow` now also prompts for an auto-lock

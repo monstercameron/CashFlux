@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall/js"
+
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 const appLockGateID = "cf-applock-gate"
@@ -49,7 +51,7 @@ func buildAppLockGate(doc js.Value) {
 	card := doc.Call("createElement", "div")
 	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.8rem;width:min(90vw,320px);text-align:center;color:var(--text,#f4f4f5);")
 	card.Set("innerHTML", `<div style="font-family:Fraunces,Georgia,serif;font-size:1.4rem;font-weight:600;">CashFlux</div>`+
-		`<div id="cf-applock-msg" style="font-size:0.9rem;opacity:0.7;">Enter your passcode to unlock</div>`)
+		`<div id="cf-applock-msg" style="font-size:0.9rem;opacity:0.7;">`+htmlEscaper.Replace(uistate.T("applock.unlockPrompt"))+`</div>`)
 
 	inp := doc.Call("createElement", "input")
 	inp.Set("id", "cf-applock-input")
@@ -61,7 +63,7 @@ func buildAppLockGate(doc js.Value) {
 
 	btn := doc.Call("createElement", "button")
 	btn.Set("type", "button")
-	btn.Set("textContent", "Unlock")
+	btn.Set("textContent", uistate.T("applock.unlock"))
 	btn.Get("style").Set("cssText", "padding:0.6rem 0.8rem;border-radius:8px;border:0;background:var(--accent,#2e8b57);color:#052e13;font-weight:600;cursor:pointer;")
 	card.Call("appendChild", btn)
 
@@ -74,7 +76,7 @@ func buildAppLockGate(doc js.Value) {
 			return
 		}
 		if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
-			msg.Set("textContent", "Wrong passcode — try again")
+			msg.Set("textContent", uistate.T("applock.wrong"))
 			msg.Get("style").Set("color", "var(--danger,#d8716f)")
 		}
 		inp.Set("value", "")
@@ -98,7 +100,7 @@ func buildAppLockGate(doc js.Value) {
 // setPasscodeFlow prompts for a passcode (twice, to confirm) and enables the lock.
 // Uses native prompts for the MVP; a proper in-app form is a follow-up.
 func setPasscodeFlow() {
-	p := js.Global().Call("prompt", "Set a passcode for CashFlux:")
+	p := js.Global().Call("prompt", uistate.T("applock.setPrompt"))
 	if p.IsNull() || p.IsUndefined() {
 		return
 	}
@@ -106,19 +108,19 @@ func setPasscodeFlow() {
 	if pass == "" {
 		return
 	}
-	c := js.Global().Call("prompt", "Confirm the passcode:")
+	c := js.Global().Call("prompt", uistate.T("applock.confirmPrompt"))
 	if c.IsNull() || c.IsUndefined() || strings.TrimSpace(c.String()) != pass {
-		js.Global().Call("alert", "The passcodes didn't match — nothing changed.")
+		js.Global().Call("alert", uistate.T("applock.mismatch"))
 		return
 	}
 	mins := 0
-	if m := js.Global().Call("prompt", "Auto-lock after how many minutes of inactivity? (0 = only on reload / Lock now)", "0"); !m.IsNull() && !m.IsUndefined() {
+	if m := js.Global().Call("prompt", uistate.T("applock.autoPrompt"), "0"); !m.IsNull() && !m.IsUndefined() {
 		if v, err := strconv.Atoi(strings.TrimSpace(m.String())); err == nil && v > 0 {
 			mins = v
 		}
 	}
 	if enableAppLock(pass, mins) {
-		js.Global().Call("alert", "Passcode lock enabled. You'll be asked for it next time you open or lock CashFlux.")
+		js.Global().Call("alert", uistate.T("applock.enabled"))
 	}
 }
 

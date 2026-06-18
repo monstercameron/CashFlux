@@ -14,7 +14,8 @@ and every commit updates this file under `Unreleased`.
   across workspaces) and verified in constant time; it's a soft deterrent for a local-first app, not
   encryption. **Optional auto-lock** re-shows the gate after a chosen number of minutes of inactivity
   (pointer/key/scroll resets the idle clock); set the window when you create the passcode. (A polished
-  in-app entry form — vs. the MVP's native prompts — and i18n of the app-lock strings remain follow-ups.)
+  in-app entry form — vs. the MVP's native prompts — remains a follow-up; the app-lock strings are
+  translatable.)
 - **Workflows are now real transaction automation (was: a demo).** Acting on a product critique that the
   engine couldn't see the transaction that triggered it, "when a transaction is added" workflows now get
   **per-transaction condition variables** — `txn_amount`/`txn_abs` (major units) and string fields
@@ -324,6 +325,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Delete buttons have a larger touch target (UX audit §6.1).** `.btn-del` controls now carry an explicit
+  32×32px floor instead of relying on the shared 24px icon-button minimum; browser verification confirmed
+  the computed size.
 - **Selected transaction rows have a real visual state (UX audit §6.4).** Bulk-selection checkboxes now get
   an accent background/border when selected instead of relying on the glyph alone. Browser verification
   covered the selected checkbox's computed colors, and `gwc verify` stayed green after the app-lock updates.

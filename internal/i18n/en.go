@@ -97,6 +97,21 @@ var english = Catalog{
 	"cmd.newWorkspace":    "New workspace…",
 	"cmd.exportWorkspace": "Export current workspace",
 
+	// Passcode lock (B17)
+	"applock.unlockPrompt":  "Enter your passcode to unlock",
+	"applock.unlock":        "Unlock",
+	"applock.wrong":         "Wrong passcode — try again",
+	"applock.setPrompt":     "Set a passcode for CashFlux:",
+	"applock.confirmPrompt": "Confirm the passcode:",
+	"applock.autoPrompt":    "Auto-lock after how many minutes of inactivity? (0 = only on reload / Lock now)",
+	"applock.mismatch":      "The passcodes didn't match — nothing changed.",
+	"applock.enabled":       "Passcode lock enabled. You'll be asked for it next time you open or lock CashFlux.",
+	"applock.removed":       "Passcode lock removed.",
+	"applock.cmdSet":        "Set passcode lock…",
+	"applock.cmdLock":       "Lock now",
+	"applock.cmdChange":     "Change passcode…",
+	"applock.cmdRemove":     "Remove passcode lock",
+
 	// Common actions (shared across screens)
 	"action.add":    "Add",
 	"action.save":   "Save",
