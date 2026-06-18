@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Move dashboard span math into pure dashlayout (with tests)
+
+- The tile resize arithmetic (`cycleSpan` grow/shrink/wrap, `clampSpan` bound) lived as unexported helpers
+  in `internal/ui/widget.go` — a wasm-only view package, so they had no native unit tests. That's
+  computation in view code, which CLAUDE.md explicitly forbids ("never put computation in view code";
+  "logic packages … unit-tested").
+- Promoted them to `dashlayout.CycleSpan(cur, max, shrink)` and `dashlayout.ClampSpan(v, max)` in a new
+  `span.go` (the package is already pure, no build tag, and is where the rest of the grid math lives), with
+  table tests in `span_test.go` covering grow/wrap/shrink-floor and clamp bounds. `widget.go` now calls
+  them and the local copies are deleted.
+- Pure-Go refactor, no behavior change: `go test ./internal/dashlayout` passes, wasm build + `go vet
+  ./internal/ui` green.
+
 ## 2026-06-18 — i18n: route the last hardcoded user-facing messages through the catalog
 
 - Audited the screens for user-facing strings that bypass `uistate.T`. Grepped the error/notice setters

@@ -1117,6 +1117,16 @@ results are summarized here so the backlog doesn't bloat.
   - ❔ **Bulk select NOT verified** — checking `input[type='checkbox']` surfaced no bulk-action bar /
     "selected" text; the row checkboxes may be custom (non-`<input>`) elements. _Re-test next pass with a
     role/label-based selector to confirm bulk select + bulk delete/recategorize/clear work._
+- **2026-06-18 #14** — Goals contribute + checkbox semantics (0 console errors).
+  - ✅ **Goals "Contribute" works** — the `window.prompt` "Contribute how much to Vacation?" accepted
+    100 and the goal moved to **$600.00 / $3,000.00** (from $500.00; +$100).
+  - 🐞 **NEW (accessibility) — transaction bulk-select checkboxes are non-semantic.** The Transactions
+    DOM has **0 `<input type=checkbox>` and 0 `[role=checkbox]`** despite visible checkbox squares per
+    row — so bulk-select is **not keyboard-focusable or screen-reader-perceivable** (and resists
+    automated testing). Fix: use a real `<input type=checkbox>` or `role="checkbox"` + `aria-checked` +
+    a label. (Ties **B15** custom-controls-need-ARIA; explains the #13 bulk-select miss.)
+  - _UX note: "Contribute" uses a raw `window.prompt`, which is unstyled/inaccessible and can't validate
+    inline — consider an in-app inline field/flip-panel instead (low priority)._
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.

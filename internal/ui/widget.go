@@ -146,8 +146,8 @@ func widget(props WidgetProps) uic.Node {
 							break
 						}
 					}
-					nc := clampSpan(curCol+dc, maxColSpan)
-					nr := clampSpan(curRow+dr, maxRowSpan)
+					nc := dashlayout.ClampSpan(curCol+dc, maxColSpan)
+					nr := dashlayout.ClampSpan(curRow+dr, maxRowSpan)
 					next := dashlayout.ResizeItem(items, id, nc, nr)
 					itemsAtom.Set(next)
 					uistate.PersistItems(next)
@@ -247,45 +247,17 @@ func widget(props WidgetProps) uic.Node {
 			// overlaps. Tooltip says so.
 			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", uistate.T("widget.resizeWidth")),
 				OnClick(func(e uic.MouseEvent) {
-					resize(cycleSpan(curCol, maxColSpan, e.JSValue().Get("shiftKey").Bool()), curRow)
+					resize(dashlayout.CycleSpan(curCol, maxColSpan, e.JSValue().Get("shiftKey").Bool()), curRow)
 				}),
 			),
 			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", uistate.T("widget.resizeHeight")),
 				OnClick(func(e uic.MouseEvent) {
-					resize(curCol, cycleSpan(curRow, maxRowSpan, e.JSValue().Get("shiftKey").Bool()))
+					resize(curCol, dashlayout.CycleSpan(curRow, maxRowSpan, e.JSValue().Get("shiftKey").Bool()))
 				}),
 			),
 		)
 	}
 	return Div(args...)
-}
-
-// cycleSpan advances a grid span on a resize-handle click: Shift+click shrinks by
-// one (clamped at 1) for a direct shrink, while a plain click grows by one and
-// wraps back to 1 past the max (so the wrap is the no-modifier way to shrink). The
-// keyboard Shift+Arrow path is the equivalent for keyboard users (#1032).
-func cycleSpan(cur, max int, shrink bool) int {
-	if shrink {
-		if cur <= 1 {
-			return 1
-		}
-		return cur - 1
-	}
-	if cur+1 > max {
-		return 1
-	}
-	return cur + 1
-}
-
-// clampSpan keeps a grid span within [1, max].
-func clampSpan(v, max int) int {
-	if v < 1 {
-		return 1
-	}
-	if v > max {
-		return max
-	}
-	return v
 }
 
 // gridStyle builds the inline grid-placement style, omitting empty axes.

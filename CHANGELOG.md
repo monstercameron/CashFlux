@@ -69,6 +69,10 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Dashboard span math moved into the tested layout package (internal):** the tile resize grow/shrink/clamp
+  arithmetic lived in the wasm-only view (`internal/ui/widget.go`) with no tests, against the project rule
+  that computation belongs in pure, unit-tested packages. It's now `dashlayout.CycleSpan`/`dashlayout.ClampSpan`
+  with table tests; the widget just calls them. No behavior change.
 - **The sidebar is now derived from the screen registry (B7):** each rail section (Primary, Tools, System)
   is built by filtering `screens.All()` on a new `Route.Group` field instead of three hand-maintained
   lists. Membership lives in one place, so a newly registered screen can't silently miss the menu — an
