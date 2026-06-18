@@ -36,8 +36,12 @@ const (
 	ThemeSystem Theme = "system"
 )
 
-// defaultAccent is the out-of-the-box accent color (candidate-C green).
-const defaultAccent = "#54b884"
+// defaultAccent is the out-of-the-box accent color: a seagreen that clears WCAG
+// AA for UI/large elements (3:1) against BOTH the dark and light theme surfaces
+// (dark 4.09:1, light 3.63:1), unlike the original lighter mint #54b884 which
+// failed on light (~2.1:1). Accent drives the focus ring and large strokes, so it
+// must pass the 3:1 threshold on whichever surface the user runs (B15).
+const defaultAccent = "#2e8b57"
 
 // Display-scale bounds (whole percent). 100 is the unscaled default. The upper
 // bound reaches 200 so the scale doubles as an accessibility text-resize control

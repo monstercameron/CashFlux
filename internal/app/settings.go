@@ -446,7 +446,7 @@ func globalSettingsForm() uic.Node {
 		Div(Class("toggle-row"),
 			Span(uistate.T("settings.accent")),
 			ui.SwatchPicker(ui.SwatchPickerProps{
-				Colors:   []string{"#54b884", "#cfa14e", "#7c83ff", "#d8716f"},
+				Colors:   []string{"#2e8b57", "#cfa14e", "#7c83ff", "#d8716f"},
 				Selected: pr.Accent,
 				OnSelect: func(c string) {
 					p := prefsAtom.Get()
@@ -570,7 +570,7 @@ func accentSurfaceHexes(theme prefs.Theme) []string {
 // fills, active states, and the focus ring, so the large/UI threshold applies.
 func accentContrastNote(accent string, theme prefs.Theme) uic.Node {
 	if accent == "" {
-		accent = "#54b884" // the default swatch
+		accent = "#2e8b57" // the default swatch
 	}
 	worst := 21.0
 	for _, surf := range accentSurfaceHexes(theme) {

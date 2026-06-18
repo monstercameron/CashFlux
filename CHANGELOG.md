@@ -106,6 +106,11 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Default accent now passes contrast on both themes (B15):** the out-of-the-box accent changed from the
+  mint green `#54b884` (which failed WCAG AA-UI on the light theme at ~2.1:1) to seagreen `#2e8b57`, chosen
+  with `internal/contrast` to clear the 3:1 UI/large threshold against **both** surfaces (dark 4.09:1,
+  light 3.63:1). The accent drives the focus ring and large strokes, so it has to read on whichever theme
+  the user picks. Also updated the swatch palette's default entry and the chart stroke fallbacks to match.
 - **Accessibility polish (B15):** the icon-only widget gear and the accounts "⋯" overflow button now carry
   explicit `aria-label`s, and the decorative drag grip is `aria-hidden`, so screen readers announce the
   controls correctly. (Reduced-motion already covers the new tile animations, and the layout reflows at

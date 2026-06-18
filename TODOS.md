@@ -459,12 +459,14 @@ one-line a11y item in §1.20.
       "On track/Near limit/Over budget" text, net-worth/highlights use ▲/▼ arrows, stale accounts show
       a "Stale" badge, cleared shows a ✓; the one offender — the To-do widget's priority dots (high vs
       medium were both `●`) — now uses distinct shapes ▲/●/○ plus accessible names.
-- [~] **Contrast:** built `internal/contrast` (table-tested) and **audited** the tokens with it.
+- [x] **Contrast:** built `internal/contrast` (table-tested) and **audited** the tokens with it.
       Fixed: `text-faint` now meets AA-normal (4.5) on both surfaces in both themes (dark→#888890,
       light→#686870). The appearance settings now **show the selected accent's contrast ratio** vs the
       theme surface and warn when it's low (uses `internal/contrast`) — so users see when an accent is
-      hard to read. Still TODO (brand decision): pick a light-theme-safe default accent (or per-theme
-      accent) since the default green is ~2.3:1 on light.
+      hard to read. The **default accent** is now seagreen `#2e8b57`, picked with `internal/contrast`
+      to clear AA-UI (3:1) on BOTH theme surfaces (dark 4.09:1, light 3.63:1); the old mint `#54b884`
+      failed on light (~2.1:1). One default that passes everywhere beat a per-theme accent, since the
+      accent drives the focus ring and is applied inline by JS where the active theme isn't always known.
 - [x] **Motion:** `prefers-reduced-motion` covers the flip-panel, toast slide-in, rail width, boot, the
       rail flyout, AND the dashboard reorder/resize/drag FLIP animations (`web/flip.js` checks
       `matchMedia('(prefers-reduced-motion: reduce)')` and only records positions, no transition, when set).
@@ -1031,6 +1033,19 @@ results are summarized here so the backlog doesn't bloat.
     Either way it's a UX bug: **a failed add must surface a reason.** _Confirm whether filling opening
     balance + real typing makes the button work; if so, the bug is "no validation feedback"; if not, it's
     the Members-style commit bug spreading to Accounts._
+- **2026-06-18 #8** — Pinpointed the add-button bug (0 console errors). For **both Accounts and Members**:
+  button click = **no add**, but **Enter = adds**; filling the opening balance did **not** help Accounts
+  (`nameAndBalanceClick=false`) and **no error text** appeared. → **Not validation** — it's the
+  **button's click handler not committing the typed name** (reads stale state), while the form's
+  Enter/submit path reads the live value.
+  - **Scope confirmed:** affected = **Members, Accounts**; working = Categories, To-do, Budgets, Goals.
+    The broken pair's "Add" buttons likely aren't `type="submit"` (or their OnClick reads a state var the
+    input's `OnInput` never updates), unlike the working forms.
+  - [ ] Fix Members + Accounts so the Add **button** commits identically to Enter (make it a submit
+        button, or read the live field value in the click handler). Add an E2E assert: add via button
+        succeeds on every entity form.
+  - _Caveat: verify with real keyboard typing — if a human's typing updates the bound state, the button
+    may work for them; but the wiring is still inconsistent across forms and worth aligning._
 
 ## D. Cross-component E2E workstream stories — budgeting · planning · finances ★
 

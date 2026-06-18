@@ -33,7 +33,7 @@ func AreaChart(props AreaChartProps) uic.Node {
 	}
 	stroke := props.Stroke
 	if stroke == "" {
-		stroke = "#54b884"
+		stroke = "#2e8b57"
 	}
 	gid := props.GradientID
 	if gid == "" {

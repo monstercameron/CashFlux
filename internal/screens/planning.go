@@ -425,7 +425,7 @@ func PlanRow(props planRowProps) ui.Node {
 	for i, v := range curve {
 		vals[i] = float64(v)
 	}
-	stroke := "#54b884"
+	stroke := "#2e8b57"
 	if planning.EndBalance(p) < p.StartBalance {
 		stroke = "#d8716f"
 	}

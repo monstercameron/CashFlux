@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B15 a11y: a light-theme-safe default accent
+
+- The last open contrast item: the default accent `#54b884` (a light mint) only cleared ~2.1:1 against the
+  light surface, failing WCAG AA for UI/large elements (3:1). The accent isn't decorative — it paints the
+  focus ring and large strokes — so the default has to pass on whichever theme the user runs.
+- Considered a **per-theme default** (keep the mint on dark, darker on light) but rejected it: `--accent` is
+  applied **inline by JS** from prefs, and for `ThemeSystem` the effective theme isn't known at apply time,
+  so a per-theme default would need a CSS `@media`/`[data-theme]` override path that fights the inline var.
+  A single default that passes everywhere is simpler and correct.
+- Drove the choice with data: a throwaway test over `internal/contrast.Ratio` against the dark elev `#1a1a1d`
+  and light elev `#efede8`. Seagreen **`#2e8b57`** clears both comfortably (dark 4.09:1, light 3.63:1) and
+  stays an obviously-green brand color. Set it as `prefs.defaultAccent`, the first swatch in the picker, the
+  contrast-note fallback, the CSS `--accent` default in index.html, and the chart-stroke fallbacks
+  (chart.js, ui/chart.go, planning.go). Bumped the SW cache to v15. prefs/contrast tests + wasm build green.
+- The settings contrast note now reads OK on light with the default (it computed the warning before). Closes
+  the B15 contrast item.
+
 ## 2026-06-18 — B15 a11y: route the last hardcoded aria-labels through i18n
 
 - Grepped for hardcoded `aria-label`/`aria-roledescription` literals; only two remained (the widget gear

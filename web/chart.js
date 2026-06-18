@@ -35,7 +35,7 @@
     var H = el.clientHeight || 160;
     var fg = cssVar("--text-faint", "#888890");
     var grid = cssVar("--border", "#2a2a2c");
-    var defColor = cssVar("--accent", "#54b884");
+    var defColor = cssVar("--accent", "#2e8b57");
 
     var svg = d3.select(el).append("svg")
       .attr("width", W).attr("height", H).attr("role", "img");
