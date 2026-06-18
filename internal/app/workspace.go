@@ -4,10 +4,12 @@ package app
 
 import (
 	"encoding/json"
+	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/store"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
 )
 
@@ -115,6 +117,88 @@ func setStartupWorkspace(wsID string) {
 // the switcher reads the registry on its next render.
 func setWorkspaceColor(wsID, color string) {
 	saveRegistry(loadRegistry().SetColor(wsID, color))
+}
+
+// wsExport is the portable envelope for a single workspace: its name, color, and
+// the snapshot of its per-workspace keys (dataset + UI state). It carries no
+// secrets — the OpenAI key is user-global and lives outside perWorkspaceKeys.
+type wsExport struct {
+	Version int               `json:"version"`
+	Name    string            `json:"name"`
+	Color   string            `json:"color,omitempty"`
+	Bundle  map[string]string `json:"bundle"`
+}
+
+const wsExportVersion = 1
+
+// exportWorkspace downloads a workspace as a self-contained JSON file (dataset +
+// layout + settings), so it can be moved to another device or shared. The active
+// workspace's live keys are used; an inactive one comes from its saved blob.
+func exportWorkspace(wsID string) {
+	r := loadRegistry()
+	w, ok := r.Get(wsID)
+	if !ok {
+		return
+	}
+	bundle := loadBlob(wsID)
+	if wsID == r.ActiveID {
+		bundle = bundleCurrent()
+	}
+	env := wsExport{Version: wsExportVersion, Name: w.Name, Color: w.Color, Bundle: bundle}
+	data, err := json.MarshalIndent(env, "", "  ")
+	if err != nil {
+		return
+	}
+	downloadBytes("workspace-"+slugify(w.Name)+".json", "application/json", data)
+}
+
+// importWorkspace adds a workspace from an exported JSON file and switches to it
+// (the current workspace is bundled out first, so nothing is lost). Returns false
+// on a malformed file so the caller can surface an error.
+func importWorkspace(data []byte) bool {
+	var env wsExport
+	if err := json.Unmarshal(data, &env); err != nil || env.Bundle == nil {
+		return false
+	}
+	name := strings.TrimSpace(env.Name)
+	if name == "" {
+		name = uistate.T("ws.importedDefault")
+	}
+	r := loadRegistry()
+	suspendAutosave = true
+	saveBlob(r.ActiveID, bundleCurrent())
+	newID := id.NewWithPrefix("ws")
+	color := env.Color
+	if color == "" {
+		color = paletteColor(len(r.Workspaces))
+	}
+	saveBlob(newID, env.Bundle)
+	saveRegistry(r.Add(newID, name).SetActive(newID).SetColor(newID, color))
+	applyBundle(env.Bundle)
+	reloadPage()
+	return true
+}
+
+// slugify makes a filename-safe slug from a workspace name (lowercase, spaces and
+// other non-alphanumerics collapsed to hyphens), falling back to "workspace".
+func slugify(name string) string {
+	var b strings.Builder
+	lastHyphen := false
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			lastHyphen = false
+		case !lastHyphen:
+			b.WriteByte('-')
+			lastHyphen = true
+		}
+	}
+	s := strings.Trim(b.String(), "-")
+	if s == "" {
+		return "workspace"
+	}
+	return s
 }
 
 func wsBlobKey(wsID string) string { return wsBlobPrefix + wsID }

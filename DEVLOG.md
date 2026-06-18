@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: workspace export / import (move a whole context as a file)
+
+- Another isolated workspace-layer feature (the parallel session is churning store/domain/screens, so I
+  stayed out). Reused the existing `downloadBytes`/`pickFile` DOM helpers — no new file plumbing.
+- `wsExport` envelope `{version, name, color, bundle}` where bundle is the workspace's perWorkspaceKeys
+  snapshot (live `bundleCurrent()` for the active one, else `loadBlob`). No secrets: the OpenAI key is
+  user-global, not in perWorkspaceKeys. `exportWorkspace` marshals + downloads `workspace-<slug>.json`
+  (new `slugify` helper). `importWorkspace` parses, rejects a nil/!bundle file (returns false → caller
+  alerts `ws.importErr`), else adds a new workspace from the envelope (palette color if none), saves its
+  blob, switches + reloads (current bundled out first). applyBundle only writes known perWorkspaceKeys, so
+  stray keys in an import are harmlessly ignored.
+- UI: per-row **Export** in `wsManageRow`; a section-level **Import workspace** button. 4 i18n keys.
+- Process: committed atomically (single `git add <files>; git commit` shell call) per the new
+  [[cashflux-parallel-git-tree-hazard]] memory, after the last feature got swept into the parallel
+  session's commit. en.go required three Read→Edit retries — the other session was writing it live.
+- Verified: i18n + workspace tests pass, gofmt clean, `GOOS=js GOARCH=wasm` build exit 0, probe healthy.
+  File download/upload can't be driven headlessly (probe is read-only), so export/import round-trip is
+  logic-verified — confirm in-browser.
+
 ## 2026-06-18 — feat: per-workspace color (tell contexts apart at a glance)
 
 - Followed the user's "add other useful settings like this" invite with a self-contained, isolated

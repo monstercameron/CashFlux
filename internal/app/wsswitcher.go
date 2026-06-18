@@ -192,6 +192,7 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 	actions := []any{Class("flex items-center gap-2"),
 		ui.SwatchPicker(ui.SwatchPickerProps{Colors: workspacePalette, Selected: props.Color, OnSelect: pickColor}),
 		dataBtn(uistate.T("ws.rename"), false, rename),
+		dataBtn(uistate.T("ws.export"), false, func() { exportWorkspace(id) }),
 	}
 	if props.CanDelete {
 		actions = append(actions, dataBtn(uistate.T("ws.delete"), true, del))
@@ -219,11 +220,21 @@ func workspacesSection(onChange func()) uic.Node {
 			ID: w.ID, Name: w.Name, Color: w.Color, Active: w.ID == active.ID, CanDelete: canDelete, OnChange: onChange,
 		}))
 	}
+	importWS := func() {
+		pickFile(".json", func(data []byte) {
+			if !importWorkspace(data) {
+				js.Global().Call("alert", uistate.T("ws.importErr"))
+			}
+		})
+	}
 	return Div(Class("flex flex-col"),
 		uic.CreateElement(wsStartupSelect, wsStartupSelectProps{
 			Workspaces: r.Workspaces, StartupID: r.StartupID, OnChange: onChange,
 		}),
 		rows,
+		Div(Class("flex flex-wrap gap-2 py-1"),
+			dataBtn(uistate.T("ws.import"), false, importWS),
+		),
 	)
 }
 

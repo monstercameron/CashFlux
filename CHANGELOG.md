@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Export & import a whole workspace.** Settings → Workspaces now has a per-workspace **Export** (downloads
+  a self-contained `workspace-<name>.json` — the dataset plus layout/settings) and a section-level **Import
+  workspace** (adds the file as a new workspace and switches to it, bundling the current one out first so
+  nothing is lost). Lets you move a workspace between devices or share a setup. The envelope is versioned
+  (`{version, name, color, bundle}`) and carries no secrets — the OpenAI key is user-global, outside the
+  per-workspace bundle. A malformed file is rejected with a clear message; an imported workspace with no
+  color gets one from the palette.
 - **User artifacts — persisted images & datasets (Phase C groundwork):** new `domain.Artifact` plus a pure,
   tested `internal/artifacts` package (kinds, CSV parsing to columns+rows, image data-URL building, byte-
   size accounting, validation). Artifacts persist in the dataset (new `artifacts` table + CRUD + appstate
