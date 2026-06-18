@@ -291,27 +291,23 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 		})
 	}
 
+	// Rank categories by spend, collapsing the tail into "Other" (pure logic in
+	// ledger.RankSpending); resolve display names here.
 	type seg struct {
 		name string
 		amt  int64
 	}
-	segs := make([]seg, 0, len(totals))
-	for cid, amt := range totals {
-		name := catName[cid]
+	ranked, other := ledger.RankSpending(totals, topN)
+	segs := make([]seg, 0, len(ranked)+1)
+	for _, ct := range ranked {
+		name := catName[ct.CategoryID]
 		if name == "" {
-			name = "Uncategorized"
+			name = uistate.T("dashboard.uncategorized")
 		}
-		segs = append(segs, seg{name: name, amt: amt})
+		segs = append(segs, seg{name: name, amt: ct.Amount})
 	}
-	sort.Slice(segs, func(i, j int) bool { return segs[i].amt > segs[j].amt })
-
-	// Top N categories, the rest lumped into "Other".
-	if len(segs) > topN+1 {
-		var other int64
-		for _, s := range segs[topN:] {
-			other += s.amt
-		}
-		segs = append(segs[:topN], seg{name: "Other", amt: other})
+	if other > 0 {
+		segs = append(segs, seg{name: uistate.T("dashboard.other"), amt: other})
 	}
 
 	tones := []string{"bg-up", "bg-warn", "bg-dim", "bg-down"}

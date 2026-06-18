@@ -69,6 +69,10 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Spend-breakdown ranking moved into the tested ledger package (internal):** the dashboard's
+  sort-categories-by-spend / top-N / collapse-the-rest-into-"Other" logic lived inline in the view. It's now
+  `ledger.RankSpending(totals, n) (top, other)` — pure and table-tested — with name resolution and labels
+  kept in the view. No behavior change.
 - **Account-by-id lookup consolidated into a tested `domain.AccountByID` (internal):** the documents view's
   `accByIDFrom` and the goals view's `accountName` each re-implemented the same linear scan. Both now use one
   pure, table-tested `domain.AccountByID(accounts, id) (Account, bool)`. No behavior change.
@@ -156,9 +160,9 @@ and every commit updates this file under `Unreleased`.
 
 ### Fixed
 - **A few user-facing strings now go through the language catalog (i18n):** the "Enter a valid opening
-  balance" validation message, the dashboard "Couldn't create the reminder" toast, and the dashboard
-  tile resize-handle tooltips were hardcoded English. They're now resolved via `uistate.T` like the rest
-  of the UI, so they translate with everything else.
+  balance" validation message, the dashboard "Couldn't create the reminder" toast, the dashboard
+  tile resize-handle tooltips, and the spending-breakdown "Other"/"Uncategorized" labels were hardcoded
+  English. They're now resolved via `uistate.T` like the rest of the UI, so they translate with everything else.
 - **Form errors are tied to their input for screen readers (B15):** each add-form's validation error now
   carries a stable `id` and the form's primary input references it via `aria-describedby` (plus
   `aria-invalid`) while the error is showing. Previously the error only announced once via `role="alert"`;

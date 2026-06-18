@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — extract spend-breakdown ranking into ledger.RankSpending (+ i18n the labels)
+
+- The broader scan found one more real chunk of view-embedded logic: the dashboard breakdown widget's
+  rank-categories-by-spend → top-N → collapse-the-rest-into-"Other". Extracted the pure part to
+  `ledger.RankSpending(totals, n) (top []CategoryTotal, other int64)`, table-tested (sort order, the
+  n+1-keep-all threshold, tail collapse sum, n<=0, empty). The view keeps name resolution + bar/legend
+  rendering, now calling RankSpending.
+- Bonus: the breakdown's "Other" and "Uncategorized" were hardcoded English — added `dashboard.other` /
+  `dashboard.uncategorized` keys and the view passes localized labels (the extraction made the label
+  injection natural). i18n + ledger tests + wasm build green.
+- The other view helpers scanned (uistate's loadItems/resolveTheme/loadRailCollapsed, the dashboard
+  bills/segment *rendering*) are platform glue (localStorage/JS) or display — correctly staying put.
+
 ## 2026-06-18 — consolidate account-by-id lookup into domain.AccountByID
 
 - `accByIDFrom` (documents, 3 uses) and `accountName` (goals) each had their own linear "find account by id"

@@ -1255,6 +1255,12 @@ results are summarized here so the backlog doesn't bloat.
   `cashflux.json`**; **Export CSV → download `transactions.csv`**. Verifies the export half of the
   export→import round-trip (§1.18 / B16). _Next: import the exported JSON back and assert a lossless
   round-trip._
+- **2026-06-18 #32** — Export→import round-trip attempt (0 console errors). Export saved to a `.json` file
+  fine, but **import-back couldn't be triggered**: clicking "Import…" did not open a file chooser within
+  the timeout — likely my substring selector matched the wrong "Import" (there's also "Import languages"),
+  or "Import…" uses a non-native picker (inline paste?). **Round-trip import half unverified.** _Harness
+  fix: target the data-section "Import…" precisely (or whatever control it opens) and re-test lossless
+  round-trip; the export half is confirmed (#31)._
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

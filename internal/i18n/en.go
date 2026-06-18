@@ -594,6 +594,8 @@ var english = Catalog{
 	"dashboard.reminderErr":          "Couldn't create the reminder: %s",
 	"dashboard.goalPrefix":           "Goal · %s",
 	"dashboard.noSpending":           "No spending in this period.",
+	"dashboard.uncategorized":        "Uncategorized",
+	"dashboard.other":                "Other",
 	"dashboard.noTransactions":       "No transactions yet.",
 	"dashboard.savingsSub":           "of income saved · target %d%%",
 	"dashboard.thisPeriod":           "this period",
