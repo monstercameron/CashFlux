@@ -223,8 +223,8 @@ func buildPaletteCommands() []paletteCmd {
 	add(systemNav())
 	cmds = append(cmds,
 		paletteCmd{label: uistate.T("addmenu.transaction"), run: func() { uistate.UseQuickAdd().Set(true) }},
-		paletteCmd{label: "Toggle light / dark theme", run: toggleTheme},
-		paletteCmd{label: "Collapse / expand sidebar", run: toggleSidebar},
+		paletteCmd{label: uistate.T("cmd.toggleTheme"), run: toggleTheme},
+		paletteCmd{label: uistate.T("cmd.toggleSidebar"), run: toggleSidebar},
 		paletteCmd{label: uistate.T("shortcuts.title"), run: toggleHelpOverlay},
 	)
 	// Workspace management straight from the palette.
@@ -234,16 +234,16 @@ func buildPaletteCommands() []paletteCmd {
 			continue
 		}
 		id, name := w.ID, w.Name
-		cmds = append(cmds, paletteCmd{label: "Switch to workspace: " + name, run: func() { switchWorkspace(id) }})
+		cmds = append(cmds, paletteCmd{label: uistate.T("cmd.switchTo") + name, run: func() { switchWorkspace(id) }})
 	}
 	cmds = append(cmds,
-		paletteCmd{label: "New workspace…", run: func() {
+		paletteCmd{label: uistate.T("cmd.newWorkspace"), run: func() {
 			if n := promptName(uistate.T("ws.newPrompt"), uistate.T("ws.newDefault")); n != "" {
 				createWorkspace(n)
 			}
 		}},
-		paletteCmd{label: "Export current workspace", run: func() { exportWorkspace(loadRegistry().ActiveID) }},
-		paletteCmd{label: "Import workspace…", run: func() {
+		paletteCmd{label: uistate.T("cmd.exportWorkspace"), run: func() { exportWorkspace(loadRegistry().ActiveID) }},
+		paletteCmd{label: uistate.T("ws.import"), run: func() {
 			pickFile(".json", func(data []byte) {
 				if !importWorkspace(data) {
 					js.Global().Call("alert", uistate.T("ws.importErr"))
@@ -325,8 +325,8 @@ func buildCommandPalette(doc js.Value) {
 	inp := doc.Call("createElement", "input")
 	inp.Set("id", cmdInputID)
 	inp.Set("type", "text")
-	inp.Call("setAttribute", "placeholder", "Search commands…")
-	inp.Call("setAttribute", "aria-label", "Search commands")
+	inp.Call("setAttribute", "placeholder", uistate.T("cmd.search"))
+	inp.Call("setAttribute", "aria-label", uistate.T("cmd.search"))
 	inp.Get("style").Set("cssText", "width:100%;box-sizing:border-box;padding:0.8rem 1rem;background:transparent;border:0;border-bottom:1px solid var(--border,#2a2a2c);color:inherit;font:inherit;font-size:1rem;outline:none;")
 	card.Call("appendChild", inp)
 
@@ -424,7 +424,9 @@ func renderPalette(doc js.Value, query string) {
 		b.WriteString(`</div>`)
 	}
 	if len(cmdPaletteShown) == 0 {
-		b.WriteString(`<div style="padding:0.6rem 0.7rem;opacity:0.6;">No matching commands</div>`)
+		b.WriteString(`<div style="padding:0.6rem 0.7rem;opacity:0.6;">`)
+		b.WriteString(htmlEscaper.Replace(uistate.T("cmd.noMatch")))
+		b.WriteString(`</div>`)
 	}
 	list.Set("innerHTML", b.String())
 }

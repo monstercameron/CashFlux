@@ -88,6 +88,15 @@ var english = Catalog{
 	"shortcuts.resize":     "Show dashboard resize handles",
 	"shortcuts.toggleHelp": "Toggle this help",
 
+	// Command palette (§6.6)
+	"cmd.search":          "Search commands…",
+	"cmd.noMatch":         "No matching commands",
+	"cmd.toggleTheme":     "Toggle light / dark theme",
+	"cmd.toggleSidebar":   "Collapse / expand sidebar",
+	"cmd.switchTo":        "Switch to workspace: ",
+	"cmd.newWorkspace":    "New workspace…",
+	"cmd.exportWorkspace": "Export current workspace",
+
 	// Common actions (shared across screens)
 	"action.add":    "Add",
 	"action.save":   "Save",
