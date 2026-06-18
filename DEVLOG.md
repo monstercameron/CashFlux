@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: export-data commands in the command palette
+
+- Added "Export JSON" / "Export CSV" to the Cmd+K palette (reusing the existing `exportJSON`/`exportCSV`
+  helpers + the `settings.exportJSON/CSV` i18n keys — no new keys). New `paletteNotify` posts the
+  helpers' success/error via the global Notice/toast atom (works outside a render). Export is read-only
+  (download), so no refresh/reload plumbing needed — kept import/sample/wipe out of the palette since those
+  need a re-render and wipe has reload subtleties.
+- All in `shortcuts.go`; gofmt clean, worktree build exit 0, committed by pathspec.
+
 ## 2026-06-18 — feat: in-app passcode setup form (B17 final; UX audit §6.8)
 
 - Replaced the set-passcode native `prompt()`s with an in-app modal form (`showAppLockSetup`/
@@ -30,7 +39,7 @@ problems and fixes, and what's next.
 - This leaves the shared 24px minimum for smaller non-delete icon controls intact.
 - Browser verification initially caught the cascade order overriding width back to 24px; the final rule now
   computes to 32×32px.
-- Re-ran `go test ./...`, the wasm build, and `gwc verify` after the app-lock i18n commit landed; all passed.
+- Re-ran `go test ./...`, the wasm build, and `gwc verify` after the app-lock setup form landed; all passed.
 
 ## 2026-06-18 — feat: app-lock idle auto-lock (B17 cont.)
 

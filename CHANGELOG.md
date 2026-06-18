@@ -36,7 +36,7 @@ and every commit updates this file under `Unreleased`.
 - **Command palette: Cmd/Ctrl+K (§6.6).** Press Cmd/Ctrl+K to open a searchable palette — type to filter,
   ↑/↓ to move, Enter to run, Esc or a backdrop click to close. It lists every screen (jump to Dashboard,
   Accounts, Planning, Workflows, …), quick actions (Add a transaction, toggle light/dark theme, collapse
-  the sidebar, Keyboard shortcuts), and a
+  the sidebar, export data as JSON/CSV, Keyboard shortcuts), and a
   full **workspace management** — switch to any other workspace, or create / export / import one — straight
   from the keyboard. Built as a self-contained DOM overlay owned by the shortcut layer, with delegated row
   clicks (no per-row listeners); the command list rebuilds on each open so the workspace entries stay current.
@@ -331,7 +331,7 @@ and every commit updates this file under `Unreleased`.
 ### Fixed
 - **Delete buttons have a larger touch target (UX audit §6.1).** `.btn-del` controls now carry an explicit
   32×32px floor instead of relying on the shared 24px icon-button minimum; browser verification confirmed
-  the computed size, and `gwc verify` stayed green after the sample workflow seed update.
+  the computed size, and `gwc verify` stayed green after the app-lock setup form landed.
 - **Selected transaction rows have a real visual state (UX audit §6.4).** Bulk-selection checkboxes now get
   an accent background/border when selected instead of relying on the glyph alone. Browser verification
   covered the selected checkbox's computed colors, and `gwc verify` stayed green after the app-lock updates.
