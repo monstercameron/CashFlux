@@ -11,8 +11,10 @@ and every commit updates this file under `Unreleased`.
   finds recurring charges in your transaction history: it groups identical repeated expenses, infers a
   cadence (weekly / monthly / yearly) from the spacing between them, and reports each one's normalized
   monthly and annual cost plus the next expected renewal date — with a total monthly burden. Base-currency,
-  ignores one-offs and irregular spacing, deterministic and table-tested. The Subscriptions view builds on
-  this next.
+  ignores one-offs and irregular spacing, deterministic and table-tested.
+- **Subscriptions screen (B25).** A new **Subscriptions** item in the Tools nav lists those detected
+  recurring charges — name, cadence, charge, normalized monthly cost, and next renewal date — with your
+  total monthly and yearly subscription burden up top. Read-only; no setup needed.
 - **Reports screen (B21).** A new **Reports** item in the Tools nav: for the period chosen in the top bar
   it shows income / spending / net / savings-rate, a plain-English summary of where the money went, and
   spending by category compared to the prior period (each category's amount with a green ▼ / red ▲ change

@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Subscriptions screen — wire the B25 core into the UI (B25, step 2)
+
+- New `screens.Subscriptions()` registered as `/subscriptions` in the Tools group: runs
+  `subscriptions.Detect(txns, rates, 2)` and renders a stat grid (monthly burden via `MonthlyTotal`, yearly
+  via summed `AnnualAmount`, active count) plus a per-subscription list (name, cadence + next-renewal meta,
+  normalized $/mo, and the charge). Rows are plain text (no On* hooks), so the loop is safe.
+- Gotcha: `cadenceLabel` already exists in planning.go (for `domain.RecurringCadence`) — renamed mine to
+  `subscriptionCadenceLabel` to avoid the package-level redeclaration. Added `subs.*` + `nav.subscriptions`
+  i18n keys. Left the rail icon as the neutral fallback for now (a dedicated icon is an easy follow-up,
+  like Reports). wasm build green, gofmt clean.
+
 ## 2026-06-18 — feat: subscriptions detection — pure core (B25, step 1)
 
 - New pure `internal/subscriptions` (no syscall/js, table-tested): `Detect(txns, rates, minCount)` finds
