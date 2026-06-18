@@ -7,6 +7,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 )
@@ -247,6 +248,50 @@ func TestFormulaRoundTrip(t *testing.T) {
 	}
 	if len(a.Formulas()) != 0 {
 		t.Error("formula still present after delete")
+	}
+}
+
+func TestCustomFieldFormulaExportImportRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+	def := customfields.Def{
+		ID: "cf1", EntityType: "account", Key: "apr", Label: "Annual percentage rate", Type: customfields.TypeNumber,
+	}
+	if err := a.PutCustomFieldDef(def); err != nil {
+		t.Fatalf("PutCustomFieldDef: %v", err)
+	}
+	if err := a.PutAccount(domain.Account{
+		ID: "a1", Name: "Rewards Card", Currency: "USD", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Custom: map[string]any{"apr": 19.99},
+	}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	if err := a.PutFormula(domain.Formula{ID: "f1", Name: "APR stress", Expr: "round(apr * 2)", Enabled: true}); err != nil {
+		t.Fatalf("PutFormula: %v", err)
+	}
+
+	data, err := a.ExportJSON()
+	if err != nil {
+		t.Fatalf("ExportJSON: %v", err)
+	}
+	b := newApp(t, false)
+	if err := b.ImportJSON(data); err != nil {
+		t.Fatalf("ImportJSON: %v", err)
+	}
+	defs := b.CustomFieldDefs()
+	accounts := b.Accounts()
+	if issues := customfields.Validate(defs, accounts[0].Custom); len(issues) != 0 {
+		t.Fatalf("imported custom fields failed validation: %v", issues)
+	}
+	apr, ok := accounts[0].Custom["apr"].(float64)
+	if !ok {
+		t.Fatalf("imported apr = %v (%T), want float64", accounts[0].Custom["apr"], accounts[0].Custom["apr"])
+	}
+	got, err := formula.Eval(b.Formulas()[0].Expr, formula.Env{Vars: map[string]float64{"apr": apr}})
+	if err != nil {
+		t.Fatalf("Eval imported formula: %v", err)
+	}
+	if got != float64(40) {
+		t.Errorf("imported formula result = %v, want 40", got)
 	}
 }
 

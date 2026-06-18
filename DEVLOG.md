@@ -104,6 +104,8 @@ problems and fixes, and what's next.
 - Rechecked after the B17 passcode-hint commit landed and kept a fresh docs delta for this test/TODO commit.
 - Rechecked again after the B17.1 Settings toggles landed; this commit keeps the formula/custom-field test,
   docs note, and checkbox together.
+- Rechecked after the B17.1 unlock animation landed; keeping the staged formula/custom-field test and TODO
+  checkbox paired with fresh docs.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 

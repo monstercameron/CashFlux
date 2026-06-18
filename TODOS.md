@@ -1591,7 +1591,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Build a formula (e.g. `round((income-expense)/income*100)`); assert the live result matches the figures.
 - [ ] Save the formula; reload; assert it persists and re-evaluates.
 - [ ] Assert sandbox safety: a non-allowlisted function / unknown var errors cleanly (no escape).
-- [ ] unit: `formula` eval + security + `customfields.Validate` round-trip.
+- [x] unit: `formula` eval + security + `customfields.Validate` round-trip.
 
 #### D23. Accounting money display consistency on every surface ★
 **Workstream:** the same money value renders identically (grouped thousands, parentheses for negatives) everywhere it appears.

@@ -55,6 +55,8 @@ and every commit updates this file under `Unreleased`.
   test and completed checklist entry remain atomic.
 - **Formula/custom-field commit note.** Reattached the bridge-test changelog entry after the B17.1 settings
   toggle commit landed, keeping this TODO closeout self-contained.
+- **Formula/custom-field verification note.** Reattached the bridge-test docs after the B17.1 unlock
+  animation commit so this test/TODO closeout still updates the changelog.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
