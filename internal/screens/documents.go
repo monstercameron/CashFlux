@@ -120,12 +120,14 @@ func Documents() ui.Node {
 	})
 
 	settings := app.Settings()
+	pr := uistate.UsePrefs().Get().Normalize()
+	useBackendAI := strings.TrimSpace(pr.ServerURL) != "" && strings.TrimSpace(pr.ServerToken) != ""
 	aiModel := settings.OpenAIModel
 	if aiModel == "" || aiModel == "gpt-4o-mini" {
 		aiModel = "gpt-4o" // vision needs a vision-capable model
 	}
 	readAI := ui.UseEvent(func() {
-		if settings.OpenAIKey == "" {
+		if settings.OpenAIKey == "" && !useBackendAI {
 			aiErr.Set(uistate.T("documents.needKey"))
 			return
 		}
@@ -135,24 +137,29 @@ func Documents() ui.Node {
 		}
 		aiLoading.Set(true)
 		aiErr.Set("")
-		ai.SendStructuredVisionChat(settings.OpenAIKey, ai.DefaultBaseURL, aiModel, visionSystemPrompt,
-			"Extract every transaction you can read from this image.", imageURL.Get(), 0.1,
-			"transactions", []byte(visionExtractionSchema),
-			func(content string, _ ai.Usage) {
-				aiLoading.Set(false)
-				rows, err := extract.ParseRows(content)
-				if err != nil {
-					aiErr.Set(err.Error())
-					return
-				}
-				if len(rows) == 0 {
-					aiErr.Set(uistate.T("documents.noneFound"))
-					return
-				}
-				draft.Set(rows)
-			},
-			func(e string) { aiLoading.Set(false); aiErr.Set(e) },
-		)
+		onResult := func(content string, _ ai.Usage) {
+			aiLoading.Set(false)
+			rows, err := extract.ParseRows(content)
+			if err != nil {
+				aiErr.Set(err.Error())
+				return
+			}
+			if len(rows) == 0 {
+				aiErr.Set(uistate.T("documents.noneFound"))
+				return
+			}
+			draft.Set(rows)
+		}
+		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
+		if useBackendAI {
+			ai.SendProxyStructuredVisionChat(pr.ServerURL, pr.ServerToken, aiModel, visionSystemPrompt,
+				"Extract every transaction you can read from this image.", imageURL.Get(), 0.1,
+				"transactions", []byte(visionExtractionSchema), onResult, onError)
+		} else {
+			ai.SendStructuredVisionChat(settings.OpenAIKey, ai.DefaultBaseURL, aiModel, visionSystemPrompt,
+				"Extract every transaction you can read from this image.", imageURL.Get(), 0.1,
+				"transactions", []byte(visionExtractionSchema), onResult, onError)
+		}
 	})
 
 	importDraft := ui.UseEvent(Prevent(func() {

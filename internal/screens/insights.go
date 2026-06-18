@@ -31,6 +31,8 @@ func Insights() ui.Node {
 
 	settings := app.Settings()
 	key := settings.OpenAIKey
+	pr := uistate.UsePrefs().Get().Normalize()
+	useBackendAI := strings.TrimSpace(pr.ServerURL) != "" && strings.TrimSpace(pr.ServerToken) != ""
 	model := settings.OpenAIModel
 	if model == "" {
 		model = "gpt-4o-mini"
@@ -117,7 +119,7 @@ func Insights() ui.Node {
 	}
 
 	explain := ui.UseEvent(func() {
-		if key == "" {
+		if key == "" && !useBackendAI {
 			errMsg.Set(uistate.T("insights.needKey"))
 			return
 		}
@@ -132,15 +134,22 @@ func Insights() ui.Node {
 			{Role: ai.RoleSystem, Content: "You are a concise, encouraging personal-finance assistant. Plain English, no jargon."},
 			{Role: ai.RoleUser, Content: prompt},
 		}
-		cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.5,
-			func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
-			func(e string) { loading.Set(false); errMsg.Set(e) },
-		))
+		if useBackendAI {
+			cancelFn.Set(ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, 0.5,
+				func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
+				func(e string) { loading.Set(false); errMsg.Set(e) },
+			))
+		} else {
+			cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.5,
+				func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
+				func(e string) { loading.Set(false); errMsg.Set(e) },
+			))
+		}
 	})
 
 	ask := ui.UseEvent(Prevent(func() {
 		q := strings.TrimSpace(question.Get())
-		if key == "" {
+		if key == "" && !useBackendAI {
 			errMsg.Set(uistate.T("insights.needKey"))
 			return
 		}
@@ -158,10 +167,17 @@ func Insights() ui.Node {
 			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant. Answer using the provided context; if it isn't enough, say what's missing. Plain English, no jargon."},
 			{Role: ai.RoleUser, Content: "Context — " + aiCtx.Line() + "\n\nQuestion: " + q},
 		}
-		cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4,
-			func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
-			func(e string) { loading.Set(false); errMsg.Set(e) },
-		))
+		if useBackendAI {
+			cancelFn.Set(ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, 0.4,
+				func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
+				func(e string) { loading.Set(false); errMsg.Set(e) },
+			))
+		} else {
+			cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4,
+				func(content string, u ai.Usage) { loading.Set(false); result.Set(content); usage.Set(u) },
+				func(e string) { loading.Set(false); errMsg.Set(e) },
+			))
+		}
 	}))
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates)
@@ -179,7 +195,7 @@ func Insights() ui.Node {
 
 	var action ui.Node
 	switch {
-	case key == "":
+	case key == "" && !useBackendAI:
 		action = P(Class("muted"), uistate.T("insights.keyHint"))
 	case loading.Get():
 		action = Div(Class("flex items-center gap-2"),
@@ -218,11 +234,11 @@ func Insights() ui.Node {
 			H2(Class("card-title"), uistate.T("insights.askTitle")),
 			// The Q&A needs a key; show the box either way so the feature is visible,
 			// with a disabled preview + key hint when no key is set (C9).
-			If(key != "", Form(Class("form-grid"), OnSubmit(ask),
+			If(key != "" || useBackendAI, Form(Class("form-grid"), OnSubmit(ask),
 				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("insights.askPlaceholder")), Value(question.Get()), OnInput(onQuestion)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("insights.ask")),
 			)),
-			If(key == "", Div(
+			If(key == "" && !useBackendAI, Div(
 				Input(Class("field field-wide"), Type("text"), Attr("disabled", "disabled"), Placeholder(uistate.T("insights.askPlaceholder"))),
 				P(Class("muted"), uistate.T("insights.keyHint")),
 			)),

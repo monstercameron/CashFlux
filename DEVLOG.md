@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: route AI screens through backend proxy
+
+- Added a wasm backend AI transport in `internal/ai` for `/v1/ai/chat` and `/v1/ai/vision`, with the same
+  callback/cancel shape as the direct OpenAI transport.
+- Insights, Allocate, and Documents now prefer the backend URL/token saved in Settings; direct browser OpenAI calls
+  remain as the local-only fallback when no backend token is configured.
+- Verified pure proxy request builders, full native tests, wasm build, server build, and `gwc verify`. Final
+  gRPC/server-streaming client replacement remains a backend TODO.
+
 ## 2026-06-18 — feat: bills month-calendar layout helper (B22)
 
 - Added `bills.MonthCalendar(bills, year, month, weekStart) [][]CalendarDay` — the pure month-grid layout

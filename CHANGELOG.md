@@ -356,6 +356,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **AI screens can use the backend proxy instead of browser OpenAI calls.** Insights, Allocate, and Documents now
+  route chat/vision requests through the configured backend URL/token when present, keeping direct browser OpenAI
+  as the local-only fallback.
 - **Backend AI proxy now enforces abuse guards.** Server-side OpenAI calls can be constrained with an
   allow-list of model IDs, max request-body bytes, and per-user daily request/token caps before the encrypted
   BYO key is loaded or an upstream call is made.

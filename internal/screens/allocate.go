@@ -282,6 +282,8 @@ func Allocate() ui.Node {
 	// Optional AI narrative explaining the ranking (bring-your-own-key).
 	settings := app.Settings()
 	aiKey := settings.OpenAIKey
+	pr := uistate.UsePrefs().Get().Normalize()
+	useBackendAI := strings.TrimSpace(pr.ServerURL) != "" && strings.TrimSpace(pr.ServerToken) != ""
 	aiModel := settings.OpenAIModel
 	if aiModel == "" {
 		aiModel = "gpt-4o-mini"
@@ -290,7 +292,7 @@ func Allocate() ui.Node {
 	aiLoading := ui.UseState(false)
 	aiErr := ui.UseState("")
 	explain := ui.UseEvent(func() {
-		if aiKey == "" {
+		if aiKey == "" && !useBackendAI {
 			aiErr.Set(uistate.T("allocate.needKey"))
 			return
 		}
@@ -311,10 +313,17 @@ func Allocate() ui.Node {
 			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant. In 2-3 sentences, explain why this ranking suits the chosen profile. Plain English, no jargon."},
 			{Role: ai.RoleUser, Content: "Profile: " + profile.Get() + ". Ranked places to put new money:\n" + b.String()},
 		}
-		ai.SendChat(aiKey, ai.DefaultBaseURL, aiModel, messages, 0.5,
-			func(c string, _ ai.Usage) { aiLoading.Set(false); aiResult.Set(c) },
-			func(e string) { aiLoading.Set(false); aiErr.Set(e) },
-		)
+		if useBackendAI {
+			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, aiModel, messages, 0.5,
+				func(c string, _ ai.Usage) { aiLoading.Set(false); aiResult.Set(c) },
+				func(e string) { aiLoading.Set(false); aiErr.Set(e) },
+			)
+		} else {
+			ai.SendChat(aiKey, ai.DefaultBaseURL, aiModel, messages, 0.5,
+				func(c string, _ ai.Usage) { aiLoading.Set(false); aiResult.Set(c) },
+				func(e string) { aiLoading.Set(false); aiErr.Set(e) },
+			)
+		}
 	})
 
 	// Optional amount split: when the user enters an amount, distribute it across
