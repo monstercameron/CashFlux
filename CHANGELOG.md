@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Unlock animation (B17.1).** Entering the right passcode now dismisses the lock screen with a brief
+  blur-and-fade so the app appears to sharpen into focus, instead of snapping away. Respects
+  `prefers-reduced-motion` (instant hide when reduced motion is requested).
 - **Passcode hint, shown only after repeated misses (B17).** When setting a passcode you can add an
   optional hint. It stays hidden on the lock screen until **3 failed attempts**, then a "Show hint" link
   appears. A guard rejects any hint that contains the passcode (case-insensitive) so it can't leak the
@@ -50,6 +53,8 @@ and every commit updates this file under `Unreleased`.
   account custom value, and saved formula, then validate and evaluate the imported data together.
 - **Formula/custom-field TODO closeout.** The bridge test now has a post-B17 hint commit docs delta so the
   test and completed checklist entry remain atomic.
+- **Formula/custom-field commit note.** Reattached the bridge-test changelog entry after the B17.1 settings
+  toggle commit landed, keeping this TODO closeout self-contained.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

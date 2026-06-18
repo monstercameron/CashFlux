@@ -25,6 +25,36 @@ func appLockActive() bool {
 	return !g.IsNull() && !g.IsUndefined() && g.Get("style").Get("display").String() != "none"
 }
 
+// unlockGate dismisses the gate with a brief blur→fade so the app behind appears
+// to sharpen into focus, then hides it and resets the styles for next time.
+// Respects prefers-reduced-motion (then it just hides immediately).
+func unlockGate(doc, gate js.Value) {
+	st := gate.Get("style")
+	reduce := false
+	if m := js.Global().Call("matchMedia", "(prefers-reduced-motion: reduce)"); !m.IsNull() && !m.IsUndefined() {
+		reduce = m.Get("matches").Bool()
+	}
+	if reduce {
+		st.Set("display", "none")
+		return
+	}
+	st.Set("transition", "opacity 0.35s ease, filter 0.35s ease, transform 0.35s ease")
+	st.Set("opacity", "0")
+	st.Set("filter", "blur(10px)")
+	st.Set("transform", "scale(1.03)")
+	var done js.Func
+	done = js.FuncOf(func(js.Value, []js.Value) any {
+		st.Set("display", "none")
+		st.Set("opacity", "")
+		st.Set("filter", "")
+		st.Set("transform", "")
+		st.Set("transition", "")
+		done.Release()
+		return nil
+	})
+	js.Global().Call("setTimeout", done, 380)
+}
+
 // maybeLockOnBoot shows the passcode gate at startup when the lock is enabled, so
 // the app's content stays covered until the right passcode is entered. Called once
 // from Run after mount.
@@ -103,7 +133,7 @@ func buildAppLockGate(doc js.Value) {
 	hintBtnEl := func() js.Value { return doc.Call("getElementById", "cf-lock-hint-btn") }
 	attempt := func() {
 		if loadAppLock().Verify(inp.Get("value").String()) {
-			gate.Get("style").Set("display", "none")
+			unlockGate(doc, gate)
 			fails = 0
 			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
 				hb.Get("style").Set("display", "none")

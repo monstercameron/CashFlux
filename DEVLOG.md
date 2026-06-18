@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: lock-screen unlock animation (B17.1)
+
+- On a correct passcode the gate now fades out with a blur+scale (opacity/filter/transform CSS transition,
+  ~0.35s) via a new `unlockGate`, then sets display:none and resets the styles (self-releasing setTimeout
+  callback). Honors `prefers-reduced-motion` (instant hide). Gate-only change.
+- gofmt clean, disk wasm build green (served wasm rebuilt). Committed by pathspec.
+
 ## 2026-06-18 — feat: toggle lock-screen quote/metadata in Settings (B17.1)
 
 - Made the lock-screen content configurable. Added `HideQuotes`/`HideMeta` to `applock.Config` (stored as
@@ -95,6 +102,8 @@ problems and fixes, and what's next.
 - The test validates the imported custom map and evaluates the imported formula against the imported custom
   value, tying the already-covered formula sandbox to custom-field persistence.
 - Rechecked after the B17 passcode-hint commit landed and kept a fresh docs delta for this test/TODO commit.
+- Rechecked again after the B17.1 Settings toggles landed; this commit keeps the formula/custom-field test,
+  docs note, and checkbox together.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 
