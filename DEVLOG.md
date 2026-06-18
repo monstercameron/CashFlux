@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.1–6.2 — WCAG contrast + touch targets (CSS)
+
+- User redirected the loop to TODOS section 6 (the 2026-06-18 UX/UI polish audit). Started with the two
+  cheapest-but-high-value, lowest-collision clusters: both are pure `web/index.html` CSS, so a single
+  shared file, no Go/wasm rebuild.
+- 6.2 contrast: `faint` #6c6c72→#7d7d85 (verified ~4.7:1 on #0e0e0f, was ~3.1:1) and `dim`
+  #a6a6ac→#ababb3, in BOTH the Tailwind config block and the `:root` vars (two color systems coexist).
+  `.insight-dot` 1.05rem→1rem.
+- 6.1 touch targets: `.field` padding up + 38px min-height (36px floored under compact density); to-do
+  `.check` made a centered 24×24 inline-grid with a right margin; `.btn-del` padding bumped within its
+  existing 24×24; color picker 46×34→44×44. (`.btn-del`/`.toast-x`/`.set-close` already had the 24×24 hit
+  area from a prior fix.) Skipped the screen-file parts of 6.1 (transactions.go checkbox markup,
+  custompagesnav ⋯, shell rail min-size) — those are the parallel session's hot files; deferred.
+- Did NOT touch TODOS.md to check the items off — it's perpetually dirty from the parallel session; the
+  items addressed are 6.2 (faint/dim/insight-dot) and the CSS parts of 6.1 (field/check/btn-del/color).
+- Verified: probe ok=true / 200 (CSS can't break the wasm; confirmed it still boots). Visual contrast/size
+  needs an eyeball pass in-browser (probe can't read computed styles). Atomic commit per the git-tree memory.
+- Next in §6: 6.11 light-theme contrast (index.html only, low collision), then the keyboard-shortcut
+  features in 6.6 (new files, e.g. Alt+1..9 section jump / Cmd+K palette).
+
 ## 2026-06-18 — feat: reorder workspaces (arrange the switcher)
 
 - `Registry.Move(id, toIndex)` — clamps toIndex into range, order-preserving, no-ops on unknown id /

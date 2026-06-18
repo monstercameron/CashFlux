@@ -40,7 +40,7 @@
         fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'], display: ['Fraunces','Georgia','serif'] },
         colors: {
           base:'#0e0e0f', tile:'#121214', line:'#232325', hover:'#161617',
-          fg:'#f4f4f5', dim:'#a6a6ac', faint:'#6c6c72',
+          fg:'#f4f4f5', dim:'#ababb3', faint:'#7d7d85',
           up:'#54b884', down:'#d8716f', warn:'#cfa14e',
         },
       } } }
@@ -55,7 +55,7 @@
         --bg-card: #121214;
         --border: #2a2a2c;
         --text: #f4f4f5;
-        --text-dim: #a6a6ac;
+        --text-dim: #ababb3;
         --text-faint: #888890;
         --accent: #2e8b57;
         --accent-dim: #1f2c24;
@@ -184,12 +184,12 @@
       /* Spending highlights (Insights anomaly cards) */
       .insight-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
       .insight-row { display: flex; align-items: flex-start; gap: 0.6rem; margin: 0; line-height: 1.45; }
-      .insight-dot { flex: none; font-weight: 800; font-size: 1.05rem; line-height: 1.35; }
+      .insight-dot { flex: none; font-weight: 800; font-size: 1rem; line-height: 1.35; }
       /* Compact density: tighter cards, rows, and fields (set via data-density on <html>). */
       [data-density="compact"] .card { padding: 0.7rem 0.8rem; margin-bottom: 0.6rem; }
       [data-density="compact"] .card-title { margin-bottom: 0.45rem; }
       [data-density="compact"] .row { padding-top: 0.3rem; padding-bottom: 0.3rem; }
-      [data-density="compact"] .field, [data-density="compact"] .btn { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+      [data-density="compact"] .field, [data-density="compact"] .btn { padding-top: 0.35rem; padding-bottom: 0.35rem; min-height: 36px; }
 
       /* Light theme (set via data-theme="light" on <html>). Overrides the legacy
          palette variables, the shell's Tailwind utility colors, and the widgets'
@@ -258,11 +258,11 @@
 
       /* Forms */
       .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; align-items: end; }
-      .field { width: 100%; padding: 0.4rem 0.55rem; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: inherit; }
+      .field { width: 100%; padding: 0.5rem 0.6rem; min-height: 38px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: inherit; }
       .field:focus { outline: none; border-color: var(--accent); }
       /* Native color picker rendered as a proper swatch (a bare-width text field
          clipped it to a thin line). */
-      .color-input { width: 46px; height: 34px; padding: 3px; background: var(--bg-elev);
+      .color-input { width: 44px; height: 44px; padding: 3px; background: var(--bg-elev);
         border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
       .color-input::-webkit-color-swatch-wrapper { padding: 0; }
       .color-input::-webkit-color-swatch { border: none; border-radius: 5px; }
@@ -272,7 +272,7 @@
       .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; transition: filter 0.12s; }
       .btn:hover { filter: brightness(1.12); }
       .btn-primary { background: var(--accent); color: #052e13; border-color: var(--accent); font-weight: 600; }
-      .btn-del { background: transparent; border: 0; color: var(--text-faint); cursor: pointer; font-size: 1rem; padding: 0 0.3rem; }
+      .btn-del { background: transparent; border: 0; color: var(--text-faint); cursor: pointer; font-size: 1rem; padding: 0.25rem 0.4rem; }
       .btn-del:hover { color: var(--danger); }
       /* WCAG 2.5.8 (AA): small icon-only buttons get at least a 24x24 hit area,
          with the glyph centered, so they're comfortably tappable. */
@@ -319,7 +319,7 @@
 
       /* To-do */
       .field-wide { grid-column: 1 / -1; }
-      .check { background: transparent; border: 0; color: var(--text-dim); cursor: pointer; font-size: 1.15rem; padding: 0 0.5rem 0 0; line-height: 1; }
+      .check { background: transparent; border: 0; color: var(--text-dim); cursor: pointer; font-size: 1.15rem; line-height: 1; min-width: 24px; min-height: 24px; display: inline-grid; place-items: center; margin-right: 0.4rem; }
       .check:hover { color: var(--accent); }
       .row.done .row-desc { text-decoration: line-through; color: var(--text-faint); }
       .task-meta { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.15rem; }

@@ -268,6 +268,13 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Accessibility pass — text contrast & touch-target sizes (WCAG AA, §6.1–6.2 CSS).** Muted text now
+  meets AA: the `faint` token went `#6c6c72` → `#7d7d85` (was ~3.1:1 on the base, used for rail section
+  headers, breadcrumb separators, the "New page" link) and `dim` `#a6a6ac` → `#ababb3` (row meta, budget
+  sub-text). Interactive targets grew toward the 24–44px minimums: form `.field` padding raised with a
+  38px floor (36px under compact), the to-do `.check` checkbox is now a centered 24×24 grid, `.btn-del`
+  padding bumped, and the native color picker enlarged 46×34 → 44×44. Also nudged the oversized
+  `.insight-dot` (1.05rem → 1rem) back into balance with the body type.
 - **Deep-link refresh works on nested routes (e.g. `/p/<page>`).** Refreshing a custom-page URL showed
   "wasm_exec.js failed to load": the relative asset paths (`./wasm_exec.js`, `./bin/main.wasm`) resolved
   against the route's directory (`/p/`) and 404'd. Added a `<base href>` set at the very top of `<head>`
