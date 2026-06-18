@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.6 — segmented control arrow keys
+
+- Closed the shared segmented-control keyboard item in `internal/ui/controls.go`: radiogroups now handle
+  Arrow Left/Up and Arrow Right/Down, wrapping through options and calling the existing `OnSelect`.
+- Kept the change at the `Segmented` container so every existing caller gets the behavior without new
+  screen-specific code.
+- Browser verification focused the period selector and confirmed ArrowRight moved `Month` to `Quarter`,
+  then ArrowLeft moved back to `Month`; `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — fix: UX polish §6.4 — workspace switcher divider spacing
 
 - Closed the workspace-switcher separator spacing item in `internal/app/wsswitcher.go`: the divider before

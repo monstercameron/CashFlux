@@ -329,6 +329,8 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Segmented controls support arrow-key navigation (UX audit §6.6).** Shared radiogroups now move with
+  Left/Up and Right/Down keys, wrapping across options. Browser verification covered the period selector.
 - **Workspace switcher actions have clearer separation (UX audit §6.4).** The menu divider now carries
   top padding as well as vertical margin, giving management actions more breathing room. Browser
   verification covered the rendered divider class.

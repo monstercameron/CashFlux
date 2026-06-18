@@ -30,19 +30,45 @@ func Segmented(props SegmentedProps) uic.Node {
 }
 
 func segmented(props SegmentedProps) uic.Node {
-	args := []any{Class("seg"), Attr("role", "radiogroup")}
+	options := props.Options
+	selected := props.Selected
+	onSelect := props.OnSelect
+	move := func(delta int) {
+		if onSelect == nil || len(options) == 0 {
+			return
+		}
+		i := 0
+		for idx, o := range options {
+			if o.Value == selected {
+				i = idx
+				break
+			}
+		}
+		next := (i + delta + len(options)) % len(options)
+		onSelect(options[next].Value)
+	}
+	args := []any{Class("seg"), Attr("role", "radiogroup"), OnKeyDown(func(e uic.KeyboardEvent) {
+		switch e.GetKey() {
+		case "ArrowLeft", "ArrowUp":
+			e.PreventDefault()
+			move(-1)
+		case "ArrowRight", "ArrowDown":
+			e.PreventDefault()
+			move(1)
+		}
+	})}
 	if props.Label != "" {
 		args = append(args, Attr("aria-label", props.Label))
 	}
 	args = append(args,
-		MapKeyed(props.Options,
+		MapKeyed(options,
 			func(o SegOption) any { return o.Value },
 			func(o SegOption) uic.Node {
 				return uic.CreateElement(segButton, segButtonProps{
 					Value:    o.Value,
 					Label:    o.Label,
-					Active:   o.Value == props.Selected,
-					OnSelect: props.OnSelect,
+					Active:   o.Value == selected,
+					OnSelect: onSelect,
 				})
 			},
 		),
