@@ -9,8 +9,10 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - **Command palette: Cmd/Ctrl+K (§6.6).** Press Cmd/Ctrl+K to open a searchable palette — type to filter,
   ↑/↓ to move, Enter to run, Esc or a backdrop click to close. It lists every screen (jump to Dashboard,
-  Accounts, Planning, Workflows, …) plus quick actions (Add a transaction, Keyboard shortcuts). Built as a
-  self-contained DOM overlay owned by the shortcut layer, with delegated row clicks (no per-row listeners).
+  Accounts, Planning, Workflows, …), quick actions (Add a transaction, Keyboard shortcuts), and a
+  **Switch to workspace: …** entry per other workspace — switch contexts straight from the keyboard. Built
+  as a self-contained DOM overlay owned by the shortcut layer, with delegated row clicks (no per-row
+  listeners); the command list rebuilds on each open so the workspace entries stay current.
 - **Quick-add hotkey: Alt+N (§6.6).** Press Alt+N anywhere (outside a text field) to open the quick-add
   transaction panel directly, skipping the +Add menu. Chose Alt+N over the audit's Ctrl/Cmd+Shift+A —
   that chord is reserved by Chrome (tab search) and Firefox (add-ons) — keeping it in the Alt family with
@@ -295,6 +297,8 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Rail section labels are easier to read (UX audit §6.2).** Sidebar group labels now use 11px type with
+  calmer tracking, reducing clipping risk while keeping the compact rail rhythm.
 - **Rail navigation items have a real minimum hit area (UX audit §6.1).** Sidebar nav rows now carry
   explicit `min-w-10 min-h-10` guards, so icon-only collapsed items stay comfortably tappable instead of
   relying only on padding. Browser verification covered the Dashboard row carrying both guards.

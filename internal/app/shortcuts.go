@@ -218,6 +218,15 @@ func buildPaletteCommands() []paletteCmd {
 		paletteCmd{label: uistate.T("addmenu.transaction"), run: func() { uistate.UseQuickAdd().Set(true) }},
 		paletteCmd{label: "Keyboard shortcuts", run: toggleHelpOverlay},
 	)
+	// Switch to any other workspace straight from the palette.
+	reg := loadRegistry()
+	for _, w := range reg.Workspaces {
+		if w.ID == reg.ActiveID {
+			continue
+		}
+		id, name := w.ID, w.Name
+		cmds = append(cmds, paletteCmd{label: "Switch to workspace: " + name, run: func() { switchWorkspace(id) }})
+	}
 	return cmds
 }
 
@@ -249,6 +258,7 @@ func closeCommandPalette() {
 // openCommandPalette reveals the palette, clears the query, focuses the input,
 // and renders the full command list.
 func openCommandPalette(doc, ov js.Value) {
+	cmdPaletteCmds = buildPaletteCommands() // rebuild so the workspace list stays current
 	ov.Get("style").Set("display", "grid")
 	if inp := doc.Call("getElementById", cmdInputID); !inp.IsNull() && !inp.IsUndefined() {
 		inp.Set("value", "")
@@ -258,8 +268,6 @@ func openCommandPalette(doc, ov js.Value) {
 }
 
 func buildCommandPalette(doc js.Value) {
-	cmdPaletteCmds = buildPaletteCommands()
-
 	ov := doc.Call("createElement", "div")
 	ov.Set("id", cmdPaletteID)
 	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:210;display:grid;place-items:start center;padding-top:12vh;background:rgba(0,0,0,0.5);")

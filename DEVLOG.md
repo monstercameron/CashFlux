@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: switch workspaces from the command palette
+
+- Enriched the Cmd/Ctrl+K palette with "Switch to workspace: <name>" entries (one per non-active
+  workspace) that call `switchWorkspace(id)` — integrating two features I own, entirely within
+  `shortcuts.go`. Moved `cmdPaletteCmds = buildPaletteCommands()` from build-time into `openCommandPalette`
+  so the command list (and thus the workspace entries) rebuilds on every open and never goes stale.
+- Build note: a full wasm build currently fails ONLY on the parallel session's `internal/screens/
+  custompage.go` (unused imports — their mid-edit WIP); my `shortcuts.go` change has zero errors. Verified
+  HEAD+my-change compiles by copying it into a detached worktree at HEAD and building (`GOOS=js` exit 0).
+  Committed by pathspec, so their broken WIP isn't included. Couldn't refresh the served wasm (their break
+  blocks `gwc dev`'s rebuild) — confirm in-browser once their build is green.
+
 ## 2026-06-18 — feat: §6.6 command palette (Cmd/Ctrl+K) — the capstone keyboard item
 
 - The remaining [H] §6.6 item. Self-contained DOM overlay in `shortcuts.go` (same pattern as the help
