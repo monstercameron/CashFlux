@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.11 — accent swatch hit area
+
+- Closed the settings accent-swatch target-size item in `web/index.html`: `.swatch` moved from 22×22px to
+  24×24px, preserving the existing 6px radius and selection border.
+- This is CSS-only because the shared `ui.Swatch` component already emits the `.swatch` class for accent
+  choices.
+
 ## 2026-06-18 — refactor: i18n the command palette (§6.6, finishes the keyboard-UI pass)
 
 - Routed the Cmd+K palette through the catalog: search placeholder/aria + "No matching commands" + the

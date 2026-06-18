@@ -303,6 +303,8 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Settings accent swatches meet the 24px hit-area floor (UX audit §6.11).** Theme accent chips now render
+  at 24×24px instead of 22×22px.
 - **Priority badges are less cramped (UX audit §6.2).** To-do priority chips now use 0.75rem text and a
   little more metadata spacing, keeping compact rows readable. Browser verification confirmed the computed
   badge size and gap.
