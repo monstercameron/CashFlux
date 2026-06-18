@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Pause the lock without losing your passcode (B17).** Settings → App lock has a **Lock screen** switch
+  that turns the gate off while keeping the passcode — flip it back on and no re-entry is needed (distinct
+  from "Remove passcode lock", which clears it). A paused lock won't gate at startup or auto-lock. Backed by
+  `Config.Suspended` + `Active()` (table-tested).
 - **Unlock animation (B17.1).** Entering the right passcode now dismisses the lock screen with a brief
   blur-and-fade so the app appears to sharpen into focus, instead of snapping away. Respects
   `prefers-reduced-motion` (instant hide when reduced motion is requested).

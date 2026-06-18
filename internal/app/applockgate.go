@@ -59,7 +59,7 @@ func unlockGate(doc, gate js.Value) {
 // the app's content stays covered until the right passcode is entered. Called once
 // from Run after mount.
 func maybeLockOnBoot() {
-	if loadAppLock().Enabled {
+	if loadAppLock().Active() {
 		showAppLockGate()
 	}
 }
@@ -67,7 +67,7 @@ func maybeLockOnBoot() {
 // showAppLockGate covers the whole app with a modal passcode gate (building it on
 // first use). A correct passcode hides it. No-op when the lock isn't enabled.
 func showAppLockGate() {
-	if !loadAppLock().Enabled {
+	if !loadAppLock().Active() {
 		return
 	}
 	doc := js.Global().Get("document")
@@ -413,7 +413,7 @@ func wireAutoLock() {
 
 	check := js.FuncOf(func(js.Value, []js.Value) any {
 		c := loadAppLock()
-		if !c.Enabled || c.AutoLockMinutes <= 0 {
+		if !c.Active() || c.AutoLockMinutes <= 0 {
 			return nil
 		}
 		if !c.ShouldAutoLock(int((now() - last) / 60000)) {

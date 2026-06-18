@@ -17,22 +17,36 @@ import (
 func appLockSection(onChange func()) uic.Node {
 	c := loadAppLock()
 	if c.Enabled {
-		status := uistate.T("applock.statusOn")
-		if c.AutoLockMinutes > 0 {
-			status = fmt.Sprintf(uistate.T("applock.statusOnAuto"), c.AutoLockMinutes)
+		active := !c.Suspended
+		status := uistate.T("applock.statusSuspended")
+		if active {
+			status = uistate.T("applock.statusOn")
+			if c.AutoLockMinutes > 0 {
+				status = fmt.Sprintf(uistate.T("applock.statusOnAuto"), c.AutoLockMinutes)
+			}
 		}
+		actions := []any{Class("flex flex-wrap gap-2 py-1")}
+		if active {
+			actions = append(actions, dataBtn(uistate.T("applock.cmdLock"), false, showAppLockGate))
+		}
+		actions = append(actions,
+			dataBtn(uistate.T("applock.cmdChange"), false, func() { showAppLockSetup(onChange) }),
+			dataBtn(uistate.T("applock.cmdRemove"), true, func() {
+				disableAppLock()
+				if onChange != nil {
+					onChange()
+				}
+			}),
+		)
 		return Div(Class("flex flex-col gap-1"),
 			P(Class("muted text-xs"), status),
-			Span(Class("flex flex-wrap gap-2 py-1"),
-				dataBtn(uistate.T("applock.cmdLock"), false, showAppLockGate),
-				dataBtn(uistate.T("applock.cmdChange"), false, func() { showAppLockSetup(onChange) }),
-				dataBtn(uistate.T("applock.cmdRemove"), true, func() {
-					disableAppLock()
-					if onChange != nil {
-						onChange()
-					}
-				}),
-			),
+			ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("applock.toggleActive"), On: active, OnChange: func(v bool) {
+				setLockSuspended(!v)
+				if onChange != nil {
+					onChange()
+				}
+			}}),
+			Span(actions...),
 			ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("applock.toggleMeta"), On: !c.HideMeta, OnChange: func(v bool) {
 				setLockHideMeta(!v)
 				if onChange != nil {

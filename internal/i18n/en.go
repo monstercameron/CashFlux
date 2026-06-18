@@ -131,6 +131,8 @@ var english = Catalog{
 	"applock.hintPrefix":      "Hint: ",
 	"applock.toggleMeta":      "Show greeting & date on the lock screen",
 	"applock.toggleQuotes":    "Show a daily quote on the lock screen",
+	"applock.toggleActive":    "Lock screen",
+	"applock.statusSuspended": "Paused — your passcode is kept, but the lock screen is off.",
 
 	// Common actions (shared across screens)
 	"action.add":    "Add",

@@ -75,6 +75,28 @@ func TestValidHintAndStorage(t *testing.T) {
 	}
 }
 
+func TestActiveAndSuspend(t *testing.T) {
+	c := Config{}.WithPasscode("1234", "s", 5, "")
+	if !c.Active() {
+		t.Error("a freshly set lock should be active")
+	}
+	// Suspending keeps the credentials but deactivates the gate + auto-lock.
+	c.Suspended = true
+	if c.Active() {
+		t.Error("a suspended lock must not be active")
+	}
+	if c.ShouldAutoLock(9999) {
+		t.Error("a suspended lock must not auto-lock")
+	}
+	if !c.Verify("1234") {
+		t.Error("a suspended lock still knows its passcode (resume needs no re-entry)")
+	}
+	// A disabled (no-passcode) lock is never active.
+	if (Config{}).Active() {
+		t.Error("an unconfigured lock is not active")
+	}
+}
+
 func TestVerifyDisabled(t *testing.T) {
 	if (Config{}).Verify("anything") {
 		t.Error("a disabled/unconfigured lock must never verify")

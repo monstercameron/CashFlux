@@ -73,3 +73,11 @@ func setLockHideMeta(hide bool) {
 		saveAppLock(c)
 	}
 }
+
+// setLockSuspended pauses or resumes the gate without dropping the passcode.
+func setLockSuspended(suspended bool) {
+	if c := loadAppLock(); c.Enabled {
+		c.Suspended = suspended
+		saveAppLock(c)
+	}
+}

@@ -28,7 +28,14 @@ type Config struct {
 	// value / older configs) is "shown" — both default ON per the B17.1 spec.
 	HideQuotes bool `json:"hideQuotes,omitempty"`
 	HideMeta   bool `json:"hideMeta,omitempty"`
+	// Suspended pauses the gate without dropping the passcode: the credentials are
+	// kept, but the lock screen doesn't appear. Resuming needs no new passcode.
+	Suspended bool `json:"suspended,omitempty"`
 }
+
+// Active reports whether the gate should actually guard the app: a passcode is set
+// and the lock isn't paused.
+func (c Config) Active() bool { return c.Enabled && !c.Suspended }
 
 // ValidHint reports whether hint is safe to store with the given passcode. An
 // empty hint (no hint) is always fine; a non-empty hint must not contain the
@@ -93,5 +100,5 @@ func (c Config) Verify(passcode string) bool {
 // minutes the user has been idle. Only fires when the lock is enabled with a
 // positive auto-lock window.
 func (c Config) ShouldAutoLock(idleMinutes int) bool {
-	return c.Enabled && c.AutoLockMinutes > 0 && idleMinutes >= c.AutoLockMinutes
+	return c.Active() && c.AutoLockMinutes > 0 && idleMinutes >= c.AutoLockMinutes
 }

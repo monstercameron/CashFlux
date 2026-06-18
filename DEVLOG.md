@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: suspend/resume the lock without wiping creds (B17)
+
+- Implemented the spec's "Lock screen toggle that flips Enabled without touching the credentials."
+  `applock.Config.Suspended` + `Active() = Enabled && !Suspended`; `ShouldAutoLock` now keys off `Active`.
+  All gate-show paths (maybeLockOnBoot, showAppLockGate, the auto-lock timer) check `Active()`, so a paused
+  lock keeps its passcode but never appears. `setLockSuspended` flips it; Settings → App lock gains a "Lock
+  screen" toggle + a "Paused" status, and hides "Lock now" while paused. Remove still fully clears.
+- Table test covers active→suspend (not active, no auto-lock, still verifies passcode) and disabled.
+  applock tests green, gofmt clean, disk wasm build green (served wasm rebuilt). Committed by pathspec.
+
 ## 2026-06-18 — feat: lock-screen unlock animation (B17.1)
 
 - On a correct passcode the gate now fades out with a blur+scale (opacity/filter/transform CSS transition,
