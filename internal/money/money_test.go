@@ -2,6 +2,7 @@ package money
 
 import (
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -77,6 +78,41 @@ func TestAddSub(t *testing.T) {
 			}
 			if diff.Amount != tt.sub {
 				t.Errorf("Sub amount = %d, want %d", diff.Amount, tt.sub)
+			}
+		})
+	}
+}
+
+func TestAddSubOverflow(t *testing.T) {
+	tests := []struct {
+		name   string
+		op     string
+		a, b   Money
+		wantOK bool
+	}{
+		{"add positive overflow", "add", New(math.MaxInt64, "USD"), New(1, "USD"), false},
+		{"add negative overflow", "add", New(math.MinInt64, "USD"), New(-1, "USD"), false},
+		{"add at boundary ok", "add", New(math.MaxInt64-1, "USD"), New(1, "USD"), true},
+		{"sub positive overflow", "sub", New(math.MaxInt64, "USD"), New(-1, "USD"), false},
+		{"sub negative overflow", "sub", New(math.MinInt64, "USD"), New(1, "USD"), false},
+		{"sub at boundary ok", "sub", New(math.MinInt64+1, "USD"), New(1, "USD"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var err error
+			if tt.op == "add" {
+				_, err = tt.a.Add(tt.b)
+			} else {
+				_, err = tt.a.Sub(tt.b)
+			}
+			if tt.wantOK {
+				if err != nil {
+					t.Fatalf("%s: unexpected error: %v", tt.op, err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrOverflow) {
+				t.Errorf("%s err = %v, want ErrOverflow", tt.op, err)
 			}
 		})
 	}

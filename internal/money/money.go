@@ -19,6 +19,10 @@ import (
 // of different currencies.
 var ErrCurrencyMismatch = errors.New("money: currency mismatch")
 
+// ErrOverflow is returned when an arithmetic operation would exceed the range of
+// the underlying int64 minor-unit representation.
+var ErrOverflow = errors.New("money: amount overflow")
+
 // Money is an amount in a single currency, stored as integer minor units.
 type Money struct {
 	// Amount is the value in the currency's smallest unit (e.g. cents).
@@ -64,20 +68,34 @@ func (m Money) Abs() Money {
 	return m
 }
 
-// Add returns m + n. It fails if the two values are in different currencies.
+// Add returns m + n. It fails if the two values are in different currencies or
+// if the sum would overflow the int64 minor-unit range.
 func (m Money) Add(n Money) (Money, error) {
 	if m.Currency != n.Currency {
 		return Money{}, currencyMismatch(m, n)
 	}
-	return Money{Amount: m.Amount + n.Amount, Currency: m.Currency}, nil
+	sum := m.Amount + n.Amount
+	// Signed addition overflows when the result's sign disagrees with the
+	// (equal) signs of both operands.
+	if (n.Amount > 0 && sum < m.Amount) || (n.Amount < 0 && sum > m.Amount) {
+		return Money{}, fmt.Errorf("%w: %d + %d", ErrOverflow, m.Amount, n.Amount)
+	}
+	return Money{Amount: sum, Currency: m.Currency}, nil
 }
 
-// Sub returns m - n. It fails if the two values are in different currencies.
+// Sub returns m - n. It fails if the two values are in different currencies or
+// if the difference would overflow the int64 minor-unit range.
 func (m Money) Sub(n Money) (Money, error) {
 	if m.Currency != n.Currency {
 		return Money{}, currencyMismatch(m, n)
 	}
-	return Money{Amount: m.Amount - n.Amount, Currency: m.Currency}, nil
+	diff := m.Amount - n.Amount
+	// Signed subtraction overflows when the operands' signs differ and the
+	// result's sign disagrees with the minuend's.
+	if (n.Amount < 0 && diff < m.Amount) || (n.Amount > 0 && diff > m.Amount) {
+		return Money{}, fmt.Errorf("%w: %d - %d", ErrOverflow, m.Amount, n.Amount)
+	}
+	return Money{Amount: diff, Currency: m.Currency}, nil
 }
 
 // Cmp compares m and n, returning -1 if m < n, 0 if equal, and +1 if m > n.
