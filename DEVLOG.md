@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — test: D18 net-worth rollups
+
+- Closed the D18 pure ledger unit-test checklist item with a combined `NetWorth`/`NetByOwner` case in
+  `internal/ledger/ledger_test.go`.
+- The test mixes two individual owners, the household group owner, a EUR asset converted to USD, a liability,
+  and an archived account that must be excluded from both total net worth and owner rollups.
+- Verification: `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — test: D9 payoff final-month boundary
 
 - Closed the D9 pure unit-test checklist item by adding an exact final-payoff-month case in

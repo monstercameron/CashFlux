@@ -19,6 +19,8 @@ and every commit updates this file under `Unreleased`.
   target date, complementing the existing allocate goal-progress scorer tests for D12.
 - **Payoff final-month coverage.** The `payoff` unit tests now pin the exact final payoff month where the
   last payment is capped at the remaining balance plus interest, completing the D9 payoff/allocate unit item.
+- **Net-worth rollup coverage.** The `ledger` unit tests now cover multi-member, group, multi-currency, and
+  archived-account net-worth rollups in one D18 regression case.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

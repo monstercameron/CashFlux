@@ -1556,7 +1556,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Assert net worth = assets − liabilities in base currency, matching the Accounts header and KPI.
 - [ ] Assert per-member rollup sums to the household total (individual + group).
 - [ ] Archive an account; assert it drops out of net worth but is restorable.
-- [ ] unit: `ledger.NetWorth` + rollup tests (multi-member, multi-currency, archived).
+- [x] unit: `ledger.NetWorth` + rollup tests (multi-member, multi-currency, archived).
 
 #### D19. Member add/reassign/delete ripples ★
 **Workstream:** add a member, reassign ownership, then delete a member with owned entities.

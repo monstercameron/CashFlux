@@ -263,6 +263,54 @@ func TestNetByOwner(t *testing.T) {
 	}
 }
 
+func TestNetWorthRollupsMultiMemberMultiCurrencyArchived(t *testing.T) {
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.20}}
+	accounts := []domain.Account{
+		{ID: "m1save", OwnerID: "m1", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(100000)},
+		{ID: "m2eur", OwnerID: "m2", Class: domain.ClassAsset, Currency: "EUR", OpeningBalance: money.New(50000, "EUR")},
+		{ID: "group", OwnerID: domain.GroupOwnerID, Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(25000)},
+		{ID: "m1card", OwnerID: "m1", Class: domain.ClassLiability, Currency: "USD", OpeningBalance: usd(-30000)},
+		{ID: "old", OwnerID: "m2", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(999999), Archived: true},
+	}
+	txns := []domain.Transaction{
+		{AccountID: "m1save", Amount: usd(10000)},
+		{AccountID: "m2eur", Amount: money.New(10000, "EUR")},
+		{AccountID: "old", Amount: usd(999999)},
+	}
+
+	net, assets, liabilities, err := NetWorth(accounts, txns, rates)
+	if err != nil {
+		t.Fatalf("NetWorth error: %v", err)
+	}
+	if !assets.Equal(usd(207000)) {
+		t.Errorf("assets = %v, want 207000 USD", assets)
+	}
+	if !liabilities.Equal(usd(30000)) {
+		t.Errorf("liabilities = %v, want 30000 USD", liabilities)
+	}
+	if !net.Equal(usd(177000)) {
+		t.Errorf("net = %v, want 177000 USD", net)
+	}
+
+	byOwner, err := NetByOwner(accounts, txns, rates)
+	if err != nil {
+		t.Fatalf("NetByOwner error: %v", err)
+	}
+	want := map[string]money.Money{
+		"m1":                usd(80000),
+		"m2":                usd(72000),
+		domain.GroupOwnerID: usd(25000),
+	}
+	for owner, w := range want {
+		if !byOwner[owner].Equal(w) {
+			t.Errorf("owner %q = %v, want %v", owner, byOwner[owner], w)
+		}
+	}
+	if _, ok := byOwner["old"]; ok {
+		t.Error("archived account owner should not appear")
+	}
+}
+
 func TestUtilization(t *testing.T) {
 	cases := []struct {
 		name           string
