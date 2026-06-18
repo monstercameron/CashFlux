@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend repository layer has native coverage.** Added typed server-store methods for users and
+  workspace registry rows, including per-user listing/getting and soft-delete tombstones for the
+  future SyncService.
 - **Backend storage schema is pinned.** Added the server SQLite migration foundation with WAL/foreign-key
   setup, schema-version rejection for newer databases, and the planned Cloud tables for users,
   workspaces, snapshots/history, blobs, encrypted AI keys, and usage.

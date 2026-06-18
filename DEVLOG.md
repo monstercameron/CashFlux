@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: backend repository layer
+
+- Added typed server repository structs and methods for OAuth users and workspace registry rows:
+  upsert user, put/list/get workspace, and soft-delete workspace tombstones scoped by user.
+- Covered ordering, cross-user isolation at the repository boundary, validation errors, and deleted-vs-active
+  list behavior with native server tests. Snapshot payload/LWW methods stay as the next storage atom.
+
 ## 2026-06-18 - feat: backend storage schema
 
 - Added `internal/server.Store`, `OpenStore`, and schema-version migration handling for the backend DB.
