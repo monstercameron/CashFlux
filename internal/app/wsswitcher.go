@@ -17,6 +17,7 @@ import (
 // swapped-in context), which also dismisses the menu.
 func WorkspaceSwitcher() uic.Node {
 	open := uic.UseState(false)
+	collapsed := uistate.UseRailCollapsed().Get()
 	r := loadRegistry()
 	active, ok := r.Active()
 	if !ok {
@@ -39,13 +40,31 @@ func WorkspaceSwitcher() uic.Node {
 		}
 	}
 
+	// In the collapsed rail (58px) a full-width labelled button doesn't fit, so the
+	// trigger becomes an icon-only square and its menu flies out to the right at a
+	// readable fixed width instead of stretching edge-to-edge.
+	menuCls := "absolute left-0 right-0 mt-1 z-30 rounded-[4px] border border-line bg-base p-1 text-[13px]"
+	if collapsed {
+		menuCls = "absolute left-full top-0 ml-1 z-40 w-48 rounded-[4px] border border-line bg-base p-1 text-[13px] shadow-lg"
+	}
 	menu := Fragment()
 	if open.Get() {
-		menu = Div(Class("absolute left-0 right-0 mt-1 z-30 rounded-[4px] border border-line bg-base p-1 text-[13px]"),
+		menu = Div(Class(menuCls),
 			Div(Class("flex flex-col gap-0.5"), rows),
 			Div(Class("border-t border-line my-1")),
 			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onNew), uistate.T("ws.new")),
 			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onDup), uistate.T("ws.duplicate")),
+		)
+	}
+
+	if collapsed {
+		return Div(Class("ws-switch relative mx-auto mt-3 w-9"),
+			Button(Class("w-9 h-9 grid place-items-center rounded-[4px] border border-line text-[13px] font-medium hover:bg-hover"),
+				Type("button"), Title(active.Name+" · "+uistate.T("ws.switch")),
+				OnClick(func() { open.Set(!open.Get()) }),
+				workspaceInitial(active.Name),
+			),
+			menu,
 		)
 	}
 
@@ -58,6 +77,15 @@ func WorkspaceSwitcher() uic.Node {
 		),
 		menu,
 	)
+}
+
+// workspaceInitial is the uppercased first letter of a workspace name, used as the
+// compact glyph in the collapsed rail (falls back to a dot for an empty name).
+func workspaceInitial(name string) string {
+	for _, r := range strings.TrimSpace(name) {
+		return strings.ToUpper(string(r))
+	}
+	return "•"
 }
 
 type wsMenuItemProps struct {

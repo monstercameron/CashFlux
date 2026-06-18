@@ -101,6 +101,11 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Workspace switcher adapts to the collapsed rail.** In the 58px collapsed sidebar the full-width
+  labelled switcher button doesn't fit, so it now renders as a compact icon-only square showing the
+  active workspace's initial; its menu flies out to the right at a readable fixed width (with a hover
+  title carrying the full name). The expanded rail is unchanged. Keeps workspace switching reachable in
+  both rail states instead of leaving a cramped, clipped control.
 - **Service-worker cache bumped to v16** so clients re-fetch the updated wasm after the sample-data change
   (it's network-first, but the bump evicts any stale cached `main.wasm`). To populate the new persona at
   runtime, use **Settings → Data → "Load sample"**, which replaces the current data with the fresh seed.

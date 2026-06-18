@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: collapsed-rail variant for the workspace switcher
+
+- Re-applied (cleanly, mine-only) the previously-reverted polish: `WorkspaceSwitcher` now reads
+  `uistate.UseRailCollapsed()` and, when collapsed, renders a compact 36px icon-only square showing the
+  active workspace's initial (`workspaceInitial`) instead of the full-width name + ▾ button, which was
+  cramped/clipped in the 58px rail. The dropdown menu flies out to the right (`left-full ml-1 w-48`)
+  rather than stretching edge-to-edge, so workspace names stay readable. Hover title carries the full
+  name + "Switch workspace". Expanded rail unchanged.
+- Kept the change entirely inside `internal/app/wsswitcher.go` (inline Tailwind utilities, no CSS) to
+  avoid touching `web/index.html`, which the parallel custom-pages session has dirty (base-href work).
+- Hooks: `UseState` then `UseRailCollapsed` are both called unconditionally before any early return, so
+  hook order stays stable across the collapsed/expanded branches.
+- Verified: wasm builds, gofmt clean, probe healthy (`ok:true`, status 200, 0 console errors, "Default"
+  switcher + $354,070 dashboard render). Note: the headless probe can't toggle the rail, so the collapsed
+  branch is build-verified; confirm the compact glyph + right-flyout in-browser by collapsing the rail.
+- Tooling note: `.tools/gwc.exe` was rebuilt and `probe` now takes the URL **positionally**
+  (`gwc probe http://127.0.0.1:8080/index.html`), not via `-url=`.
+
 ## 2026-06-18 — fix: new workspace starts empty (was cloning the current sample)
 
 - Bug (user-reported): "the profile switcher works but it clones all the data from the prior selected
