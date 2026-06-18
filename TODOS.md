@@ -3982,7 +3982,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Document the handshake: HTTP-issued token → carried as gRPC metadata on every RPC.
 
 ### 7.7 Client integration (wasm app) ★
-- [ ] gRPC client over the bridge: `BuildTunnelConn` (wss to backend) + a metadata interceptor that
+- [x] gRPC client over the bridge: `BuildTunnelConn` (wss to backend) + a metadata interceptor that
       attaches the auth token.
 - [ ] Sync client layered over the existing autosave: push the active workspace (debounced) + on
       reconnect; pull on load/focus; apply newest-by-`updatedAt`; map `internal/app/workspace.go`

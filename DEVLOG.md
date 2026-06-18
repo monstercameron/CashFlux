@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add client grpc bridge transport
+
+- Added `internal/syncbridge`, a small client transport layer that turns the configured backend HTTP(S) URL into
+  the `/grpc` ws/wss tunnel URL and opens it through `grpctunnel.BuildTunnelConn`.
+- Added unary and stream client interceptors that attach `authorization: Bearer <token>` metadata, matching the
+  server auth interceptor contract. Sync RPC wiring remains the next 7.7 atom.
+- Verified URL normalization, required-token validation, and metadata injection with native tests.
+
 ## 2026-06-18 - feat: mount backend gRPC bridge
 
 - Mounted GoGRPCBridge at `/grpc` around the backend `grpc.Server`, with the configured SPA origin check,

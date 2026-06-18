@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Client gRPC bridge transport foundation.** Added a `syncbridge` client helper that converts the saved
+  backend URL to the `/grpc` websocket tunnel target, builds a GoGRPCBridge `BuildTunnelConn`, and attaches
+  the backend bearer token as gRPC metadata for unary and streaming calls.
 - **Backend gRPC bridge transport mounted.** The server now exposes `/grpc` through GoGRPCBridge with SPA
   origin checks, keepalive/idle settings, read limits, and active/per-client/upgrade caps, reusing the
   existing bearer-token auth path for RPC metadata.
