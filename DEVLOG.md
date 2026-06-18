@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — insights down-anomaly coverage (92% → 98%)
+
+- Coverage sweep, anomaly detection. `insights` was 92.0%; the untested branches were the *down* path of
+  `Detect` (a category whose spend fell) and `abs64`'s negative arm — the latter only runs inside the sort
+  comparator, which needs ≥2 anomalies to fire.
+- Added `insights_edge_test.go` with a three-series case: a +400% rise (Up), an −80% drop (Down), and a
+  −10% drop that's below the 50% threshold (skipped). Two flagged anomalies exercise the sort/`abs64` path
+  and the equal-magnitude tie-break by name. `insights` → **98.0%** (`abs64` 100%, `Detect` 96.7%).
+
 ## 2026-06-18 — validate to 99% (edge rules)
 
 - Coverage sweep on the entity validator (it guards every write). `validate` was 92.2%; the existing tests
