@@ -3,6 +3,7 @@
 package app
 
 import (
+	"strconv"
 	"strings"
 	"syscall/js"
 )
@@ -110,7 +111,51 @@ func setPasscodeFlow() {
 		js.Global().Call("alert", "The passcodes didn't match — nothing changed.")
 		return
 	}
-	if enableAppLock(pass, 0) {
+	mins := 0
+	if m := js.Global().Call("prompt", "Auto-lock after how many minutes of inactivity? (0 = only on reload / Lock now)", "0"); !m.IsNull() && !m.IsUndefined() {
+		if v, err := strconv.Atoi(strings.TrimSpace(m.String())); err == nil && v > 0 {
+			mins = v
+		}
+	}
+	if enableAppLock(pass, mins) {
 		js.Global().Call("alert", "Passcode lock enabled. You'll be asked for it next time you open or lock CashFlux.")
 	}
+}
+
+// wireAutoLock arms an inactivity timer that re-shows the gate after the
+// configured auto-lock window. Registered once at boot; activity (pointer/key/
+// scroll) resets the idle clock, and a periodic check re-locks once idle passes
+// the window. The listeners live for the app's lifetime (intentionally not
+// released). No-op behaviorally until a lock with a positive window is set.
+func wireAutoLock() {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return
+	}
+	now := func() float64 { return js.Global().Get("Date").Call("now").Float() }
+	last := now()
+
+	reset := js.FuncOf(func(js.Value, []js.Value) any { last = now(); return nil })
+	for _, ev := range []string{"mousemove", "keydown", "click", "touchstart", "scroll"} {
+		doc.Call("addEventListener", ev, reset)
+	}
+
+	check := js.FuncOf(func(js.Value, []js.Value) any {
+		c := loadAppLock()
+		if !c.Enabled || c.AutoLockMinutes <= 0 {
+			return nil
+		}
+		if !c.ShouldAutoLock(int((now() - last) / 60000)) {
+			return nil
+		}
+		// Don't re-show if the gate is already up.
+		gate := doc.Call("getElementById", appLockGateID)
+		if !gate.IsNull() && !gate.IsUndefined() && gate.Get("style").Get("display").String() != "none" {
+			return nil
+		}
+		showAppLockGate()
+		last = now()
+		return nil
+	})
+	js.Global().Call("setInterval", check, 30000)
 }

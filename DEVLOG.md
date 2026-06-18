@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: app-lock idle auto-lock (B17 cont.)
+
+- Wired the pure `ShouldAutoLock` into a real timer. `setPasscodeFlow` now also prompts for an auto-lock
+  window (minutes; 0 = off). New `wireAutoLock` (armed once in `app.go` after `maybeLockOnBoot`) tracks a
+  `last`-activity timestamp reset by mousemove/keydown/click/touchstart/scroll, and a 30s `setInterval`
+  re-shows the gate once `ShouldAutoLock(idleMinutes)` is true (guarded against re-showing an already-open
+  gate, then resets `last`). Uses JS `Date.now()` for timing (Go's monotonic time isn't needed here).
+- Still in my/new files only (`applockgate.go` + one `app.go` line) — collision-free. gofmt clean, worktree
+  build exit 0. The B17 lock is now functional end-to-end: set (with optional auto-lock) → boots/locks/idles
+  behind the gate → unlock. Remaining: in-app passcode form (vs prompts) + i18n.
+
 ## 2026-06-18 — feat: passcode lock MVP (B17) — gate + palette management, collision-free
 
 - Built the functional lock on top of the pure `applock` core, deliberately keeping it out of the parallel
@@ -63,6 +74,7 @@ problems and fixes, and what's next.
 - The base `.check` now has a transparent border to avoid layout shift when selection turns the border on.
 - Browser verification confirmed the selected checkbox computes to the accent background, border, and text
   color with `box-sizing:border-box`.
+- Re-ran `go test ./...`, the wasm build, and `gwc verify` after the app-lock commit landed; all passed.
 
 ## 2026-06-18 — fix: UX polish §6.11 — light-theme soon badge
 

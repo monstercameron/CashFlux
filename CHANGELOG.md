@@ -12,8 +12,9 @@ and every commit updates this file under `Unreleased`.
   passcode is entered. Manage it from Cmd/Ctrl+K — **Set passcode lock**, **Change passcode**, **Lock now**,
   **Remove passcode lock**. The passcode is stored only as a salted SHA-256 hash (user-global, shared
   across workspaces) and verified in constant time; it's a soft deterrent for a local-first app, not
-  encryption. (Auto-lock-on-idle and a polished in-app entry form — vs. the MVP's native prompts — are
-  follow-ups.)
+  encryption. **Optional auto-lock** re-shows the gate after a chosen number of minutes of inactivity
+  (pointer/key/scroll resets the idle clock); set the window when you create the passcode. (A polished
+  in-app entry form — vs. the MVP's native prompts — and i18n of the app-lock strings remain follow-ups.)
 - **Workflows are now real transaction automation (was: a demo).** Acting on a product critique that the
   engine couldn't see the transaction that triggered it, "when a transaction is added" workflows now get
   **per-transaction condition variables** — `txn_amount`/`txn_abs` (major units) and string fields
@@ -325,7 +326,7 @@ and every commit updates this file under `Unreleased`.
 ### Fixed
 - **Selected transaction rows have a real visual state (UX audit §6.4).** Bulk-selection checkboxes now get
   an accent background/border when selected instead of relying on the glyph alone. Browser verification
-  covered the selected checkbox's computed colors.
+  covered the selected checkbox's computed colors, and `gwc verify` stayed green.
 - **Soon badges now adapt to light theme (UX audit §6.11).** `.badge-soon` keeps its dark badge treatment
   in dark mode and gains a light-theme color override.
 - **Form fields have comfortable touch targets (UX audit §6.1).** Shared `.field` controls now default to
