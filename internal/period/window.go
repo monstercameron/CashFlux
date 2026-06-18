@@ -20,15 +20,14 @@ func NewWindow(r Resolution, t time.Time, weekStart time.Weekday) Window {
 	return Window{Res: r, From: a, To: a, WeekStart: weekStart}
 }
 
-// SetResolution switches the resolution and re-snaps both anchors to the new
-// unit (so e.g. a month range collapses sensibly into quarters).
-func (w Window) SetResolution(r Resolution) Window {
-	return Window{
-		Res:       r,
-		From:      Truncate(r, w.From, w.WeekStart),
-		To:        Truncate(r, w.To, w.WeekStart),
-		WeekStart: w.WeekStart,
-	}
+// SetResolution switches the resolution and re-anchors to the single period
+// that contains now (this week/month/quarter). It deliberately does NOT re-snap
+// the existing window anchors: those sit at or before now, so truncating them to
+// the new unit drifts the view backward in time and compounds across switches
+// (e.g. Month "Jun" → Week would land on June's *first* week, not the current
+// one) — the C41 bug. Anchoring on now matches the "This period" reset.
+func (w Window) SetResolution(r Resolution, now time.Time) Window {
+	return NewWindow(r, now, w.WeekStart)
 }
 
 // WithWeekStart returns the window using a different week-start convention,

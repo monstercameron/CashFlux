@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: resolution switch re-anchors to now, not the window start (C41)
+
+- `Window.SetResolution(r)` re-snapped `w.From`/`w.To` (the existing window start, which is ≤ now) to the
+  new unit, so each switch drifted backward: Month "Jun" → Week gave June's first week (May 31–Jun 6),
+  Week → Month gave May, Week → Quarter gave Q1 — compounding into the past.
+- Changed it to `SetResolution(r, now)` returning `NewWindow(r, now, weekStart)` — the single period that
+  contains now (matching the "This period" preset that #64 confirmed works). Only caller is shell.go's
+  resolution control (passes `time.Now()`). Rewrote `TestSetResolutionResnaps` → `…ReanchorsToNow`,
+  asserting every Week/Month/Quarter switch yields a single window whose half-open range contains now.
+- The period engine itself was already correct (per C40/#61); this was purely the re-anchor policy on a
+  resolution change. Native period tests pass; wasm build green. (C40 — Budgets-screen SPENT under
+  Quarter — is a separate, still-open bug.)
+
 ## 2026-06-18 — fix: workflow Save folds in a pending action (C37)
 
 - Root cause of the "Save workflow is a no-op" report: the action builder stages an action only on *Add

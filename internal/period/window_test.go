@@ -15,10 +15,25 @@ func TestNewWindow(t *testing.T) {
 	}
 }
 
-func TestSetResolutionResnaps(t *testing.T) {
-	w := NewWindow(Month, d(2026, time.May, 10), time.Monday).SetResolution(Quarter)
+func TestSetResolutionReanchorsToNow(t *testing.T) {
+	now := d(2026, time.June, 18)
+	// Start from a window paged well into the past; switching resolution must
+	// re-anchor to the period containing now, not drift to the old anchor (C41).
+	w := NewWindow(Month, d(2026, time.January, 10), time.Monday).SetResolution(Quarter, now)
 	if w.Res != Quarter || !w.From.Equal(d(2026, time.April, 1)) {
-		t.Errorf("SetResolution(Quarter) from = %s (%s), want 2026-04-01 quarter", w.From.Format("2006-01-02"), w.Res)
+		t.Errorf("SetResolution(Quarter) from = %s (%s), want 2026-04-01 (Q2 contains now)", w.From.Format("2006-01-02"), w.Res)
+	}
+	// Every Week/Month/Quarter switch yields a single window that contains now.
+	for _, r := range []Resolution{Week, Month, Quarter} {
+		got := w.SetResolution(r, now)
+		if !got.IsSinglePeriod() {
+			t.Errorf("SetResolution(%s) is not a single period", r)
+		}
+		s, e := got.Range()
+		if now.Before(s) || !now.Before(e) {
+			t.Errorf("SetResolution(%s) range [%s, %s) does not contain now %s",
+				r, s.Format("2006-01-02"), e.Format("2006-01-02"), now.Format("2006-01-02"))
+		}
 	}
 }
 

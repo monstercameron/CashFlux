@@ -466,7 +466,7 @@ func ResolutionControl() uic.Node {
 			OnSelect: func(v string) {
 				r := period.Resolution(v)
 				uistate.PersistResolution(r)
-				atom.Set(w.SetResolution(r))
+				atom.Set(w.SetResolution(r, time.Now()))
 			},
 		}),
 		Select(Class("rstep text-[12px]"), Attr("title", uistate.T("resolution.jumpTo")), OnChange(onPreset),

@@ -464,6 +464,10 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Switching the time period no longer drifts the view backward in time (C41).** Changing Week / Month /
+  Quarter in the top bar now re-anchors to the period that contains today (this week/month/quarter),
+  instead of re-snapping the old window's start — which used to land you on, e.g., June's *first* week or
+  even the previous quarter, and compounded with each switch. Every switch now shows the current period.
 - **Saving a workflow no longer silently drops the action you just typed (C37).** If you fill in an
   action and click *Save workflow* without first clicking *Add action*, that action is now folded into the
   saved workflow instead of being lost (which previously made Save look like a no-op). *Add action* also
