@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -385,14 +384,4 @@ func GoalRow(props goalRowProps) ui.Node {
 		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", pct)))),
 		Span(Class("budget-sub"), sub),
 	)
-}
-
-// promptText shows a browser prompt and returns the entered text ("" if cancelled).
-// Still used by the Accounts "Set balance" flow (its in-app form is a follow-up).
-func promptText(message string) string {
-	v := js.Global().Get("window").Call("prompt", message)
-	if v.IsNull() || v.IsUndefined() {
-		return ""
-	}
-	return strings.TrimSpace(v.String())
 }

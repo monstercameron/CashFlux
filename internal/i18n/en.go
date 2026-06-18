@@ -627,6 +627,7 @@ var english = Catalog{
 	"accounts.balanceAdjustment":  "Balance adjustment",
 	"accounts.balanceUpdated":     "Updated %s to %s.",
 	"accounts.setBalancePrompt":   "Actual balance of %s (%s)?",
+	"accounts.setBalanceAmount":   "New balance",
 	"accounts.lockUntilEdit":      "Locked until",
 	"accounts.archive":            "Archive",
 	"accounts.restore":            "Restore",

@@ -392,10 +392,10 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
-- **Contributing to a goal uses an in-app form, not a browser prompt (§6.8).** The Goals "Contribute"
-  button now reveals an inline amount field (with Add/Cancel), matching the inline-edit pattern, instead of
-  a native `window.prompt` — better on mobile, keyboard-consistent, and styled. (Accounts' "Set balance"
-  still uses a prompt; its in-app form is a follow-up.)
+- **No more browser prompts — Goal "Contribute" and Account "Set balance" use in-app forms (§6.8).** Both
+  now reveal an inline amount field (Add/Cancel), matching the inline-edit pattern, instead of a native
+  `window.prompt` — better on mobile, keyboard-consistent, and styled. This removes the last `window.prompt`
+  from the screens.
 - **Passcode lock now actually blocks the keyboard (B17).** While the unlock gate is up, the global
   shortcuts (Alt+1–9, Alt+N, Cmd/Ctrl+K) were still firing as document-level listeners — so a "locked" app
   could be navigated or have the command palette opened behind the gate. The shortcut handler now bails

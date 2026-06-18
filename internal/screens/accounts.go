@@ -430,12 +430,21 @@ func AccountRow(props accountRowProps) ui.Node {
 	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
 	refresh := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnRefresh(a) }))
 	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
+	settingBal := ui.UseState(false)
+	setBalAmtS := ui.UseState("")
 	setBal := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
-		if v := promptText(uistate.T("accounts.setBalancePrompt", a.Name, a.Currency)); v != "" {
+		setBalAmtS.Set("")
+		settingBal.Set(true)
+	}))
+	onSetBalAmt := ui.UseEvent(func(v string) { setBalAmtS.Set(v) })
+	doSetBal := ui.UseEvent(Prevent(func() {
+		if v := strings.TrimSpace(setBalAmtS.Get()); v != "" {
 			props.OnSetBalance(a, props.Balance, v)
 		}
+		settingBal.Set(false)
 	}))
+	cancelSetBal := ui.UseEvent(Prevent(func() { settingBal.Set(false) }))
 	editing := ui.UseState(false)
 	nameS := ui.UseState(a.Name)
 	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
@@ -515,6 +524,15 @@ func AccountRow(props accountRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	if settingBal.Get() {
+		return Div(Class("row-edit"),
+			Form(Class("form-grid"), OnSubmit(doSetBal),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.setBalanceAmount")), Value(setBalAmtS.Get()), Step("0.01"), OnInput(onSetBalAmt)),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(Class("btn"), Type("button"), OnClick(cancelSetBal), uistate.T("action.cancel")),
+			),
+		)
+	}
 	if editing.Get() {
 		isLiab := a.Class == domain.ClassLiability
 		return Div(Class("row-edit"),

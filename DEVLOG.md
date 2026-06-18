@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: in-app "Set balance" form; remove the last native prompt (§6.8 complete)
+
+- Converted Accounts "Set balance" to an inline form in `AccountRow` (settingBal state + amount input +
+  Save/Cancel, mirroring inline edit), like the goals contribute one. That was the last `promptText` caller,
+  so removed `promptText` + the now-unused `syscall/js` import from goals.go. §6.8 "replace native dialogs"
+  is done — no `window.prompt` left in the screens. 1 new i18n key.
+- gofmt clean, disk wasm build green (served wasm rebuilt). Committed by pathspec.
+
 ## 2026-06-18 — fix: in-app goal-contribute form (§6.8, branched off lock-screen)
 
 - Branched for breadth per the user's "tonnes of todos". Replaced the Goals "Contribute" native
