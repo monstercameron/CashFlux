@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — cleanup C7: one period control for Budgets
+
+- The Budgets card carried its own `‹ January 2006 ›` month stepper (a `monthOffset` UseState +
+  prev/next handlers) that competed with the global top-bar resolution control — two controls, two
+  formats ("Jun" vs "June"). Since C4 already shows the resolution control on /budgets, the in-card
+  stepper was redundant.
+- Removed the stepper UI + `monthOffset`/`prevMonth`/`nextMonth`, and pointed `viewMonth` at the shared
+  window (`uistate.UsePeriod().Get().From`) — the same atom the top-bar writes — so stepping the period
+  up top now drives the budgets view. Dropped the now-unused `dateutil`/`time` imports.
+- Default behavior unchanged (the default window is the current month). Route-gated screen; verified by
+  reasoning + build.
+
 ## 2026-06-18 — feature B8: drag-reorder the sidebar
 
 - Built the sidebar nav reorder bottom-up. Pure `internal/navorder` (Move/Apply, 10 table-test cases):

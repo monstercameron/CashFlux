@@ -5,13 +5,11 @@ package screens
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -60,7 +58,9 @@ func Budgets() ui.Node {
 	period := ui.UseState(string(domain.PeriodMonthly))
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
-	monthOffset := ui.UseState(0)
+	// The viewed period comes from the shared top-bar resolution control (C7) —
+	// the Budgets card no longer has its own competing month stepper.
+	periodWin := uistate.UsePeriod()
 	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
@@ -79,9 +79,6 @@ func Budgets() ui.Node {
 		nm[key] = value
 		customVals.Set(nm)
 	}
-	prevMonth := ui.UseEvent(func() { monthOffset.Set(monthOffset.Get() - 1) })
-	nextMonth := ui.UseEvent(func() { monthOffset.Set(monthOffset.Get() + 1) })
-
 	add := ui.UseEvent(Prevent(func() {
 		amt, err := money.ParseMinor(strings.TrimSpace(limit.Get()), currency.Decimals(base))
 		if err != nil || amt <= 0 {
@@ -178,7 +175,7 @@ func Budgets() ui.Node {
 	budgets := app.Budgets()
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	viewMonth := dateutil.AddMonths(time.Now(), monthOffset.Get())
+	viewMonth := periodWin.Get().From
 	// Each budget is evaluated over its own period window around the viewed date.
 	statuses := make([]budgeting.Status, 0, len(budgets))
 	for _, b := range budgets {
@@ -226,11 +223,6 @@ func Budgets() ui.Node {
 		Section(Class("card"),
 			Div(Class("budget-head"),
 				H2(Class("card-title"), uistate.T("nav.budgets")),
-				Span(Class("rpill"),
-					Button(Class("rstep"), Type("button"), Title(uistate.T("budgets.prevMonth")), OnClick(prevMonth), "‹"),
-					Span(Class("rlabel fig"), viewMonth.Format("January 2006")),
-					Button(Class("rstep"), Type("button"), Title(uistate.T("budgets.nextMonth")), OnClick(nextMonth), "›"),
-				),
 			),
 			If(overCount > 0 || nearCount > 0, P(Class("budget-sub"), uistate.T("budgets.overNear", overCount, nearCount))),
 			listBody,

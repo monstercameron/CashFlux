@@ -74,6 +74,10 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Budgets has a single period control now (C7):** the Budgets card had its own `‹ January 2006 ›`
+  month stepper competing with the global top-bar resolution control (and in a different format). The
+  in-card stepper is removed; the screen now follows the shared top-bar period, so there's one control
+  and one format.
 - **Receipt import matches near-miss category names (C27):** the vision model often returns a near-name
   ("Food & Drink") for a household category ("Food"), which previously imported uncategorized. Imports now
   fall back to a substring match (either direction, min 3 chars, deterministic order) before the

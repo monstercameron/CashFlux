@@ -585,8 +585,10 @@ you can't tell which is returns / stability / liquidity / debt-reduction / goal-
 - [x] The budget row reads **"Food · Food"** — fixed: `BudgetRow` now shows one label when name ==
       category (case-insensitive), just the category when unnamed, and "name · category" only when they
       differ.
-- [ ] Two month pickers compete: the global top-bar `Jun 2026` and the Budgets card's own `June 2026`
-      stepper — and the formats differ ("Jun" vs "June"). Consolidate to one control + one format.
+- [x] Consolidated to one control. The Budgets card's own `‹ January 2006 ›` month stepper is removed;
+      the screen now reads the viewed period from the shared top-bar resolution control
+      (`uistate.UsePeriod().Get().From`), so there's a single period control and one format. (Dropped the
+      now-unused `monthOffset` state + `dateutil`/`time` imports.)
 
 ### C8. Members — color picker renders as a bare line
 **Symptom:** the Add-member form's color field shows only a thin horizontal line between Name and the
