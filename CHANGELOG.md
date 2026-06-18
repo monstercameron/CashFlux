@@ -208,6 +208,12 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Deep-link refresh works on nested routes (e.g. `/p/<page>`).** Refreshing a custom-page URL showed
+  "wasm_exec.js failed to load": the relative asset paths (`./wasm_exec.js`, `./bin/main.wasm`) resolved
+  against the route's directory (`/p/`) and 404'd. Added a `<base href>` set at the very top of `<head>`
+  (server root for local/custom domains, `/<repo>/` on `*.github.io`), so assets resolve to the app root at
+  any depth — fixing both the dev server and GitHub Pages 404-shell deep links. The skip-to-content link is
+  now anchored to the live path so the base tag doesn't turn it into a root navigation.
 - **A new workspace now starts empty instead of cloning the current one's data.** "+ New workspace"
   was clearing only the canonical `cashflux:dataset` key; boot then saw an empty dataset key and
   re-seeded the Michael Brooks demo sample — so a freshly created workspace looked like a copy of the

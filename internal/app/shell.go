@@ -46,8 +46,12 @@ func Shell(props ShellProps) uic.Node {
 		return nil
 	}, router.InspectCurrentRoute().Path)
 
+	// The skip link must include the current path: a document <base href> is set so
+	// deep-link refreshes resolve assets, but that also makes a bare "#main" resolve
+	// against the base (navigating to the root). Anchoring it to the live path keeps
+	// "skip to content" an in-page jump on every route.
 	return Div(Class("flex h-screen overflow-hidden bg-base text-fg font-sans"),
-		A(Class("skip-link"), Attr("href", "#main"), uistate.T("a11y.skipToContent")),
+		A(Class("skip-link"), Attr("href", router.InspectCurrentRoute().Path+"#main"), uistate.T("a11y.skipToContent")),
 		uic.CreateElement(Sidebar),
 		Main(Class("cf-scroll flex-1 min-w-0 overflow-y-auto"), Attr("id", "main"), Attr("tabindex", "-1"),
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title}),

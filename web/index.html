@@ -3,6 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- App base href, set before any relative asset is referenced, so a deep-link
+         refresh (e.g. /p/taxes) resolves ./wasm_exec.js, ./bin/main.wasm, etc. to
+         the app root instead of the current route's directory. On a *.github.io
+         project site the app lives under /<repo>/, so derive the base from the
+         first path segment there; everywhere else (local dev, custom domain) it's
+         the server root. Must run first in <head>. -->
+    <script>
+      (function () {
+        var base = "/";
+        if (location.hostname.endsWith("github.io")) {
+          var seg = location.pathname.split("/")[1];
+          if (seg) base = "/" + seg + "/";
+        }
+        document.write('<base href="' + base + '">');
+      })();
+    </script>
+
     <title>CashFlux</title>
 
     <!-- PWA: installable, standalone, dark theme -->
