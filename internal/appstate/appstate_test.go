@@ -5,7 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -130,6 +133,94 @@ func TestApplyRules(t *testing.T) {
 	}
 	if got := byID["t5"]; got.CategoryID != "transport" || len(got.Tags) != 1 || got.Tags[0] != "existing" {
 		t.Errorf("t5 should be categorized while preserving existing tags: %+v", got)
+	}
+}
+
+func TestRulesEntryImportApplyAndConflictFlow(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutAccount(domain.Account{
+		ID: "a1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+	}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	for _, c := range []domain.Category{
+		{ID: "dining", Name: "Dining", Kind: domain.KindExpense},
+		{ID: "coffee", Name: "Coffee", Kind: domain.KindExpense},
+		{ID: "manual", Name: "Manual", Kind: domain.KindExpense},
+	} {
+		if err := a.PutCategory(c); err != nil {
+			t.Fatalf("PutCategory %s: %v", c.ID, err)
+		}
+	}
+	for _, r := range []rules.Rule{
+		{ID: "r1", Match: "starbucks", SetCategoryID: "coffee", SetTags: []string{"caffeine"}},
+		{ID: "r2", Match: "starbucks latte", SetCategoryID: "dining"},
+	} {
+		if err := a.PutRule(r); err != nil {
+			t.Fatalf("PutRule %s: %v", r.ID, err)
+		}
+	}
+
+	cat, tags := a.SuggestTransactionFields("Morning Starbucks latte", "", nil)
+	if cat != "coffee" || len(tags) != 1 || tags[0] != "caffeine" {
+		t.Fatalf("entry suggestion = %q/%v, want coffee/[caffeine]", cat, tags)
+	}
+	cat, tags = a.SuggestTransactionFields("Morning Starbucks latte", "manual", []string{"keep"})
+	if cat != "manual" || len(tags) != 1 || tags[0] != "keep" {
+		t.Fatalf("manual entry suggestion overwritten = %q/%v", cat, tags)
+	}
+	if conflicts := rules.Conflicts(a.Rules()); len(conflicts) == 0 || conflicts[0].Index != 1 {
+		t.Fatalf("expected second rule to be shadowed, got %+v", conflicts)
+	}
+
+	csv := "date,account,payee,desc,amount\n2026-06-04,Checking,Starbucks,Latte,-6.25\n"
+	n, err := a.ImportTransactionsCSV([]byte(csv))
+	if err != nil {
+		t.Fatalf("ImportTransactionsCSV: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("imported = %d, want 1", n)
+	}
+	var imported domain.Transaction
+	for _, tx := range a.Transactions() {
+		if tx.Payee == "Starbucks" {
+			imported = tx
+			break
+		}
+	}
+	if imported.CategoryID != "coffee" || len(imported.Tags) != 1 || imported.Tags[0] != "caffeine" {
+		t.Fatalf("imported txn auto fields = %q/%v", imported.CategoryID, imported.Tags)
+	}
+	start, end := dateutil.MonthRange(time.Date(2026, time.June, 15, 0, 0, 0, 0, time.UTC))
+	spent, err := budgeting.Spent(
+		domain.Budget{CategoryID: "coffee", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: money.New(10000, "USD")},
+		a.Transactions(), start, end, currency.Rates{Base: "USD"},
+	)
+	if err != nil {
+		t.Fatalf("budgeting.Spent: %v", err)
+	}
+	if !spent.Equal(money.New(625, "USD")) {
+		t.Fatalf("coffee spent = %v, want 625 USD", spent)
+	}
+
+	if err := a.PutTransaction(domain.Transaction{
+		ID: "old", AccountID: "a1", Payee: "Starbucks", Desc: "Cold brew",
+		Date: time.Date(2026, time.June, 5, 0, 0, 0, 0, time.UTC), Amount: money.New(-500, "USD"),
+	}); err != nil {
+		t.Fatalf("PutTransaction old: %v", err)
+	}
+	updated, err := a.ApplyRules()
+	if err != nil {
+		t.Fatalf("ApplyRules: %v", err)
+	}
+	if updated != 1 {
+		t.Fatalf("ApplyRules updated = %d, want 1", updated)
+	}
+	for _, tx := range a.Transactions() {
+		if tx.ID == "old" && tx.CategoryID != "coffee" {
+			t.Fatalf("old txn category = %q, want coffee", tx.CategoryID)
+		}
 	}
 }
 

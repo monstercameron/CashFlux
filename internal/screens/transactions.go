@@ -13,7 +13,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -46,13 +45,6 @@ func Transactions() ui.Node {
 	// Auto-categorization: the user's saved rules take priority (first match wins,
 	// and they can also assign tags), then fall back to implicit rules that treat
 	// each category name as a match — so typing "Groceries" suggests that category.
-	userRules := app.Rules()
-	implicitRules := make([]rules.Rule, 0, len(categories))
-	for _, c := range categories {
-		implicitRules = append(implicitRules, rules.Rule{Match: c.Name, SetCategoryID: c.ID})
-	}
-	autoRules := append(append(make([]rules.Rule, 0, len(userRules)+len(implicitRules)), userRules...), implicitRules...)
-
 	desc := ui.UseState("")
 	amountStr := ui.UseState("")
 	kind := ui.UseState("Expense")
@@ -85,13 +77,10 @@ func Transactions() ui.Node {
 		desc.Set(v)
 		// Auto-suggest from the description via the matching rule, but never override
 		// a category or tags the user already entered.
-		if r := rules.FirstMatch(autoRules, v); r != nil {
-			if strings.TrimSpace(catID.Get()) == "" && r.SetCategoryID != "" {
-				catID.Set(r.SetCategoryID)
-			}
-			if strings.TrimSpace(tagsStr.Get()) == "" && len(r.SetTags) > 0 {
-				tagsStr.Set(strings.Join(r.SetTags, ", "))
-			}
+		nextCat, nextTags := app.SuggestTransactionFields(v, catID.Get(), textutil.CommaFields(tagsStr.Get()))
+		catID.Set(nextCat)
+		if len(nextTags) > 0 && strings.TrimSpace(tagsStr.Get()) == "" {
+			tagsStr.Set(strings.Join(nextTags, ", "))
 		}
 	})
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })

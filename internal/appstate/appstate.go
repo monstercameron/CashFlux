@@ -171,6 +171,7 @@ func (a *App) ImportTransactionsCSV(data []byte) (int, error) {
 		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
 		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
 		txns[i].MemberID = resolveMem(txns[i].MemberID)
+		txns[i] = a.AutoCategorizeTransaction(txns[i])
 	}
 
 	n := 0
@@ -579,6 +580,43 @@ func (a *App) PutRule(r rules.Rule) error {
 
 // DeleteRule removes an auto-categorization rule.
 func (a *App) DeleteRule(id string) error { return a.del("rule", id, a.store.DeleteRule) }
+
+func (a *App) transactionAutoRules() []rules.Rule {
+	userRules := a.Rules()
+	categories := a.Categories()
+	autoRules := make([]rules.Rule, 0, len(userRules)+len(categories))
+	autoRules = append(autoRules, userRules...)
+	for _, c := range categories {
+		autoRules = append(autoRules, rules.Rule{Match: c.Name, SetCategoryID: c.ID})
+	}
+	return autoRules
+}
+
+// SuggestTransactionFields applies the first matching auto-categorization rule
+// to draft fields without overriding a manual category or tags.
+func (a *App) SuggestTransactionFields(text, categoryID string, tags []string) (string, []string) {
+	r := rules.FirstMatch(a.transactionAutoRules(), text)
+	if r == nil {
+		return categoryID, tags
+	}
+	if strings.TrimSpace(categoryID) == "" && r.SetCategoryID != "" {
+		categoryID = r.SetCategoryID
+	}
+	if len(tags) == 0 && len(r.SetTags) > 0 {
+		tags = append([]string(nil), r.SetTags...)
+	}
+	return categoryID, tags
+}
+
+// AutoCategorizeTransaction applies auto-categorization to a transaction without
+// overwriting manual category/tags. Transfers are excluded from categorization.
+func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction {
+	if t.IsTransfer() {
+		return t
+	}
+	t.CategoryID, t.Tags = a.SuggestTransactionFields(t.Payee+" "+t.Desc, t.CategoryID, t.Tags)
+	return t
+}
 
 // PutDocument saves an imported-document record (needs an ID).
 func (a *App) PutDocument(d domain.Document) error {

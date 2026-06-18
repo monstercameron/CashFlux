@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - test: D20 rules auto-fill flow
+
+- Moved transaction draft auto-fill and CSV import auto-categorization through shared appstate helpers so
+  entry and import use the same first-match rule behavior without overriding manual category/tags.
+- Added D20 coverage for entry suggestions, CSV import categorization, coffee-budget spend impact,
+  Apply-to-existing, and shadowed-rule conflict detection; wired Transactions to the helper.
+
 ## 2026-06-18 - test: D19 member ripple behavior
 
 - Added appstate helpers for setting exactly one default member, resolving the member for new transaction

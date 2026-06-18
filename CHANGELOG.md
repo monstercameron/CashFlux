@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Rules auto-fill now shares one tested path.** Transaction entry and CSV import now both run through
+  the appstate auto-categorization helper, preserving manual category/tags while first-match rules fill
+  empty fields; coverage also asserts imported budget impact, apply-to-existing, and conflict warnings.
 - **Lock-screen content is now toggleable (B17.1).** Settings → App lock has two switches — *Show greeting
   & date* and *Show a daily quote* — both ON by default; turning one off hides it on the unlock screen.
 - **App lock is now in Settings.** Added a **Settings → App lock** section so the passcode lock is

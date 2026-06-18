@@ -2797,10 +2797,10 @@ Savings KPIs) · `period.Window`.
 #### D20. Rules auto-categorize on entry & import ★
 **Workstream:** define rules, then add/import transactions and confirm category/tags are applied (and conflicts handled).
 **Touches:** Rules (`rules` engine, conflicts) · `rulesuggest` · Transactions (entry auto-fill) · Documents (import) · `appstate.ApplyRules` · Budgets/breakdown impact.
-- [ ] Add a rule; type a matching description; assert category + tags auto-fill without overriding a manual pick.
-- [ ] Import a CSV/image; assert rows are categorized by first-match rule; assert budget/breakdown reflect it.
-- [ ] "Apply to existing"; assert pre-existing uncategorized txns get categorized.
-- [ ] Assert a shadowed/never-fires rule shows the conflict warning.
+- [x] Add a rule; type a matching description; assert category + tags auto-fill without overriding a manual pick.
+- [x] Import a CSV/image; assert rows are categorized by first-match rule; assert budget/breakdown reflect it.
+- [x] "Apply to existing"; assert pre-existing uncategorized txns get categorized.
+- [x] Assert a shadowed/never-fires rule shows the conflict warning.
 - [x] unit: `rules.FirstMatch`/`Conflicts` + `ApplyRules` retroactive path.
 
 #### D21. Document import → review → dedupe → ledger → derived figures ★
