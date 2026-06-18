@@ -1148,6 +1148,15 @@ results are summarized here so the backlog doesn't bloat.
     `aria-label`/label. Add an `aria-label` to every `<select>` (and label the bare `type=date` inputs).
     One shared fix pattern covers all screens. (Ties B15 forms; extends #15.)
   - C28 nav icons: still `viewbox` lowercase (unchanged).
+- **2026-06-18 #17** — Visual recheck of Accounts/Budgets/Goals (0 console errors). **More fixes confirmed:**
+  - ✅ **C2 (money formatting) — RESOLVED** on Accounts & Goals. Accounts: NET WORTH **$20,749.25**,
+    **$6,599.25**, "cleared **$6,900.00**", Credit Card **($850.00)** (grouped + parentheses for the
+    liability; was `$20749.25` / `-$850.00`). Goals: **$3,000.00**, "**$2,500.00** to go", "**$416.67/mo**".
+  - ✅ **C9 — RESOLVED.** Accounts rows now use a **"···" overflow menu** (Transactions / Edit / ··· / ✕)
+    instead of 6 inline buttons; add-form placeholders now fit ("Return %", "Liquidity", "Stability" — no
+    longer truncated "Expected returr").
+  - [ ] Minor remaining (C9): Goals add form still has an **unlabeled "0" field** (current amount) — give
+    it a placeholder/label.
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.

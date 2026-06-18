@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — domain enums to 100% coverage
+
+- Coverage sweep, the foundational types. `domain` was 85.5%; the misses were the default (invalid) arms of
+  several `Valid()` methods and `Period.Label`, which had no test at all.
+- `TestEnumInvalid` already covered the invalid branch for AccountClass/AccountType/CategoryKind/TaskPriority;
+  added `enums_edge_test.go` for the rest — invalid Scope/Period/TaskStatus/RelatedType/TaskSource — plus
+  `TestPeriodLabel` over all three periods and the unknown→Monthly default. `domain` → **100.0%**.
+
 ## 2026-06-18 — Raise formula test coverage (89% → 93%)
 
 - Coverage sweep, the sandboxed expression engine. `formula` was 88.7%; the existing tests covered the
