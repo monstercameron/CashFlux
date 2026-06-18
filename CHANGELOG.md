@@ -173,6 +173,13 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **All icons now render (and the sidebar collapse button is visible again):** inline SVG icons across
+  the app — the left-rail nav glyphs, the top-bar menu/collapse toggle (which is icon-only, so it had
+  no visible affordance), the household gear, and the per-tile grip/gear — were invisible. Root cause was
+  in the framework: the wasm DOM renderer built every node with `document.createElement`, placing SVG
+  elements in the HTML namespace where they never paint. Fixed upstream in GoWebComponents
+  (`createElementNS` for SVG tags) and re-pinned the module here
+  (`v1.1.1-0.20260618120835-bfe3011d7f39`). Screenshot-verified on the live dashboard.
 - **A few user-facing strings now go through the language catalog (i18n):** the "Enter a valid opening
   balance" validation message, the dashboard "Couldn't create the reminder" toast, the dashboard
   tile resize-handle tooltips, and the spending-breakdown "Other"/"Uncategorized" labels were hardcoded

@@ -3,6 +3,31 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: invisible icons (SVG namespace bug in the framework)
+
+- Report: can't see the left-rail icons, and can't see the button that collapses the sidebar.
+- Diagnosis: the collapse toggle (`app.TopBar`, `.menu-btn`) is icon-only, so when its icon doesn't
+  paint the whole control is invisible — same root cause as the rail icons. Traced to the framework: the
+  wasm DOM adapter (`internal/platform/jsdom/adapters.go`) created every node via
+  `document.createElement`, i.e. the HTML namespace. SVG elements only render when created with
+  `document.createElementNS(...)`, so all inline `ui.Icon` SVGs were invisible. The SSR/string path
+  serializes `xmlns` correctly, which is why the framework's SVG tests passed while the live app showed
+  nothing. The `DOMAdapter` interface had no namespace-aware creation, and a deliberate guard
+  (`TestDOMAdapterHasNoRawHTMLSink`) rules out an `innerHTML` escape hatch.
+- Decision (asked the user): fix the root cause in the framework AND re-pin, rather than work around it in
+  CashFlux. The CSS-mask data-URI workaround was therefore unnecessary — adding it would have been dead,
+  redundant code on top of a working fix, so it was deliberately skipped.
+- Framework fix: routed SVG-only tags through a cached `createElementNS`, and made
+  `CreatePreparedElement` skip the HTML-string template fast path for SVG (it can't produce SVG nodes).
+  No raw-HTML sink introduced — attrs/text still set via `setAttribute`/`textContent`. Committed +
+  pushed to GoWebComponents (`bfe3011d`), then `go get`-bumped the pin here.
+- Gotcha that caused a false "still broken": the served wasm is `web/bin/main.wasm`, but the CLAUDE.md
+  "build wasm directly" snippet targets `static/bin/` — rebuilding there left the live app on the old
+  binary. Rebuilt into `web/bin/` and screenshot-verified (headless Edge against `gwc serve`): every rail
+  icon, the collapse toggle, the household gear, and the tile grips/gears now render.
+- Next: the build-output path mismatch (`static/bin` vs `web/bin`) is a footgun — worth reconciling the
+  CLAUDE.md snippet / dev flow so there's one canonical wasm output location.
+
 ## 2026-06-18 — seed data: a middle-aged single homeowner persona
 
 - User request: seed the data for a middle-aged single man. Confirmed three choices up front (AskUserQuestion):
