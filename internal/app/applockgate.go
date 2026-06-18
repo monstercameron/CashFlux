@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/lockquotes"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -41,6 +42,7 @@ func showAppLockGate() {
 	doc := js.Global().Get("document")
 	if gate := doc.Call("getElementById", appLockGateID); !gate.IsNull() && !gate.IsUndefined() {
 		gate.Get("style").Set("display", "grid")
+		refreshLockMeta(doc)
 		resetAppLockInput(doc)
 		return
 	}
@@ -61,7 +63,9 @@ func buildAppLockGate(doc js.Value) {
 
 	card := doc.Call("createElement", "div")
 	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.8rem;width:min(90vw,320px);text-align:center;color:var(--text,#f4f4f5);")
-	card.Set("innerHTML", `<div style="font-family:Fraunces,Georgia,serif;font-size:1.4rem;font-weight:600;">CashFlux</div>`+
+	card.Set("innerHTML", `<div id="cf-lock-greeting" style="font-size:1rem;opacity:0.85;"></div>`+
+		`<div id="cf-lock-date" style="font-size:0.82rem;opacity:0.55;margin-bottom:0.3rem;"></div>`+
+		`<div style="font-family:Fraunces,Georgia,serif;font-size:1.4rem;font-weight:600;">CashFlux</div>`+
 		`<div id="cf-applock-msg" style="font-size:0.9rem;opacity:0.7;">`+htmlEscaper.Replace(uistate.T("applock.unlockPrompt"))+`</div>`)
 
 	inp := doc.Call("createElement", "input")
@@ -122,6 +126,11 @@ func buildAppLockGate(doc js.Value) {
 	})
 	forgot.Call("addEventListener", "click", forgotCb)
 
+	quoteEl := doc.Call("createElement", "div")
+	quoteEl.Set("id", "cf-lock-quote")
+	quoteEl.Get("style").Set("cssText", "font-size:0.8rem;opacity:0.5;font-style:italic;margin-top:0.6rem;line-height:1.4;")
+	card.Call("appendChild", quoteEl)
+
 	// Focus trap: keep Tab within the gate's controls so a locked app's covered
 	// background can't be reached by keyboard (mirrors the FlipPanel trap).
 	focusables := []js.Value{inp, btn, forgot}
@@ -145,7 +154,32 @@ func buildAppLockGate(doc js.Value) {
 	})
 	gate.Call("addEventListener", "keydown", trapCb)
 
+	refreshLockMeta(doc)
 	resetAppLockInput(doc)
+}
+
+// refreshLockMeta fills the lock screen's safe, non-financial metadata — a
+// time-of-day greeting, the date, and the day's rotating quote (deterministic via
+// the day ordinal, no randomness). Recomputed each time the gate is shown.
+func refreshLockMeta(doc js.Value) {
+	set := func(id, text string) {
+		if e := doc.Call("getElementById", id); !e.IsNull() && !e.IsUndefined() {
+			e.Set("textContent", text)
+		}
+	}
+	now := js.Global().Get("Date").New()
+	greeting := "Good evening"
+	switch h := now.Call("getHours").Int(); {
+	case h < 12:
+		greeting = "Good morning"
+	case h < 18:
+		greeting = "Good afternoon"
+	}
+	set("cf-lock-greeting", greeting)
+	set("cf-lock-date", now.Call("toLocaleDateString", js.Undefined(),
+		map[string]any{"weekday": "long", "month": "long", "day": "numeric"}).String())
+	dayOrdinal := int(js.Global().Get("Date").Call("now").Float() / 86400000)
+	set("cf-lock-quote", lockquotes.ForIndex(dayOrdinal))
 }
 
 // wipeAllLocalData removes every cashflux:* localStorage key — the reset path for

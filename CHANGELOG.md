@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Lock screen shows a greeting, the date, and a daily quote (B17.1).** The unlock screen is no longer
+  bare: it now greets you by time of day, shows the date, and a rotating finance/motivation line — all
+  privacy-safe (nothing financial). Quotes come from a new curated, table-tested `internal/lockquotes`
+  package and rotate deterministically by day ordinal (no randomness). Metadata refreshes each time the
+  screen appears. (Settings toggles for these, and opt-in glanceable data, are follow-ups.)
 - **Currency conversion edge coverage.** The `currency` unit tests now cover missing target rates,
   negative-amount rounding, and repeated cross-rate conversions so D16's pure conversion path has a tighter
   regression net. The missing-rate coverage now checks both the source and target sides of a conversion.
@@ -33,6 +38,8 @@ and every commit updates this file under `Unreleased`.
   accounts, budgets, goals, and transactions, closing the D-style ReassignOwner coverage gap.
 - **Recurring cadence catch-up coverage.** `Recurring.Advance` is now covered across every cadence, and
   autopost catch-up has an exact no-double-count regression test.
+- **Rules retroactive coverage.** `ApplyRules` now has regression coverage for transfer exclusion and
+  preserving existing tags while applying the first matching category retroactively.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

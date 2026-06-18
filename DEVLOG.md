@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: lock-screen greeting + date + daily quote (B17.1)
+
+- Started the B17.1 lock-screen experience: new pure `internal/lockquotes` package (12 curated finance/
+  motivation lines; `ForIndex` wraps deterministically — no randomness, table-tested for wrap/negative/
+  determinism). The gate now renders a time-of-day greeting, locale date (`toLocaleDateString`), and the
+  day's quote (rotated by `Date.now()/86400000`), via a `refreshLockMeta` recomputed on every show. All
+  privacy-safe — nothing financial. Hardcoded greeting strings for now (English; the quotes are English
+  anyway) — i18n + Settings toggles + opt-in glanceable data are follow-ups.
+- New package + gate-only change (applockgate.go); lockquotes test green, gofmt clean, disk wasm build
+  green (served wasm rebuilt). Committed by pathspec.
+- Re-engaged the broader backlog (454 open items) after the user flagged it — dropping the
+  collision-avoidance over-caution; using pathspec commits to coexist with the parallel session.
+
 ## 2026-06-18 — fix: focus-trap the lock gate (B17 modality complete)
 
 - Closed the residual from the previous commit: the unlock gate now traps Tab within its controls
@@ -45,6 +58,13 @@ problems and fixes, and what's next.
 - Expanded `Recurring.Advance` coverage from monthly-only to weekly, monthly, quarterly, and yearly.
 - Made `PostDueRecurring` deterministic with fixed due/as-of dates, asserting the exact catch-up count,
   advanced `NextDue`, and zero new transactions on a second run.
+
+## 2026-06-18 — test: rules retroactive apply path
+
+- Extended `TestApplyRules` beyond the existing first-match update case to assert transfers are skipped and
+  pre-existing transaction tags are preserved.
+- The pure `rules.FirstMatch` and `rules.Conflicts` tests already covered ordering/shadowing, so this closes
+  the remaining retroactive `ApplyRules` path.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 
