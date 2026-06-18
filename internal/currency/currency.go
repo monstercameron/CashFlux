@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -42,6 +43,17 @@ var registry = map[string]Currency{
 }
 
 const defaultDecimals = 2
+
+// Codes returns the registered currency codes, sorted — for building base-currency
+// and exchange-rate pickers.
+func Codes() []string {
+	out := make([]string, 0, len(registry))
+	for code := range registry {
+		out = append(out, code)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // Lookup returns the registered currency for a code and whether it was found.
 func Lookup(code string) (Currency, bool) {

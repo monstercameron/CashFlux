@@ -7,6 +7,28 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
+func TestCodesSortedAndRegistered(t *testing.T) {
+	codes := Codes()
+	if len(codes) < 5 {
+		t.Fatalf("expected several registered codes, got %d", len(codes))
+	}
+	for i := 1; i < len(codes); i++ {
+		if codes[i-1] >= codes[i] {
+			t.Errorf("codes not strictly sorted at %d: %q >= %q", i, codes[i-1], codes[i])
+		}
+	}
+	seen := map[string]bool{}
+	for _, c := range codes {
+		if _, ok := Lookup(c); !ok {
+			t.Errorf("Codes returned unregistered %q", c)
+		}
+		seen[c] = true
+	}
+	if !seen["USD"] || !seen["EUR"] {
+		t.Error("expected USD and EUR among codes")
+	}
+}
+
 func TestLookupAndDefaults(t *testing.T) {
 	if c, ok := Lookup("usd"); !ok || c.Decimals != 2 || c.Symbol != "$" {
 		t.Fatalf("Lookup(usd) = %+v, ok=%v", c, ok)

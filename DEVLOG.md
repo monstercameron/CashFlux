@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: make the multi-currency (FX) editor functional (D16)
+
+- Discovered the Settings FX editor was a dead stub: base-currency `<select>` had no `OnChange`, `rateRow`'s
+  input had no handler, and rows only appeared for currencies already in `FXRates` (so an empty table had
+  no way to add one). The whole pipeline below it already worked — `store.Settings{BaseCurrency,FXRates}`
+  exists, every screen builds `currency.Rates` from it, and `ledger.*` converts — so this was purely a
+  broken editor UI.
+- Fix (settings.go): `onBase` saves the base via `PutSettings`+bump; `setRate` writes/clears a rate;
+  `rateRow` → `fxRateRow` component (stable change hook) with an editable number input that commits on
+  change (blur) so decimals aren't reparsed mid-typing; rows now render for every registered currency
+  (`currency.Codes()`) except the base, so any rate is addable. Base selector lists all registered
+  currencies (was a hardcoded 3). Swapped the now-unused `sort` import for `currency`.
+- Added pure `currency.Codes()` (sorted, table-tested). gofmt clean, currency test green, worktree wasm
+  build exit 0. Committed by pathspec. This effectively completes the D16 multi-currency feature's UI.
+
+## 2026-06-18 — test: D11 planning one-time end balance
+
+- Closed the D11 pure planning unit-test checklist item with an `EndBalance` case that includes a one-time
+  future item.
+- Existing tests already covered `Project` and `MonthlyNet` with one-time items; this pins the final
+  projected balance helper against the same behavior.
+- Verification: `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — test: D4 budget scope aggregation
 
 - Closed the D4 pure budgeting unit-test checklist item with a mixed-member scenario in

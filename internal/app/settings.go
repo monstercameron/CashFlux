@@ -3,13 +3,13 @@
 package app
 
 import (
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/contrast"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/i18n"
@@ -313,6 +313,32 @@ func globalSettingsForm() uic.Node {
 			bump() // re-render the budgets view with the new methodology
 		}
 	})
+	onBase := uic.UseEvent(func(e uic.Event) {
+		if a := appstate.Default; a != nil {
+			s := a.Settings()
+			s.BaseCurrency = e.GetValue()
+			_ = a.PutSettings(s)
+			bump() // re-window every currency-aware figure to the new base
+		}
+	})
+	// setRate writes (or clears, when 0/blank) one currency's rate against the base.
+	setRate := func(code string, rate float64) {
+		a := appstate.Default
+		if a == nil {
+			return
+		}
+		s := a.Settings()
+		if s.FXRates == nil {
+			s.FXRates = map[string]float64{}
+		}
+		if rate > 0 {
+			s.FXRates[code] = rate
+		} else {
+			delete(s.FXRates, code)
+		}
+		_ = a.PutSettings(s)
+		bump()
+	}
 
 	var members []domain.Member
 	base := "USD"
@@ -323,13 +349,13 @@ func globalSettingsForm() uic.Node {
 		if s.BaseCurrency != "" {
 			base = s.BaseCurrency
 		}
-		codes := make([]string, 0, len(s.FXRates))
-		for code := range s.FXRates {
-			codes = append(codes, code)
-		}
-		sort.Strings(codes)
-		for _, code := range codes {
-			fxRows = append(fxRows, rateRow(code, s.FXRates[code], base))
+		for _, code := range currency.Codes() {
+			if code == base {
+				continue
+			}
+			fxRows = append(fxRows, uic.CreateElement(fxRateRow, fxRateRowProps{
+				Code: code, Base: base, Rate: s.FXRates[code], OnSet: setRate,
+			}))
 		}
 	}
 
@@ -380,11 +406,7 @@ func globalSettingsForm() uic.Node {
 		Div(Class("set-label"), uistate.T("settings.householdMembers")),
 		Div(Class("flex flex-wrap gap-2 py-1"), memberChips),
 		Div(Class("set-label"), uistate.T("settings.baseCurrency")),
-		Select(Class("set-input"),
-			Option(Value("USD"), SelectedIf(base == "USD"), "USD — US Dollar"),
-			Option(Value("EUR"), SelectedIf(base == "EUR"), "EUR — Euro"),
-			Option(Value("GBP"), SelectedIf(base == "GBP"), "GBP — British Pound"),
-		),
+		Select(Class("set-input"), Title(uistate.T("settings.baseCurrency")), OnChange(onBase), baseCurrencyOptions(base)),
 		Div(Class("set-label"), uistate.T("settings.budgetMethod")),
 		Select(Class("set-input"), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
 			Option(Value(string(budgeting.MethodSimple)), SelectedIf(curMethod == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
@@ -612,13 +634,44 @@ func memberChip(m domain.Member) uic.Node {
 	)
 }
 
-// rateRow renders one editable FX rate row (1 <code> = <rate> <base>).
-func rateRow(code string, rate float64, base string) uic.Node {
+// baseCurrencyOptions builds the base-currency <option> list from the registered
+// currencies (code + name), marking the current base selected.
+func baseCurrencyOptions(base string) []uic.Node {
+	opts := make([]uic.Node, 0)
+	for _, code := range currency.Codes() {
+		name := code
+		if c, ok := currency.Lookup(code); ok {
+			name = c.Name
+		}
+		opts = append(opts, Option(Value(code), SelectedIf(base == code), code+" — "+name))
+	}
+	return opts
+}
+
+type fxRateRowProps struct {
+	Code, Base string
+	Rate       float64
+	OnSet      func(code string, rate float64)
+}
+
+// fxRateRow is one editable FX rate (1 <code> = <rate> <base>). Its own component
+// so the input's change hook stays stable across the currency list. The value
+// commits on change (blur), so a decimal like 1.08 isn't mangled mid-typing; an
+// empty/zero value clears the rate.
+func fxRateRow(props fxRateRowProps) uic.Node {
+	on := uic.UseEvent(func(e uic.Event) {
+		r, _ := strconv.ParseFloat(strings.TrimSpace(e.GetValue()), 64)
+		props.OnSet(props.Code, r)
+	})
+	val := ""
+	if props.Rate > 0 {
+		val = strconv.FormatFloat(props.Rate, 'f', -1, 64)
+	}
 	return Div(Class("rate-row"),
-		Span(Style(map[string]string{"width": "40px"}), code),
-		Span(Class("text-faint"), "1 "+code+" ="),
-		Input(Class("rate-in"), Value(strconv.FormatFloat(rate, 'f', -1, 64))),
-		Span(Class("text-faint"), base),
+		Span(Style(map[string]string{"width": "40px"}), props.Code),
+		Span(Class("text-faint"), "1 "+props.Code+" ="),
+		Input(Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Value(val), OnChange(on)),
+		Span(Class("text-faint"), props.Base),
 	)
 }
 

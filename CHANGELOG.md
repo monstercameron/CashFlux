@@ -12,6 +12,8 @@ and every commit updates this file under `Unreleased`.
   regression net. The missing-rate coverage now checks both the source and target sides of a conversion.
 - **Budget scope aggregation coverage.** The `budgeting` unit tests now pin the mixed-member D4 case: an
   individual budget counts only its owner while a group budget counts the whole household for the same category.
+- **Planning end-balance coverage.** The `planning` unit tests now assert that one-time plan items affect
+  `EndBalance`, closing the D11 pure projection checklist item.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
@@ -339,6 +341,14 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **The multi-currency editor actually works now.** Settings → Base currency and the exchange-rate inputs
+  were inert stubs — the base-currency `<select>` had no change handler and the rate inputs no handler, so
+  neither could be changed (and there was no way to add a rate for a currency not already in the table).
+  Now: changing the base currency saves and re-windows every currency-aware figure (net worth, period
+  totals, budgets, forecasts — all already convert via the FX table); each registered currency shows an
+  editable rate row (`1 EUR = … USD`) that commits on blur (so decimals like `1.08` aren't mangled) and
+  clears when blank. The model + ledger conversion already existed (`Settings.FXRates`, `currency.Rates`);
+  this wires up the editor. Adds `currency.Codes()` (table-tested).
 - **Segmented controls support arrow-key navigation (UX audit §6.6).** Shared radiogroups now move with
   Left/Up and Right/Down keys, wrapping across options. Browser verification covered the period selector.
 - **Workspace switcher actions have clearer separation (UX audit §6.4).** The menu divider now carries
