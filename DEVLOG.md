@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature: opt-in "remember my key on this device" (C27 closed)
+
+- Followed the dataset-persistence feature with the small, isolated piece it left: an opt-in to persist
+  the OpenAI key (the autosave redacts it, so it's session-only by default).
+- `prefs.RememberAIKey` (new bool, off by default). `uistate/aikey.go`: `PersistAIKey`/`ClearAIKey`/
+  `LoadAIKey` over a dedicated `cashflux:openai-key` localStorage entry (kept separate from the dataset).
+  `app/persist.go` `hydrateAIKey()` restores it on boot when the toggle is on (called after
+  hydrateDataset). Settings → AI gained a ToggleRow + a plain-English unencrypted-storage note; the key
+  input's onKey re-persists when the toggle is on so edits stay in step.
+- Secure-by-default: off → nothing stored; on → user has explicitly opted in with a clear notice.
+- Verified live by driving the UI: open settings → type a key → toggle Remember on writes
+  `cashflux:openai-key`, toggle off clears it. Boot-restore is reasoned (mirrors hydrateDataset + tested
+  PutSettings). Closes the C27 AI-key item entirely.
+
 ## 2026-06-18 — feature: local dataset persistence (data survives reload)
 
 - Re-armed loop ("implement all features"). Picked the highest-value gap I'd surfaced while investigating

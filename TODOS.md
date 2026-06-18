@@ -885,13 +885,13 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
       through `fmtMoney` (the unified accounting formatter, parentheses for negatives) in the chosen import
       account's currency (falling back to base), with a raw-string fallback while the value is unparseable.
       Matches the rest of the app (C2). The summary line already used `fmtMoney`.
-- [~] Harden the AI key flow: the key lives only in the in-memory store, so a **page reload loses it**.
-      **Investigated (2026-06-17):** this was not isolated — `appstate.New(seed=true)` loaded the *sample*
-      dataset on boot and there was **no dataset autosave**. **Local dataset persistence is now done
-      (2026-06-18):** the dataset autosaves to localStorage and hydrates on boot, so data survives a
-      reload — but the OpenAI key is **redacted** before saving (stays session-only), so the key itself
-      still resets, by design. What remains is just the **opt-in** key persistence: a "remember my key on
-      this device" toggle that, when on, also writes the key (secure-by-default off). Small, isolated.
+- [x] Harden the AI key flow — DONE. (1) **Local dataset persistence (2026-06-18):** the dataset
+      autosaves to localStorage and hydrates on boot, so data survives a reload; the OpenAI key is
+      **redacted** from that autosave (stays session-only). (2) **Opt-in key persistence (2026-06-18):**
+      a `prefs.RememberAIKey` toggle in Settings → AI ("Remember my key on this device", off by default).
+      When on, the key is written to its own `cashflux:openai-key` entry and restored on boot
+      (`hydrateAIKey`); when off, it's cleared. Secure-by-default, with a plain-English unencrypted-storage
+      note. Verified live: toggling on persists the key, off clears it.
 - [x] **Insights "Save as task"** — verified: the AI answer becomes a To-do (body carries the full
       answer; savings-rate math 2399.25/4200 = 57.14% correct). **Rough edge FIXED:** the task title is
       now the **question** (for a Q&A) or a short generic label ("Money insight") for "Explain my month",

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 // datasetStoreKey is the localStorage key holding the autosaved dataset, so the
@@ -33,6 +34,26 @@ func hydrateDataset() {
 	if err := app.ImportJSON([]byte(v.String())); err != nil {
 		app.Log().Error("dataset hydrate failed; seeding sample", "err", err)
 		_ = app.LoadSample()
+	}
+}
+
+// hydrateAIKey restores the saved OpenAI key into the session when the user has
+// opted into remembering it on this device (the dataset autosave redacts the
+// key, so it is stored separately). No-op when the toggle is off or nothing is
+// stored. Call after hydrateDataset so it lands on the loaded settings.
+func hydrateAIKey() {
+	app := appstate.Default
+	if app == nil || !uistate.LoadPrefs().RememberAIKey {
+		return
+	}
+	key := uistate.LoadAIKey()
+	if key == "" {
+		return
+	}
+	s := app.Settings()
+	s.OpenAIKey = key
+	if err := app.PutSettings(s); err != nil {
+		app.Log().Error("restore ai key failed", "err", err)
 	}
 }
 

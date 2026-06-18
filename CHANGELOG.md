@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Opt-in "Remember my key on this device" (C27):** Settings → AI now has a toggle (off by default) to
+  keep your OpenAI key across reloads. When off, the key stays session-only (the dataset autosave always
+  redacts it); when on, the key is saved to its own localStorage entry and restored on boot, so AI stays
+  on after a refresh. A plain-English note explains it's stored unencrypted in this browser. Verified live
+  (toggling on persists the key, off clears it). Closes the AI-key-lost-on-reload rough edge.
 - **Your data now survives a page reload (local persistence):** previously every reload reset the app to
   the sample dataset (data was in an in-memory store with only manual Export/Import). The dataset is now
   autosaved to localStorage — snapshotted on a short ticker (catching every change) and on page-hide,

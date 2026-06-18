@@ -288,6 +288,10 @@ func globalSettingsForm() uic.Node {
 			s.OpenAIKey = v
 			_ = a.PutSettings(s)
 		}
+		// Keep the persisted copy in step when the user has opted in (C27).
+		if prefsAtom.Get().RememberAIKey {
+			uistate.PersistAIKey(v)
+		}
 	})
 	onModel := uic.UseEvent(func(e uic.Event) {
 		if a := appstate.Default; a != nil {
@@ -390,6 +394,17 @@ func globalSettingsForm() uic.Node {
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
 		Input(Class("set-input mt-[0.45rem]"), Type("password"), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(aiKey.Get()), OnInput(onKey)),
 		If(strings.TrimSpace(aiKey.Get()) == "", P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.aiNoKey"))),
+		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: pr.RememberAIKey, OnChange: func(v bool) {
+			p := prefsAtom.Get()
+			p.RememberAIKey = v
+			savePrefs(p)
+			if v {
+				uistate.PersistAIKey(aiKey.Get())
+			} else {
+				uistate.ClearAIKey()
+			}
+		}}),
+		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.rememberKeyNote")),
 		Select(Class("set-input mt-[0.45rem]"), Title(uistate.T("settings.aiModel")), OnChange(onModel),
 			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
 			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),

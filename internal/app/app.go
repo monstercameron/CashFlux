@@ -26,6 +26,7 @@ func Run() {
 		panic(err)
 	}
 	hydrateDataset()
+	hydrateAIKey()
 
 	// Apply saved appearance preferences (theme/accent/density) before mounting,
 	// so the first paint matches the user's choice instead of flashing defaults.

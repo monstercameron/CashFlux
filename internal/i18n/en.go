@@ -394,6 +394,8 @@ var english = Catalog{
 	"settings.aiEnable":          "Enable AI features",
 	"settings.aiKeyPlaceholder":  "OpenAI API key (sk-…)",
 	"settings.aiNoKey":           "AI features stay off until you add a key. Your key is stored on this device and only sent to OpenAI when you ask.",
+	"settings.rememberKey":       "Remember my key on this device",
+	"settings.rememberKeyNote":   "Off by default: your key is kept only for this session. Turn on to save it (unencrypted) in this browser so AI stays on after a reload.",
 	"settings.aiModel":           "AI model",
 	"settings.displayScale":      "Text & display size",
 	"settings.scaleDefault":      "%d%% (default)",

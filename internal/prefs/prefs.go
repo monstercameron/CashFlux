@@ -58,6 +58,10 @@ type Prefs struct {
 	Accent    string    `json:"accent"`          // hex color, e.g. "#54b884"
 	Compact   bool      `json:"compact"`         // denser layout
 	Scale     int       `json:"scale,omitempty"` // UI zoom percent (70..200); 0 means default 100
+	// RememberAIKey opts into persisting the OpenAI key on this device across
+	// reloads (off by default — the key is otherwise session-only). When on, the
+	// key is written to its own localStorage entry, separate from the dataset.
+	RememberAIKey bool `json:"rememberAiKey,omitempty"`
 }
 
 // Default returns the out-of-the-box preferences (Sunday week start, ISO dates,
