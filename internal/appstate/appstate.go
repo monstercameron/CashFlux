@@ -18,11 +18,14 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
+	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/logging"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/validate"
@@ -618,6 +621,14 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 	return t
 }
 
+// DocumentImportResult reports how many reviewed rows were committed to the
+// ledger and how many were skipped as duplicates.
+type DocumentImportResult struct {
+	Imported   int
+	Skipped    int
+	DocumentID string
+}
+
 // PutDocument saves an imported-document record (needs an ID).
 func (a *App) PutDocument(d domain.Document) error {
 	if d.ID == "" {
@@ -632,6 +643,97 @@ func (a *App) PutDocument(d domain.Document) error {
 
 // DeleteDocument removes an imported-document record.
 func (a *App) DeleteDocument(id string) error { return a.del("document", id, a.store.DeleteDocument) }
+
+// ImportReviewedDocumentRows commits reviewed document-extraction rows into the
+// ledger for an account, skipping same-date/same-amount duplicates and recording
+// an import-history document when at least one row is imported.
+func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID string, rows []extract.Row) (DocumentImportResult, error) {
+	var result DocumentImportResult
+	acc, ok := domain.AccountByID(a.Accounts(), accountID)
+	if !ok {
+		return result, fmt.Errorf("appstate: choose an account for document import")
+	}
+	dec := currency.Decimals(acc.Currency)
+	seen := map[string]bool{}
+	for _, t := range a.Transactions() {
+		if t.AccountID != acc.ID {
+			continue
+		}
+		sig := extract.Row{Date: dateutil.FormatDate(t.Date), Amount: money.FormatMinor(t.Amount.Amount, dec)}.Signature()
+		seen[sig] = true
+	}
+	fresh := extract.FilterNew(rows, seen)
+	result.Skipped = len(rows) - len(fresh)
+
+	importedRows := make([]extract.Row, 0, len(fresh))
+	a.WithoutTriggers(func() {
+		for _, r := range fresh {
+			t, ok := a.transactionFromDocumentRow(acc, dec, r)
+			if !ok {
+				continue
+			}
+			if err := a.PutTransaction(t); err == nil {
+				result.Imported++
+				importedRows = append(importedRows, r)
+			}
+		}
+	})
+	if result.Imported == 0 {
+		return result, nil
+	}
+
+	docID := id.New()
+	result.DocumentID = docID
+	if err := a.PutDocument(domain.Document{
+		ID: docID, Kind: kind, UploadedAt: time.Now(), AccountID: acc.ID,
+		Status: domain.DocImported, Extracted: documentRowsFromExtract(importedRows),
+	}); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func (a *App) transactionFromDocumentRow(acc domain.Account, decimals int, r extract.Row) (domain.Transaction, bool) {
+	amt, err := money.ParseMinor(strings.TrimSpace(r.Amount), decimals)
+	if err != nil || amt == 0 {
+		return domain.Transaction{}, false
+	}
+	date, err := dateutil.ParseDate(strings.TrimSpace(r.Date))
+	if err != nil {
+		date = time.Now()
+	}
+	desc := strings.TrimSpace(r.Description)
+	t := domain.Transaction{
+		ID: id.New(), AccountID: acc.ID, Date: date, Desc: desc,
+		CategoryID: a.categoryIDForDocumentRow(r.Category), Amount: money.New(amt, acc.Currency),
+	}
+	return a.AutoCategorizeTransaction(t), true
+}
+
+func (a *App) categoryIDForDocumentRow(category string) string {
+	aiCat := strings.ToLower(strings.TrimSpace(category))
+	if aiCat == "" {
+		return ""
+	}
+	for _, c := range a.Categories() {
+		cn := strings.ToLower(c.Name)
+		if aiCat == cn || len(cn) >= 3 && (strings.Contains(aiCat, cn) || strings.Contains(cn, aiCat)) {
+			return c.ID
+		}
+	}
+	return ""
+}
+
+func documentRowsFromExtract(rows []extract.Row) []domain.DocumentRow {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]domain.DocumentRow, len(rows))
+	for i, r := range rows {
+		out[i] = domain.DocumentRow{Date: r.Date, Description: r.Description, Amount: r.Amount, Category: r.Category}
+	}
+	return out
+}
 
 // PutSavedInsight pins an AI insight (needs an ID and non-empty text).
 func (a *App) PutSavedInsight(si domain.SavedInsight) error {

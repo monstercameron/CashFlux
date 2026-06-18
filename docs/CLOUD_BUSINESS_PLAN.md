@@ -123,3 +123,38 @@ the software is free and self-hostable; the paid product is *managed convenience
 
 Net: self-hosting and the paid Cloud are complementary. Keep the server genuinely runnable (single
 binary, simple token auth option, Docker quickstart), and let Cloud win on convenience.
+
+## 14. Turnkey self-host deploy + referral revenue (DigitalOcean)
+
+Make self-hosting *one click* and turn that free path into a second revenue stream — without
+compromising the open, no-dark-patterns promise.
+
+### Easy deploy (ship in order)
+1. **cloud-init user-data script** (now, no approvals): paste-on-create installs Docker + the CashFlux
+   server image (compose) + **Caddy auto-HTTPS** + prints the first-run access token. One paste → a
+   running, TLS'd server.
+2. **One-command installer** (`curl … | sh`) for any fresh VPS — same recipe, host-agnostic.
+3. **DO Marketplace 1-Click image** (later): Packer-built snapshot submitted to the DigitalOcean
+   Marketplace ("Create CashFlux Droplet"). More discoverable/trusted; carries the referral; needs
+   DO vendor approval. All three reduce to: Docker image + compose + Caddy + printed token (server is
+   already a single binary).
+
+### Referral monetization (the flywheel)
+- DigitalOcean's **referral program** credits new sign-ups (DO has run ~$200/60-day promos) and pays the
+  referrer **account credit (~$25)** once the referee spends a threshold.
+- Put **our DO referral link** on the "Deploy your own server" button / install docs / Marketplace
+  listing. Self-hosters who create a DO account via it earn us DO credit — which **offsets the cost of
+  running CashFlux Cloud itself**.
+- **Why it's complementary, not cannibalizing:** the free self-host path is great for brand + top-of-
+  funnel; with referral it *also lowers our Cloud infra bill* and monetizes users who'll never buy a
+  subscription. Two revenue paths (Cloud subs + DO referral credit) reinforce each other.
+
+### Discipline / caveats
+- Referral payout is **account credit, not cash** — it reduces our DO bill (≈ Cloud COGS); model it as
+  reduced cost, not a paycheck.
+- **Verify current DO terms** (amounts/thresholds change; promos can end). Don't hard-depend on it.
+- **Disclose it plainly** ("deploy via this link → you get DO credit, and it supports CashFlux") — honest
+  and required by DO's ToS (no misrepresenting referrals).
+- Keep an unconditional **plain self-host path** (any host, your own account, no referral) — the free
+  promise stays absolute.
+- Marketplace 1-Click may carry separate partner economics — check if/when going that route.

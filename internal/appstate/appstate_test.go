@@ -10,9 +10,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/formula"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/spendsummary"
 )
 
 func newApp(t *testing.T, seed bool) *App {
@@ -241,6 +244,74 @@ func TestDocumentRoundTrip(t *testing.T) {
 	}
 	if len(a.Documents()) != 0 {
 		t.Error("document still present after delete")
+	}
+}
+
+func TestReviewedDocumentImportDedupeHistoryAndDerivedFigures(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutAccount(domain.Account{
+		ID: "checking", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+	}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	if err := a.PutCategory(domain.Category{ID: "food", Name: "Food", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory food: %v", err)
+	}
+	if err := a.PutTransaction(domain.Transaction{
+		ID: "existing", AccountID: "checking", Desc: "Existing coffee",
+		Date: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC), Amount: money.New(-450, "USD"),
+	}); err != nil {
+		t.Fatalf("PutTransaction existing: %v", err)
+	}
+
+	rows := []extract.Row{
+		{Date: "2026-06-01", Description: "Coffee duplicate", Amount: "-4.50", Category: "Food"},
+		{Date: "2026-06-02", Description: "Groceries", Amount: "-86.40", Category: "Food & Drink"},
+		{Date: "2026-06-03", Description: "Payroll", Amount: "1000.00"},
+	}
+	preview := spendsummary.Summarize(rows, 2)
+	if len(preview) != 1 || preview[0].Month != "2026-06" || preview[0].Out != 9090 || preview[0].In != 100000 {
+		t.Fatalf("preview summary = %+v, want June out9090 in100000", preview)
+	}
+
+	result, err := a.ImportReviewedDocumentRows(domain.DocImage, "checking", rows)
+	if err != nil {
+		t.Fatalf("ImportReviewedDocumentRows: %v", err)
+	}
+	if result.Imported != 2 || result.Skipped != 1 || result.DocumentID == "" {
+		t.Fatalf("import result = %+v, want imported2 skipped1 document id", result)
+	}
+	if len(a.Transactions()) != 3 {
+		t.Fatalf("transactions after import = %d, want 3", len(a.Transactions()))
+	}
+
+	docs := a.Documents()
+	if len(docs) != 1 || docs[0].Kind != domain.DocImage || docs[0].Status != domain.DocImported || docs[0].AccountID != "checking" {
+		t.Fatalf("document history = %+v", docs)
+	}
+	if len(docs[0].Extracted) != 2 || docs[0].Extracted[0].Description != "Groceries" {
+		t.Fatalf("document extracted rows = %+v, want only imported reviewed rows", docs[0].Extracted)
+	}
+
+	start, end := dateutil.MonthRange(time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC))
+	rates := currency.Rates{Base: "USD"}
+	income, expense, err := ledger.PeriodTotals(a.Transactions(), start, end, rates)
+	if err != nil {
+		t.Fatalf("PeriodTotals: %v", err)
+	}
+	if !income.Equal(money.New(100000, "USD")) || !expense.Equal(money.New(9090, "USD")) {
+		t.Fatalf("period totals income/expense = %v/%v, want 1000.00/90.90 USD", income, expense)
+	}
+	spent, err := budgeting.Spent(
+		domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: money.New(20000, "USD")},
+		a.Transactions(), start, end, rates,
+	)
+	if err != nil {
+		t.Fatalf("budgeting.Spent: %v", err)
+	}
+	if !spent.Equal(money.New(8640, "USD")) {
+		t.Fatalf("food budget spent = %v, want 86.40 USD", spent)
 	}
 }
 

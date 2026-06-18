@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - test: D21 document import flow
+
+- Extracted reviewed document-row import from the wasm Documents screen into `appstate.ImportReviewedDocumentRows`,
+  preserving duplicate detection, category-name matching, rule fallback, bulk-trigger suspension, and import-history
+  recording.
+- Added D21 coverage for CSV header import (existing test), duplicate skipping, reviewed image-row import history,
+  monthly statement summary, period spending totals, and budget impact. The OpenAI-key vision extraction checkbox
+  remains open because it needs a live key/browser path.
+
 ## 2026-06-18 - test: D20 rules auto-fill flow
 
 - Moved transaction draft auto-fill and CSV import auto-categorization through shared appstate helpers so

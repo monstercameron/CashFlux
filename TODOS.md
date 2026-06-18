@@ -1310,6 +1310,55 @@ Budgets, Goals, To-do, Planning, Allocate, Insights, Documents, Customize, Membe
 Rules). Screenshots + rendered text are in `.review-screenshots/` (git-ignore this). Items are
 ordered correctness-first, then cross-cutting chrome, then per-screen polish.
 
+### C46. Iconography pass — add a consistent glyph system across all screens ★ (UX/visual, user-requested 2026-06-18)
+**Surveyed live (all 11 routes, content inventory via harness).** Today the app **mixes ad-hoc Unicode glyphs**
+(`▾` dropdown, `‹ ›` period stepper, `⚙` settings, `✕` close, `⋯` overflow, `↑` insight trend, `+ Add`) and
+otherwise relies on **text-only** labels; real SVGs appear **only in charts** (svgTotal≈21, nearly all D3). The
+**17-item sidebar is entirely text** (`Dashboard, Accounts, Transactions, Budgets, Goals, To-do, Planning,
+Allocate, Insights, Documents, Customize, Artifacts, Workflows, Members, Categories, Rules, New page`) — which
+makes the **collapsible rail unusable when collapsed** (no icons = nothing to show). Adding a coherent icon set
+makes the app more legible, scannable, and visually interesting.
+
+**System decision (do this first):** adopt **one** open-source icon set inlined as **local SVG** — e.g. **Lucide**
+(MIT, clean, matches the calm aesthetic). **No icon CDN or webfont** (per C44 — bundle at build time; inline SVG
+also lets icons inherit `currentColor` for theming, B20). Build a tiny `internal/ui/icon` helper (`Icon(name, …)`)
+so screens reference glyphs by name; replace the ad-hoc Unicode glyphs above with real icons for consistency.
+
+**High-value placements (grounded in actual labels/sections):**
+- [ ] **Sidebar nav (highest — unblocks the collapsible rail):** one icon per item — Dashboard `layout-dashboard`,
+      Accounts `wallet`, Transactions `arrow-left-right`, Budgets `pie-chart`, Goals `target`, To-do `check-square`,
+      Planning `line-chart`, Allocate `scale`, Insights `sparkles`, Documents `file-text`, Customize `sliders`,
+      Artifacts `box`, Workflows `workflow`, Members `users`, Categories `tags`, Rules `filter`, New page `plus`.
+- [ ] **Quick-add menu (text-only today):** leading icon per item — New transaction `arrow-left-right`, New account
+      `wallet`, New budget `pie-chart`, New goal `target`, Scan a document `scan-line`/`camera`. Also the `+ Add`
+      trigger → `plus`, the `⚙` → `settings`, `⋯` → `more-horizontal`, `✕` → `x`, `▾` → `chevron-down`, `‹ ›` →
+      `chevron-left/right`.
+- [ ] **Dashboard KPI tiles:** leading icon on each tile header — Net worth `wallet`, Income `arrow-down-circle`,
+      Spending `arrow-up-circle`, Liabilities `credit-card`, Recent transactions `receipt`, Budgets `pie-chart`,
+      Goal `target`, To-do `check-square`, Accounts `landmark`, Net worth trend `trending-up`. (Pairs with the
+      existing tile-click-to-navigate TODO — icon reinforces the destination.)
+- [ ] **Status/semantic glyphs (carry meaning at a glance, color-coded):** stale-balance nudge ("7 balances could
+      use a refresh" / "7 accounts stale") → `clock`/`alert-circle`; over/near budget ("0 over budget · 2 near the
+      limit") → `check-circle`/`alert-triangle`; goal pace (on-track/behind) → `trending-up`/`trending-down`;
+      Insights trend arrows (currently bare `↑`) → colored `arrow-up`/`arrow-down`; transaction row type (transfer
+      `arrow-left-right`, income `arrow-down`, expense `arrow-up`, cleared `check`).
+- [ ] **Row/section actions:** Accounts — Edit `pencil`, Update balance `refresh-cw`, Mark updated `check`, Mark
+      all updated `refresh-cw`, Transactions link `list`; Goals — Contribute `plus-circle`, Edit `pencil`;
+      Accounts section headers Assets `trending-up` / Liabilities `trending-down`.
+- [ ] **AI affordances — unify with one "sparkle" glyph:** "Read with AI", "Explain with AI", "Explain my month",
+      "Ask about your money" all get `sparkles` (chat-style ones could use `message-circle`) so AI actions read as
+      a consistent family.
+- [ ] **Per-screen section headers & empty states (make it interesting):** Planning — Net worth in 12 months
+      `trending-up`, Recurring cash flows `repeat`, Savings & spending plans `sliders`, Debt payoff `calculator`,
+      Projection `line-chart`; Documents — Read a receipt `scan-line`, Import CSV `upload`, Import history `history`;
+      Allocate — Why this order `help-circle`, Exclude `ban`; Customize — Formula calculator `function-square`,
+      Available variables `braces`. **Empty states** ("No recurring cash flows yet", "No plans yet", "No imports
+      yet", "No custom fields yet") → a friendly muted **empty-state glyph/illustration** above the text — biggest
+      "more interesting" win for otherwise-blank panels.
+_Cross-links: collapsible rail item (icons unblock collapsed mode), tile-click-to-navigate item, C44 (bundle icons
+locally, no CDN), B20 theming (icons inherit `currentColor` → recolor with accent), accessibility (decorative icons
+`aria-hidden`, icon-only buttons keep `aria-label`)._
+
 ### C1. Dashboard "Income" shows $0.00 despite a $4,200 salary in-period ★ (correctness)
 **Symptom:** with sample data, the Dashboard Income KPI reads **$0.00 · 0 deposits** for Jun 2026,
 but `tx-1` Salary (+$4,200, income, cleared, **2026-06-01**) is clearly in June. Spending ($1,800.75,
@@ -2806,10 +2855,10 @@ Savings KPIs) · `period.Window`.
 #### D21. Document import → review → dedupe → ledger → derived figures ★
 **Workstream:** import via CSV and via image (vision), review, dedupe, import to ledger, and verify downstream.
 **Touches:** Documents (CSV + image) · `extract.ParseRows` · `ai` vision codec · dedupe · store (`documents`) · Transactions · Dashboard/Budgets/net worth · `spendsummary`.
-- [ ] Paste a CSV with a header; assert rows map by column name and import to the chosen account.
-- [ ] Import the same rows again; assert same-date+amount dedupe skips them and reports the count.
+- [x] Paste a CSV with a header; assert rows map by column name and import to the chosen account.
+- [x] Import the same rows again; assert same-date+amount dedupe skips them and reports the count.
 - [ ] (Image path, key set) assert vision extraction → review edits → import; assert an Import-history entry.
-- [ ] Assert imported txns update Spending KPI, budgets, and the monthly-spend summary.
+- [x] Assert imported txns update Spending KPI, budgets, and the monthly-spend summary.
 - [x] unit: `extract` parsing/dedupe + CSV column mapping.
 
 #### D22. Custom fields + formula over live figures
@@ -4018,3 +4067,34 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] **Docker quickstart** + one-command run; sample config (.env) with TLS notes; docs linked from
       Settings.
 - [ ] Self-host docs: backups (SQLite WAL + blobs), upgrade path, optional OAuth setup.
+
+### 7.13 Turnkey self-host deploy + DO referral ★
+
+> One-click(ish) self-host on DigitalOcean, and turn the free self-host path into DO referral credit
+> that offsets Cloud infra cost. Design: [`docs/CLOUD_BUSINESS_PLAN.md`](./docs/CLOUD_BUSINESS_PLAN.md) §14.
+> Keep an unconditional plain self-host path (any host, no referral). Disclose referral plainly.
+
+#### Packaging
+- [ ] Publish the server as a **Docker image** (multi-arch) on a registry; `docker-compose.yml` with the
+      server + **Caddy** (automatic HTTPS) + a persistent volume for the SQLite file + blobs dir.
+- [ ] **cloud-init / user-data script**: installs Docker, runs the compose stack, generates + prints the
+      first-run access token, configures Caddy for the droplet's domain/IP. Hosted at a stable URL.
+- [ ] **One-command installer** (`curl -fsSL <url>/install.sh | sh`) for any fresh VPS (host-agnostic).
+- [ ] Config via `.env` (domain, auth mode token|oauth, master key, fair-use off, providers if oauth).
+- [ ] **DO Marketplace 1-Click**: Packer build of a droplet image; submit for vendor approval (later,
+      after the script path is proven).
+
+#### Referral
+- [ ] Add the **DO referral link** to the "Deploy your own server" button + install docs + Marketplace
+      listing, with a clear disclosure line.
+- [ ] Verify current DO referral terms before relying on it; track referral credit as reduced COGS.
+- [ ] Provide a non-referral deploy path/link too (unconditional free promise).
+
+#### In-app hook
+- [ ] Settings → Cloud (self-hosted): a **"Deploy your own server"** link → the deploy docs (with the
+      referral disclosure), shown near the self-hosted server-URL field.
+- [ ] After deploy, the docs walk the user to paste the printed token into Settings (ties to §7.12 token auth).
+
+#### Ops/docs
+- [ ] Self-host runbook: backups (SQLite WAL checkpoint + blobs), upgrades (pull new image), TLS, restore.
+- [ ] Security defaults: token auth on by default, TLS required, sensible limits; never ship a default secret.

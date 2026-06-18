@@ -11,12 +11,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/spendsummary"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -158,88 +156,17 @@ func Documents() ui.Node {
 
 	importDraft := ui.UseEvent(Prevent(func() {
 		rows := draft.Get()
-		acc, ok := domain.AccountByID(accounts, importAcct.Get())
-		if !ok {
+		result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
+		if err != nil {
 			aiErr.Set(uistate.T("documents.chooseAccount"))
 			return
-		}
-		dec := currency.Decimals(acc.Currency)
-		// Skip rows that already exist in the chosen account (same date + amount).
-		seen := map[string]bool{}
-		for _, t := range app.Transactions() {
-			if t.AccountID != acc.ID {
-				continue
-			}
-			sig := extract.Row{Date: dateutil.FormatDate(t.Date), Amount: money.FormatMinor(t.Amount.Amount, dec)}.Signature()
-			seen[sig] = true
-		}
-		fresh := extract.FilterNew(rows, seen)
-		skipped := len(rows) - len(fresh)
-		rows = fresh
-
-		// Category resolution: prefer the row's own category (matched by name); when
-		// it's missing or unknown, fall back to the user's saved rules + implicit
-		// category-name rules against the description (a rule can add tags too).
-		catByName := map[string]string{}
-		autoRules := app.Rules()
-		for _, c := range app.Categories() {
-			catByName[strings.ToLower(c.Name)] = c.ID
-			autoRules = append(autoRules, rules.Rule{Match: c.Name, SetCategoryID: c.ID})
-		}
-		n := 0
-		// Suspend per-row workflow triggering during the bulk import; the trigger
-		// fires once afterward instead of once per imported row.
-		app.WithoutTriggers(func() {
-			for _, r := range rows {
-				amt, err := money.ParseMinor(strings.TrimSpace(r.Amount), dec)
-				if err != nil || amt == 0 {
-					continue
-				}
-				date, derr := dateutil.ParseDate(strings.TrimSpace(r.Date))
-				if derr != nil {
-					date = time.Now()
-				}
-				desc := strings.TrimSpace(r.Description)
-				cid := catByName[strings.ToLower(r.Category)]
-				// Fuzzy fallback: the model often returns a near-name ("Food & Drink"
-				// for the user's "Food"), so if the exact name doesn't match, accept a
-				// substring match either way (min length 3 to avoid spurious hits),
-				// scanning categories in order for determinism (C27).
-				if cid == "" && strings.TrimSpace(r.Category) != "" {
-					aiCat := strings.ToLower(strings.TrimSpace(r.Category))
-					for _, c := range app.Categories() {
-						cn := strings.ToLower(c.Name)
-						if len(cn) >= 3 && (strings.Contains(aiCat, cn) || strings.Contains(cn, aiCat)) {
-							cid = c.ID
-							break
-						}
-					}
-				}
-				var tags []string
-				if cid == "" {
-					if mr := rules.FirstMatch(autoRules, desc); mr != nil {
-						cid = mr.SetCategoryID
-						tags = mr.SetTags
-					}
-				}
-				t := domain.Transaction{
-					ID: id.New(), AccountID: acc.ID, Date: date, Desc: desc,
-					CategoryID: cid, Tags: tags, Amount: money.New(amt, acc.Currency),
-				}
-				if err := app.PutTransaction(t); err == nil {
-					n++
-				}
-			}
-		})
-		if n > 0 {
-			recordDocument(domain.DocImage, acc.ID, rows)
 		}
 		draft.Set([]extract.Row{})
 		imageURL.Set("")
 		aiErr.Set("")
-		summary := uistate.T("documents.importedImage", plural(n, "transaction"))
-		if skipped > 0 {
-			summary += uistate.T("documents.skipped", plural(skipped, "duplicate"))
+		summary := uistate.T("documents.importedImage", plural(result.Imported, "transaction"))
+		if result.Skipped > 0 {
+			summary += uistate.T("documents.skipped", plural(result.Skipped, "duplicate"))
 		}
 		msg.Set(summary)
 		rev.Set(rev.Get() + 1)
