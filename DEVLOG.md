@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.1 — form field target height
+
+- Closed the shared form-field target-height item in `web/index.html`: `.field` now has a 44px minimum
+  height, while compact density still keeps a 40px floor instead of dropping to 36px.
+- This covers the app's shared text/select/date/number field class without changing individual form code.
+
 ## 2026-06-18 — fix: UX polish §6.2 — segmented button label size
 
 - Closed the segmented-button part of the tiny-type item in `web/index.html`: `.seg-btn` labels moved from
