@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.11 — light-theme soon badge
+
+- Closed the fixed dark-blue `.badge-soon` item in `web/index.html`: light theme now overrides the badge
+  background, text, and border colors instead of reusing the dark palette.
+- This keeps existing dark-theme styling intact and only adds the missing light-theme treatment.
+
 ## 2026-06-18 — fix: UX polish §6.1 — form field target height
 
 - Closed the shared form-field target-height item in `web/index.html`: `.field` now has a 44px minimum

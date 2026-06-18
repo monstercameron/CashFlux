@@ -303,6 +303,8 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Soon badges now adapt to light theme (UX audit §6.11).** `.badge-soon` keeps its dark badge treatment
+  in dark mode and gains a light-theme color override.
 - **Form fields have comfortable touch targets (UX audit §6.1).** Shared `.field` controls now default to
   44px tall, with compact density still holding a 40px floor.
 - **Segmented controls are easier to read (UX audit §6.2).** Shared `.seg-btn` labels now use 0.85rem type
