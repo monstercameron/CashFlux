@@ -46,6 +46,7 @@ type Dataset struct {
 	AllocProfiles []domain.AllocationProfile `json:"allocProfiles,omitempty"`
 	Formulas      []domain.Formula           `json:"formulas,omitempty"`
 	Plans         []domain.Plan              `json:"plans,omitempty"`
+	CustomPages   []domain.CustomPage        `json:"customPages,omitempty"`
 	Settings      Settings                   `json:"settings"`
 }
 

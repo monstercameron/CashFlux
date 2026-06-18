@@ -1305,6 +1305,18 @@ results are summarized here so the backlog doesn't bloat.
     Worth confirming whether the store persists across reloads and whether "Wipe data" / fresh-context
     resets it; if it accumulates unboundedly that's a real concern. _Re-check with a clean profile + a
     precise count assertion next pass._
+- **2026-06-18 #40** — Resolved the #39 "57 txns" lead (0 console errors). **Data persists across reloads
+  AND across fresh, isolated browser contexts**, while **localStorage is EMPTY** (`count:0`) — so the
+  dataset is NOT in localStorage; it persists via an **origin-scoped store that survives fresh contexts**
+  (OPFS / SQLite-wasm persistence, or server-side). Both a brand-new context A and context B showed
+  **57 transactions**, and the count held across reload.
+  - ✅ **Implication 1 (feature):** transaction data now **survives reload** (earlier the in-memory store
+    reset to the 4-row sample). Persistence is working.
+  - [ ] **Implication 2 (test hygiene):** the running dev instance has **accumulated 4 → 57** from my ~39
+    iterations of test writes — there's no per-session isolation/reset, so test data piles up in the
+    shared origin store. Future count-based assertions must not assume the 4-row baseline; tests should
+    **reset state** (Wipe data, or a clean fixture) first. Also confirm the persistence layer is
+    intentional + origin-scoped (not unexpectedly shared) and that "Wipe data" fully clears it.
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

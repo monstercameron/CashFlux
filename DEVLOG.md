@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: workspaces — Phase 1 (pure registry)
+
+- User wants multiple independent "workspaces" (e.g. real money vs. an experimental sandbox) with quick
+  switching. Decided: terminology "workspace"; a swap changes *everything* (dataset + all UI/layout/settings);
+  the OpenAI key/env stays user-global (the per-workspace OpenAI model lives in the dataset's Settings).
+- Plan (bottom-up, commit per layer): (1) pure registry — this commit; (2) workspace-scoped localStorage
+  (namespace every `cashflux:*` key by the active workspace id, except the user-global `cashflux:openai-key`;
+  migrate existing keys into a "Default" workspace); (3) switch/create/duplicate/delete wiring + tests;
+  (4) rail quick-switch dropdown + Settings management.
+- Phase 1: new pure `internal/workspace` package — `Workspace{ID,Name}` + `Registry{Workspaces, ActiveID}`
+  with `Add`/`Rename`/`SetActive`/`Remove`/`Active`/`Has`/`Get`. Rules encoded + table-tested: first add
+  becomes active, duplicate/empty ids ignored, `Active()` falls back to the first when ActiveID dangles,
+  removing the active promotes the first survivor, the last workspace can't be removed. ID generation is the
+  caller's job so the package stays deterministic. Tests green, gofmt clean.
+
 ## 2026-06-18 — feat: custom pages — Phase A starts (data model + pure logic)
 
 - Kicked off the big "custom pages + widget engine + workflow engine + artifacts" feature (plan agreed
