@@ -9,7 +9,7 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - **Currency conversion edge coverage.** The `currency` unit tests now cover missing target rates,
   negative-amount rounding, and repeated cross-rate conversions so D16's pure conversion path has a tighter
-  regression net.
+  regression net. The missing-rate coverage now checks both the source and target sides of a conversion.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

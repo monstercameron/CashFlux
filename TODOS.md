@@ -1539,7 +1539,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Edit an FX rate; assert every aggregate re-converts live.
 - [ ] Assert a missing/zero rate surfaces a clear error, not a silent wrong total.
 - [ ] Assert rounding is to target minor units and is stable (no drift on re-render).
-- [ ] unit: `currency` cross-rate + rounding + missing-rate tests (extend existing).
+- [x] unit: `currency` cross-rate + rounding + missing-rate tests (extend existing).
 
 #### D17. Staleness → nudge → task ★
 **Workstream:** let an account go stale, get nudged, and turn the nudge into a to-do.

@@ -20,6 +20,8 @@ problems and fixes, and what's next.
 - Closed the D16 pure currency unit-test checklist item in `internal/currency/currency_test.go`.
 - Added coverage for missing target-currency rates, negative amount rounding, and repeated cross-rate
   conversion stability so render loops do not hide conversion drift.
+- Rechecked after the app-lock Settings commit landed; this follow-up keeps the currency commit's own docs
+  delta attached to the test and TODO checkbox changes.
 - Verification: `go test ./...`, wasm build, and `gwc verify` passed.
 
 ## 2026-06-18 — fix: UX polish §6.6 — segmented control arrow keys

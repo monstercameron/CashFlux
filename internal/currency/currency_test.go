@@ -77,6 +77,9 @@ func TestConvertMissingRate(t *testing.T) {
 	if _, err := r.Convert(money.New(100, "EUR"), "USD"); !errors.Is(err, ErrUnknownRate) {
 		t.Errorf("err = %v, want ErrUnknownRate", err)
 	}
+	if _, err := r.Convert(money.New(100, "USD"), "EUR"); !errors.Is(err, ErrUnknownRate) {
+		t.Errorf("target err = %v, want ErrUnknownRate", err)
+	}
 }
 
 func TestConvertNonPositiveRate(t *testing.T) {
@@ -109,5 +112,34 @@ func TestConvertRoundsToNearestMinor(t *testing.T) {
 				t.Errorf("amount = %d, want %d", got.Amount, tt.want)
 			}
 		})
+	}
+}
+
+func TestConvertRoundsNegativeAmounts(t *testing.T) {
+	r := Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.236}}
+	got, err := r.Convert(money.New(-100, "EUR"), "USD")
+	if err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+	if !got.Equal(money.New(-124, "USD")) {
+		t.Errorf("Convert negative = %v, want -124 USD", got)
+	}
+}
+
+func TestConvertStableAcrossRepeatedCalls(t *testing.T) {
+	r := Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.10, "GBP": 1.25}}
+	in := money.New(5000, "EUR")
+	want := money.New(4400, "GBP")
+	for i := 0; i < 5; i++ {
+		got, err := r.Convert(in, "GBP")
+		if err != nil {
+			t.Fatalf("Convert call %d error: %v", i, err)
+		}
+		if !got.Equal(want) {
+			t.Fatalf("Convert call %d = %v, want %v", i, got, want)
+		}
+		if !in.Equal(money.New(5000, "EUR")) {
+			t.Fatalf("input mutated after call %d: %v", i, in)
+		}
 	}
 }
