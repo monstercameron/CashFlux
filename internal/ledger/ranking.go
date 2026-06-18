@@ -21,7 +21,14 @@ func RankSpending(totals map[string]int64, n int) (top []CategoryTotal, other in
 	for id, amt := range totals {
 		all = append(all, CategoryTotal{CategoryID: id, Amount: amt})
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].Amount > all[j].Amount })
+	// Sort by amount descending, breaking ties on CategoryID so the ordering is
+	// deterministic regardless of the source map's iteration order.
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].Amount != all[j].Amount {
+			return all[i].Amount > all[j].Amount
+		}
+		return all[i].CategoryID < all[j].CategoryID
+	})
 	if n <= 0 || len(all) <= n+1 {
 		return all, 0
 	}

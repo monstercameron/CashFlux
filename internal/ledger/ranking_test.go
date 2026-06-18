@@ -34,3 +34,14 @@ func TestRankSpending(t *testing.T) {
 		t.Errorf("empty → %+v, other=%d; want none", tp, o)
 	}
 }
+
+func TestRankSpendingTieIsDeterministic(t *testing.T) {
+	// Equal amounts must order by CategoryID, regardless of map iteration order.
+	totals := map[string]int64{"c": 100, "a": 100, "b": 100}
+	for i := 0; i < 20; i++ {
+		top, _ := RankSpending(totals, 0)
+		if len(top) != 3 || top[0].CategoryID != "a" || top[1].CategoryID != "b" || top[2].CategoryID != "c" {
+			t.Fatalf("iteration %d: top = %+v, want a,b,c by id on ties", i, top)
+		}
+	}
+}

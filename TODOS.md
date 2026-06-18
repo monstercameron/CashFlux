@@ -3947,7 +3947,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 ### 7.3 SyncService (last-write-wins) ★
 - [x] Auth interceptor: read bearer token from gRPC metadata → validate → put user in context.
-- [ ] `List`/`Get`/`Delete` (soft-delete tombstone) strictly scoped to the caller's `user_id`.
+- [x] `List`/`Get`/`Delete` (soft-delete tombstone) strictly scoped to the caller's `user_id`.
 - [ ] `PutWorkspace` LWW: accept when `clientUpdatedAt >= stored.updatedAt` (newest wins, so a stale
       device can't clobber newer data); server-stamp `updatedAt`; bump `version`; honor a `force` flag;
       return the new `{version, updatedAt}` (and current state when rejected so the client re-pulls).
