@@ -1495,7 +1495,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Create a plan (name/horizon/start/monthly); assert projected end balance matches `planning.EndBalance`.
 - [ ] Add a one-time item in a future month; assert the curve bends at that month.
 - [ ] Reload; assert the plan persists and re-projects identically.
-- [ ] unit: `planning.Project`/`MonthlyNet`/`EndBalance` with one-time items.
+- [x] unit: `planning.Project`/`MonthlyNet`/`EndBalance` with one-time items.
 
 #### D12. Goal pace → linked-account contributions → allocate
 **Workstream:** create a goal linked to an account, contribute, and see pace + allocation interplay.

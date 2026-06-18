@@ -24,6 +24,7 @@ problems and fixes, and what's next.
   future item.
 - Existing tests already covered `Project` and `MonthlyNet` with one-time items; this pins the final
   projected balance helper against the same behavior.
+- Rechecked after the FX editor commit landed and kept this docs follow-up attached to the test/TODO commit.
 - Verification: `go test ./...`, wasm build, and `gwc verify` passed.
 
 ## 2026-06-18 — test: D4 budget scope aggregation

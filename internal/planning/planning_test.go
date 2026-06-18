@@ -55,6 +55,20 @@ func TestEndBalance(t *testing.T) {
 	}
 }
 
+func TestEndBalanceIncludesOneTimeItems(t *testing.T) {
+	p := domain.Plan{
+		StartBalance:  5000,
+		HorizonMonths: 3,
+		Items: []domain.PlanItem{
+			recItem("Save", 1000),
+			oneItem("Repair", 2, -2500),
+		},
+	}
+	if got := EndBalance(p); got != 5500 {
+		t.Errorf("EndBalance with one-time item = %d, want 5500", got)
+	}
+}
+
 func TestEndBalanceNoHorizonReturnsStart(t *testing.T) {
 	p := domain.Plan{StartBalance: 7777, HorizonMonths: 0, Items: []domain.PlanItem{recItem("Save", 1000)}}
 	if got := EndBalance(p); got != 7777 {

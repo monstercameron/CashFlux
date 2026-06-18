@@ -13,7 +13,8 @@ and every commit updates this file under `Unreleased`.
 - **Budget scope aggregation coverage.** The `budgeting` unit tests now pin the mixed-member D4 case: an
   individual budget counts only its owner while a group budget counts the whole household for the same category.
 - **Planning end-balance coverage.** The `planning` unit tests now assert that one-time plan items affect
-  `EndBalance`, closing the D11 pure projection checklist item.
+  `EndBalance`, closing the D11 pure projection checklist item. The test pairs the one-time outflow with a
+  recurring monthly inflow so the final balance proves both inputs compose correctly.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up
