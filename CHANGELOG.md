@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Dashboard tiles drill into their data screen (C30).** Each tile's title is now a link — click it (or
+  press Enter) to jump to the screen that owns that data: Net worth / Liabilities / Accounts / Upcoming
+  bills / Net-worth trend → Accounts; Income / Spending / Recent / Cash flow / Savings rate / Breakdown →
+  Transactions; Budgets → Budgets; Goal → Goals; To-do → To-do; Highlight → Insights. The grip (drag) and
+  gear (settings) keep their roles, and the title shows a pointer + hover underline so it reads as clickable.
 - **Empty lists now invite you to add the first item (§6.5).** Goals, budgets, to-do, members, rules,
   transactions, and both category lists show a centered "Add your first…" button on their empty state
   that jumps the cursor straight to the add form, instead of just a bare line of grey text. (A filtered

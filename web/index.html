@@ -530,7 +530,10 @@
 
       /* unified widget header: grip (left) · title (center) · gear (right) */
       .wh { display:flex; align-items:center; gap:.55rem; padding:.7rem .85rem .55rem; }
-      .wh h3 { font-family:'Fraunces',serif; font-size:1rem; font-weight:600; letter-spacing:-0.01em; flex:1; text-align:center; }
+      .wh h3, .wh .wh-title { font-family:'Fraunces',serif; font-size:1rem; font-weight:600; letter-spacing:-0.01em; flex:1; text-align:center; }
+      /* Title doubles as a drill-in link to the tile's data screen (C30). */
+      .wh .wh-title { background:none; border:0; padding:0; margin:0; color:inherit; cursor:pointer; line-height:inherit; }
+      .wh .wh-title:hover, .wh .wh-title:focus-visible { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
       .wh .grip { width:1.1rem; }
       .grip { cursor:grab; color:#4f4f55; }
       .wbody { padding:0 .7rem .7rem; flex:1; min-height:0; }

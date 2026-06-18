@@ -7,8 +7,30 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
+
+// widgetRoute maps a dashboard tile's stable id to the screen that owns its data,
+// so the tile title can drill into that screen on click (C30). An empty result
+// means the tile has no natural destination and its title stays plain text.
+func widgetRoute(id string) string {
+	switch id {
+	case "kpi-networth", "kpi-liabilities", "accounts", "trend", "bills", "freshness":
+		return "/accounts"
+	case "kpi-income", "kpi-spending", "recent", "cashflow", "savings", "breakdown":
+		return "/transactions"
+	case "budgets":
+		return "/budgets"
+	case "goals":
+		return "/goals"
+	case "todo":
+		return "/todo"
+	case "highlight":
+		return "/insights"
+	}
+	return ""
+}
 
 // gridCols is the bento width Pack flows tiles into.
 const gridCols = 4
@@ -216,10 +238,16 @@ func widget(props WidgetProps) uic.Node {
 			OnDragEnd(func() { dragSrc.Set(""); dragPreview.Set("") }), // clear (reverts preview if dropped outside)
 		)
 	}
+	// The title drills into the tile's data screen when one exists (C30); it stays
+	// a plain heading otherwise. Distinct from the grip (drag) and gear (settings).
+	var titleNode uic.Node = H3(props.Title)
+	if route := widgetRoute(props.ID); route != "" {
+		titleNode = uic.CreateElement(viewTitle, viewTitleProps{Title: props.Title, Route: route})
+	}
 	args = append(args,
 		Div(Class("wh"),
 			Span(Class("grip"), Attr("aria-hidden", "true"), "⠿"), // decorative drag grip
-			H3(props.Title),
+			titleNode,
 			gear,
 		),
 		Div(Class(bodyClass), props.Body),
@@ -273,6 +301,27 @@ func gridStyle(col, row string) map[string]string {
 		style["grid-row"] = row
 	}
 	return style
+}
+
+type viewTitleProps struct {
+	Title string
+	Route string
+}
+
+// viewTitle renders a dashboard tile's title as a button that navigates to the
+// tile's data screen (C30). It is its own component so its click hook stays
+// stable across the many widgets rendered in a list (the On*-hooks-in-loops
+// rule), mirroring gearButton.
+func viewTitle(props viewTitleProps) uic.Node {
+	route := props.Route
+	return Button(
+		Class("wh-title"),
+		Type("button"),
+		Attr("title", uistate.T("widget.open")),
+		Attr("aria-label", uistate.T("widget.openNamed", props.Title)),
+		OnClick(func() { router.Navigate(route) }),
+		props.Title,
+	)
 }
 
 type gearButtonProps struct {

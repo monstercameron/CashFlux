@@ -444,6 +444,8 @@ var english = Catalog{
 	"settings.panelTitle":        "Settings",
 	"settings.noWidgetSettings":  "This widget doesn't have any settings yet.",
 	"widget.settings":            "Widget settings",
+	"widget.open":                "Open this screen",
+	"widget.openNamed":           "Open %s",
 	"widget.resizeWidth":         "Resize width — click grows, Shift+click shrinks",
 	"widget.resizeHeight":        "Resize height — click grows, Shift+click shrinks",
 	"widget.importance":          "Importance",

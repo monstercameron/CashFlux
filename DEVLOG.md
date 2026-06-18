@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: dashboard tiles drill into their data screen (C30)
+
+- Tiles had no click behavior (no href/role, cursor:auto). Made each tile's **title** a navigation link
+  to the screen that owns its data. Chose the title-as-link over whole-body click (the TODO's open
+  decision): whole-body would fight the tile's HTML5 drag/resize; the title is unambiguous, keyboard-
+  activatable, and visually distinct from the grip and gear.
+- Implemented centrally in the `ui.widget` shell via a `widgetRoute(id)` map + a `viewTitle` sub-component
+  (its own click hook, like `gearButton`, per the On*-hooks-in-loops rule) — one file, instead of
+  threading an `OnView` prop through all ~18 `ui.Widget(...)` call sites in dashboard.go.
+- `ui` now imports `GoWebComponents/router` and calls `router.Navigate`. Custom-page tiles use a separate
+  `customTile` header and are unaffected. CSS: `.wh-title` shares the h3 font, adds pointer + hover
+  underline. New `widget.open` / `widget.openNamed` i18n keys. Build green, gofmt clean.
+- Deferred (noted in C30): deep-linking with a pre-applied filter (e.g. Spending → Transactions filtered
+  to expenses for the period) — needs the transactions screen to accept filter query params.
+
 ## 2026-06-18 — fix: top bar wraps instead of scrolling (C34)
 
 - `.topbar` had `overflow-x: auto`, so at the awkward ~1000–1100px band (esp. Custom-range mode, which
