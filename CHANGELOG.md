@@ -186,10 +186,11 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
-- **Keyboard help overlay is now translatable (§6.6 i18n).** The `?` cheat sheet's title and row labels go
-  through the language catalog (`uistate.T`, new `shortcuts.*` keys) instead of being hardcoded English, so
-  they translate with the rest of the UI; the key chords stay literal. The palette's "Keyboard shortcuts"
-  command shares the same key.
+- **Keyboard UI is now translatable (§6.6 i18n).** The `?` cheat sheet (title + row labels) and the
+  Cmd/Ctrl+K command palette (search placeholder, "No matching commands", and the action labels — toggle
+  theme, collapse sidebar, switch/new/export workspace) now go through the language catalog (`uistate.T`,
+  new `shortcuts.*` / `cmd.*` keys) instead of hardcoded English, so they translate with the rest of the
+  UI; the key chords stay literal.
 - **Workspace switcher adapts to the collapsed rail.** In the 58px collapsed sidebar the full-width
   labelled switcher button doesn't fit, so it now renders as a compact icon-only square showing the
   active workspace's initial; its menu flies out to the right at a readable fixed width (with a hover
@@ -303,7 +304,8 @@ and every commit updates this file under `Unreleased`.
 
 ### Fixed
 - **Priority badges are less cramped (UX audit §6.2).** To-do priority chips now use 0.75rem text and a
-  little more metadata spacing, keeping compact rows readable.
+  little more metadata spacing, keeping compact rows readable. Browser verification confirmed the computed
+  badge size and gap.
 - **Disabled buttons now read as disabled (UX audit §6.4).** Shared `.btn` disabled styling dims inactive
   actions, suppresses hover brightening, and switches the cursor to `not-allowed`.
 - **Upcoming bill dates honor the display preference (UX audit §6.3).** The dashboard bills widget now uses

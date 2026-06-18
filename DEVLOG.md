@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — refactor: i18n the command palette (§6.6, finishes the keyboard-UI pass)
+
+- Routed the Cmd+K palette through the catalog: search placeholder/aria + "No matching commands" + the
+  action labels (toggle theme/sidebar, switch/new/export workspace) now use `uistate.T` (new `cmd.*` keys;
+  import reuses `ws.import`). With the prior help-overlay commit, the whole keyboard UI is translatable.
+- gofmt clean, worktree build at HEAD exit 0, committed by pathspec.
+
 ## 2026-06-18 — refactor: i18n the keyboard help overlay (§6.6)
 
 - Routed the `?` cheat-sheet through the i18n catalog per the engineering standards: `helpHTML` went from a
@@ -19,6 +26,7 @@ problems and fixes, and what's next.
 - Closed the To-do priority badge part of the tiny-type item in `web/index.html`: `.badge-prio` moved from
   `0.68rem` to `0.75rem`, and `.task-meta` gap loosened from `0.5rem` to `0.6rem`.
 - Kept this CSS-only because the rendered badge markup already uses the shared `.badge-prio` classes.
+- Browser verification confirmed the priority badge computes to 12px and the metadata gap to 9.6px.
 
 ## 2026-06-18 — fix: UX polish §6.4 — disabled button state
 
