@@ -16,6 +16,7 @@ import (
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -74,11 +75,10 @@ func ExcludedChip(props excludedChipProps) ui.Node {
 
 // parseWeight reads a weight input, treating blank/invalid/negative as 0.
 func parseWeight(s string) float64 {
-	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-	if err != nil || f < 0 {
-		return 0
+	if f := textutil.ParseFloat(s); f > 0 {
+		return f
 	}
-	return f
+	return 0
 }
 
 // trimWeight renders a weight for an input field without trailing zeros.

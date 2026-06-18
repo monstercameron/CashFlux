@@ -5,6 +5,39 @@ import (
 	"testing"
 )
 
+func TestParseFloat(t *testing.T) {
+	cases := map[string]float64{
+		"":        0,
+		"  ":      0,
+		"abc":     0,
+		" 12.5 ":  12.5,
+		"-3":      -3,
+		"0.0":     0,
+		"1000000": 1000000,
+	}
+	for in, want := range cases {
+		if got := ParseFloat(in); got != want {
+			t.Errorf("ParseFloat(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestParseInt(t *testing.T) {
+	cases := map[string]int{
+		"":      0,
+		"x":     0,
+		" 42 ":  42,
+		"-7":    -7,
+		"3.5":   0, // not an integer
+		"00012": 12,
+	}
+	for in, want := range cases {
+		if got := ParseInt(in); got != want {
+			t.Errorf("ParseInt(%q) = %d, want %d", in, got, want)
+		}
+	}
+}
+
 func TestCommaFields(t *testing.T) {
 	cases := []struct {
 		name string

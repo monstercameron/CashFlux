@@ -69,6 +69,10 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Numeric form parsing consolidated into tested helpers (internal):** the view layer had untested
+  `parseFloatOrZero`/`parseIntOrZero` (accounts) and a near-identical `parseWeight` (allocate). Added
+  `textutil.ParseFloat`/`ParseInt` (pure, table-tested, tolerant: 0 on blank/garbage); accounts uses them
+  directly and allocate's `parseWeight` now delegates (keeping its non-negative clamp). No behavior change.
 - **Comma-list parsing unified into a tested helper (internal):** `parseTags` (transactions/rules) and
   `parseOptions` (custom fields) were duplicate, untested copies of the same "split on commas, trim, drop
   empties" logic in the view layer. Both are now `textutil.CommaFields` — one pure, table-tested helper —

@@ -1247,6 +1247,9 @@ results are summarized here so the backlog doesn't bloat.
   correct, since sample data is all June. Re-corroborates the **C1 fix** (Jun income counted: 1 deposit).
 - **2026-06-18 #29** — Spot-check, 0 errors. Durable bugs **all unchanged**: C28 icon painted `[0,0]`;
   Members add-button no-op ("Quinn"); Accounts add-button no-op ("LoopFund29"). No regressions.
+- **2026-06-18 #30** — Freshness nudge → task (D17), 0 console errors. ✅ **Works.** Clicking the dashboard
+  Freshness widget's **"Remind me"** created a To-do task: task count **1 → 2**, and the new task carries a
+  refresh/balance keyword. Cross-component flow (freshness → To-do) verified.
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -494,14 +495,14 @@ func AccountRow(props accountRowProps) ui.Node {
 		}
 		if a.Class == domain.ClassLiability {
 			cp.CreditLimit = parseMoneyOrZero(climS.Get(), dec, a.Currency)
-			cp.InterestRateAPR = parseFloatOrZero(aprS.Get())
+			cp.InterestRateAPR = textutil.ParseFloat(aprS.Get())
 			cp.MinPayment = parseMoneyOrZero(minpS.Get(), dec, a.Currency)
-			cp.DueDayOfMonth = parseIntOrZero(dueS.Get())
+			cp.DueDayOfMonth = textutil.ParseInt(dueS.Get())
 			cp.Lender = strings.TrimSpace(lenderS.Get())
 		} else {
-			cp.ExpectedReturnAPR = parseFloatOrZero(retS.Get())
-			cp.LiquidityScore = parseIntOrZero(liqS.Get())
-			cp.StabilityScore = parseIntOrZero(stabS.Get())
+			cp.ExpectedReturnAPR = textutil.ParseFloat(retS.Get())
+			cp.LiquidityScore = textutil.ParseInt(liqS.Get())
+			cp.StabilityScore = textutil.ParseInt(stabS.Get())
 			if lu := strings.TrimSpace(lockS.Get()); lu != "" {
 				if d, err := dateutil.ParseDate(lu); err == nil {
 					cp.LockUntil = d
@@ -578,16 +579,4 @@ func parseMoneyOrZero(s string, dec int, cur string) money.Money {
 		return money.New(amt, cur)
 	}
 	return money.Money{Currency: cur}
-}
-
-// parseFloatOrZero parses a float, returning 0 on error.
-func parseFloatOrZero(s string) float64 {
-	f, _ := strconv.ParseFloat(strings.TrimSpace(s), 64)
-	return f
-}
-
-// parseIntOrZero parses an int, returning 0 on error.
-func parseIntOrZero(s string) int {
-	n, _ := strconv.Atoi(strings.TrimSpace(s))
-	return n
 }

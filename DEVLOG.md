@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — consolidate numeric form parsing into textutil
+
+- Continued the view-logic extraction. `parseFloatOrZero`/`parseIntOrZero` (accounts.go) and `parseWeight`
+  (allocate.go) were three untested view-layer takes on "parse a number from a form field, tolerate junk".
+- Added `textutil.ParseFloat`/`ParseInt` (TrimSpace + parse, 0 on error), table-tested (blank, spaces,
+  garbage, negatives, non-integer for ParseInt). accounts' five call sites now use them and the two local
+  defs are gone; allocate's `parseWeight` delegates to `textutil.ParseFloat` while keeping its
+  non-negative clamp. `strconv` stays imported in both screens (other uses); `strings` too. gofmt + wasm
+  build + textutil tests green.
+- (`trimWeight` left in allocate — it's float→string display formatting, a view concern, not logic.)
+
 ## 2026-06-18 — unify comma-list parsing into tested textutil.CommaFields
 
 - Continuing to pull pure logic out of the view layer. Found `parseTags` (defined in transactions.go, used

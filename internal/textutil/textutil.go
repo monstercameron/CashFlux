@@ -2,7 +2,10 @@
 // kept out of the view layer so they can be unit-tested on native Go.
 package textutil
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // CommaFields splits a comma-separated string into trimmed, non-empty fields,
 // preserving order. It returns nil (not an empty slice) when there are no
@@ -16,4 +19,18 @@ func CommaFields(s string) []string {
 		}
 	}
 	return out
+}
+
+// ParseFloat parses a (possibly space-padded) decimal string, returning 0 when it
+// isn't a valid number — for tolerant numeric form inputs.
+func ParseFloat(s string) float64 {
+	f, _ := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	return f
+}
+
+// ParseInt parses a (possibly space-padded) integer string, returning 0 when it
+// isn't a valid integer.
+func ParseInt(s string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(s))
+	return n
 }
