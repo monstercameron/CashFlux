@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — Repo health check + raise goals test coverage
+
+- Full-repo health pass after the session's commits: `gofmt -l` clean, native `go vet ./...` clean, native
+  `go test ./...` all 40 packages green, wasm `go vet`/build green. No regressions, nothing to fix.
+- Ran `go test -cover ./...` to find genuine gaps. Coverage is high across the board (most >85%); the lowest
+  pure-logic package was `goals` at 82.1%. Per-function profiling showed the misses were error/edge branches
+  (currency-mismatch errors in `Remaining`/`IsComplete`/`Project`/`Evaluate`, and `MonthlyNeeded`'s
+  partial-final-month bump).
+- Added `goals_edge_test.go`: currency-mismatch error paths for all four, the `Project`→`Remaining` error
+  propagation, both `Evaluate` error branches (Remaining-first and Project-via-mismatched-monthly), the
+  partial-final-month month-count round-up, and `MonthlyNeeded`'s mismatch path. `goals` → **94.6%**. The
+  remaining ~5% is defensive/unreachable code (negative-`current` clamp; the `months < 1` guard that the
+  `TargetDate.After(from)` check already precludes), not worth contorting tests for.
+
 ## 2026-06-18 — Remove dead `stub` screen placeholder
 
 - Swept the Go source for `TODO`/`FIXME`/`HACK`/`XXX`/`BUG` markers — none (clean). The one real find was

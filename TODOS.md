@@ -1127,6 +1127,17 @@ results are summarized here so the backlog doesn't bloat.
     a label. (Ties **B15** custom-controls-need-ARIA; explains the #13 bulk-select miss.)
   - _UX note: "Contribute" uses a raw `window.prompt`, which is unstyled/inaccessible and can't validate
     inline — consider an in-app inline field/flip-panel instead (low priority)._
+- **2026-06-18 #15** — Automated accessibility audit (Dashboard + Transactions). **Foundation is good:**
+  all buttons have accessible names (**0 unnamed** of 25/40 — `title` attrs cover the blank-icon buttons),
+  the Week/Month/Quarter segmented uses `role=radio` (×3), `<main>` landmark + a skip-link are present,
+  and no `<img>` is missing alt. **Gaps found:**
+  - [ ] **5 unlabeled inputs on Transactions** (of 16) — inputs with no `<label for>`/`aria-label`/
+        `placeholder`/`title`. Likely the filter `<select>`s (account/category/member/cleared/sort have no
+        accessible name) and/or the `type=date` inputs (no placeholder). Add `aria-label`s. (Ties B15 forms.)
+  - [ ] **Checkboxes non-semantic — confirmed app-wide:** `inputCheckbox=0`, `roleCheckbox=0` on
+        Transactions (the bulk-select squares). Same fix as #14.
+  - _Not yet audited: `role=switch` on the Settings toggles (panel wasn't opened here) — check next that
+    Enable-AI / Compact-density / show-screen toggles expose `role="switch"` + `aria-checked`._
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the
 UX all agree. Unlike B16 (per-feature happy paths), these are organized by **concept** and deliberately
 **span components** so a change in one place is proven not to break the figures somewhere else.
