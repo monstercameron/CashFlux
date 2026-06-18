@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — validate to 99% (edge rules)
+
+- Coverage sweep on the entity validator (it guards every write). `validate` was 92.2%; the existing tests
+  covered the common problems, leaving small edge branches: `Error()` on empty Issues, `validCode`'s
+  character-range arm (a 3-letter *lowercase* code), `ValidateAccount`'s invalid-type / negative-stability /
+  negative-APR checks, and `ValidateTask`'s non-empty-but-invalid RelatedType.
+- Added `validate_edge_test.go` for exactly those. `validate` → **98.9%** (Error/validCode/ValidateTask now
+  100%, ValidateAccount 95.7%). The tiny residual is the class/type-mismatch `else if` and a couple of
+  single `< 0` operands already covered on their `> max` side.
+
 ## 2026-06-18 — Cover appstate accessors, deletes, settings, CSV (64% → 82%)
 
 - Largest remaining sweep target. `appstate` was 63.8%; the existing tests covered the rule/recurring/
