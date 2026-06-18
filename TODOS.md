@@ -1272,6 +1272,13 @@ results are summarized here so the backlog doesn't bloat.
     keyboard/SR-friendly. A real `<input type=file>` (visually hidden, label-triggered) fixes both.
   - [ ] Round-trip import still **unverified by harness** — confirm lossless import manually for now.
   - (Export half confirmed #31; data intact $20,749.25 / $4,200.00 — but no import actually occurred.)
+- **2026-06-18 #34** — Insights no-key state (C9) + C28, 0 console errors.
+  - 🟡 **C9 (Insights bare without key) — partially improved.** Without an OpenAI key, Insights now shows
+    **both "Explain my month" and the "Ask about your money" box** (the Ask box used to be hidden). But the
+    **offline "Spending highlights" card is still NOT on the Insights screen** — C9 wanted that surfaced
+    key-free (the pure `internal/insights.Detect` engine + the dashboard top-highlight widget exist; the
+    Insights screen just doesn't render the highlights card). Still sparse without a key.
+  - C28 nav icons: still painted `[0,0]` (unchanged).
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so

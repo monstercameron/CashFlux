@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix stray nested wasm re-tracking (.gitignore mid-slash anchoring)
+
+- A clean-state check caught `internal/screens/static/bin/main.wasm` tracked *again* after I thought I'd
+  untracked it. Cause: a `.gitignore` pattern with a slash in the middle (`static/bin/`) is **anchored to
+  the repo root**, so it never matched the nested path — and the untracking commit's `git add -A` re-added
+  the on-disk file. Classic gitignore gotcha.
+- Fixed the pattern to `**/static/bin/` (the leading `**/` matches at any depth; `git check-ignore` now
+  confirms both the root and the nested wasm are ignored) and deleted the stray
+  `internal/screens/static/` dir outright (it only ever held the accidental build artifact). No tracked
+  `.wasm` remains and it can't be re-added now.
+
 ## 2026-06-18 — untrack stray bin/ screenshots; ignore bin/ wholesale
 
 - Follow-on to the wasm untracking. The four `bin/*.png` review screenshots (dash/dash2/mobile/mobile2)
