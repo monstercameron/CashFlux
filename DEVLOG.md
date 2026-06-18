@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: reports — deterministic spending narrative (B21, step 3)
+
+- Added `reports.SpendingNarrative(rows, compared, format, name)` — the "narrative descriptions" piece of
+  B21, template-based (no AI) so identical numbers always yield identical text. Headline (total + category
+  count with correct singular/plural), biggest expense, and — when comparing — the single biggest mover
+  vs the prior period (`topMover` = largest absolute change, with rose/fell + signed %). Stays decoupled
+  via `format`/`name` callbacks (empty/unknown name → "uncategorized"). Zero-spend (incl. all-dropped-to-
+  zero movers) reads "No spending in this period."
+- Table tests: empty, no-comparison headline+biggest, singular + uncategorized, and top-mover selection
+  (a drop-to-zero beating a smaller increase). `go vet` clean; pure, not yet wired.
+
 ## 2026-06-18 — feat: reports — income-vs-expense / cash-flow (B21, step 2)
 
 - Added `internal/reports/cashflow.go`: `PeriodFlow` (income/expense + `Net()` + `SavingsRate()` via the

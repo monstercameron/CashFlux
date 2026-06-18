@@ -16,6 +16,10 @@ and every commit updates this file under `Unreleased`.
   for a single period and `reports.IncomeExpenseSeries` across consecutive buckets (for the cash-flow
   trend chart), each carrying net and savings-rate, reusing the shared ledger totals so figures match the
   dashboard. Pure and table-tested.
+- **Reports engine — deterministic narrative summaries (B21, internal).** `reports.SpendingNarrative`
+  turns a spending report into a short plain-English summary ("You spent $X across N categories. Your
+  biggest expense was Rent at $Y. Fun fell 100% to $0 versus the prior period.") — template-based, not AI,
+  so it's stable and testable. Formatter/name callbacks keep it decoupled from the UI. Pure, table-tested.
 - **Notifications foundation — the pure rules core (B19 Phase A, internal).** New `internal/notify`
   package with notification/rule types, channel selection, daily quiet-hours (with past-midnight wrap),
   per-period idempotency keys (day/ISO-week/month) and a delivered-log so catch-up-on-wake won't replay
