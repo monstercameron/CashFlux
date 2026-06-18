@@ -275,6 +275,11 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Light-theme contrast & toggle target size (WCAG, §6.11 CSS).** The light theme's idle icon controls
+  (`.gear-inline`/`.gear-abs`/`.menu-btn`/`.set-close`) were `#8a8a90`/`#8a8a92` on the `#f7f6f3` light
+  background (~2.7:1, below the 3:1 UI threshold) — darkened to `#6a6a72` (~5:1). The Settings toggle
+  switch was a 36×21px hit area (under the 24px minimum); enlarged to 40×24 with a proportionally larger
+  knob.
 - **Accessibility pass — text contrast & touch-target sizes (WCAG AA, §6.1–6.2 CSS).** Muted text now
   meets AA: the `faint` token went `#6c6c72` → `#7d7d85` (was ~3.1:1 on the base, used for rail section
   headers, breadcrumb separators, the "New page" link) and `dim` `#a6a6ac` → `#ababb3` (row meta, budget

@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.11 — light-theme contrast + toggle size (CSS)
+
+- Continued section 6, again pure `web/index.html` CSS (single shared file, no rebuild). Light-theme idle
+  icon controls `.gear-inline`/`.gear-abs`/`.menu-btn`/`.set-close` were `#8a8a90`/`#8a8a92` on `#f7f6f3`
+  (~2.7:1) → `#6a6a72` (verified ~5:1, clears the 3:1 UI / 4.5:1 text thresholds). Note `.set-close`
+  wasn't in the existing light-theme override group, so I added it.
+- Settings `.switch` 36×21 → 40×24 (24px clears the touch-target minimum); knob 17→18px, travel recomputed
+  (left 3→19). Both `.switch::after` and `.switch.on::after` updated together.
+- Verified probe ok/200. Atomic commit. Next §6: 6.4 [L] switcher separator spacing (my own wsswitcher.go,
+  low collision), then the 6.6 keyboard-shortcut features (new files).
+
 ## 2026-06-18 — fix: UX polish §6.1–6.2 — WCAG contrast + touch targets (CSS)
 
 - User redirected the loop to TODOS section 6 (the 2026-06-18 UX/UI polish audit). Started with the two
