@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend storage schema is pinned.** Added the server SQLite migration foundation with WAL/foreign-key
+  setup, schema-version rejection for newer databases, and the planned Cloud tables for users,
+  workspaces, snapshots/history, blobs, encrypted AI keys, and usage.
 - **Backend server foundation started.** Added the `cmd/cashflux-server` entrypoint plus a native
   `internal/server` package with env config, health/readiness checks, and a `/v1/version` compatibility
   response for the self-host Test connection path.

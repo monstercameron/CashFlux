@@ -3934,7 +3934,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       stale push when `force` is off; resource-exhausted for quota).
 
 ### 7.2 Server storage layer (pure, tested) ★
-- [ ] SQLite schema (ncruces, WAL) + stepwise migrations (own `schemaVersion`, reject newer-than-supported):
+- [x] SQLite schema (ncruces, WAL) + stepwise migrations (own `schemaVersion`, reject newer-than-supported):
       `users`, `workspaces`, `snapshots` (current + last-N history), `blobs`, `workspace_blobs`,
       `ai_keys`, `usage`.
 - [ ] Repository layer with table-driven tests on native Go (no transport/proto deps).

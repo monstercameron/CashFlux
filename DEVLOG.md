@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: backend storage schema
+
+- Added `internal/server.Store`, `OpenStore`, and schema-version migration handling for the backend DB.
+  The opener enables SQLite foreign keys and WAL, creates the Cloud schema, and rejects databases newer
+  than this binary supports.
+- Pinned the first schema in tests: users, workspaces, current snapshots, snapshot history, blobs,
+  workspace-blob links, encrypted AI keys, usage counters, and schema metadata.
+
 ## 2026-06-18 - feat: backend server foundation
 
 - Started the backend series with an in-module layout: `cmd/cashflux-server` for the binary and
