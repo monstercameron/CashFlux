@@ -170,11 +170,15 @@ typing the URL: **Planning** (`/planning`), **Allocate** (`/allocate`), **Insigh
 ### B8. Sidebar menu management: reorder, drop "My pages", visibility settings ★
 
 Three related sidebar changes (relates to B5 collapsed-hover, B7 missing items):
-- [ ] **Shift+drag reorder.** Holding Shift turns nav items draggable; drag-reorder the menu (same
-      Shift-gating idea as the dashboard resize handles). Persist the order to localStorage (a
-      `uistate` nav-order atom) and apply it when rendering `primaryNav`/System. Reuse the
-      `internal/dashlayout` ordered-sequence/`Move` approach or a small pure `navorder` helper +
-      table tests. Respect the On*-hooks-in-loops rule (each item already its own `navItem` component).
+- [x] **Drag reorder.** DONE — the primary nav items are drag-reorderable: drop one onto another to
+      move it, persisted to localStorage (`cashflux:nav-order`) via a new pure `internal/navorder` helper
+      (`Move`/`Apply`, table-tested) + `uistate.UseNavOrder`/`PersistNavOrder`; `Apply` layers the saved
+      order over the live, hidden-filtered list (new screens append, hidden ones drop). Each item is its
+      own `navItem` component so the drag hooks stay stable. Verified live: dragging Accounts onto
+      Dashboard reorders to `[Accounts, Dashboard, …]` and persists. **Deviation:** implemented
+      *always-draggable* rather than Shift-gated — click still navigates (separate event); Shift-gating
+      would need a reactive shift-held atom (the resize-reveal uses a non-reactive DOM attribute), left as
+      a later refinement.
 - [x] **Remove the "My pages" segment.** Dropped the `myPages()` example section + "New page"
       affordance (and the dead `customPage`/`myPages` code) from the rail — the rail is now just the
       real screens.

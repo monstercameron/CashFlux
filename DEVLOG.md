@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature B8: drag-reorder the sidebar
+
+- Built the sidebar nav reorder bottom-up. Pure `internal/navorder` (Move/Apply, 10 table-test cases):
+  `Move` relocates an id like `dashlayout.Move`; `Apply` layers a saved path sequence over the live nav
+  list (saved order first, new screens appended, hidden/removed dropped). `uistate/navorder.go` persists
+  the order (`cashflux:nav-order`) + a `UseNavDragSource` atom. `navItem` gained Draggable/OnDragStart/
+  OnDrop props (the item is already its own component, so the drag hooks are at stable positions); the
+  Sidebar applies the saved order to `visibleNav` and wires per-item drag callbacks.
+- **Design call:** implemented *always-draggable* rather than the TODO's Shift-gating. Shift-gating the
+  HTML `draggable` attribute reactively would need a new shift-held *atom* (the resize-reveal uses a
+  non-reactive `data-resize` DOM attribute, which CSS can read but the Go components can't react to), and
+  that re-renders the whole rail on every Shift press. Always-draggable is simpler and fully functional —
+  click still navigates (a separate event from drag). Noted Shift-gating as a later refinement.
+- Verified live by dispatching real DragEvents (dragstart/dragover/drop with a DataTransfer): dragging
+  Accounts onto Dashboard reordered the rail to `[Accounts, Dashboard, …]` and persisted the path order.
+  Apply-on-boot is reasoned (tested Apply + the atom seeds from localStorage like the other prefs).
+
 ## 2026-06-18 — feature: per-widget "add" affordances on empty dashboard tiles (C23)
 
 - Completed the open part of C23: empty Accounts/Goals/Budgets/To-do dashboard tiles now show an

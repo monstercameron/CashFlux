@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reorder the sidebar by dragging (B8):** drag a primary nav item onto another to reorder the menu;
+  the order persists across reloads. New screens append and hidden ones are skipped automatically.
+  (Clicking a nav item still navigates as before.) Backed by a new pure `navorder` package with table
+  tests; verified live (dragging Accounts to the top reorders and persists).
 - **Empty dashboard tiles now offer an "Add" button (C23):** an empty Accounts / Goals / Budgets / To-do
   widget shows an in-context "Add a …" button that jumps to the relevant screen, so you can create data
   from the dashboard. The Budgets tile only offers it when there are genuinely no budgets (not when the

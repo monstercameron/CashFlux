@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/navorder"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -112,6 +113,44 @@ func Sidebar() uic.Node {
 			visibleNav = append(visibleNav, it)
 		}
 	}
+	// Apply the user's custom primary-nav order (B8): drag-reorder persists a path
+	// sequence; navorder.Apply layers it over the live, hidden-filtered list.
+	navOrder := uistate.UseNavOrder()
+	dragSrc := uistate.UseNavDragSource()
+	currentPaths := make([]string, len(visibleNav))
+	for i, it := range visibleNav {
+		currentPaths[i] = it.Path
+	}
+	orderedPaths := navorder.Apply(navOrder.Get(), currentPaths)
+	byPath := make(map[string]railItem, len(visibleNav))
+	for _, it := range visibleNav {
+		byPath[it.Path] = it
+	}
+	ordered := make([]railItem, 0, len(visibleNav))
+	for _, p := range orderedPaths {
+		if it, ok := byPath[p]; ok {
+			ordered = append(ordered, it)
+		}
+	}
+	visibleNav = ordered
+	// reorderNav moves the dragged item in front of the drop target, then persists.
+	reorderNav := func(targetPath string) {
+		src := dragSrc.Get()
+		dragSrc.Set("")
+		if src == "" || src == targetPath {
+			return
+		}
+		ti := 0
+		for i, p := range orderedPaths {
+			if p == targetPath {
+				ti = i
+				break
+			}
+		}
+		next := navorder.Move(orderedPaths, src, ti)
+		navOrder.Set(next)
+		uistate.PersistNavOrder(next)
+	}
 	var visibleTools []railItem
 	for _, it := range toolsNav() {
 		if !hidden.IsHidden(it.Path) {
@@ -127,11 +166,15 @@ func Sidebar() uic.Node {
 			MapKeyed(visibleNav,
 				func(it railItem) any { return it.Path },
 				func(it railItem) uic.Node {
+					p := it.Path
 					return uic.CreateElement(navItem, navItemProps{
-						Label:  uistate.T(it.Key),
-						Path:   it.Path,
-						Icon:   it.Icon,
-						Active: current == it.Path,
+						Label:       uistate.T(it.Key),
+						Path:        it.Path,
+						Icon:        it.Icon,
+						Active:      current == it.Path,
+						Draggable:   true,
+						OnDragStart: func() { dragSrc.Set(p) },
+						OnDrop:      func() { reorderNav(p) },
 					})
 				},
 			),
@@ -179,6 +222,12 @@ type navItemProps struct {
 	IconClass string // defaults to "w-4 h-4 shrink-0"
 	Active    bool
 	Muted     bool // faint styling for low-emphasis actions ("New page")
+	// Drag-reorder (B8): when Draggable, the item can be dragged onto another to
+	// reorder the primary nav. OnDragStart marks this item as the drag source;
+	// OnDrop fires when another item is dropped onto this one.
+	Draggable   bool
+	OnDragStart func()
+	OnDrop      func()
 }
 
 // navItem is its own component so its click-handler hook stays stable regardless
@@ -197,7 +246,7 @@ func navItem(props navItemProps) uic.Node {
 		iconClass = "w-4 h-4 shrink-0"
 	}
 	path := props.Path
-	return A(
+	args := []any{
 		Class(cls),
 		Title(props.Label), // native tooltip + accessible name, esp. when collapsed to icons
 		OnClick(func() {
@@ -205,9 +254,26 @@ func navItem(props navItemProps) uic.Node {
 				nav.Navigate(path)
 			}
 		}),
-		ui.Icon(props.Icon, Class(iconClass)),
-		Span(props.Label),
-	)
+	}
+	if props.Draggable {
+		onStart, onDrop := props.OnDragStart, props.OnDrop
+		args = append(args,
+			Attr("draggable", "true"),
+			OnDragStart(func() {
+				if onStart != nil {
+					onStart()
+				}
+			}),
+			OnDragOver(Prevent(func() {})), // allow drop
+			OnDrop(Prevent(func() {
+				if onDrop != nil {
+					onDrop()
+				}
+			})),
+		)
+	}
+	args = append(args, ui.Icon(props.Icon, Class(iconClass)), Span(props.Label))
+	return A(args...)
 }
 
 // HouseholdCard sits at the bottom of the rail, summarizing the household and
