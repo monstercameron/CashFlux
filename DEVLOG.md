@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B15 a11y: keyboard reorder for the bento
+
+- Closed the biggest remaining keyboard gap: the bento was drag-only (pointer). Made each draggable tile
+  `tabindex=0` with `aria-keyshortcuts`, and added an `OnKeyDown` that on Arrow keys moves the tile one
+  slot earlier (Left/Up) or later (Right/Down) via `dashlayout.Move` on the arranged order — persisting
+  and switching to Custom mode, exactly like a drag. The FLIP animates it; reduced-motion still applies.
+- Verified live: focusing kpi-networth and pressing ArrowRight moves it from grid 1/2 to 2/2.
+- Remaining keyboard a11y: an arrow-key *resize* alternative (resize is still Shift+click) and
+  inline-edit focus-on-enter/exit.
+
 ## 2026-06-18 — B15 a11y: icon-button labels + closing satisfied items
 
 - Added explicit `aria-label`s to the icon-only buttons the spike flagged: the widget gear ("Widget

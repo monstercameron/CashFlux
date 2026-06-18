@@ -115,6 +115,40 @@ func widget(props WidgetProps) uic.Node {
 		id := props.ID
 		args = append(args,
 			Attr("draggable", "true"),
+			// Keyboard alternative to drag (WCAG 2.1.1): focus a tile and use the
+			// arrow keys to move it one slot earlier/later in the flow (B15).
+			Attr("tabindex", "0"),
+			Attr("aria-keyshortcuts", "ArrowUp ArrowDown ArrowLeft ArrowRight"),
+			OnKeyDown(func(e uic.KeyboardEvent) {
+				var delta int
+				switch e.GetKey() {
+				case "ArrowLeft", "ArrowUp":
+					delta = -1
+				case "ArrowRight", "ArrowDown":
+					delta = 1
+				default:
+					return
+				}
+				e.PreventDefault()
+				baked := dashlayout.Arrange(items, mode)
+				ci := -1
+				for i, it := range baked {
+					if it.ID == id {
+						ci = i
+						break
+					}
+				}
+				if ci < 0 {
+					return
+				}
+				next := dashlayout.Move(baked, id, ci+delta)
+				itemsAtom.Set(next)
+				uistate.PersistItems(next)
+				if mode != dashlayout.ModeCustom {
+					modeAtom.Set(dashlayout.ModeCustom)
+					uistate.PersistLayoutMode(dashlayout.ModeCustom)
+				}
+			}),
 			OnDragStart(func() { dragSrc.Set(id) }),
 			OnDragOver(Prevent(func() { dragPreview.Set(id) })), // allow drop + live preview
 			OnDrop(Prevent(func() {

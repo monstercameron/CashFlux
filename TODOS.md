@@ -431,11 +431,13 @@ one-line a11y item in §1.20.
 - [~] **Semantics & landmarks:** sidebar `<nav>` labelled "Main navigation"; `<main id=main tabindex=-1>`
       + a **skip-to-content** link; the top bar's page title is now the screen's single `<h1>` (dashboard
       in-canvas header demoted to `<h2>`). Still TODO: `banner`/`contentinfo` roles.
-- [~] **Keyboard:** the div-based **toggle switch** and **accent swatches** are now focusable + operable
-      (tabindex=0 + Space/Enter via the framework's `OnKeyDown`; focus ring via the existing
-      `:focus-visible`). Segmented = real buttons (already operable). Still pointer-only: **the bento
-      drag/resize** (needs an arrow-key move/resize alternative) and the Shift+drag nav reorder (B8);
-      inline-edit rows' focus-on-enter/exit also still TODO.
+- [~] **Keyboard:** the div-based **toggle switch** and **accent swatches** are focusable + operable
+      (tabindex=0 + Space/Enter via `OnKeyDown`; focus ring via `:focus-visible`). Segmented = real
+      buttons. The **bento tiles are now keyboard-reorderable** — each is `tabindex=0` with
+      `aria-keyshortcuts`, and Arrow keys move it one slot earlier/later (reuses `dashlayout.Move`,
+      persists, switches to Custom). Verified: ArrowRight moves a tile from grid 1/2→2/2. Still
+      pointer-only: bento **resize** (Shift+click; an arrow-key resize could follow) and inline-edit
+      focus-on-enter/exit. (Nav reorder B8 is also drag-only.)
 - [x] **Dialogs (`FlipPanel`, the B11 add panel, confirms):** `role="dialog"` + `aria-modal="true"` +
       an accessible label, **Esc to close**, a **focus trap** (Tab/Shift+Tab cycle within), **initial
       focus** into the dialog, and **focus restore** to the trigger on close — all done in one shared
