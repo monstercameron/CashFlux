@@ -35,24 +35,27 @@ const (
 // All returns the ordered screen registry that drives both routing and the nav.
 func All() []Route {
 	return []Route{
-		{Path: "/", Label: "Dashboard", Title: "Dashboard", Subtitle: "Your money at a glance", Phase: 1, Group: GroupPrimary, View: Dashboard},
-		{Path: "/accounts", Label: "Accounts", Title: "Accounts", Subtitle: "Everything you own and owe", Phase: 1, Group: GroupPrimary, View: Accounts},
-		{Path: "/transactions", Label: "Transactions", Title: "Transactions", Subtitle: "Record income, expenses, and transfers", Phase: 1, Group: GroupPrimary, View: Transactions},
-		{Path: "/budgets", Label: "Budgets", Title: "Budgets", Subtitle: "Individual and group spending limits", Phase: 1, Group: GroupPrimary, View: Budgets},
-		{Path: "/goals", Label: "Goals", Title: "Goals", Subtitle: "Save toward what matters", Phase: 1, Group: GroupPrimary, View: Goals},
-		{Path: "/todo", Label: "To-do", Title: "To-do", Subtitle: "Budgeting tasks and reminders", Phase: 1, Group: GroupPrimary, View: Todo},
-		{Path: "/planning", Label: "Planning", Title: "Planning", Subtitle: "Scenarios and projections", Phase: 2, Group: GroupTools, View: Planning},
-		{Path: "/allocate", Label: "Allocate", Title: "Allocate", Subtitle: "Where to put your money next", Phase: 2, Group: GroupTools, View: Allocate},
-		{Path: "/reports", Label: "Reports", Title: "Reports", Subtitle: "Spending, income, and trends for the period", Phase: 2, Group: GroupTools, View: Reports},
-		{Path: "/subscriptions", Label: "Subscriptions", Title: "Subscriptions", Subtitle: "Recurring charges and renewals", Phase: 2, Group: GroupTools, View: Subscriptions},
-		{Path: "/insights", Label: "Insights", Title: "Insights", Subtitle: "AI analysis and advice", Phase: 2, Group: GroupTools, View: Insights},
-		{Path: "/documents", Label: "Documents", Title: "Documents", Subtitle: "Import statements and receipts with AI", Phase: 2, Group: GroupTools, View: Documents},
-		{Path: "/customize", Label: "Customize", Title: "Customize", Subtitle: "Custom fields and formulas", Phase: 2, Group: GroupTools, View: Customize},
-		{Path: "/artifacts", Label: "Artifacts", Title: "Artifacts", Subtitle: "Images and datasets for your pages", Phase: 2, Group: GroupTools, View: Artifacts},
-		{Path: "/workflows", Label: "Workflows", Title: "Workflows", Subtitle: "Automate actions with triggers and rules", Phase: 2, Group: GroupTools, View: Workflows},
-		{Path: "/members", Label: "Members", Title: "Members", Subtitle: "Your household", Phase: 1, Group: GroupSystem, View: Members},
-		{Path: "/categories", Label: "Categories", Title: "Categories", Subtitle: "Income and expense categories", Phase: 1, Group: GroupSystem, View: Categories},
-		{Path: "/rules", Label: "Rules", Title: "Rules", Subtitle: "Auto-categorize transactions by keyword", Phase: 2, Group: GroupSystem, View: Rules},
+		// Label/Title hold i18n keys (resolved by the shell + nav via uistate.T);
+		// Subtitle holds a screen.*Sub key. The registry carries no display English.
+		{Path: "/", Label: "nav.dashboard", Title: "nav.dashboard", Subtitle: "screen.dashboardSub", Phase: 1, Group: GroupPrimary, View: Dashboard},
+		{Path: "/accounts", Label: "nav.accounts", Title: "nav.accounts", Subtitle: "screen.accountsSub", Phase: 1, Group: GroupPrimary, View: Accounts},
+		{Path: "/transactions", Label: "nav.transactions", Title: "nav.transactions", Subtitle: "screen.transactionsSub", Phase: 1, Group: GroupPrimary, View: Transactions},
+		{Path: "/budgets", Label: "nav.budgets", Title: "nav.budgets", Subtitle: "screen.budgetsSub", Phase: 1, Group: GroupPrimary, View: Budgets},
+		{Path: "/goals", Label: "nav.goals", Title: "nav.goals", Subtitle: "screen.goalsSub", Phase: 1, Group: GroupPrimary, View: Goals},
+		{Path: "/todo", Label: "nav.todo", Title: "nav.todo", Subtitle: "screen.todoSub", Phase: 1, Group: GroupPrimary, View: Todo},
+		{Path: "/planning", Label: "nav.planning", Title: "nav.planning", Subtitle: "screen.planningSub", Phase: 2, Group: GroupTools, View: Planning},
+		{Path: "/allocate", Label: "nav.allocate", Title: "nav.allocate", Subtitle: "screen.allocateSub", Phase: 2, Group: GroupTools, View: Allocate},
+		{Path: "/reports", Label: "nav.reports", Title: "nav.reports", Subtitle: "screen.reportsSub", Phase: 2, Group: GroupTools, View: Reports},
+		{Path: "/subscriptions", Label: "nav.subscriptions", Title: "nav.subscriptions", Subtitle: "screen.subscriptionsSub", Phase: 2, Group: GroupTools, View: Subscriptions},
+		{Path: "/bills", Label: "nav.bills", Title: "nav.bills", Subtitle: "screen.billsSub", Phase: 2, Group: GroupTools, View: Bills},
+		{Path: "/insights", Label: "nav.insights", Title: "nav.insights", Subtitle: "screen.insightsSub", Phase: 2, Group: GroupTools, View: Insights},
+		{Path: "/documents", Label: "nav.documents", Title: "nav.documents", Subtitle: "screen.documentsSub", Phase: 2, Group: GroupTools, View: Documents},
+		{Path: "/customize", Label: "nav.customize", Title: "nav.customize", Subtitle: "screen.customizeSub", Phase: 2, Group: GroupTools, View: Customize},
+		{Path: "/artifacts", Label: "nav.artifacts", Title: "nav.artifacts", Subtitle: "screen.artifactsSub", Phase: 2, Group: GroupTools, View: Artifacts},
+		{Path: "/workflows", Label: "nav.workflows", Title: "nav.workflows", Subtitle: "screen.workflowsSub", Phase: 2, Group: GroupTools, View: Workflows},
+		{Path: "/members", Label: "nav.members", Title: "nav.members", Subtitle: "screen.membersSub", Phase: 1, Group: GroupSystem, View: Members},
+		{Path: "/categories", Label: "nav.categories", Title: "nav.categories", Subtitle: "screen.categoriesSub", Phase: 1, Group: GroupSystem, View: Categories},
+		{Path: "/rules", Label: "nav.rules", Title: "nav.rules", Subtitle: "screen.rulesSub", Phase: 2, Group: GroupSystem, View: Rules},
 	}
 }
 

@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Bills screen — wire the B22 core into the UI (B22, step 2)
+
+- New `screens.Bills()` registered as `/bills` in the Tools group: runs `bills.Upcoming(accounts, now)`,
+  converts each min-payment to base currency, and renders a stat grid (total due soon, count, next due
+  date) plus a per-bill list (name, due date + friendly days-until via `daysUntilLabel`, amount). Rows are
+  plain text (no hooks), so the loop is safe.
+- Followed the parallel session's screens.go refactor: Label/Title/Subtitle now hold **i18n keys** (not
+  English), so the route uses `nav.bills` / `screen.billsSub`, and I added those plus `bills.*` keys. The
+  rail auto-shows it via navGroup (B7) with the neutral icon for now (dedicated icon is a quick follow-up).
+- Deferred: month calendar view + mark-paid (logs a payment) + Planning-recurring-derived bills. wasm
+  build green, gofmt clean.
+
 ## 2026-06-18 — feat: bills tracker — pure core (B22, step 1)
 
 - New pure `internal/bills` (no syscall/js, table-tested), derived-first per the spec's recommendation:
@@ -41,6 +53,20 @@ problems and fixes, and what's next.
   `nav.subscriptions` key, so the screen shows a recurring-cycle glyph instead of the neutral page icon.
   Updated the icon curated-set test (17→18). gofmt realigned the (now wider) `railMeta` and icon maps.
   Native icon test green, wasm build green.
+
+## 2026-06-18 — chore: route screen registry through i18n (copy pass, file 4)
+
+- The deferred `internal/screens/screens.go` registry: every Route hardcoded Label, Title, and Subtitle in
+  English, displayed raw by the shell (page heading + subline) — the last real i18n gap in the UI.
+- Design: the registry now carries **keys, not English**. Label/Title reuse the existing `nav.*` keys (the page
+  title equals the nav label for every screen); Subtitle uses new `screen.*Sub` keys. The shell already resolves
+  rail labels via `T()`, so only the Shell-title path needed wrapping: `app.go` now passes
+  `uistate.T(route.Title)` / `uistate.T(route.Subtitle)` at all three Shell construction sites, and the
+  custom-page fallback title ("Page") became `custompage.fallbackTitle`.
+- Verified: 18 `screen.*Sub` + 1 fallback key added; `nav.artifacts`/`nav.workflows` already existed; registry
+  has no display English; builds under `GOOS=js GOARCH=wasm`. Copy kept verbatim (already high quality).
+- This closes the UI i18n sweep: remaining hardcoded strings are AI system prompts (English by design) and the
+  "CashFlux" brand wordmark (handled by the rebrand backlog §7, not i18n).
 
 ## 2026-06-18 — chore: route dashboard empty states through i18n (copy pass, file 3)
 
