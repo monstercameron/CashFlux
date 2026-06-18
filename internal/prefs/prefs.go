@@ -54,6 +54,8 @@ const (
 	ScaleDefault = 100
 )
 
+const DefaultServerURL = "http://127.0.0.1:8081"
+
 // Prefs holds the user's display preferences.
 type Prefs struct {
 	WeekStart WeekStart `json:"weekStart"`
@@ -65,13 +67,15 @@ type Prefs struct {
 	// RememberAIKey opts into persisting the OpenAI key on this device across
 	// reloads (off by default — the key is otherwise session-only). When on, the
 	// key is written to its own localStorage entry, separate from the dataset.
-	RememberAIKey bool `json:"rememberAiKey,omitempty"`
+	RememberAIKey bool   `json:"rememberAiKey,omitempty"`
+	ServerURL     string `json:"serverUrl,omitempty"`
+	ServerToken   string `json:"serverToken,omitempty"`
 }
 
 // Default returns the out-of-the-box preferences (Sunday week start, ISO dates,
 // dark theme, green accent, comfortable density, 100% scale).
 func Default() Prefs {
-	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault}
+	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerURL: DefaultServerURL}
 }
 
 // Normalize fills any blank or unrecognized field with its default, so partial or
@@ -94,6 +98,9 @@ func (p Prefs) Normalize() Prefs {
 	}
 	if !isHexColor(p.Accent) {
 		p.Accent = defaultAccent
+	}
+	if p.ServerURL == "" {
+		p.ServerURL = DefaultServerURL
 	}
 	switch {
 	case p.Scale == 0:

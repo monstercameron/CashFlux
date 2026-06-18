@@ -3957,7 +3957,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       oversized-payload rejection.
 
 ### 7.4 AIService (per-user encrypted BYO key) ★
-- [ ] `SetKey`: validate, AES-GCM encrypt, store; never return the key.
+- [x] `SetKey`: validate, AES-GCM encrypt, store; never return the key.
 - [ ] `Chat`/`Vision` server-streaming: load+decrypt the user's key, call OpenAI (reuse the
       `internal/ai` request builders where possible), stream chunks back; map upstream errors → status.
 - [ ] Model allow-list; per-user rate limit + usage metering; request-size caps; **redact key in logs**.

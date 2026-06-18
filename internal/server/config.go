@@ -23,6 +23,7 @@ type Config struct {
 	Billing   bool
 	AppOrigin string
 	MasterKey string
+	Token     string
 }
 
 // FromEnv builds server config from CASHFLUX_SERVER_* environment variables.
@@ -35,6 +36,7 @@ func FromEnv() (Config, error) {
 	}
 	cfg.AppOrigin = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_APP_ORIGIN"))
 	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))
+	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}

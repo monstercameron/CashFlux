@@ -366,6 +366,27 @@ func globalSettingsForm() uic.Node {
 	memberChips = append(memberChips, Button(Class("member-add"), Type("button"), OnClick(goManageMembers), uistate.T("settings.addMember")))
 
 	pr := prefsAtom.Get().Normalize()
+	serverURL := uic.UseState(pr.ServerURL)
+	serverToken := uic.UseState(pr.ServerToken)
+	onServerURL := uic.UseEvent(func(v string) {
+		serverURL.Set(v)
+		p := prefsAtom.Get()
+		p.ServerURL = strings.TrimSpace(v)
+		savePrefs(p)
+	})
+	onServerToken := uic.UseEvent(func(v string) {
+		serverToken.Set(v)
+		p := prefsAtom.Get()
+		p.ServerToken = strings.TrimSpace(v)
+		savePrefs(p)
+	})
+	uploadKey := uic.UseEvent(func() {
+		uploadOpenAIKeyToBackend(serverURL.Get(), serverToken.Get(), aiKey.Get(), func() {
+			notify(uistate.T("settings.serverKeyStored"), false)
+		}, func(msg string) {
+			notify(uistate.T("settings.serverKeyFailed", strings.TrimSpace(msg)), true)
+		})
+	})
 
 	// Freshness window editor: per-type day inputs writing Settings.FreshnessOverrides.
 	setFreshness := func(typeKey string, days int) {
@@ -447,6 +468,11 @@ func globalSettingsForm() uic.Node {
 			}
 		}}),
 		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.rememberKeyNote")),
+		Div(Class("set-label"), uistate.T("settings.backendTitle")),
+		Input(Class("set-input mt-[0.45rem]"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
+		Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken)),
+		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.backendNote")),
+		Button(Class("btn mt-[0.45rem]"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
 		Select(Class("set-input mt-[0.45rem]"), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
 			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
 			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),
