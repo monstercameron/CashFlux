@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -17,18 +18,24 @@ const (
 
 // Config contains the runtime settings for the optional CashFlux backend.
 type Config struct {
-	Addr              string
-	DataDir           string
-	AuthMode          string
-	Billing           bool
-	AppOrigin         string
-	MasterKey         string
-	Token             string
-	OpenAIBaseURL     string
-	AIAllowedModels   []string
-	AIRequestMaxBytes int64
-	AIRequestsPerDay  int64
-	AITokensPerDay    int64
+	Addr                              string
+	DataDir                           string
+	AuthMode                          string
+	Billing                           bool
+	AppOrigin                         string
+	MasterKey                         string
+	Token                             string
+	OpenAIBaseURL                     string
+	AIAllowedModels                   []string
+	AIRequestMaxBytes                 int64
+	AIRequestsPerDay                  int64
+	AITokensPerDay                    int64
+	GRPCReadLimitBytes                int64
+	GRPCKeepaliveInterval             time.Duration
+	GRPCIdleTimeout                   time.Duration
+	GRPCMaxActiveConnections          int
+	GRPCMaxConnectionsPerClient       int
+	GRPCMaxUpgradesPerClientPerMinute int
 }
 
 // FromEnv builds server config from CASHFLUX_SERVER_* environment variables.
@@ -47,6 +54,12 @@ func FromEnv() (Config, error) {
 	cfg.AIRequestMaxBytes = envInt64("CASHFLUX_SERVER_AI_REQUEST_MAX_BYTES", 4<<20)
 	cfg.AIRequestsPerDay = envInt64("CASHFLUX_SERVER_AI_REQUESTS_PER_DAY", 0)
 	cfg.AITokensPerDay = envInt64("CASHFLUX_SERVER_AI_TOKENS_PER_DAY", 0)
+	cfg.GRPCReadLimitBytes = envInt64("CASHFLUX_SERVER_GRPC_READ_LIMIT_BYTES", 16<<20)
+	cfg.GRPCKeepaliveInterval = envDuration("CASHFLUX_SERVER_GRPC_KEEPALIVE_INTERVAL", 30*time.Second)
+	cfg.GRPCIdleTimeout = envDuration("CASHFLUX_SERVER_GRPC_IDLE_TIMEOUT", 90*time.Second)
+	cfg.GRPCMaxActiveConnections = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_ACTIVE_CONNECTIONS", 128))
+	cfg.GRPCMaxConnectionsPerClient = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_CONNECTIONS_PER_CLIENT", 8))
+	cfg.GRPCMaxUpgradesPerClientPerMinute = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_UPGRADES_PER_CLIENT_PER_MINUTE", 60))
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -66,6 +79,16 @@ func (c Config) Validate() error {
 	}
 	if c.AIRequestMaxBytes < 0 || c.AIRequestsPerDay < 0 || c.AITokensPerDay < 0 {
 		return fmt.Errorf("server: ai limits must be non-negative")
+	}
+	if c.GRPCReadLimitBytes < 0 || c.GRPCKeepaliveInterval < 0 || c.GRPCIdleTimeout < 0 ||
+		c.GRPCMaxActiveConnections < 0 || c.GRPCMaxConnectionsPerClient < 0 || c.GRPCMaxUpgradesPerClientPerMinute < 0 {
+		return fmt.Errorf("server: grpc bridge limits must be non-negative")
+	}
+	if c.GRPCIdleTimeout > 0 && c.GRPCKeepaliveInterval <= 0 {
+		return fmt.Errorf("server: grpc keepalive interval is required when idle timeout is set")
+	}
+	if c.GRPCIdleTimeout > 0 && c.GRPCKeepaliveInterval >= c.GRPCIdleTimeout {
+		return fmt.Errorf("server: grpc keepalive interval must be less than idle timeout")
 	}
 	switch c.AuthMode {
 	case "token", "oauth":
@@ -122,4 +145,16 @@ func envCSV(key string) []string {
 		}
 	}
 	return out
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return fallback
+	}
+	return d
 }

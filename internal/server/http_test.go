@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +24,17 @@ func TestConfigValidate(t *testing.T) {
 	invalid.MasterKey = "short"
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("short master key accepted")
+	}
+	invalid = valid
+	invalid.GRPCReadLimitBytes = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative grpc read limit accepted")
+	}
+	invalid = valid
+	invalid.GRPCKeepaliveInterval = 30
+	invalid.GRPCIdleTimeout = 30
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("grpc keepalive equal to idle timeout accepted")
 	}
 }
 
@@ -129,6 +141,57 @@ func TestAIKeyEndpointCORS(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("forbidden cors status = %d", rr.Code)
+	}
+}
+
+func TestGRPCBridgeEndpointMountedAndOriginChecked(t *testing.T) {
+	cfg := Config{
+		AuthMode:              "token",
+		Token:                 "dev-token",
+		AppOrigin:             "http://127.0.0.1:8080",
+		GRPCReadLimitBytes:    1 << 20,
+		GRPCKeepaliveInterval: 30,
+		GRPCIdleTimeout:       90,
+	}
+	h := NewMux(cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/grpc", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code == http.StatusNotFound {
+		t.Fatal("/grpc was not mounted")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/grpc", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Sec-WebSocket-Version", "13")
+	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("forbidden grpc origin status = %d, want 403", rr.Code)
+	}
+}
+
+func TestGRPCTokenValidatorMatchesHTTPBearerUser(t *testing.T) {
+	cfg := Config{AuthMode: "token", Token: "dev-token"}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	want, ok := httpBearerUser(req, cfg)
+	if !ok {
+		t.Fatal("http bearer user missing")
+	}
+	got, err := grpcTokenValidator(cfg)(context.Background(), "dev-token")
+	if err != nil {
+		t.Fatalf("grpc token validator rejected token: %v", err)
+	}
+	if got != want {
+		t.Fatalf("grpc user = %+v, want %+v", got, want)
+	}
+	if _, err := grpcTokenValidator(cfg)(context.Background(), "wrong"); err == nil {
+		t.Fatal("grpc token validator accepted wrong token")
 	}
 }
 

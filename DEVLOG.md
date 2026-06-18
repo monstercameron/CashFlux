@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: mount backend gRPC bridge
+
+- Mounted GoGRPCBridge at `/grpc` around the backend `grpc.Server`, with the configured SPA origin check,
+  keepalive/idle timers, read limit, active/per-client connection caps, and per-client upgrade-rate cap.
+- Shared the token auth derivation between HTTP bearer calls and gRPC metadata validation so both surfaces map
+  a server token to the same authenticated user id.
+- Verified with focused server tests for config validation, endpoint mount/origin rejection, and token mapping.
+
 ## 2026-06-18 - test: pin backend AI cancellation
 
 - Added a cancel-aware mock HTTP client around `server.AIService.Chat` to prove the request context reaches the

@@ -2,7 +2,6 @@ package server
 
 import (
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -52,6 +51,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			BillingEnabled:      cfg.Billing,
 		})
 	})
+	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg))
 	mux.HandleFunc("OPTIONS /v1/ai/key", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
@@ -221,14 +221,17 @@ func httpBearerUser(r *http.Request, cfg Config) (AuthUser, bool) {
 	if len(fields) != 2 || !strings.EqualFold(fields[0], "bearer") || strings.TrimSpace(fields[1]) == "" {
 		return AuthUser{}, false
 	}
-	token := strings.TrimSpace(fields[1])
-	expected := strings.TrimSpace(cfg.Token)
-	if expected == "" || subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
+	user, ok := authUserForToken(strings.TrimSpace(fields[1]), cfg)
+	if !ok {
 		return AuthUser{}, false
 	}
+	return user, true
+}
+
+func authUserFromToken(token string) AuthUser {
 	sum := sha256.Sum256([]byte(token))
 	id := "token:" + hex.EncodeToString(sum[:])[:24]
-	return AuthUser{ID: id, Token: token}, true
+	return AuthUser{ID: id, Token: token}
 }
 
 func writeCORS(w http.ResponseWriter, r *http.Request, cfg Config) bool {

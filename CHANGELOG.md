@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend gRPC bridge transport mounted.** The server now exposes `/grpc` through GoGRPCBridge with SPA
+  origin checks, keepalive/idle settings, read limits, and active/per-client/upgrade caps, reusing the
+  existing bearer-token auth path for RPC metadata.
 - **Bills — month-calendar layout (B22, internal).** `bills.MonthCalendar` lays out a month as a grid of
   whole weeks (starting on the user's week-start), placing each bill on its due day and padding the first
   and last weeks with adjacent-month days. Pure, table-tested; the calendar view renders on this next.

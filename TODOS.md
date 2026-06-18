@@ -3967,7 +3967,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       cancellation are covered. Remaining: streaming passthrough once the final server-streaming transport exists.
 
 ### 7.5 gRPC bridge transport ★
-- [ ] `grpctunnel.Wrap(grpcServer, …)` at `/grpc`: `WithOriginCheck` (SPA origin allow-list),
+- [x] `grpctunnel.Wrap(grpcServer, …)` at `/grpc`: `WithOriginCheck` (SPA origin allow-list),
       `WithKeepalive`, `WithReadLimitBytes`, `WithMaxActiveConnections` / `…PerClient` / `…UpgradesPerMinute`.
 - [ ] TLS / `wss` (server or reverse proxy); confirm WS survives the proxy/LB (keepalive, idle timeout).
 - [ ] Health + readiness endpoints; graceful shutdown that drains active streams.
