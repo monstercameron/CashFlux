@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: §6.6 quick-add hotkey (Alt+N)
+
+- Alt+N opens the quick-add transaction panel by setting `uistate.UseQuickAdd().Set(true)` from the global
+  keydown handler. Confirmed safe: `UseAtom` → `runtime.GoUseAtomGlobal` is a global id-keyed atom (not
+  component-bound), and the +Add menu already calls the identical `quickAdd.Set(true)` from an OnClick
+  (also a non-render callback), so opening it from a keydown behaves the same.
+- Chord choice: the audit suggested Ctrl/Cmd+Shift+A, but that's reserved (Chrome tab-search, Firefox
+  add-ons). Used Alt+N instead — conflict-free and consistent with the Alt+1..9 family. Added to the `?`
+  overlay. Lives entirely in `shortcuts.go` (+uistate import); low collision while the parallel session
+  works other §6 items.
+- gofmt clean, wasm build exit 0, probe ok/200. Keystroke can't be sent headlessly — logic-verified.
+
+## 2026-06-18 — fix: UX polish §6.1 — custom-page menu hit area
+
+- Closed the §6.1 custom-page "⋯" menu touch-target item in `internal/app/custompagesnav.go`: the row
+  menu button now has `min-w-6 min-h-6 inline-grid place-items-center`, giving it a stable 24×24px hit
+  area while preserving the compact rail layout.
+- Kept the change to one clean file plus journals; no TODO edit because `TODOS.md` is still carrying the
+  parallel backlog expansion.
+
 ## 2026-06-18 — fix: §6.9 toast — error notices linger + labelled dismiss
 
 - `toast.go` already had the role/aria-live work (status/polite for info, alert/assertive for errors, plus

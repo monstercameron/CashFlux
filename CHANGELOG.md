@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Quick-add hotkey: Alt+N (§6.6).** Press Alt+N anywhere (outside a text field) to open the quick-add
+  transaction panel directly, skipping the +Add menu. Chose Alt+N over the audit's Ctrl/Cmd+Shift+A —
+  that chord is reserved by Chrome (tab search) and Firefox (add-ons) — keeping it in the Alt family with
+  the section-jump keys. Listed in the `?` shortcuts overlay.
 - **"?" keyboard help overlay (§6.6).** Press `?` anywhere (outside a text field) to pop a cheat sheet of
   the keyboard shortcuts — Alt+1–9 section jump, Enter to save a panel, Esc to close, hold Shift for resize
   handles. Dismiss with `?` again, Esc, the ✕, or a click on the backdrop. Self-contained (built and
@@ -287,6 +291,8 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Custom-page row menu is easier to hit (UX audit §6.1).** The **⋯** menu button in the **My pages**
+  rail now has an explicit 24×24px grid hit area, so it no longer depends on text padding alone.
 - **Error toasts linger longer + a labelled dismiss (§6.9).** Error notices now stay up 7.5s (vs 4.5s for
   ordinary notices) so there's time to read what failed, and the toast's dismiss button gained an
   `aria-label` to go with its title. (Errors already announced assertively via `role="alert"`/`aria-live`.)

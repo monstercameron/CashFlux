@@ -5,6 +5,7 @@ package app
 import (
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/router"
 )
 
@@ -48,6 +49,12 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		code := e.Get("code").String()
+		// Alt+N opens the quick-add transaction panel.
+		if code == "KeyN" {
+			e.Call("preventDefault")
+			uistate.UseQuickAdd().Set(true)
+			return nil
+		}
 		if len(code) != 6 || code[:5] != "Digit" {
 			return nil
 		}
@@ -95,6 +102,7 @@ const helpHTML = `<div style="display:flex;justify-content:space-between;align-i
 </div>
 <table style="width:100%;border-collapse:collapse;">
   <tr><td style="padding:0.28rem 0;opacity:0.85;">Jump to a section</td><td style="text-align:right;white-space:nowrap;">Alt + 1&ndash;9</td></tr>
+  <tr><td style="padding:0.28rem 0;opacity:0.85;">Add a transaction</td><td style="text-align:right;white-space:nowrap;">Alt + N</td></tr>
   <tr><td style="padding:0.28rem 0;opacity:0.85;">Save the open settings panel</td><td style="text-align:right;white-space:nowrap;">Enter</td></tr>
   <tr><td style="padding:0.28rem 0;opacity:0.85;">Close a panel / this help</td><td style="text-align:right;white-space:nowrap;">Esc</td></tr>
   <tr><td style="padding:0.28rem 0;opacity:0.85;">Show dashboard resize handles</td><td style="text-align:right;white-space:nowrap;">Hold Shift</td></tr>
