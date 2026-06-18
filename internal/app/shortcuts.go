@@ -218,7 +218,7 @@ func buildPaletteCommands() []paletteCmd {
 		paletteCmd{label: uistate.T("addmenu.transaction"), run: func() { uistate.UseQuickAdd().Set(true) }},
 		paletteCmd{label: "Keyboard shortcuts", run: toggleHelpOverlay},
 	)
-	// Switch to any other workspace straight from the palette.
+	// Workspace management straight from the palette.
 	reg := loadRegistry()
 	for _, w := range reg.Workspaces {
 		if w.ID == reg.ActiveID {
@@ -227,6 +227,21 @@ func buildPaletteCommands() []paletteCmd {
 		id, name := w.ID, w.Name
 		cmds = append(cmds, paletteCmd{label: "Switch to workspace: " + name, run: func() { switchWorkspace(id) }})
 	}
+	cmds = append(cmds,
+		paletteCmd{label: "New workspace…", run: func() {
+			if n := promptName(uistate.T("ws.newPrompt"), uistate.T("ws.newDefault")); n != "" {
+				createWorkspace(n)
+			}
+		}},
+		paletteCmd{label: "Export current workspace", run: func() { exportWorkspace(loadRegistry().ActiveID) }},
+		paletteCmd{label: "Import workspace…", run: func() {
+			pickFile(".json", func(data []byte) {
+				if !importWorkspace(data) {
+					js.Global().Call("alert", uistate.T("ws.importErr"))
+				}
+			})
+		}},
+	)
 	return cmds
 }
 
