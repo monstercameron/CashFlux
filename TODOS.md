@@ -169,8 +169,12 @@ typing the URL: **Planning** (`/planning`), **Allocate** (`/allocate`), **Insigh
 - [x] Add the five missing screens to the sidebar — a "Tools" nav group (`shell.go` `toolsNav()`/
       `Sidebar`) with new icons (planning/allocate/insights/customize; documents reuses `page`).
 - [x] They respect the module-visibility set (filtered by `hidden.IsHidden(path)` like primary nav).
-- [ ] Optional hardening: derive nav groups from `screens.All()` (or a Group field on Route) so a new
-      routed screen can't silently miss the menu again.
+- [x] Optional hardening: derive nav groups from `screens.All()` (or a Group field on Route) so a new
+      routed screen can't silently miss the menu again. Done: `Route` has a `Group` field
+      (`GroupPrimary`/`GroupTools`/`GroupSystem`); `shell.go` `navGroup()` builds each rail section by
+      filtering `screens.All()` on it, in registry order, so membership lives in one place. Icons/label
+      keys stay in the shell's `railMeta` (design layer); an unmapped new screen still appears with its
+      registry label + a default icon rather than being dropped. The hardcoded System group is gone.
 - [~] Verify: every routed main-line screen now has a menu entry (wasm build green; browser spot-check
       pending). Module toggles cover them via the hidden-path filter.
 
@@ -1062,6 +1066,15 @@ results are summarized here so the backlog doesn't bloat.
     (5000 / 19.99% / 250) accept fine but the months/interest **output is below the fold** and wasn't
     captured (the "12 months" a text scan caught was the unrelated "Net worth in 12 months" header).
     Next pass: full-page capture or scroll to assert payoff months ≈ 25 + interest for these inputs.
+- **2026-06-18 #10** — Resolved the #9 deferral (0 console errors):
+  - ✅ **Debt-payoff calculator works.** After filling balance/APR/payment, the result block renders
+    **"MONTHS TO PAY OFF"** and **"TOTAL INTEREST"** labels (reactive — no button). (Exact value not
+    asserted here; recommend an E2E check that 5000/19.99%/250 ≈ 25 months.)
+  - 🔧 **Harness learning (not an app bug):** CashFlux scrolls an **inner `main` pane**, so Playwright
+    `FullPage` screenshots and the viewport only ever capture the top — **below-fold content can't be
+    screenshotted**. Use `page.InnerText("body")` (scroll-independent) or scroll the `main` element for
+    below-fold assertions. _Noting so future loop iterations don't re-chase "missing" below-fold UI._
+  - ➕ Forecast positive again ($2,399.25 → $49,540.25), consistent with C1/C16.
 
 Each story below is a **workstream**: one real user journey followed end-to-end, asserting that every
 component it crosses stays correct *and* coherent — the persisted data, the derived figures, and the

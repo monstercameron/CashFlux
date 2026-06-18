@@ -69,6 +69,11 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **The sidebar is now derived from the screen registry (B7):** each rail section (Primary, Tools, System)
+  is built by filtering `screens.All()` on a new `Route.Group` field instead of three hand-maintained
+  lists. Membership lives in one place, so a newly registered screen can't silently miss the menu — an
+  unmapped screen even falls back to its registry label and a default icon rather than being dropped. No
+  visible change: the derived order matches the previous hardcoded order.
 - **Planning forecast chart upgraded to a labelled comparison (D10):** the 12-month net-worth forecast
   now renders with the D3 chart (a proper **dollar** Y axis like C16, not the axis-less sparkline), and
   when you enter a "trim spending" amount it **overlays the trimmed scenario beside the baseline** (two

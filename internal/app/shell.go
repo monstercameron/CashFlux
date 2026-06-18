@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/navorder"
 	"github.com/monstercameron/CashFlux/internal/period"
+	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -65,29 +66,59 @@ type railItem struct {
 	Icon icon.Name
 }
 
-// primaryNav is the candidate-C rail's main navigation group.
-func primaryNav() []railItem {
-	return []railItem{
-		{"nav.dashboard", "/", icon.Dashboard},
-		{"nav.accounts", "/accounts", icon.Accounts},
-		{"nav.transactions", "/transactions", icon.Transactions},
-		{"nav.budgets", "/budgets", icon.Budgets},
-		{"nav.goals", "/goals", icon.Goals},
-		{"nav.todo", "/todo", icon.Todo},
-	}
+// railMeta maps a route path to its rail presentation: the i18n label key and the
+// icon. This is the design layer — kept out of the screens registry, which stays
+// presentation-free — while the registry's Group field decides *membership*. A
+// route with no entry here still appears (B7), falling back to its registry label
+// and a neutral icon rather than being dropped.
+var railMeta = map[string]struct {
+	Key  string
+	Icon icon.Name
+}{
+	"/":             {"nav.dashboard", icon.Dashboard},
+	"/accounts":     {"nav.accounts", icon.Accounts},
+	"/transactions": {"nav.transactions", icon.Transactions},
+	"/budgets":      {"nav.budgets", icon.Budgets},
+	"/goals":        {"nav.goals", icon.Goals},
+	"/todo":         {"nav.todo", icon.Todo},
+	"/planning":     {"nav.planning", icon.Planning},
+	"/allocate":     {"nav.allocate", icon.Allocate},
+	"/insights":     {"nav.insights", icon.Insights},
+	"/documents":    {"nav.documents", icon.Page},
+	"/customize":    {"nav.customize", icon.Customize},
+	"/members":      {"nav.members", icon.Users},
+	"/categories":   {"nav.categories", icon.Tag},
+	"/rules":        {"nav.rules", icon.Tag},
 }
+
+// navGroup builds the rail items for one screen group, in registry order. The
+// screens registry (Route.Group) is the single source of truth for membership, so
+// a newly registered screen can't be silently dropped from the rail (B7); if its
+// path isn't in railMeta it still shows, with its registry label and a default icon.
+func navGroup(group string) []railItem {
+	var items []railItem
+	for _, r := range screens.All() {
+		if r.Group != group {
+			continue
+		}
+		if meta, ok := railMeta[r.Path]; ok {
+			items = append(items, railItem{Key: meta.Key, Path: r.Path, Icon: meta.Icon})
+		} else {
+			items = append(items, railItem{Key: r.Label, Path: r.Path, Icon: icon.Page})
+		}
+	}
+	return items
+}
+
+// primaryNav is the candidate-C rail's main navigation group.
+func primaryNav() []railItem { return navGroup(screens.GroupPrimary) }
 
 // toolsNav is the Phase-2 "Tools" group: the routed power-tool screens that were
 // otherwise only reachable by URL.
-func toolsNav() []railItem {
-	return []railItem{
-		{"nav.planning", "/planning", icon.Planning},
-		{"nav.allocate", "/allocate", icon.Allocate},
-		{"nav.insights", "/insights", icon.Insights},
-		{"nav.documents", "/documents", icon.Page},
-		{"nav.customize", "/customize", icon.Customize},
-	}
-}
+func toolsNav() []railItem { return navGroup(screens.GroupTools) }
+
+// systemNav is the "System" group: the household-configuration screens.
+func systemNav() []railItem { return navGroup(screens.GroupSystem) }
 
 // railHeader renders a small uppercase section label inside the rail. The
 // rail-section class lets the collapsed/mobile rules hide just these labels
@@ -157,6 +188,12 @@ func Sidebar() uic.Node {
 			visibleTools = append(visibleTools, it)
 		}
 	}
+	var visibleSystem []railItem
+	for _, it := range systemNav() {
+		if !hidden.IsHidden(it.Path) {
+			visibleSystem = append(visibleSystem, it)
+		}
+	}
 	return Aside(Class(cls),
 		Div(Class("railhead h-14 flex items-center gap-2.5 px-5 border-b border-line"),
 			Span(Class("grid place-items-center w-7 h-7 rounded bg-fg text-base font-display font-semibold text-[13px] shrink-0"), "C"),
@@ -190,25 +227,18 @@ func Sidebar() uic.Node {
 					})
 				},
 			),
-			railHeader(uistate.T("rail.system")),
-			If(!hidden.IsHidden("/members"), uic.CreateElement(navItem, navItemProps{
-				Label:  uistate.T("nav.members"),
-				Path:   "/members",
-				Icon:   icon.Users,
-				Active: current == "/members",
-			})),
-			If(!hidden.IsHidden("/categories"), uic.CreateElement(navItem, navItemProps{
-				Label:  uistate.T("nav.categories"),
-				Path:   "/categories",
-				Icon:   icon.Tag,
-				Active: current == "/categories",
-			})),
-			If(!hidden.IsHidden("/rules"), uic.CreateElement(navItem, navItemProps{
-				Label:  uistate.T("nav.rules"),
-				Path:   "/rules",
-				Icon:   icon.Tag,
-				Active: current == "/rules",
-			})),
+			If(len(visibleSystem) > 0, railHeader(uistate.T("rail.system"))),
+			MapKeyed(visibleSystem,
+				func(it railItem) any { return it.Path },
+				func(it railItem) uic.Node {
+					return uic.CreateElement(navItem, navItemProps{
+						Label:  uistate.T(it.Key),
+						Path:   it.Path,
+						Icon:   it.Icon,
+						Active: current == it.Path,
+					})
+				},
+			),
 		),
 		// The household card is the single Settings entry point (opens the global panel).
 		uic.CreateElement(HouseholdCard),

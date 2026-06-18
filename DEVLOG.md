@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B7: derive the rail nav from the screen registry
+
+- B7's last item: the rail's three groups (primaryNav/toolsNav + an inline System block) were
+  hand-maintained lists in shell.go, separate from `screens.All()` — so a newly routed screen could be
+  reachable by URL yet silently missing from the menu (exactly the bug B7 was about).
+- Added a `Group` field to `screens.Route` (`GroupPrimary`/`GroupTools`/`GroupSystem`) — pure data, no
+  design dependency, so the registry stays presentation-free. `shell.go`'s new `navGroup(group)` filters
+  `screens.All()` by it, in registry order; `primaryNav`/`toolsNav`/`systemNav` are now one-liners over it.
+- Kept the design data (icons + i18n label keys) in shell.go as a `railMeta` path→{Key,Icon} map, honoring
+  the earlier "icons live in the design layer, not the registry" decision. Membership = registry; appearance
+  = railMeta. A path not in railMeta still renders (its registry Label + a default `icon.Page`) instead of
+  vanishing — fail-safe, which is the whole point of B7.
+- Replaced the hardcoded System block (members/categories/rules `If(!hidden…)`) with a `MapKeyed` over
+  `visibleSystem`, and wrapped its header in `If(len>0)` so an all-hidden System group drops its label too.
+- Behavior-preserving: the derived order is identical to the old hardcoded order, so no visual change.
+  wasm build + `go vet ./internal/app ./internal/screens` green.
+
 ## 2026-06-18 — B15 a11y: announce filtered transaction count via live region
 
 - The Transactions list already rendered a visible count+net summary, but it wasn't a live region and it
