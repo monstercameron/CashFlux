@@ -3,6 +3,7 @@
 package ui
 
 import (
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -244,7 +245,7 @@ func SwatchPicker(props SwatchPickerProps) uic.Node {
 
 func swatchPicker(props SwatchPickerProps) uic.Node {
 	onSelect := props.OnSelect
-	return Div(Class("flex gap-2 items-center"), Attr("role", "radiogroup"), Attr("aria-label", "Accent color"),
+	return Div(Class("flex gap-2 items-center"), Attr("role", "radiogroup"), Attr("aria-label", uistate.T("a11y.accentColor")),
 		MapKeyed(props.Colors,
 			func(c string) any { return c },
 			func(c string) uic.Node {

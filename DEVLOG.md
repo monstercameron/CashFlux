@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B15 a11y: route the last hardcoded aria-labels through i18n
+
+- Grepped for hardcoded `aria-label`/`aria-roledescription` literals; only two remained (the widget gear
+  and the SwatchPicker). Routed both through `uistate.T()` (new `widget.settings`, `a11y.accentColor`
+  keys); controls.go gained the uistate import (no cycle — widget.go already imports it). The gear's
+  title attr now uses the same key. Closes the B15 i18n-aria item. Build + i18n catalog test green.
+
 ## 2026-06-18 — B15 a11y: keyboard resize (completes bento keyboard control)
 
 - Extended the tile `OnKeyDown` with Shift+Arrow resize: ←/→ adjust width, ↑/↓ adjust height via

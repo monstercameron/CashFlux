@@ -482,7 +482,9 @@ one-line a11y item in §1.20.
       in `chartd3.go`; the sparkline in `chart.go`.
 - [~] **Touch targets:** small icon-only buttons (delete/toast-x/rstep/set-close) now meet the WCAG
       2.5.8 AA 24×24 minimum (centered glyph). 44×44 (AAA) left aspirational given the dense desktop UI.
-- [ ] **i18n:** route `aria-label`s/announcements through the language store (B i18n) so they translate.
+- [x] **i18n:** all `aria-label`s now resolve via `uistate.T()` (the language store) — the last two
+      hardcoded ones (the widget gear "Widget settings" and the SwatchPicker "Accent color") were routed
+      through new `widget.settings` / `a11y.accentColor` keys, so they translate with everything else.
 - [ ] **Tooling:** wire an automated a11y check into CI (axe via the browser lane) once Playwright is in.
 
 ### B16. End-to-end test stories — every feature, UX + correctness ★
@@ -1017,8 +1019,18 @@ results are summarized here so the backlog doesn't bloat.
     (camelCase) SVG bug is not yet fixed. _Re-verify once that lands; it also unblocks collapse-button visibility._
   - [ ] Grid: the resize handle still only **grows** (click-cycles span up, wraps to shrink) — the
     explicit-shrink direction from C14 isn't in yet.
-
----
+- **2026-06-18 #7** — Re-check of still-open items + Accounts (0 console errors):
+  - ⚠️ **C28 (icons) confirmed STILL OPEN** — the nav `<svg>` is emitted with `viewbox="0 0 24 24"`
+    (lowercase) — `viewBoxCamel=false, viewBoxLower=true`. Unchanged. Icons remain blank.
+  - ⚠️ **Members "Add member" via button still no-ops** (typed "Jordan", clicked, not added) — #4/#5 bug
+    unchanged.
+  - 🐞 **NEW — Accounts "Add account" via button is also a silent no-op.** Filled only the Name
+    ("Loop Brokerage") and clicked "Add account" → nothing added, **no error/feedback**, 0 console errors.
+    Likely either the same name-not-committed wiring as Members, **or** silent validation (the opening-
+    balance/amount field is empty → fails like the CSV "amount required" path) with no message shown.
+    Either way it's a UX bug: **a failed add must surface a reason.** _Confirm whether filling opening
+    balance + real typing makes the button work; if so, the bug is "no validation feedback"; if not, it's
+    the Members-style commit bug spreading to Accounts._
 
 ## D. Cross-component E2E workstream stories — budgeting · planning · finances ★
 

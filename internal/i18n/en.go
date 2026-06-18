@@ -7,6 +7,7 @@ var english = Catalog{
 	// App + chrome
 	"app.name":           "CashFlux",
 	"a11y.skipToContent": "Skip to content",
+	"a11y.accentColor":   "Accent color",
 	"household.title":    "Your household",
 	"household.settings": "Settings",
 
@@ -377,6 +378,7 @@ var english = Catalog{
 	// Settings panel (household / global flip panel)
 	"settings.panelTitle":        "Settings",
 	"settings.noWidgetSettings":  "This widget doesn't have any settings yet.",
+	"widget.settings":            "Widget settings",
 	"widget.importance":          "Importance",
 	"widget.importanceHighest":   "Highest",
 	"widget.importanceHigh":      "High",

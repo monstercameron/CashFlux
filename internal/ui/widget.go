@@ -303,8 +303,8 @@ func gearButton(props gearButtonProps) uic.Node {
 	return Button(
 		Class("gear-inline"),
 		Type("button"),
-		Attr("title", "Widget settings"),
-		Attr("aria-label", "Widget settings"), // icon-only button → explicit name (B15)
+		Attr("title", uistate.T("widget.settings")),
+		Attr("aria-label", uistate.T("widget.settings")), // icon-only button → explicit name (B15)
 		OnClick(func() {
 			if onClick != nil {
 				onClick()
