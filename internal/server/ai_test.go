@@ -117,3 +117,79 @@ func TestAIServiceMissingKey(t *testing.T) {
 		t.Fatalf("missing key err = %v", err)
 	}
 }
+
+func TestAIServiceRejectsDisallowedModel(t *testing.T) {
+	store := openTestStore(t)
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey:     []byte("0123456789abcdef0123456789abcdef"),
+		AllowedModels: []string{"gpt-4o-mini"},
+	})
+	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
+		Model:    "gpt-4o",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "model is not allowed") {
+		t.Fatalf("disallowed model err = %v", err)
+	}
+}
+
+func TestAIServiceRejectsOversizedRequestBeforeKeyLoad(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	if err := store.UpsertUser(User{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u1", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	svc := NewAIService(store, AIServiceConfig{MasterKey: master, RequestMaxBytes: 64})
+	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: strings.Repeat("x", 200)}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "ai request is too large") {
+		t.Fatalf("oversized request err = %v", err)
+	}
+}
+
+func TestAIServiceEnforcesDailyUsageLimits(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	day := time.Date(2026, time.June, 18, 18, 30, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: day}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u1", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	if _, err := store.AddUsage("u1", day, 2, 99); err != nil {
+		t.Fatalf("AddUsage: %v", err)
+	}
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey:      master,
+		RequestsPerDay: 2,
+		TokensPerDay:   100,
+		Now:            func() time.Time { return day },
+	})
+	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "daily ai request limit reached") {
+		t.Fatalf("request limit err = %v", err)
+	}
+
+	svc = NewAIService(store, AIServiceConfig{
+		MasterKey:      master,
+		RequestsPerDay: 3,
+		TokensPerDay:   99,
+		Now:            func() time.Time { return day },
+	})
+	_, err = svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "daily ai token limit reached") {
+		t.Fatalf("token limit err = %v", err)
+	}
+}

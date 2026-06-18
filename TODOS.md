@@ -3961,7 +3961,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] `Chat`/`Vision` server proxy path: load+decrypt the user's key, call OpenAI (reusing the
       `internal/ai` request builders), map upstream errors to status, and count usage. Remaining: stream chunks
       back over the final server-streaming surface.
-- [ ] Model allow-list; per-user rate limit + usage metering; request-size caps; **redact key in logs**.
+- [x] Model allow-list; per-user rate limit + usage metering; request-size caps; **redact key in logs**.
 - [ ] Cancellation: propagate client `ctx` cancel to the upstream call (stop billing on disconnect).
 - [ ] Tests: streaming passthrough against a mock upstream, key encrypt round-trip, rate-limit trip,
       missing-key → clear error.

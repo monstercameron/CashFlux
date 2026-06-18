@@ -109,7 +109,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		if !readJSON(w, r, &body) {
 			return
 		}
-		svc := NewAIService(store, AIServiceConfig{MasterKey: []byte(cfg.MasterKey), BaseURL: cfg.OpenAIBaseURL})
+		svc := newHTTPAIService(store, cfg)
 		result, err := svc.Chat(ContextWithAuthUser(r.Context(), user), body)
 		if err != nil {
 			writeStatusError(w, err)
@@ -126,7 +126,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		if !readJSON(w, r, &body) {
 			return
 		}
-		svc := NewAIService(store, AIServiceConfig{MasterKey: []byte(cfg.MasterKey), BaseURL: cfg.OpenAIBaseURL})
+		svc := newHTTPAIService(store, cfg)
 		result, err := svc.Vision(ContextWithAuthUser(r.Context(), user), body)
 		if err != nil {
 			writeStatusError(w, err)
@@ -135,6 +135,17 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		writeJSON(w, result)
 	})
 	return mux
+}
+
+func newHTTPAIService(store *Store, cfg Config) *AIService {
+	return NewAIService(store, AIServiceConfig{
+		MasterKey:       []byte(cfg.MasterKey),
+		BaseURL:         cfg.OpenAIBaseURL,
+		AllowedModels:   cfg.AIAllowedModels,
+		RequestMaxBytes: cfg.AIRequestMaxBytes,
+		RequestsPerDay:  cfg.AIRequestsPerDay,
+		TokensPerDay:    cfg.AITokensPerDay,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

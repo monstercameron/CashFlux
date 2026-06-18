@@ -22,18 +22,26 @@ type aiHTTPDoer interface {
 }
 
 type AIService struct {
-	store     *Store
-	client    aiHTTPDoer
-	baseURL   string
-	masterKey []byte
-	now       func() time.Time
+	store           *Store
+	client          aiHTTPDoer
+	baseURL         string
+	masterKey       []byte
+	allowedModels   map[string]struct{}
+	requestMaxBytes int64
+	requestsPerDay  int64
+	tokensPerDay    int64
+	now             func() time.Time
 }
 
 type AIServiceConfig struct {
-	MasterKey []byte
-	BaseURL   string
-	Client    aiHTTPDoer
-	Now       func() time.Time
+	MasterKey       []byte
+	BaseURL         string
+	Client          aiHTTPDoer
+	AllowedModels   []string
+	RequestMaxBytes int64
+	RequestsPerDay  int64
+	TokensPerDay    int64
+	Now             func() time.Time
 }
 
 type AIChatRequest struct {
@@ -70,12 +78,32 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &AIService{store: store, client: client, baseURL: baseURL, masterKey: cfg.MasterKey, now: now}
+	allowedModels := make(map[string]struct{}, len(cfg.AllowedModels))
+	for _, model := range cfg.AllowedModels {
+		model = strings.TrimSpace(model)
+		if model != "" {
+			allowedModels[model] = struct{}{}
+		}
+	}
+	return &AIService{
+		store:           store,
+		client:          client,
+		baseURL:         baseURL,
+		masterKey:       cfg.MasterKey,
+		allowedModels:   allowedModels,
+		requestMaxBytes: cfg.RequestMaxBytes,
+		requestsPerDay:  cfg.RequestsPerDay,
+		tokensPerDay:    cfg.TokensPerDay,
+		now:             now,
+	}
 }
 
 func (s *AIService) Chat(ctx context.Context, req AIChatRequest) (AICompletion, error) {
 	if strings.TrimSpace(req.Model) == "" || len(req.Messages) == 0 {
 		return AICompletion{}, status.Error(codes.InvalidArgument, "model and messages are required")
+	}
+	if err := s.validateModel(req.Model); err != nil {
+		return AICompletion{}, err
 	}
 	body, err := ai.BuildRequest(req.Model, req.Messages, req.Temperature)
 	if err != nil {
@@ -87,6 +115,9 @@ func (s *AIService) Chat(ctx context.Context, req AIChatRequest) (AICompletion, 
 func (s *AIService) Vision(ctx context.Context, req AIVisionRequest) (AICompletion, error) {
 	if strings.TrimSpace(req.Model) == "" || strings.TrimSpace(req.SystemPrompt) == "" || strings.TrimSpace(req.UserText) == "" || strings.TrimSpace(req.ImageURL) == "" {
 		return AICompletion{}, status.Error(codes.InvalidArgument, "model, system prompt, user text, and image url are required")
+	}
+	if err := s.validateModel(req.Model); err != nil {
+		return AICompletion{}, err
 	}
 	var (
 		body []byte
@@ -112,6 +143,12 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	}
 	user, err := syncUser(ctx)
 	if err != nil {
+		return AICompletion{}, err
+	}
+	if s.requestMaxBytes > 0 && int64(len(body)) > s.requestMaxBytes {
+		return AICompletion{}, status.Error(codes.ResourceExhausted, "ai request is too large")
+	}
+	if err := s.checkUsageLimit(user.ID, s.now()); err != nil {
 		return AICompletion{}, err
 	}
 	key, ok, err := s.store.GetAIKey(user.ID, "openai", s.masterKey)
@@ -151,6 +188,36 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 		return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
 	}
 	return AICompletion{Content: content, Usage: usage}, nil
+}
+
+func (s *AIService) validateModel(model string) error {
+	if len(s.allowedModels) == 0 {
+		return nil
+	}
+	if _, ok := s.allowedModels[strings.TrimSpace(model)]; ok {
+		return nil
+	}
+	return status.Error(codes.InvalidArgument, "model is not allowed")
+}
+
+func (s *AIService) checkUsageLimit(userID string, day time.Time) error {
+	if s.requestsPerDay <= 0 && s.tokensPerDay <= 0 {
+		return nil
+	}
+	usage, ok, err := s.store.GetUsage(userID, day)
+	if err != nil {
+		return fmt.Errorf("server ai: get usage: %w", err)
+	}
+	if !ok {
+		return nil
+	}
+	if s.requestsPerDay > 0 && usage.Requests >= s.requestsPerDay {
+		return status.Error(codes.ResourceExhausted, "daily ai request limit reached")
+	}
+	if s.tokensPerDay > 0 && usage.Tokens >= s.tokensPerDay {
+		return status.Error(codes.ResourceExhausted, "daily ai token limit reached")
+	}
+	return nil
 }
 
 func openAICode(httpStatus int) codes.Code {

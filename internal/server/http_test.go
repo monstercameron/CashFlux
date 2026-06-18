@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -170,5 +171,44 @@ func TestAIChatEndpoint(t *testing.T) {
 	}
 	if body.Content != "server says hi" || body.Usage.TotalTokens != 11 {
 		t.Fatalf("chat response = %+v", body)
+	}
+}
+
+func TestAIChatEndpointAppliesConfiguredGuards(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{
+		AuthMode:          "token",
+		MasterKey:         "0123456789abcdef0123456789abcdef",
+		Token:             "dev-token",
+		AIAllowedModels:   []string{"gpt-4o-mini"},
+		AIRequestMaxBytes: 64,
+	}
+	reqForUser := httptest.NewRequest(http.MethodPost, "/v1/ai/key", bytes.NewBufferString(`{}`))
+	reqForUser.Header.Set("Authorization", "Bearer dev-token")
+	user, ok := httpBearerUser(reqForUser, cfg)
+	if !ok {
+		t.Fatal("bearer user missing")
+	}
+	if err := store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey(user.ID, "openai", "sk-secret", []byte(cfg.MasterKey)); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/ai/chat", bytes.NewBufferString(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr := httptest.NewRecorder()
+	NewMux(cfg, store).ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("disallowed model status = %d body %q", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/v1/ai/chat", bytes.NewBufferString(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"`+strings.Repeat("x", 200)+`"}]}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	NewMux(cfg, store).ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("oversized request status = %d body %q", rr.Code, rr.Body.String())
 	}
 }
