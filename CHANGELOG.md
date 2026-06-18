@@ -7,9 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Dashboard tiles are keyboard-reorderable (B15):** focus a tile (Tab) and use the arrow keys to move
-  it one slot earlier/later — a keyboard alternative to drag (WCAG 2.1.1), animated by the same FLIP and
-  persisted like a drag. Tiles expose `aria-keyshortcuts`.
+- **Dashboard tiles are fully keyboard-operable (B15):** focus a tile (Tab), use the arrow keys to move
+  it one slot earlier/later, and **Shift+Arrow to resize** it — a keyboard alternative to drag-and-resize
+  (WCAG 2.1.1), animated by the same FLIP and persisted. Tiles expose `aria-keyshortcuts`.
 - **Live drag-over preview on the dashboard (B2):** while dragging a tile, the grid now reflows *during*
   the drag to show where it will land (FLIP-animated), instead of only rearranging on drop. It's a
   render-only preview — the saved layout isn't touched, so dropping keeps the arrangement and releasing

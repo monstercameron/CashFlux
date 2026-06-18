@@ -115,13 +115,47 @@ func widget(props WidgetProps) uic.Node {
 		id := props.ID
 		args = append(args,
 			Attr("draggable", "true"),
-			// Keyboard alternative to drag (WCAG 2.1.1): focus a tile and use the
-			// arrow keys to move it one slot earlier/later in the flow (B15).
+			// Keyboard alternatives to pointer drag/resize (WCAG 2.1.1): focus a tile
+			// and use the arrow keys to move it one slot earlier/later; hold Shift to
+			// grow/shrink its span instead (B15).
 			Attr("tabindex", "0"),
-			Attr("aria-keyshortcuts", "ArrowUp ArrowDown ArrowLeft ArrowRight"),
+			Attr("aria-keyshortcuts", "ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"),
 			OnKeyDown(func(e uic.KeyboardEvent) {
+				key := e.GetKey()
+				shift := e.JSValue().Get("shiftKey").Bool()
+				if shift {
+					// Resize: ←/→ adjust width, ↑/↓ adjust height (clamped to bounds).
+					dc, dr := 0, 0
+					switch key {
+					case "ArrowLeft":
+						dc = -1
+					case "ArrowRight":
+						dc = 1
+					case "ArrowUp":
+						dr = -1
+					case "ArrowDown":
+						dr = 1
+					default:
+						return
+					}
+					e.PreventDefault()
+					curCol, curRow := 1, 1
+					for _, it := range items {
+						if it.ID == id {
+							curCol, curRow = it.ColSpan, it.RowSpan
+							break
+						}
+					}
+					nc := clampSpan(curCol+dc, maxColSpan)
+					nr := clampSpan(curRow+dr, maxRowSpan)
+					next := dashlayout.ResizeItem(items, id, nc, nr)
+					itemsAtom.Set(next)
+					uistate.PersistItems(next)
+					return
+				}
+				// Move one slot earlier (←/↑) or later (→/↓).
 				var delta int
-				switch e.GetKey() {
+				switch key {
 				case "ArrowLeft", "ArrowUp":
 					delta = -1
 				case "ArrowRight", "ArrowDown":
@@ -230,6 +264,17 @@ func widget(props WidgetProps) uic.Node {
 		)
 	}
 	return Div(args...)
+}
+
+// clampSpan keeps a grid span within [1, max].
+func clampSpan(v, max int) int {
+	if v < 1 {
+		return 1
+	}
+	if v > max {
+		return max
+	}
+	return v
 }
 
 // gridStyle builds the inline grid-placement style, omitting empty axes.

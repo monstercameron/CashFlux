@@ -435,9 +435,10 @@ one-line a11y item in §1.20.
       (tabindex=0 + Space/Enter via `OnKeyDown`; focus ring via `:focus-visible`). Segmented = real
       buttons. The **bento tiles are now keyboard-reorderable** — each is `tabindex=0` with
       `aria-keyshortcuts`, and Arrow keys move it one slot earlier/later (reuses `dashlayout.Move`,
-      persists, switches to Custom). Verified: ArrowRight moves a tile from grid 1/2→2/2. Still
-      pointer-only: bento **resize** (Shift+click; an arrow-key resize could follow) and inline-edit
-      focus-on-enter/exit. (Nav reorder B8 is also drag-only.)
+      persists, switches to Custom) while **Shift+Arrow resizes** it (`dashlayout.ResizeItem`, clamped).
+      Verified: ArrowRight moves a tile 1/2→2/2; Shift+ArrowRight grows it to "1 / span 2". The bento is
+      now fully keyboard-operable. Still pointer-only: inline-edit focus-on-enter/exit and the nav reorder
+      (B8, drag-only).
 - [x] **Dialogs (`FlipPanel`, the B11 add panel, confirms):** `role="dialog"` + `aria-modal="true"` +
       an accessible label, **Esc to close**, a **focus trap** (Tab/Shift+Tab cycle within), **initial
       focus** into the dialog, and **focus restore** to the trigger on close — all done in one shared
@@ -1000,6 +1001,25 @@ results are summarized here so the backlog doesn't bloat.
   button) ✓ and Enter ✓. 0 console errors. **Conclusion: the no-op is isolated to the Members "Add
   member" form** — not a framework-wide input-commit problem. Root cause lives in that form's wiring
   (its button handler vs. the Name field), so the fix is local to the Members add form.
+- **2026-06-18 #6** — Dashboard grid + figures re-test (0 console errors). **Several earlier findings now
+  RESOLVED:**
+  - **C14 / C22 / B2 (grid reflow) — FIXED.** Resizing `kpi-income` to span 3 **reflowed** the neighbors
+    (spending/liabilities → row 3, others repacked) with **no overlap**; the resize handle was
+    **clickable twice in a row** (the old overlap-blocks-second-click self-destruct is gone); tiles carry
+    `transition: transform 0.22s` (FLIP). Drag-reorder also repacks. `pack.go` is wired in.
+  - **C1 (income $0) — FIXED.** Dashboard Income KPI now shows **$4,200.00 · 1 deposit**; net worth
+    "▲ 13% this month". The period/timezone boundary no longer drops the day-1 salary.
+  - **C16 (chart cents) — FIXED.** Net-worth trend Y-axis now reads **$20k / $15k / $10k / $5k / $0**
+    (dollars, compact), not raw minor units.
+  - **C24 (auto-layout) — landed (partial).** A **"Custom layout" mode selector** now sits beside "Reset
+    layout" — verify the importance/default modes next.
+  - ⚠️ **C28 (icons) STILL OPEN** — the left rail is still **text-only with no icons**; the `viewBox`
+    (camelCase) SVG bug is not yet fixed. _Re-verify once that lands; it also unblocks collapse-button visibility._
+  - [ ] Grid: the resize handle still only **grows** (click-cycles span up, wraps to shrink) — the
+    explicit-shrink direction from C14 isn't in yet.
+
+---
+
 ## D. Cross-component E2E workstream stories — budgeting · planning · finances ★
 
 Each story below is a **workstream**: one real user journey followed end-to-end, asserting that every

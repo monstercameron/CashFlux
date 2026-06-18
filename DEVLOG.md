@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — B15 a11y: keyboard resize (completes bento keyboard control)
+
+- Extended the tile `OnKeyDown` with Shift+Arrow resize: ←/→ adjust width, ↑/↓ adjust height via
+  `dashlayout.ResizeItem`, clamped to [1,maxColSpan]/[1,maxRowSpan] (added a `clampSpan` helper). Read
+  Shift off the underlying event (`e.JSValue().Get("shiftKey").Bool()`). Plain arrows still move.
+- Verified live: Shift+ArrowRight on kpi-networth grows it from grid-column "1" to "1 / span 2".
+- The dashboard bento is now fully keyboard-operable (move + resize), closing the WCAG 2.1.1 gap that the
+  pointer-only drag/resize left.
+
 ## 2026-06-18 — B15 a11y: keyboard reorder for the bento
 
 - Closed the biggest remaining keyboard gap: the bento was drag-only (pointer). Made each draggable tile
