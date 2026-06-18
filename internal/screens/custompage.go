@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
@@ -166,9 +167,59 @@ func widgetBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 		return chartBody(ctx)
 	case widgetspec.TypeText:
 		return textBody(w)
+	case widgetspec.TypeImage:
+		return cpImageBody(w, ctx)
+	case widgetspec.TypeTable:
+		return cpTableBody(w, ctx)
 	default:
 		return P(Class("empty"), uistate.T("pages.unknownWidget"))
 	}
+}
+
+// cpImageBody renders an image artifact bound by ID.
+func cpImageBody(w domain.PageWidget, ctx pageCtx) ui.Node {
+	art, ok := findArtifact(ctx.App.Artifacts(), w.Binding.ArtifactID)
+	if !ok || art.Kind != artifacts.KindImage || len(art.Bytes) == 0 {
+		return P(Class("empty"), uistate.T("pages.pickArtifact"))
+	}
+	return Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)),
+		Attr("alt", art.Name), Class("max-w-full max-h-full object-contain m-auto"))
+}
+
+// cpTableBody renders a dataset artifact (columns + first rows) bound by ID.
+func cpTableBody(w domain.PageWidget, ctx pageCtx) ui.Node {
+	art, ok := findArtifact(ctx.App.Artifacts(), w.Binding.ArtifactID)
+	if !ok || len(art.Columns) == 0 {
+		return P(Class("empty"), uistate.T("pages.pickArtifact"))
+	}
+	head := make([]ui.Node, 0, len(art.Columns))
+	for _, c := range art.Columns {
+		head = append(head, Th(Class("text-left pr-3 text-faint font-medium"), c))
+	}
+	bodyRows := make([]ui.Node, 0)
+	for i, r := range art.Rows {
+		if i >= 8 { // keep tiles compact; the artifact keeps the full data
+			break
+		}
+		cells := make([]ui.Node, 0, len(r))
+		for _, cell := range r {
+			cells = append(cells, Td(Class("pr-3 py-0.5 truncate"), cell))
+		}
+		bodyRows = append(bodyRows, Tr(cells))
+	}
+	return Table(Class("w-full text-[12px] fig"),
+		Thead(Tr(head)),
+		Tbody(bodyRows),
+	)
+}
+
+func findArtifact(arts []domain.Artifact, id string) (domain.Artifact, bool) {
+	for _, a := range arts {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	return domain.Artifact{}, false
 }
 
 // cpKPIBody evaluates the widget's formula over the engine variables and shows the
@@ -376,6 +427,8 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 			w.Binding.Source = firstNonEmpty(bind.Get(), widgetspec.SourceTransactions)
 		case widgetspec.TypeText:
 			w.Config["text"] = bind.Get()
+		case widgetspec.TypeImage, widgetspec.TypeTable:
+			w.Binding.ArtifactID = bind.Get()
 		}
 		span := 1
 		if wtype.Get() == widgetspec.TypeChart || wtype.Get() == widgetspec.TypeList {
@@ -422,6 +475,20 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 	case widgetspec.TypeText:
 		bindControl = Input(Class("field"), Attr("placeholder", uistate.T("pages.textContent")),
 			Value(bind.Get()), OnInput(onBind))
+	case widgetspec.TypeImage, widgetspec.TypeTable:
+		arts := appstate.Default.Artifacts()
+		artOpts := []ui.Node{Option(Value(""), uistate.T("pages.chooseArtifact"))}
+		for _, a := range arts {
+			// Image widgets list image artifacts; Table widgets list datasets.
+			if wtype.Get() == widgetspec.TypeImage && a.Kind != artifacts.KindImage {
+				continue
+			}
+			if wtype.Get() == widgetspec.TypeTable && a.Kind == artifacts.KindImage {
+				continue
+			}
+			artOpts = append(artOpts, Option(Value(a.ID), SelectedIf(bind.Get() == a.ID), a.Name))
+		}
+		bindControl = Select(Class("field"), OnChange(onBind), artOpts)
 	default: // Chart needs no binding in Phase B
 		bindControl = P(Class("muted"), uistate.T("pages.chartDefault"))
 	}

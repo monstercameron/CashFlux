@@ -51,8 +51,8 @@ func TestFormat(t *testing.T) {
 }
 
 func TestCatalogAndSources(t *testing.T) {
-	if len(Catalog()) != 4 {
-		t.Errorf("catalog should have 4 Phase-B types, got %d", len(Catalog()))
+	if len(Catalog()) != 6 {
+		t.Errorf("catalog should have 6 types, got %d", len(Catalog()))
 	}
 	for _, d := range Catalog() {
 		if !Known(d.Type) {

@@ -38,6 +38,8 @@ var catalog = []Def{
 	{TypeList, "List", "Rows from your data (transactions, accounts, …)."},
 	{TypeChart, "Chart", "A trend line of a figure over time."},
 	{TypeText, "Text", "A note or heading you write."},
+	{TypeTable, "Table", "A table from an imported dataset artifact."},
+	{TypeImage, "Image", "An uploaded image artifact."},
 }
 
 // Catalog returns the placeable widget types, in display order.

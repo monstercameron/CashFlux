@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Artifacts manager + Image/Table widgets (Phase C).** A new **Artifacts** screen (Tools) lets you upload
+  an image or import a CSV dataset, see them listed with size, and delete them — with a local-storage meter
+  so you can watch usage. Two new custom-widget types bind to artifacts by id: **Image** (renders an
+  uploaded image) and **Table** (renders an imported dataset's columns + rows). Verified end-to-end: an
+  image-backed tile and a CSV-backed table render on a custom page.
 - **Export & import a whole workspace.** Settings → Workspaces now has a per-workspace **Export** (downloads
   a self-contained `workspace-<name>.json` — the dataset plus layout/settings) and a section-level **Import
   workspace** (adds the file as a new workspace and switches to it, bundling the current one out first so

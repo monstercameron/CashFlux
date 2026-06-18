@@ -46,6 +46,7 @@ func All() []Route {
 		{Path: "/insights", Label: "Insights", Title: "Insights", Subtitle: "AI analysis and advice", Phase: 2, Group: GroupTools, View: Insights},
 		{Path: "/documents", Label: "Documents", Title: "Documents", Subtitle: "Import statements and receipts with AI", Phase: 2, Group: GroupTools, View: Documents},
 		{Path: "/customize", Label: "Customize", Title: "Customize", Subtitle: "Custom fields and formulas", Phase: 2, Group: GroupTools, View: Customize},
+		{Path: "/artifacts", Label: "Artifacts", Title: "Artifacts", Subtitle: "Images and datasets for your pages", Phase: 2, Group: GroupTools, View: Artifacts},
 		{Path: "/members", Label: "Members", Title: "Members", Subtitle: "Your household", Phase: 1, Group: GroupSystem, View: Members},
 		{Path: "/categories", Label: "Categories", Title: "Categories", Subtitle: "Income and expense categories", Phase: 1, Group: GroupSystem, View: Categories},
 		{Path: "/rules", Label: "Rules", Title: "Rules", Subtitle: "Auto-categorize transactions by keyword", Phase: 2, Group: GroupSystem, View: Rules},
