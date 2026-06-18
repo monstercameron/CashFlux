@@ -69,6 +69,10 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Comma-list parsing unified into a tested helper (internal):** `parseTags` (transactions/rules) and
+  `parseOptions` (custom fields) were duplicate, untested copies of the same "split on commas, trim, drop
+  empties" logic in the view layer. Both are now `textutil.CommaFields` — one pure, table-tested helper —
+  removing the duplication. No behavior change.
 - **"Recent transactions" logic moved into the tested ledger package (internal):** the dashboard's
   newest-first/top-N transaction selection lived in the wasm-only view (`dashboard.go`) with no tests. It's
   now `ledger.Recent(txns, n)` — pure and table-tested (ordering, limit, n≤0, no input mutation) — with a

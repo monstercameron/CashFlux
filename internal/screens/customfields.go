@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -72,7 +73,7 @@ func CustomFieldsManager() ui.Node {
 			Key:        strings.TrimSpace(key.Get()),
 			Label:      strings.TrimSpace(label.Get()),
 			Type:       customfields.FieldType(ftype.Get()),
-			Options:    parseOptions(options.Get()),
+			Options:    textutil.CommaFields(options.Get()),
 			Required:   required.Get() == "yes",
 		}
 		if err := app.PutCustomFieldDef(def); err != nil {
@@ -158,16 +159,6 @@ func CustomFieldsManager() ui.Node {
 }
 
 // parseOptions splits a comma-separated option list, trimming blanks.
-func parseOptions(s string) []string {
-	var out []string
-	for _, part := range strings.Split(s, ",") {
-		if p := strings.TrimSpace(part); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 // cfTypeLabel renders a field type as the human label used in the form.
 func cfTypeLabel(t customfields.FieldType) string {
 	for _, ty := range cfTypes {

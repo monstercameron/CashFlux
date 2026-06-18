@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -204,7 +205,7 @@ func Transactions() ui.Node {
 		t := domain.Transaction{
 			ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
 			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: memberFor(acc),
-			Tags: parseTags(tagsStr.Get()), Custom: customValuesToMap(txnDefs, customVals.Get()),
+			Tags: textutil.CommaFields(tagsStr.Get()), Custom: customValuesToMap(txnDefs, customVals.Get()),
 		}
 		if err := app.PutTransaction(t); err != nil {
 			errMsg.Set(err.Error())
@@ -572,20 +573,6 @@ type transactionRowProps struct {
 // package; see txnfilter.Apply and txnfilter.AbsAmount.)
 
 // parseTags splits a comma-separated string into trimmed, non-empty tags.
-func parseTags(s string) []string {
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
 // TransactionRow is a per-transaction row. Income/expense rows can be edited
 // inline (description, amount, category, date); transfers cannot. All hooks are
 // declared unconditionally so the edit toggle never reorders them.

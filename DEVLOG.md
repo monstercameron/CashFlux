@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — unify comma-list parsing into tested textutil.CommaFields
+
+- Continuing to pull pure logic out of the view layer. Found `parseTags` (defined in transactions.go, used
+  there and in rules.go) and `parseOptions` (customfields.go) were *functionally identical*: split on commas,
+  trim each, drop empties, nil when none. Two untested copies of the same logic.
+- Created `internal/textutil` with `CommaFields(s) []string` (pure, table-tested: empties, all-separators,
+  trimming, order, inner spaces) and rewired all four call sites to it; removed both local copies. gofmt
+  reordered the new imports. `strings` stays imported in both screens (still used elsewhere). wasm build +
+  textutil test green.
+- (`validateRuleInput` is also pure but returns i18n keys — more view-coupled — so left for now.)
+
 ## 2026-06-18 — extract dashboard "recent transactions" into tested ledger.Recent
 
 - New vein of work the user's "keep going" surfaced: pure logic still embedded in the wasm-only view

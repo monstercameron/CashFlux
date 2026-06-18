@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/rulesuggest"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -53,7 +54,7 @@ func Rules() ui.Node {
 			ID:            id.New(),
 			Match:         strings.TrimSpace(match.Get()),
 			SetCategoryID: categoryID.Get(),
-			SetTags:       parseTags(tags.Get()),
+			SetTags:       textutil.CommaFields(tags.Get()),
 		}
 		if err := app.PutRule(r); err != nil {
 			errMsg.Set(err.Error())
@@ -79,7 +80,7 @@ func Rules() ui.Node {
 			errMsg.Set(uistate.T(errKey))
 			return
 		}
-		r := rules.Rule{ID: ruleID, Match: strings.TrimSpace(m), SetCategoryID: cat, SetTags: parseTags(tagStr)}
+		r := rules.Rule{ID: ruleID, Match: strings.TrimSpace(m), SetCategoryID: cat, SetTags: textutil.CommaFields(tagStr)}
 		if err := app.PutRule(r); err != nil {
 			errMsg.Set(err.Error())
 			return
