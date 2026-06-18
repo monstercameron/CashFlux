@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: custom pages — widget engine + grid rendering (Phase B)
+
+- `internal/screens/custompage.go` now renders a page's `[]PageWidget` as a bento grid: `dashlayout.Pack`
+  on the page's `[]dashlayout.Item` gives each tile its `grid-column/row`; a local `customTile` component
+  (its own delete hook) wraps each body. Did NOT reuse `ui.Widget` — it's wired to the dashboard's global
+  layout atom, so custom pages get their own lightweight tile.
+- Widget bodies: KPI (`widgetspec.EvalKPI` over `engineenv.Vars`, currency/number/percent formatting),
+  List (transactions/accounts/budgets/goals/tasks, N rows, using `ledger.Balance`/`goals.Percent`), Chart
+  (net-worth trend via `ledger.NetWorthSeries` + `chartspec` + `ui.Chart`), Text (authored config text).
+- `addWidgetBar`: a single stable component (form hooks not in a loop) — pick type, title, and one binding
+  (KPI formula / list source / text), appends a `PageWidget` + a `dashlayout.Item` and persists. Per-tile
+  remove. Re-render via a version-counter refresh callback threaded to tiles + the bar.
+- Name clash: `kpiBody` already existed in dashboard.go → renamed mine `cpKPIBody`.
+- Verified end-to-end with a Go-generated seed dataset (a page with all four widget types) loaded into
+  localStorage, then screenshotted /p/demo: KPI showed the live net worth ($14,120), the list showed recent
+  transactions, the trend chart drew (D3 SVG — works because of the earlier createElementNS fix), and the
+  text note rendered. The seed/generator were throwaway and removed.
+- Next: Phase C (artifacts: images + datasets persisted, Image/Table widgets) and Phase D (workflow engine).
+
 ## 2026-06-18 — feat: startup workspace preference (pin a workspace to open with)
 
 - Requested: configure whether the app starts with a specific workspace or resumes the last-used one.

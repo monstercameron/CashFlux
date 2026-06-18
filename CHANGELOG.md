@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom pages now render custom widgets (Phase B).** A custom page shows a bento grid of user-authored
+  widgets bound to the app engine: **KPI** (a formula over your figures — net_worth, income, …, formatted
+  as number/percent/currency), **List** (rows from transactions/accounts/budgets/goals/tasks), **Chart**
+  (your net-worth trend), and **Text** (an authored note). An **"Add widget"** toolbar picks a type, names
+  it, and sets its one binding; each tile has a remove button. Widgets persist in the page (and so export/
+  import and survive reload). Verified end-to-end in a browser (KPI = live net worth, list of recent
+  transactions, rendered trend chart, and a text note on one page).
 - **Startup workspace preference.** Settings → Workspaces now has an **"On launch, open"** selector:
   *Last used workspace* (the default — resumes whatever you had active) or a specific pinned workspace
   that the app always opens with, regardless of which one you left it on. The choice lives in the
