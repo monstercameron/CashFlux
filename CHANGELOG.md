@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend AI keys are encrypted at rest.** Server storage now accepts an env-provided AES master key,
+  stores per-user provider keys with AES-GCM, and tests rotation, wrong-key failure, and plaintext
+  avoidance.
 - **Backend blobs are content-addressed.** Server storage now writes artifact bytes under sha256
   path-sharded filenames, records blob metadata, links blobs to workspaces, verifies reads, and sweeps
   unreferenced blobs for future artifact sync.

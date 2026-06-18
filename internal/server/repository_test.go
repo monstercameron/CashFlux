@@ -232,6 +232,56 @@ func TestBlobStoreRejectsOversizedAndHashMismatch(t *testing.T) {
 	}
 }
 
+func TestAIKeyEncryptDecryptAndRotate(t *testing.T) {
+	s := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	now := time.Date(2026, time.June, 18, 17, 0, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutAIKey("u1", "openai", "sk-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	var raw string
+	if err := s.db.QueryRow(`SELECT CAST(ciphertext AS TEXT) FROM ai_keys WHERE user_id = ? AND provider = ?`, "u1", "openai").Scan(&raw); err != nil {
+		t.Fatalf("read ciphertext: %v", err)
+	}
+	if raw == "sk-secret" {
+		t.Fatal("ai key stored in plaintext")
+	}
+	got, ok, err := s.GetAIKey("u1", "openai", master)
+	if err != nil || !ok || got != "sk-secret" {
+		t.Fatalf("GetAIKey = %q/%v/%v", got, ok, err)
+	}
+	if err := s.PutAIKey("u1", "openai", "sk-rotated", master); err != nil {
+		t.Fatalf("rotate PutAIKey: %v", err)
+	}
+	got, ok, err = s.GetAIKey("u1", "openai", master)
+	if err != nil || !ok || got != "sk-rotated" {
+		t.Fatalf("rotated GetAIKey = %q/%v/%v", got, ok, err)
+	}
+}
+
+func TestAIKeyRejectsBadMasterAndWrongAAD(t *testing.T) {
+	s := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutAIKey("u1", "openai", "sk-secret", []byte("short")); err == nil {
+		t.Fatal("short master key accepted")
+	}
+	if err := s.PutAIKey("u1", "openai", "sk-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	if _, ok, err := s.GetAIKey("u2", "openai", master); err != nil || ok {
+		t.Fatalf("cross-user GetAIKey = ok %v err %v, want missing", ok, err)
+	}
+	if _, ok, err := s.GetAIKey("u1", "openai", []byte("abcdef0123456789abcdef0123456789")); err == nil || ok {
+		t.Fatalf("wrong master GetAIKey = ok %v err %v, want decrypt error", ok, err)
+	}
+}
+
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	s, err := OpenStore(filepath.Join(t.TempDir(), "cashflux.db"))

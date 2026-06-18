@@ -17,6 +17,11 @@ func TestConfigValidate(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("unsupported auth mode accepted")
 	}
+	invalid = valid
+	invalid.MasterKey = "short"
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("short master key accepted")
+	}
 }
 
 func TestHealthReadyAndVersionEndpoints(t *testing.T) {

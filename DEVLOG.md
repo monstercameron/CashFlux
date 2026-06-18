@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: backend encrypted AI keys
+
+- Added AES-GCM helpers for `ai_keys`: env config accepts a 16/24/32-byte master key, and storage encrypts
+  per-user provider keys with user/provider authenticated data before writing SQLite ciphertext.
+- Covered plaintext avoidance, decrypt/rotate flow, bad master-key rejection, cross-user miss, and wrong-key
+  decrypt failure with native server tests.
+
 ## 2026-06-18 - feat: backend blob store
 
 - Added content-addressed blob storage for the backend: sha256 hashing, path-sharded files, metadata

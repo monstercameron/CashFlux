@@ -1,11 +1,15 @@
 package server
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -381,6 +385,66 @@ WHERE wb.hash IS NULL`)
 		}
 	}
 	return len(blobs), nil
+}
+
+// PutAIKey encrypts and stores a user's provider key with AES-GCM.
+func (s *Store) PutAIKey(userID, provider, key string, masterKey []byte) error {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(provider) == "" || strings.TrimSpace(key) == "" {
+		return fmt.Errorf("server store: user id, provider, and key are required")
+	}
+	gcm, err := aesGCM(masterKey)
+	if err != nil {
+		return err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return fmt.Errorf("server store: ai key nonce: %w", err)
+	}
+	ciphertext := gcm.Seal(nil, nonce, []byte(key), []byte(userID+"|"+provider))
+	if _, err := s.db.Exec(`
+INSERT INTO ai_keys(user_id, provider, ciphertext, nonce)
+VALUES(?, ?, ?, ?)
+ON CONFLICT(user_id, provider) DO UPDATE SET ciphertext = excluded.ciphertext, nonce = excluded.nonce`,
+		userID, provider, ciphertext, nonce); err != nil {
+		return fmt.Errorf("server store: put ai key: %w", err)
+	}
+	return nil
+}
+
+// GetAIKey decrypts a user's provider key.
+func (s *Store) GetAIKey(userID, provider string, masterKey []byte) (string, bool, error) {
+	gcm, err := aesGCM(masterKey)
+	if err != nil {
+		return "", false, err
+	}
+	var ciphertext, nonce []byte
+	err = s.db.QueryRow(`SELECT ciphertext, nonce FROM ai_keys WHERE user_id = ? AND provider = ?`, userID, provider).Scan(&ciphertext, &nonce)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("server store: get ai key: %w", err)
+	}
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, []byte(userID+"|"+provider))
+	if err != nil {
+		return "", false, fmt.Errorf("server store: decrypt ai key: %w", err)
+	}
+	return string(plaintext), true, nil
+}
+
+func aesGCM(masterKey []byte) (cipher.AEAD, error) {
+	if !validAESKeyLength(len(masterKey)) {
+		return nil, fmt.Errorf("server store: master key must be 16, 24, or 32 bytes")
+	}
+	block, err := aes.NewCipher(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("server store: aes cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("server store: aes-gcm: %w", err)
+	}
+	return gcm, nil
 }
 
 func trimSnapshotHistory(tx *sql.Tx, workspaceID string, limit int) error {

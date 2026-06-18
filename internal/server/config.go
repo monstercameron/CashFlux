@@ -22,6 +22,7 @@ type Config struct {
 	AuthMode  string
 	Billing   bool
 	AppOrigin string
+	MasterKey string
 }
 
 // FromEnv builds server config from CASHFLUX_SERVER_* environment variables.
@@ -33,6 +34,7 @@ func FromEnv() (Config, error) {
 		Billing:  envBool("CASHFLUX_SERVER_BILLING", false),
 	}
 	cfg.AppOrigin = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_APP_ORIGIN"))
+	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -47,6 +49,9 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.DataDir) == "" {
 		return fmt.Errorf("server: data dir is required")
 	}
+	if c.MasterKey != "" && !validAESKeyLength(len(c.MasterKey)) {
+		return fmt.Errorf("server: master key must be 16, 24, or 32 bytes")
+	}
 	switch c.AuthMode {
 	case "token", "oauth":
 		return nil
@@ -54,6 +59,8 @@ func (c Config) Validate() error {
 		return fmt.Errorf("server: unsupported auth mode %q", c.AuthMode)
 	}
 }
+
+func validAESKeyLength(n int) bool { return n == 16 || n == 24 || n == 32 }
 
 func envOr(key, fallback string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
