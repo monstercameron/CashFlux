@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C27: "Save as task" title
+
+- Saving an AI insight as a to-do used the whole first sentence of the answer (truncated to 80 runes) as
+  the title. Now the title is the question the user asked (the `question` state) when present, else a
+  short generic "Money insight" label; the full answer stays in the task notes. Small, route-gated UI fix.
+
 ## 2026-06-17 — bugfix C27: document-review amounts in accounting style
 
 - The receipt-import review list showed the AI's raw amount string ("−4.50"), out of step with the

@@ -79,7 +79,12 @@ func Insights() ui.Node {
 		if r == "" {
 			return
 		}
-		title := r
+		// Title from the question when this was a Q&A; otherwise a short generic
+		// label. The full answer always lives in the notes, not the title (C27).
+		title := strings.TrimSpace(question.Get())
+		if title == "" {
+			title = uistate.T("insights.aiTaskTitle")
+		}
 		if rs := []rune(title); len(rs) > 80 { // rune-safe truncation for the title
 			title = strings.TrimSpace(string(rs[:80])) + "…"
 		}

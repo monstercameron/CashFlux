@@ -54,6 +54,9 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **"Save as task" gives the to-do a sensible title (C27):** saving an AI insight used the entire first
+  sentence of the answer as the task title (long, truncated). The title is now the question you asked
+  (or a short "Money insight" label for "Explain my month"), with the full answer kept in the notes.
 - **Document-review amounts use accounting style (C27):** the AI receipt-import review rows showed raw
   "−4.50" values; they now format through the same accounting formatter as the rest of the app
   (parentheses for negatives, grouped, in the chosen account's currency), with a raw fallback while a

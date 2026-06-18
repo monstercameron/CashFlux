@@ -888,9 +888,9 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
       (settings aren't hydrated from localStorage). Decide whether the OpenAI key should persist across
       reload (with a clear on-device-only notice) — today every reload silently turns AI back off.
 - [x] **Insights "Save as task"** — verified: the AI answer becomes a To-do (body carries the full
-      answer; savings-rate math 2399.25/4200 = 57.14% correct). **Rough edge:** the task **title is the
-      entire first sentence** of the answer (long, "…"-truncated) — derive a short title (the question or
-      a trimmed summary) and keep the prose in notes.
+      answer; savings-rate math 2399.25/4200 = 57.14% correct). **Rough edge FIXED:** the task title is
+      now the **question** (for a Q&A) or a short generic label ("Money insight") for "Explain my month",
+      with the full answer kept in the notes — no more whole-sentence titles.
 - [x] **Insights "Pin"** — verified: pins to the "Pinned insights" list.
 - [x] Re-confirmed on re-test (2026-06-17): OpenAI calls 200, vision works. The **CSV documented-format
       failure is now fixed** (see the currency-default + name-resolution item above).

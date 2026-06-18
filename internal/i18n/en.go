@@ -612,6 +612,7 @@ var english = Catalog{
 	"insights.answerTitle":     "Answer",
 	"insights.saveTask":        "Save as task",
 	"insights.saveTaskTitle":   "Save this as a to-do task",
+	"insights.aiTaskTitle":     "Money insight",
 	"insights.savedToTodo":     "Saved to your to-do list.",
 	"insights.usageCost":       "Used %d tokens · about %s",
 	"insights.usageTokens":     "Used %d tokens",
