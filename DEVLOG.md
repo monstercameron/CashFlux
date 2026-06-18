@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: passcode hint (revealed after failed attempts) (B17)
+
+- Optional hint that surfaces only after 3 wrong tries, never sitting on the gate for a passer-by. Pure
+  `applock.ValidHint(hint, passcode)` rejects any hint containing the passcode (case-insensitive, trimmed);
+  `WithPasscode` now takes a hint and drops a leaky one (Config gains a `Hint` field). Table tests cover
+  empty/safe/leaky/case-insensitive + storage. `enableAppLock` threads the hint.
+- Gate: a `fails` counter in the attempt closure reveals a hidden "Show hint" button at ≥3 misses (only if
+  a hint exists); clicking shows `Hint: <text>` in the message line. Reset on success / each show. The
+  setup form gained a hint input with inline "can't contain your passcode" validation. 5 new applock.* keys.
+- applock tests green, gofmt clean (realigned en.go), disk wasm build green (served wasm rebuilt).
+  Committed by pathspec.
+
 ## 2026-06-18 — feat: lock-screen greeting + date + daily quote (B17.1)
 
 - Started the B17.1 lock-screen experience: new pure `internal/lockquotes` package (12 curated finance/
@@ -67,6 +79,13 @@ problems and fixes, and what's next.
   the remaining retroactive `ApplyRules` path.
 - Rechecked after the B17.1 quote/greeting commit landed and kept a fresh docs delta for the atomic rules
   test/TODO commit.
+
+## 2026-06-18 — test: formula/custom-field round trip
+
+- Added an appstate integration test that saves a numeric custom field, an account value, and a saved
+  formula, then export/imports the dataset.
+- The test validates the imported custom map and evaluates the imported formula against the imported custom
+  value, tying the already-covered formula sandbox to custom-field persistence.
 
 ## 2026-06-18 — test: D15 cleared balance adjustment math
 

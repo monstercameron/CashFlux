@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Passcode hint, shown only after repeated misses (B17).** When setting a passcode you can add an
+  optional hint. It stays hidden on the lock screen until **3 failed attempts**, then a "Show hint" link
+  appears. A guard rejects any hint that contains the passcode (case-insensitive) so it can't leak the
+  secret — validated in the pure `applock` package (table-tested) and at the form.
 - **Lock screen shows a greeting, the date, and a daily quote (B17.1).** The unlock screen is no longer
   bare: it now greets you by time of day, shows the date, and a rotating finance/motivation line — all
   privacy-safe (nothing financial). Quotes come from a new curated, table-tested `internal/lockquotes`
@@ -42,6 +46,8 @@ and every commit updates this file under `Unreleased`.
   preserving existing tags while applying the first matching category retroactively.
 - **Rules TODO closeout.** The retroactive rules test commit now carries its own post-B17 docs delta with
   the completed checklist item, after the lock-screen quote commit landed.
+- **Formula/custom-field bridge coverage.** Appstate tests now export/import a custom field definition,
+  account custom value, and saved formula, then validate and evaluate the imported data together.
 - **The sample data now ships example workflows.** A first run (or a reset) comes with three ready-made
   automations so the feature is discoverable: "Flag large purchases" (`txn_abs > 200` → flag for review),
   "Categorize coffee runs" (`contains(txn_payee, "coffee")` → Dining), and a disabled manual "Tidy up

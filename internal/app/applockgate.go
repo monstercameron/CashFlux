@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/applock"
 	"github.com/monstercameron/CashFlux/internal/lockquotes"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -54,6 +55,13 @@ func resetAppLockInput(doc js.Value) {
 		inp.Set("value", "")
 		inp.Call("focus")
 	}
+	if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
+		msg.Set("textContent", uistate.T("applock.unlockPrompt"))
+		msg.Get("style").Set("color", "")
+	}
+	if hb := doc.Call("getElementById", "cf-lock-hint-btn"); !hb.IsNull() && !hb.IsUndefined() {
+		hb.Get("style").Set("display", "none")
+	}
 }
 
 func buildAppLockGate(doc js.Value) {
@@ -91,14 +99,27 @@ func buildAppLockGate(doc js.Value) {
 	gate.Call("appendChild", card)
 	doc.Get("body").Call("appendChild", gate)
 
+	fails := 0
+	hintBtnEl := func() js.Value { return doc.Call("getElementById", "cf-lock-hint-btn") }
 	attempt := func() {
 		if loadAppLock().Verify(inp.Get("value").String()) {
 			gate.Get("style").Set("display", "none")
+			fails = 0
+			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
+				hb.Get("style").Set("display", "none")
+			}
 			return
 		}
+		fails++
 		if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
 			msg.Set("textContent", uistate.T("applock.wrong"))
 			msg.Get("style").Set("color", "var(--danger,#d8716f)")
+		}
+		// After a few misses, offer the hint — but only if one was set.
+		if fails >= 3 && loadAppLock().Hint != "" {
+			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
+				hb.Get("style").Set("display", "block")
+			}
 		}
 		inp.Set("value", "")
 		inp.Call("focus")
@@ -125,6 +146,24 @@ func buildAppLockGate(doc js.Value) {
 		return nil
 	})
 	forgot.Call("addEventListener", "click", forgotCb)
+
+	// Hidden until a few failed attempts; reveals the (passcode-safe) hint.
+	hintBtn := doc.Call("createElement", "button")
+	hintBtn.Set("id", "cf-lock-hint-btn")
+	hintBtn.Set("type", "button")
+	hintBtn.Set("textContent", uistate.T("applock.showHint"))
+	hintBtn.Get("style").Set("cssText", "display:none;background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;text-decoration:underline;")
+	card.Call("appendChild", hintBtn)
+	hintCb := js.FuncOf(func(js.Value, []js.Value) any {
+		if h := loadAppLock().Hint; h != "" {
+			if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
+				msg.Set("textContent", uistate.T("applock.hintPrefix")+h)
+				msg.Get("style").Set("color", "")
+			}
+		}
+		return nil
+	})
+	hintBtn.Call("addEventListener", "click", hintCb)
 
 	quoteEl := doc.Call("createElement", "div")
 	quoteEl.Set("id", "cf-lock-quote")
@@ -228,7 +267,7 @@ func showAppLockSetup(onDone func()) {
 }
 
 func resetSetupFields(doc js.Value) {
-	for _, id := range []string{"cf-al-pass", "cf-al-confirm"} {
+	for _, id := range []string{"cf-al-pass", "cf-al-confirm", "cf-al-hint"} {
 		if e := doc.Call("getElementById", id); !e.IsNull() && !e.IsUndefined() {
 			e.Set("value", "")
 		}
@@ -258,6 +297,7 @@ func buildAppLockSetup(doc js.Value) {
 			`<input id="cf-al-confirm" type="password" inputmode="numeric" aria-label="`+escT("applock.confirm")+`" placeholder="`+escT("applock.confirm")+`" style="`+inputStyle+`">`+
 			`<label style="font-size:0.82rem;opacity:0.85;display:flex;flex-direction:column;gap:0.3rem;">`+escT("applock.autoLabel")+
 			`<input id="cf-al-mins" type="number" min="0" value="0" style="`+inputStyle+`"></label>`+
+			`<input id="cf-al-hint" type="text" aria-label="`+escT("applock.hintLabel")+`" placeholder="`+escT("applock.hintPlaceholder")+`" style="`+inputStyle+`">`+
 			`<div id="cf-al-err" style="color:var(--danger,#d8716f);font-size:0.82rem;min-height:1em;"></div>`+
 			`<div style="display:flex;gap:0.5rem;justify-content:flex-end;">`+
 			`<button id="cf-al-cancel" type="button" style="padding:0.5rem 0.9rem;border-radius:8px;border:1px solid var(--border,#2a2a2c);background:transparent;color:inherit;cursor:pointer;">`+escT("action.cancel")+`</button>`+
@@ -280,11 +320,16 @@ func buildAppLockSetup(doc js.Value) {
 			errEl.Set("textContent", uistate.T("applock.mismatch"))
 			return
 		}
+		hint := strings.TrimSpace(get("cf-al-hint").Get("value").String())
+		if !applock.ValidHint(hint, pass) {
+			errEl.Set("textContent", uistate.T("applock.hintLeaks"))
+			return
+		}
 		mins := 0
 		if v, err := strconv.Atoi(strings.TrimSpace(get("cf-al-mins").Get("value").String())); err == nil && v > 0 {
 			mins = v
 		}
-		if enableAppLock(pass, mins) {
+		if enableAppLock(pass, mins, hint) {
 			hide()
 			if appLockOnDone != nil {
 				appLockOnDone()

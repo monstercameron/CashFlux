@@ -13,6 +13,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"strings"
 )
 
 // Config is the persisted app-lock configuration. The zero value is a valid,
@@ -22,6 +23,21 @@ type Config struct {
 	Salt            string `json:"salt"`            // random per-install, set with the passcode
 	Hash            string `json:"hash"`            // hex SHA-256 of Salt+passcode
 	AutoLockMinutes int    `json:"autoLockMinutes"` // 0 = lock only on reload / manual lock
+	Hint            string `json:"hint,omitempty"`  // optional reminder, revealed only after failed tries
+}
+
+// ValidHint reports whether hint is safe to store with the given passcode. An
+// empty hint (no hint) is always fine; a non-empty hint must not contain the
+// passcode (case-insensitive), so it can never leak the secret.
+func ValidHint(hint, passcode string) bool {
+	hint = strings.TrimSpace(hint)
+	if hint == "" {
+		return true
+	}
+	if passcode == "" {
+		return false
+	}
+	return !strings.Contains(strings.ToLower(hint), strings.ToLower(passcode))
 }
 
 // HashPasscode returns the hex-encoded SHA-256 of salt+passcode. Deterministic
@@ -32,21 +48,26 @@ func HashPasscode(passcode, salt string) string {
 }
 
 // WithPasscode returns a copy of the config with the lock enabled for the given
-// passcode (hashed with salt) and auto-lock window. An empty passcode or salt is
-// rejected (returns the config unchanged) so the lock can't be enabled without a
-// real secret. A negative auto-lock window is clamped to 0 (manual/reload only).
-func (c Config) WithPasscode(passcode, salt string, autoLockMinutes int) Config {
+// passcode (hashed with salt), auto-lock window, and optional hint. An empty
+// passcode or salt is rejected (returns the config unchanged) so the lock can't
+// be enabled without a real secret. A negative auto-lock window is clamped to 0
+// (manual/reload only). A hint that would leak the passcode is dropped.
+func (c Config) WithPasscode(passcode, salt string, autoLockMinutes int, hint string) Config {
 	if passcode == "" || salt == "" {
 		return c
 	}
 	if autoLockMinutes < 0 {
 		autoLockMinutes = 0
 	}
+	if !ValidHint(hint, passcode) {
+		hint = ""
+	}
 	return Config{
 		Enabled:         true,
 		Salt:            salt,
 		Hash:            HashPasscode(passcode, salt),
 		AutoLockMinutes: autoLockMinutes,
+		Hint:            strings.TrimSpace(hint),
 	}
 }
 

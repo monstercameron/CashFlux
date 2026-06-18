@@ -42,12 +42,12 @@ func newSalt() string {
 
 // enableAppLock sets a passcode (with a fresh salt) and persists it. Reports
 // whether it took (false for an empty passcode or RNG failure).
-func enableAppLock(passcode string, autoLockMinutes int) bool {
+func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	salt := newSalt()
 	if salt == "" {
 		return false
 	}
-	c := applock.Config{}.WithPasscode(passcode, salt, autoLockMinutes)
+	c := applock.Config{}.WithPasscode(passcode, salt, autoLockMinutes, hint)
 	if !c.Enabled {
 		return false
 	}
