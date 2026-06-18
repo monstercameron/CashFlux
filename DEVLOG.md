@@ -75,6 +75,7 @@ problems and fixes, and what's next.
 - Browser verification confirmed the selected checkbox computes to the accent background, border, and text
   color with `box-sizing:border-box`.
 - Re-ran `go test ./...`, the wasm build, and `gwc verify` after the app-lock commit landed; all passed.
+- Final commit was held until the five-minute cooldown after the idle auto-lock commit cleared.
 
 ## 2026-06-18 — fix: UX polish §6.11 — light-theme soon badge
 

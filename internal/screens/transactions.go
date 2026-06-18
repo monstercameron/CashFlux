@@ -649,7 +649,11 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		clearedLabel = uistate.T("transactions.clearedCheck")
 		meta += uistate.T("transactions.clearedMeta")
 	}
-	return Div(Class("row"),
+	rowClass := "row"
+	if props.Selected {
+		rowClass += " selected"
+	}
+	return Div(Class(rowClass),
 		Button(Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), props.Txn.Desc),

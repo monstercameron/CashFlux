@@ -321,8 +321,9 @@
 
       /* To-do */
       .field-wide { grid-column: 1 / -1; }
-      .check { background: transparent; border: 0; color: var(--text-dim); cursor: pointer; font-size: 1.15rem; line-height: 1; min-width: 24px; min-height: 24px; display: inline-grid; place-items: center; margin-right: 0.4rem; }
+      .check { background: transparent; border: 1px solid transparent; color: var(--text-dim); cursor: pointer; font-size: 1.15rem; line-height: 1; min-width: 24px; min-height: 24px; display: inline-grid; place-items: center; margin-right: 0.4rem; box-sizing: border-box; }
       .check:hover { color: var(--accent); }
+      .row.selected .check { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
       .row.done .row-desc { text-decoration: line-through; color: var(--text-faint); }
       .task-meta { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.15rem; }
       .badge-prio { font-size: 0.75rem; }

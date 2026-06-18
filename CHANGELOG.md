@@ -326,7 +326,7 @@ and every commit updates this file under `Unreleased`.
 ### Fixed
 - **Selected transaction rows have a real visual state (UX audit §6.4).** Bulk-selection checkboxes now get
   an accent background/border when selected instead of relying on the glyph alone. Browser verification
-  covered the selected checkbox's computed colors, and `gwc verify` stayed green.
+  covered the selected checkbox's computed colors, and `gwc verify` stayed green after the app-lock updates.
 - **Soon badges now adapt to light theme (UX audit §6.11).** `.badge-soon` keeps its dark badge treatment
   in dark mode and gains a light-theme color override.
 - **Form fields have comfortable touch targets (UX audit §6.1).** Shared `.field` controls now default to
