@@ -46,8 +46,8 @@ func Run() {
 		route := route // capture per iteration
 		r.Register(route.Path, func(router.Attrs) *router.Element {
 			return ui.CreateElement(Shell, ShellProps{
-				Title:    route.Title,
-				Subtitle: route.Subtitle,
+				Title:    uistate.T(route.Title),
+				Subtitle: uistate.T(route.Subtitle),
 				View:     route.View,
 			})
 		})
@@ -57,7 +57,7 @@ func Run() {
 	// re-registering routes (the router can't be mutated after mount).
 	r.Register("/p/:slug", func(attrs router.Attrs) *router.Element {
 		slug, _ := attrs["slug"].(string)
-		title := "Page"
+		title := uistate.T("custompage.fallbackTitle")
 		if app := appstate.Default; app != nil {
 			if p, ok := pages.BySlug(app.CustomPages(), slug); ok {
 				title = p.Name
@@ -72,7 +72,7 @@ func Run() {
 	// Unknown paths fall back to the dashboard.
 	r.Register("*", func(router.Attrs) *router.Element {
 		home := screens.All()[0]
-		return ui.CreateElement(Shell, ShellProps{Title: home.Title, Subtitle: home.Subtitle, View: home.View})
+		return ui.CreateElement(Shell, ShellProps{Title: uistate.T(home.Title), Subtitle: uistate.T(home.Subtitle), View: home.View})
 	})
 
 	r.Mount("#app")
