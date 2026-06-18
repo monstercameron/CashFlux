@@ -93,7 +93,7 @@ func Rules() ui.Node {
 		H2(Class("card-title"), uistate.T("rules.add")),
 		P(Class("muted"), uistate.T("rules.hint")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
+			Input(append([]any{Class("field"), Attr("id", "rule-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
 			Select(Class("field"), OnChange(onCategory), categoryOptions(cats, categoryID.Get())),
 			Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
@@ -126,7 +126,7 @@ func Rules() ui.Node {
 		}
 	}
 	list := IfElse(len(rs) == 0,
-		P(Class("empty"), uistate.T("rules.empty")),
+		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), FocusID: "rule-add"}),
 		Div(Class("rows"), MapKeyed(rs,
 			func(r rules.Rule) any { return r.ID },
 			func(r rules.Rule) ui.Node {

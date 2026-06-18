@@ -218,7 +218,7 @@ func Members() ui.Node {
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("members.add")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
+				Input(append([]any{Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
 				Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
 				MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
@@ -230,7 +230,7 @@ func Members() ui.Node {
 		reassignPanel,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("members.listTitle")),
-			IfElse(len(members) == 0, P(Class("empty"), uistate.T("members.empty")), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),
+			IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), FocusID: "member-add"}), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),
 		),
 		If(len(members) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("members.netWorthTitle")),

@@ -160,7 +160,7 @@ func Budgets() ui.Node {
 		formCard = Section(Class("card"),
 			H2(Class("card-title"), uistate.T("budgets.add")),
 			Form(Class("form-grid"), OnSubmit(add),
-				Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...),
+				Input(append([]any{Class("field"), Attr("id", "budget-add"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...),
 				Select(Class("field"), OnChange(onCat), catOptions),
 				Select(Class("field"), OnChange(onOwner), ownerOptions),
 				Select(Class("field"), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get())),
@@ -235,7 +235,7 @@ func Budgets() ui.Node {
 
 	var listBody ui.Node
 	if len(statuses) == 0 {
-		listBody = P(Class("empty"), uistate.T("budgets.empty"))
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("budgets.empty"), CTALabel: uistate.T("budgets.addFirst"), FocusID: "budget-add"})
 	} else {
 		rows := MapKeyed(statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },

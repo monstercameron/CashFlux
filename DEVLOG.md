@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: empty-state call-to-action blocks (§6.5, batch 1)
+
+- Empty lists were a bare `P(Class("empty"), …)` line. Added a reusable `EmptyStateCTA` component
+  (`internal/screens/emptystate.go`): centered message + a primary button that calls `focusByID` on the
+  screen's add form (reusing the §6.7 plumbing). Add-form first inputs got stable ids (`goal-add`,
+  `budget-add`, `task-add`, `member-add`, `rule-add`).
+- Made it a component (not a helper returning a node with an inline OnClick) so the click-handler hook
+  lives inside its own lifecycle — safe to mount/unmount as the list toggles empty↔non-empty, rather than
+  conditionally registering a hook in the screen body.
+- Added `.empty-cta` CSS (flex column, centered) in index.html; new i18n `*.addFirst` keys.
+- Batch 1: goals, budgets, to-do, members, rules. Next: transactions (truly-empty vs filtered no-match),
+  categories (expense/income), accounts (sample loader already covers the welcome state). Build green.
+
 ## 2026-06-18 — feat: focus-on-edit for todo/rules/documents/custom pages — §6.7 complete
 
 - Final batch of the §6.7 focus-on-edit feature: `TaskRow`, `RuleRow`, `DraftRow`, and the custom-page

@@ -133,7 +133,7 @@ func Todo() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("todo.addTitle")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(append([]any{Class("field field-wide"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
+			Input(append([]any{Class("field field-wide"), Attr("id", "task-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
 			Select(Class("field"), OnChange(onPriority), prioOptions),
 			Input(Class("field"), Type("date"), Value(dueStr.Get()), OnInput(onDue)),
 			Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
@@ -150,7 +150,7 @@ func Todo() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(tasks) == 0:
-		listBody = P(Class("empty"), uistate.T("todo.empty"))
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("todo.empty"), CTALabel: uistate.T("todo.addFirst"), FocusID: "task-add"})
 	case len(shown) == 0:
 		listBody = P(Class("empty"), uistate.T("todo.allDone"))
 	default:

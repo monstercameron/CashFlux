@@ -184,7 +184,7 @@ func Goals() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("goals.add")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...),
+			Input(append([]any{Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...),
 			Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget)),
 			Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)),
 			Select(Class("field"), OnChange(onOwner), ownerOptions),
@@ -225,7 +225,7 @@ func Goals() ui.Node {
 
 	var listBody ui.Node
 	if len(goals) == 0 {
-		listBody = P(Class("empty"), uistate.T("goals.empty"))
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("goals.empty"), CTALabel: uistate.T("goals.addFirst"), FocusID: "goal-add"})
 	} else {
 		rows := MapKeyed(goals,
 			func(g domain.Goal) any { return g.ID },
