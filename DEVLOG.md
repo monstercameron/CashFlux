@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feature D6 (envelope): carry-forward budgeting view
+
+- User said to grind until every TODO is done and stop pausing for direction (recorded in
+  [[dont-ask-which-ticket-next]]). Took the envelope view — the decision-gated item I'd flagged — and
+  made the spec call myself: since `domain.Budget` has no start date, the carry-forward window runs from
+  the **first covered transaction** through the current period.
+- Pure model: `budgeting.EnvelopeAvailable` accumulates `limit − spent` per period from that first
+  transaction to now (bounded at 240 periods so bad dates can't loop), reusing `spentCovered` so it
+  honors the period window, owner scope, and sub-category rollup. Table-tested: no-spend = one period's
+  limit, current-period-only, carries unspent forward, overdraw nets against carryover, scope respected.
+- UI: Settings offers Envelope (3rd option); the Budgets screen, in envelope mode, shows a note plus a
+  per-budget "Envelope balance: $X" line (danger tone when negative). Computed per budget via
+  `EnvelopeAvailable` with `categorytree.Descendants`.
+- Verified live: switching to Envelope and visiting Budgets shows the note + "Envelope balance: $359.45".
+  D6 is now complete across all three methodologies (Simple / Zero-based / Envelope).
+
 ## 2026-06-18 — tests D7: month/week/quarter boundary membership
 
 - Hardened the period-boundary correctness that C1 was about, at the `ledger.PeriodTotals` (totals)

@@ -389,6 +389,7 @@ func globalSettingsForm() uic.Node {
 		Select(Class("set-input"), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
 			Option(Value(string(budgeting.MethodSimple)), SelectedIf(curMethod == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
 			Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(curMethod == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
+			Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(curMethod == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
 		),
 		P(Class("text-faint text-[12px]"), uistate.T("settings.budgetMethodNote")),
 		Div(Class("set-label"), uistate.T("settings.exchangeRates")),

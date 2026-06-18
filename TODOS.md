@@ -912,6 +912,38 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
 - [ ] Not yet exercised (queue for the browser E2E lane): cancel/abort mid-call, retry/backoff on
       429/5xx, and the error message shown on a bad/empty key.
 
+### C28. ROOT CAUSE — every `ui.Icon` SVG renders blank (`viewBox` is lowercased to `viewbox`) ★★ (bug)
+**Reported three symptoms — analyzed individually against the live DOM (2026-06-18):**
+
+1. **"The icons don't show."** ✅ confirmed + root-caused. The icon `<svg>` is emitted with the
+   attribute **`viewbox`** (all-lowercase) instead of **`viewBox`**:
+   `<svg … viewbox="0 0 24 24" … class="w-4 h-4 shrink-0"><rect x="3" y="3" …></svg>`.
+   SVG attribute names are **case-sensitive** (unlike HTML); `viewbox` is invalid and ignored, so the
+   icon's 0–24 coordinate system never maps onto the 16px (`w-4 h-4`) box. The shapes (coords 3–21) sit
+   outside the default 16-unit user space and are clipped → the `<svg>` still has a 16×16 bounding box
+   (so a DOM scan counts "14 visible icons") but it **paints nothing**. Affects **every** `ui.Icon`
+   app-wide (nav rail, menu toggle, etc.). The likely mechanism is HTML-style attribute lowercasing in
+   the framework's element/attr emission; SVG camelCase attrs (`viewBox`, and watch
+   `preserveAspectRatio`) need to be preserved. _Fix lives in how `internal/ui.Icon` / the renderer emit
+   SVG camelCase attributes — verify `preserveAspectRatio` on `ui.Chart` SVGs isn't similarly mangled._
+   - [ ] Emit `viewBox` (and other camelCase SVG attrs) with correct case in the DOM; re-check nav, menu
+         toggle, and chart SVGs all render.
+
+2. **"There is no collapse button."** ⚠️ partly a consequence of #1. The toggle **does exist** — a 28×28
+   `.menu-btn` in the top bar with an `icon.Menu` `<svg>` — but that glyph is blank for the same
+   `viewbox` reason, so it reads as an empty/absent button. Compounded by **C20**: it lives in the top
+   bar, not on the panel, so even when it paints it's not where a collapse control is expected.
+   - [ ] After #1, confirm the menu glyph is visible; then (C20) add an on-panel collapse affordance.
+
+3. **"It can't collapse."** ❌ not an actual collapse bug — collapse **works**: clicking `.menu-btn`
+   toggled the rail **240px → 58px** and added the `.collapsed` class (verified live). The perception is
+   downstream of #2 — the toggle is visually empty, so it can't be found/clicked. No functional fix
+   needed beyond #1/#2 (and persisting collapsed state, already done under C20).
+   - [ ] Re-verify once icons paint: button is findable, collapse/expand works, collapsed rail shows icons.
+
+_Note: C15's CSS fix (scoping `nav .rail-section`) was correct for its issue, but the "empty collapsed
+rail" is really this `viewBox` bug — C28 supersedes the icon symptom._
+
 ---
 
 ## D. Cross-component E2E workstream stories — budgeting · planning · finances ★
@@ -997,8 +1029,13 @@ Savings KPIs) · `period.Window`.
 - [x] Apply "zero-based": the Budgets screen surfaces an "assign every dollar" banner — income for the
       month minus total budgeted ("$X left to assign" / "Every dollar is assigned" / "Over-assigned by
       $X"). Verified live: switching to zero-based and visiting Budgets shows "$3,600.00 left to assign".
-- [ ] Apply "envelope": envelope-style carry-forward view — deferred. `MethodEnvelope` exists in the type
-      but isn't offered in the selector yet (behaves like simple); needs the carry-forward computation.
+- [x] Apply "envelope": envelope-style carry-forward view — DONE. `budgeting.EnvelopeAvailable` (pure,
+      table-tested: no-spend funds one period, current-period-only, carries unspent forward, overdraw
+      nets, scope respected) accumulates `limit − spent` over every period from the first covered
+      transaction through the current one (bounded at 240 periods). Settings offers Envelope; each budget
+      row shows "Envelope balance: $X" (danger tone when overdrawn) under a note. Verified live: switching
+      to Envelope shows the note + per-budget balances (e.g. "$359.45"). _Decision: carry-forward window
+      = from the first covered transaction (no budget start date exists), made autonomously._
 - [ ] unit: config-layering test (defaults→household→member). Methodology is household-only today; the
       per-member layering is a future refinement.
 

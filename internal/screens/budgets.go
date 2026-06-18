@@ -204,10 +204,14 @@ func Budgets() ui.Node {
 		totalLimit += s.Spent.Amount + s.Remaining.Amount // limit = spent + remaining
 	}
 
-	// Zero-based budgeting surfaces how much of the period's income is still
-	// unassigned to a budget (D6). Other methodologies show no banner.
+	// The methodology shapes the Budgets view (D6): zero-based surfaces unassigned
+	// income; envelope shows each budget's carried-forward balance.
+	method := budgeting.ParseMethodology(app.Settings().BudgetMethodology)
+	envAvail := map[string]string{} // budgetID → formatted envelope balance (envelope mode)
+	envNeg := map[string]bool{}     // budgetID → whether the envelope is overdrawn
 	var assignBanner ui.Node = Fragment()
-	if budgeting.ParseMethodology(app.Settings().BudgetMethodology) == budgeting.MethodZeroBased {
+	switch method {
+	case budgeting.MethodZeroBased:
 		ms, me := budgeting.PeriodRange(domain.PeriodMonthly, viewMonth, weekStart)
 		income, _, _ := ledger.PeriodTotals(txns, ms, me, rates)
 		toAssign := budgeting.ToAssign(income.Amount, totalLimit)
@@ -219,6 +223,14 @@ func Budgets() ui.Node {
 		default:
 			assignBanner = P(Class("budget-sub font-display text-down"), uistate.T("budgets.overAssigned", fmtMoney(money.New(-toAssign, base))))
 		}
+	case budgeting.MethodEnvelope:
+		assignBanner = P(Class("budget-sub font-display"), uistate.T("budgets.envelopeNote"))
+		for _, b := range budgets {
+			if av, err := budgeting.EnvelopeAvailable(b, txns, viewMonth, weekStart, rates, categorytree.Descendants(cats, b.CategoryID)); err == nil {
+				envAvail[b.ID] = fmtMoney(av)
+				envNeg[b.ID] = av.IsNegative()
+			}
+		}
 	}
 
 	var listBody ui.Node
@@ -228,7 +240,7 @@ func Budgets() ui.Node {
 		rows := MapKeyed(statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), OnDelete: deleteBudget, OnSave: saveBudget})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], OnDelete: deleteBudget, OnSave: saveBudget})
 			},
 		)
 		listBody = Div(rows)
@@ -253,11 +265,13 @@ func Budgets() ui.Node {
 }
 
 type budgetRowProps struct {
-	Status   budgeting.Status
-	Category string
-	Members  []domain.Member
-	OnDelete func(string)
-	OnSave   func(id, name, limit, period, owner string)
+	Status      budgeting.Status
+	Category    string
+	Members     []domain.Member
+	Envelope    string // formatted envelope balance (envelope methodology); "" hides the line
+	EnvelopeNeg bool   // envelope is overdrawn → danger tone
+	OnDelete    func(string)
+	OnSave      func(id, name, limit, period, owner string)
 }
 
 // periodOptions builds the budget-period <option>s with selected marked.
@@ -350,6 +364,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		title += " · " + props.Category
 	}
 
+	// Envelope methodology: show the carried-forward balance under the period row.
+	var envLine ui.Node = Fragment()
+	if props.Envelope != "" {
+		cls := "budget-sub font-display"
+		if props.EnvelopeNeg {
+			cls += " text-down"
+		}
+		envLine = Span(Class(cls), uistate.T("budgets.envelopeRow", props.Envelope))
+	}
 	return Div(Class("budget"),
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), title),
@@ -359,5 +382,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		),
 		Div(Class("bar"), Div(Class(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 		Span(Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
+		envLine,
 	)
 }

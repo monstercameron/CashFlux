@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Envelope budgeting (D6):** the budgeting-method selector now offers **Envelope** — each budget's
+  unspent funds carry forward to the next period. The Budgets screen shows a per-budget "Envelope
+  balance: $X" (red when overdrawn) under a note. The balance accumulates `limit − spent` over every
+  period from the budget category's first transaction through the current one. Backed by a pure,
+  table-tested `budgeting.EnvelopeAvailable`. Verified live.
 - **Budgeting method: Simple or Zero-based (D6):** Settings now has a budgeting-method selector. Under
   **Zero-based**, the Budgets screen shows how much of the month's income is still unassigned —
   "$X left to assign", "Every dollar is assigned", or "Over-assigned by $X". The choice is household
