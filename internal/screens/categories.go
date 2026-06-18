@@ -258,6 +258,18 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when the inline editor opens (§6.7).
+	editKey := "closed"
+	if editing.Get() {
+		editKey = "open"
+	}
+	ui.UseEffect(func() func() {
+		if editing.Get() {
+			focusByID("cat-edit-" + c.ID)
+		}
+		return nil
+	}, editKey)
+
 	if editing.Get() {
 		// Parent options: same-kind categories except this one (prevents self-parenting).
 		var sameKind []domain.Category
@@ -272,7 +284,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		}
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Attr("id", "cat-edit-"+c.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
 				Select(Class("field"), OnChange(onKind),
 					Option(Value(string(domain.KindExpense)), SelectedIf(kindS.Get() == string(domain.KindExpense)), uistate.T("category.expense")),
 					Option(Value(string(domain.KindIncome)), SelectedIf(kindS.Get() == string(domain.KindIncome)), uistate.T("category.income")),

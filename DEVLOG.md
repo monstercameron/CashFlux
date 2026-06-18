@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: focus-on-edit for categories + members (§6.7 cont.)
+
+- Same pattern applied to `CategoryRow` and `MemberRow`: open/closed-keyed `ui.UseEffect` → `focusByID`
+  on the first input (name), which now carries a stable `Attr("id", ...)`.
+- Remaining inline editors: todo, rules, documents, custom pages. Build green, gofmt clean.
+
 ## 2026-06-18 — feat: focus-on-edit for transactions + budgets (§6.7 cont.)
 
 - Extended the §6.7 focus-on-edit pattern to `TransactionRow` and `BudgetRow`: a `ui.UseEffect` keyed on

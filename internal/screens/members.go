@@ -275,10 +275,22 @@ func MemberRow(props memberRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// Land the cursor in the first field when the inline editor opens (§6.7).
+	editKey := "closed"
+	if editing.Get() {
+		editKey = "open"
+	}
+	ui.UseEffect(func() func() {
+		if editing.Get() {
+			focusByID("member-edit-" + m.ID)
+		}
+		return nil
+	}, editKey)
+
 	if editing.Get() {
 		return Div(Class("row"),
 			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName)),
 				Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(colorS.Get()), OnInput(onColor)),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
