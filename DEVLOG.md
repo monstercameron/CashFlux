@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: backend server foundation
+
+- Started the backend series with an in-module layout: `cmd/cashflux-server` for the binary and
+  `internal/server` for native-tested server pieces. No gRPC/proto dependencies yet.
+- Added env-driven config, auth-mode validation (`token` or `oauth`), health/readiness endpoints,
+  and `/v1/version` so the future self-host Settings "Test connection" can verify API compatibility
+  and discover token-vs-OAuth plus billing mode.
+
 ## 2026-06-18 - test: D21 document import flow
 
 - Extracted reviewed document-row import from the wasm Documents screen into `appstate.ImportReviewedDocumentRows`,

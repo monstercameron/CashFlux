@@ -292,6 +292,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend server foundation started.** Added the `cmd/cashflux-server` entrypoint plus a native
+  `internal/server` package with env config, health/readiness checks, and a `/v1/version` compatibility
+  response for the self-host Test connection path.
 - **Reviewed document imports are testable through appstate.** The image-review import path now shares an
   appstate helper that skips duplicates, records import history, and commits reviewed rows so spending
   totals, budgets, and statement summaries can be covered without a browser-only code path.

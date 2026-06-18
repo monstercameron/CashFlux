@@ -1359,6 +1359,32 @@ _Cross-links: collapsible rail item (icons unblock collapsed mode), tile-click-t
 locally, no CDN), B20 theming (icons inherit `currentColor` → recolor with accent), accessibility (decorative icons
 `aria-hidden`, icon-only buttons keep `aria-label`)._
 
+**C46.1 — Credit-card glyphs + "delight" micro-additions (user-requested 2026-06-18).** Beyond the functional
+icon pass above, add small characterful touches that make the app feel richer:
+- [ ] **Credit-card / network brand glyphs on accounts.** Credit-card & liability accounts show a small **card
+      brand mark** (Visa / Mastercard / Amex / Discover / generic card). Detect brand from a user-set field (or
+      optionally the card number's IIN/BIN prefix if ever entered — 4=Visa, 51-55/2221-2720=Mastercard, 34/37=Amex,
+      6011/65=Discover); fall back to a **generic `credit-card` glyph** when unknown. ⚠️ **Trademark note:** Visa/MC/
+      Amex/Discover logos are protected marks with brand guidelines — prefer a **permissively-licensed brand-icon
+      set** (or simple stylized monograms/colors) over shipping official logos, and keep them purely decorative/
+      identifying. Log a quick licensing check as a sub-task before bundling any real network logos.
+- [ ] **Mini credit-card visual for card accounts.** Optional small **card-art tile** (rounded rectangle, subtle
+      gradient in the account/accent color, brand glyph, masked •••• last-4, name) on the Accounts screen / account
+      detail — a wallet-style flourish that reads instantly as "a card." Pure CSS + the brand glyph; no PII beyond
+      last-4, and only if the user enters it.
+- [ ] **Account-type avatars & color chips.** Each account/category/member gets a small colored avatar or
+      type-glyph (checking `landmark`, savings `piggy-bank`, cash `banknote`, investment `trending-up`, loan
+      `credit-card`) so lists are scannable by shape+color, not just text.
+- [ ] **Category & member glyphs.** Let categories carry an icon/emoji (groceries `shopping-cart`, housing `home`,
+      transport `car`, utilities `plug`, dining `utensils`…) and members a colored monogram avatar — used in
+      transaction rows, budgets, and allocation.
+- [ ] **Small delight moments (tasteful, dismissible, respect reduced-motion):** goal-reached confetti/checkmark
+      burst when a goal hits 100%; progress **rings** on goals/budgets instead of bare bars; tiny inline
+      **sparklines** on KPI tiles; a subtle count-up animation on KPI numbers; streak/"all caught up" badge when no
+      balances are stale; gentle hover lift on tiles. Keep them quiet and optional — never naggy (CLAUDE.md).
+_All of these are local SVG/CSS (no CDN per C44), inherit theme color (B20), and stay decorative+`aria-hidden`
+with text labels intact for a11y. Build behind the C46 `internal/ui/icon` helper once it exists._
+
 ### C1. Dashboard "Income" shows $0.00 despite a $4,200 salary in-period ★ (correctness)
 **Symptom:** with sample data, the Dashboard Income KPI reads **$0.00 · 0 deposits** for Jun 2026,
 but `tx-1` Salary (+$4,200, income, cleared, **2026-06-01**) is clearly in June. Spending ($1,800.75,
@@ -3888,7 +3914,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 > transport → client), one feature per commit, tests with each layer.
 
 ### 7.0 Foundations & toolchain
-- [ ] Decide layout: `cmd/cashflux-server/` in this module vs a sibling `server/` module. ★
+- [x] Decide layout: `cmd/cashflux-server/` in this module vs a sibling `server/` module. ★
 - [ ] Add deps: `GoGRPCBridge` (grpctunnel), `google.golang.org/grpc`, `google.golang.org/protobuf`,
       `golang.org/x/oauth2`, `ncruces/go-sqlite3` (already used client-side).
 - [ ] protoc + `protoc-gen-go` + `protoc-gen-go-grpc` (or `buf`); add a codegen step (Makefile / `gwc`-style)
@@ -4062,7 +4088,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       print/rotate the access token on first run for token mode.
 - [ ] Make billing/Stripe + entitlement gating **optional / disabled** in self-host mode (a config
       flag); `IsCloudActive` returns true when billing is disabled.
-- [ ] **Version/compat endpoint** for the client's Test-connection + too-old/too-new warnings (reuse a
+- [x] **Version/compat endpoint** for the client's Test-connection + too-old/too-new warnings (reuse a
       schemaVersion-style ping).
 - [ ] **Docker quickstart** + one-command run; sample config (.env) with TLS notes; docs linked from
       Settings.
@@ -4098,3 +4124,135 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 #### Ops/docs
 - [ ] Self-host runbook: backups (SQLite WAL checkpoint + blobs), upgrades (pull new image), TLS, restore.
 - [ ] Security defaults: token auth on by default, TLS required, sensible limits; never ship a default secret.
+
+### 7.14 Security hardening ★
+
+> Defense-in-depth for a server that holds user financial data + encrypted AI keys. Pairs with §7.8.
+> Run `gosec` + `govulncheck` in CI from day one; treat every finding as blocking.
+
+#### AuthN / AuthZ
+- [ ] Per-request auth on **every** RPC + HTTP route (deny-by-default; no unauthenticated data path). ★
+- [ ] Strict per-user **tenant isolation** enforced at the query layer (every query filters by `user_id`);
+      add isolation tests that try to read another user's workspace/blob and must fail. ★
+- [ ] Short-lived access tokens (JWT, ~15m) + rotating refresh tokens (httpOnly, Secure, SameSite);
+      refresh reuse detection → revoke session family.
+- [ ] Session revocation (logout, device revoke, "sign out everywhere"); token `jti` denylist or version.
+- [ ] OAuth: PKCE + `state` (CSRF), nonce, redirect-URI allow-list, validate `iss`/`aud`.
+- [ ] Self-host token mode: high-entropy token, hashed at rest, constant-time compare, rotate command.
+
+#### Transport / browser
+- [ ] TLS-only (HSTS, modern ciphers); `wss` for the bridge; redirect HTTP→HTTPS.
+- [ ] Security headers: HSTS, X-Content-Type-Options, Referrer-Policy, COOP/COEP, frame-ancestors/CSP
+      on any served HTML; lock CORS + WS `WithOriginCheck` to the SPA origin allow-list.
+- [ ] CSRF protection on cookie-authed HTTP endpoints (OAuth callback, refresh); SameSite + token.
+
+#### Input / data
+- [ ] Validate + bound every input: request-size caps (dataset, blob, RPC message), field limits,
+      content-type checks; reject malformed protobuf/JSON early.
+- [ ] Blob upload: verify bytes hash to the claimed `:hash`; cap size; sniff/allow-list MIME; never
+      execute or serve as HTML (force download / safe content-type).
+- [ ] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,
+      never in code or the DB; documented **key rotation** + re-encryption procedure.
+- [ ] Consider per-user dataset encryption-at-rest (envelope encryption) as a later privacy upgrade.
+- [ ] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
+
+#### Abuse / DoS
+- [ ] Per-user + per-IP rate limits + quotas; the bridge's connection/upgrade caps enabled.
+- [ ] Global request timeouts/deadlines; max in-flight; slow-loris protection (read/write/idle timeouts).
+- [ ] Backpressure on streams; cap concurrent streams per user.
+
+#### Supply chain / process
+- [ ] CI: `govulncheck`, `gosec` (high sev blocking), `go vet`, dependency pinning + Dependabot/renovate.
+- [ ] Reproducible builds; SBOM (e.g. `cyclonedx`); sign release artifacts/images (cosign).
+- [ ] `SECURITY.md` + `security.txt` + a coordinated vuln-disclosure process.
+- [ ] Periodic threat-model review; pre-launch pen-test pass; secrets scanning (gitleaks) in CI.
+- [ ] Least-privilege runtime: non-root container, read-only FS where possible, drop caps, minimal base image.
+
+### 7.15 Observability — structured logging (slog), metrics, tracing ★
+
+> Match the client's discipline: **`log/slog` everywhere, structured, leveled, contextual** — never
+> `fmt.Println`. Logs/metrics/traces must be safe (no secrets/PII) and correlatable.
+
+#### Structured logging (`log/slog`) ★
+- [ ] Adopt `log/slog` with a **JSON handler** in prod (text in dev); single configured logger injected
+      via context — no package-global `log`. ★
+- [ ] **Request/RPC-scoped logger**: attach a generated **request id / correlation id** (propagate via
+      gRPC metadata + HTTP header `X-Request-ID`) and `user_id`, `workspace_id`, `rpc`/`route`,
+      `device_id`, latency, status to every log line. ★
+- [ ] **Leveling**: Debug/Info/Warn/Error with a runtime-configurable level (env); sane prod default Info.
+- [ ] **Redaction is mandatory**: never log AI keys, tokens, OAuth secrets, cookies, full datasets, blob
+      bytes, or PII. A `slog` middleware/`ReplaceAttr` that scrubs known-sensitive keys + a deny-list;
+      log sizes/hashes/ids instead of contents. Add a test that asserts secrets never appear in output. ★
+- [ ] **Audit log** as a *separate*, append-only structured stream for security-relevant events (login,
+      token issue/revoke, key set/replace, subscription change, account/data delete, admin actions),
+      with actor, action, target, ip, timestamp; tamper-evident (hash chain) if feasible.
+- [ ] Log sampling for hot paths; structured error logging with stack/cause (wrap with `%w`).
+- [ ] Ship logs to a sink (stdout → collector); retention + access policy; PII-minimized.
+
+#### Metrics
+- [ ] Prometheus/OpenTelemetry metrics: request rate/latency/errors per RPC + route (RED), active WS
+      connections, stream durations, sync push/pull counts + conflict/LWW rejects, blob bytes
+      stored/transferred, AI proxy tokens/requests per user, DB query latency, queue depths.
+- [ ] Business metrics (privacy-respecting): signups, trials, conversions, MRR (from billing webhooks).
+- [ ] `/metrics` endpoint (auth-gated or internal-only).
+
+#### Tracing
+- [ ] OpenTelemetry tracing end-to-end (the GoGRPCBridge canonical path already integrates OTel spans);
+      propagate trace context client→bridge→grpc→DB/upstream; export to an OTLP collector.
+- [ ] Correlate trace id ↔ request id ↔ log lines.
+
+#### Health & dashboards
+- [ ] `/livez` (process up) + `/readyz` (DB reachable, migrations applied, deps ok) distinct probes.
+- [ ] Dashboards + **SLOs** (availability, p99 latency, error rate) with alerting + on-call routing.
+
+### 7.16 Reliability, SRE & disaster recovery
+- [ ] Context deadlines/timeouts on all I/O (DB, upstream OpenAI, blob store); cancellation propagation.
+- [ ] Retries with jittered exponential backoff for transient upstream failures; circuit breaker on the
+      AI upstream; idempotent writes (idempotency keys on mutating HTTP; PUT semantics on sync).
+- [ ] Graceful shutdown: stop accepting, drain active streams/requests, checkpoint WAL, flush logs.
+- [ ] **Backups + tested restore**: scheduled SQLite WAL checkpoint + file copy + blobs dir snapshot to
+      off-box storage; **documented + periodically rehearsed restore**; define **RPO/RTO**.
+- [ ] Zero-/low-downtime deploys; safe forward-only migrations (run on boot, reject newer schema);
+      migration dry-run + rollback plan; data-migration backfills idempotent.
+- [ ] Resource limits (memory/CPU/FD/conn); OOM-safe; bounded queues; graceful degradation under load.
+- [ ] Status page + incident response runbook (sev levels, comms, postmortems).
+
+### 7.17 Compliance & data governance
+- [ ] **GDPR/CCPA**: self-serve data **export** + **delete account** (purge DB rows + blobs +
+      subscription unlink), data-subject request workflow + SLA; right-to-rectify via the app.
+- [ ] Privacy Policy, Terms of Service, Cookie/consent (minimal), DPA template for any sub-processors
+      (Stripe, OAuth providers, host) + a public sub-processor list.
+- [ ] Data retention + deletion schedule (snapshots history, logs, audit, backups); document residency.
+- [ ] **PCI scope minimized** by using Stripe Checkout/Elements (no card data touches the server).
+- [ ] **SOC 2 readiness checklist** (access control, change mgmt, monitoring, vendor mgmt, IR) — even if
+      not certifying, build to the controls so enterprise/audit asks are answerable.
+- [ ] Encryption-in-transit + at-rest documented; key management policy; access logging to prod data.
+
+### 7.18 Performance, scale & limits
+- [ ] Load + soak tests (sync push/pull, blob up/down, AI streaming, WatchWorkspaces fan-out); publish
+      a baseline like the bridge's benchmark snapshots; perf regression gate in CI.
+- [ ] DB tuning: WAL, `busy_timeout`, sensible `PRAGMA`s; single-writer awareness; per-request conn use.
+- [ ] **Scale ceiling — be honest:** SQLite is single-writer. Document the throughput boundary and the
+      **migration path to Postgres (or per-tenant SQLite sharding)** for true multi-tenant scale; gate
+      the choice on real numbers, not speculation. ★
+- [ ] Quotas/fair-use enforced (storage cap, rate limits) with clear `resource-exhausted` responses.
+- [ ] Pagination/limits on any list endpoint; cap snapshot history; blob GC scheduled + monitored.
+- [ ] Caching: immutable blob cache headers (+ CDN later); ETag/If-None-Match on `GetWorkspace`.
+
+### 7.19 API governance & operability
+- [ ] Versioned API (`/v1`, proto package versioning); **backward-compat policy** + deprecation windows;
+      CI proto-/API-compat guard (the bridge ships an `api_compat_guard` tool — reuse the pattern).
+- [ ] Consistent **error taxonomy** (gRPC codes ↔ HTTP statuses) with stable, documented error reasons;
+      machine-readable error details; no internal leakage in messages.
+- [ ] Config via env/secret manager with validation on boot; **feature flags** (billing on/off, AI proxy
+      on/off, self-host mode) so deployments differ safely.
+- [ ] Runbooks (deploy, rollback, restore, rotate keys, revoke sessions, handle past-due); on-call docs.
+- [ ] Admin tooling (read-only support views; usage lookups) — built on the same isolation guarantees.
+
+### 7.20 Anti-abuse & fraud
+- [ ] Signup/login abuse controls (rate limit, optional CAPTCHA on bursts, email/OAuth verification).
+- [ ] **Referral-fraud guards** (DO referral path): detect self-referral/farming; honest disclosure;
+      don't tie product behavior to referral outcomes.
+- [ ] Trial abuse limits (one trial per account/identity); payment-fraud handling via Stripe Radar.
+- [ ] AI-proxy abuse: per-user token/req caps, anomaly alerts, kill-switch per user; cost-control even
+      though tokens are BYO (protect bandwidth/compute + the user's own bill).
