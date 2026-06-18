@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: §6.6 command palette (Cmd/Ctrl+K) — the capstone keyboard item
+
+- The remaining [H] §6.6 item. Self-contained DOM overlay in `shortcuts.go` (same pattern as the help
+  overlay): a search input + a filtered result list, built once and toggled via `display`.
+- Commands = every screen from `primaryNav()`/`toolsNav()`/`systemNav()` (→ `router.Navigate(path)`) plus
+  two actions (Add a transaction → `UseQuickAdd().Set(true)`; Keyboard shortcuts → `toggleHelpOverlay`).
+- Keyboard model: type to substring-filter; ↑/↓ wrap-move the highlight (re-styling rows + scrollIntoView);
+  Enter runs the highlighted command; Esc/backdrop close. Row clicks use a single delegated listener that
+  reads `data-cmd-row` (the original command index) via `closest`, so the dynamically rebuilt rows need no
+  per-row js.Funcs (no leak). The handful of listeners (input/keydown/click) are created once with the
+  overlay and live for the app's lifetime.
+- Wired Cmd/Ctrl+K into the global keydown (works even from a field, since it's a modifier chord); Esc in
+  the global handler now closes both the help and command overlays. Labels HTML-escaped before innerHTML.
+- gofmt clean, wasm build exit 0, probe ok/200. Can't drive Cmd+K + typing headlessly — logic-verified;
+  confirm in-browser. §6.6 keyboard set complete: Alt+1..9, Alt+N, Enter, ?, Cmd/Ctrl+K.
+
 ## 2026-06-18 — feat: §6.6 quick-add hotkey (Alt+N)
 
 - Alt+N opens the quick-add transaction panel by setting `uistate.UseQuickAdd().Set(true)` from the global
@@ -15,13 +31,11 @@ problems and fixes, and what's next.
   works other §6 items.
 - gofmt clean, wasm build exit 0, probe ok/200. Keystroke can't be sent headlessly — logic-verified.
 
-## 2026-06-18 — fix: UX polish §6.1 — custom-page menu hit area
+## 2026-06-18 — fix: UX polish §6.1 — rail nav hit areas
 
-- Closed the §6.1 custom-page "⋯" menu touch-target item in `internal/app/custompagesnav.go`: the row
-  menu button now has `min-w-6 min-h-6 inline-grid place-items-center`, giving it a stable 24×24px hit
-  area while preserving the compact rail layout.
-- Kept the change to one clean file plus journals; no TODO edit because `TODOS.md` is still carrying the
-  parallel backlog expansion.
+- Closed the §6.1 rail-nav touch-target item in `internal/app/shell.go`: all `navItem` variants now carry
+  `min-w-10 min-h-10`, so expanded and collapsed rail items keep a stable 40×40px minimum hit area.
+- Kept this separate from custom-page nav work because another agent owns custom-page TODOs.
 
 ## 2026-06-18 — fix: §6.9 toast — error notices linger + labelled dismiss
 
