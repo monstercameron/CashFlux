@@ -677,6 +677,7 @@ var english = Catalog{
 	"dashboard.savingsRate":          "Savings rate",
 	"dashboard.cashFlow":             "Cash flow",
 	"reports.net":                    "Net",
+	"reports.trendHint":              "Net cash flow over the last %d periods.",
 	"reports.byCategory":             "Spending by category",
 	"reports.empty":                  "No spending in this period yet.",
 	"reports.uncategorized":          "Uncategorized",

@@ -11,7 +11,8 @@ and every commit updates this file under `Unreleased`.
   it shows income / spending / net / savings-rate, a plain-English summary of where the money went, and
   spending by category compared to the prior period (each category's amount with a green ▼ / red ▲ change
   badge). Works with no AI key — it's all from the deterministic reports core, so the figures match the
-  dashboard. Charts are a follow-up.
+  dashboard. It also charts a **cash-flow trend** — net income minus spending over the last six periods
+  of the chosen resolution.
 - **Reports engine — the pure reporting core (B21, internal).** New `internal/reports` package with the
   first report: spending by category over a period, sorted largest-first, with an optional comparison to
   the prior period (each category's prior amount + percent change, and a union so a category that dropped
@@ -333,6 +334,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Backend AI proxy can call OpenAI with the encrypted server key.** Added a server-side AI service plus
+  `/v1/ai/chat` and `/v1/ai/vision` endpoints that authenticate the caller, decrypt the user's stored BYO key,
+  reuse the existing request builders, forward to OpenAI, map upstream failures, and record usage totals.
 - **Client OpenAI keys can be handed to the backend securely.** Settings now has backend URL/token controls and
   an upload action that sends the current OpenAI key to `/v1/ai/key`; the server requires bearer auth plus an AES
   master key, stores the key encrypted in SQLite, and never returns it.

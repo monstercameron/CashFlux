@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Reports cash-flow trend chart (B21, step 6)
+
+- Added a cash-flow trend to the Reports screen using the existing pure `ui.AreaChart` sparkline (no D3
+  dependency). Builds `trendBuckets` (6) consecutive period bounds ending at the viewed period via
+  `period.Truncate` + `period.Step` on the current resolution, feeds them to
+  `reports.IncomeExpenseSeries`, and plots each bucket's `Net()`. Shown only when there are ≥2 points.
+- Note on aliases: in `screens` the framework hooks are `ui` and the internal design system is `uiw`
+  (matching dashboard.go), so the chart is `uiw.AreaChart`. New `reports.trendHint` i18n key (formatted
+  with the bucket count). wasm build green, gofmt clean.
+
+## 2026-06-18 - feat: proxy AI calls through backend
+
+- Added `server.AIService` for backend OpenAI calls: it authenticates via context, decrypts the user's stored
+  OpenAI key from SQLite with the server master key, reuses the existing chat/vision request builders, maps
+  upstream HTTP errors to status codes, and records request/token usage.
+- Wired `/v1/ai/chat` and `/v1/ai/vision` into the HTTP backend behind the same bearer-token, master-key, and
+  CORS checks as key upload. `CASHFLUX_SERVER_OPENAI_BASE_URL` lets tests and dev runs point at a mock upstream.
+- This is the secure proxy call path, not the final gRPC/SSE streaming surface; the remaining 7.4 work is true
+  streaming chunks, model allow-list/rate limits, and cancellation polish.
+
 ## 2026-06-18 — feat: Reports screen — wire the reports core into the UI (B21, step 5)
 
 - The UI-last step for the first reports: a new `screens.Reports()` (`reports_screen.go`) registered as

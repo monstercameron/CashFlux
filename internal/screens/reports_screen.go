@@ -4,15 +4,21 @@ package screens
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
+
+// trendBuckets is how many consecutive periods the cash-flow trend spans.
+const trendBuckets = 6
 
 // Reports is the read-only reporting screen (B21): for the period chosen in the
 // top bar it shows income / expense / net, a plain-English summary, and spending
@@ -38,6 +44,20 @@ func Reports() ui.Node {
 
 	flow, _ := reports.IncomeVsExpense(txns, cs, ce, rates)
 	rows, _ := reports.SpendingByCategory(txns, cs, ce, true, ps, pe, rates)
+
+	// Cash-flow trend: net for each of the last trendBuckets periods of the
+	// viewed resolution, ending with the current one.
+	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
+	startCur := period.Truncate(w.Res, w.From, weekStart)
+	bounds := make([]time.Time, 0, trendBuckets+1)
+	for k := 0; k <= trendBuckets; k++ {
+		bounds = append(bounds, period.Step(w.Res, startCur, k-(trendBuckets-1)))
+	}
+	flows, _ := reports.IncomeExpenseSeries(txns, bounds, rates)
+	netSeries := make([]float64, len(flows))
+	for i, f := range flows {
+		netSeries[i] = float64(f.Net())
+	}
 
 	cats := app.Categories()
 	catName := make(map[string]string, len(cats))
@@ -100,5 +120,10 @@ func Reports() ui.Node {
 			P(Class("muted"), narrative),
 			catBody,
 		),
+		If(len(netSeries) >= 2, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("dashboard.cashFlow")),
+			P(Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+			uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow")}),
+		)),
 	)
 }
