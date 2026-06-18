@@ -166,6 +166,51 @@ func TestSetColor(t *testing.T) {
 	}
 }
 
+func TestMove(t *testing.T) {
+	base := (Registry{}).Add("a", "A").Add("b", "B").Add("c", "C").SetActive("b").SetStartup("c")
+	order := func(r Registry) string {
+		s := ""
+		for _, w := range r.Workspaces {
+			s += w.ID
+		}
+		return s
+	}
+
+	// Move first to last.
+	if got := order(base.Move("a", 2)); got != "bca" {
+		t.Errorf("move a→2: want bca, got %s", got)
+	}
+	// Move last to first.
+	if got := order(base.Move("c", 0)); got != "cab" {
+		t.Errorf("move c→0: want cab, got %s", got)
+	}
+	// Move middle up one.
+	if got := order(base.Move("b", 0)); got != "bac" {
+		t.Errorf("move b→0: want bac, got %s", got)
+	}
+	// Out-of-range index clamps.
+	if got := order(base.Move("a", 99)); got != "bca" {
+		t.Errorf("move a→99 should clamp to last: want bca, got %s", got)
+	}
+	// No-op cases keep order and don't disturb active/startup.
+	moved := base.Move("a", 0) // already first
+	if order(moved) != "abc" || moved.ActiveID != "b" || moved.StartupID != "c" {
+		t.Errorf("no-op move changed state: order=%s active=%s startup=%s", order(moved), moved.ActiveID, moved.StartupID)
+	}
+	if order(base.Move("nope", 0)) != "abc" {
+		t.Error("moving an unknown id should be a no-op")
+	}
+	one := (Registry{}).Add("only", "Only")
+	if order(one.Move("only", 0)) != "only" {
+		t.Error("moving in a single-element list should be a no-op")
+	}
+	// Active/startup survive a real move (tracked by id, not index).
+	m := base.Move("c", 0)
+	if m.ActiveID != "b" || m.StartupID != "c" {
+		t.Errorf("move disturbed active/startup: active=%s startup=%s", m.ActiveID, m.StartupID)
+	}
+}
+
 func equalColors(a, b Registry) bool {
 	if len(a.Workspaces) != len(b.Workspaces) {
 		return false

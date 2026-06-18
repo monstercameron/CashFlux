@@ -155,11 +155,12 @@ func wsMenuItem(props wsMenuItemProps) uic.Node {
 }
 
 type wsManageRowProps struct {
-	ID, Name  string
-	Color     string
-	Active    bool
-	CanDelete bool
-	OnChange  func() // re-render the settings panel after an in-place change
+	ID, Name     string
+	Color        string
+	Index, Total int
+	Active       bool
+	CanDelete    bool
+	OnChange     func() // re-render the settings panel after an in-place change
 }
 
 // wsManageRow is one row in the Settings → Workspaces list: a color swatch + the
@@ -189,7 +190,26 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 			onChange()
 		}
 	}
+	// Reorder buttons. Move() clamps and no-ops out-of-range, so a click at a
+	// boundary (the dimmed arrow) is harmless; the dimming is just a hint.
+	moveTo := func(to int) func() {
+		return func() {
+			moveWorkspace(id, to)
+			if onChange != nil {
+				onChange()
+			}
+		}
+	}
+	moveCls := func(enabled bool) string {
+		c := "shrink-0 px-1.5 py-1 text-faint hover:text-fg text-[13px] leading-none"
+		if !enabled {
+			c += " opacity-30 pointer-events-none"
+		}
+		return c
+	}
 	actions := []any{Class("flex items-center gap-2"),
+		Button(Class(moveCls(props.Index > 0)), Type("button"), Title(uistate.T("ws.moveUp")), OnClick(moveTo(props.Index-1)), "↑"),
+		Button(Class(moveCls(props.Index < props.Total-1)), Type("button"), Title(uistate.T("ws.moveDown")), OnClick(moveTo(props.Index+1)), "↓"),
 		ui.SwatchPicker(ui.SwatchPickerProps{Colors: workspacePalette, Selected: props.Color, OnSelect: pickColor}),
 		dataBtn(uistate.T("ws.rename"), false, rename),
 		dataBtn(uistate.T("ws.export"), false, func() { exportWorkspace(id) }),
@@ -215,9 +235,11 @@ func workspacesSection(onChange func()) uic.Node {
 	active, _ := r.Active()
 	canDelete := len(r.Workspaces) > 1
 	rows := make([]uic.Node, 0, len(r.Workspaces))
-	for _, w := range r.Workspaces {
+	total := len(r.Workspaces)
+	for i, w := range r.Workspaces {
 		rows = append(rows, uic.CreateElement(wsManageRow, wsManageRowProps{
-			ID: w.ID, Name: w.Name, Color: w.Color, Active: w.ID == active.ID, CanDelete: canDelete, OnChange: onChange,
+			ID: w.ID, Name: w.Name, Color: w.Color, Index: i, Total: total,
+			Active: w.ID == active.ID, CanDelete: canDelete, OnChange: onChange,
 		}))
 	}
 	importWS := func() {

@@ -118,6 +118,41 @@ func (r Registry) SetActive(id string) Registry {
 	return out
 }
 
+// Move repositions a workspace to toIndex (clamped into range), keeping the order
+// of the others. A no-op for an unknown id, a list shorter than two, or a move
+// that doesn't change position. The active and startup selections are unaffected
+// (they're tracked by id, not position).
+func (r Registry) Move(id string, toIndex int) Registry {
+	if !r.Has(id) || len(r.Workspaces) < 2 {
+		return r
+	}
+	from := 0
+	for i, w := range r.Workspaces {
+		if w.ID == id {
+			from = i
+			break
+		}
+	}
+	if toIndex < 0 {
+		toIndex = 0
+	}
+	if max := len(r.Workspaces) - 1; toIndex > max {
+		toIndex = max
+	}
+	if from == toIndex {
+		return r
+	}
+	out := r.clone()
+	w := out.Workspaces[from]
+	rest := append(out.Workspaces[:from:from], out.Workspaces[from+1:]...)
+	final := make([]Workspace, 0, len(r.Workspaces))
+	final = append(final, rest[:toIndex]...)
+	final = append(final, w)
+	final = append(final, rest[toIndex:]...)
+	out.Workspaces = final
+	return out
+}
+
 // SetStartup sets the workspace the app opens on launch. An empty id means
 // "resume the last-active workspace" (the default); a non-empty id must name an
 // existing workspace, otherwise the call is a no-op.

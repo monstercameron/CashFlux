@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reorder workspaces.** Each row in Settings → Workspaces has up/down arrows to arrange the list; the
+  order flows through to the rail switcher's dropdown so your most-used workspaces sit where you want them.
+  Backed by `Registry.Move` (clamped, order-preserving, leaves the active/startup selections untouched —
+  they're tracked by id, not position) with table tests.
 - **Artifacts manager + Image/Table widgets (Phase C).** A new **Artifacts** screen (Tools) lets you upload
   an image or import a CSV dataset, see them listed with size, and delete them — with a local-storage meter
   so you can watch usage. Two new custom-widget types bind to artifacts by id: **Image** (renders an

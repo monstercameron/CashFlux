@@ -119,6 +119,12 @@ func setWorkspaceColor(wsID, color string) {
 	saveRegistry(loadRegistry().SetColor(wsID, color))
 }
 
+// moveWorkspace repositions a workspace in the list to toIndex. No reload — the
+// switcher and management list read the registry on their next render.
+func moveWorkspace(wsID string, toIndex int) {
+	saveRegistry(loadRegistry().Move(wsID, toIndex))
+}
+
 // wsExport is the portable envelope for a single workspace: its name, color, and
 // the snapshot of its per-workspace keys (dataset + UI state). It carries no
 // secrets — the OpenAI key is user-global and lives outside perWorkspaceKeys.

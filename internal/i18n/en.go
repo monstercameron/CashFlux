@@ -442,6 +442,8 @@ var english = Catalog{
 	"ws.import":                  "Import workspace",
 	"ws.importErr":               "That file isn't a valid workspace export.",
 	"ws.importedDefault":         "Imported workspace",
+	"ws.moveUp":                  "Move up",
+	"ws.moveDown":                "Move down",
 	"settings.data":              "Data",
 	"settings.exportJSON":        "Export JSON",
 	"settings.exportCSV":         "Export CSV",

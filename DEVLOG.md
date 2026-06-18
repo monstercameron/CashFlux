@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: reorder workspaces (arrange the switcher)
+
+- `Registry.Move(id, toIndex)` — clamps toIndex into range, order-preserving, no-ops on unknown id /
+  single-element list / same-position. Crucially leaves ActiveID and StartupID alone (they're id-tracked,
+  not index-tracked) — covered explicitly in the table test alongside first↔last, middle, clamp, and
+  no-op cases. Used a full-slice-expression (`out.Workspaces[:from:from]`) on remove to avoid aliasing the
+  cloned backing array before re-inserting.
+- App: `moveWorkspace(id, toIndex)` persists; no reload (switcher + management list re-read the registry).
+- UI: up/down arrows in each `wsManageRow` (new Index/Total props; workspacesSection passes them). Both
+  arrows always render — Move clamps, so a keyboard activation of a dimmed boundary arrow is a harmless
+  no-op; the dim (`opacity-30 pointer-events-none`) is just a hint. Two i18n keys.
+- Clean window this time: tree was idle (only TODOS.md), so the atomic add+commit went through without the
+  en.go write-races of the previous feature. Tests pass, gofmt clean, wasm build exit 0.
+
 ## 2026-06-18 — feat: workspace export / import (move a whole context as a file)
 
 - Another isolated workspace-layer feature (the parallel session is churning store/domain/screens, so I
