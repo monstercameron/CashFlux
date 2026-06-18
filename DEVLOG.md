@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-17 — bugfix C27: document-review amounts in accounting style
+
+- The receipt-import review list showed the AI's raw amount string ("−4.50"), out of step with the
+  app's accounting format. Passed the chosen import account's currency (falling back to base) into
+  `DraftRow` and formatted the display amount via `fmtMoney` (parse → money → format), with a raw-string
+  fallback when the value won't parse (the user may still be correcting it). The edit field keeps the
+  raw editable string. Route-gated screen, so verified by reasoning + build; `fmtMoney` itself is tested.
+
 ## 2026-06-17 — bugfix C27: CSV import accepts its documented format
 
 - The starred C27 bug: pasting the on-screen `date,payee,amount,account` example failed with a leaked

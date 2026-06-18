@@ -880,8 +880,10 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
       the household category is "Food", so name-matching ("Categories are matched by name") likely imports
       these uncategorized. Fix: fuzzy/alias category matching, or constrain the vision prompt/schema to the
       user's existing category names, or offer a per-row category picker in review.
-- [ ] **Review-row amounts use a minus sign** ("−4.50") not accounting format — same as **C2**; route
-      through `money.FormatAccounting`.
+- [x] **Review-row amounts use a minus sign** — FIXED. The draft review rows now format the amount
+      through `fmtMoney` (the unified accounting formatter, parentheses for negatives) in the chosen import
+      account's currency (falling back to base), with a raw-string fallback while the value is unparseable.
+      Matches the rest of the app (C2). The summary line already used `fmtMoney`.
 - [ ] Harden the AI key flow: the key lives only in the in-memory store, so a **page reload loses it**
       (settings aren't hydrated from localStorage). Decide whether the OpenAI key should persist across
       reload (with a clear on-device-only notice) — today every reload silently turns AI back off.

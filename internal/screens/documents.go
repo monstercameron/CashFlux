@@ -249,11 +249,23 @@ func Documents() ui.Node {
 
 	// Draft review list: each row can be removed before importing.
 	rows := draft.Get()
+	// The review amounts format in the chosen import account's currency (falling
+	// back to base), so they read in accounting style like the rest of the app.
+	reviewCur := app.Settings().BaseCurrency
+	if reviewCur == "" {
+		reviewCur = "USD"
+	}
+	for _, a := range accounts {
+		if a.ID == importAcct.Get() {
+			reviewCur = a.Currency
+			break
+		}
+	}
 	draftBody := ui.Node(nil)
 	if len(rows) > 0 {
 		items := make([]ui.Node, 0, len(rows))
 		for i, r := range rows {
-			items = append(items, ui.CreateElement(DraftRow, draftRowProps{Index: i, Row: r, OnRemove: removeDraft, OnUpdate: updateDraft}))
+			items = append(items, ui.CreateElement(DraftRow, draftRowProps{Index: i, Row: r, Currency: reviewCur, OnRemove: removeDraft, OnUpdate: updateDraft}))
 		}
 		acctOptions := make([]ui.Node, 0, len(accounts))
 		for _, a := range accounts {
@@ -361,6 +373,7 @@ func Documents() ui.Node {
 type draftRowProps struct {
 	Index    int
 	Row      extract.Row
+	Currency string // for accounting-formatting the review amount (C27)
 	OnRemove func(int)
 	OnUpdate func(int, extract.Row)
 }
@@ -412,12 +425,21 @@ func DraftRow(props draftRowProps) ui.Node {
 	if r.Category != "" {
 		meta += " · " + r.Category
 	}
+	// Show the amount in accounting style (parentheses for negatives) like the
+	// rest of the app (C27/C2); fall back to the raw string if it won't parse
+	// (e.g. while the AI value is still being corrected).
+	amtText := r.Amount
+	if props.Currency != "" {
+		if minor, err := money.ParseMinor(strings.TrimSpace(r.Amount), currency.Decimals(props.Currency)); err == nil {
+			amtText = fmtMoney(money.New(minor, props.Currency))
+		}
+	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), firstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
 			Span(Class("row-meta"), meta),
 		),
-		Span(Class("amount fig"), r.Amount),
+		Span(Class("amount fig"), amtText),
 		Button(Class("btn"), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uistate.T("action.edit")),
 		Button(Class("btn-del"), Type("button"), Title(uistate.T("documents.removeRow")), OnClick(rm), "✕"),
 	)

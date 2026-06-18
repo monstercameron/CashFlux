@@ -54,6 +54,10 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Fixed
+- **Document-review amounts use accounting style (C27):** the AI receipt-import review rows showed raw
+  "−4.50" values; they now format through the same accounting formatter as the rest of the app
+  (parentheses for negatives, grouped, in the chosen account's currency), with a raw fallback while a
+  value is still being edited.
 - **CSV import accepts its own documented format (C27):** pasting the on-screen example
   `date,payee,amount,account` failed demanding an undocumented `currency` column (and leaked a raw
   `store:` error). Currency is now optional — it defaults to your base currency — and the account /
