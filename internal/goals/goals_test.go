@@ -58,6 +58,22 @@ func TestMonthlyNeededRoundsUp(t *testing.T) {
 	}
 }
 
+func TestMonthlyNeededContributionProjectsToTargetDate(t *testing.T) {
+	from := mustDate("2026-01-01")
+	g := domain.Goal{TargetAmount: usd(120000), CurrentAmount: usd(0), TargetDate: mustDate("2027-01-01")}
+	per, ok, err := MonthlyNeeded(g, from)
+	if err != nil || !ok {
+		t.Fatalf("MonthlyNeeded ok=%v err=%v", ok, err)
+	}
+	projected, ok, err := Project(g, per, from)
+	if err != nil || !ok {
+		t.Fatalf("Project ok=%v err=%v", ok, err)
+	}
+	if !projected.Equal(g.TargetDate) {
+		t.Errorf("projected = %s, want target date %s", dateutil.FormatDate(projected), dateutil.FormatDate(g.TargetDate))
+	}
+}
+
 func goal(target, current int64) domain.Goal {
 	return domain.Goal{TargetAmount: usd(target), CurrentAmount: usd(current)}
 }

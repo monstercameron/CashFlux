@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — test: D12 goal pace projection
+
+- Closed the D12 pure unit-test checklist item by linking `goals.MonthlyNeeded` to `goals.Project` in
+  `internal/goals/goals_test.go`.
+- The new test computes the required monthly contribution and proves using that amount projects exactly to
+  the target date; existing allocate tests already cover the `GoalProgress` scorer/ranking behavior.
+- Verification: `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — fix: make the multi-currency (FX) editor functional (D16)
 
 - Discovered the Settings FX editor was a dead stub: base-currency `<select>` had no `OnChange`, `rateRow`'s

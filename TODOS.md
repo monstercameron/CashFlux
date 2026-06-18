@@ -1503,7 +1503,7 @@ Savings KPIs) · `period.Window`.
 - [ ] Create a goal with a target date + linked account; assert monthly-needed + projected completion.
 - [ ] Contribute; assert progress %, remaining, and the dashboard goal widget update.
 - [ ] On Allocate, assert "Finish goals" preset feeds `GoalProgress` and ranks the goal sensibly.
-- [ ] unit: `goals.MonthlyNeeded`/projection + allocate goal-progress scorer.
+- [x] unit: `goals.MonthlyNeeded`/projection + allocate goal-progress scorer.
 
 #### D13. Net-worth forecast horizon correctness ★
 **Workstream:** project net worth over the horizon from recurring + one-time items and validate edges.
