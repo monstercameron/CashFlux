@@ -111,6 +111,10 @@ and every commit updates this file under `Unreleased`.
   default arrangement is unchanged (verified pixel-for-pixel in a headless browser).
 
 ### Added
+- **Dashboard tiles can be shrunk with the mouse, not just grown (C14/#1032):** the edge resize handles
+  used to only grow a tile's span (clicking cycled up and wrapped to 1 at the max). Now **Shift+click
+  shrinks** the span one step directly (clamped at 1), while a plain click still grows. It mirrors the
+  keyboard Shift+Arrow resize, and the handle tooltips say so.
 - **Screen readers hear the filtered transaction count (B15):** the Transactions list gained a polite
   `role="status"` live region that announces how many transactions match the current filters — e.g.
   "Showing 12 transactions, net −$340.00" or "No transactions match your filters" — and updates as you

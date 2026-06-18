@@ -240,30 +240,41 @@ func widget(props WidgetProps) uic.Node {
 			uistate.PersistItems(next)
 		}
 		args = append(args,
-			// Click cycles the span up and wraps at the max back to 1; with Pack
-			// the grid reflows around the new size (so growing never overlaps and
-			// the wrap is how you shrink). Tooltip says so.
-			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", "Resize width (cycles 1→4)"),
-				OnClick(func() {
-					span := curCol + 1
-					if span > maxColSpan {
-						span = 1
-					}
-					resize(span, curRow)
+			// Click grows the span by one, wrapping at the max back to 1; Shift+click
+			// shrinks by one (clamped at 1) so you can shrink directly instead of
+			// cycling all the way around (#1032) — mirroring the keyboard Shift+Arrow
+			// resize. With Pack the grid reflows around the new size, so growing never
+			// overlaps. Tooltip says so.
+			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", "Resize width — click grows, Shift+click shrinks"),
+				OnClick(func(e uic.MouseEvent) {
+					resize(cycleSpan(curCol, maxColSpan, e.JSValue().Get("shiftKey").Bool()), curRow)
 				}),
 			),
-			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", "Resize height (cycles 1→3)"),
-				OnClick(func() {
-					span := curRow + 1
-					if span > maxRowSpan {
-						span = 1
-					}
-					resize(curCol, span)
+			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", "Resize height — click grows, Shift+click shrinks"),
+				OnClick(func(e uic.MouseEvent) {
+					resize(curCol, cycleSpan(curRow, maxRowSpan, e.JSValue().Get("shiftKey").Bool()))
 				}),
 			),
 		)
 	}
 	return Div(args...)
+}
+
+// cycleSpan advances a grid span on a resize-handle click: Shift+click shrinks by
+// one (clamped at 1) for a direct shrink, while a plain click grows by one and
+// wraps back to 1 past the max (so the wrap is the no-modifier way to shrink). The
+// keyboard Shift+Arrow path is the equivalent for keyboard users (#1032).
+func cycleSpan(cur, max int, shrink bool) int {
+	if shrink {
+		if cur <= 1 {
+			return 1
+		}
+		return cur - 1
+	}
+	if cur+1 > max {
+		return 1
+	}
+	return cur + 1
 }
 
 // clampSpan keeps a grid span within [1, max].

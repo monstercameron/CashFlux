@@ -1026,8 +1026,9 @@ results are summarized here so the backlog doesn't bloat.
     layout" — verify the importance/default modes next.
   - ⚠️ **C28 (icons) STILL OPEN** — the left rail is still **text-only with no icons**; the `viewBox`
     (camelCase) SVG bug is not yet fixed. _Re-verify once that lands; it also unblocks collapse-button visibility._
-  - [ ] Grid: the resize handle still only **grows** (click-cycles span up, wraps to shrink) — the
-    explicit-shrink direction from C14 isn't in yet.
+  - [x] Grid: the resize handle now has an **explicit shrink** — plain click grows (wrapping at the max
+    back to 1), **Shift+click shrinks** one step (clamped at 1), via a new `cycleSpan` helper reading the
+    click's `shiftKey`. Mirrors the keyboard Shift+Arrow resize; tooltip updated to say so (#1032/C14).
 - **2026-06-18 #7** — Re-check of still-open items + Accounts (0 console errors):
   - ⚠️ **C28 (icons) confirmed STILL OPEN** — the nav `<svg>` is emitted with `viewbox="0 0 24 24"`
     (lowercase) — `viewBoxCamel=false, viewBoxLower=true`. Unchanged. Icons remain blank.

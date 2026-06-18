@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — #1032: explicit mouse shrink on the dashboard resize handle
+
+- Open grid item: the resize handle only *grew* (click cycles span up, wraps to 1 at the max), so the only
+  mouse way to shrink was to cycle all the way around. The keyboard path already had a direct shrink
+  (Shift+Arrow); the mouse lacked the equivalent.
+- Added Shift+click to shrink one step. Checked the framework first: `OnClick`/`OnKeyDown` both take
+  `any` and the runtime dispatches `func(GoEvent)` (= `uic.MouseEvent`, an alias), exposing `JSValue()`.
+  So the handle's `OnClick(func(e uic.MouseEvent))` reads `e.JSValue().Get("shiftKey").Bool()` — same
+  technique the keyboard handler already uses for `shiftKey`.
+- Factored the span math into a `cycleSpan(cur, max, shrink)` helper: shrink → `cur-1` clamped at 1;
+  otherwise grow → `cur+1` wrapping to 1 past max. Both edge handles (width/height) use it. Tooltips now
+  read "click grows, Shift+click shrinks".
+- (Kept the tooltips as plain hardcoded English, consistent with the existing resize tooltips and the
+  `aria-keyshortcuts` string in this same component; a full title-i18n sweep would be a separate change.)
+  wasm build + `go vet ./internal/ui` green.
+
 ## 2026-06-18 — Closed the Members/Accounts "Add button no-op" finding (not a defect)
 
 - Browser-oracle findings #4–#8 reported that the Members and Accounts **Add buttons** were silent no-ops
