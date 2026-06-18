@@ -329,6 +329,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Workspace switcher actions have clearer separation (UX audit §6.4).** The menu divider now carries
+  top padding as well as vertical margin, giving management actions more breathing room. Browser
+  verification covered the rendered divider class.
 - **Collapsed rail flyout labels are clickable (UX audit §6.9).** Hover/focus labels in the icon-only rail
   now accept pointer events instead of letting clicks fall through; hover-state browser verification and
   `gwc verify` both passed.

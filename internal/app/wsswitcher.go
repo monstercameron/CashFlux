@@ -84,7 +84,7 @@ func WorkspaceSwitcher() uic.Node {
 	if open.Get() {
 		menu = Div(Class(menuCls),
 			Div(Class("flex flex-col gap-0.5"), rows),
-			Div(Class("border-t border-line my-2")),
+			Div(Class("border-t border-line my-2 pt-2")),
 			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onNew), uistate.T("ws.new")),
 			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onDup), uistate.T("ws.duplicate")),
 		)

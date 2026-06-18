@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — fix: UX polish §6.4 — workspace switcher divider spacing
+
+- Closed the workspace-switcher separator spacing item in `internal/app/wsswitcher.go`: the divider before
+  menu management actions now uses `my-2 pt-2` instead of only `my-2`.
+- This keeps the existing border-line separator but gives the action group the requested breathing room.
+- Browser verification opened the workspace switcher and confirmed the divider renders as
+  `border-t border-line my-2 pt-2`; `go test ./...`, wasm build, and `gwc verify` passed.
+
 ## 2026-06-18 — fix: UX polish §6.9 — collapsed rail flyout clicks
 
 - Closed the collapsed-rail flyout clickability item in `web/index.html`: the hover/focus label now uses
