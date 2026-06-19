@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: bind backend oauth nonce
+
+- Generated an OAuth nonce alongside state and PKCE verifier material.
+- Stored the nonce in the httpOnly state cookie and sent it on Google authorization requests.
+- Added tests for nonce parsing and Google redirect/cookie consistency.
+
 ## 2026-06-19 - feat: validate backend oauth redirects
 
 - Added config validation for OAuth provider redirect URLs.

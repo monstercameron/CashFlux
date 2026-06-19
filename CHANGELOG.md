@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend OAuth nonce binding.** OAuth starts now bind a nonce into the state cookie, and Google authorization requests include the nonce parameter.
 - **Backend OAuth redirect validation.** OAuth provider config now rejects redirect URLs outside the exact `/v1/auth/{provider}/callback` path.
 - **Backend blob path hardening.** Content-addressed blob paths now reject malformed hashes before disk access and keep blob files rooted under the configured blob directory.
 - **Backend per-user HTTP rate limiting.** Authenticated HTTP requests can now be capped per user per minute with `CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE`.

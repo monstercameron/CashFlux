@@ -38,10 +38,15 @@ func handleOAuthStart(cfg Config) http.HandlerFunc {
 			http.Error(w, "build oauth verifier", http.StatusInternalServerError)
 			return
 		}
+		nonce, err := randomURLToken(32)
+		if err != nil {
+			http.Error(w, "build oauth nonce", http.StatusInternalServerError)
+			return
+		}
 		challenge := pkceChallenge(verifier)
 		http.SetCookie(w, &http.Cookie{
 			Name:     oauthStateCookie,
-			Value:    state + "." + verifier,
+			Value:    state + "." + verifier + "." + nonce,
 			Path:     "/v1/auth/" + providerName + "/callback",
 			HttpOnly: true,
 			Secure:   requestIsSecure(r),
@@ -57,6 +62,9 @@ func handleOAuthStart(cfg Config) http.HandlerFunc {
 		q.Set("code_challenge", challenge)
 		q.Set("code_challenge_method", "S256")
 		q.Set("scope", oauthScope(providerName))
+		if providerName == "google" {
+			q.Set("nonce", nonce)
+		}
 		u.RawQuery = q.Encode()
 		http.Redirect(w, r, u.String(), http.StatusFound)
 	}
@@ -88,7 +96,7 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, "oauth state cookie is missing", http.StatusBadRequest)
 			return
 		}
-		cookieState, verifier, ok := parseOAuthStateCookie(cookie.Value)
+		cookieState, verifier, _, ok := parseOAuthStateCookie(cookie.Value)
 		if !ok || cookieState != state {
 			http.Error(w, "oauth state mismatch", http.StatusBadRequest)
 			return
@@ -251,9 +259,13 @@ func requestIsSecure(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-func parseOAuthStateCookie(value string) (string, string, bool) {
-	state, verifier, ok := strings.Cut(value, ".")
-	return state, verifier, ok && state != "" && verifier != ""
+func parseOAuthStateCookie(value string) (string, string, string, bool) {
+	state, rest, ok := strings.Cut(value, ".")
+	if !ok {
+		return "", "", "", false
+	}
+	verifier, nonce, ok := strings.Cut(rest, ".")
+	return state, verifier, nonce, ok && state != "" && verifier != "" && nonce != ""
 }
 
 func exchangeOAuthCode(r *http.Request, providerName string, provider OAuthProviderConfig, code, verifier string) (string, error) {

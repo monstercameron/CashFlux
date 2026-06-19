@@ -490,6 +490,41 @@ func TestOAuthStartRedirectsWithPKCEState(t *testing.T) {
 	if !strings.HasPrefix(cookies[0].Value, q.Get("state")+".") {
 		t.Fatalf("state cookie value does not match redirect state")
 	}
+	if _, _, nonce, ok := parseOAuthStateCookie(cookies[0].Value); !ok || nonce == "" {
+		t.Fatalf("state cookie missing nonce: %q", cookies[0].Value)
+	}
+}
+
+func TestOAuthStartAddsGoogleNonce(t *testing.T) {
+	h := NewMux(Config{AuthMode: "oauth", OAuthProviders: map[string]OAuthProviderConfig{
+		"google": {
+			ClientID:     "google-id",
+			ClientSecret: "google-secret",
+			RedirectURL:  "http://127.0.0.1:8081/v1/auth/google/callback",
+		},
+	}}, openTestStore(t))
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("oauth start status = %d body %q", rr.Code, rr.Body.String())
+	}
+	loc, err := url.Parse(rr.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect: %v", err)
+	}
+	q := loc.Query()
+	if q.Get("nonce") == "" {
+		t.Fatalf("google redirect missing nonce: %s", loc.RawQuery)
+	}
+	cookies := rr.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("oauth cookies = %+v", cookies)
+	}
+	_, _, nonce, ok := parseOAuthStateCookie(cookies[0].Value)
+	if !ok || nonce != q.Get("nonce") {
+		t.Fatalf("nonce cookie/query mismatch cookie=%q query=%q", cookies[0].Value, q.Get("nonce"))
+	}
 }
 
 func TestOAuthStartRejectsUnconfiguredProvider(t *testing.T) {
@@ -547,7 +582,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	}
 	h := NewMux(cfg, store)
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=oauth-code&state=state-123", nil)
-	req.AddCookie(&http.Cookie{Name: oauthStateCookie, Value: "state-123.verifier-123"})
+	req.AddCookie(&http.Cookie{Name: oauthStateCookie, Value: "state-123.verifier-123.nonce-123"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
