@@ -17,7 +17,8 @@ and every commit updates this file under `Unreleased`.
   candidates keyed by due date (due today/tomorrow = critical). A fourth, `DigestCandidates`, emits a
   periodic summary keyed by period (week/month). **All four recommended Phase-A notification events now
   have pure, tested generators feeding the catch-up engine** — the notification logic is complete; the
-  in-app surface follows.
+  in-app surface follows. A `notify.DefaultRules()` factory provides the recommended out-of-the-box rule
+  set (all four events, in-app, no quiet hours) the UI will seed and let you tweak.
 - **Bills: Download CSV (B22).** A "Download CSV" button on the Bills screen exports your upcoming bills
   (name, due date, days until, amount) as a CSV. Backed by a pure, table-tested `bills.CSV`.
 - **Subscriptions: Download CSV (B25).** A "Download CSV" button on the Subscriptions screen exports your

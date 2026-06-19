@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: notify.DefaultRules — recommended rule set (B19, step 7)
+
+- Added `notify.DefaultRules()` — one Rule per supported event (bill-due, budget-threshold, stale-balance,
+  digest), all enabled, in-app channel, no quiet hours, no frequency cap (the per-event occurrence keys
+  already bound firing). Only bill-due carries a Threshold (7-day lead); the others read existing logic
+  (freshness windows / budgeting near-over / digest period) so their Threshold stays 0. Pure (notify
+  types only, no domain dep), table-tested for count, uniqueness, enabled+in-app, no-quiet-hours, and the
+  bill-due lead.
+- This is the last pre-wiring pure piece: the wasm shell can now seed rules from `DefaultRules()`, persist
+  them + lastSeenAt + the delivered log, run the notifyfeed generators → `notify.CatchUp` on open, and
+  surface the results. That wiring (localStorage + in-app center + the budget-status assembly) is the
+  remaining focused task. `go vet` clean.
+
 ## 2026-06-18 — feat: notifyfeed — digest event evaluator; event set complete (B19, step 6)
 
 - Added `notifyfeed.DigestCandidates(ruleID, periodKey, title, body, now)`: a periodic summary keyed
