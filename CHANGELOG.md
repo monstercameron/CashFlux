@@ -19,6 +19,8 @@ and every commit updates this file under `Unreleased`.
   empty, so local dev, custom domains, and native tests are unaffected (the wildcard `*` is never prefixed).
 
 ### Changed
+- **Production data access logging policy (7.16).** Backend security notes now define when production data
+  access is allowed and which actor/reason/request fields must be recorded.
 - **PCI scope documentation (7.16).** The legal compliance pack now explicitly states that payment-card entry,
   updates, fraud screening, and cardholder data stay in Stripe-hosted surfaces.
 - **Server deploy/migration procedure (7.16).** The operations runbook now places backup, migration dry-run,

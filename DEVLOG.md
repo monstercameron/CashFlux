@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: add production data access logging policy (7.16)
+
+- Added a backend security policy that says production operators should use metadata endpoints before reading
+  customer sync snapshots, blobs, or decrypted AI-key material.
+- Required actor, reason, ticket/incident id, target, request/trace id, timing, and accessed fields for unavoidable
+  production data access.
+- Pinned the policy in deploy documentation tests and closed the encryption/access-logging checklist line.
+
 ## 2026-06-19 - docs: add soc2 readiness checklist (7.16)
 
 - Added `docs/SOC2_READINESS.md` as an engineering control checklist, not a certification claim.

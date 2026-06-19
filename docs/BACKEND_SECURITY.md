@@ -18,6 +18,19 @@ Protected gRPC services:
 
 The gRPC bridge applies auth interceptors to unary and streaming calls. Token mode validates the configured bearer token or SHA-256 digest; OAuth mode validates signed short-lived access tokens. HTTP blob/audit/admin/metrics handlers reject missing or invalid bearer tokens before reading or returning data.
 
+## Production Data Access Logging Policy
+
+Production operators must not read customer sync snapshots, blob contents, or decrypted AI-key material during
+routine support. Use scoped metadata first: `/status`, `/readyz`, `/metrics`, `/v1/admin/usage`, and `/v1/audit`.
+When production data access is unavoidable, record the actor, reason, ticket or incident id, user/workspace target,
+request id or trace id, start/end time, and fields accessed in the support or incident record before closing the
+work item.
+
+All privileged support actions should have a corresponding audit event or structured log entry with `request_id`,
+`trace_id`, actor/user scope, route or RPC, status, and cause. Retain production access records for the same window
+as operational audit logs, restrict them to operators with a support need, and review access monthly alongside the
+SOC 2 readiness checklist.
+
 ## Security Coverage Map
 
 The top-level backend security checklist is reconciled against the detailed hardening stories in `TODOS.md`

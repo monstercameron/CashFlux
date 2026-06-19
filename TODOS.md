@@ -4392,9 +4392,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       not certifying, build to the controls so enterprise/audit asks are answerable.
       Done: `docs/SOC2_READINESS.md` defines access control, change management, monitoring/availability,
       vendor management, and incident-response controls with a deploy doc test pinning the checklist.
-- [~] Encryption-in-transit + at-rest documented; key management policy; access logging to prod data.
-      Master-key source/length/rotation guidance is documented for AI-key encryption at rest. Remaining:
-      formal production data access logging policy.
+- [x] Encryption-in-transit + at-rest documented; key management policy; access logging to prod data.
+      Done: master-key source/length/rotation guidance is documented for AI-key encryption at rest, TLS/proxy
+      notes cover encryption in transit, and `docs/BACKEND_SECURITY.md` now defines a production data access
+      logging policy pinned by deploy doc tests.
 
 ### 7.18 Performance, scale & limits
 - [ ] Load + soak tests (sync push/pull, blob up/down, AI streaming, WatchWorkspaces fan-out); publish
