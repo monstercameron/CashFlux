@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
@@ -57,6 +58,7 @@ func runNotifyCatchUp() {
 		})...)
 	cands = append(cands, weeklyDigestCandidates(app, now)...)
 	cands = append(cands, largeTransactionCandidates(app, now)...)
+	cands = append(cands, backupReminderCandidates(app, now)...)
 
 	log := loadDeliveredLog()
 	out := notify.CatchUp(notify.DefaultRules(), cands, now, log)
@@ -128,6 +130,55 @@ func largeTransactionCandidates(app *appstate.App, now time.Time) []notify.Candi
 		return nil
 	}
 	return out
+}
+
+// lastBackupKey holds the timestamp (RFC3339) of the user's most recent JSON
+// export, so the backup reminder knows how long it's been (B28).
+const lastBackupKey = "cashflux:lastBackupAt"
+
+// recordBackupNow stamps the current time as the last backup — called after a
+// successful data export. Safe to call from any package-app code (no-op without
+// localStorage).
+func recordBackupNow() {
+	ls := js.Global().Get("localStorage")
+	if !ls.Truthy() {
+		return
+	}
+	ls.Call("setItem", lastBackupKey, time.Now().Format(time.RFC3339))
+}
+
+// loadLastBackup reads the last-backup timestamp, or the zero time when never set
+// or unparseable (which reads as "never backed up").
+func loadLastBackup() time.Time {
+	ls := js.Global().Get("localStorage")
+	if !ls.Truthy() {
+		return time.Time{}
+	}
+	v := ls.Call("getItem", lastBackupKey)
+	if !v.Truthy() {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, v.String())
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// backupReminderCandidates produces a gentle "back up your data" nudge when a
+// backup is due for the default cadence (B28). It's suppressed when there are no
+// transactions yet (nothing worth backing up), so a fresh install isn't nagged.
+func backupReminderCandidates(app *appstate.App, now time.Time) []notify.Candidate {
+	if len(app.Transactions()) == 0 {
+		return nil
+	}
+	return notifyfeed.BackupCandidates("default-backup", backup.DefaultCadence, loadLastBackup(), now,
+		func(daysSince int) (title, body string) {
+			if daysSince <= 0 {
+				return uistate.T("notify.backupTitle"), uistate.T("notify.backupBodyNever")
+			}
+			return uistate.T("notify.backupTitle"), uistate.T("notify.backupBody", daysSince)
+		})
 }
 
 // fmtBaseMoney formats a base-currency minor-units value in the app's accounting

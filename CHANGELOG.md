@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Backup reminders are live (B28).** Exporting your data now stamps the time, and opening CashFlux surfaces a
+  gentle monthly "back up your data" reminder when it's been too long (or you've never exported), through the
+  same B19 catch-up engine — suppressed on a fresh, empty install. Completes the backup-reminder feature end
+  to end (the per-cadence Settings selector remains a future refinement; the default is monthly).
+
 ### Changed
 - **Unified anomaly detection.** The Reports "Heads up" card now uses the shared `internal/insights` detector
   (already behind the Insights highlights and dashboard widget) instead of a second, redundant detector,

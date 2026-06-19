@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: backup reminders live end-to-end (B28)
+
+- Completed B28 by seizing a window where the parallel session was in `server/` (settings.go momentarily
+  clean). Kept the settings.go footprint to ONE line: `recordBackupNow()` after a successful JSON export.
+- All the js/localStorage + wiring lives in my `notifyrun.go` (same `app` package): `lastBackupKey`,
+  `recordBackupNow` (stamps RFC3339), `loadLastBackup` (zero = never), and `backupReminderCandidates` which
+  calls `notifyfeed.BackupCandidates` with `backup.DefaultCadence` (Monthly), suppressed when there are no
+  transactions so a fresh install isn't nagged. The `default-backup` rule (already in DefaultRules) gates it.
+- Added notify.backupTitle/backupBody/backupBodyNever i18n keys. Deferred only the per-cadence Settings
+  selector (Off/Weekly/Monthly) — a refinement; the reminder works on the monthly default now.
+- Committed path-scoped to avoid sweeping the parallel session's STAGED server/sync.go in the shared index.
+  gofmt clean, i18n tests + wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — refactor: unify anomaly detection (remove duplicate)
 
 - While exploring the Insights screen I found `internal/insights.Detect` — the canonical category-spend anomaly

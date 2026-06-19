@@ -714,6 +714,7 @@ func exportJSON(notify func(string, bool)) {
 		return
 	}
 	downloadBytes("cashflux.json", "application/json", data)
+	recordBackupNow() // stamp the backup so the B28 reminder resets
 	notify(uistate.T("settings.exportedData", "cashflux.json"), false)
 }
 
