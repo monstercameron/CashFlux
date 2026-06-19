@@ -4190,7 +4190,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] `SECURITY.md` + `security.txt` + a coordinated vuln-disclosure process.
 - [~] Periodic threat-model review; pre-launch pen-test pass; secrets scanning (gitleaks) in CI.
       Gitleaks now runs in CI; remaining: periodic threat-model review and pre-launch pen-test pass.
-- [ ] Least-privilege runtime: non-root container, read-only FS where possible, drop caps, minimal base image.
+- [x] Least-privilege runtime: non-root container, read-only FS where possible, drop caps, minimal base image.
+      Self-host Compose now uses read-only root filesystems, hardened tmpfs mounts, dropped capabilities,
+      and `no-new-privileges`; the server image already runs as the non-root `cashflux` user.
 
 ### 7.15 Observability — structured logging (slog), metrics, tracing ★
 

@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: harden self-host runtime
+
+- Hardened the self-host Compose services with read-only root filesystems, explicit tmpfs mounts, dropped Linux capabilities, and `no-new-privileges`.
+- Documented the container runtime expectations in the self-hosting runbook.
+- Added deploy regression tests for the non-root Dockerfile and least-privilege Compose settings.
+
 ## 2026-06-19 - feat: validate backend oauth id tokens
 
 - Made OAuth token exchange retain provider ID tokens in addition to access tokens.

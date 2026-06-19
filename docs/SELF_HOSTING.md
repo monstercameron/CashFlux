@@ -104,6 +104,12 @@ Caddy terminates TLS and proxies websocket upgrades to the server. Keep ports `8
 
 Do not expose a default token or example master key in production. Generate real token material with `rotate-token`, set the SHA-256 digest in the env file, and store the plaintext token in a password manager.
 
+## Container Runtime Hardening
+
+The Compose stack runs the CashFlux server as the non-root `cashflux` user with a read-only root filesystem, a writable `/data` volume, a small hardened `/tmp` tmpfs, all Linux capabilities dropped, and `no-new-privileges` enabled. Caddy also runs with a read-only root filesystem and drops all capabilities except `NET_BIND_SERVICE` so it can bind ports 80/443.
+
+If you add a volume or sidecar, keep writable paths explicit and prefer read-only mounts. Do not add broad capabilities or privileged mode for normal operation.
+
 ## Reliability Knobs
 
 AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI_UPSTREAM_RETRIES` to keep upstream OpenAI failures bounded. The defaults are a 45 second deadline and two retries for transient `429`/`5xx` responses or transport errors.
