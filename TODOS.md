@@ -4279,9 +4279,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Load + soak tests (sync push/pull, blob up/down, AI streaming, WatchWorkspaces fan-out); publish
       a baseline like the bridge's benchmark snapshots; perf regression gate in CI.
 - [x] DB tuning: WAL, `busy_timeout`, sensible `PRAGMA`s; single-writer awareness; per-request conn use.
-- [ ] **Scale ceiling — be honest:** SQLite is single-writer. Document the throughput boundary and the
+- [x] **Scale ceiling — be honest:** SQLite is single-writer. Document the throughput boundary and the
       **migration path to Postgres (or per-tenant SQLite sharding)** for true multi-tenant scale; gate
-      the choice on real numbers, not speculation. ★
+      the choice on real numbers, not speculation. ★ Done: `docs/SCALE_LIMITS.md` documents the
+      single-writer ceiling, capacity signals, migration triggers, and sharded-SQLite/Postgres/object-storage path.
 - [ ] Quotas/fair-use enforced (storage cap, rate limits) with clear `resource-exhausted` responses.
 - [ ] Pagination/limits on any list endpoint; cap snapshot history; blob GC scheduled + monitored.
 - [x] Caching: immutable blob cache headers (+ CDN later); ETag/If-None-Match on `GetWorkspace`.

@@ -119,6 +119,8 @@ Migrations run on server startup. Back up the data volume before upgrading. The 
 
 For recurring operations, use `docs/OPERATIONS_RUNBOOK.md` for deploy, rollback, restore, key rotation, session revocation, and past-due handling. Use `docs/OBSERVABILITY.md` for metrics/logs and `docs/INCIDENT_RESPONSE.md` during incidents.
 
+For capacity planning, use `docs/SCALE_LIMITS.md`. The self-host backend intentionally starts with SQLite; do not expand hosted multi-tenant usage without measuring the single-writer ceiling and migration triggers.
+
 ## TLS And Proxy Notes
 
 Caddy terminates TLS and proxies websocket upgrades to the server. Keep ports `80` and `443` reachable for automatic certificates. If you use another reverse proxy, preserve websocket upgrades and forward `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto`.

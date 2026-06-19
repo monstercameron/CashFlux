@@ -253,3 +253,24 @@ func TestOperationsRunbookDefinesRequiredProcedures(t *testing.T) {
 		}
 	}
 }
+
+func TestScaleLimitsDocumentSQLiteCeilingAndMigrationPath(t *testing.T) {
+	data, err := os.ReadFile("../../docs/SCALE_LIMITS.md")
+	if err != nil {
+		t.Fatalf("read scale limits doc: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"SQLite allows many readers but still has one writer",
+		"Do Not Guess Capacity",
+		"Migration Path",
+		"Postgres",
+		"object storage",
+		"Tenant-isolation tests",
+		"restore",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("scale limits doc missing %q", want)
+		}
+	}
+}
