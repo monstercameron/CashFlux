@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: show subscription price changes on screen (B25)
+
+- Surfaced `subscriptions.DetectPriceChanges` on the Subscriptions screen as a read-only "Recent price
+  changes" card (delta/percent/new amount/date, most-recent first, only shown when non-empty). Price-change
+  rows have no per-row interactive elements, so they render inline via MapKeyed (no Row component needed).
+  Added `subs.priceChangesTitle`/`subs.priceUp`/`subs.priceDown` i18n keys.
+- Hazard event: while finishing this commit the parallel session truncated **both** CHANGELOG.md and
+  DEVLOG.md to 0 bytes and didn't restore them for 60s+. I committed the code + i18n + sw.js path-scoped
+  (8dfb5a5) WITHOUT the docs (committing empty docs would have wiped 180KB+186KB of history), then restored
+  both from HEAD (`git checkout HEAD -- CHANGELOG.md DEVLOG.md`) and re-added these entries in a follow-up
+  commit. Verified my prior B25/D2 entries survived the restore. wasm build + i18n tests green.
+
+## 2026-06-19 - feat: bound sync lookup workspace ids
+
+- Found one input-bound gap left in sync: `PutWorkspace` and `Delete` enforced the workspace id length cap,
+  but `Get` only checked for an empty id before hitting the repository.
+- `SyncService.Get` now trims the id and rejects anything over `maxWorkspaceIDLength` with
+  `InvalidArgument`, matching the existing Put/Delete field-limit behavior.
+- Extended `TestSyncServiceRejectsOversizedWorkspaceFields` to cover long Get ids; focused server test passed
+  before the full gate run.
+
 ## 2026-06-19 - feat: enforce tls-safe browser config
 
 - Tightened backend config validation for browser-facing URLs: `CASHFLUX_SERVER_APP_ORIGIN` must now be an

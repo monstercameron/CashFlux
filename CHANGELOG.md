@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Subscription price changes on screen (B25).** The Subscriptions screen now shows a "Recent price changes"
+  card when any recurring charge's price has moved — each one's up/down delta, percent, new amount, and the
+  date it changed, most-recent first. Read-only over `subscriptions.DetectPriceChanges`.
 - **Backend TLS-safe browser config defaults.** Server config now rejects wildcard CORS origins and rejects
   cleartext browser origins or OAuth redirect URLs unless they target loopback local development, keeping
   production app origins and OAuth callbacks HTTPS-only by default.
