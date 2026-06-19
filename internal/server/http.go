@@ -17,6 +17,13 @@ type VersionResponse struct {
 	AuthProviders       []string `json:"authProviders,omitempty"`
 }
 
+// RootResponse is returned by / for local backend discoverability.
+type RootResponse struct {
+	Service   string   `json:"service"`
+	Status    string   `json:"status"`
+	Endpoints []string `json:"endpoints"`
+}
+
 // NewMux returns the backend HTTP surface that exists before gRPC/proto wiring.
 func NewMux(cfg Config, stores ...*Store) http.Handler {
 	var store *Store
@@ -30,6 +37,19 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		store.SetMetrics(cfg.Metrics)
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, RootResponse{
+			Service: "cashflux-server",
+			Status:  "ok",
+			Endpoints: []string{
+				"/livez",
+				"/healthz",
+				"/readyz",
+				"/v1/version",
+				"/grpc",
+			},
+		})
+	})
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})

@@ -3976,6 +3976,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Health + readiness endpoints; graceful shutdown that drains active streams.
 
 ### 7.6 HTTP endpoints (OAuth + blobs)
+- [x] Backend root status endpoint returns service/status JSON and advertises the health, version, and
+      `/grpc` tunnel paths for local browser checks.
 - [x] OAuth: `GET /v1/auth/:provider` redirects with PKCE + `state`; callback code exchange upserts
       `users`, issues signed short-lived access tokens plus httpOnly refresh cookies, and supports refresh/logout.
 - [x] Provider config (Google, GitHub) per environment (client id/secret, redirect URIs).

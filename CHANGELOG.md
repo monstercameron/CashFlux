@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend root status endpoint.** Visiting the backend root now returns a small JSON service/status payload with the key local endpoints instead of a confusing 404.
 - **Backend sync field bounds.** Sync workspace writes now reject overlong IDs, names, colors, and device identifiers before storage.
 - **Backend OAuth CSRF protection.** Cookie-auth refresh and logout endpoints now require a double-submit CSRF token.
 - **Backend blob MIME hardening.** Blob uploads now reject executable web content types, sniff uploaded bytes, and force downloaded blobs to be attachments.

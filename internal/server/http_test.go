@@ -209,6 +209,42 @@ func TestHealthReadyAndVersionEndpoints(t *testing.T) {
 	}
 }
 
+func TestRootEndpointAdvertisesBackend(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token"}, openTestStore(t))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("root status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var body RootResponse
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode root response: %v", err)
+	}
+	if body.Service != "cashflux-server" || body.Status != "ok" {
+		t.Fatalf("root response = %+v", body)
+	}
+	if !rootEndpointContains(body.Endpoints, "/grpc") || !rootEndpointContains(body.Endpoints, "/v1/version") {
+		t.Fatalf("root endpoints = %+v", body.Endpoints)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/missing", nil)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("missing route status = %d, want 404", rr.Code)
+	}
+}
+
+func rootEndpointContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestSecurityHeaders(t *testing.T) {
 	h := NewMux(Config{AuthMode: "token"}, openTestStore(t))
 	req := httptest.NewRequest(http.MethodGet, "/v1/version", nil)

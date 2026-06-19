@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend root status
+
+- Added an exact `/` backend status response for local browser checks.
+- Advertised the health, readiness, version, and gRPC tunnel endpoints in the root payload.
+- Covered the root response and preserved 404 behavior for unknown paths.
+
 ## 2026-06-19 - feat: bound backend sync fields
 
 - Added explicit length limits for sync workspace ids, names, colors, and device ids.
