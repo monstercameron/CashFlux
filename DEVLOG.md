@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: cash runway on the Reports screen (B21)
+
+- Surfaced `reports.EstimateRunway` on the Reports stat grid. Liquid balance = sum of `ledger.Balance` for
+  non-archived cash-type accounts only (checking/debit/savings/cash), FX-converted to base. Burn = average of
+  the last six FULL months (built monthly bounds from `dateutil.MonthStart(now)` back six months, excluding
+  the current partial month so it doesn't understate spending), via `AverageMonthlyExpense`.
+- Gated the stat on `burn > 0` so a no-spend dataset doesn't render a misleading "0 months". Added
+  `accentForRunway` (under 3 mo → warning, 6+ → positive) and the `reports.runway`/`reports.runwayMonths`
+  i18n keys.
+- CHANGELOG was re-truncated to 0 bytes by the parallel session (DEVLOG intact this time); restored from HEAD
+  before editing. gofmt clean, i18n tests + wasm build green.
+
 ## 2026-06-19 — feat: financial runway estimator (B21)
 
 - Added pure `reports.EstimateRunway(balance, monthlyBurn) Runway` (Months/Days/Sustainable) + a companion

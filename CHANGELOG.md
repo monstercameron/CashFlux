@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Cash runway on the Reports screen (B21).** The Reports stat grid now shows a "Cash runway" figure —
+  how many months your spendable cash (checking/debit/savings/cash accounts) would last at the average burn
+  over the last six full months. Color-cued (under three months reads as a warning, six-plus as healthy) and
+  shown only when there's real spending history. Built on `reports.EstimateRunway`/`AverageMonthlyExpense`.
 - **Financial runway estimator (B21).** New pure, table-tested `reports.EstimateRunway` and
   `reports.AverageMonthlyExpense`: from a cash balance and recent monthly spend they compute how many
   months (and days) of buffer you have — the classic "how long would my savings last?" metric. A

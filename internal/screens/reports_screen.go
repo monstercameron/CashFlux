@@ -8,6 +8,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
@@ -20,6 +22,19 @@ import (
 
 // trendBuckets is how many consecutive periods the cash-flow trend spans.
 const trendBuckets = 6
+
+// accentForRunway tones the cash-runway stat: a thin buffer (under three months)
+// reads as a warning, a healthy one (six months or more) as positive.
+func accentForRunway(months int) string {
+	switch {
+	case months < 3:
+		return "neg"
+	case months >= 6:
+		return "pos"
+	default:
+		return ""
+	}
+}
 
 // Reports is the read-only reporting screen (B21): for the period chosen in the
 // top bar it shows income / expense / net, a plain-English summary, and spending
@@ -76,6 +91,33 @@ func Reports() ui.Node {
 	for i, v := range srInts {
 		srSeries[i] = float64(v)
 	}
+
+	// Cash runway (B21): how long spendable cash would last at the average burn
+	// over the last six *full* months (the current partial month is excluded so it
+	// doesn't understate spending). Liquid = cash-type accounts only.
+	const runwayMonths = 6
+	var liquid int64
+	for _, a := range accounts {
+		if a.Archived {
+			continue
+		}
+		switch a.Type {
+		case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings, domain.TypeCash:
+			if bal, err := ledger.Balance(a, txns); err == nil {
+				if conv, err := rates.Convert(bal, base); err == nil {
+					liquid += conv.Amount
+				}
+			}
+		}
+	}
+	curMonth := dateutil.MonthStart(time.Now())
+	monthBounds := make([]time.Time, 0, runwayMonths+1)
+	for k := 0; k <= runwayMonths; k++ {
+		monthBounds = append(monthBounds, dateutil.AddMonths(curMonth, k-runwayMonths))
+	}
+	monthFlows, _ := reports.IncomeExpenseSeries(txns, monthBounds, rates)
+	burn := reports.AverageMonthlyExpense(monthFlows)
+	runway := reports.EstimateRunway(liquid, burn)
 
 	cats := app.Categories()
 	catName := make(map[string]string, len(cats))
@@ -163,6 +205,7 @@ func Reports() ui.Node {
 			stat(uistate.T("dashboard.spending"), fmtMoney(money.New(flow.Expense, base)), "neg"),
 			stat(uistate.T("reports.net"), fmtMoney(net), accentFor(net)),
 			stat(uistate.T("dashboard.savingsRate"), fmt.Sprintf("%d%%", flow.SavingsRate()), ""),
+			If(burn > 0, stat(uistate.T("reports.runway"), uistate.T("reports.runwayMonths", runway.Months), accentForRunway(runway.Months))),
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.byCategory")),
