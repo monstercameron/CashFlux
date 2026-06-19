@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Distinct backend liveness probe.** Added `/livez` as a process-up probe separate from
+  `/readyz`, which remains the SQLite readiness check.
 - **Split a shared expense (B24).** A new **Split** screen in the Tools nav: enter an amount, tick who's
   sharing it, and it shows each member's even share (the rounding remainder distributed so they add up
   exactly); pick who paid and it lists who owes them what. Built on the pure `internal/split` core — no

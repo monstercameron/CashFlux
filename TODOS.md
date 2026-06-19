@@ -4214,7 +4214,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Correlate trace id ↔ request id ↔ log lines.
 
 #### Health & dashboards
-- [ ] `/livez` (process up) + `/readyz` (DB reachable, migrations applied, deps ok) distinct probes.
+- [x] `/livez` (process up) + `/readyz` (DB reachable, migrations applied, deps ok) distinct probes.
 - [ ] Dashboards + **SLOs** (availability, p99 latency, error rate) with alerting + on-call routing.
 
 ### 7.16 Reliability, SRE & disaster recovery

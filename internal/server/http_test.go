@@ -214,8 +214,22 @@ func TestOAuthStartRejectsUnconfiguredProvider(t *testing.T) {
 
 func TestReadyEndpointRequiresStore(t *testing.T) {
 	h := NewMux(Config{AuthMode: "token"})
-	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	req := httptest.NewRequest(http.MethodGet, "/livez", nil)
 	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("live without store status = %d, want 204", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("health without store status = %d, want 204", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("ready without store status = %d, want 503", rr.Code)

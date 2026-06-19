@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add backend liveness probe
+
+- Added `GET /livez` so orchestration can distinguish process liveness from database readiness.
+- Kept `/healthz` as the existing compatibility health endpoint and `/readyz` as the SQLite-backed readiness probe.
+- Covered the split in server tests: live/health return 204 without a store, ready returns 503 without one.
+
 ## 2026-06-18 — feat: Split-a-shared-expense calculator screen (B24)
 
 - Surfaced the pure `internal/split` core as a self-contained `screens.Split()` (`/split`, Tools group):
