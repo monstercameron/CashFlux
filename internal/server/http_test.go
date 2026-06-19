@@ -43,11 +43,54 @@ func TestConfigValidate(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("grpc keepalive equal to idle timeout accepted")
 	}
+	invalid = valid
+	invalid.AuthMode = "oauth"
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("oauth mode without providers accepted")
+	}
+	invalid = valid
+	invalid.OAuthProviders = map[string]OAuthProviderConfig{"github": {ClientID: "id"}}
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("partial oauth provider accepted")
+	}
+	valid.AuthMode = "oauth"
+	valid.OAuthProviders = map[string]OAuthProviderConfig{"google": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/callback"}}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("oauth config rejected: %v", err)
+	}
+}
+
+func TestFromEnvLoadsOAuthProviders(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_AUTH_MODE", "oauth")
+	t.Setenv("CASHFLUX_SERVER_OAUTH_GOOGLE_CLIENT_ID", "google-id")
+	t.Setenv("CASHFLUX_SERVER_OAUTH_GOOGLE_CLIENT_SECRET", "google-secret")
+	t.Setenv("CASHFLUX_SERVER_OAUTH_GOOGLE_REDIRECT_URL", "http://127.0.0.1:8081/v1/auth/google/callback")
+	t.Setenv("CASHFLUX_SERVER_OAUTH_GITHUB_CLIENT_ID", "github-id")
+	t.Setenv("CASHFLUX_SERVER_OAUTH_GITHUB_CLIENT_SECRET", "github-secret")
+	t.Setenv("CASHFLUX_SERVER_OAUTH_GITHUB_REDIRECT_URL", "http://127.0.0.1:8081/v1/auth/github/callback")
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if got := cfg.OAuthProviderNames(); len(got) != 2 || got[0] != "github" || got[1] != "google" {
+		t.Fatalf("OAuthProviderNames = %+v", got)
+	}
+	if cfg.OAuthProviders["google"].ClientSecret != "google-secret" {
+		t.Fatalf("google provider = %+v", cfg.OAuthProviders["google"])
+	}
 }
 
 func TestHealthReadyAndVersionEndpoints(t *testing.T) {
 	store := openTestStore(t)
-	h := NewMux(Config{AuthMode: "token", Billing: false}, store)
+	h := NewMux(Config{
+		AuthMode: "oauth",
+		Billing:  false,
+		OAuthProviders: map[string]OAuthProviderConfig{
+			"google": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/callback"},
+		},
+		AppOrigin: "http://127.0.0.1:8080",
+	}, store)
 	for _, path := range []string{"/healthz", "/readyz"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rr := httptest.NewRecorder()
@@ -58,6 +101,7 @@ func TestHealthReadyAndVersionEndpoints(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/version", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -73,8 +117,14 @@ func TestHealthReadyAndVersionEndpoints(t *testing.T) {
 	if body.APIVersion != APIVersion || body.MinClientAPIVersion != MinClientAPIVersion {
 		t.Fatalf("version body = %+v", body)
 	}
-	if body.AuthMode != "token" || body.BillingEnabled {
+	if body.AuthMode != "oauth" || body.BillingEnabled {
 		t.Fatalf("mode flags = %+v", body)
+	}
+	if len(body.AuthProviders) != 1 || body.AuthProviders[0] != "google" {
+		t.Fatalf("auth providers = %+v", body.AuthProviders)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "http://127.0.0.1:8080" {
+		t.Fatalf("version CORS origin = %q", got)
 	}
 }
 

@@ -14,10 +14,11 @@ import (
 
 // VersionResponse is returned by /v1/version for client compatibility checks.
 type VersionResponse struct {
-	APIVersion          string `json:"apiVersion"`
-	MinClientAPIVersion string `json:"minClientApiVersion"`
-	AuthMode            string `json:"authMode"`
-	BillingEnabled      bool   `json:"billingEnabled"`
+	APIVersion          string   `json:"apiVersion"`
+	MinClientAPIVersion string   `json:"minClientApiVersion"`
+	AuthMode            string   `json:"authMode"`
+	BillingEnabled      bool     `json:"billingEnabled"`
+	AuthProviders       []string `json:"authProviders,omitempty"`
 }
 
 type AIKeyRequest struct {
@@ -47,12 +48,18 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
 		writeJSON(w, VersionResponse{
 			APIVersion:          APIVersion,
 			MinClientAPIVersion: MinClientAPIVersion,
 			AuthMode:            cfg.AuthMode,
 			BillingEnabled:      cfg.Billing,
+			AuthProviders:       cfg.OAuthProviderNames(),
 		})
 	})
 	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg, store))

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: configure oauth providers
+
+- Added `OAuthProviderConfig` to backend config, loaded from `CASHFLUX_SERVER_OAUTH_GOOGLE_*` and
+  `CASHFLUX_SERVER_OAUTH_GITHUB_*` environment variables.
+- Config validation now rejects `oauth` auth mode without at least one complete provider, and rejects partial
+  provider configs early at boot.
+- `/v1/version` now returns sorted configured `authProviders` and supports CORS/preflight so the wasm settings
+  test-connection flow can discover whether a server supports OAuth or token mode.
+
 ## 2026-06-18 - feat: list ai models over grpc
 
 - Added `AIService.ListModels` to the shared JSON gRPC contract and dynamic service registration.

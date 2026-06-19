@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **OAuth provider discovery config.** The backend now loads Google/GitHub OAuth client settings from
+  environment variables and exposes configured provider names from `/v1/version` with CORS for client reachability checks.
 - **AI model listing over gRPC.** `AIService.ListModels` now returns the configured model allow-list
   (or the app's default model picker list) through the GoGRPCBridge tunnel.
 - **Sync oversized snapshot rejection.** `PutWorkspace` now maps over-limit datasets to

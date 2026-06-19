@@ -3976,7 +3976,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 ### 7.6 HTTP endpoints (OAuth + blobs)
 - [ ] OAuth: `GET /v1/auth/:provider` (PKCE + `state`) and `…/callback` → upsert `users` → issue session
       (short-lived JWT access + httpOnly refresh cookie); `refresh` + `logout`.
-- [ ] Provider config (Google, GitHub) per environment (client id/secret, redirect URIs).
+- [x] Provider config (Google, GitHub) per environment (client id/secret, redirect URIs).
 - [~] Blobs: `PUT /v1/blobs/:hash` (verify the bytes hash to `:hash`, size cap, store if absent),
       `GET /v1/blobs/:hash` (immutable / long cache headers), `HEAD` for existence; auth + refcount on link.
       Raw authenticated PUT/GET/HEAD is done; remaining: link blob hashes to workspaces from the sync/artifact flow.

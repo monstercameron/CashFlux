@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ type Config struct {
 	AppOrigin                         string
 	MasterKey                         string
 	Token                             string
+	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
 	AIAllowedModels                   []string
 	AIRequestMaxBytes                 int64
@@ -39,6 +41,12 @@ type Config struct {
 	GRPCMaxUpgradesPerClientPerMinute int
 }
 
+type OAuthProviderConfig struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+}
+
 // FromEnv builds server config from CASHFLUX_SERVER_* environment variables.
 func FromEnv() (Config, error) {
 	cfg := Config{
@@ -50,6 +58,7 @@ func FromEnv() (Config, error) {
 	cfg.AppOrigin = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_APP_ORIGIN"))
 	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))
 	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
+	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
 	cfg.AIAllowedModels = envCSV("CASHFLUX_SERVER_AI_MODELS")
 	cfg.AIRequestMaxBytes = envInt64("CASHFLUX_SERVER_AI_REQUEST_MAX_BYTES", 4<<20)
@@ -95,12 +104,35 @@ func (c Config) Validate() error {
 	if c.GRPCIdleTimeout > 0 && c.GRPCKeepaliveInterval >= c.GRPCIdleTimeout {
 		return fmt.Errorf("server: grpc keepalive interval must be less than idle timeout")
 	}
+	for name, provider := range c.OAuthProviders {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("server: oauth provider name is required")
+		}
+		if strings.TrimSpace(provider.ClientID) == "" || strings.TrimSpace(provider.ClientSecret) == "" || strings.TrimSpace(provider.RedirectURL) == "" {
+			return fmt.Errorf("server: oauth provider %q requires client id, client secret, and redirect url", name)
+		}
+	}
 	switch c.AuthMode {
 	case "token", "oauth":
+		if c.AuthMode == "oauth" && len(c.OAuthProviders) == 0 {
+			return fmt.Errorf("server: oauth auth mode requires at least one provider")
+		}
 		return nil
 	default:
 		return fmt.Errorf("server: unsupported auth mode %q", c.AuthMode)
 	}
+}
+
+func (c Config) OAuthProviderNames() []string {
+	names := make([]string, 0, len(c.OAuthProviders))
+	for name := range c.OAuthProviders {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 func validAESKeyLength(n int) bool { return n == 16 || n == 24 || n == 32 }
@@ -150,6 +182,22 @@ func envCSV(key string) []string {
 		}
 	}
 	return out
+}
+
+func oauthProvidersFromEnv() map[string]OAuthProviderConfig {
+	providers := map[string]OAuthProviderConfig{}
+	for _, name := range []string{"google", "github"} {
+		prefix := "CASHFLUX_SERVER_OAUTH_" + strings.ToUpper(name) + "_"
+		cfg := OAuthProviderConfig{
+			ClientID:     strings.TrimSpace(os.Getenv(prefix + "CLIENT_ID")),
+			ClientSecret: strings.TrimSpace(os.Getenv(prefix + "CLIENT_SECRET")),
+			RedirectURL:  strings.TrimSpace(os.Getenv(prefix + "REDIRECT_URL")),
+		}
+		if cfg.ClientID != "" || cfg.ClientSecret != "" || cfg.RedirectURL != "" {
+			providers[name] = cfg
+		}
+	}
+	return providers
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {
