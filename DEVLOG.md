@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: include recurring outflows in bills (B22)
+
+- Added `bills.UpcomingAll`, which merges liability-account bills with negative Planning recurring items.
+  Past recurring due dates advance by cadence until they are upcoming, while positive recurring income is
+  ignored.
+- Wired the Bills screen, dashboard Upcoming Bills widget, and B19 bill-due notification candidates through
+  the recurring-aware helper so all three surfaces agree.
+- Added bills tests for recurring outflows, income filtering, cadence catch-up, invalid recurring rows, and
+  deterministic ordering.
+
 ## 2026-06-19 - docs: reconcile split tracker TODO (B24)
 
 - Audited B24 against source and prior commits: `internal/split` has tested equal, weighted, net-balance,

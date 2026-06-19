@@ -1,8 +1,8 @@
-// Package bills derives upcoming bills from the user's accounts (B22). For now it
-// is a pure, derived read: each liability account that has a statement due-day
-// and a minimum payment becomes a recurring monthly bill, with its next due date
-// and days-until computed from the calendar. It owns no store — paid/unpaid
-// status and the calendar UI build on top of this.
+// Package bills derives upcoming bills from the user's accounts and recurring
+// cash flows (B22). It is a pure, derived read: each liability account that has a
+// statement due-day and a minimum payment becomes a recurring monthly bill, and
+// each negative recurring cash flow becomes a bill-like upcoming payment. It
+// owns no store — paid/unpaid status builds on top of this.
 //
 // Pure Go, no syscall/js; due-date math reuses the standard library calendar so
 // month-end clamping (a "due on the 31st" bill in February) is handled correctly.
@@ -48,12 +48,59 @@ func Upcoming(accounts []domain.Account, now time.Time) []Bill {
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if !out[i].DueDate.Equal(out[j].DueDate) {
-			return out[i].DueDate.Before(out[j].DueDate)
-		}
-		return out[i].AccountID < out[j].AccountID
+		return billLess(out[i], out[j])
 	})
 	return out
+}
+
+// UpcomingAll returns account-derived bills plus negative recurring cash flows
+// from Planning. Positive recurring items are income and are skipped. A recurring
+// item whose NextDue is in the past is advanced by cadence until it lands on or
+// after now, bounded to avoid bad imported schedules looping forever.
+func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now time.Time) []Bill {
+	out := Upcoming(accounts, now)
+	for _, r := range recurring {
+		if !r.Amount.IsNegative() {
+			continue
+		}
+		due, ok := nextRecurringDue(r, now)
+		if !ok {
+			continue
+		}
+		out = append(out, Bill{
+			AccountID: "recurring:" + r.ID,
+			Name:      r.Label,
+			Amount:    r.Amount.Abs(),
+			DueDate:   due,
+			DaysUntil: daysBetween(now, due),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return billLess(out[i], out[j])
+	})
+	return out
+}
+
+func billLess(a, b Bill) bool {
+	if !a.DueDate.Equal(b.DueDate) {
+		return a.DueDate.Before(b.DueDate)
+	}
+	return a.AccountID < b.AccountID
+}
+
+func nextRecurringDue(r domain.Recurring, now time.Time) (time.Time, bool) {
+	if r.ID == "" || r.Label == "" || r.NextDue.IsZero() {
+		return time.Time{}, false
+	}
+	due := dateOnly(r.NextDue)
+	ref := dateOnly(now)
+	for i := 0; due.Before(ref) && i < 240; i++ {
+		due = dateOnly(r.Cadence.Next(due))
+	}
+	if due.Before(ref) {
+		return time.Time{}, false
+	}
+	return due, true
 }
 
 // NextDue returns the next occurrence of the given day-of-month on or after the
@@ -62,7 +109,7 @@ func Upcoming(accounts []domain.Account, now time.Time) []Bill {
 // overflowing into the next month.
 func NextDue(dueDay int, from time.Time) time.Time {
 	loc := from.Location()
-	fromDate := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, loc)
+	fromDate := dateOnly(from)
 
 	y, m := from.Year(), from.Month()
 	cand := time.Date(y, m, clampDay(y, m, dueDay), 0, 0, 0, 0, loc)
@@ -74,6 +121,10 @@ func NextDue(dueDay int, from time.Time) time.Time {
 		cand = time.Date(ny, nm, clampDay(ny, nm, dueDay), 0, 0, 0, 0, loc)
 	}
 	return cand
+}
+
+func dateOnly(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
 // clampDay limits day to the number of days in the given month.

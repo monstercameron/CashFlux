@@ -201,7 +201,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 	pr := uistate.UsePrefs().Get()
 	// Share the exact bill-derivation the Bills screen uses (B22), so the widget
 	// and the screen always agree (incl. month-end due-date clamping).
-	upcoming := bills.Upcoming(app.Accounts(), now)
+	upcoming := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
 
 	var body ui.Node
 	if len(upcoming) == 0 {

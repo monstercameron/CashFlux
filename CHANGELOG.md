@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Recurring-aware bills (B22).** Bills, the dashboard bill widget, and bill-due notifications now include
+  negative Planning recurring items alongside liability-account minimum payments, advancing stale recurring
+  due dates to the next upcoming cadence occurrence.
 - **Split tracker status reconciled (B24).** Marked the shipped pure split/settle-up engine complete and
   recorded the standalone Split screen as partial UI coverage, with transaction-level persistence still open.
 - **Subscriptions tracker marked complete (B25).** Reconciled the backlog with the shipped

@@ -984,13 +984,17 @@ history + Year-end/tax; (5) **new Reports nav screen**. _Cross-links: **B14 (now
 ### B22. Bills & due-date tracker + calendar — SPEC (from C38, 2026-06-18)
 **Want:** a real bills surface beyond the dashboard "upcoming bills" widget — a list with due dates,
 amounts, paid/unpaid status, and a **month calendar** view.
-- [ ] **Pure `internal/bills`** (no `syscall/js`, tested): derive bills from liability accounts'
+- [~] **Pure `internal/bills`** (no `syscall/js`, tested): derive bills from liability accounts'
       due-day/min-payment **and** Planning recurring items; compute next-due, overdue, days-until,
       paid-this-cycle; month-grid layout helper (which bills fall on which day). Reuse `dateutil`,
       `freshness`, `domain.Recurring`.
+      Liability bills, Planning recurring outflows, next-due/days-until, and month-grid dots are now tested
+      and wired into Bills/dashboard/notifications. Remaining: paid-this-cycle derivation.
 - [ ] **State:** mark-paid per cycle (creates/links a transaction); persist paid status.
-- [ ] **UI:** Bills screen — upcoming/overdue list + a **month calendar** with bill dots; "mark paid" →
+- [~] **UI:** Bills screen — upcoming/overdue list + a **month calendar** with bill dots; "mark paid" →
       logs the payment; ties **B19** (bill-due reminders) + the dashboard widget.
+      Bills screen, calendar dots, reminder-to-task, dashboard, CSV, and bill-due notifications are live.
+      Remaining: mark-paid creates/links a transaction.
 - [ ] _Decision:_ bills as a first-class entity vs. purely derived from liabilities+recurring (recommend
       derived first, with an optional manual "add a bill").
 

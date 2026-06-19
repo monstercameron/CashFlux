@@ -35,7 +35,7 @@ func Bills() ui.Node {
 	pr := uistate.UsePrefs().Get()
 
 	now := time.Now()
-	upcoming := bills.Upcoming(app.Accounts(), now)
+	upcoming := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
 
 	// remind creates a to-do dated to the bill's due date, so a "pay this" task
 	// surfaces in time (B22, via the existing to-do system).

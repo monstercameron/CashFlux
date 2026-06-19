@@ -69,3 +69,64 @@ func TestUpcoming(t *testing.T) {
 		t.Errorf("Visa amount = %d, want 5000", got[0].Amount.Amount)
 	}
 }
+
+func TestUpcomingAllIncludesRecurringOutflows(t *testing.T) {
+	now := d(2026, time.June, 10)
+	accounts := []domain.Account{
+		liability("card", "Visa", 15, 5000),
+	}
+	recurring := []domain.Recurring{
+		{
+			ID:      "rent",
+			Label:   "Rent",
+			Amount:  money.New(-150000, "USD"),
+			Cadence: domain.CadenceMonthly,
+			NextDue: d(2026, time.June, 1),
+		},
+		{
+			ID:      "paycheck",
+			Label:   "Paycheck",
+			Amount:  money.New(250000, "USD"),
+			Cadence: domain.CadenceMonthly,
+			NextDue: d(2026, time.June, 14),
+		},
+		{
+			ID:      "gym",
+			Label:   "Gym",
+			Amount:  money.New(-3000, "USD"),
+			Cadence: domain.CadenceWeekly,
+			NextDue: d(2026, time.June, 8),
+		},
+	}
+
+	got := UpcomingAll(accounts, recurring, now)
+	if len(got) != 3 {
+		t.Fatalf("got %d bills, want account + 2 recurring outflows: %+v", len(got), got)
+	}
+	if got[0].Name != "Visa" || !got[0].DueDate.Equal(d(2026, time.June, 15)) {
+		t.Fatalf("first = %+v, want Visa on Jun 15 by id tie-break", got[0])
+	}
+	if got[1].Name != "Gym" || !got[1].DueDate.Equal(d(2026, time.June, 15)) {
+		t.Fatalf("second = %+v, want weekly gym advanced to Jun 15", got[1])
+	}
+	if got[2].Name != "Rent" || !got[2].DueDate.Equal(d(2026, time.July, 1)) || got[2].Amount.Amount != 150000 {
+		t.Fatalf("third = %+v, want rent advanced to Jul 1 with positive amount", got[2])
+	}
+	for _, b := range got {
+		if b.Name == "Paycheck" {
+			t.Fatal("income recurring item should not become a bill")
+		}
+	}
+}
+
+func TestUpcomingAllSkipsInvalidRecurring(t *testing.T) {
+	now := d(2026, time.June, 10)
+	got := UpcomingAll(nil, []domain.Recurring{
+		{ID: "", Label: "No ID", Amount: money.New(-100, "USD"), Cadence: domain.CadenceMonthly, NextDue: now},
+		{ID: "nolabel", Amount: money.New(-100, "USD"), Cadence: domain.CadenceMonthly, NextDue: now},
+		{ID: "nodue", Label: "No due", Amount: money.New(-100, "USD"), Cadence: domain.CadenceMonthly},
+	}, now)
+	if len(got) != 0 {
+		t.Fatalf("invalid recurring produced bills: %+v", got)
+	}
+}
