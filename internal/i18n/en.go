@@ -600,6 +600,7 @@ var english = Catalog{
 	"settings.serverTestOK":      "Connected to backend (%s auth).",
 	"settings.serverTestFailed":  "Backend connection failed: %s",
 	"settings.uploadKey":         "Upload key to backend",
+	"settings.deploySelfHost":    "Deploy your own server",
 	"settings.serverKeyStored":   "Stored your OpenAI key in the backend.",
 	"settings.serverKeyFailed":   "Couldn't store the key: %s",
 	"settings.aiModel":           "AI model",

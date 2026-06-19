@@ -486,6 +486,7 @@ func globalSettingsForm() uic.Node {
 		Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
 			Button(Class("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
 			Button(Class("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
+			A(Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
 		Select(Class("set-input mt-[0.45rem]"), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
 			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),

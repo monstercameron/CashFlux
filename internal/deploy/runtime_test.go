@@ -146,6 +146,26 @@ func TestSelfHostDocsWalkUserThroughPastingTokenIntoSettings(t *testing.T) {
 	}
 }
 
+func TestSelfHostDocsDiscloseReferralAndPlainDeployPath(t *testing.T) {
+	data, err := os.ReadFile("../../docs/SELF_HOSTING.md")
+	if err != nil {
+		t.Fatalf("read self-host docs: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"## Deploy Link Disclosure",
+		"DigitalOcean referral deploy link",
+		"offsets CashFlux hosting costs",
+		"plain self-host path",
+		"without a referral link",
+		"free to run on any host",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("self-host docs missing referral disclosure %q", want)
+		}
+	}
+}
+
 func TestServerDockerfileRunsAsNonRoot(t *testing.T) {
 	data, err := os.ReadFile("../../Dockerfile.server")
 	if err != nil {

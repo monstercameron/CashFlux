@@ -4177,8 +4177,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Provide a non-referral deploy path/link too (unconditional free promise).
 
 #### In-app hook
-- [ ] Settings → Cloud (self-hosted): a **"Deploy your own server"** link → the deploy docs (with the
+- [x] Settings → Cloud (self-hosted): a **"Deploy your own server"** link → the deploy docs (with the
       referral disclosure), shown near the self-hosted server-URL field.
+      Done: Settings links the backend controls to `docs/SELF_HOSTING.md`, and the docs disclose the
+      DigitalOcean referral possibility plus the unconditional non-referral self-host path.
 - [x] After deploy, the docs walk the user to paste the printed token into Settings (ties to §7.12 token auth).
       Done: `docs/SELF_HOSTING.md` now has a post-deploy Settings checklist for the server URL, printed
       `CASHFLUX_SERVER_TOKEN`, `/v1/version` test connection, and derived `/grpc` tunnel.

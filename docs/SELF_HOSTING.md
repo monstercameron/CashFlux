@@ -51,6 +51,12 @@ After the stack is healthy, open CashFlux Settings and choose the self-hosted ba
 Keep the printed token private. The server stores only `CASHFLUX_SERVER_TOKEN_SHA256` in production config; the
 plaintext token belongs in the user's password manager and CashFlux Settings only.
 
+## Deploy Link Disclosure
+
+CashFlux may offer a DigitalOcean referral deploy link from the app or install docs. If you use that link,
+DigitalOcean may grant account credit that offsets CashFlux hosting costs. The plain self-host path in this
+document always works without a referral link, and self-hosting remains free to run on any host.
+
 ## Deployment Surface
 
 The backend ships as one `cashflux-server` binary with a configured data directory. The container image builds

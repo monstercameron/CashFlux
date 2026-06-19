@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Self-host deploy link in Settings (7.13).** The backend Settings controls now link to the self-host
+  deployment docs, which include the referral disclosure and non-referral path.
 - **Backend Settings connection test (7.12).** Settings now has a Test connection action for the configured
   backend URL/token, validating `/v1/version` before the same base URL is used for `/grpc`.
 - **Self-host token setup docs (7.13).** Added a post-deploy Settings checklist so operators know to paste the

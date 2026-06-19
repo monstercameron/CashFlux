@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: link self-host deploy docs from Settings (7.13)
+
+- Added a "Deploy your own server" link beside the backend URL/token controls in Settings.
+- Added a self-host docs disclosure that any DigitalOcean referral deploy link may offset CashFlux hosting
+  costs, while the plain self-host path remains available without referral on any host.
+- Added deploy-doc coverage and marked the 7.13 Settings deploy-link hook complete.
+
 ## 2026-06-19 - feat: test backend connection from Settings (7.12)
 
 - Added a Settings Test connection action that calls the configured backend's `/v1/version` endpoint, validates
