@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: switch client ai proxy to streaming rpc (7.7)
+
+- Updated the wasm backend AI transport to call `ChatStream` / `VisionStream` over the GoGRPCBridge tunnel
+  instead of unary `Chat` / `Vision`.
+- The client aggregates received completion chunks until `done` or EOF and then invokes the existing callback,
+  so current screens keep their behavior while the transport is ready for multi-chunk responses.
+- Verified with the full Go suite and a `GOOS=js GOARCH=wasm` build.
+
 ## 2026-06-19 - feat: add ai streaming rpc surface (7.1/7.4)
 
 - Added `CompletionChunk`, `ChatStream`, and `VisionStream` to the proto/backendrpc contract and regenerated

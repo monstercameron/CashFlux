@@ -4,15 +4,17 @@ package ai
 
 import (
 	"context"
+	"io"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
 
 func SendProxyChat(endpoint, token, model string, messages []Message, temperature float64, onResult func(string, Usage), onError func(string)) func() {
-	return invokeProxyCompletion(endpoint, token, backendrpc.MethodAIChat, backendrpc.ChatRequest{
+	return invokeProxyCompletionStream(endpoint, token, backendrpc.MethodAIChatStream, backendrpc.ChatRequest{
 		Model:       model,
 		Messages:    rpcMessages(messages),
 		Temperature: temperature,
@@ -20,7 +22,7 @@ func SendProxyChat(endpoint, token, model string, messages []Message, temperatur
 }
 
 func SendProxyStructuredVisionChat(endpoint, token, model, systemPrompt, userText, imageURL string, temperature float64, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
-	return invokeProxyCompletion(endpoint, token, backendrpc.MethodAIVision, backendrpc.VisionRequest{
+	return invokeProxyCompletionStream(endpoint, token, backendrpc.MethodAIVisionStream, backendrpc.VisionRequest{
 		Model:        strings.TrimSpace(model),
 		SystemPrompt: systemPrompt,
 		UserText:     userText,
@@ -47,7 +49,7 @@ func rpcUsage(usage backendrpc.Usage) Usage {
 	}
 }
 
-func invokeProxyCompletion(endpoint, token, method string, req any, onResult func(string, Usage), onError func(string)) func() {
+func invokeProxyCompletionStream(endpoint, token, method string, req any, onResult func(string, Usage), onError func(string)) func() {
 	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
 	token = strings.TrimSpace(token)
 	if endpoint == "" || token == "" {
@@ -72,20 +74,53 @@ func invokeProxyCompletion(endpoint, token, method string, req any, onResult fun
 			return
 		}
 		defer conn.Close()
-		var out backendrpc.Completion
-		err = conn.Invoke(ctx, method, req, &out, backendrpc.JSONCallOptions()...)
+		stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, method, backendrpc.JSONCallOptions()...)
+		if err == nil {
+			err = stream.SendMsg(req)
+		}
+		if err == nil {
+			err = stream.CloseSend()
+		}
 		if cancelled {
 			return
 		}
 		if err != nil {
-			if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
-				onError(st.Message())
-				return
-			}
-			onError(err.Error())
+			reportProxyError(err, onError)
 			return
 		}
-		onResult(out.Content, rpcUsage(out.Usage))
+		var content strings.Builder
+		var usage backendrpc.Usage
+		for {
+			var chunk backendrpc.CompletionChunk
+			err := stream.RecvMsg(&chunk)
+			if cancelled {
+				return
+			}
+			if err == io.EOF {
+				onResult(content.String(), rpcUsage(usage))
+				return
+			}
+			if err != nil {
+				reportProxyError(err, onError)
+				return
+			}
+			content.WriteString(chunk.Content)
+			if chunk.Usage.TotalTokens != 0 || chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0 {
+				usage = chunk.Usage
+			}
+			if chunk.Done {
+				onResult(content.String(), rpcUsage(usage))
+				return
+			}
+		}
 	}()
 	return cancel
+}
+
+func reportProxyError(err error, onError func(string)) {
+	if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
+		onError(st.Message())
+		return
+	}
+	onError(err.Error())
 }

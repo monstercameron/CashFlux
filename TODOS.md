@@ -4033,10 +4033,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] **Artifact extraction (client schema change):** move `domain.Artifact.Bytes` out of the synced
       snapshot → upload via blob `PUT` (sha256), download via `GET`, keep a local cache; the dataset
       carries a `BlobRef`. Migrate existing inline artifacts on first sync.
-- [~] AI via proxy: Insights, Allocate, and Documents prefer the backend AI proxy when backend URL/token prefs are
+- [x] AI via proxy: Insights, Allocate, and Documents prefer the backend AI proxy when backend URL/token prefs are
       configured; direct OpenAI remains optional/local-only. The client now uses `AIService` unary calls over the
-      `/grpc` GoGRPCBridge tunnel for key upload, chat, and vision. Backend `ChatStream`/`VisionStream` are
-      implemented; remaining: switch the wasm client from unary completion calls to the streaming methods.
+      `/grpc` GoGRPCBridge tunnel for key upload, chat, and vision.
+      Done: backend `ChatStream`/`VisionStream` are implemented, and the wasm AI proxy transport now consumes
+      those streaming methods while preserving existing result/error callbacks.
 - [ ] OAuth login UI + token handling, preserving offline-first (no login required to use locally).
 - [ ] Settings: backend URL, sign in/out, sync status; conflict/LWW UX ("a newer version was on the
       server — pulled it").

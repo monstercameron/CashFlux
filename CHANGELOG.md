@@ -40,6 +40,8 @@ and every commit updates this file under `Unreleased`.
   empty, so local dev, custom domains, and native tests are unaffected (the wildcard `*` is never prefixed).
 
 ### Changed
+- **Client AI proxy uses streaming RPCs (7.7).** Browser AI proxy calls now use `ChatStream` and `VisionStream`
+  over the gRPC tunnel, aggregating completion chunks before updating the existing UI callbacks.
 - **OAuth email verification (7.20).** OAuth callbacks now reject provider profiles that explicitly report an
   unverified Google/GitHub email claim before account upsert or session issuance.
 - **Account deletion unlinks billing state (7.17).** `DELETE /v1/account` now explicitly removes the caller's
