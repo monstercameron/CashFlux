@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: no-spend days on Reports (B21)
+
+- Added pure `reports.NoSpendDays(txns, start, end, now)`: iterates the period's days and counts those with no
+  expense, capping the window at the end of `now`'s day so future days in the current period don't inflate it
+  (past periods count fully; future periods return 0). Transfers/income don't count; multiple charges on one
+  day collapse to a single spend day. Added a small `dayStart` helper.
+- Surfaced as a "No-spend days" stat (pos tone) on the Reports grid, shown when > 0. Table tests: current
+  partial period, past full month, future period. Added the reports.noSpendDays i18n key.
+- gofmt clean, reports + i18n tests green, wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: wire large-transaction alerts into catch-up (B19)
 
 - Wired `notifyfeed.LargeTransactionCandidates` into `runNotifyCatchUp` (my app/notifyrun.go). Added

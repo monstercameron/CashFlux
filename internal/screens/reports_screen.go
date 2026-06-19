@@ -61,6 +61,9 @@ func Reports() ui.Node {
 	flow, _ := reports.IncomeVsExpense(txns, cs, ce, rates)
 	rows, _ := reports.SpendingByCategory(txns, cs, ce, true, ps, pe, rates)
 
+	// No-spend days: elapsed days in the period with zero spending (motivating).
+	noSpendDays := reports.NoSpendDays(txns, cs, ce, time.Now())
+
 	// Headline spending trend vs the previous comparable period (up = worse).
 	spendTrend := ""
 	if pf, err := reports.IncomeVsExpense(txns, ps, pe, rates); err == nil {
@@ -280,6 +283,7 @@ func Reports() ui.Node {
 			stat(uistate.T("reports.net"), fmtMoney(net), accentFor(net)),
 			stat(uistate.T("dashboard.savingsRate"), fmt.Sprintf("%d%%", flow.SavingsRate()), ""),
 			If(burn > 0, stat(uistate.T("reports.runway"), uistate.T("reports.runwayMonths", runway.Months), accentForRunway(runway.Months))),
+			If(noSpendDays > 0, stat(uistate.T("reports.noSpendDays"), fmt.Sprintf("%d", noSpendDays), "pos")),
 		),
 		If(spendTrend != "", P(Class("muted"), spendTrend)),
 		Section(Class("card"),

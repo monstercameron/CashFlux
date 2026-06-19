@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **No-spend days on Reports (B21).** New pure, table-tested `reports.NoSpendDays` counts the elapsed days in
+  the period with zero spending (future days in the current period don't count), surfaced as a motivating
+  "No-spend days" stat on the Reports grid.
+
+### Added
 - **Large-transaction alerts are live (B19).** Opening CashFlux now surfaces a "while you were away" alert for
   any unusually large charge in the last 30 days (at or above the rule's threshold), wired through the
   catch-up engine and de-duped per transaction so it shows once. Completes the large-transaction notification
