@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: cover custom-field defs in the export/import round trip
+
+- While auditing export/import for losslessness, noticed the canonical round-trip test fixture populated every
+  `Dataset` entity except `CustomFields` (`customFieldDefs`). JSON round-trips it fine, but it was the one
+  field with no assertion guarding against a future tag/shape regression.
+- Added a select-type `customfields.Def` (options + required) to the fixture and a spot-check. Test-only;
+  committed separately from the doc note (docs were mid-edit by the parallel session at the time).
+- Broader context: this session's audit swept the screen layer (fixed goals FX totals, member-delete reassign,
+  account-delete orphan guard) and the pure money/data packages (split, weighted, payoff, bills, goals,
+  export/import), which are otherwise robust. Remaining backlog needs the browser, a product decision, or is
+  the in-flight backend work.
+
 ## 2026-06-19 - feat: add backend storage fair-use warnings (7.11)
 
 - Added `CASHFLUX_SERVER_STORAGE_WARN_BYTES` as a soft warning line before the hard per-user blob cap.

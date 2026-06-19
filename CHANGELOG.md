@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Export/import round-trip test now covers custom-field definitions.** The lossless-export test exercised
+  every dataset entity except `customFieldDefs`; it now includes a select-type definition (with options and
+  the required flag) and asserts it survives the round trip, closing the last untested `Dataset` field.
 - **Transactions list is paginated (C39).** Long ledgers now render the first 50 filtered rows with a
   "Show more (N hidden)" button that reveals the next batch, keeping the screen responsive instead of
   building thousands of rows at once.
