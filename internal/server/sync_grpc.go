@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
@@ -59,7 +61,15 @@ func (s *SyncService) GetWorkspaceRPC(ctx context.Context, req backendrpc.GetWor
 	if err != nil {
 		return backendrpc.GetWorkspaceResponse{}, err
 	}
-	resp := backendrpc.GetWorkspaceResponse{Found: found, Workspace: rpcWorkspace(workspace)}
+	if !found {
+		return backendrpc.GetWorkspaceResponse{Found: false}, nil
+	}
+	etag := workspaceETag(workspace)
+	resp := backendrpc.GetWorkspaceResponse{Found: true, ETag: etag, Workspace: rpcWorkspace(workspace)}
+	if strings.TrimSpace(req.IfNoneMatch) == etag {
+		resp.NotModified = true
+		return resp, nil
+	}
 	if found {
 		snapshot, ok, err := s.store.GetSnapshot(workspace.ID)
 		if err != nil {
@@ -185,6 +195,10 @@ func serverWorkspace(workspace backendrpc.Workspace) Workspace {
 		UpdatedAt: updatedAt,
 		DeviceID:  workspace.DeviceID,
 	}
+}
+
+func workspaceETag(workspace Workspace) string {
+	return fmt.Sprintf(`"%s-%d"`, workspace.ID, workspace.Version)
 }
 
 func parseOptionalRPCTime(value string) (time.Time, error) {

@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add workspace sync etags
+
+- Added `etag` and `ifNoneMatch` fields to the backend sync RPC contract.
+- Made `GetWorkspace` return `notModified` without the dataset when the client already has the current workspace version.
+- Covered the bridge round-trip so ETags are emitted and cached requests suppress the dataset payload.
+
 ## 2026-06-18 - feat: bound backend http requests
 
 - Added configurable HTTP read/write timeouts for the backend server.

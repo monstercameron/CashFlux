@@ -80,8 +80,18 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	if !get.Found || get.Workspace.ID != "w-grpc" {
 		t.Fatalf("GetWorkspace response = %+v", get)
 	}
+	if get.ETag == "" {
+		t.Fatalf("GetWorkspace ETag is empty: %+v", get)
+	}
 	if string(get.Dataset) != `{"schemaVersion":1,"accounts":[]}` {
 		t.Fatalf("GetWorkspace dataset = %q", get.Dataset)
+	}
+	var cached backendrpc.GetWorkspaceResponse
+	if err := conn.Invoke(ctx, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: "w-grpc", IfNoneMatch: get.ETag}, &cached, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("cached GetWorkspace invoke: %v", err)
+	}
+	if !cached.Found || !cached.NotModified || cached.ETag != get.ETag || len(cached.Dataset) != 0 {
+		t.Fatalf("cached GetWorkspace response = %+v, want not-modified without dataset", cached)
 	}
 
 	var del backendrpc.DeleteWorkspaceResponse

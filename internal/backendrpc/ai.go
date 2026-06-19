@@ -90,13 +90,16 @@ type ListWorkspacesResponse struct {
 }
 
 type GetWorkspaceRequest struct {
-	ID string `json:"id"`
+	ID          string `json:"id"`
+	IfNoneMatch string `json:"ifNoneMatch,omitempty"`
 }
 
 type GetWorkspaceResponse struct {
-	Found     bool      `json:"found"`
-	Workspace Workspace `json:"workspace,omitempty"`
-	Dataset   []byte    `json:"dataset,omitempty"`
+	Found       bool      `json:"found"`
+	NotModified bool      `json:"notModified,omitempty"`
+	ETag        string    `json:"etag,omitempty"`
+	Workspace   Workspace `json:"workspace,omitempty"`
+	Dataset     []byte    `json:"dataset,omitempty"`
 }
 
 type PutWorkspaceRequest struct {

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Workspace sync caching.** `GetWorkspace` now returns an ETag and honors `IfNoneMatch` to avoid resending unchanged datasets over the gRPC bridge.
 - **Backend HTTP request limits.** Server HTTP read/write deadlines and max in-flight request shedding are now configurable and tested.
 - **Backend security headers.** Server responses now include HSTS, nosniff, referrer policy, COOP/COEP, and frame-ancestor CSP headers.
 - **Tenant-scoped backend blobs.** Blob PUT/GET/HEAD now require an owned workspace context, link uploads to workspaces, and reject cross-user blob access.

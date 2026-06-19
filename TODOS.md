@@ -4251,7 +4251,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       the choice on real numbers, not speculation. ★
 - [ ] Quotas/fair-use enforced (storage cap, rate limits) with clear `resource-exhausted` responses.
 - [ ] Pagination/limits on any list endpoint; cap snapshot history; blob GC scheduled + monitored.
-- [ ] Caching: immutable blob cache headers (+ CDN later); ETag/If-None-Match on `GetWorkspace`.
+- [x] Caching: immutable blob cache headers (+ CDN later); ETag/If-None-Match on `GetWorkspace`.
 
 ### 7.19 API governance & operability
 - [ ] Versioned API (`/v1`, proto package versioning); **backward-compat policy** + deprecation windows;
