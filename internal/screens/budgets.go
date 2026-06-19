@@ -5,6 +5,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -181,7 +182,9 @@ func Budgets() ui.Node {
 	cats := app.Categories()
 	// Each budget is evaluated over its own period window around the viewed date,
 	// and a parent-category budget rolls up its sub-categories' spend (D5).
+	now := time.Now()
 	statuses := make([]budgeting.Status, 0, len(budgets))
+	paceOver := map[string]string{} // budgetID → formatted projected overspend (in-progress only)
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRange(b.Period, viewMonth, weekStart)
 		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
@@ -189,6 +192,12 @@ func Budgets() ui.Node {
 			continue
 		}
 		statuses = append(statuses, st)
+		// Pace projection (D2): warn only while the period is genuinely in progress
+		// and the budget isn't already over — "you're spending too fast" — so a
+		// finished period or an already-over budget doesn't double up the message.
+		if p := budgeting.ProjectPace(st, bs, be, now); !p.OnTrack && p.Elapsed > 0 && p.Elapsed < 1 && st.State != budgeting.StateOver {
+			paceOver[b.ID] = fmtMoney(p.OverBy)
+		}
 	}
 
 	overCount, nearCount := 0, 0
@@ -240,7 +249,7 @@ func Budgets() ui.Node {
 		rows := MapKeyed(statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], OnDelete: deleteBudget, OnSave: saveBudget})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], OnDelete: deleteBudget, OnSave: saveBudget})
 			},
 		)
 		listBody = Div(rows)
@@ -270,6 +279,7 @@ type budgetRowProps struct {
 	Members     []domain.Member
 	Envelope    string // formatted envelope balance (envelope methodology); "" hides the line
 	EnvelopeNeg bool   // envelope is overdrawn → danger tone
+	PaceOver    string // formatted projected overspend (pace, in-progress only); "" hides the line
 	OnDelete    func(string)
 	OnSave      func(id, name, limit, period, owner string)
 }
@@ -385,6 +395,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 		envLine = Span(Class(cls), uistate.T("budgets.envelopeRow", props.Envelope))
 	}
+
+	// Pace projection (D2): a gentle heads-up when current spending would blow the
+	// budget by period end, shown only while the period is still in progress.
+	var paceLine ui.Node = Fragment()
+	if props.PaceOver != "" {
+		paceLine = Span(Class("budget-sub text-down"), uistate.T("budgets.paceOver", props.PaceOver))
+	}
 	return Div(Class("budget"),
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), title),
@@ -394,6 +411,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		),
 		Div(Class("bar"), Div(Class(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 		Span(Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
+		paceLine,
 		envLine,
 	)
 }

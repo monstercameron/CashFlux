@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Budget pace warning on screen (D2).** Each budget row now shows a gentle "at this pace, projected to go
+  over by $X" line while its period is still in progress and current spending is trending over — backed by
+  `budgeting.ProjectPace`. Hidden once the period ends or the budget is already over (so it never doubles up
+  with the "over budget" state).
 - **Subscription price changes on screen (B25).** The Subscriptions screen now shows a "Recent price changes"
   card when any recurring charge's price has moved — each one's up/down delta, percent, new amount, and the
   date it changed, most-recent first. Read-only over `subscriptions.DetectPriceChanges`.

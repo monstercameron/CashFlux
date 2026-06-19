@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: budget pace warning on screen (D2)
+
+- Surfaced `budgeting.ProjectPace` on the Budgets screen. In the per-budget evaluation loop I now also call
+  ProjectPace(st, bs, be, now) with `now = time.Now()` and stash a formatted overspend in `paceOver[budgetID]`
+  — but only when `!OnTrack && 0 < Elapsed < 1 && state != StateOver`, so a finished period (Elapsed clamps to
+  1 → projected = actual) or an already-over budget doesn't show a redundant warning. Using real now (not the
+  viewed period start) means past/future periods naturally show no pace line.
+- Threaded it through `budgetRowProps.PaceOver`; BudgetRow renders a `budgets.paceOver` line (text-down) under
+  the period sub-line. Added the i18n key.
+- Restored CHANGELOG/DEVLOG from HEAD again first — the parallel session had re-truncated both to 0 bytes
+  (now a recurring pattern; see the hazard memory). Verified size before committing. gofmt clean, i18n tests +
+  wasm build green.
+
 ## 2026-06-19 — feat: show subscription price changes on screen (B25)
 
 - Surfaced `subscriptions.DetectPriceChanges` on the Subscriptions screen as a read-only "Recent price

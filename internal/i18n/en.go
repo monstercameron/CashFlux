@@ -308,6 +308,7 @@ var english = Catalog{
 	"budgets.overAssigned":     "Over-assigned by %s (budgets exceed income)",
 	"budgets.envelopeNote":     "Envelope budgeting: each budget's unspent funds carry forward to the next period.",
 	"budgets.envelopeRow":      "Envelope balance: %s",
+	"budgets.paceOver":         "At this pace, projected to go over by %s",
 	"budgets.onTrack":          "On track",
 	"budgets.nearLimit":        "Near limit",
 	"budgets.overBudget":       "Over budget",
