@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend protected-route auth audit.** Added regression coverage and docs for backend data routes requiring bearer auth across HTTP audit/metrics/blob paths and gRPC Sync/AI services.
 - **Backup-reminder cadence core (B28).** New pure, table-tested `internal/backup` package: a `Cadence`
   (Off / Weekly / Monthly, gentle Monthly default), `ParseCadence` that falls back to Off for unknown
   values so a bad setting never nags, and `Due` / `NextDue` / `DaysSince` that decide when a "back up your

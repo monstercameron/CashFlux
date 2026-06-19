@@ -295,3 +295,23 @@ func TestScaleLimitsDocumentSQLiteCeilingAndMigrationPath(t *testing.T) {
 		}
 	}
 }
+
+func TestBackendSecurityNotesDocumentProtectedRoutes(t *testing.T) {
+	data, err := os.ReadFile("../../docs/BACKEND_SECURITY.md")
+	if err != nil {
+		t.Fatalf("read backend security notes: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"deny-by-default",
+		"/v1/audit",
+		"/v1/blobs/{hash}",
+		"cashflux.v1.SyncService",
+		"cashflux.v1.AIService",
+		"auth interceptors",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("backend security notes missing %q", want)
+		}
+	}
+}

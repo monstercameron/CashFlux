@@ -4144,7 +4144,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 > Run `gosec` + `govulncheck` in CI from day one; treat every finding as blocking.
 
 #### AuthN / AuthZ
-- [ ] Per-request auth on **every** RPC + HTTP route (deny-by-default; no unauthenticated data path). ★
+- [x] Per-request auth on **every** RPC + HTTP route (deny-by-default; no unauthenticated data path). ★
+      Done: HTTP data routes (`/metrics`, `/v1/audit`, blob GET/HEAD/PUT) reject unauthenticated
+      requests in tests, and gRPC Sync/AI services are covered by unary/stream auth interceptors.
 - [x] Strict per-user **tenant isolation** enforced at the query layer (every query filters by `user_id`);
       add isolation tests that try to read another user's workspace/blob and must fail. ★
 - [ ] Short-lived access tokens (JWT, ~15m) + rotating refresh tokens (httpOnly, Secure, SameSite);

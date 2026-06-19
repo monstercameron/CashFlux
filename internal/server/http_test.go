@@ -373,6 +373,32 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestHTTPDataRoutesRequireAuthentication(t *testing.T) {
+	store := openTestStore(t)
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token", DataDir: t.TempDir()}, store)
+	hash := blobHash([]byte("abc"))
+	for _, tc := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/metrics"},
+		{method: http.MethodGet, path: "/v1/audit"},
+		{method: http.MethodPut, path: "/v1/blobs/" + hash + "?workspaceId=w1", body: "abc"},
+		{method: http.MethodGet, path: "/v1/blobs/" + hash + "?workspaceId=w1"},
+		{method: http.MethodHead, path: "/v1/blobs/" + hash + "?workspaceId=w1"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d body %q, want 401", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
+
 func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	metrics := NewMetrics()
 	h := NewMux(Config{AuthMode: "token", Token: "dev-token", Metrics: metrics}, openTestStore(t))

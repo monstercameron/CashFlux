@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: cover backend protected routes
+
+- Added an HTTP regression table proving `/metrics`, `/v1/audit`, and blob GET/HEAD/PUT reject unauthenticated requests.
+- Added `docs/BACKEND_SECURITY.md` to document which backend surfaces are public discovery/health and which data paths require bearer auth.
+- Pinned the security note in deploy tests; gRPC Sync/AI remain protected by the existing unary/stream auth interceptors and unauthenticated service tests.
+
 ## 2026-06-19 — feat: backup-reminder cadence core (B28)
 
 - B28 wants gentle, non-naggy backup reminders that reuse the B19 catch-up-on-wake evaluation. Started
