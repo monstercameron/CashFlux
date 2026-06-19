@@ -4182,7 +4182,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Backpressure on streams; cap concurrent streams per user.
 
 #### Supply chain / process
-- [ ] CI: `govulncheck`, `gosec` (high sev blocking), `go vet`, dependency pinning + Dependabot/renovate.
+- [~] CI: `govulncheck`, `gosec` (high sev blocking), `go vet`, dependency pinning + Dependabot/renovate.
+      `go vet`, `govulncheck`, and high-severity/medium-confidence `gosec` now run in CI.
+      Remaining: dependency update automation/pinning policy.
 - [ ] Reproducible builds; SBOM (e.g. `cyclonedx`); sign release artifacts/images (cosign).
 - [ ] `SECURITY.md` + `security.txt` + a coordinated vuln-disclosure process.
 - [ ] Periodic threat-model review; pre-launch pen-test pass; secrets scanning (gitleaks) in CI.

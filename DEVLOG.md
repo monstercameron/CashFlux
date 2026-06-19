@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend security ci scans
+
+- Added `govulncheck` to the main CI workflow.
+- Added `gosec` as a high-severity, medium-confidence blocking scan to avoid known low-confidence catalog noise.
+- Verified `go vet`, `govulncheck`, and the configured `gosec` command locally.
+
 ## 2026-06-19 - feat: bind backend oauth nonce
 
 - Generated an OAuth nonce alongside state and PKCE verifier material.
