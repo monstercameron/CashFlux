@@ -70,6 +70,11 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative http rate limit accepted")
 	}
 	invalid = valid
+	invalid.HTTPUserRateLimitPerMinute = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative http user rate limit accepted")
+	}
+	invalid = valid
 	invalid.TokenSHA256 = "not-a-digest"
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("bad token sha256 accepted")
@@ -102,14 +107,15 @@ func TestFromEnvLoadsHTTPLimits(t *testing.T) {
 	t.Setenv("CASHFLUX_SERVER_HTTP_WRITE_TIMEOUT", "7s")
 	t.Setenv("CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT", "17")
 	t.Setenv("CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE", "19")
+	t.Setenv("CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE", "23")
 	cfg, err := FromEnv()
 	if err != nil {
 		t.Fatalf("FromEnv: %v", err)
 	}
 	if cfg.HTTPReadTimeout != 5*time.Second || cfg.HTTPWriteTimeout != 7*time.Second ||
-		cfg.HTTPMaxInFlight != 17 || cfg.HTTPRateLimitPerMinute != 19 {
-		t.Fatalf("http limits = read %s write %s in-flight %d rate %d",
-			cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPMaxInFlight, cfg.HTTPRateLimitPerMinute)
+		cfg.HTTPMaxInFlight != 17 || cfg.HTTPRateLimitPerMinute != 19 || cfg.HTTPUserRateLimitPerMinute != 23 {
+		t.Fatalf("http limits = read %s write %s in-flight %d rate %d user rate %d",
+			cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPMaxInFlight, cfg.HTTPRateLimitPerMinute, cfg.HTTPUserRateLimitPerMinute)
 	}
 }
 
@@ -383,6 +389,57 @@ func TestRateLimitMiddlewareHonorsForwardedClient(t *testing.T) {
 	h.ServeHTTP(rr, second)
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("forwarded client status = %d, want 429", rr.Code)
+	}
+}
+
+func TestUserRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
+	cfg := Config{AuthMode: "oauth", MasterKey: "0123456789abcdef0123456789abcdef"}
+	now := time.Now().UTC()
+	userA, err := issueSessionToken(cfg, "github:1", "access", time.Hour, now)
+	if err != nil {
+		t.Fatalf("issue user A token: %v", err)
+	}
+	userB, err := issueSessionToken(cfg, "github:2", "access", time.Hour, now)
+	if err != nil {
+		t.Fatalf("issue user B token: %v", err)
+	}
+	var hits int
+	h := userRateLimitMiddleware(1, cfg, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/limited", nil)
+	req.RemoteAddr = "198.51.100.1:1234"
+	req.Header.Set("Authorization", "Bearer "+userA)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("first user request status = %d, want 204", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/limited", nil)
+	req.RemoteAddr = "198.51.100.2:1234"
+	req.Header.Set("Authorization", "Bearer "+userA)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("limited user status = %d, want 429", rr.Code)
+	}
+	if got := rr.Header().Get("Retry-After"); got != "60" {
+		t.Fatalf("retry-after = %q, want 60", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/limited", nil)
+	req.RemoteAddr = "198.51.100.3:1234"
+	req.Header.Set("Authorization", "Bearer "+userB)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("other user status = %d, want 204", rr.Code)
+	}
+	if hits != 2 {
+		t.Fatalf("handler hits = %d, want 2", hits)
 	}
 }
 

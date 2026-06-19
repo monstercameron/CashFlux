@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend per-user HTTP rate limiting.** Authenticated HTTP requests can now be capped per user per minute with `CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE`.
 - **Backend HTTP rate limiting.** Backend HTTP requests can now be capped per client IP per minute with `CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE`.
 - **Backend root status endpoint.** Visiting the backend root now returns a small JSON service/status payload with the key local endpoints instead of a confusing 404.
 - **Backend sync field bounds.** Sync workspace writes now reject overlong IDs, names, colors, and device identifiers before storage.

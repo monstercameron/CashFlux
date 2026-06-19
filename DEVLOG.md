@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: rate limit backend http users
+
+- Added a configurable fixed-window HTTP rate limit keyed by authenticated user id.
+- Applied the user limiter before protected HTTP endpoints while keeping unauthenticated traffic on the per-IP limiter.
+- Covered env parsing, validation, and same-user/different-user behavior with signed access tokens.
+
 ## 2026-06-19 - feat: rate limit backend http clients
 
 - Added configurable fixed-window HTTP rate limiting per client IP.

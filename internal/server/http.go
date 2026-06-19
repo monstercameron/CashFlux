@@ -98,7 +98,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("PUT /v1/blobs/{hash}", handlePutBlob(cfg, store))
 	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
-	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, cfg.Metrics, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, mux)))))
+	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, cfg.Metrics, userRateLimitMiddleware(cfg.HTTPUserRateLimitPerMinute, cfg, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, mux))))))
 }
 
 func handleCORSPreflight(cfg Config) http.HandlerFunc {
@@ -156,27 +156,53 @@ type rateLimitBucket struct {
 	count       int
 }
 
+type fixedWindowLimiter struct {
+	limit   int
+	mu      sync.Mutex
+	buckets map[string]rateLimitBucket
+}
+
+func newFixedWindowLimiter(limit int) *fixedWindowLimiter {
+	return &fixedWindowLimiter{limit: limit, buckets: map[string]rateLimitBucket{}}
+}
+
+func (l *fixedWindowLimiter) allow(key string, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	bucket := l.buckets[key]
+	if bucket.windowStart.IsZero() || now.Sub(bucket.windowStart) >= time.Minute {
+		bucket = rateLimitBucket{windowStart: now}
+	}
+	bucket.count++
+	l.buckets[key] = bucket
+	return bucket.count <= l.limit
+}
+
 func rateLimitMiddleware(limit int, next http.Handler) http.Handler {
 	if limit <= 0 {
 		return next
 	}
-	var mu sync.Mutex
-	buckets := map[string]rateLimitBucket{}
+	limiter := newFixedWindowLimiter(limit)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key := clientIP(r)
-		now := time.Now()
-		mu.Lock()
-		bucket := buckets[key]
-		if bucket.windowStart.IsZero() || now.Sub(bucket.windowStart) >= time.Minute {
-			bucket = rateLimitBucket{windowStart: now}
-		}
-		bucket.count++
-		allowed := bucket.count <= limit
-		buckets[key] = bucket
-		mu.Unlock()
-		if !allowed {
+		if !limiter.allow(clientIP(r), time.Now()) {
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func userRateLimitMiddleware(limit int, cfg Config, next http.Handler) http.Handler {
+	if limit <= 0 {
+		return next
+	}
+	limiter := newFixedWindowLimiter(limit)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, ok := httpBearerUser(r, cfg)
+		if ok && !limiter.allow(user.ID, time.Now()) {
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "user rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
 		next.ServeHTTP(w, r)
