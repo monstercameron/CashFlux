@@ -500,6 +500,60 @@ func TestAuditEndpointStreamsNDJSON(t *testing.T) {
 	}
 }
 
+func TestAdminUsageEndpointIsReadOnlyAndScopedToAuthenticatedUser(t *testing.T) {
+	store := openTestStore(t)
+	day := time.Date(2026, time.June, 19, 0, 0, 0, 0, time.UTC)
+	user := authUserFromToken("dev-token")
+	other := authUserFromToken("other-token")
+	if err := store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID, CreatedAt: day}); err != nil {
+		t.Fatalf("upsert user: %v", err)
+	}
+	if err := store.UpsertUser(User{ID: other.ID, Provider: "token", Subject: other.ID, CreatedAt: day}); err != nil {
+		t.Fatalf("upsert other user: %v", err)
+	}
+	if _, err := store.AddUsage(user.ID, day, 3, 90); err != nil {
+		t.Fatalf("add user usage: %v", err)
+	}
+	if _, err := store.AddUsage(other.ID, day, 99, 9999); err != nil {
+		t.Fatalf("add other usage: %v", err)
+	}
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token", AppOrigin: "http://127.0.0.1:8080"}, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/usage?day=2026-06-19&userId="+other.ID, nil)
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("usage status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var body AdminUsageResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode usage: %v", err)
+	}
+	if body.UserID != user.ID || body.Day != "2026-06-19" || body.Requests != 3 || body.Tokens != 90 {
+		t.Fatalf("usage body = %+v, want only authenticated user's usage", body)
+	}
+	if body.UserID == other.ID || body.Requests == 99 || body.Tokens == 9999 {
+		t.Fatalf("usage leaked other user: %+v", body)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/usage?day=2026-06-19", nil)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized usage status = %d, want 401", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/usage?day=2026-99-99", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("bad day status = %d, want 400", rr.Code)
+	}
+}
+
 func TestMaxInFlightMiddlewareRejectsWhenBusy(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})

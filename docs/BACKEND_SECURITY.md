@@ -6,6 +6,7 @@ Protected HTTP data routes:
 
 - `/metrics`
 - `/v1/audit`
+- `/v1/admin/usage`
 - `/v1/blobs/{hash}` with `GET`, `HEAD`, and `PUT`
 
 Protected gRPC services:
@@ -13,7 +14,7 @@ Protected gRPC services:
 - `cashflux.v1.SyncService`
 - `cashflux.v1.AIService`
 
-The gRPC bridge applies auth interceptors to unary and streaming calls. Token mode validates the configured bearer token or SHA-256 digest; OAuth mode validates signed short-lived access tokens. HTTP blob/audit/metrics handlers reject missing or invalid bearer tokens before reading or returning data.
+The gRPC bridge applies auth interceptors to unary and streaming calls. Token mode validates the configured bearer token or SHA-256 digest; OAuth mode validates signed short-lived access tokens. HTTP blob/audit/admin/metrics handlers reject missing or invalid bearer tokens before reading or returning data.
 
 ## Security Coverage Map
 
@@ -25,6 +26,8 @@ section 7.14:
   rotation path.
 - Strict tenant isolation is enforced at the repository and service layers: workspace, blob, AI-key, usage, and
   audit queries are scoped by authenticated user id, with cross-user tests covering workspace and blob access.
+- The read-only `/v1/admin/usage` support view ignores caller-supplied user ids and returns only the
+  authenticated user's daily request/token counters.
 - Request-size and abuse controls are enabled across the backend: dataset caps, blob size/storage caps, AI request
   caps, HTTP in-flight/rate limits, per-user rate limits, and gRPC bridge connection/stream/upgrade caps.
 - Load/abuse tests cover oversized sync snapshots, oversized blobs, storage quota exhaustion, AI request-size

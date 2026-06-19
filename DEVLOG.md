@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add scoped backend usage support view (7.19)
+
+- Added authenticated `GET /v1/admin/usage` as a read-only support/admin lookup for daily request and token
+  usage.
+- The endpoint scopes by the authenticated bearer token and ignores caller-supplied user ids; tests seed another
+  user's usage and verify it is not returned.
+- Documented the protected route and marked the 7.19 admin tooling usage-lookup TODO complete.
+
 ## 2026-06-19 - feat: link self-host deploy docs from Settings (7.13)
 
 - Added a "Deploy your own server" link beside the backend URL/token controls in Settings.

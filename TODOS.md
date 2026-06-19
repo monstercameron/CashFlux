@@ -4373,7 +4373,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Runbooks (deploy, rollback, restore, rotate keys, revoke sessions, handle past-due); on-call docs.
       Done: `docs/OPERATIONS_RUNBOOK.md` covers deploy, rollback, restore, token/master-key rotation,
       session revocation, past-due handling, and routine checks; deploy tests pin the required sections.
-- [ ] Admin tooling (read-only support views; usage lookups) — built on the same isolation guarantees.
+- [x] Admin tooling (read-only support views; usage lookups) — built on the same isolation guarantees.
+      Done: `/v1/admin/usage` is authenticated, read-only, scoped to the caller's usage counters, and covered by
+      cross-user isolation tests.
 
 ### 7.20 Anti-abuse & fraud
 - [ ] Signup/login abuse controls (rate limit, optional CAPTCHA on bursts, email/OAuth verification).
