@@ -145,6 +145,21 @@ func buildAppLockGate(doc js.Value) {
 			msg.Set("textContent", uistate.T("applock.wrong"))
 			msg.Get("style").Set("color", "var(--danger,#d8716f)")
 		}
+		// Shake the field on a wrong passcode — the familiar "no" cue. Web Animations
+		// API so it needs no stylesheet; skipped under prefers-reduced-motion.
+		if m := js.Global().Call("matchMedia", "(prefers-reduced-motion: reduce)"); m.IsNull() || m.IsUndefined() || !m.Get("matches").Bool() {
+			inp.Call("animate",
+				[]any{
+					map[string]any{"transform": "translateX(0)"},
+					map[string]any{"transform": "translateX(-6px)"},
+					map[string]any{"transform": "translateX(6px)"},
+					map[string]any{"transform": "translateX(-4px)"},
+					map[string]any{"transform": "translateX(4px)"},
+					map[string]any{"transform": "translateX(0)"},
+				},
+				map[string]any{"duration": 280, "easing": "ease-in-out"},
+			)
+		}
 		// After a few misses, offer the hint — but only if one was set.
 		if fails >= 3 && loadAppLock().Hint != "" {
 			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
