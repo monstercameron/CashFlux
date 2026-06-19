@@ -4258,7 +4258,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Resource limits (memory/CPU/FD/conn); OOM-safe; bounded queues; graceful degradation under load.
       Done: self-host Compose caps CPU/memory/PIDs/open files for server+Caddy, env docs expose
       HTTP/gRPC connection and stream limits, and deploy tests pin the runtime ceilings/backpressure knobs.
-- [ ] Status page + incident response runbook (sev levels, comms, postmortems).
+- [x] Status page + incident response runbook (sev levels, comms, postmortems). Done:
+      `GET /status` returns component health for status-page polling, and `docs/INCIDENT_RESPONSE.md`
+      covers SEV levels, first response, comms cadence, recovery, and postmortems.
 
 ### 7.17 Compliance & data governance
 - [ ] **GDPR/CCPA**: self-serve data **export** + **delete account** (purge DB rows + blobs +

@@ -184,3 +184,25 @@ func TestBackupArtifactsDefineScheduleAndRestoreRunbook(t *testing.T) {
 		}
 	}
 }
+
+func TestIncidentResponseRunbookDefinesStatusAndComms(t *testing.T) {
+	data, err := os.ReadFile("../../docs/INCIDENT_RESPONSE.md")
+	if err != nil {
+		t.Fatalf("read incident runbook: %v", err)
+	}
+	runbook := string(data)
+	for _, want := range []string{
+		"GET /status",
+		"SEV1",
+		"SEV2",
+		"SEV3",
+		"First 15 Minutes",
+		"Communication",
+		"Postmortem",
+		"docs/SELF_HOSTING.md",
+	} {
+		if !strings.Contains(runbook, want) {
+			t.Fatalf("incident runbook missing %q", want)
+		}
+	}
+}

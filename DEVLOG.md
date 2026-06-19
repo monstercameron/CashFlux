@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend status runbook
+
+- Added unauthenticated `GET /status` for status-page polling: 200 when process + SQLite are healthy, 503 with component status when readiness is degraded.
+- Added `docs/INCIDENT_RESPONSE.md` with SEV1/SEV2/SEV3 definitions, first-15-minutes triage, communication cadence, recovery steps, and postmortem expectations.
+- Covered healthy/degraded status responses in server tests and pinned the incident runbook sections in deploy tests.
+
 ## 2026-06-19 - feat: set self-host resource limits
 
 - Added Compose CPU, memory, PID, and file-descriptor caps for `cashflux-server` and Caddy so a self-host install has explicit container-level guardrails.

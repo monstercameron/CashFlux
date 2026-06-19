@@ -27,6 +27,14 @@ type RootResponse struct {
 	Endpoints []string `json:"endpoints"`
 }
 
+// StatusResponse is returned by /status for simple status-page checks.
+type StatusResponse struct {
+	Service    string            `json:"service"`
+	Status     string            `json:"status"`
+	Components map[string]string `json:"components"`
+	UpdatedAt  time.Time         `json:"updatedAt"`
+}
+
 // NewMux returns the backend HTTP surface that exists before gRPC/proto wiring.
 func NewMux(cfg Config, stores ...*Store) http.Handler {
 	var store *Store
@@ -46,6 +54,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			Status:  "ok",
 			Endpoints: []string{
 				"/livez",
+				"/status",
 				"/healthz",
 				"/readyz",
 				"/v1/version",
@@ -59,6 +68,22 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, _ *http.Request) {
+		code := http.StatusOK
+		status := "ok"
+		components := map[string]string{"process": "ok", "database": "ok"}
+		if err := store.Ready(); err != nil {
+			code = http.StatusServiceUnavailable
+			status = "degraded"
+			components["database"] = "unavailable"
+		}
+		writeJSONStatus(w, code, StatusResponse{
+			Service:    "cashflux-server",
+			Status:     status,
+			Components: components,
+			UpdatedAt:  time.Now().UTC(),
+		})
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
 		if err := store.Ready(); err != nil {
@@ -247,7 +272,12 @@ func newAIService(store *Store, cfg Config) *AIService {
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
+	writeJSONStatus(w, http.StatusOK, v)
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

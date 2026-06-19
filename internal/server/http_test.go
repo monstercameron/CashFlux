@@ -263,6 +263,43 @@ func TestRootEndpointAdvertisesBackend(t *testing.T) {
 	}
 }
 
+func TestStatusEndpointReportsComponents(t *testing.T) {
+	store := openTestStore(t)
+	h := NewMux(Config{AuthMode: "token"}, store)
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status code = %d body %q", rr.Code, rr.Body.String())
+	}
+	var body StatusResponse
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode status: %v", err)
+	}
+	if body.Service != "cashflux-server" || body.Status != "ok" || body.Components["database"] != "ok" {
+		t.Fatalf("status body = %+v", body)
+	}
+	if body.UpdatedAt.IsZero() {
+		t.Fatalf("status updatedAt is zero: %+v", body)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/status", nil)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("degraded status code = %d body %q", rr.Code, rr.Body.String())
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("decode degraded status: %v", err)
+	}
+	if body.Status != "degraded" || body.Components["database"] != "unavailable" || body.Components["process"] != "ok" {
+		t.Fatalf("degraded status body = %+v", body)
+	}
+}
+
 func rootEndpointContains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
