@@ -316,6 +316,62 @@ func TestBlobStoreContentAddressingLinksAndGC(t *testing.T) {
 	}
 }
 
+func TestBlobStoreCountsDistinctUserBlobBytes(t *testing.T) {
+	s := openTestStore(t)
+	root := filepath.Join(t.TempDir(), "blobs")
+	now := time.Date(2026, time.June, 19, 3, 20, 0, 0, time.UTC)
+	for _, userID := range []string{"u1", "u2"} {
+		if err := s.UpsertUser(User{ID: userID, Provider: "github", Subject: userID, CreatedAt: now}); err != nil {
+			t.Fatalf("UpsertUser %s: %v", userID, err)
+		}
+	}
+	for _, workspace := range []Workspace{
+		{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now},
+		{ID: "w2", UserID: "u1", Name: "Travel", UpdatedAt: now},
+		{ID: "w3", UserID: "u2", Name: "Other", UpdatedAt: now},
+	} {
+		if err := s.PutWorkspace(workspace); err != nil {
+			t.Fatalf("PutWorkspace %s: %v", workspace.ID, err)
+		}
+	}
+	first, err := s.PutBlob(root, []byte("abc"), "text/plain", "a.txt", 1024)
+	if err != nil {
+		t.Fatalf("PutBlob first: %v", err)
+	}
+	second, err := s.PutBlob(root, []byte("abcdef"), "text/plain", "b.txt", 1024)
+	if err != nil {
+		t.Fatalf("PutBlob second: %v", err)
+	}
+	for _, link := range []struct {
+		workspaceID string
+		hash        string
+	}{
+		{"w1", first.Hash},
+		{"w2", first.Hash},
+		{"w2", second.Hash},
+		{"w3", first.Hash},
+	} {
+		if err := s.LinkWorkspaceBlob(link.workspaceID, link.hash); err != nil {
+			t.Fatalf("LinkWorkspaceBlob %+v: %v", link, err)
+		}
+	}
+	bytes, err := s.UserBlobBytes("u1")
+	if err != nil {
+		t.Fatalf("UserBlobBytes: %v", err)
+	}
+	if bytes != first.Size+second.Size {
+		t.Fatalf("u1 blob bytes = %d, want %d", bytes, first.Size+second.Size)
+	}
+	linked, err := s.UserBlobLinked("u1", first.Hash)
+	if err != nil || !linked {
+		t.Fatalf("UserBlobLinked own = %v/%v", linked, err)
+	}
+	linked, err = s.UserBlobLinked("u1", strings.Repeat("a", sha256.Size*2))
+	if err != nil || linked {
+		t.Fatalf("UserBlobLinked missing = %v/%v", linked, err)
+	}
+}
+
 func TestBlobStoreRejectsOversizedAndHashMismatch(t *testing.T) {
 	s := openTestStore(t)
 	root := filepath.Join(t.TempDir(), "blobs")

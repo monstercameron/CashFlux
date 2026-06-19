@@ -51,6 +51,11 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative blob io timeout accepted")
 	}
 	invalid = valid
+	invalid.StorageMaxBytes = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative storage max bytes accepted")
+	}
+	invalid = valid
 	invalid.AIUpstreamRetries = -1
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("negative ai upstream retries accepted")
@@ -166,6 +171,17 @@ func TestFromEnvLoadsGRPCStreamLimit(t *testing.T) {
 	}
 	if cfg.GRPCMaxStreamsPerUser != 3 {
 		t.Fatalf("GRPCMaxStreamsPerUser = %d, want 3", cfg.GRPCMaxStreamsPerUser)
+	}
+}
+
+func TestFromEnvLoadsStorageQuota(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_STORAGE_MAX_BYTES", "12345")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if cfg.StorageMaxBytes != 12345 {
+		t.Fatalf("StorageMaxBytes = %d, want 12345", cfg.StorageMaxBytes)
 	}
 }
 
@@ -1139,6 +1155,30 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	safeH.ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("svg declared status = %d, want 415", rr.Code)
+	}
+}
+
+func TestBlobEndpointRejectsStorageQuotaExceeded(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 19, 3, 30, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutWorkspace(Workspace{ID: "w1", UserID: user.ID, Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Token: "dev-token", DataDir: t.TempDir(), StorageMaxBytes: 3}
+	h := NewMux(cfg, store)
+	data := []byte("abcd")
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+blobHash(data)+"?workspaceId=w1", bytes.NewReader(data))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusInsufficientStorage {
+		t.Fatalf("quota status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "storage quota exceeded") {
+		t.Fatalf("quota body = %q", rr.Body.String())
 	}
 }
 

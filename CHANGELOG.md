@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backup-reminder cadence core (B28).** New pure, table-tested `internal/backup` package: a `Cadence`
+  (Off / Weekly / Monthly, gentle Monthly default), `ParseCadence` that falls back to Off for unknown
+  values so a bad setting never nags, and `Due` / `NextDue` / `DaysSince` that decide when a "back up your
+  data" nudge is owed (never-backed-up is due as soon as a cadence is enabled). Logic-first per the SDLC; the
+  notify candidate generator + the dismissible export nudge build on this.
+- **Backend storage fair-use quota.** Blob uploads now honor `CASHFLUX_SERVER_STORAGE_MAX_BYTES` per user and return `507 storage quota exceeded` before linking data beyond the configured cap.
 - **Budget rollover & sinking-fund math (B26).** New pure, table-tested `internal/budgeting` helpers:
   `Carryover` advances envelope budgeting one period (last period's remaining — negative when overspent —
   plus this period's limit), the single-step recurrence behind a "carried over $X" badge; and a sinking-fund

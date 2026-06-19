@@ -52,6 +52,9 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		if !ok {
 			return
 		}
+		if !withinStorageQuota(w, store, user.ID, hash, int64(len(data)), cfg.StorageMaxBytes) {
+			return
+		}
 		ctx, cancel := blobIOContext(r.Context(), cfg)
 		defer cancel()
 		blob, err := store.PutBlobContext(ctx, blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes)
@@ -69,6 +72,30 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		auditFromRequest(r, store, user, "blob.put", "blob", blob.Hash)
 		writeJSON(w, BlobResponse{Hash: blob.Hash, Size: blob.Size, Mime: blob.Mime})
 	}
+}
+
+func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string, size, maxBytes int64) bool {
+	if maxBytes <= 0 {
+		return true
+	}
+	linked, err := store.UserBlobLinked(userID, hash)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if linked {
+		return true
+	}
+	current, err := store.UserBlobBytes(userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if current+size > maxBytes {
+		http.Error(w, "storage quota exceeded", http.StatusInsufficientStorage)
+		return false
+	}
+	return true
 }
 
 func handleGetBlob(cfg Config, store *Store) http.HandlerFunc {

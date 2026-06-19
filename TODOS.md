@@ -4283,7 +4283,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       **migration path to Postgres (or per-tenant SQLite sharding)** for true multi-tenant scale; gate
       the choice on real numbers, not speculation. ★ Done: `docs/SCALE_LIMITS.md` documents the
       single-writer ceiling, capacity signals, migration triggers, and sharded-SQLite/Postgres/object-storage path.
-- [ ] Quotas/fair-use enforced (storage cap, rate limits) with clear `resource-exhausted` responses.
+- [x] Quotas/fair-use enforced (storage cap, rate limits) with clear `resource-exhausted` responses.
+      Done: HTTP/user rate limits and AI quotas exist; blob uploads now enforce
+      `CASHFLUX_SERVER_STORAGE_MAX_BYTES` per user and return HTTP 507 `storage quota exceeded`.
 - [x] Pagination/limits on any list endpoint; cap snapshot history; blob GC scheduled + monitored.
       Done: audit listing is capped, snapshot history is capped/pruned, and `cashflux-server gc-blobs`
       plus weekly timer examples and Prometheus GC counters cover scheduled/monitored blob cleanup.

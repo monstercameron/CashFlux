@@ -141,6 +141,8 @@ AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI
 
 Blob disk reads and writes use `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` so request cancellation and slow storage do not hang blob endpoints indefinitely. The default is 10 seconds.
 
+Set `CASHFLUX_SERVER_STORAGE_MAX_BYTES` to enforce a per-user fair-use cap for blob storage. The default `0` is unlimited for self-hosting; when set, blob uploads that would exceed the user's distinct linked blob bytes return HTTP 507 with `storage quota exceeded`.
+
 For status-page and incident handling, expose `/status` through the same TLS host and use `docs/INCIDENT_RESPONSE.md` for severity levels, update cadence, recovery, and postmortems.
 
 ## Data Retention

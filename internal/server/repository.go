@@ -593,6 +593,46 @@ WHERE w.user_id = ? AND wb.workspace_id = ? AND wb.hash = ?`, userID, workspaceI
 	return true, nil
 }
 
+// UserBlobLinked reports whether any workspace owned by userID already references hash.
+func (s *Store) UserBlobLinked(userID, hash string) (bool, error) {
+	if strings.TrimSpace(userID) == "" || !validBlobHash(hash) {
+		return false, fmt.Errorf("server store: user id and blob hash are required")
+	}
+	defer s.observeDB("UserBlobLinked", time.Now())
+	var count int
+	err := s.db.QueryRow(`
+SELECT COUNT(*)
+FROM workspace_blobs wb
+JOIN workspaces w ON w.id = wb.workspace_id
+WHERE w.user_id = ? AND wb.hash = ?`, userID, hash).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("server store: user blob linked: %w", err)
+	}
+	return count > 0, nil
+}
+
+// UserBlobBytes returns distinct blob bytes currently referenced by a user's workspaces.
+func (s *Store) UserBlobBytes(userID string) (int64, error) {
+	if strings.TrimSpace(userID) == "" {
+		return 0, fmt.Errorf("server store: user id is required")
+	}
+	defer s.observeDB("UserBlobBytes", time.Now())
+	var total int64
+	err := s.db.QueryRow(`
+SELECT COALESCE(SUM(size), 0)
+FROM (
+  SELECT DISTINCT b.hash, b.size
+  FROM blobs b
+  JOIN workspace_blobs wb ON wb.hash = b.hash
+  JOIN workspaces w ON w.id = wb.workspace_id
+  WHERE w.user_id = ?
+)`, userID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("server store: user blob bytes: %w", err)
+	}
+	return total, nil
+}
+
 // WorkspaceBlobs returns blob metadata linked to a workspace.
 func (s *Store) WorkspaceBlobs(workspaceID string) ([]Blob, error) {
 	defer s.observeDB("WorkspaceBlobs", time.Now())
