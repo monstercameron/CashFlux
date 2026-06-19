@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend error taxonomy (7.19)
+
+- Added `internal/server.BackendErrorTaxonomy` with stable reason strings and gRPC/HTTP status mappings.
+- Expanded `docs/BACKEND_ERRORS.md` with the reason table and a migration note for JSON HTTP error details.
+- Added unit/doc guards for taxonomy mappings and required documentation.
+- Marked the 7.19 error-taxonomy TODO in progress; remaining work is migrating plain-text HTTP errors to
+  machine-readable JSON bodies everywhere.
+
 ## 2026-06-19 - fix: keep lock-screen display prefs across a passcode change
 
 - Found a latent bug in the app-lock flow: `applock.Config.WithPasscode` constructed a brand-new `Config`

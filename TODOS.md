@@ -4376,8 +4376,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       CI proto-/API-compat guard (the bridge ships an `api_compat_guard` tool — reuse the pattern).
       Done: `cmd/api_compat_guard` runs in CI and checks `/v1`, `cashflux.v1`, backend compatibility constants,
       the generated-code target package, and the proto compatibility/deprecation policy.
-- [ ] Consistent **error taxonomy** (gRPC codes ↔ HTTP statuses) with stable, documented error reasons;
+- [~] Consistent **error taxonomy** (gRPC codes ↔ HTTP statuses) with stable, documented error reasons;
       machine-readable error details; no internal leakage in messages.
+      `internal/server.BackendErrorTaxonomy` now pins stable reasons and gRPC/HTTP mappings, and
+      `docs/BACKEND_ERRORS.md` documents the table. Remaining: migrate plain-text HTTP errors to JSON details
+      across all handlers.
 - [x] Config via env/secret manager with validation on boot; **feature flags** (billing on/off, AI proxy
       on/off, self-host mode) so deployments differ safely.
 - [x] Runbooks (deploy, rollback, restore, rotate keys, revoke sessions, handle past-due); on-call docs.

@@ -28,6 +28,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend error taxonomy (7.19).** Added stable machine-readable backend error reasons with gRPC/HTTP
+  mappings and pinned the documented taxonomy in tests.
 - **Backend compliance docs (7.17).** Added the legal compliance pack with launch draft privacy/terms,
   cookie/consent note, DPA outline, public subprocessors list, and data-subject request workflow.
 - **Backend account export/delete (7.11).** Added authenticated `/v1/account/export` and `DELETE /v1/account`

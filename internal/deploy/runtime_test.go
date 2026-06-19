@@ -444,6 +444,13 @@ func TestBackendErrorModelDocumentsStatusCodesAndLWWRejection(t *testing.T) {
 		"not a gRPC failure",
 		"current dataset",
 		"HTTP Statuses",
+		"Stable Reasons",
+		"AUTH_UNAUTHENTICATED",
+		"REQUEST_INVALID",
+		"RESOURCE_EXHAUSTED",
+		"RATE_LIMITED",
+		"UPSTREAM_UNAVAILABLE",
+		"Migration Note",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("backend error model missing %q", want)

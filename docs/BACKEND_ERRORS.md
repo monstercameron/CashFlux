@@ -3,6 +3,25 @@
 CashFlux backend RPCs use gRPC status codes for transport, auth, validation, quota, and upstream failures.
 Responses that need to carry recovery data may use a successful RPC with an explicit result flag.
 
+## Stable Reasons
+
+New backend APIs should expose one of these stable machine-readable reasons in addition to the transport status.
+The Go source of truth is `internal/server.BackendErrorTaxonomy`.
+
+| Reason | gRPC code | HTTP status | Use |
+| --- | --- | --- | --- |
+| `AUTH_UNAUTHENTICATED` | `Unauthenticated` | `401` | Missing, invalid, or expired auth metadata. |
+| `AUTH_PERMISSION_DENIED` | `PermissionDenied` | `403` | Authenticated caller is not allowed to perform the action. |
+| `REQUEST_INVALID` | `InvalidArgument` | `400` | Malformed JSON/RPC shape, bad ids, invalid timestamp, unsupported model/key format. |
+| `RESOURCE_NOT_FOUND` | `NotFound` | `404` | Resource does not exist or is intentionally hidden by tenant isolation. |
+| `FAILED_PRECONDITION` | `FailedPrecondition` | `412` | Server prerequisite is missing, such as disabled AI proxy or missing master key. |
+| `RESOURCE_EXHAUSTED` | `ResourceExhausted` | `507` | Storage, dataset, request-size, or stream quota is exceeded. |
+| `RATE_LIMITED` | `ResourceExhausted` | `429` | Per-user or per-IP request rate limit is exceeded. |
+| `UPSTREAM_UNAVAILABLE` | `Unavailable` | `502` | OpenAI or another upstream dependency failed transiently. |
+| `DEADLINE_EXCEEDED` | `DeadlineExceeded` | `504` | Upstream or server deadline expired. |
+| `CANCELED` | `Canceled` | `499` | Client canceled the request. |
+| `INTERNAL` | `Internal` | `500` | Unexpected server failure; response must not leak internals. |
+
 ## gRPC Codes
 
 - `Unauthenticated`: missing, invalid, or expired bearer token/session metadata.
@@ -30,3 +49,9 @@ fails with `InvalidArgument`.
 HTTP blob, audit, metrics, OAuth, and status endpoints use matching HTTP status families: `401` for auth,
 `400`/`415` for malformed or unsupported input, `413` for blob size caps, `429` for rate limits, `507` for
 storage quota, and `503` for unavailable dependencies/readiness.
+
+## Migration Note
+
+Existing plain-text HTTP error bodies are being migrated to JSON details using the stable reasons above. Until
+that migration is complete, handlers must still choose the mapped HTTP status and avoid leaking secrets, tokens,
+datasets, blob bytes, or internal stack details.
