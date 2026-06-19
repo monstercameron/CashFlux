@@ -8,9 +8,10 @@ and every commit updates this file under `Unreleased`.
 
 ### Added
 - **Reminders on open — notifications are live (B19).** When you open CashFlux it now surfaces a gentle
-  "while you were away" toast for anything that needs attention — accounts whose balance has gone stale
-  and bills due within a week. Each reminder fires at most once per its natural period (a stale account
-  weekly, a bill once per due date), tracked in a persisted delivered log so reopening doesn't re-nag.
+  "while you were away" toast for anything that needs attention — accounts whose balance has gone stale,
+  bills due within a week, and budgets that are near or over their limit. Each reminder fires at most once
+  per its natural period (a stale account weekly, a bill once per due date, a budget once per state per
+  month), tracked in a persisted delivered log so reopening doesn't re-nag.
   Boot-safe (a notification hiccup can never block startup). The full in-app center + per-rule settings
   build on this.
 - **Notifications: first event evaluator (B19, internal).** New pure `internal/notifyfeed` package bridges

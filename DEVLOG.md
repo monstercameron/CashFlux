@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: budget-threshold reminders in the catch-up (B19, step 9)
+
+- Extended `runNotifyCatchUp` with the budget-threshold event. New `currentBudgetStatuses(app, now)` helper
+  mirrors the Budgets screen: evaluates every budget over its own current period via
+  `budgeting.PeriodRange(b.Period, now, weekStart)` + `EvaluateRollup(..., DefaultNearThreshold,
+  categorytree.Descendants(...))` (parent budgets roll up sub-categories), skipping any that error. Feeds
+  the statuses to `notifyfeed.BudgetCandidates` → near (warning) / over (critical) candidates.
+- Three of the four events now fire live (stale-balance, bill-due, budget-threshold); only the periodic
+  digest remains (needs the period summary text). Localized via new `notify.budget{Over,Near}{Title,Body}`
+  keys. Still one summary toast, still recover-guarded. wasm build green, gofmt clean.
+
 ## 2026-06-18 — feat: wire notify catch-up on load (B19, step 8 — live!)
 
 - Wired the pure notify pipeline into the wasm shell: new `internal/app/notifyrun.go` (`runNotifyCatchUp`)
