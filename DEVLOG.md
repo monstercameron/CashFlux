@@ -3,31 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
-## 2026-06-19 - test: cover backend protected routes
+## 2026-06-19 — feat: wire backup reminders into notifications (B28)
 
-- Added an HTTP regression table proving `/metrics`, `/v1/audit`, and blob GET/HEAD/PUT reject unauthenticated requests.
-- Added `docs/BACKEND_SECURITY.md` to document which backend surfaces are public discovery/health and which data paths require bearer auth.
-- Pinned the security note in deploy tests; gRPC Sync/AI remain protected by the existing unary/stream auth interceptors and unauthenticated service tests.
-
-## 2026-06-19 — feat: backup-reminder cadence core (B28)
-
-- B28 wants gentle, non-naggy backup reminders that reuse the B19 catch-up-on-wake evaluation. Started
-  bottom-up with the pure decision logic: `internal/backup`.
-- `Cadence` (Off/Weekly/Monthly) with `ParseCadence` normalizing unknown/blank values to Off so a corrupted
-  setting can never nag; `DefaultCadence = Monthly` as the gentle default. `NextDue` uses calendar math
-  (`AddDate(0,0,7)` / `AddDate(0,1,0)`) rather than a fixed "month = 30d" duration, so monthly tracks real
-  months. `Due` = cadence schedules AND now ≥ NextDue; a zero last-backup time (never backed up) is due as
-  soon as a cadence is enabled. `DaysSince` clamps to zero for unknown/future so the UI can say "never".
-- Table tests cover parse fallbacks, the boundary (exactly-due vs one day short), overdue, never-backed-up,
-  and off. gofmt + vet + native tests green.
-- Next (separate commits, keeping it granular): a `notifyfeed.BackupCandidates` generator + a notify rule,
-  then the dismissible "Back up your data" → Export JSON nudge and the Settings cadence control.
-
-## 2026-06-19 - feat: enforce backend storage quota
-
-- Added `CASHFLUX_SERVER_STORAGE_MAX_BYTES` as an optional per-user blob storage cap; `0` keeps self-host unlimited.
-- Blob PUT now counts distinct blob bytes already linked to the user and rejects uploads that would exceed the cap with HTTP 507 `storage quota exceeded`.
-- Added repository accounting tests, HTTP quota coverage, config/env validation, and self-host docs for the quota behavior.
+- Bridged the B28 backup cadence core into the B19 notification system. Added `notify.EventBackupDue` plus a
+  `default-backup` rule in `DefaultRules` (enabled, in-app), and updated `defaults_test.go` (4→5 rules,
+  added the event to the coverage list).
+- Added `notifyfeed.BackupCandidates(ruleID, cadence, lastBackupAt, now, text)`: returns one informational
+  candidate when `backup.Due` is true, keyed `backup@<period>` (WeekKey for weekly, MonthKey for monthly) so
+  it nudges once per cadence period and is idempotent across reopens via the existing DeliveredLog. nil when
+  not due or Off. Kept it gentle (SeverityInfo) per the non-naggy ethos. Table tests cover not-due, off,
+  due-monthly/weekly keying, and never-backed-up (fires immediately, 0-days body).
+- Deferred to a follow-up (state/UI, app/ collision with the parallel session): persisting `lastBackupAt` in
+  localStorage, calling BackupCandidates inside `runNotifyCatchUp`, and the dismissible export nudge +
+  Settings cadence control.
+- gofmt + vet clean; notify + notifyfeed native tests green; wasm build green.
+- Process note: committing path-scoped (`git commit -F msg -- <paths>`) per the parallel-tree hazard memory,
+  after last iteration's shared-index race split add from commit.
 
 ## 2026-06-19 — feat: budget rollover & sinking-fund math (B26)
 

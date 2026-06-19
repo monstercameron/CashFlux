@@ -20,5 +20,6 @@ func DefaultRules() []Rule {
 		{ID: "default-budget", Event: EventBudgetThreshold, Enabled: true, Channels: inApp},
 		{ID: "default-stale", Event: EventStaleBalance, Enabled: true, Channels: inApp},
 		{ID: "default-digest", Event: EventDigest, Enabled: true, Channels: inApp},
+		{ID: "default-backup", Event: EventBackupDue, Enabled: true, Channels: inApp},
 	}
 }

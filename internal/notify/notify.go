@@ -37,6 +37,7 @@ const (
 	EventStaleBalance     Event = "stale-balance"     // an account hasn't been updated in a while
 	EventLargeTransaction Event = "large-transaction" // a transaction exceeded an amount
 	EventDigest           Event = "digest"            // a periodic (weekly/monthly) summary
+	EventBackupDue        Event = "backup-due"        // a periodic data-backup reminder is due
 )
 
 // Severity ranks a notification for ordering and styling in the center.

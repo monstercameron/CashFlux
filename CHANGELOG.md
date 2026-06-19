@@ -7,13 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Backend protected-route auth audit.** Added regression coverage and docs for backend data routes requiring bearer auth across HTTP audit/metrics/blob paths and gRPC Sync/AI services.
-- **Backup-reminder cadence core (B28).** New pure, table-tested `internal/backup` package: a `Cadence`
-  (Off / Weekly / Monthly, gentle Monthly default), `ParseCadence` that falls back to Off for unknown
-  values so a bad setting never nags, and `Due` / `NextDue` / `DaysSince` that decide when a "back up your
-  data" nudge is owed (never-backed-up is due as soon as a cadence is enabled). Logic-first per the SDLC; the
-  notify candidate generator + the dismissible export nudge build on this.
-- **Backend storage fair-use quota.** Blob uploads now honor `CASHFLUX_SERVER_STORAGE_MAX_BYTES` per user and return `507 storage quota exceeded` before linking data beyond the configured cap.
+- **Backup reminders wired into notifications (B28).** A new `notify` event (`backup-due`, with a default
+  in-app rule) and a `notifyfeed.BackupCandidates` generator that turns the backup cadence into a gentle,
+  informational "back up your data" reminder — surfaced at most once per cadence period (ISO-week for weekly,
+  month for monthly) via the same B19 catch-up-on-wake engine, and never when the cadence is off. Pure and
+  table-tested; the dismissible export nudge + Settings cadence control build on this.
 - **Budget rollover & sinking-fund math (B26).** New pure, table-tested `internal/budgeting` helpers:
   `Carryover` advances envelope budgeting one period (last period's remaining — negative when overspent —
   plus this period's limit), the single-step recurrence behind a "carried over $X" badge; and a sinking-fund

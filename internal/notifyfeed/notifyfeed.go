@@ -9,6 +9,7 @@ package notifyfeed
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -110,6 +111,39 @@ func BillDueCandidates(
 		})
 	}
 	return out
+}
+
+// BackupCandidates returns a gentle "back up your data" reminder as a one-element
+// slice when a backup is due for the given cadence (per the pure backup package),
+// or nil otherwise. The occurrence is keyed by the cadence's natural period
+// (ISO-week for Weekly, year-month for Monthly) so the nudge surfaces at most once
+// per period regardless of how often the app is reopened. text renders the
+// localized title and body from the days since the last backup (0 when never
+// backed up). Severity is informational — backups are encouraged, never alarming.
+func BackupCandidates(
+	ruleID string,
+	cadence backup.Cadence,
+	lastBackupAt time.Time,
+	now time.Time,
+	text func(daysSince int) (title, body string),
+) []notify.Candidate {
+	if !backup.Due(cadence, lastBackupAt, now) {
+		return nil
+	}
+	periodKey := notify.MonthKey(now)
+	if cadence == backup.Weekly {
+		periodKey = notify.WeekKey(now)
+	}
+	title, body := text(backup.DaysSince(lastBackupAt, now))
+	return []notify.Candidate{{
+		RuleID:        ruleID,
+		Event:         notify.EventBackupDue,
+		OccurrenceKey: "backup@" + periodKey,
+		At:            now,
+		Title:         title,
+		Body:          body,
+		Severity:      notify.SeverityInfo,
+	}}
 }
 
 // BudgetCandidates produces a notify.Candidate for each budget that is near or

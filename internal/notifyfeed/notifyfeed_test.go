@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -12,6 +13,68 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
 )
+
+func TestBackupCandidates(t *testing.T) {
+	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
+	text := func(days int) (string, string) {
+		return "Back up your data", fmt.Sprintf("%d days since your last backup", days)
+	}
+
+	t.Run("not due yields nothing", func(t *testing.T) {
+		last := now.AddDate(0, 0, -3) // weekly cadence, only 3 days ago
+		if got := BackupCandidates("rule-backup", backup.Weekly, last, now, text); got != nil {
+			t.Errorf("got %d candidates, want none: %+v", len(got), got)
+		}
+	})
+
+	t.Run("off never fires", func(t *testing.T) {
+		if got := BackupCandidates("rule-backup", backup.Off, time.Time{}, now, text); got != nil {
+			t.Errorf("Off should yield no candidates, got %+v", got)
+		}
+	})
+
+	t.Run("due monthly fires one, keyed by month", func(t *testing.T) {
+		last := now.AddDate(0, -2, 0) // two months ago → overdue
+		got := BackupCandidates("rule-backup", backup.Monthly, last, now, text)
+		if len(got) != 1 {
+			t.Fatalf("got %d candidates, want 1: %+v", len(got), got)
+		}
+		c := got[0]
+		if c.RuleID != "rule-backup" || c.Event != notify.EventBackupDue {
+			t.Errorf("RuleID/Event = %q/%q", c.RuleID, c.Event)
+		}
+		if c.Severity != notify.SeverityInfo {
+			t.Errorf("Severity = %v, want info", c.Severity)
+		}
+		if want := "backup@" + notify.MonthKey(now); c.OccurrenceKey != want {
+			t.Errorf("OccurrenceKey = %q, want %q", c.OccurrenceKey, want)
+		}
+		if c.Title != "Back up your data" {
+			t.Errorf("Title = %q", c.Title)
+		}
+	})
+
+	t.Run("due weekly keyed by ISO week", func(t *testing.T) {
+		last := now.AddDate(0, 0, -10) // overdue for weekly
+		got := BackupCandidates("rule-backup", backup.Weekly, last, now, text)
+		if len(got) != 1 {
+			t.Fatalf("got %d candidates, want 1", len(got))
+		}
+		if want := "backup@" + notify.WeekKey(now); got[0].OccurrenceKey != want {
+			t.Errorf("OccurrenceKey = %q, want %q", got[0].OccurrenceKey, want)
+		}
+	})
+
+	t.Run("never backed up is due immediately", func(t *testing.T) {
+		got := BackupCandidates("rule-backup", backup.Monthly, time.Time{}, now, text)
+		if len(got) != 1 {
+			t.Fatalf("never-backed-up should fire, got %d", len(got))
+		}
+		if got[0].Body != "0 days since your last backup" {
+			t.Errorf("Body = %q, want 0-days (unknown)", got[0].Body)
+		}
+	})
+}
 
 func TestStaleBalanceCandidates(t *testing.T) {
 	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
