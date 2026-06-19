@@ -33,6 +33,11 @@ jobs:
       - name: API compatibility guard
         run: go run ./cmd/api_compat_guard
 
+      - name: Proto drift check
+        run: |
+          go run github.com/bufbuild/buf/cmd/buf@v1.57.2 generate
+          git diff --exit-code -- buf.yaml buf.gen.yaml proto internal/backendrpc/pb
+
       - name: Test (pure logic packages — js/wasm view packages are build-tagged out)
         run: go test ./...
 

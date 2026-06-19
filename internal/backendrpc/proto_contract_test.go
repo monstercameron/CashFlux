@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	backendrpcpb "github.com/monstercameron/CashFlux/internal/backendrpc/pb/cashflux/v1"
 )
 
 func TestProtoContractCoversBackendRPCMethods(t *testing.T) {
@@ -55,6 +57,28 @@ func TestProtoContractKeepsDatasetOpaque(t *testing.T) {
 	} {
 		if strings.Contains(proto, entity) {
 			t.Fatalf("backend proto should not re-model client entity %q", entity)
+		}
+	}
+}
+
+func TestGeneratedProtoMethodNamesMatchBridgeConstants(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		manual    string
+		generated string
+	}{
+		{name: "sync list", manual: MethodSyncListWorkspaces, generated: backendrpcpb.SyncService_ListWorkspaces_FullMethodName},
+		{name: "sync get", manual: MethodSyncGetWorkspace, generated: backendrpcpb.SyncService_GetWorkspace_FullMethodName},
+		{name: "sync put", manual: MethodSyncPutWorkspace, generated: backendrpcpb.SyncService_PutWorkspace_FullMethodName},
+		{name: "sync delete", manual: MethodSyncDeleteWorkspace, generated: backendrpcpb.SyncService_DeleteWorkspace_FullMethodName},
+		{name: "sync watch", manual: MethodSyncWatchWorkspaces, generated: backendrpcpb.SyncService_WatchWorkspaces_FullMethodName},
+		{name: "ai set key", manual: MethodAISetKey, generated: backendrpcpb.AIService_SetKey_FullMethodName},
+		{name: "ai list models", manual: MethodAIListModels, generated: backendrpcpb.AIService_ListModels_FullMethodName},
+		{name: "ai chat", manual: MethodAIChat, generated: backendrpcpb.AIService_Chat_FullMethodName},
+		{name: "ai vision", manual: MethodAIVision, generated: backendrpcpb.AIService_Vision_FullMethodName},
+	} {
+		if tc.manual != tc.generated {
+			t.Fatalf("%s method = %q, generated %q", tc.name, tc.manual, tc.generated)
 		}
 	}
 }

@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Proto codegen and drift check (7.0/7.1).** Added Buf-based generation for
+  `proto/cashflux/v1/cashflux.proto`, checked-in Go/gRPC descriptors under `internal/backendrpc/pb`, and a CI
+  drift check.
 - **OTLP trace export (7.15).** The server now installs an OpenTelemetry SDK tracer provider when
   `CASHFLUX_SERVER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` is configured, exporting spans over OTLP/HTTP.
 - **Device/session revocation endpoints (7.14).** Added `GET /v1/auth/sessions` and

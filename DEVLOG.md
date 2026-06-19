@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add proto codegen drift check (7.0/7.1)
+
+- Added `buf.yaml` and `buf.gen.yaml` so `go run github.com/bufbuild/buf/cmd/buf@v1.57.2 generate` produces
+  Go and gRPC descriptors without requiring a globally installed `protoc`.
+- Checked in generated output under `internal/backendrpc/pb` and added CI drift detection against the proto and
+  generated files.
+- Added a contract test that compares generated full method names to the current hand-written bridge constants
+  while the transport migration remains incremental.
+
 ## 2026-06-19 - feat: add otlp trace export (7.15)
 
 - Added `server.ConfigureTracing`, which installs an OpenTelemetry SDK tracer provider with an OTLP/HTTP batch

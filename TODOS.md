@@ -3935,16 +3935,18 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `golang.org/x/oauth2`, `ncruces/go-sqlite3` (already used client-side).
       Done: bridge/grpc/protobuf/sqlite deps are pinned. OAuth intentionally uses explicit stdlib HTTP
       handlers for PKCE/state/token/userinfo flows, so `golang.org/x/oauth2` is not carried as an unused module.
-- [ ] protoc + `protoc-gen-go` + `protoc-gen-go-grpc` (or `buf`); add a codegen step (Makefile / `gwc`-style)
+- [x] protoc + `protoc-gen-go` + `protoc-gen-go-grpc` (or `buf`); add a codegen step (Makefile / `gwc`-style)
       and a CI **proto-drift check** (generated code matches `.proto`).
+      Done: Buf is pinned through `buf.yaml`/`buf.gen.yaml`; `go run github.com/bufbuild/buf/cmd/buf@v1.57.2
+      generate` writes Go/gRPC descriptors to `internal/backendrpc/pb`, and CI fails on generated drift.
 - [x] Pin server Go toolchain (1.26) and confirm the client gRPC code builds for `js/wasm`.
       Done: `go.mod` pins Go 1.26.0, `Dockerfile.server` builds from `golang:1.26-alpine`, and the
       server + `GOOS=js GOARCH=wasm` client builds are part of this atom's verification.
 
 ### 7.1 Proto contracts (shared client+server) ★
-- [~] `proto/` package + gen output dir; versioning policy (no breaking changes; reserve removed fields).
+- [x] `proto/` package + gen output dir; versioning policy (no breaking changes; reserve removed fields).
       `proto/cashflux/v1/cashflux.proto` and `proto/README.md` now define the contract and policy; generated
-      Go output remains blocked on pinned `protoc`/plugin tooling.
+      Go/gRPC output is checked in under `internal/backendrpc/pb`.
 - [x] Common messages: `Workspace{id,name,color,sort,deleted,version,updatedAt,deviceId}`,
       `DatasetEnvelope{schemaVersion, gzippedJson bytes}`, `BlobRef{hash,mime,size,name}`.
 - [x] Keep the dataset as an opaque **bytes/gzip JSON** field (reuse `store.ExportJSON`) — do **not**

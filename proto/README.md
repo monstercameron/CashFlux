@@ -3,8 +3,9 @@
 CashFlux backend RPCs are defined in `proto/cashflux/v1/cashflux.proto`.
 
 The browser and server currently use the hand-written JSON codec in `internal/backendrpc` over the
-GoGRPCBridge tunnel. This proto is the canonical wire-contract target for generated clients and servers once
-the repo has `protoc`, `protoc-gen-go`, and `protoc-gen-go-grpc` pinned.
+GoGRPCBridge tunnel. The generated Go package in `internal/backendrpc/pb` is produced from this proto with
+Buf so the canonical contract and generated descriptors stay pinned while the transport migration remains
+incremental.
 
 ## Versioning Policy
 
@@ -24,7 +25,13 @@ the repo has `protoc`, `protoc-gen-go`, and `protoc-gen-go-grpc` pinned.
 - Warn clients through `/v1/version` compatibility fields before removing an endpoint, field, or behavior.
 - Breaking changes require a new proto package (`cashflux.v2`) and a matching HTTP prefix (`/v2`).
 
-## Future Codegen
+## Codegen
 
-When the toolchain is available, generate Go into `internal/backendrpc/pb` and fail CI if generated files drift
-from `proto/cashflux/v1/cashflux.proto`.
+Run:
+
+```powershell
+go run github.com/bufbuild/buf/cmd/buf@v1.57.2 generate
+```
+
+`buf.yaml` and `buf.gen.yaml` pin the module layout and remote Go/gRPC plugins. CI runs the same command and
+fails if `internal/backendrpc/pb` drifts from `proto/cashflux/v1/cashflux.proto`.
