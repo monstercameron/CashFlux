@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Self-host Docker quickstart status (7.12).** Confirmed the Compose quickstart, env template, Caddy TLS notes,
+  README docs link, and in-app Settings link are all wired.
 - **Export/import round-trip test now covers custom-field definitions.** The lossless-export test exercised
   every dataset entity except `customFieldDefs`; it now includes a select-type definition (with options and
   the required flag) and asserts it survives the round trip, closing the last untested `Dataset` field.

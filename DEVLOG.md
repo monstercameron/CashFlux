@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: close docker quickstart status (7.12)
+
+- Audited the self-host path and found the remaining "link from Settings" already satisfied by the Cloud/server
+  Settings link to `docs/SELF_HOSTING.md`.
+- Confirmed the quickstart evidence: `docker-compose.selfhost.yml`, `deploy/cashflux-server.env.example`,
+  `deploy/Caddyfile.selfhost`, README self-host section, and the self-hosting runbook.
+- Marked the 7.12 Docker quickstart TODO complete without touching the parallel UI work in progress.
+
 ## 2026-06-19 - feat: add cloud trial abuse guard (7.20)
 
 - Added a server-side Checkout precondition that blocks repeat Cloud trial starts for accounts with any prior

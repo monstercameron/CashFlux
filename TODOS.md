@@ -4173,8 +4173,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       flag); `IsCloudActive` returns true when billing is disabled.
 - [x] **Version/compat endpoint** for the client's Test-connection + too-old/too-new warnings (reuse a
       schemaVersion-style ping).
-- [~] **Docker quickstart** + one-command run; sample config (.env) with TLS notes; docs linked from
+- [x] **Docker quickstart** + one-command run; sample config (.env) with TLS notes; docs linked from
       README. Remaining: link from Settings.
+      Done: `docker-compose.selfhost.yml`, the env template, Caddy TLS config, README self-host link,
+      `docs/SELF_HOSTING.md`, and the Settings "Deploy your own server" link are all wired.
 - [x] Self-host docs: backups (SQLite WAL + blobs), upgrade path, optional OAuth setup.
 
 ### 7.13 Turnkey self-host deploy + DO referral ★
