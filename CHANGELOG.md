@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Expanded the typed icon registry for the iconography pass (C46/B13).** `internal/icon` gains 35 curated
+  Lucide-style glyphs the screens need — chevrons, close, more, check/alert/clock status marks, trending and
+  arrow variants, edit/refresh/list/contribute actions, the AI sparkle + message glyphs, and domain accents
+  (credit-card, receipt, landmark, filter, box, workflow, scale, repeat, calculator, scan-line, upload, history,
+  ban, help). All compile-checked `Name` constants with table tests; the wasm `ui.Icon` already renders them.
 - **Artifact blob refs for backend sync (7.7).** Synced datasets can now carry `Artifact.BlobRef` metadata while
   the wasm sync client uploads artifact bytes through `/v1/blobs` and rehydrates them on pull.
 - **Client sync queue and status (7.7).** Browser autosave now persists the latest pending backend mutation per

@@ -39,6 +39,53 @@ const (
 	Subscriptions Name = "subscriptions"
 	Bills         Name = "bills"
 	Split         Name = "split"
+
+	// Controls — real glyphs for the ad-hoc Unicode the chrome used (▾ ‹ › ✕ ⋯).
+	ChevronDown  Name = "chevron-down"
+	ChevronLeft  Name = "chevron-left"
+	ChevronRight Name = "chevron-right"
+	Close        Name = "x"
+	MoreH        Name = "more-horizontal"
+
+	// Status + trend glyphs (carry meaning at a glance; color via caller classes).
+	Check           Name = "check"
+	CheckCircle     Name = "check-circle"
+	AlertCircle     Name = "alert-circle"
+	AlertTriangle   Name = "alert-triangle"
+	Clock           Name = "clock"
+	TrendingUp      Name = "trending-up"
+	TrendingDown    Name = "trending-down"
+	ArrowUp         Name = "arrow-up"
+	ArrowDown       Name = "arrow-down"
+	ArrowUpCircle   Name = "arrow-up-circle"
+	ArrowDownCircle Name = "arrow-down-circle"
+
+	// Row + section actions.
+	Pencil     Name = "pencil"
+	Refresh    Name = "refresh-cw"
+	List       Name = "list"
+	PlusCircle Name = "plus-circle"
+
+	// AI + content.
+	Sparkles      Name = "sparkles"
+	MessageCircle Name = "message-circle"
+	FileText      Name = "file-text"
+
+	// Screens + domain accents.
+	CreditCard Name = "credit-card"
+	Receipt    Name = "receipt"
+	Landmark   Name = "landmark"
+	Filter     Name = "filter"
+	Box        Name = "box"
+	Workflow   Name = "workflow"
+	Scale      Name = "scale"
+	Repeat     Name = "repeat"
+	Calculator Name = "calculator"
+	ScanLine   Name = "scan-line"
+	Upload     Name = "upload"
+	History    Name = "history"
+	Ban        Name = "ban"
+	HelpCircle Name = "help-circle"
 )
 
 // inner maps each icon to its inner SVG markup — the child shapes only. Stroke,
@@ -65,6 +112,48 @@ var inner = map[Name]string{
 	Subscriptions: `<path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>`,
 	Bills:         `<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>`,
 	Split:         `<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.17-2.83L3 3"/><path d="M21 3l-7.83 7.83A4 4 0 0 0 12 13.67V22"/>`,
+
+	ChevronDown:  `<path d="M6 9l6 6 6-6"/>`,
+	ChevronLeft:  `<path d="M15 18l-6-6 6-6"/>`,
+	ChevronRight: `<path d="M9 18l6-6-6-6"/>`,
+	Close:        `<path d="M18 6 6 18"/><path d="M6 6l12 12"/>`,
+	MoreH:        `<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
+
+	Check:           `<path d="M20 6 9 17l-5-5"/>`,
+	CheckCircle:     `<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>`,
+	AlertCircle:     `<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/>`,
+	AlertTriangle:   `<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>`,
+	Clock:           `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`,
+	TrendingUp:      `<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>`,
+	TrendingDown:    `<path d="M22 17 13.5 8.5 8.5 13.5 2 7"/><path d="M16 17h6v-6"/>`,
+	ArrowUp:         `<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>`,
+	ArrowDown:       `<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>`,
+	ArrowUpCircle:   `<circle cx="12" cy="12" r="9"/><path d="M12 16V8"/><path d="m8.5 11.5 3.5-3.5 3.5 3.5"/>`,
+	ArrowDownCircle: `<circle cx="12" cy="12" r="9"/><path d="M12 8v8"/><path d="m8.5 12.5 3.5 3.5 3.5-3.5"/>`,
+
+	Pencil:     `<path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>`,
+	Refresh:    `<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>`,
+	List:       `<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>`,
+	PlusCircle: `<circle cx="12" cy="12" r="9"/><path d="M12 8v8"/><path d="M8 12h8"/>`,
+
+	Sparkles:      `<path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z"/><path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>`,
+	MessageCircle: `<path d="M21 11.5a8.5 8.5 0 0 1-11.8 7.8L3 21l1.7-6.2A8.5 8.5 0 1 1 21 11.5z"/>`,
+	FileText:      `<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/>`,
+
+	CreditCard: `<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>`,
+	Receipt:    `<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/>`,
+	Landmark:   `<path d="M3 21h18"/><path d="M5 21V10"/><path d="M19 21V10"/><path d="M9 21V14"/><path d="M15 21V14"/><path d="M12 3 3 8h18z"/>`,
+	Filter:     `<path d="M22 3H2l8 9.5V19l4 2v-9.5z"/>`,
+	Box:        `<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>`,
+	Workflow:   `<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4a3 3 0 0 1 3 3V14"/>`,
+	Scale:      `<path d="M12 3v18"/><path d="M7 21h10"/><path d="M5 7h14"/><path d="M5 7l-3 6h6z"/><path d="M19 7l3 6h-6z"/>`,
+	Repeat:     `<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>`,
+	Calculator: `<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>`,
+	ScanLine:   `<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>`,
+	Upload:     `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 9l5-5 5 5"/><path d="M12 4v12"/>`,
+	History:    `<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>`,
+	Ban:        `<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>`,
+	HelpCircle: `<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4.6 1.4c0 1.6-2.1 2-2.1 3.1"/><path d="M12 17h.01"/>`,
 }
 
 // Inner returns the icon's inner SVG markup, or "" for an unknown name.

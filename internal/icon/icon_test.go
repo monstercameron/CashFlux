@@ -10,6 +10,13 @@ import (
 var curated = []Name{
 	Dashboard, Accounts, Transactions, Budgets, Goals, Todo, Settings, Page,
 	Plus, Menu, Tag, Users, Planning, Allocate, Insights, Customize, Reports, Subscriptions, Bills, Split,
+	ChevronDown, ChevronLeft, ChevronRight, Close, MoreH,
+	Check, CheckCircle, AlertCircle, AlertTriangle, Clock, TrendingUp, TrendingDown,
+	ArrowUp, ArrowDown, ArrowUpCircle, ArrowDownCircle,
+	Pencil, Refresh, List, PlusCircle,
+	Sparkles, MessageCircle, FileText,
+	CreditCard, Receipt, Landmark, Filter, Box, Workflow, Scale, Repeat, Calculator,
+	ScanLine, Upload, History, Ban, HelpCircle,
 }
 
 func TestEveryConstantResolves(t *testing.T) {

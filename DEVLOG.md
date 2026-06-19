@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: expand the typed icon registry for the C46 iconography pass
+
+- Starting the Icons & charts group. Found the foundations already in place: B13's typed `internal/icon` (20
+  glyphs) with `ui.Icon` rewired and the sidebar/menu already rendering icons (so C46's "sidebar is text only"
+  is stale), and B14's `internal/chartspec` + `web/chart.js` D3 shim + `ui.Chart` with the net-worth trend
+  migrated.
+- The gap blocking C46's placements was the icon vocabulary: its lists call for ~35 glyphs the registry didn't
+  have (chevrons, x, more, check/alert/clock, trending/arrow variants, pencil/refresh/list/plus-circle, sparkles/
+  message-circle, file-text, credit-card, receipt, landmark, filter, box, workflow, scale, repeat, calculator,
+  scan-line, upload, history, ban, help-circle). Added them all as compile-checked `Name` constants with inner
+  SVG authored in the existing Lucide stroke style; kept the test's curated list in sync (every constant resolves,
+  `All()` == curated). Pure + native-tested; wasm builds.
+- Remaining in the group (handed back, since they need a browser or a decision): the actual placement of these
+  glyphs across the screens (quick-add menu, KPI tile headers, status/semantic marks, row actions, AI family,
+  empty-state illustrations) is extensive view-layer work that needs visual verification I can't do headless;
+  B14 still has an open renderer decision (D3 — already implemented — vs. keep pure-Go SVG) plus an in-browser
+  check; and C46.1's card-network glyphs carry a trademark/licensing check before bundling.
+
 ## 2026-06-19 - feat: add artifact blob refs for sync (7.7)
 
 - Added `domain.BlobRef` on artifacts so backend-synced snapshots can reference content-addressed blob bytes
