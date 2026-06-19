@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -85,5 +87,30 @@ func TestIsCloudActiveReadsSubscription(t *testing.T) {
 	active, err := IsCloudActive(context.Background(), Config{Billing: true}, store, AuthUser{ID: "u1"})
 	if err != nil || !active {
 		t.Fatalf("IsCloudActive subscription = %v/%v, want true nil", active, err)
+	}
+}
+
+func TestCloudEntitlementUnaryInterceptorRejectsInactiveBilling(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Now().UTC()
+	if err := store.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	interceptor := CloudEntitlementUnaryInterceptor(Config{Billing: true}, store)
+	called := false
+	_, err := interceptor(
+		ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}),
+		struct{}{},
+		&grpc.UnaryServerInfo{FullMethod: "/cashflux.v1.SyncService/ListWorkspaces"},
+		func(context.Context, any) (any, error) {
+			called = true
+			return struct{}{}, nil
+		},
+	)
+	if status.Code(err) != codes.PermissionDenied || !strings.Contains(err.Error(), "cloud entitlement is inactive") {
+		t.Fatalf("entitlement err = %v code %v", err, status.Code(err))
+	}
+	if called {
+		t.Fatal("handler called for inactive entitlement")
 	}
 }

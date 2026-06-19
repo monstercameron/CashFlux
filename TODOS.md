@@ -4092,12 +4092,12 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] `subscriptions(user_id, stripe_customer, stripe_sub, status, plan, current_period_end, trial_end)`.
       Done: schema v4 adds the table with unique Stripe customer/subscription ids and repository upsert/lookup
       coverage for current subscription state.
-- [~] **Entitlement gate**: a single `IsCloudActive(user)` check (active|trial|grace) enforced in the
+- [x] **Entitlement gate**: a single `IsCloudActive(user)` check (active|trial|grace) enforced in the
       gRPC auth interceptor for Sync/AI RPCs and the blob endpoints; past-due grace window; lapse →
       reject cloud RPCs (clear status code) while local app keeps working.
       Done: billing-disabled self-host stays always-on, and billing-enabled `IsCloudActive` now reads
-      `active`, `trialing`, and in-period `past_due` states from `subscriptions`. Remaining: enforce this
-      gate in Sync/AI/blob endpoints.
+      `active`, `trialing`, and in-period `past_due` states from `subscriptions`; gRPC Sync/AI interceptors
+      and HTTP blob endpoints now reject inactive billing-enabled users.
 - [ ] Storage fair-use cap per user (blob bytes); soft-warn → block new uploads over cap; overage copy.
 - [x] Privacy/compliance: privacy policy + terms endpoints; account export + **delete account**.
       Public `/legal/privacy` and `/legal/terms` JSON endpoints are now mounted and documented in

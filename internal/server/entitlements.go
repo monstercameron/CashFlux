@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -52,4 +53,37 @@ func subscriptionCloudActive(sub Subscription, now time.Time) bool {
 	default:
 		return false
 	}
+}
+
+func CloudEntitlementUnaryInterceptor(cfg Config, store *Store) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if err := requireCloudEntitlement(ctx, cfg, store); err != nil {
+			return nil, err
+		}
+		return handler(ctx, req)
+	}
+}
+
+func CloudEntitlementStreamInterceptor(cfg Config, store *Store) grpc.StreamServerInterceptor {
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if err := requireCloudEntitlement(stream.Context(), cfg, store); err != nil {
+			return err
+		}
+		return handler(srv, stream)
+	}
+}
+
+func requireCloudEntitlement(ctx context.Context, cfg Config, store *Store) error {
+	user, ok := AuthUserFromContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "authenticated user is required")
+	}
+	active, err := IsCloudActive(ctx, cfg, store, user)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return status.Error(codes.PermissionDenied, "cloud entitlement is inactive")
+	}
+	return nil
 }

@@ -152,6 +152,15 @@ func authorizedBlobRequest(w http.ResponseWriter, r *http.Request, cfg Config, s
 		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 		return AuthUser{}, false
 	}
+	active, err := IsCloudActive(r.Context(), cfg, store, user)
+	if err != nil {
+		writeErrorJSON(w, ErrorReasonInternal, "entitlement lookup failed")
+		return AuthUser{}, false
+	}
+	if !active {
+		writeErrorJSON(w, ErrorReasonPermissionDenied, "cloud entitlement is inactive")
+		return AuthUser{}, false
+	}
 	SetLogScope(r.Context(), LogScope{UserID: user.ID})
 	return user, true
 }

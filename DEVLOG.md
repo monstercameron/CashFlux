@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: enforce cloud entitlements on backend services (7.10)
+
+- Added gRPC entitlement interceptors after auth/logging so billing-enabled Sync/AI RPCs require an active
+  subscription state.
+- Added blob endpoint entitlement checks after bearer auth and before workspace/blob work.
+- Covered inactive billing denial for the gRPC interceptor and blob upload endpoint.
+- Marked the entitlement-gate TODO complete; Stripe webhook state updates remain separate.
+
 ## 2026-06-19 - feat: read cloud entitlements from subscriptions (7.10)
 
 - Changed `IsCloudActive` so billing-enabled deployments read the current subscription row instead of returning

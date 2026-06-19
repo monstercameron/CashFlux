@@ -1561,6 +1561,28 @@ func TestBlobEndpointRejectsStorageQuotaExceeded(t *testing.T) {
 	assertHTTPErrorReason(t, rr, ErrorReasonResourceExhausted)
 }
 
+func TestBlobEndpointRejectsInactiveCloudEntitlement(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 19, 13, 45, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutWorkspace(Workspace{ID: "w1", UserID: user.ID, Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Token: "dev-token", Billing: true, DataDir: t.TempDir(), BlobMaxBytes: 1024}
+	h := NewMux(cfg, store)
+	data := []byte("receipt")
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+blobHash(data)+"?workspaceId=w1", bytes.NewReader(data))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("inactive entitlement status = %d body %q", rr.Code, rr.Body.String())
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonPermissionDenied)
+}
+
 func assertHTTPErrorReason(t *testing.T, rr *httptest.ResponseRecorder, want ErrorReason) {
 	t.Helper()
 	if rr.Header().Get("Content-Type") != "application/json" {

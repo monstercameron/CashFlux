@@ -41,6 +41,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend entitlement enforcement (7.10).** Billing-enabled deployments now deny inactive Cloud users at the
+  gRPC Sync/AI interceptor layer and HTTP blob endpoints while self-host mode remains always-on.
 - **Backend subscription entitlement reads (7.10).** `IsCloudActive` now reads billing-enabled Cloud
   entitlement state from stored subscription rows, including active, trialing, and past-due grace states.
 - **Backend subscription persistence (7.10).** Added the server `subscriptions` table and repository APIs for
