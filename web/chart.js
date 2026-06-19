@@ -63,7 +63,11 @@
     var xs = allPts.map(function (p) { return p.x; });
     var ys = allPts.map(function (p) { return p.y; });
     var x = d3.scaleLinear().domain([d3.min(xs), d3.max(xs)]).range([0, iw]);
-    var y = d3.scaleLinear().domain([Math.min(0, d3.min(ys)), d3.max(ys)]).nice().range([ih, 0]);
+    // Bars must grow from a 0 baseline; line/area trend charts should fill the
+    // plot using the data's own range, else a net-worth line (~$350k on a 0–$400k
+    // axis) flattens against the top with dead space below (C51).
+    var yMin = (spec.kind === "bar") ? Math.min(0, d3.min(ys)) : d3.min(ys);
+    var y = d3.scaleLinear().domain([yMin, d3.max(ys)]).nice().range([ih, 0]);
 
     function styleAxis(sel) {
       sel.selectAll("text").attr("fill", fg).attr("font-size", "10px");
