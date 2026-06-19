@@ -100,6 +100,18 @@ func Bills() ui.Node {
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("nav.bills")),
 			body,
+			If(len(upcoming) > 0, Div(Class("flex flex-wrap gap-2 py-1"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
+					csvAmount := func(m money.Money) string {
+						c, err := rates.Convert(m, base)
+						if err != nil {
+							c = money.New(m.Amount, base)
+						}
+						return money.FormatMinor(c.Amount, currency.Decimals(base))
+					}
+					downloadBytes("bills.csv", "text/csv", bills.CSV(upcoming, csvAmount))
+				}), uistate.T("bills.downloadCsv")),
+			)),
 		),
 		If(len(upcoming) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("bills.calendar", monthLabel(now))),

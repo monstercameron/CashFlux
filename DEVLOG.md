@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Bills CSV export (B22)
+
+- Added pure `bills.CSV(bills, amount)` (encoding/csv): header + name, due date (ISO), days until, amount.
+  The amount callback receives each bill's `money.Money` so the screen can convert to base before
+  formatting. Table-tested incl. a comma-in-name row (quoted by encoding/csv).
+- Wired a "Download CSV" button into the Bills list card (shown when there are bills) via `downloadBytes`
+  → `bills.csv`, with a per-bill base-currency conversion in the formatter. Completes CSV export across all
+  three new Tools screens (Reports, Subscriptions, Bills). New `bills.downloadCsv*` keys; wasm build green.
+
 ## 2026-06-18 — feat: Subscriptions CSV export (B25)
 
 - Added pure `subscriptions.CSV(subs, amount)` (encoding/csv): header + name, cadence, charge, normalized

@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Bills: Download CSV (B22).** A "Download CSV" button on the Bills screen exports your upcoming bills
+  (name, due date, days until, amount) as a CSV. Backed by a pure, table-tested `bills.CSV`.
 - **Subscriptions: Download CSV (B25).** A "Download CSV" button on the Subscriptions screen exports your
   detected subscriptions (name, cadence, charge, monthly, annual, next renewal) as a CSV. Backed by a
   pure, table-tested `subscriptions.CSV`.
