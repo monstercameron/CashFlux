@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: add backend sqli audit guard (7.14)
+
+- Added a repository source audit test that rejects dynamic SQL formatting/builders and keeps key tenant
+  predicates parameterized.
+- Documented the guard in `docs/BACKEND_SECURITY.md`, alongside the protected-route and isolation notes.
+- Marked the 7.14 SQLi/path traversal hardening item complete.
+
 ## 2026-06-19 - feat: add scoped backend usage support view (7.19)
 
 - Added authenticated `GET /v1/admin/usage` as a read-only support/admin lookup for daily request and token

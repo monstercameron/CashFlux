@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend SQLi audit coverage (7.14).** Added a repository source guard that rejects dynamic SQL construction
+  patterns and pins parameterized user/workspace predicates.
 - **Backend usage support view (7.19).** Added authenticated `/v1/admin/usage`, a read-only usage lookup scoped
   to the caller, with cross-user isolation tests.
 - **Self-host deploy link in Settings (7.13).** The backend Settings controls now link to the self-host

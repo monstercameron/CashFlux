@@ -4237,9 +4237,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       master-key sourcing and document the current maintenance-window re-entry rotation path. Remaining:
       automated re-encryption command.
 - [ ] Consider per-user dataset encryption-at-rest (envelope encryption) as a later privacy upgrade.
-- [~] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
+- [x] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
       Blob paths now reject malformed hashes before disk access and stay rooted under the blob directory.
-      Remaining: formal SQLi audit coverage.
+      Formal SQLi coverage is now in `TestRepositorySQLAuditUsesParameterizedQueries`, which rejects dynamic SQL
+      formatting/builders and pins parameterized tenant predicates.
 
 #### Abuse / DoS
 - [x] Per-user + per-IP rate limits + quotas; HTTP per-IP/per-user minute caps, AI request/token quotas,

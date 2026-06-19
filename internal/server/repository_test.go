@@ -11,6 +11,38 @@ import (
 	"time"
 )
 
+func TestRepositorySQLAuditUsesParameterizedQueries(t *testing.T) {
+	data, err := os.ReadFile("repository.go")
+	if err != nil {
+		t.Fatalf("read repository.go: %v", err)
+	}
+	src := string(data)
+	for _, forbidden := range []string{
+		"fmt.Sprintf(",
+		"strings.Builder",
+		" + `SELECT",
+		"`SELECT` +",
+		"WHERE user_id = '",
+		"WHERE workspace_id = '",
+	} {
+		if strings.Contains(src, forbidden) {
+			t.Fatalf("repository SQL audit found forbidden dynamic SQL pattern %q", forbidden)
+		}
+	}
+	for _, want := range []string{
+		"WHERE user_id = ?",
+		"WHERE workspace_id = ?",
+		"WHERE user_id = ? AND id = ?",
+		"WHERE w.user_id = ? AND wb.workspace_id = ? AND wb.hash = ?",
+		"WHERE user_id = ? AND day = ?",
+		"WHERE hash = ?",
+	} {
+		if !strings.Contains(src, want) {
+			t.Fatalf("repository SQL audit missing parameterized predicate %q", want)
+		}
+	}
+}
+
 func TestRepositoryUserAndWorkspaceFlow(t *testing.T) {
 	s := openTestStore(t)
 	now := time.Date(2026, time.June, 18, 16, 12, 0, 0, time.UTC)
