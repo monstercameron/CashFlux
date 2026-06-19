@@ -47,7 +47,10 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	if salt == "" {
 		return false
 	}
-	c := applock.Config{}.WithPasscode(passcode, salt, autoLockMinutes, hint)
+	// Start from the current config (not a fresh zero) so changing the passcode
+	// carries over the lock-screen display prefs. On first set loadAppLock returns
+	// the zero config, so the defaults still apply.
+	c := loadAppLock().WithPasscode(passcode, salt, autoLockMinutes, hint)
 	if !c.Enabled {
 		return false
 	}
