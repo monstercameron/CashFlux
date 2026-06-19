@@ -5,13 +5,19 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"google.golang.org/grpc/status"
 )
@@ -157,4 +163,97 @@ func createBillingSession(endpoint, token, path string, body map[string]string, 
 		}
 		js.Global().Get("location").Call("assign", strings.TrimSpace(out.URL))
 	}()
+}
+
+func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
+	ds, err := store.Import(data)
+	if err != nil {
+		return nil, err
+	}
+	changed := false
+	for i := range ds.Artifacts {
+		if len(ds.Artifacts[i].Bytes) == 0 {
+			continue
+		}
+		ref, err := uploadBackendArtifactBlob(ctx, endpoint, token, workspaceID, ds.Artifacts[i])
+		if err != nil {
+			return nil, err
+		}
+		ds.Artifacts[i].BlobRef = &ref
+		ds.Artifacts[i].Bytes = nil
+		changed = true
+	}
+	if !changed {
+		return data, nil
+	}
+	return store.Export(ds)
+}
+
+func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
+	ds, err := store.Import(data)
+	if err != nil {
+		return nil, err
+	}
+	changed := false
+	for i := range ds.Artifacts {
+		if len(ds.Artifacts[i].Bytes) > 0 || ds.Artifacts[i].BlobRef == nil || strings.TrimSpace(ds.Artifacts[i].BlobRef.Hash) == "" {
+			continue
+		}
+		bytes, err := downloadBackendArtifactBlob(ctx, endpoint, token, workspaceID, ds.Artifacts[i].BlobRef.Hash)
+		if err != nil {
+			return nil, err
+		}
+		ds.Artifacts[i].Bytes = bytes
+		if ds.Artifacts[i].Size == 0 {
+			ds.Artifacts[i].Size = len(bytes)
+		}
+		changed = true
+	}
+	if !changed {
+		return data, nil
+	}
+	return store.Export(ds)
+}
+
+func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID string, art domain.Artifact) (domain.BlobRef, error) {
+	sum := sha256.Sum256(art.Bytes)
+	hash := hex.EncodeToString(sum[:])
+	blobURL := normalizedBackendEndpoint(endpoint) + "/v1/blobs/" + hash + "?workspaceId=" + url.QueryEscape(workspaceID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, blobURL, bytes.NewReader(art.Bytes))
+	if err != nil {
+		return domain.BlobRef{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+	mime := strings.TrimSpace(art.MIME)
+	if mime == "" {
+		mime = "application/octet-stream"
+	}
+	req.Header.Set("Content-Type", mime)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return domain.BlobRef{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return domain.BlobRef{}, fmt.Errorf("blob upload returned HTTP %d", resp.StatusCode)
+	}
+	return domain.BlobRef{Hash: hash, MIME: mime, Size: len(art.Bytes)}, nil
+}
+
+func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID, hash string) ([]byte, error) {
+	blobURL := normalizedBackendEndpoint(endpoint) + "/v1/blobs/" + strings.TrimSpace(hash) + "?workspaceId=" + url.QueryEscape(workspaceID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, blobURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("blob download returned HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
 }

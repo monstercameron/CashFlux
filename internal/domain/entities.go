@@ -374,10 +374,19 @@ type Artifact struct {
 	Kind      string     `json:"kind"` // see internal/artifacts: image | csv | json
 	MIME      string     `json:"mime,omitempty"`
 	Bytes     []byte     `json:"bytes,omitempty"`
+	BlobRef   *BlobRef   `json:"blobRef,omitempty"`
 	Columns   []string   `json:"columns,omitempty"`
 	Rows      [][]string `json:"rows,omitempty"`
 	Size      int        `json:"size,omitempty"`
 	CreatedAt time.Time  `json:"createdAt,omitempty"`
+}
+
+// BlobRef points to a backend content-addressed blob that carries artifact bytes
+// outside the synced JSON snapshot.
+type BlobRef struct {
+	Hash string `json:"hash"`
+	MIME string `json:"mime,omitempty"`
+	Size int    `json:"size,omitempty"`
 }
 
 // Task is a budgeting-related to-do item.

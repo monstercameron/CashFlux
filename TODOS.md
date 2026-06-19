@@ -4034,9 +4034,12 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       (synced / offline / syncing / error) + a "Sync now" action.
       Done: latest pending snapshot per workspace is persisted locally, retrying on focus/online/manual sync with
       Settings status copy. Remaining: richer queued-change count outside Settings and conflict action sheet.
-- [ ] **Artifact extraction (client schema change):** move `domain.Artifact.Bytes` out of the synced
+- [~] **Artifact extraction (client schema change):** move `domain.Artifact.Bytes` out of the synced
       snapshot → upload via blob `PUT` (sha256), download via `GET`, keep a local cache; the dataset
       carries a `BlobRef`. Migrate existing inline artifacts on first sync.
+      Done: `Artifact.BlobRef` is in the dataset schema, sync flush uploads artifact bytes to `/v1/blobs`, and
+      sync pull rehydrates missing bytes before local import. Remaining: explicit local blob cache controls and
+      a one-time migration/status surface for already-inline artifacts.
 - [x] AI via proxy: Insights, Allocate, and Documents prefer the backend AI proxy when backend URL/token prefs are
       configured; direct OpenAI remains optional/local-only. The client now uses `AIService` unary calls over the
       `/grpc` GoGRPCBridge tunnel for key upload, chat, and vision.

@@ -130,6 +130,14 @@ func flushBackendSyncQueue() {
 		}
 		defer conn.Close()
 		for _, item := range queue {
+			dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, item.WorkspaceID, []byte(item.Dataset))
+			if err != nil {
+				item.LastAttemptError = err.Error()
+				upsertQueuedSyncMutation(item)
+				setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: "artifact blob upload failed"})
+				logSyncError("backend artifact blob upload failed", err)
+				return
+			}
 			var resp backendrpc.PutWorkspaceResponse
 			err = conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
 				Workspace: backendrpc.Workspace{
@@ -139,7 +147,7 @@ func flushBackendSyncQueue() {
 					Sort:     item.Sort,
 					DeviceID: item.DeviceID,
 				},
-				Dataset:         []byte(item.Dataset),
+				Dataset:         dataset,
 				ClientUpdatedAt: item.ClientUpdatedAt,
 			}, &resp, backendrpc.JSONCallOptions()...)
 			if err != nil {
@@ -242,6 +250,12 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		if !resp.Found || len(resp.Dataset) == 0 {
 			return
 		}
+		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, w.ID, resp.Dataset)
+		if err != nil {
+			logSyncError("backend artifact blob download failed", err)
+			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: "artifact blob download failed"})
+			return
+		}
 		meta := loadSyncMeta(w.ID)
 		localUpdatedAt, hasLocalMeta := parseSyncMetaTime(meta)
 		remoteUpdatedAt, err := time.Parse(time.RFC3339Nano, resp.Workspace.UpdatedAt)
@@ -256,13 +270,13 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		if app == nil {
 			return
 		}
-		if err := app.ImportJSON(resp.Dataset); err != nil {
+		if err := app.ImportJSON(dataset); err != nil {
 			logSyncError("backend sync import failed", err)
 			return
 		}
-		lsSet(datasetStoreKey, string(resp.Dataset))
+		lsSet(datasetStoreKey, string(dataset))
 		hadLocalDataset = true
-		saveSyncMeta(w.ID, syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(resp.Dataset)})
+		saveSyncMeta(w.ID, syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset)})
 		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 		if reloadOnApply {
 			reloadPage()

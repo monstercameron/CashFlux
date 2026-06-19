@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Artifact blob refs for backend sync (7.7).** Synced datasets can now carry `Artifact.BlobRef` metadata while
+  the wasm sync client uploads artifact bytes through `/v1/blobs` and rehydrates them on pull.
 - **Client sync queue and status (7.7).** Browser autosave now persists the latest pending backend mutation per
   workspace, retries on focus/online/manual sync, and exposes sync status plus a Sync now action in Settings.
 - **Blob bridge round-trip coverage (7.10).** Added an integration test that creates a workspace through the

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add artifact blob refs for sync (7.7)
+
+- Added `domain.BlobRef` on artifacts so backend-synced snapshots can reference content-addressed blob bytes
+  without embedding the raw artifact payload in the JSON dataset.
+- The wasm sync flush now uploads artifact bytes through authenticated `/v1/blobs` before `PutWorkspace`; pulls
+  download missing bytes for `BlobRef` artifacts before importing locally.
+- Covered the dataset schema round-trip for blob-backed artifacts; local artifact rendering still uses hydrated
+  bytes, so custom-page behavior is unchanged.
+
 ## 2026-06-19 - feat: add client sync queue status (7.7)
 
 - Added a persisted browser sync queue that keeps the latest unsent snapshot per workspace and retries it on

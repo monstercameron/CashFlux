@@ -65,6 +65,9 @@ func sampleDataset() Dataset {
 		}, {
 			ID: "art2", Name: "Import", Kind: "csv",
 			Columns: []string{"date", "amount"}, Rows: [][]string{{"2026-06-01", "12.50"}},
+		}, {
+			ID: "art3", Name: "Remote receipt", Kind: "image", MIME: "image/png",
+			BlobRef: &domain.BlobRef{Hash: "abcd", MIME: "image/png", Size: 2048}, Size: 2048,
 		}},
 		Workflows: []workflow.Workflow{{
 			ID: "wf1", Name: "Overspend alert", Enabled: true,
@@ -171,13 +174,17 @@ func TestExportImportRoundTrip(t *testing.T) {
 		cp.Widgets[0].Binding.Expr != "(income - expense) / income * 100" {
 		t.Errorf("custom page lost: %+v", cp)
 	}
-	if len(imported.Artifacts) != 2 {
+	if len(imported.Artifacts) != 3 {
 		t.Fatalf("artifacts lost: %+v", imported.Artifacts)
 	}
 	if imported.Artifacts[0].Kind != "image" || len(imported.Artifacts[0].Bytes) != 4 ||
 		imported.Artifacts[1].Kind != "csv" || len(imported.Artifacts[1].Rows) != 1 ||
 		imported.Artifacts[1].Rows[0][1] != "12.50" {
 		t.Errorf("artifact content lost: %+v", imported.Artifacts)
+	}
+	if imported.Artifacts[2].BlobRef == nil || imported.Artifacts[2].BlobRef.Hash != "abcd" ||
+		imported.Artifacts[2].BlobRef.Size != 2048 || len(imported.Artifacts[2].Bytes) != 0 {
+		t.Errorf("artifact blob ref lost: %+v", imported.Artifacts[2])
 	}
 	if len(imported.Workflows) != 1 || imported.Workflows[0].Name != "Overspend alert" ||
 		!imported.Workflows[0].Enabled || imported.Workflows[0].Trigger.Kind != workflow.TriggerTxnAdded ||
