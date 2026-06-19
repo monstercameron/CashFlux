@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add security disclosure policy
+
+- Added `SECURITY.md` with supported-version scope, private reporting guidance, and handling expectations.
+- Added `web/.well-known/security.txt` pointing to the GitHub advisory flow.
+- Kept disclosure instructions explicit about not sending real financial data, tokens, keys, or database files.
+
 ## 2026-06-19 - feat: add dependency update automation
 
 - Added Dependabot coverage for root Go modules.

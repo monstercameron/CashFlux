@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Security disclosure policy.** Added `SECURITY.md` and a web-served `.well-known/security.txt` for coordinated vulnerability reports.
 - **Dependency update automation.** Dependabot now watches Go modules and GitHub Actions weekly with grouped PRs.
 - **Backend security CI scans.** CI now runs `govulncheck` and high-severity/medium-confidence `gosec` alongside `go vet`.
 - **Backend OAuth nonce binding.** OAuth starts now bind a nonce into the state cookie, and Google authorization requests include the nonce parameter.

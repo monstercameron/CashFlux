@@ -1,0 +1,5 @@
+Contact: https://github.com/monstercameron/CashFlux/security/advisories/new
+Expires: 2027-06-19T05:00:00Z
+Preferred-Languages: en
+Canonical: https://monstercameron.github.io/CashFlux/.well-known/security.txt
+Policy: https://github.com/monstercameron/CashFlux/security/policy

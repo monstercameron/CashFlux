@@ -4186,7 +4186,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `go vet`, `govulncheck`, and high-severity/medium-confidence `gosec` now run in CI; Dependabot
       watches Go modules and GitHub Actions weekly.
 - [ ] Reproducible builds; SBOM (e.g. `cyclonedx`); sign release artifacts/images (cosign).
-- [ ] `SECURITY.md` + `security.txt` + a coordinated vuln-disclosure process.
+- [x] `SECURITY.md` + `security.txt` + a coordinated vuln-disclosure process.
 - [ ] Periodic threat-model review; pre-launch pen-test pass; secrets scanning (gitleaks) in CI.
 - [ ] Least-privilege runtime: non-root container, read-only FS where possible, drop caps, minimal base image.
 
