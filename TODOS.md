@@ -4175,7 +4175,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 #### Input / data
 - [ ] Validate + bound every input: request-size caps (dataset, blob, RPC message), field limits,
       content-type checks; reject malformed protobuf/JSON early.
-      Sync workspace ids/names/colors/device ids are length-bounded before storage.
+      Sync workspace ids/names/colors/device ids are length-bounded before storage; GetWorkspace now also
+      trims and bounds lookup ids before querying. Remaining: malformed protobuf/JSON audit and broader
+      request-shape rejection tests.
 - [x] Blob upload: verify bytes hash to the claimed `:hash`; cap size; sniff/allow-list MIME; never
       execute or serve as HTML (force download / safe content-type).
 - [ ] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,

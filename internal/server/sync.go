@@ -70,8 +70,12 @@ func (s *SyncService) Get(ctx context.Context, workspaceID string) (Workspace, b
 	if err != nil {
 		return Workspace{}, false, err
 	}
-	if strings.TrimSpace(workspaceID) == "" {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
 		return Workspace{}, false, status.Error(codes.InvalidArgument, "workspace id is required")
+	}
+	if len(workspaceID) > maxWorkspaceIDLength {
+		return Workspace{}, false, status.Error(codes.InvalidArgument, "workspace id is too long")
 	}
 	workspace, ok, err := s.store.GetWorkspace(user.ID, workspaceID)
 	if err != nil {

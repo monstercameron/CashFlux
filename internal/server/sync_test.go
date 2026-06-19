@@ -130,6 +130,9 @@ func TestSyncServiceRejectsOversizedWorkspaceFields(t *testing.T) {
 			}
 		})
 	}
+	if _, _, err := service.Get(ctx, strings.Repeat("w", maxWorkspaceIDLength+1)); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("Get long id err = %v, want invalid argument", err)
+	}
 	if _, err := service.Delete(ctx, strings.Repeat("w", maxWorkspaceIDLength+1), now, "device"); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("Delete long id err = %v, want invalid argument", err)
 	}

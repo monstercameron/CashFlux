@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend sync lookup ID bounds.** Workspace sync reads now trim and reject oversized workspace ids before
+  querying SQLite, matching the existing Put/Delete field limits and closing a remaining input-validation gap.
 - **Backup reminders are live (B28).** Exporting your data now stamps the time, and opening CashFlux surfaces a
   gentle monthly "back up your data" reminder when it's been too long (or you've never exported), through the
   same B19 catch-up engine — suppressed on a fresh, empty install. Completes the backup-reminder feature end

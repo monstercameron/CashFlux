@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: bound sync lookup workspace ids
+
+- Found one input-bound gap left in sync: `PutWorkspace` and `Delete` enforced the workspace id length cap,
+  but `Get` only checked for an empty id before hitting the repository.
+- `SyncService.Get` now trims the id and rejects anything over `maxWorkspaceIDLength` with
+  `InvalidArgument`, matching the existing Put/Delete field-limit behavior.
+- Extended `TestSyncServiceRejectsOversizedWorkspaceFields` to cover long Get ids. Full native tests, WASM
+  build, backend build, and `gwc verify` passed against the current HEAD before staging this atom.
+
 ## 2026-06-19 — feat: backup reminders live end-to-end (B28)
 
 - Completed B28 by seizing a window where the parallel session was in `server/` (settings.go momentarily
