@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: budget limit suggestions from history (D6)
+
+- Added pure `budgeting.SuggestLimit(categoryID, txns, now, months, rates)`: averages the category's spend over
+  the trailing full months, dividing by the span from the oldest month with spend through the most recent (so a
+  one-month-old category isn't divided by the whole window, while genuine zero-spend months inside the span
+  still pull the average down). Excludes the current partial month, transfers, and income.
+- Surfaced it in the Budgets add form: "You've averaged $X/mo here recently." for the selected category plus a
+  "Use this" button that sets the limit field (FormatMinor into major units). Added budgets.suggest/useSuggest
+  i18n keys. Table tests: multi-month span average, new-category (denom 1), gap handling, and edge cases.
+- gofmt clean, budgeting + i18n tests green, wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: headline spending trend on Reports (B21)
 
 - Added a one-line spending-trend summary under the Reports stat grid, comparing this period's expense to the

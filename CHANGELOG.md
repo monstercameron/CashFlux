@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Budget limit suggestions from history (D6).** New pure, table-tested `budgeting.SuggestLimit` computes a
+  category's average monthly spend over recent full months (averaged across its span of activity, so new
+  categories aren't diluted), and the Budgets add form now shows "You've averaged $X/mo here recently." for the
+  selected category with a one-tap "Use this" that fills the limit field.
+
+### Added
 - **Headline spending trend on Reports (B21).** Below the stat grid the Reports screen now shows a one-line
   "Spending is up/down X% versus the previous period" summary (backed by the shared `ledger.PercentChange`),
   so the overall direction is clear at a glance — not just the per-category deltas.

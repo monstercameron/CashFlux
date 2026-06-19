@@ -313,6 +313,8 @@ var english = Catalog{
 	"budgets.envelopeNote":     "Envelope budgeting: each budget's unspent funds carry forward to the next period.",
 	"budgets.envelopeRow":      "Envelope balance: %s",
 	"budgets.paceOver":         "At this pace, projected to go over by %s",
+	"budgets.suggest":          "You've averaged %s/mo here recently.",
+	"budgets.useSuggest":       "Use this",
 	"budgets.onTrack":          "On track",
 	"budgets.nearLimit":        "Near limit",
 	"budgets.overBudget":       "Over budget",

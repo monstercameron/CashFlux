@@ -158,6 +158,10 @@ func Budgets() ui.Node {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
 		}
 		ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
+		// Suggest a limit from the selected category's recent monthly spend, with a
+		// one-tap "use this" that fills the limit field (D6/budget hygiene).
+		suggestRates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		suggestion, _ := budgeting.SuggestLimit(catID.Get(), app.Transactions(), time.Now(), 6, suggestRates)
 		formCard = Section(Class("card"),
 			H2(Class("card-title"), uistate.T("budgets.add")),
 			Form(Class("form-grid"), OnSubmit(add),
@@ -171,6 +175,10 @@ func Budgets() ui.Node {
 				}),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 			),
+			If(suggestion > 0, Div(Class("flex items-center gap-2 mt-2"),
+				Span(Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
+				Button(Class("btn"), Type("button"), OnClick(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }), uistate.T("budgets.useSuggest")),
+			)),
 			errText("budget-err", errMsg.Get()),
 		)
 	}
