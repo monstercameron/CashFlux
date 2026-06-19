@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add ai upstream circuit breaker (7.16)
+
+- Added a short global AI upstream circuit breaker that opens after three consecutive transport/5xx failures.
+- The breaker fails fast before key lookup/upstream calls while open, resets after cooldown, and clears on a
+  successful/non-5xx upstream response.
+- Covered open, fail-fast, cooldown, and reset behavior with focused AI service tests.
+
 ## 2026-06-19 - test: add backend load smoke baseline (7.18)
 
 - Added `TestServerLoadSmokeSyncBlobAndWatch` as a CI-friendly first load baseline.

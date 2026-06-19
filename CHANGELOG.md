@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **AI upstream circuit breaker (7.16).** The backend AI proxy now opens a short fail-fast window after
+  repeated upstream transport or 5xx failures, then resets after cooldown and a successful upstream response.
 - **Backend load smoke coverage (7.18).** Added an in-process load smoke test covering concurrent sync pushes,
   workspace watch fan-out, and blob upload/download through the real HTTP/gRPC bridge.
 - **Sign out everywhere endpoint (7.14).** Added `POST /v1/auth/logout-all` to revoke every refresh session

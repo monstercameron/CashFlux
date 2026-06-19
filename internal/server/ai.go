@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
@@ -34,6 +35,8 @@ const (
 	maxAIVisionImageURLBytes  = 4 << 20
 	maxAIVisionSchemaNameSize = 128
 	maxAIVisionSchemaBytes    = 64 << 10
+	aiCircuitFailureThreshold = 3
+	aiCircuitCooldown         = 30 * time.Second
 )
 
 type aiHTTPDoer interface {
@@ -57,6 +60,9 @@ type AIService struct {
 	blockedUsers    map[string]struct{}
 	metrics         *Metrics
 	now             func() time.Time
+	circuitMu       sync.Mutex
+	circuitFailures int
+	circuitOpenTil  time.Time
 }
 
 type AIServiceConfig struct {
@@ -229,6 +235,9 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	if err := s.checkUsageLimit(user.ID, day); err != nil {
 		return AICompletion{}, err
 	}
+	if err := s.checkAIUpstreamCircuit(day); err != nil {
+		return AICompletion{}, err
+	}
 	key, ok, err := s.store.GetAIKey(user.ID, "openai", s.masterKey)
 	if err != nil {
 		return AICompletion{}, fmt.Errorf("server ai: get key: %w", err)
@@ -248,8 +257,10 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 			return AICompletion{}, status.Error(codes.Canceled, "ai request canceled")
 		}
 		if upstreamCtx.Err() == context.DeadlineExceeded {
+			s.recordAIUpstreamFailure(day)
 			return AICompletion{}, status.Error(codes.DeadlineExceeded, "openai request timed out")
 		}
+		s.recordAIUpstreamFailure(day)
 		return AICompletion{}, status.Errorf(codes.Unavailable, "openai request failed: %v", err)
 	}
 	defer resp.Body.Close()
@@ -258,8 +269,14 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 		return AICompletion{}, status.Errorf(codes.Unavailable, "read openai response: %v", err)
 	}
 	if resp.StatusCode >= 400 {
+		if resp.StatusCode >= 500 {
+			s.recordAIUpstreamFailure(day)
+		} else {
+			s.recordAIUpstreamSuccess()
+		}
 		return AICompletion{}, status.Error(openAICode(resp.StatusCode), ai.ErrorMessage(resp.StatusCode, data))
 	}
+	s.recordAIUpstreamSuccess()
 	content, err := ai.ParseResponse(data)
 	if err != nil {
 		return AICompletion{}, status.Errorf(codes.Internal, "parse openai response: %v", err)
@@ -284,6 +301,44 @@ func (s *AIService) aiBlocked(userID string) bool {
 	}
 	_, ok := s.blockedUsers[strings.TrimSpace(userID)]
 	return ok
+}
+
+func (s *AIService) checkAIUpstreamCircuit(now time.Time) error {
+	if s == nil {
+		return nil
+	}
+	s.circuitMu.Lock()
+	defer s.circuitMu.Unlock()
+	if !s.circuitOpenTil.IsZero() && now.Before(s.circuitOpenTil) {
+		return status.Error(codes.Unavailable, "openai upstream circuit is open")
+	}
+	if !s.circuitOpenTil.IsZero() && !now.Before(s.circuitOpenTil) {
+		s.circuitOpenTil = time.Time{}
+		s.circuitFailures = 0
+	}
+	return nil
+}
+
+func (s *AIService) recordAIUpstreamFailure(now time.Time) {
+	if s == nil {
+		return
+	}
+	s.circuitMu.Lock()
+	defer s.circuitMu.Unlock()
+	s.circuitFailures++
+	if s.circuitFailures >= aiCircuitFailureThreshold {
+		s.circuitOpenTil = now.Add(aiCircuitCooldown)
+	}
+}
+
+func (s *AIService) recordAIUpstreamSuccess() {
+	if s == nil {
+		return
+	}
+	s.circuitMu.Lock()
+	defer s.circuitMu.Unlock()
+	s.circuitFailures = 0
+	s.circuitOpenTil = time.Time{}
 }
 
 func (s *AIService) auditAIUsageAlerts(ctx context.Context, day time.Time, previous, next Usage) {

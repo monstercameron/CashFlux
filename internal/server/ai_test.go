@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -486,6 +487,93 @@ func TestAIServiceRetriesTransientUpstreamStatus(t *testing.T) {
 	}
 	if got.Content != "retry ok" || got.Usage.TotalTokens != 7 || client.calls != 2 {
 		t.Fatalf("retry response/calls = %+v/%d", got, client.calls)
+	}
+}
+
+func TestAIServiceOpensCircuitAfterConsecutiveUpstreamFailures(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	if err := store.UpsertUser(User{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u1", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	now := time.Date(2026, time.June, 19, 20, 0, 0, 0, time.UTC)
+	client := &sequenceAIClient{errors: []error{errors.New("dial failed"), errors.New("dial failed"), errors.New("dial failed")}}
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey:       master,
+		Client:          client,
+		UpstreamRetries: 0,
+		Now:             func() time.Time { return now },
+	})
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
+	for i := 0; i < aiCircuitFailureThreshold; i++ {
+		_, err := svc.Chat(ctx, AIChatRequest{
+			Model:    "gpt-4o-mini",
+			Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+		})
+		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "openai request failed") {
+			t.Fatalf("failure %d err = %v code %v", i, err, status.Code(err))
+		}
+	}
+	if client.calls != aiCircuitFailureThreshold {
+		t.Fatalf("client calls after failures = %d", client.calls)
+	}
+	_, err := svc.Chat(ctx, AIChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+	})
+	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "circuit is open") {
+		t.Fatalf("open circuit err = %v code %v", err, status.Code(err))
+	}
+	if client.calls != aiCircuitFailureThreshold {
+		t.Fatalf("open circuit made upstream call: %d", client.calls)
+	}
+}
+
+func TestAIServiceCircuitResetsAfterCooldownAndSuccess(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	if err := store.UpsertUser(User{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u1", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	now := time.Date(2026, time.June, 19, 20, 5, 0, 0, time.UTC)
+	client := &sequenceAIClient{responses: []*http.Response{
+		{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(`temporary`))},
+		{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(`temporary`))},
+		{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(`temporary`))},
+		{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"reset ok"}}],"usage":{"total_tokens":3}}`))},
+	}}
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey:       master,
+		Client:          client,
+		UpstreamRetries: 0,
+		Now:             func() time.Time { return now },
+	})
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
+	for i := 0; i < aiCircuitFailureThreshold; i++ {
+		if _, err := svc.Chat(ctx, AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}}); status.Code(err) != codes.Unavailable {
+			t.Fatalf("failure %d did not return unavailable: %v", i, err)
+		}
+	}
+	now = now.Add(aiCircuitCooldown + time.Second)
+	got, err := svc.Chat(ctx, AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}})
+	if err != nil {
+		t.Fatalf("Chat after cooldown: %v", err)
+	}
+	if got.Content != "reset ok" || client.calls != aiCircuitFailureThreshold+1 {
+		t.Fatalf("after cooldown response/calls = %+v/%d", got, client.calls)
+	}
+	_, err = svc.Chat(ctx, AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}})
+	if err != nil {
+		t.Fatalf("Chat after reset: %v", err)
+	}
+	if client.calls != aiCircuitFailureThreshold+2 {
+		t.Fatalf("circuit did not stay reset, calls = %d", client.calls)
 	}
 }
 
