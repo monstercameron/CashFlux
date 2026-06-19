@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Self-host log retention policy.** The self-host Compose stack now uses Docker's local log driver with bounded rotation, and the observability runbook documents stdout collection, retention, and access policy.
 - **Backend SLO and alerting artifacts.** Added Prometheus alert rules plus an observability runbook with SLOs, dashboard queries, and alert routing guidance.
 - **Backend trace/request log correlation.** HTTP and gRPC handlers now extract W3C trace IDs and include `trace_id` alongside request IDs in structured logs.
 - **Backend log sampling and structured errors.** Successful health/metrics probe logs are now sampled, while HTTP 5xx and non-OK gRPC calls emit structured error logs with status and cause fields.

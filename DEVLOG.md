@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: bound self-host log retention
+
+- Configured self-host Compose services to use Docker's `local` log driver with 10 MB files and 10 retained files.
+- Documented stdout log collection, central sink forwarding, retention, and operator access policy in `docs/OBSERVABILITY.md`.
+- Added deploy tests that enforce the log retention settings and observability runbook policy language.
+
 ## 2026-06-19 - feat: add backend slo alerts
 
 - Added `deploy/prometheus-rules.yml` for backend-down, HTTP/gRPC error-rate, and HTTP latency alerts.

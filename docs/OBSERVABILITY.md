@@ -1,6 +1,12 @@
 # CashFlux Observability
 
-Use `/metrics` with a backend bearer token and scrape it from Prometheus or an equivalent collector. Logs should go to stdout and be collected by the host or container platform; keep access limited because logs include operational identifiers.
+Use `/metrics` with a backend bearer token and scrape it from Prometheus or an equivalent collector. Logs go to stdout and are collected by the host or container platform; keep access limited because logs include operational identifiers.
+
+## Logs
+
+The self-host Compose stack uses Docker's `local` log driver with 10 files of 10 MB each per service. Forward stdout logs from Docker, journald, or your platform collector to a central sink when running production. Retain operational logs for the shortest useful window, start with 30 days, and restrict access to operators who can handle request ids, trace ids, user ids, workspace ids, and audit event ids.
+
+Use `CASHFLUX_SERVER_LOG_FORMAT=json` in production so collectors can parse fields without scraping text. Search incidents by `request_id`, `trace_id`, `user_id`, `workspace_id`, route/RPC, status, and `cause`.
 
 ## Service-Level Objectives
 

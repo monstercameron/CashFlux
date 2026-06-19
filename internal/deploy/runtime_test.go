@@ -24,6 +24,24 @@ func TestSelfHostComposeUsesLeastPrivilegeRuntime(t *testing.T) {
 	}
 }
 
+func TestSelfHostComposeConfiguresLogRetention(t *testing.T) {
+	data, err := os.ReadFile("../../docker-compose.selfhost.yml")
+	if err != nil {
+		t.Fatalf("read compose file: %v", err)
+	}
+	compose := string(data)
+	for _, want := range []string{
+		"logging:",
+		"driver: local",
+		`max-size: "10m"`,
+		`max-file: "10"`,
+	} {
+		if !strings.Contains(compose, want) {
+			t.Fatalf("compose file missing log retention setting %q", want)
+		}
+	}
+}
+
 func TestServerDockerfileRunsAsNonRoot(t *testing.T) {
 	data, err := os.ReadFile("../../Dockerfile.server")
 	if err != nil {
@@ -68,7 +86,7 @@ func TestObservabilityArtifactsDefineSLOAlerts(t *testing.T) {
 		t.Fatalf("read observability runbook: %v", err)
 	}
 	runbookText := string(runbook)
-	for _, want := range []string{"Service-Level Objectives", "Dashboard Queries", "Alerts And Routing", "trace_id"} {
+	for _, want := range []string{"Logs", "local` log driver", "30 days", "Service-Level Objectives", "Dashboard Queries", "Alerts And Routing", "trace_id"} {
 		if !strings.Contains(runbookText, want) {
 			t.Fatalf("observability runbook missing %q", want)
 		}

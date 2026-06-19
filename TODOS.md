@@ -4217,7 +4217,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Log sampling for hot paths; structured error logging with stack/cause (wrap with `%w`).
       Successful health/metrics probes are sampled with `CASHFLUX_SERVER_LOG_HOT_PATH_SAMPLE_RATE`, and
       HTTP 5xx/non-OK gRPC records now log structured status and cause fields at error level.
-- [ ] Ship logs to a sink (stdout → collector); retention + access policy; PII-minimized.
+- [x] Ship logs to a sink (stdout → collector); retention + access policy; PII-minimized.
+      Self-host services now use bounded Docker local log retention, and `docs/OBSERVABILITY.md` documents
+      stdout collection, central sink forwarding, 30-day starting retention, and restricted operator access.
 
 #### Metrics
 - [x] Prometheus/OpenTelemetry metrics: request rate/latency/errors per RPC + route (RED), active WS
