@@ -42,6 +42,14 @@ func normalizedBackendEndpoint(endpoint string) string {
 	return endpoint
 }
 
+func backendOrigin(endpoint string) string {
+	u, err := url.Parse(normalizedBackendEndpoint(endpoint))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
 func testBackendConnection(endpoint, token string, onDone func(string), onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
 	token = strings.TrimSpace(token)
@@ -116,6 +124,63 @@ func uploadOpenAIKeyToBackend(endpoint, token, key string, onDone func(), onErro
 		}
 		onError(err.Error())
 	}()
+}
+
+func startOAuthLogin(endpoint, provider string, onDone func(token, csrf, userID string), onError func(string)) {
+	endpoint = normalizedBackendEndpoint(endpoint)
+	provider = strings.TrimSpace(provider)
+	origin := backendOrigin(endpoint)
+	if provider == "" || origin == "" {
+		onError("Backend OAuth configuration is invalid.")
+		return
+	}
+	window := js.Global().Get("window")
+	listener := js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if len(args) == 0 {
+			return nil
+		}
+		event := args[0]
+		if event.Get("origin").String() != origin {
+			return nil
+		}
+		data := event.Get("data")
+		if data.IsUndefined() || data.IsNull() || data.Get("type").String() != "cashflux.oauth" {
+			return nil
+		}
+		token := strings.TrimSpace(data.Get("accessToken").String())
+		csrf := strings.TrimSpace(data.Get("csrf").String())
+		userID := strings.TrimSpace(data.Get("userId").String())
+		if token == "" {
+			onError("Backend OAuth response did not include an access token.")
+			return nil
+		}
+		onDone(token, csrf, userID)
+		return nil
+	})
+	window.Call("addEventListener", "message", listener)
+	returnTo := js.Global().Get("location").Get("href").String()
+	loginURL := endpoint + "/v1/auth/" + url.PathEscape(provider) + "?returnTo=" + url.QueryEscape(returnTo)
+	popup := window.Call("open", loginURL, "cashflux-oauth", "popup,width=520,height=720")
+	if popup.IsUndefined() || popup.IsNull() {
+		onError("The browser blocked the OAuth sign-in window.")
+	}
+}
+
+func signOutBackendOAuth(endpoint, token, csrf string, onDone func()) {
+	endpoint = normalizedBackendEndpoint(endpoint)
+	headers := js.Global().Get("Headers").New()
+	if strings.TrimSpace(token) != "" {
+		headers.Call("set", "Authorization", "Bearer "+strings.TrimSpace(token))
+	}
+	if strings.TrimSpace(csrf) != "" {
+		headers.Call("set", "X-CashFlux-CSRF", strings.TrimSpace(csrf))
+	}
+	opts := js.Global().Get("Object").New()
+	opts.Set("method", "POST")
+	opts.Set("credentials", "include")
+	opts.Set("headers", headers)
+	js.Global().Call("fetch", endpoint+"/v1/auth/logout", opts)
+	onDone()
 }
 
 func startBillingCheckout(endpoint, token, interval string, onError func(string)) {

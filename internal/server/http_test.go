@@ -1038,7 +1038,7 @@ func TestOAuthStartRedirectsWithPKCEState(t *testing.T) {
 	if !strings.HasPrefix(cookies[0].Value, q.Get("state")+".") {
 		t.Fatalf("state cookie value does not match redirect state")
 	}
-	if _, _, nonce, ok := parseOAuthStateCookie(cookies[0].Value); !ok || nonce == "" {
+	if parsed, ok := parseOAuthStateCookie(cookies[0].Value); !ok || parsed.Nonce == "" {
 		t.Fatalf("state cookie missing nonce: %q", cookies[0].Value)
 	}
 }
@@ -1069,8 +1069,8 @@ func TestOAuthStartAddsGoogleNonce(t *testing.T) {
 	if len(cookies) != 1 {
 		t.Fatalf("oauth cookies = %+v", cookies)
 	}
-	_, _, nonce, ok := parseOAuthStateCookie(cookies[0].Value)
-	if !ok || nonce != q.Get("nonce") {
+	parsed, ok := parseOAuthStateCookie(cookies[0].Value)
+	if !ok || parsed.Nonce != q.Get("nonce") {
 		t.Fatalf("nonce cookie/query mismatch cookie=%q query=%q", cookies[0].Value, q.Get("nonce"))
 	}
 }
@@ -1169,6 +1169,9 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	if csrfCookie == nil || csrfCookie.HttpOnly || csrfCookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("csrf cookie = %+v", csrfCookie)
 	}
+	if rr.Header().Get(sessionCSRFHeader) == "" {
+		t.Fatal("callback csrf header missing")
+	}
 
 	refreshReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
 	refreshReq.Header.Set("Origin", "http://127.0.0.1:8080")
@@ -1242,6 +1245,75 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	h.ServeHTTP(logoutRR, logoutReq)
 	if logoutRR.Code != http.StatusNoContent {
 		t.Fatalf("logout status = %d", logoutRR.Code)
+	}
+}
+
+func TestOAuthStartAndCallbackSupportPopupReturnTo(t *testing.T) {
+	store := openTestStore(t)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/authorize":
+			http.Redirect(w, r, "/done", http.StatusFound)
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"provider-token","token_type":"bearer"}`))
+		case "/user":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":42,"email":"alice@example.com"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer provider.Close()
+
+	cfg := Config{
+		AuthMode:  "oauth",
+		AppOrigin: "http://127.0.0.1:8080",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+		OAuthProviders: map[string]OAuthProviderConfig{
+			"github": {
+				ClientID:     "github-id",
+				ClientSecret: "github-secret",
+				RedirectURL:  "http://127.0.0.1:8081/v1/auth/github/callback",
+				AuthURL:      provider.URL + "/authorize",
+				TokenURL:     provider.URL + "/token",
+				UserURL:      provider.URL + "/user",
+			},
+		},
+	}
+	h := NewMux(cfg, store)
+	startReq := httptest.NewRequest(http.MethodGet, "/v1/auth/github?returnTo=http%3A%2F%2F127.0.0.1%3A8080%2Fsettings", nil)
+	startRR := httptest.NewRecorder()
+	h.ServeHTTP(startRR, startReq)
+	if startRR.Code != http.StatusFound {
+		t.Fatalf("start status = %d", startRR.Code)
+	}
+	var stateCookie *http.Cookie
+	for _, cookie := range startRR.Result().Cookies() {
+		if cookie.Name == oauthStateCookie {
+			stateCookie = cookie
+		}
+	}
+	if stateCookie == nil {
+		t.Fatal("oauth state cookie missing")
+	}
+	state, _, ok := strings.Cut(stateCookie.Value, ".")
+	if !ok || state == "" {
+		t.Fatalf("state cookie = %q", stateCookie.Value)
+	}
+
+	callbackReq := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=oauth-code&state="+url.QueryEscape(state), nil)
+	callbackReq.AddCookie(stateCookie)
+	callbackRR := httptest.NewRecorder()
+	h.ServeHTTP(callbackRR, callbackReq)
+	if callbackRR.Code != http.StatusOK {
+		t.Fatalf("callback status = %d body %q", callbackRR.Code, callbackRR.Body.String())
+	}
+	body := callbackRR.Body.String()
+	if !strings.Contains(callbackRR.Header().Get("Content-Type"), "text/html") ||
+		!strings.Contains(body, "cashflux.oauth") ||
+		!strings.Contains(body, "http://127.0.0.1:8080") {
+		t.Fatalf("popup callback content-type/body = %q/%q", callbackRR.Header().Get("Content-Type"), body)
 	}
 }
 

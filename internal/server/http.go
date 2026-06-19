@@ -403,9 +403,10 @@ func writeCORS(w http.ResponseWriter, r *http.Request, cfg Config) bool {
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Set("Vary", "Origin")
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, POST, OPTIONS")
-	w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, ETag")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-CashFlux-CSRF")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, ETag, X-CashFlux-CSRF")
 	w.Header().Set("Access-Control-Max-Age", "600")
 	return true
 }

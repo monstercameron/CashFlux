@@ -80,6 +80,7 @@ type Prefs struct {
 	ServerMode    ServerMode `json:"serverMode,omitempty"`
 	ServerURL     string     `json:"serverUrl,omitempty"`
 	ServerToken   string     `json:"serverToken,omitempty"`
+	ServerCSRF    string     `json:"serverCsrf,omitempty"`
 }
 
 // Default returns the out-of-the-box preferences (Sunday week start, ISO dates,

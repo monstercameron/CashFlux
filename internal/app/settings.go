@@ -374,6 +374,19 @@ func globalSettingsForm() uic.Node {
 	serverURL := uic.UseState(pr.ServerURL)
 	serverToken := uic.UseState(pr.ServerToken)
 	billingInterval := uic.UseState("annual")
+	saveOAuthSession := func(token, csrf, userID string) {
+		p := prefsAtom.Get()
+		p.ServerToken = token
+		p.ServerCSRF = csrf
+		savePrefs(p)
+		serverToken.Set(token)
+		if strings.TrimSpace(userID) == "" {
+			notify(uistate.T("settings.oauthSignedIn"), false)
+		} else {
+			notify(uistate.T("settings.oauthSignedInAs", userID), false)
+		}
+		requestBackendSyncNow()
+	}
 	onServerMode := func(v string) {
 		serverMode.Set(v)
 		p := prefsAtom.Get()
@@ -419,6 +432,26 @@ func globalSettingsForm() uic.Node {
 	openPortal := uic.UseEvent(func() {
 		openBillingPortal(serverURL.Get(), serverToken.Get(), func(msg string) {
 			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
+		})
+	})
+	signInGoogle := uic.UseEvent(func() {
+		startOAuthLogin(serverURL.Get(), "google", saveOAuthSession, func(msg string) {
+			notify(uistate.T("settings.oauthFailed", strings.TrimSpace(msg)), true)
+		})
+	})
+	signInGitHub := uic.UseEvent(func() {
+		startOAuthLogin(serverURL.Get(), "github", saveOAuthSession, func(msg string) {
+			notify(uistate.T("settings.oauthFailed", strings.TrimSpace(msg)), true)
+		})
+	})
+	signOut := uic.UseEvent(func() {
+		p := prefsAtom.Get()
+		signOutBackendOAuth(serverURL.Get(), p.ServerToken, p.ServerCSRF, func() {
+			p.ServerToken = ""
+			p.ServerCSRF = ""
+			savePrefs(p)
+			serverToken.Set("")
+			notify(uistate.T("settings.oauthSignedOut"), false)
 		})
 	})
 	syncNow := uic.UseEvent(func() {
@@ -522,6 +555,9 @@ func globalSettingsForm() uic.Node {
 		If(!cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.selfHostedNote"))),
 		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.syncStatus", syncStatusLabel())),
 		Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
+			Button(Class("btn"), Type("button"), OnClick(signInGoogle), uistate.T("settings.signInGoogle")),
+			Button(Class("btn"), Type("button"), OnClick(signInGitHub), uistate.T("settings.signInGitHub")),
+			If(strings.TrimSpace(serverToken.Get()) != "", Button(Class("btn"), Type("button"), OnClick(signOut), uistate.T("settings.signOut"))),
 			Button(Class("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
 			Button(Class("btn"), Type("button"), OnClick(syncNow), uistate.T("settings.syncNow")),
 			Button(Class("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),

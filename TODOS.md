@@ -4045,10 +4045,13 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `/grpc` GoGRPCBridge tunnel for key upload, chat, and vision.
       Done: backend `ChatStream`/`VisionStream` are implemented, and the wasm AI proxy transport now consumes
       those streaming methods while preserving existing result/error callbacks.
-- [ ] OAuth login UI + token handling, preserving offline-first (no login required to use locally).
+- [x] OAuth login UI + token handling, preserving offline-first (no login required to use locally).
+      Done: Settings opens Google/GitHub OAuth in a popup, the backend callback posts the issued access token
+      and CSRF value back to the app, and the app stores the access token as the backend bearer token while
+      keeping local-only use available.
 - [~] Settings: backend URL, sign in/out, sync status; conflict/LWW UX ("a newer version was on the server - pulled it").
       Done: backend URL/token, test connection, key upload, Cloud/self-host mode, Sync now, and sync status are
-      in Settings. Remaining: OAuth sign in/out and richer conflict action sheet.
+      in Settings. OAuth sign-in buttons and local sign-out are wired. Remaining: richer conflict action sheet.
 
 ### 7.8 Security & privacy ★
 - [x] AES-GCM key management (master-key source + rotation); AI keys encrypted at rest.

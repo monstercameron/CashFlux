@@ -3,6 +3,8 @@
 package app
 
 import (
+	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -27,13 +29,14 @@ func AddMenu() uic.Node {
 	}
 	// item builds one menu row. Called a fixed number of times at stable
 	// positions (not a variable-length loop), so the OnClick hooks are stable.
-	item := func(labelKey string, onSelect func()) uic.Node {
-		return Button(Class("add-item"), Type("button"), Attr("role", "menuitem"),
+	item := func(labelKey string, ic icon.Name, onSelect func()) uic.Node {
+		return Button(Class("add-item flex items-center gap-2.5"), Type("button"), Attr("role", "menuitem"),
 			OnClick(func() {
 				closeMenu()
 				onSelect()
 			}),
-			uistate.T(labelKey),
+			ui.Icon(ic, Class("w-4 h-4 shrink-0")),
+			Span(uistate.T(labelKey)),
 		)
 	}
 	return Div(Class("add-wrap"),
@@ -45,11 +48,11 @@ func AddMenu() uic.Node {
 		),
 		Div(Class("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(Class("add-menu"+hidden), Attr("role", "menu"),
-			item("addmenu.transaction", func() { quickAdd.Set(true) }),
-			item("addmenu.account", func() { nav.Navigate(uistate.RoutePath("/accounts")) }),
-			item("addmenu.budget", func() { nav.Navigate(uistate.RoutePath("/budgets")) }),
-			item("addmenu.goal", func() { nav.Navigate(uistate.RoutePath("/goals")) }),
-			item("addmenu.document", func() { nav.Navigate(uistate.RoutePath("/documents")) }),
+			item("addmenu.transaction", icon.Transactions, func() { quickAdd.Set(true) }),
+			item("addmenu.account", icon.Accounts, func() { nav.Navigate(uistate.RoutePath("/accounts")) }),
+			item("addmenu.budget", icon.Budgets, func() { nav.Navigate(uistate.RoutePath("/budgets")) }),
+			item("addmenu.goal", icon.Goals, func() { nav.Navigate(uistate.RoutePath("/goals")) }),
+			item("addmenu.document", icon.ScanLine, func() { nav.Navigate(uistate.RoutePath("/documents")) }),
 		),
 	)
 }

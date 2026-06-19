@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,6 +16,13 @@ import (
 
 const oauthStateCookie = "cashflux_oauth_state"
 const oauthIDTokenClockSkew = 5 * time.Minute
+
+type oauthStateData struct {
+	State    string
+	Verifier string
+	Nonce    string
+	ReturnTo string
+}
 
 func handleOAuthStart(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -44,10 +52,15 @@ func handleOAuthStart(cfg Config) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInternal, "build oauth nonce")
 			return
 		}
+		returnTo := validatedOAuthReturnTo(r, cfg)
 		challenge := pkceChallenge(verifier)
+		cookieValue := state + "." + verifier + "." + nonce
+		if returnTo != "" {
+			cookieValue += "." + base64.RawURLEncoding.EncodeToString([]byte(returnTo))
+		}
 		http.SetCookie(w, &http.Cookie{
 			Name:     oauthStateCookie,
-			Value:    state + "." + verifier + "." + nonce,
+			Value:    cookieValue,
 			Path:     "/v1/auth/" + providerName + "/callback",
 			HttpOnly: true,
 			Secure:   requestIsSecure(r),
@@ -101,17 +114,17 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "oauth state cookie is missing")
 			return
 		}
-		cookieState, verifier, nonce, ok := parseOAuthStateCookie(cookie.Value)
-		if !ok || cookieState != state {
+		stateData, ok := parseOAuthStateCookie(cookie.Value)
+		if !ok || stateData.State != state {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "oauth state mismatch")
 			return
 		}
-		token, err := exchangeOAuthCode(r, providerName, provider, code, verifier)
+		token, err := exchangeOAuthCode(r, providerName, provider, code, stateData.Verifier)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, err.Error())
 			return
 		}
-		if err := validateOAuthIDToken(providerName, provider, token.IDToken, nonce); err != nil {
+		if err := validateOAuthIDToken(providerName, provider, token.IDToken, stateData.Nonce); err != nil {
 			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, err.Error())
 			return
 		}
@@ -144,6 +157,10 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 		}
 		resp := oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: user.ID}
 		w.Header().Set(sessionCSRFHeader, csrf)
+		if stateData.ReturnTo != "" {
+			writeOAuthCallbackHTML(w, stateData.ReturnTo, resp, csrf)
+			return
+		}
 		writeJSON(w, resp)
 	}
 }
@@ -417,13 +434,74 @@ func requestIsSecure(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-func parseOAuthStateCookie(value string) (string, string, string, bool) {
+func validatedOAuthReturnTo(r *http.Request, cfg Config) string {
+	raw := strings.TrimSpace(r.URL.Query().Get("returnTo"))
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	origin := u.Scheme + "://" + u.Host
+	if !allowedOrigin(origin, cfg.AppOrigin) {
+		return ""
+	}
+	return u.String()
+}
+
+func parseOAuthStateCookie(value string) (oauthStateData, bool) {
 	state, rest, ok := strings.Cut(value, ".")
 	if !ok {
-		return "", "", "", false
+		return oauthStateData{}, false
 	}
 	verifier, nonce, ok := strings.Cut(rest, ".")
-	return state, verifier, nonce, ok && state != "" && verifier != "" && nonce != ""
+	if !ok || state == "" || verifier == "" || nonce == "" {
+		return oauthStateData{}, false
+	}
+	out := oauthStateData{State: state, Verifier: verifier}
+	nonceValue, encodedReturnTo, hasReturnTo := strings.Cut(nonce, ".")
+	out.Nonce = nonceValue
+	if out.Nonce == "" {
+		return oauthStateData{}, false
+	}
+	if hasReturnTo && encodedReturnTo != "" {
+		data, err := base64.RawURLEncoding.DecodeString(encodedReturnTo)
+		if err != nil {
+			return oauthStateData{}, false
+		}
+		out.ReturnTo = string(data)
+	}
+	return out, true
+}
+
+func writeOAuthCallbackHTML(w http.ResponseWriter, returnTo string, resp oauthSessionResponse, csrf string) {
+	target, err := url.Parse(returnTo)
+	if err != nil {
+		writeJSON(w, resp)
+		return
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"type":        "cashflux.oauth",
+		"accessToken": resp.AccessToken,
+		"tokenType":   resp.TokenType,
+		"expiresIn":   resp.ExpiresIn,
+		"userId":      resp.UserID,
+		"csrf":        csrf,
+	})
+	targetOrigin := target.Scheme + "://" + target.Host
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>CashFlux signed in</title><script>
+(function(){
+  var payload = %s;
+  if (window.opener && !window.opener.closed) {
+    window.opener.postMessage(payload, %q);
+    window.close();
+  } else {
+    location.replace(%q);
+  }
+}());
+</script><p>%s</p>`, payload, targetOrigin, returnTo, html.EscapeString("Signed in to CashFlux. You can close this window."))
 }
 
 type oauthToken struct {

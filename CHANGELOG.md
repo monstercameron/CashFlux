@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Quick-add menu now has leading icons (C46).** Each "+ Add" menu item shows its glyph — New transaction
+  (arrow-left-right), New account (wallet), New budget (pie), New goal (target), Scan a document (scan-line) —
+  so the menu is scannable by shape, not just text.
+- **OAuth login UI and popup token handoff (7.7).** Settings now offers Google/GitHub backend sign-in, with
+  OAuth callbacks posting the access token and CSRF value back to the app while preserving token-mode self-hosting.
 - **Expanded the typed icon registry for the iconography pass (C46/B13).** `internal/icon` gains 35 curated
   Lucide-style glyphs the screens need — chevrons, close, more, check/alert/clock status marks, trending and
   arrow variants, edit/refresh/list/contribute actions, the AI sparkle + message glyphs, and domain accents

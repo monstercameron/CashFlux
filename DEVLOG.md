@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend oauth login ui (7.7)
+
+- Added a popup-oriented OAuth callback path: `GET /v1/auth/{provider}?returnTo=<app>` stores the app return
+  URL in the state cookie, and the callback posts the issued access token plus CSRF value back to the opener.
+- Settings now exposes Google/GitHub sign-in buttons, stores the received access token as the backend bearer
+  token, triggers sync, and provides a local sign-out action with best-effort backend logout.
+- Kept the existing JSON OAuth callback response for tests/API clients and covered the popup flow with server
+  tests; token-mode self-hosting still works through the manual bearer-token field.
+
 ## 2026-06-19 - feat: expand the typed icon registry for the C46 iconography pass
 
 - Starting the Icons & charts group. Found the foundations already in place: B13's typed `internal/icon` (20
