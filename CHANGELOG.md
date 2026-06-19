@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Subscriptions: Download CSV (B25).** A "Download CSV" button on the Subscriptions screen exports your
+  detected subscriptions (name, cadence, charge, monthly, annual, next renewal) as a CSV. Backed by a
+  pure, table-tested `subscriptions.CSV`.
 - **Reports: Top payees (B21).** The Reports screen now also shows where your money went by merchant — the
   period's expenses grouped by description (case-insensitively) and ranked by total, top 8. Backed by a
   new pure, table-tested `reports.TopPayees`.

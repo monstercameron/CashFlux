@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Subscriptions CSV export (B25)
+
+- Added pure `subscriptions.CSV(subs, amount)` (encoding/csv): header + name, cadence, charge, normalized
+  monthly + annual cost, and next-renewal (ISO date). Amounts via an `amount` callback (plain decimals).
+  Table-tested incl. the monthly→annual (×12) and yearly→monthly (÷12) normalizations.
+- Wired a "Download CSV" button into the Subscriptions list card (shown when there are subscriptions) via
+  the existing `downloadBytes` → `subscriptions.csv`. New `subs.downloadCsv*` keys. Mirrors the Reports
+  CSV export for consistency. wasm build green, gofmt clean.
+
 ## 2026-06-18 — feat: Reports CSV export (B21)
 
 - Added pure `reports.CategoryCSV(rows, name, amount)` — builds the spending-by-category report as CSV

@@ -85,6 +85,12 @@ func Subscriptions() ui.Node {
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("nav.subscriptions")),
 			body,
+			If(len(subs) > 0, Div(Class("flex flex-wrap gap-2 py-1"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")), OnClick(func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes("subscriptions.csv", "text/csv", subscriptions.CSV(subs, csvAmount))
+				}), uistate.T("subs.downloadCsv")),
+			)),
 		),
 	)
 }
