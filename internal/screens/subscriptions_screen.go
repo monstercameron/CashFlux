@@ -159,7 +159,11 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			Span(Class("row-desc"), s.Name),
 			Span(Class("row-meta"), meta),
 		),
-		Span(Class("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base)))),
+		// Only show the normalized "/mo" figure when it differs from the actual
+		// charge (i.e. weekly/yearly). For monthly subs they're identical, so
+		// showing both reads as a duplicated amount (C56).
+		If(s.Cadence != subscriptions.CadenceMonthly,
+			Span(Class("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base))))),
 		Span(Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),
 		Button(Class("btn"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
 	)
