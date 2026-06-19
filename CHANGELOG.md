@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Headline spending trend on Reports (B21).** Below the stat grid the Reports screen now shows a one-line
+  "Spending is up/down X% versus the previous period" summary (backed by the shared `ledger.PercentChange`),
+  so the overall direction is clear at a glance — not just the per-category deltas.
+
+### Added
 - **Subscriptions' share of spending (B25).** The Subscriptions stat grid now shows what percent of this
   month's spending goes to recurring subscriptions, so the recurring slice of your outflow is visible at a
   glance. Shown only when there's spending this month to compare against.

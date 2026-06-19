@@ -61,6 +61,22 @@ func Reports() ui.Node {
 	flow, _ := reports.IncomeVsExpense(txns, cs, ce, rates)
 	rows, _ := reports.SpendingByCategory(txns, cs, ce, true, ps, pe, rates)
 
+	// Headline spending trend vs the previous comparable period (up = worse).
+	spendTrend := ""
+	if pf, err := reports.IncomeVsExpense(txns, ps, pe, rates); err == nil {
+		if pct, ok := ledger.PercentChange(flow.Expense, pf.Expense); ok {
+			mag := pct
+			if mag < 0 {
+				mag = -mag
+			}
+			if pct > 0 {
+				spendTrend = uistate.T("reports.spendUp", mag)
+			} else if pct < 0 {
+				spendTrend = uistate.T("reports.spendDown", mag)
+			}
+		}
+	}
+
 	// Cash-flow trend: net for each of the last trendBuckets periods of the
 	// viewed resolution, ending with the current one.
 	pr := uistate.UsePrefs().Get()
@@ -265,6 +281,7 @@ func Reports() ui.Node {
 			stat(uistate.T("dashboard.savingsRate"), fmt.Sprintf("%d%%", flow.SavingsRate()), ""),
 			If(burn > 0, stat(uistate.T("reports.runway"), uistate.T("reports.runwayMonths", runway.Months), accentForRunway(runway.Months))),
 		),
+		If(spendTrend != "", P(Class("muted"), spendTrend)),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.byCategory")),
 			P(Class("muted"), narrative),

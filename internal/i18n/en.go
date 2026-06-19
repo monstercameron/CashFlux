@@ -800,6 +800,8 @@ var english = Catalog{
 	"reports.incomeBySource":         "Income by source",
 	"reports.biggestDeposits":        "Biggest deposits",
 	"reports.peakWeekday":            "Most spending happens on %s (%s).",
+	"reports.spendUp":                "Spending is up %d%% versus the previous period.",
+	"reports.spendDown":              "Spending is down %d%% versus the previous period.",
 	"reports.topPayees":              "Top payees",
 	"reports.biggestExpenses":        "Biggest expenses",
 	"reports.byMember":               "Spending by member",

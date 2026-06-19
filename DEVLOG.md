@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: headline spending trend on Reports (B21)
+
+- Added a one-line spending-trend summary under the Reports stat grid, comparing this period's expense to the
+  prior comparable window (`reports.IncomeVsExpense` over `ps,pe` + `ledger.PercentChange`). Up/down phrased
+  via two i18n keys (reports.spendUp/spendDown) showing the magnitude; nothing rendered when there's no prior
+  baseline (PercentChange ok=false) or no change. UI-only. gofmt clean, i18n tests + wasm build green.
+
 ## 2026-06-19 — feat: subscriptions' share of spending (B25)
 
 - Added a "Share of spending" stat to the Subscriptions grid: `subscriptions.MonthlyTotal(subs) * 100 /` this
