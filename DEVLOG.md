@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: reject non-json billing checkout bodies (7.14)
+
+- Added a media-type check to the checkout JSON decoder: explicit request bodies must be `application/json`.
+- Preserved the existing no-header compatibility path while blocking `text/plain` or malformed media types.
+- Added a regression test that confirms unsupported media fails before any Stripe call.
+
 ## 2026-06-19 - fix: reject oversized stripe webhook bodies (7.14)
 
 - Swapped the webhook raw-body read from truncating `io.LimitReader` to `http.MaxBytesReader`.

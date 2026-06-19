@@ -27,6 +27,8 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **Billing checkout content type validation (7.14).** Checkout requests with an explicit non-JSON
+  `Content-Type` now fail with `REQUEST_UNSUPPORTED_MEDIA` before any Stripe call.
 - **Stripe webhook body cap (7.14).** Oversized webhook payloads now return `REQUEST_TOO_LARGE` before Stripe
   signature validation instead of being truncated into a misleading signature failure.
 - **Billing checkout JSON validation (7.14).** Checkout requests now reject malformed, oversized, unknown-field,

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -88,6 +89,13 @@ func allowBillingCheckout(w http.ResponseWriter, store *Store, userID string) bo
 func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64) bool {
 	if r.Body == nil {
 		return true
+	}
+	if contentType := strings.TrimSpace(r.Header.Get("Content-Type")); contentType != "" {
+		mediaType, _, err := mime.ParseMediaType(contentType)
+		if err != nil || !strings.EqualFold(mediaType, "application/json") {
+			writeErrorJSON(w, ErrorReasonUnsupportedMedia, "request content type must be application/json")
+			return false
+		}
 	}
 	reader := http.MaxBytesReader(w, r.Body, maxBytes)
 	dec := json.NewDecoder(reader)

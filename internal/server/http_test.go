@@ -2071,6 +2071,40 @@ func TestBillingCheckoutRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
+func TestBillingCheckoutRejectsUnsupportedContentType(t *testing.T) {
+	store := openTestStore(t)
+	seedSyncUser(t, store, authUserFromToken("dev-token").ID, time.Now().UTC())
+	stripeCalled := false
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stripeCalled = true
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer stripe.Close()
+	cfg := Config{
+		AuthMode:          "token",
+		Token:             "dev-token",
+		Billing:           true,
+		StripeAPIBaseURL:  stripe.URL,
+		StripeSecretKey:   "sk_test",
+		StripePriceAnnual: "price_annual",
+		StripeSuccessURL:  "https://cashflux.example.com/success",
+		StripeCancelURL:   "https://cashflux.example.com/cancel",
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout", strings.NewReader(`{"interval":"annual"}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("checkout status = %d body %q", rr.Code, rr.Body.String())
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUnsupportedMedia)
+	if stripeCalled {
+		t.Fatal("stripe was called for unsupported checkout content type")
+	}
+}
+
 func TestBillingCheckoutRejectsUsedTrial(t *testing.T) {
 	store := openTestStore(t)
 	user := authUserFromToken("dev-token")
