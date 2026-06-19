@@ -4437,7 +4437,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 ### 7.20 Anti-abuse & fraud
 - [~] Signup/login abuse controls (rate limit, optional CAPTCHA on bursts, email/OAuth verification).
       OAuth/session routes now have a dedicated per-IP `CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE` cap with
-      JSON `RATE_LIMITED` errors. Remaining: optional CAPTCHA-on-burst policy and email/OAuth verification review.
+      JSON `RATE_LIMITED` errors. Google ID-token verification now rejects missing/expired expiry claims and
+      future issued-at claims before userinfo fetch or session issuance. Remaining: optional CAPTCHA-on-burst
+      policy and broader email/OAuth verification review.
 - [x] **Referral-fraud guards** (DO referral path): detect self-referral/farming; honest disclosure;
       don't tie product behavior to referral outcomes.
       Done: `docs/CLOUD_BUSINESS_PLAN.md` now treats referral attribution as accounting-only metadata,

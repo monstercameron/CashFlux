@@ -1204,6 +1204,7 @@ func TestOAuthCallbackValidatesGoogleIDTokenClaims(t *testing.T) {
 				"iss":   "https://accounts.google.com",
 				"aud":   "google-id",
 				"nonce": "nonce-123",
+				"exp":   time.Now().Add(time.Hour).Unix(),
 			})
 			_, _ = w.Write([]byte(`{"access_token":"provider-token","id_token":` + strconvQuote(idToken) + `}`))
 		case "/user":
@@ -1255,6 +1256,7 @@ func TestOAuthCallbackRejectsGoogleIDTokenAudience(t *testing.T) {
 				"iss":   "https://accounts.google.com",
 				"aud":   "other-client",
 				"nonce": "nonce-123",
+				"exp":   time.Now().Add(time.Hour).Unix(),
 			})
 			_, _ = w.Write([]byte(`{"access_token":"provider-token","id_token":` + strconvQuote(idToken) + `}`))
 		case "/user":
@@ -1285,6 +1287,51 @@ func TestOAuthCallbackRejectsGoogleIDTokenAudience(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "audience") {
 		t.Fatalf("callback status/body = %d/%q, want bad audience", rr.Code, rr.Body.String())
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUpstreamUnavailable)
+}
+
+func TestOAuthCallbackRejectsExpiredGoogleIDToken(t *testing.T) {
+	store := openTestStore(t)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			idToken := testIDToken(t, map[string]any{
+				"iss":   "https://accounts.google.com",
+				"aud":   "google-id",
+				"nonce": "nonce-123",
+				"exp":   time.Now().Add(-time.Hour).Unix(),
+			})
+			_, _ = w.Write([]byte(`{"access_token":"provider-token","id_token":` + strconvQuote(idToken) + `}`))
+		case "/user":
+			t.Fatal("userinfo should not be fetched after expired id token")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer provider.Close()
+
+	cfg := Config{
+		AuthMode:  "oauth",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+		OAuthProviders: map[string]OAuthProviderConfig{
+			"google": {
+				ClientID:     "google-id",
+				ClientSecret: "google-secret",
+				RedirectURL:  "http://127.0.0.1:8081/v1/auth/google/callback",
+				TokenURL:     provider.URL + "/token",
+				UserURL:      provider.URL + "/user",
+			},
+		},
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google/callback?code=oauth-code&state=state-123", nil)
+	req.AddCookie(&http.Cookie{Name: oauthStateCookie, Value: "state-123.verifier-123.nonce-123"})
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "expired") {
+		t.Fatalf("callback status/body = %d/%q, want expired id token", rr.Code, rr.Body.String())
 	}
 	assertHTTPErrorReason(t, rr, ErrorReasonUpstreamUnavailable)
 }

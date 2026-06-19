@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: validate oauth id-token time claims (7.20)
+
+- Tightened Google OAuth callback verification to require an ID-token expiry claim and reject expired tokens.
+- Rejected future `iat` values beyond a small clock-skew window before userinfo fetch or session issuance.
+- Added focused callback coverage for the expired-token path while keeping the existing audience/nonce coverage.
+
 ## 2026-06-19 - fix: bound ai proxy request shapes (7.14)
 
 - Added field-level validation for AI chat and vision RPCs before the service loads an encrypted key or contacts

@@ -14,6 +14,7 @@ import (
 )
 
 const oauthStateCookie = "cashflux_oauth_state"
+const oauthIDTokenClockSkew = 5 * time.Minute
 
 func handleOAuthStart(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -376,6 +377,8 @@ func validateOAuthIDToken(providerName string, provider OAuthProviderConfig, raw
 		Issuer   string `json:"iss"`
 		Audience any    `json:"aud"`
 		Nonce    string `json:"nonce"`
+		Expires  int64  `json:"exp"`
+		IssuedAt int64  `json:"iat"`
 	}
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		return fmt.Errorf("parse oauth id token claims: %w", err)
@@ -388,6 +391,16 @@ func validateOAuthIDToken(providerName string, provider OAuthProviderConfig, raw
 	}
 	if providerName == "google" && strings.TrimSpace(claims.Nonce) != nonce {
 		return fmt.Errorf("oauth id token nonce is invalid")
+	}
+	now := time.Now().UTC()
+	if claims.Expires <= 0 {
+		return fmt.Errorf("oauth id token expiry is missing")
+	}
+	if now.After(time.Unix(claims.Expires, 0).Add(oauthIDTokenClockSkew)) {
+		return fmt.Errorf("oauth id token is expired")
+	}
+	if claims.IssuedAt > 0 && time.Unix(claims.IssuedAt, 0).After(now.Add(oauthIDTokenClockSkew)) {
+		return fmt.Errorf("oauth id token issued-at is invalid")
 	}
 	return nil
 }

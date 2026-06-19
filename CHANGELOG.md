@@ -19,6 +19,8 @@ and every commit updates this file under `Unreleased`.
   empty, so local dev, custom domains, and native tests are unaffected (the wildcard `*` is never prefixed).
 
 ### Changed
+- **OAuth ID-token verification (7.20).** Google OAuth callbacks now reject missing or expired ID-token expiry
+  claims and future issued-at claims before userinfo fetch or session issuance.
 - **AI proxy request validation (7.14).** The gRPC AI service now rejects malformed chat, vision, and key-upload
   requests with bounded field sizes before key lookup, storage, or upstream OpenAI calls.
 - **Referral-fraud guardrails (7.20).** The Cloud business plan now defines referral attribution as
