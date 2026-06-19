@@ -48,6 +48,7 @@ func All() []Route {
 		{Path: "/reports", Label: "nav.reports", Title: "nav.reports", Subtitle: "screen.reportsSub", Phase: 2, Group: GroupTools, View: Reports},
 		{Path: "/subscriptions", Label: "nav.subscriptions", Title: "nav.subscriptions", Subtitle: "screen.subscriptionsSub", Phase: 2, Group: GroupTools, View: Subscriptions},
 		{Path: "/bills", Label: "nav.bills", Title: "nav.bills", Subtitle: "screen.billsSub", Phase: 2, Group: GroupTools, View: Bills},
+		{Path: "/split", Label: "nav.split", Title: "nav.split", Subtitle: "screen.splitSub", Phase: 2, Group: GroupTools, View: Split},
 		{Path: "/insights", Label: "nav.insights", Title: "nav.insights", Subtitle: "screen.insightsSub", Phase: 2, Group: GroupTools, View: Insights},
 		{Path: "/documents", Label: "nav.documents", Title: "nav.documents", Subtitle: "screen.documentsSub", Phase: 2, Group: GroupTools, View: Documents},
 		{Path: "/customize", Label: "nav.customize", Title: "nav.customize", Subtitle: "screen.customizeSub", Phase: 2, Group: GroupTools, View: Customize},

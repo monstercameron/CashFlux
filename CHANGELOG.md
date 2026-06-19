@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Split a shared expense (B24).** A new **Split** screen in the Tools nav: enter an amount, tick who's
+  sharing it, and it shows each member's even share (the rounding remainder distributed so they add up
+  exactly); pick who paid and it lists who owes them what. Built on the pure `internal/split` core — no
+  setup, a handy household calculator.
 - **Reports: Savings-rate trend (B21).** The Reports screen now charts your savings rate (percent of income
   kept) over the last six periods, so you can see whether it's trending up. Backed by a pure, table-tested
   `reports.SavingsRateSeries`.
@@ -447,6 +451,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Charts draw in on first paint (§6.16).** Bar charts grow up from the baseline and line/trend charts draw
+  left-to-right the first time they render, instead of snapping into place. Animates once per chart (guarded by
+  a `data-cf-drawn` flag so data ticks don't re-trigger it) and is skipped under `prefers-reduced-motion`.
 - **Lock screen fades in instead of popping (§6.18).** Showing the passcode gate (on boot, manual lock, or
   auto-lock) now plays a brief opacity + scale settle — the mirror of the unlock fade-out — so the gate appears
   smoothly. Web Animations API, skipped under `prefers-reduced-motion`.

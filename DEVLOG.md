@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Split-a-shared-expense calculator screen (B24)
+
+- Surfaced the pure `internal/split` core as a self-contained `screens.Split()` (`/split`, Tools group):
+  amount input + per-member include toggles + a "who paid?" select. Computes `split.Equal(amt, ids)` live
+  and shows each included member's share; with a payer chosen, lists "X owes Payer $share" (each non-payer
+  owes their portion). No persistence or domain Split model needed — a handy household calculator that also
+  exercises the core ahead of the full transaction-level split + settle-up.
+- Hooks: amount input + payer select are stable single positions; member rows render `uiw.ToggleRow`
+  (a component with a func `OnChange` prop, not an On* option) inside `MapKeyed`, so the per-row toggle is
+  loop-safe. Deliberately kept to screens + screens.go route + i18n (the parallel agent is in
+  app/server/theme). New `nav.split` / `screen.splitSub` / `split.*` keys; rail shows it with the neutral
+  icon (a dedicated icon is an easy follow-up). wasm build green, gofmt clean.
+
 ## 2026-06-18 — feat: Reports savings-rate trend (B21)
 
 - Added pure `reports.SavingsRateSeries(txns, bounds, rates)`: the whole-percent savings rate per bucket
