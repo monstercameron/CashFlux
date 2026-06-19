@@ -159,6 +159,26 @@ func TestHealthReadyAndVersionEndpoints(t *testing.T) {
 	}
 }
 
+func TestSecurityHeaders(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token"}, openTestStore(t))
+	req := httptest.NewRequest(http.MethodGet, "/v1/version", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	want := map[string]string{
+		"Strict-Transport-Security":    "max-age=31536000; includeSubDomains",
+		"X-Content-Type-Options":       "nosniff",
+		"Referrer-Policy":              "no-referrer",
+		"Cross-Origin-Opener-Policy":   "same-origin",
+		"Cross-Origin-Embedder-Policy": "require-corp",
+		"Content-Security-Policy":      "frame-ancestors 'none'",
+	}
+	for name, value := range want {
+		if got := rr.Header().Get(name); got != value {
+			t.Fatalf("%s = %q, want %q", name, got, value)
+		}
+	}
+}
+
 func TestOAuthStartRedirectsWithPKCEState(t *testing.T) {
 	store := openTestStore(t)
 	cfg := Config{

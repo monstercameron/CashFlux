@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add backend security headers
+
+- Added a server-wide security-header middleware around the backend mux.
+- Set HSTS, X-Content-Type-Options, Referrer-Policy, COOP, COEP, and frame-ancestor CSP response headers.
+- Added an HTTP test that locks the expected header values on backend responses.
+
 ## 2026-06-18 - feat: scope backend blobs to workspaces
 
 - Required blob PUT/GET/HEAD requests to include an owned workspace via `workspaceId` or `X-CashFlux-Workspace-ID`.

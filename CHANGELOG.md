@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend security headers.** Server responses now include HSTS, nosniff, referrer policy, COOP/COEP, and frame-ancestor CSP headers.
 - **Tenant-scoped backend blobs.** Blob PUT/GET/HEAD now require an owned workspace context, link uploads to workspaces, and reject cross-user blob access.
 - **SQLite server tuning.** Backend store connections now enforce WAL mode, a busy timeout, and a single-writer pool shape for SQLite concurrency.
 - **Graceful backend WAL checkpoint.** Server shutdown now drains requests, checkpoints SQLite WAL state, and flushes stdout-backed logs before exit.

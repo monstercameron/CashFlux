@@ -63,7 +63,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("PUT /v1/blobs/{hash}", handlePutBlob(cfg, store))
 	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
-	return requestIDMiddleware(requestLogMiddleware(cfg.Logger, mux))
+	return securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, mux)))
 }
 
 func handleCORSPreflight(cfg Config) http.HandlerFunc {
@@ -74,6 +74,19 @@ func handleCORSPreflight(cfg Config) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := w.Header()
+		header.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		header.Set("X-Content-Type-Options", "nosniff")
+		header.Set("Referrer-Policy", "no-referrer")
+		header.Set("Cross-Origin-Opener-Policy", "same-origin")
+		header.Set("Cross-Origin-Embedder-Policy", "require-corp")
+		header.Set("Content-Security-Policy", "frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func newAIService(store *Store, cfg Config) *AIService {
