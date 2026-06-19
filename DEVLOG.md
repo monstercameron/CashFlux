@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: test backend connection from Settings (7.12)
+
+- Added a Settings Test connection action that calls the configured backend's `/v1/version` endpoint, validates
+  the `v1` compatibility fields, and reports the advertised auth mode.
+- Reused the existing locally persisted backend URL/token prefs; sync and AI proxy calls continue deriving the
+  `/grpc` bridge target from that same base URL.
+- Marked the 7.12 base-URL/Test connection item complete.
+
 ## 2026-06-19 - docs: add self-host token setup checklist (7.13)
 
 - Added a `docs/SELF_HOSTING.md` post-deploy Settings checklist for the self-host base URL, printed

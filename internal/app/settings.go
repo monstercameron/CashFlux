@@ -391,6 +391,13 @@ func globalSettingsForm() uic.Node {
 			notify(uistate.T("settings.serverKeyFailed", strings.TrimSpace(msg)), true)
 		})
 	})
+	testBackend := uic.UseEvent(func() {
+		testBackendConnection(serverURL.Get(), serverToken.Get(), func(authMode string) {
+			notify(uistate.T("settings.serverTestOK", authMode), false)
+		}, func(msg string) {
+			notify(uistate.T("settings.serverTestFailed", strings.TrimSpace(msg)), true)
+		})
+	})
 
 	// Freshness window editor: per-type day inputs writing Settings.FreshnessOverrides.
 	setFreshness := func(typeKey string, days int) {
@@ -476,7 +483,10 @@ func globalSettingsForm() uic.Node {
 		Input(Class("set-input mt-[0.45rem]"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
 		Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken)),
 		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.backendNote")),
-		Button(Class("btn mt-[0.45rem]"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
+		Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
+			Button(Class("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
+			Button(Class("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
+		),
 		Select(Class("set-input mt-[0.45rem]"), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
 			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
 			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),

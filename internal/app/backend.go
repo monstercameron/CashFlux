@@ -4,6 +4,9 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
@@ -13,11 +16,60 @@ import (
 
 const defaultBackendURL = "http://127.0.0.1:8081"
 
-func uploadOpenAIKeyToBackend(endpoint, token, key string, onDone func(), onError func(string)) {
+type backendVersionResponse struct {
+	APIVersion          string `json:"apiVersion"`
+	MinClientAPIVersion string `json:"minClientApiVersion"`
+	AuthMode            string `json:"authMode"`
+}
+
+func normalizedBackendEndpoint(endpoint string) string {
 	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
 	if endpoint == "" {
-		endpoint = defaultBackendURL
+		return defaultBackendURL
 	}
+	return endpoint
+}
+
+func testBackendConnection(endpoint, token string, onDone func(string), onError func(string)) {
+	endpoint = normalizedBackendEndpoint(endpoint)
+	token = strings.TrimSpace(token)
+	go func() {
+		req, err := http.NewRequest(http.MethodGet, endpoint+"/v1/version", nil)
+		if err != nil {
+			onError("Backend URL is invalid.")
+			return
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			onError("Couldn't reach the backend server.")
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			onError(fmt.Sprintf("Backend returned HTTP %d.", resp.StatusCode))
+			return
+		}
+		var version backendVersionResponse
+		if err := json.NewDecoder(resp.Body).Decode(&version); err != nil {
+			onError("Backend version response was invalid.")
+			return
+		}
+		if version.APIVersion != "v1" || version.MinClientAPIVersion != "v1" {
+			onError("Backend API version is not compatible.")
+			return
+		}
+		if version.AuthMode == "" {
+			version.AuthMode = "token"
+		}
+		onDone(version.AuthMode)
+	}()
+}
+
+func uploadOpenAIKeyToBackend(endpoint, token, key string, onDone func(), onError func(string)) {
+	endpoint = normalizedBackendEndpoint(endpoint)
 	token = strings.TrimSpace(token)
 	key = strings.TrimSpace(key)
 	if token == "" {

@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend Settings connection test (7.12).** Settings now has a Test connection action for the configured
+  backend URL/token, validating `/v1/version` before the same base URL is used for `/grpc`.
 - **Self-host token setup docs (7.13).** Added a post-deploy Settings checklist so operators know to paste the
   printed access token, test `/v1/version`, and let the app derive the `/grpc` tunnel.
 - **Backend API compatibility guard (7.19).** Added `cmd/api_compat_guard`, CI coverage, and proto

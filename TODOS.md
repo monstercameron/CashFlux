@@ -4130,8 +4130,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 #### Client
 - [ ] **Settings → Cloud** leads with a segmented **Server: Cloud / Self-hosted** control; the rest of
       the section adapts to the choice.
-- [ ] Self-hosted: **base-URL field** + **Test connection** (reachability + version/compat ping) before
+- [x] Self-hosted: **base-URL field** + **Test connection** (reachability + version/compat ping) before
       save; persist the URL; use it for the gRPC bridge (`wss`) and HTTP OAuth/blob endpoints.
+      Done: Settings persists the backend URL/token locally, Test connection validates `/v1/version`, and the
+      sync/AI clients derive the GoGRPCBridge `/grpc` tunnel from the same base URL.
 - [ ] Hide all billing surfaces (pricing, trial banner, manage-subscription, storage cap) when a custom
       server is selected; entitlement = always-on for self-host.
 - [ ] **Auth method adapts to the server:** support a lighter **single-user access-token** mode (paste
