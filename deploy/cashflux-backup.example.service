@@ -1,0 +1,16 @@
+[Unit]
+Description=CashFlux self-host backup
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cashflux
+Environment=CASHFLUX_BACKUP_DIR=/var/backups/cashflux
+Environment=CASHFLUX_OFFBOX_TARGET=
+ExecStart=/usr/bin/docker compose -f docker-compose.selfhost.yml run --rm cashflux-server backup /data/backups
+ExecStart=/usr/bin/rsync -a --delete /var/lib/docker/volumes/cashflux_cashflux-data/_data/backups/ ${CASHFLUX_BACKUP_DIR}/
+ExecStart=/bin/sh -c 'test -z "$CASHFLUX_OFFBOX_TARGET" || /usr/bin/rclone sync "$CASHFLUX_BACKUP_DIR/" "$CASHFLUX_OFFBOX_TARGET" --transfers 4 --checkers 8'
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

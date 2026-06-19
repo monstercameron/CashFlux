@@ -92,3 +92,50 @@ func TestObservabilityArtifactsDefineSLOAlerts(t *testing.T) {
 		}
 	}
 }
+
+func TestBackupArtifactsDefineScheduleAndRestoreRunbook(t *testing.T) {
+	service, err := os.ReadFile("../../deploy/cashflux-backup.example.service")
+	if err != nil {
+		t.Fatalf("read backup service: %v", err)
+	}
+	serviceText := string(service)
+	for _, want := range []string{
+		"cashflux-server backup /data/backups",
+		"CASHFLUX_OFFBOX_TARGET",
+		"rclone sync",
+		"CASHFLUX_BACKUP_DIR",
+	} {
+		if !strings.Contains(serviceText, want) {
+			t.Fatalf("backup service missing %q", want)
+		}
+	}
+
+	timer, err := os.ReadFile("../../deploy/cashflux-backup.example.timer")
+	if err != nil {
+		t.Fatalf("read backup timer: %v", err)
+	}
+	timerText := string(timer)
+	for _, want := range []string{"OnCalendar=", "Persistent=true", "RandomizedDelaySec="} {
+		if !strings.Contains(timerText, want) {
+			t.Fatalf("backup timer missing %q", want)
+		}
+	}
+
+	runbook, err := os.ReadFile("../../docs/SELF_HOSTING.md")
+	if err != nil {
+		t.Fatalf("read self-host runbook: %v", err)
+	}
+	runbookText := string(runbook)
+	for _, want := range []string{
+		"cashflux-server backup /data/backups",
+		"manifest.json",
+		"off-box",
+		"Restore rehearsal",
+		"RPO is the last successful scheduled backup",
+		"RTO is the time to restore",
+	} {
+		if !strings.Contains(runbookText, want) {
+			t.Fatalf("self-host runbook missing %q", want)
+		}
+	}
+}

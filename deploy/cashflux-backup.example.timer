@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly CashFlux self-host backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=20m
+Unit=cashflux-backup.service
+
+[Install]
+WantedBy=timers.target

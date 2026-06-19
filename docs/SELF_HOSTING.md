@@ -75,19 +75,38 @@ The server data volume contains:
 - SQLite WAL/SHM files when active.
 - Blob files under the configured data directory.
 
-For a consistent backup:
+For a consistent manual backup:
 
-1. Stop writes or put the service briefly in maintenance.
-2. Run a WAL checkpoint:
+1. Run the built-in backup command:
 
    ```sh
-   docker compose -f docker-compose.selfhost.yml exec cashflux-server sh -c 'sqlite3 /data/cashflux-server.db "PRAGMA wal_checkpoint(TRUNCATE);"'
+   docker compose -f docker-compose.selfhost.yml run --rm cashflux-server backup /data/backups
    ```
 
-3. Copy the full `cashflux-data` volume, including the SQLite database and blob directory.
-4. Store the backup off-box and encrypted.
+   The command opens the store, checkpoints SQLite WAL, copies `cashflux-server.db` and `blobs/` into a timestamped
+   `cashflux-backup-YYYYMMDDTHHMMSSZ` directory, and writes `manifest.json` with file SHA-256 digests plus RPO/RTO notes.
 
-Restore by stopping the stack, replacing the `cashflux-data` volume contents, then starting the stack again. Verify `/readyz` before reconnecting clients.
+2. Copy the generated backup directory off-box and encrypt it at rest. The repository includes
+   `deploy/cashflux-backup.example.service` and `deploy/cashflux-backup.example.timer` as a nightly systemd example:
+
+   ```sh
+   sudo cp deploy/cashflux-backup.example.service /etc/systemd/system/cashflux-backup.service
+   sudo cp deploy/cashflux-backup.example.timer /etc/systemd/system/cashflux-backup.timer
+   sudo systemctl edit cashflux-backup.service
+   sudo systemctl enable --now cashflux-backup.timer
+   ```
+
+   Set `WorkingDirectory`, `CASHFLUX_BACKUP_DIR`, and `CASHFLUX_OFFBOX_TARGET` for your host. The example uses `rclone`
+   for off-box sync; leave `CASHFLUX_OFFBOX_TARGET` blank until the remote is tested.
+
+Restore rehearsal should happen at least quarterly:
+
+1. Stop the stack.
+2. Copy `cashflux-server.db` and `blobs/` from a backup directory into an empty `cashflux-data` volume.
+3. Start the stack.
+4. Verify `https://<domain>/readyz` returns 204 and spot-check sync from a non-primary device.
+
+Operational objective: RPO is the last successful scheduled backup; RTO is the time to restore the backup directory, start the server, and verify `/readyz`.
 
 ## Upgrades
 

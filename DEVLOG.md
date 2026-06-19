@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add self-host backup command
+
+- Added `cashflux-server backup [out-dir]`, backed by `server.RunBackup`, to checkpoint SQLite WAL and copy `cashflux-server.db` plus the sharded blob tree into a timestamped backup directory.
+- Wrote `manifest.json` with copied file sizes, SHA-256 digests, schema version, and explicit RPO/RTO language so restore rehearsals have an artifact to verify.
+- Added self-host docs plus example systemd service/timer files for nightly backup and optional rclone off-box sync; tests cover the backup/restore path and the deploy/runbook artifacts.
+
 ## 2026-06-19 - feat: add backend blob io deadlines
 
 - Added `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` with a 10 second default for blob disk operations.

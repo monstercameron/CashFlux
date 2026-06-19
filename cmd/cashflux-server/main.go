@@ -32,6 +32,25 @@ func main() {
 	}
 	logger := server.NewLogger(os.Stdout, cfg)
 	cfg.Logger = logger
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		outDir := filepath.Join(cfg.DataDir, "backups")
+		if len(os.Args) > 2 {
+			outDir = os.Args[2]
+		}
+		backupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		backupDir, manifest, err := server.RunBackup(backupCtx, server.BackupOptions{
+			DataDir: cfg.DataDir,
+			OutDir:  outDir,
+		})
+		if err != nil {
+			logger.Error("server backup failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("server backup complete", "path", backupDir, "files", len(manifest.Files), "rpo", manifest.RPO, "rto", manifest.RTO)
+		fmt.Println(backupDir)
+		return
+	}
 	if token := cfg.TokenForDisplay(); token != "" {
 		logger.Warn("generated self-host access token", "token", token)
 		logger.Warn("persist generated token", "hint", "set CASHFLUX_SERVER_TOKEN_SHA256 to the sha256 of this token, or CASHFLUX_SERVER_TOKEN for local development, to keep it stable across restarts")

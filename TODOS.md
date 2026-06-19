@@ -4249,8 +4249,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       AI upstream; idempotent writes (idempotency keys on mutating HTTP; PUT semantics on sync).
       OpenAI proxy retries transient transport, 429, and 5xx failures; remaining: circuit breaker and write idempotency keys.
 - [x] Graceful shutdown: stop accepting, drain active streams/requests, checkpoint WAL, flush logs.
-- [ ] **Backups + tested restore**: scheduled SQLite WAL checkpoint + file copy + blobs dir snapshot to
-      off-box storage; **documented + periodically rehearsed restore**; define **RPO/RTO**.
+- [x] **Backups + tested restore**: scheduled SQLite WAL checkpoint + file copy + blobs dir snapshot to
+      off-box storage; **documented + periodically rehearsed restore**; define **RPO/RTO**. Done:
+      `cashflux-server backup` checkpoints WAL, snapshots DB + blobs with a manifest, the self-host
+      runbook defines scheduled/off-box backup, restore rehearsal, RPO/RTO, and tests cover the restore path.
 - [ ] Zero-/low-downtime deploys; safe forward-only migrations (run on boot, reject newer schema);
       migration dry-run + rollback plan; data-migration backfills idempotent.
 - [ ] Resource limits (memory/CPU/FD/conn); OOM-safe; bounded queues; graceful degradation under load.
