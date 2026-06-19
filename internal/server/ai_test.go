@@ -207,6 +207,40 @@ func TestAIServiceEnforcesDailyUsageLimits(t *testing.T) {
 	}
 }
 
+func TestAIServiceBlocksUserBeforeKeyLoadOrUpstream(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	if err := store.UpsertUser(User{ID: "u-blocked", Provider: "token", Subject: "u-blocked", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u-blocked", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	called := false
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey:      master,
+		BlockedUserIDs: []string{"u-blocked"},
+		Client: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			called = true
+			return nil, nil
+		}),
+	})
+	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u-blocked"}), AIChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+	})
+	if status.Code(err) != codes.PermissionDenied || !strings.Contains(err.Error(), "disabled for this user") {
+		t.Fatalf("blocked err = %v code %v", err, status.Code(err))
+	}
+	if called {
+		t.Fatal("blocked user reached upstream")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
+
 type cancelAwareClient struct {
 	started chan struct{}
 	sawDone chan struct{}

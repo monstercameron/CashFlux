@@ -42,6 +42,7 @@ type Config struct {
 	AIRequestMaxBytes                 int64
 	AIRequestsPerDay                  int64
 	AITokensPerDay                    int64
+	AIBlockedUserIDs                  []string
 	BlobMaxBytes                      int64
 	BlobIOTimeout                     time.Duration
 	StorageMaxBytes                   int64
@@ -98,6 +99,7 @@ func FromEnv() (Config, error) {
 	cfg.AIRequestMaxBytes = envInt64("CASHFLUX_SERVER_AI_REQUEST_MAX_BYTES", 4<<20)
 	cfg.AIRequestsPerDay = envInt64("CASHFLUX_SERVER_AI_REQUESTS_PER_DAY", 0)
 	cfg.AITokensPerDay = envInt64("CASHFLUX_SERVER_AI_TOKENS_PER_DAY", 0)
+	cfg.AIBlockedUserIDs = envCSV("CASHFLUX_SERVER_AI_BLOCKED_USER_IDS")
 	cfg.BlobMaxBytes = envInt64("CASHFLUX_SERVER_BLOB_MAX_BYTES", 32<<20)
 	cfg.BlobIOTimeout = envDuration("CASHFLUX_SERVER_BLOB_IO_TIMEOUT", 10*time.Second)
 	cfg.StorageMaxBytes = envInt64("CASHFLUX_SERVER_STORAGE_MAX_BYTES", 0)

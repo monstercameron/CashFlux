@@ -192,6 +192,18 @@ func TestFromEnvLoadsAIProxyFlag(t *testing.T) {
 	}
 }
 
+func TestFromEnvLoadsAIBlockedUsers(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_AI_BLOCKED_USER_IDS", "u1, github:blocked , , token:abc")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if len(cfg.AIBlockedUserIDs) != 3 || cfg.AIBlockedUserIDs[0] != "u1" ||
+		cfg.AIBlockedUserIDs[1] != "github:blocked" || cfg.AIBlockedUserIDs[2] != "token:abc" {
+		t.Fatalf("AIBlockedUserIDs = %+v", cfg.AIBlockedUserIDs)
+	}
+}
+
 func TestFromEnvLoadsGRPCStreamLimit(t *testing.T) {
 	t.Setenv("CASHFLUX_SERVER_GRPC_MAX_STREAMS_PER_USER", "3")
 	cfg, err := FromEnv()

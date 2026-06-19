@@ -38,6 +38,7 @@ type AIService struct {
 	requestMaxBytes int64
 	requestsPerDay  int64
 	tokensPerDay    int64
+	blockedUsers    map[string]struct{}
 	metrics         *Metrics
 	now             func() time.Time
 }
@@ -53,6 +54,7 @@ type AIServiceConfig struct {
 	RequestMaxBytes int64
 	RequestsPerDay  int64
 	TokensPerDay    int64
+	BlockedUserIDs  []string
 	Metrics         *Metrics
 	Now             func() time.Time
 }
@@ -98,6 +100,13 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 			allowedModels[model] = struct{}{}
 		}
 	}
+	blockedUsers := make(map[string]struct{}, len(cfg.BlockedUserIDs))
+	for _, userID := range cfg.BlockedUserIDs {
+		userID = strings.TrimSpace(userID)
+		if userID != "" {
+			blockedUsers[userID] = struct{}{}
+		}
+	}
 	return &AIService{
 		store:           store,
 		client:          client,
@@ -110,6 +119,7 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 		requestMaxBytes: cfg.RequestMaxBytes,
 		requestsPerDay:  cfg.RequestsPerDay,
 		tokensPerDay:    cfg.TokensPerDay,
+		blockedUsers:    blockedUsers,
 		metrics:         cfg.Metrics,
 		now:             now,
 	}
@@ -187,6 +197,9 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	if err != nil {
 		return AICompletion{}, err
 	}
+	if s.aiBlocked(user.ID) {
+		return AICompletion{}, status.Error(codes.PermissionDenied, "ai proxy is disabled for this user")
+	}
 	if s.requestMaxBytes > 0 && int64(len(body)) > s.requestMaxBytes {
 		return AICompletion{}, status.Error(codes.ResourceExhausted, "ai request is too large")
 	}
@@ -234,6 +247,14 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	}
 	s.metrics.ObserveAIProxy(int64(usage.TotalTokens))
 	return AICompletion{Content: content, Usage: usage}, nil
+}
+
+func (s *AIService) aiBlocked(userID string) bool {
+	if s == nil || len(s.blockedUsers) == 0 {
+		return false
+	}
+	_, ok := s.blockedUsers[strings.TrimSpace(userID)]
+	return ok
 }
 
 func (s *AIService) doUpstream(ctx context.Context, body []byte, key string) (*http.Response, error) {
