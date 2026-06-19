@@ -3949,8 +3949,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `WatchWorkspaces` (server stream).
 - [~] `AIService`: `SetKey`, `ListModels`, `Chat`, and `Vision` unary RPCs are done over the
       GoGRPCBridge `/grpc` tunnel. Remaining: final server-streaming `Chat`/`Vision` chunk responses.
-- [ ] Error model: map to gRPC `codes` / `google.rpc.Status` (unauthenticated; failed-precondition for a
+- [x] Error model: map to gRPC `codes` / `google.rpc.Status` (unauthenticated; failed-precondition for a
       stale push when `force` is off; resource-exhausted for quota).
+      Done in `docs/BACKEND_ERRORS.md`: auth/validation/precondition/quota/upstream failures map to gRPC
+      codes; stale LWW writes intentionally return OK with `accepted=false` plus current state so the client
+      can recover without a second call.
 
 ### 7.2 Server storage layer (pure, tested) ★
 - [x] SQLite schema (ncruces, WAL) + stepwise migrations (own `schemaVersion`, reject newer-than-supported):

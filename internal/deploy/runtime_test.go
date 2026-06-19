@@ -386,6 +386,30 @@ func TestBackendSecurityNotesDocumentProtectedRoutes(t *testing.T) {
 	}
 }
 
+func TestBackendErrorModelDocumentsStatusCodesAndLWWRejection(t *testing.T) {
+	data, err := os.ReadFile("../../docs/BACKEND_ERRORS.md")
+	if err != nil {
+		t.Fatalf("read backend error model: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"Unauthenticated",
+		"InvalidArgument",
+		"FailedPrecondition",
+		"ResourceExhausted",
+		"Unavailable",
+		"DeadlineExceeded",
+		"accepted=false",
+		"not a gRPC failure",
+		"current dataset",
+		"HTTP Statuses",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("backend error model missing %q", want)
+		}
+	}
+}
+
 func TestReportExportDesignDocumentsOfflineSnapshots(t *testing.T) {
 	data, err := os.ReadFile("../../docs/REPORT_EXPORTS.md")
 	if err != nil {
