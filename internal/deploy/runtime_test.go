@@ -447,6 +447,8 @@ func TestBackendErrorModelDocumentsStatusCodesAndLWWRejection(t *testing.T) {
 		"Stable Reasons",
 		"AUTH_UNAUTHENTICATED",
 		"REQUEST_INVALID",
+		"REQUEST_TOO_LARGE",
+		"REQUEST_UNSUPPORTED_MEDIA",
 		"RESOURCE_EXHAUSTED",
 		"RATE_LIMITED",
 		"UPSTREAM_UNAVAILABLE",

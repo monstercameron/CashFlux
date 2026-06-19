@@ -14,6 +14,8 @@ const (
 	ErrorReasonUnauthenticated     ErrorReason = "AUTH_UNAUTHENTICATED"
 	ErrorReasonPermissionDenied    ErrorReason = "AUTH_PERMISSION_DENIED"
 	ErrorReasonInvalidArgument     ErrorReason = "REQUEST_INVALID"
+	ErrorReasonPayloadTooLarge     ErrorReason = "REQUEST_TOO_LARGE"
+	ErrorReasonUnsupportedMedia    ErrorReason = "REQUEST_UNSUPPORTED_MEDIA"
 	ErrorReasonNotFound            ErrorReason = "RESOURCE_NOT_FOUND"
 	ErrorReasonFailedPrecondition  ErrorReason = "FAILED_PRECONDITION"
 	ErrorReasonResourceExhausted   ErrorReason = "RESOURCE_EXHAUSTED"
@@ -47,6 +49,8 @@ var BackendErrorTaxonomy = []ErrorTaxonomy{
 	{Reason: ErrorReasonUnauthenticated, GRPC: codes.Unauthenticated, HTTP: http.StatusUnauthorized},
 	{Reason: ErrorReasonPermissionDenied, GRPC: codes.PermissionDenied, HTTP: http.StatusForbidden},
 	{Reason: ErrorReasonInvalidArgument, GRPC: codes.InvalidArgument, HTTP: http.StatusBadRequest},
+	{Reason: ErrorReasonPayloadTooLarge, GRPC: codes.ResourceExhausted, HTTP: http.StatusRequestEntityTooLarge},
+	{Reason: ErrorReasonUnsupportedMedia, GRPC: codes.InvalidArgument, HTTP: http.StatusUnsupportedMediaType},
 	{Reason: ErrorReasonNotFound, GRPC: codes.NotFound, HTTP: http.StatusNotFound},
 	{Reason: ErrorReasonFailedPrecondition, GRPC: codes.FailedPrecondition, HTTP: http.StatusPreconditionFailed},
 	{Reason: ErrorReasonResourceExhausted, GRPC: codes.ResourceExhausted, HTTP: http.StatusInsufficientStorage},

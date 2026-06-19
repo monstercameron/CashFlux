@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: return json errors for blobs (7.19)
+
+- Migrated blob upload/download/auth/quota failures to `writeErrorJSON`.
+- Added `REQUEST_TOO_LARGE` and `REQUEST_UNSUPPORTED_MEDIA` stable reasons to preserve 413/415 status mapping.
+- Covered representative blob error responses in HTTP tests.
+- Left audit/metrics/OAuth/general middleware HTTP errors as the remaining plain-text migration work.
+
 ## 2026-06-19 - feat: return json error details for account admin (7.19)
 
 - Added `writeErrorJSON` and the shared `ErrorResponse` shape for machine-readable HTTP errors.

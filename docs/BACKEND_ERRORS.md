@@ -13,6 +13,8 @@ The Go source of truth is `internal/server.BackendErrorTaxonomy`.
 | `AUTH_UNAUTHENTICATED` | `Unauthenticated` | `401` | Missing, invalid, or expired auth metadata. |
 | `AUTH_PERMISSION_DENIED` | `PermissionDenied` | `403` | Authenticated caller is not allowed to perform the action. |
 | `REQUEST_INVALID` | `InvalidArgument` | `400` | Malformed JSON/RPC shape, bad ids, invalid timestamp, unsupported model/key format. |
+| `REQUEST_TOO_LARGE` | `ResourceExhausted` | `413` | HTTP body exceeds a route-specific size cap. |
+| `REQUEST_UNSUPPORTED_MEDIA` | `InvalidArgument` | `415` | Blob/content upload type is blocked. |
 | `RESOURCE_NOT_FOUND` | `NotFound` | `404` | Resource does not exist or is intentionally hidden by tenant isolation. |
 | `FAILED_PRECONDITION` | `FailedPrecondition` | `412` | Server prerequisite is missing, such as disabled AI proxy or missing master key. |
 | `RESOURCE_EXHAUSTED` | `ResourceExhausted` | `507` | Storage, dataset, request-size, or stream quota is exceeded. |
@@ -52,7 +54,7 @@ storage quota, and `503` for unavailable dependencies/readiness.
 
 ## Migration Note
 
-HTTP account and admin support routes now return JSON bodies shaped like:
+HTTP account, admin support, and blob routes now return JSON bodies shaped like:
 
 ```json
 {"error":{"reason":"REQUEST_INVALID","message":"invalid day"}}

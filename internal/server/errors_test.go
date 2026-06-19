@@ -14,6 +14,8 @@ func TestBackendErrorTaxonomyStableMappings(t *testing.T) {
 		ErrorReasonUnauthenticated:     {Reason: ErrorReasonUnauthenticated, GRPC: codes.Unauthenticated, HTTP: http.StatusUnauthorized},
 		ErrorReasonPermissionDenied:    {Reason: ErrorReasonPermissionDenied, GRPC: codes.PermissionDenied, HTTP: http.StatusForbidden},
 		ErrorReasonInvalidArgument:     {Reason: ErrorReasonInvalidArgument, GRPC: codes.InvalidArgument, HTTP: http.StatusBadRequest},
+		ErrorReasonPayloadTooLarge:     {Reason: ErrorReasonPayloadTooLarge, GRPC: codes.ResourceExhausted, HTTP: http.StatusRequestEntityTooLarge},
+		ErrorReasonUnsupportedMedia:    {Reason: ErrorReasonUnsupportedMedia, GRPC: codes.InvalidArgument, HTTP: http.StatusUnsupportedMediaType},
 		ErrorReasonNotFound:            {Reason: ErrorReasonNotFound, GRPC: codes.NotFound, HTTP: http.StatusNotFound},
 		ErrorReasonFailedPrecondition:  {Reason: ErrorReasonFailedPrecondition, GRPC: codes.FailedPrecondition, HTTP: http.StatusPreconditionFailed},
 		ErrorReasonResourceExhausted:   {Reason: ErrorReasonResourceExhausted, GRPC: codes.ResourceExhausted, HTTP: http.StatusInsufficientStorage},

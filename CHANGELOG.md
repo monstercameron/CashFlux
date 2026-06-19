@@ -28,6 +28,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend blob JSON errors (7.19).** Blob upload/download failures now return stable machine-readable
+  JSON error reasons for auth, validation, size, media-type, quota, and lookup failures.
 - **Backend JSON error details (7.19).** Account and admin support HTTP errors now return stable
   machine-readable JSON error reasons.
 - **Backend error taxonomy (7.19).** Added stable machine-readable backend error reasons with gRPC/HTTP

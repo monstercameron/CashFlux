@@ -1403,6 +1403,7 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("missing auth status = %d", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUnauthenticated)
 
 	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash+"?workspaceId=w1", bytes.NewReader([]byte("wrong")))
 	req.Header.Set("Authorization", "Bearer dev-token")
@@ -1411,6 +1412,7 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	if rr.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversize status = %d", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonPayloadTooLarge)
 
 	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash+"?workspaceId=w1", bytes.NewReader([]byte("abd")))
 	req.Header.Set("Authorization", "Bearer dev-token")
@@ -1419,6 +1421,7 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("hash mismatch status = %d", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonInvalidArgument)
 
 	req = httptest.NewRequest(http.MethodGet, "/v1/blobs/not-a-hash?workspaceId=w1", nil)
 	req.Header.Set("Authorization", "Bearer dev-token")
@@ -1427,6 +1430,7 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("bad hash status = %d", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonInvalidArgument)
 
 	safeH := NewMux(Config{AuthMode: "token", Token: "dev-token", DataDir: t.TempDir(), BlobMaxBytes: 1024}, store)
 	html := []byte("<!doctype html><script>alert(1)</script>")
@@ -1438,6 +1442,7 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	if rr.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("html sniff status = %d, want 415", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUnsupportedMedia)
 
 	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`)
 	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+blobHash(svg)+"?workspaceId=w1", bytes.NewReader(svg))
@@ -1448,6 +1453,7 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	if rr.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("svg declared status = %d, want 415", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUnsupportedMedia)
 }
 
 func TestBlobEndpointRejectsStorageQuotaExceeded(t *testing.T) {
@@ -1471,6 +1477,21 @@ func TestBlobEndpointRejectsStorageQuotaExceeded(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "storage quota exceeded") {
 		t.Fatalf("quota body = %q", rr.Body.String())
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonResourceExhausted)
+}
+
+func assertHTTPErrorReason(t *testing.T, rr *httptest.ResponseRecorder, want ErrorReason) {
+	t.Helper()
+	if rr.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("content-type = %q, want application/json", rr.Header().Get("Content-Type"))
+	}
+	var body ErrorResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode error response: %v body %q", err, rr.Body.String())
+	}
+	if body.Error.Reason != want {
+		t.Fatalf("error reason = %s, want %s (body %+v)", body.Error.Reason, want, body)
 	}
 }
 

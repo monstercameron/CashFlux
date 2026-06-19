@@ -27,7 +27,7 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		}
 		hash := r.PathValue("hash")
 		if !validBlobHash(hash) {
-			http.Error(w, "invalid blob hash", http.StatusBadRequest)
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "invalid blob hash")
 			return
 		}
 		workspaceID, ok := authorizedBlobWorkspace(w, r, store, user, hash, false)
@@ -40,12 +40,12 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		}
 		data, err := io.ReadAll(reader)
 		if err != nil {
-			http.Error(w, "blob is too large", http.StatusRequestEntityTooLarge)
+			writeErrorJSON(w, ErrorReasonPayloadTooLarge, "blob is too large")
 			return
 		}
 		sum := sha256.Sum256(data)
 		if hex.EncodeToString(sum[:]) != hash {
-			http.Error(w, "blob hash mismatch", http.StatusBadRequest)
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "blob hash mismatch")
 			return
 		}
 		mime, ok := safeBlobMIME(w, r.Header.Get("Content-Type"), data)
@@ -59,11 +59,11 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		defer cancel()
 		blob, err := store.PutBlobContext(ctx, blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "blob write failed")
 			return
 		}
 		if err := store.LinkWorkspaceBlob(workspaceID, blob.Hash); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "blob link failed")
 			return
 		}
 		if cfg.Metrics != nil {
@@ -80,7 +80,7 @@ func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string
 	}
 	linked, err := store.UserBlobLinked(userID, hash)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorJSON(w, ErrorReasonInternal, "storage quota check failed")
 		return false
 	}
 	if linked {
@@ -88,11 +88,11 @@ func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string
 	}
 	current, err := store.UserBlobBytes(userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorJSON(w, ErrorReasonInternal, "storage quota check failed")
 		return false
 	}
 	if current+size > maxBytes {
-		http.Error(w, "storage quota exceeded", http.StatusInsufficientStorage)
+		writeErrorJSON(w, ErrorReasonResourceExhausted, "storage quota exceeded")
 		return false
 	}
 	return true
@@ -140,16 +140,16 @@ func handleHeadBlob(cfg Config, store *Store) http.HandlerFunc {
 
 func authorizedBlobRequest(w http.ResponseWriter, r *http.Request, cfg Config, store *Store) (AuthUser, bool) {
 	if !writeCORS(w, r, cfg) {
-		http.Error(w, "origin not allowed", http.StatusForbidden)
+		writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 		return AuthUser{}, false
 	}
 	if store == nil {
-		http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 		return AuthUser{}, false
 	}
 	user, ok := httpBearerUser(r, cfg)
 	if !ok {
-		http.Error(w, "missing bearer token", http.StatusUnauthorized)
+		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 		return AuthUser{}, false
 	}
 	SetLogScope(r.Context(), LogScope{UserID: user.ID})
@@ -162,29 +162,29 @@ func authorizedBlobWorkspace(w http.ResponseWriter, r *http.Request, store *Stor
 		workspaceID = strings.TrimSpace(r.Header.Get(blobWorkspaceHeader))
 	}
 	if workspaceID == "" {
-		http.Error(w, "workspace id is required", http.StatusBadRequest)
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "workspace id is required")
 		return "", false
 	}
 	if !validBlobHash(hash) {
-		http.Error(w, "invalid blob hash", http.StatusBadRequest)
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "invalid blob hash")
 		return "", false
 	}
 	SetLogScope(r.Context(), LogScope{WorkspaceID: workspaceID})
 	if _, ok, err := store.GetWorkspace(user.ID, workspaceID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorJSON(w, ErrorReasonInternal, "workspace lookup failed")
 		return "", false
 	} else if !ok {
-		http.Error(w, "workspace not found", http.StatusNotFound)
+		writeErrorJSON(w, ErrorReasonNotFound, "workspace not found")
 		return "", false
 	}
 	if requireLink {
 		linked, err := store.UserWorkspaceBlob(user.ID, workspaceID, hash)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "blob link lookup failed")
 			return "", false
 		}
 		if !linked {
-			http.Error(w, "blob not found", http.StatusNotFound)
+			writeErrorJSON(w, ErrorReasonNotFound, "blob not found")
 			return "", false
 		}
 	}
@@ -194,23 +194,23 @@ func authorizedBlobWorkspace(w http.ResponseWriter, r *http.Request, store *Stor
 func readHTTPBlob(w http.ResponseWriter, r *http.Request, cfg Config, store *Store) (Blob, []byte, bool) {
 	hash := r.PathValue("hash")
 	if !validBlobHash(hash) {
-		http.Error(w, "invalid blob hash", http.StatusBadRequest)
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "invalid blob hash")
 		return Blob{}, nil, false
 	}
 	blob, ok, err := store.GetBlob(hash)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorJSON(w, ErrorReasonInternal, "blob lookup failed")
 		return Blob{}, nil, false
 	}
 	if !ok {
-		http.Error(w, "blob not found", http.StatusNotFound)
+		writeErrorJSON(w, ErrorReasonNotFound, "blob not found")
 		return Blob{}, nil, false
 	}
 	ctx, cancel := blobIOContext(r.Context(), cfg)
 	defer cancel()
 	data, err := store.ReadBlobContext(ctx, blobRoot(cfg), hash)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorJSON(w, ErrorReasonInternal, "blob read failed")
 		return Blob{}, nil, false
 	}
 	return blob, data, true
@@ -234,12 +234,12 @@ func writeBlobHeaders(w http.ResponseWriter, blob Blob) {
 func safeBlobMIME(w http.ResponseWriter, declared string, data []byte) (string, bool) {
 	declared = strings.ToLower(strings.TrimSpace(strings.Split(declared, ";")[0]))
 	if declared != "" && forbiddenBlobMIME(declared) {
-		http.Error(w, "blob content type is not allowed", http.StatusUnsupportedMediaType)
+		writeErrorJSON(w, ErrorReasonUnsupportedMedia, "blob content type is not allowed")
 		return "", false
 	}
 	sniffed := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
 	if forbiddenBlobMIME(sniffed) {
-		http.Error(w, "blob content type is not allowed", http.StatusUnsupportedMediaType)
+		writeErrorJSON(w, ErrorReasonUnsupportedMedia, "blob content type is not allowed")
 		return "", false
 	}
 	if declared != "" && declared != "application/octet-stream" {
