@@ -28,7 +28,10 @@ Users are responsible for:
 - Self-hosted server configuration, backups, and access tokens.
 - Reviewing AI-generated output before acting on it.
 
-Cloud subscriptions, trials, plan changes, cancellations, and payment method updates should run through Stripe-hosted Checkout and customer portal surfaces when billing is enabled.
+Cloud subscriptions, trials, plan changes, cancellations, and payment method updates should run through
+Stripe-hosted Checkout and customer portal surfaces when billing is enabled. CashFlux enforces one Cloud trial
+per account/identity before creating Checkout sessions; payment-fraud screening stays in Stripe Checkout/Radar
+so card data and fraud outcomes do not touch product behavior.
 
 ## Cookie And Consent Note
 

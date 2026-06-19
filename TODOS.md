@@ -4417,7 +4417,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       JSON `RATE_LIMITED` errors. Remaining: optional CAPTCHA-on-burst policy and email/OAuth verification review.
 - [ ] **Referral-fraud guards** (DO referral path): detect self-referral/farming; honest disclosure;
       don't tie product behavior to referral outcomes.
-- [ ] Trial abuse limits (one trial per account/identity); payment-fraud handling via Stripe Radar.
+- [x] Trial abuse limits (one trial per account/identity); payment-fraud handling via Stripe Radar.
+      Done: Checkout refuses accounts with a prior trial or current active/trialing/past-due subscription, and
+      payment-fraud handling remains in Stripe Checkout/Radar with no card data touching CashFlux.
 - [x] AI-proxy abuse: per-user token/req caps, anomaly alerts, kill-switch per user; cost-control even
       though tokens are BYO (protect bandwidth/compute + the user's own bill).
       Per-user request/token caps already gate usage; `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS` now denies selected

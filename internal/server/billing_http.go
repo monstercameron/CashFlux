@@ -38,6 +38,9 @@ func handleBillingCheckout(cfg Config, store *Store) http.HandlerFunc {
 		if !ok {
 			return
 		}
+		if !allowBillingCheckout(w, store, user.ID) {
+			return
+		}
 		form := url.Values{}
 		form.Set("mode", "subscription")
 		form.Set("success_url", strings.TrimSpace(cfg.StripeSuccessURL))
@@ -56,6 +59,28 @@ func handleBillingCheckout(cfg Config, store *Store) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, billingSessionResponse{URL: sessionURL})
+	}
+}
+
+func allowBillingCheckout(w http.ResponseWriter, store *Store, userID string) bool {
+	sub, ok, err := store.GetSubscription(userID)
+	if err != nil {
+		writeErrorJSON(w, ErrorReasonInternal, "subscription lookup failed")
+		return false
+	}
+	if !ok {
+		return true
+	}
+	if !sub.TrialEnd.IsZero() {
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "cloud trial already used")
+		return false
+	}
+	switch strings.TrimSpace(sub.Status) {
+	case "active", "trialing", "past_due":
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "cloud subscription is already active")
+		return false
+	default:
+		return true
 	}
 }
 

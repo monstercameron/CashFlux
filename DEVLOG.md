@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add cloud trial abuse guard (7.20)
+
+- Added a server-side Checkout precondition that blocks repeat Cloud trial starts for accounts with any prior
+  `trial_end`, and also blocks duplicate Checkout starts for active/trialing/past-due subscriptions.
+- Covered the used-trial path with a fake Stripe server and asserted Stripe is not called.
+- Documented payment-fraud handling as delegated to Stripe-hosted Checkout/Radar so CashFlux never handles card
+  data or product behavior tied to fraud outcomes.
+
 ## 2026-06-19 - feat: add billing business metrics (7.15)
 
 - Added aggregate billing webhook metrics without user identifiers: signup, trial start, conversion,

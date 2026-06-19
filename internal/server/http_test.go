@@ -2009,6 +2009,52 @@ func TestBillingCheckoutRejectsInvalidInterval(t *testing.T) {
 	assertHTTPErrorReason(t, rr, ErrorReasonInvalidArgument)
 }
 
+func TestBillingCheckoutRejectsUsedTrial(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 19, 15, 20, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutSubscription(Subscription{
+		UserID:             user.ID,
+		StripeCustomer:     "cus_123",
+		StripeSubscription: "sub_123",
+		Status:             "canceled",
+		Plan:               "personal_annual",
+		TrialEnd:           now.Add(-24 * time.Hour),
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatalf("PutSubscription: %v", err)
+	}
+	stripeCalled := false
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stripeCalled = true
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer stripe.Close()
+	cfg := Config{
+		AuthMode:          "token",
+		Token:             "dev-token",
+		Billing:           true,
+		StripeAPIBaseURL:  stripe.URL,
+		StripeSecretKey:   "sk_test",
+		StripePriceAnnual: "price_annual",
+		StripeSuccessURL:  "https://cashflux.example.com/success",
+		StripeCancelURL:   "https://cashflux.example.com/cancel",
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout", strings.NewReader(`{"interval":"annual"}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusPreconditionFailed {
+		t.Fatalf("checkout status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if stripeCalled {
+		t.Fatal("stripe was called for used trial")
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonFailedPrecondition)
+}
+
 func blobHash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
