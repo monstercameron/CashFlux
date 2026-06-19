@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 )
 
 const defaultOpenAIBaseURL = "https://api.openai.com/v1"
+
+var defaultAIModels = []string{"gpt-4o-mini", "gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o", "gpt-4.1", "o4-mini"}
 
 type aiHTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -135,6 +138,18 @@ func (s *AIService) Vision(ctx context.Context, req AIVisionRequest) (AICompleti
 		return AICompletion{}, status.Errorf(codes.InvalidArgument, "build vision request: %v", err)
 	}
 	return s.complete(ctx, body)
+}
+
+func (s *AIService) ListModels(context.Context) []string {
+	if s == nil || len(s.allowedModels) == 0 {
+		return append([]string(nil), defaultAIModels...)
+	}
+	models := make([]string, 0, len(s.allowedModels))
+	for model := range s.allowedModels {
+		models = append(models, model)
+	}
+	sort.Strings(models)
+	return models
 }
 
 func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, error) {

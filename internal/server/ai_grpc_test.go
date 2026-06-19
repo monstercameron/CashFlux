@@ -34,11 +34,12 @@ func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 
 	store := openTestStore(t)
 	cfg := Config{
-		AuthMode:      "token",
-		Token:         "dev-token",
-		MasterKey:     "0123456789abcdef0123456789abcdef",
-		OpenAIBaseURL: upstream.URL,
-		AppOrigin:     "*",
+		AuthMode:        "token",
+		Token:           "dev-token",
+		MasterKey:       "0123456789abcdef0123456789abcdef",
+		OpenAIBaseURL:   upstream.URL,
+		AIAllowedModels: []string{"gpt-4.1-mini", "gpt-4o-mini"},
+		AppOrigin:       "*",
 	}
 	bridge := httptest.NewServer(NewMux(cfg, store))
 	defer bridge.Close()
@@ -57,6 +58,14 @@ func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 	}
 	if !keyResp.Stored || keyResp.Provider != "openai" {
 		t.Fatalf("SetKey response = %+v", keyResp)
+	}
+
+	var models backendrpc.ListModelsResponse
+	if err := conn.Invoke(ctx, backendrpc.MethodAIListModels, backendrpc.ListModelsRequest{}, &models, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("ListModels invoke: %v", err)
+	}
+	if len(models.Models) != 2 || models.Models[0] != "gpt-4.1-mini" || models.Models[1] != "gpt-4o-mini" {
+		t.Fatalf("ListModels response = %+v", models)
 	}
 
 	var chatResp backendrpc.Completion

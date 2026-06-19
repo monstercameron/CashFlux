@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: list ai models over grpc
+
+- Added `AIService.ListModels` to the shared JSON gRPC contract and dynamic service registration.
+- The server returns a deterministic sorted configured allow-list when `CASHFLUX_SERVER_AI_MODELS` is set, and
+  otherwise returns the same known model set shown by the app's AI settings picker.
+- Extended the real GoGRPCBridge AI integration test to verify `SetKey`, `ListModels`, and `Chat` on one
+  authenticated tunnel connection.
+
 ## 2026-06-18 - fix: reject oversized sync snapshots
 
 - Added a typed repository size-limit error for snapshot datasets so the transport can distinguish payload limits

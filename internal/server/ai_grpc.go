@@ -18,6 +18,7 @@ func RegisterAIServiceServer(s grpc.ServiceRegistrar, srv *AIService) {
 		HandlerType: (*aiServiceServer)(nil),
 		Methods: []grpc.MethodDesc{
 			{MethodName: "SetKey", Handler: aiSetKeyHandler},
+			{MethodName: "ListModels", Handler: aiListModelsHandler},
 			{MethodName: "Chat", Handler: aiChatHandler},
 			{MethodName: "Vision", Handler: aiVisionHandler},
 		},
@@ -28,6 +29,7 @@ func RegisterAIServiceServer(s grpc.ServiceRegistrar, srv *AIService) {
 
 type aiServiceServer interface {
 	SetKey(context.Context, backendrpc.SetKeyRequest) (backendrpc.SetKeyResponse, error)
+	ListModelsRPC(context.Context, backendrpc.ListModelsRequest) (backendrpc.ListModelsResponse, error)
 	ChatRPC(context.Context, backendrpc.ChatRequest) (backendrpc.Completion, error)
 	VisionRPC(context.Context, backendrpc.VisionRequest) (backendrpc.Completion, error)
 }
@@ -58,6 +60,13 @@ func (s *AIService) SetKey(ctx context.Context, req backendrpc.SetKeyRequest) (b
 		return backendrpc.SetKeyResponse{}, err
 	}
 	return backendrpc.SetKeyResponse{Stored: true, Provider: provider}, nil
+}
+
+func (s *AIService) ListModelsRPC(ctx context.Context, req backendrpc.ListModelsRequest) (backendrpc.ListModelsResponse, error) {
+	if _, err := syncUser(ctx); err != nil {
+		return backendrpc.ListModelsResponse{}, err
+	}
+	return backendrpc.ListModelsResponse{Models: s.ListModels(ctx)}, nil
 }
 
 func (s *AIService) ChatRPC(ctx context.Context, req backendrpc.ChatRequest) (backendrpc.Completion, error) {
@@ -115,6 +124,21 @@ func aiSetKeyHandler(srv any, ctx context.Context, dec func(any) error, intercep
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAISetKey}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(aiServiceServer).SetKey(ctx, req.(backendrpc.SetKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func aiListModelsHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	var in backendrpc.ListModelsRequest
+	if err := dec(&in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(aiServiceServer).ListModelsRPC(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAIListModels}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(aiServiceServer).ListModelsRPC(ctx, req.(backendrpc.ListModelsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

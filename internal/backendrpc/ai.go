@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	MethodAISetKey = "/cashflux.v1.AIService/SetKey"
-	MethodAIChat   = "/cashflux.v1.AIService/Chat"
-	MethodAIVision = "/cashflux.v1.AIService/Vision"
+	MethodAISetKey     = "/cashflux.v1.AIService/SetKey"
+	MethodAIListModels = "/cashflux.v1.AIService/ListModels"
+	MethodAIChat       = "/cashflux.v1.AIService/Chat"
+	MethodAIVision     = "/cashflux.v1.AIService/Vision"
 
 	MethodSyncListWorkspaces  = "/cashflux.v1.SyncService/ListWorkspaces"
 	MethodSyncGetWorkspace    = "/cashflux.v1.SyncService/GetWorkspace"
@@ -29,6 +30,12 @@ type SetKeyRequest struct {
 type SetKeyResponse struct {
 	Stored   bool   `json:"stored"`
 	Provider string `json:"provider"`
+}
+
+type ListModelsRequest struct{}
+
+type ListModelsResponse struct {
+	Models []string `json:"models"`
 }
 
 type Message struct {

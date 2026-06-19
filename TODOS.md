@@ -3929,7 +3929,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       re-model every entity in proto; only the sync/AI envelopes are typed.
 - [ ] `SyncService`: `ListWorkspaces`, `GetWorkspace`, `PutWorkspace`, `DeleteWorkspace`,
       `WatchWorkspaces` (server stream).
-- [ ] `AIService`: `SetKey`, `ListModels`, `Chat` (server stream), `Vision` (server stream).
+- [~] `AIService`: `SetKey` and `ListModels` unary RPCs are done; `Chat` and `Vision` unary proxy calls are
+      done as the compatibility path. Remaining: final server-streaming `Chat`/`Vision` chunk responses.
 - [ ] Error model: map to gRPC `codes` / `google.rpc.Status` (unauthenticated; failed-precondition for a
       stale push when `force` is off; resource-exhausted for quota).
 

@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **AI model listing over gRPC.** `AIService.ListModels` now returns the configured model allow-list
+  (or the app's default model picker list) through the GoGRPCBridge tunnel.
 - **Sync oversized snapshot rejection.** `PutWorkspace` now maps over-limit datasets to
   `ResourceExhausted` over the gRPC bridge, with bridge coverage for the rejection path.
 - **Browser sync watch subscription.** The wasm app now opens `SyncService.WatchWorkspaces`
