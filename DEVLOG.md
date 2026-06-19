@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: weighted expense split (B24)
+
+- Added pure `split.ByWeights(total, []WeightedMember)` next to the existing even `Equal`. Splits in
+  proportion to int64 weights (share counts or incomes), using the largest-remainder (Hamilton) method:
+  assign each `total*weight/sumW` floor, then hand the leftover (always < #weighted-members) one unit at a
+  time to the biggest fractional remainders (ties by order). Shares sum to total exactly; zero/negative-weight
+  members are kept with a zero share; nil when there's no positive-weight basis.
+- Kept int64 throughout (documented the `total*weight` overflow assumption — fine for household sums). Table
+  tests: 2:1, equal-weights, 60/30/10, remainder placement, zero-weight, no-basis, and a 7-way exact-sum.
+- Logic-first per the SDLC; the Split-screen even/proportional toggle is a follow-up. gofmt/vet/native tests
+  green, wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: downloadable income & member breakdowns (B21)
 
 - Added Download CSV buttons to the Reports "Income by source" and "Spending by member" cards. Income reuses

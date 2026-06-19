@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Weighted expense split (B24).** New pure, table-tested `split.ByWeights`: splits a shared cost in
+  proportion to per-member weights (share counts like 2:1, or incomes to split by earnings), distributing the
+  rounding remainder by the largest-remainder method so shares sum exactly. Zero-weight members get nothing.
+  The Split-screen proportional mode builds on this.
+
+### Added
 - **Downloadable income & member breakdowns (B21).** The Reports screen's "Income by source" and "Spending by
   member" cards now each have a Download CSV button, matching spending-by-category. Income reuses
   `reports.CategoryCSV`; a new pure, table-tested `reports.MemberCSV` backs the member export.
