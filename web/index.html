@@ -342,9 +342,6 @@
       .budget-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
       .budget-amount { font-variant-numeric: tabular-nums; color: var(--text-dim); white-space: nowrap; }
       .budget-sub { color: var(--text-dim); font-size: 0.82rem; }
-      /* Allocate: separate the "Score N%" fig sub from the criterion breakdown that follows
-         it so they don't render run-together ("60%returns 100"). (C52) */
-      .budget-sub.fig + .budget-sub::before { content: "·"; margin: 0 0.35rem; color: var(--text-dim); }
       .bar { height: 8px; background: var(--bg-elev); border-radius: 999px; overflow: hidden; margin: 0.45rem 0 0.35rem; }
       .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
       /* Progress/budget bars grow into place on load and update instead of snapping (§6.16). */
