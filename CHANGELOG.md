@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Hardened sub-path routing with a deep contract test (B30).** `internal/routebase` gains a contract test
+  that mirrors the full register → match → strip → highlight cycle across several base prefixes (`""`,
+  `/CashFlux`, `/app`, `/a/b`, `/Repo-Name`): route registrations stay unique under the prefix, the wildcard is
+  never prefixed, `/p/:slug` round-trips, the default route resolves to the base root, and every live pathname
+  strips back to its logical route for the active comparison — so GitHub Pages and other sub-path deploys stay
+  navigable. Plus more `Normalize`/`Strip` edge cases (resolved absolute `<base href>`, multi-segment bases,
+  look-alike-prefix safety).
+
 ### Fixed
 - **Active rail highlight (and breadcrumb) didn't follow navigation.** The Sidebar/TopBar derived the current
   screen from a non-reactive `router.InspectCurrentRoute()` snapshot and, taking no props, were memoized — so
