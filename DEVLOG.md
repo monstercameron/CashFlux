@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend oauth sessions
+
+- Added OAuth callback handling with state-cookie validation, PKCE code exchange, provider profile fetch, and user upsert.
+- Issued signed short-lived access tokens plus httpOnly refresh cookies, with refresh and logout endpoints.
+- Covered callback, refresh, logout, user persistence, and bearer-token validation in HTTP tests.
+
 ## 2026-06-19 - feat: expose backend queue metrics
 
 - Added a backend queue depth gauge to the metrics collector.

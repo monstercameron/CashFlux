@@ -85,6 +85,25 @@ ON CONFLICT(provider, subject) DO UPDATE SET email = excluded.email`,
 	return nil
 }
 
+func (s *Store) GetUserByID(userID string) (User, bool, error) {
+	defer s.observeDB("GetUserByID", time.Now())
+	var u User
+	var created string
+	err := s.db.QueryRow(`SELECT id, provider, subject, email, created_at FROM users WHERE id = ?`, userID).
+		Scan(&u.ID, &u.Provider, &u.Subject, &u.Email, &created)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, false, nil
+	}
+	if err != nil {
+		return User{}, false, fmt.Errorf("server store: get user: %w", err)
+	}
+	u.CreatedAt, err = parseTime(created)
+	if err != nil {
+		return User{}, false, fmt.Errorf("server store: parse user time: %w", err)
+	}
+	return u, true, nil
+}
+
 // PutWorkspace inserts or replaces a workspace registry row.
 func (s *Store) PutWorkspace(w Workspace) error {
 	if strings.TrimSpace(w.ID) == "" || strings.TrimSpace(w.UserID) == "" || strings.TrimSpace(w.Name) == "" {

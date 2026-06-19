@@ -61,6 +61,9 @@ type OAuthProviderConfig struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURL  string
+	AuthURL      string
+	TokenURL     string
+	UserURL      string
 }
 
 // FromEnv builds server config from CASHFLUX_SERVER_* environment variables.

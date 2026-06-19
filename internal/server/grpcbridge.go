@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 	"google.golang.org/grpc"
@@ -58,6 +59,11 @@ func authUserForToken(token string, cfg Config) (AuthUser, bool) {
 		got := hex.EncodeToString(sum[:])
 		if subtle.ConstantTimeCompare([]byte(got), []byte(expectedHash)) == 1 {
 			return authUserFromToken(token), true
+		}
+	}
+	if strings.EqualFold(cfg.AuthMode, "oauth") {
+		if userID, ok := verifySessionToken(cfg, token, "access", time.Now().UTC()); ok {
+			return AuthUser{ID: userID, Token: token}, true
 		}
 	}
 	return AuthUser{}, false

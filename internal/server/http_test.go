@@ -339,6 +339,106 @@ func TestOAuthStartRejectsUnconfiguredProvider(t *testing.T) {
 	}
 }
 
+func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
+	store := openTestStore(t)
+	var sawVerifier bool
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm: %v", err)
+			}
+			if r.Form.Get("code") != "oauth-code" || r.Form.Get("code_verifier") != "verifier-123" {
+				t.Fatalf("token form = %v", r.Form)
+			}
+			sawVerifier = true
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"provider-token","token_type":"bearer"}`))
+		case "/user":
+			if r.Header.Get("Authorization") != "Bearer provider-token" {
+				t.Fatalf("user authorization = %q", r.Header.Get("Authorization"))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":42,"email":"alice@example.com"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer provider.Close()
+
+	cfg := Config{
+		AuthMode:  "oauth",
+		AppOrigin: "http://127.0.0.1:8080",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+		OAuthProviders: map[string]OAuthProviderConfig{
+			"github": {
+				ClientID:     "github-id",
+				ClientSecret: "github-secret",
+				RedirectURL:  "http://127.0.0.1:8081/v1/auth/github/callback",
+				TokenURL:     provider.URL + "/token",
+				UserURL:      provider.URL + "/user",
+			},
+		},
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=oauth-code&state=state-123", nil)
+	req.AddCookie(&http.Cookie{Name: oauthStateCookie, Value: "state-123.verifier-123"})
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("callback status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if !sawVerifier {
+		t.Fatal("token exchange did not receive PKCE verifier")
+	}
+	var body oauthSessionResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode callback: %v", err)
+	}
+	if body.TokenType != "Bearer" || body.AccessToken == "" || body.UserID != "github:42" {
+		t.Fatalf("callback body = %+v", body)
+	}
+	if _, ok := authUserForToken(body.AccessToken, cfg); !ok {
+		t.Fatal("issued access token did not authenticate")
+	}
+	if _, ok, err := store.GetUserByID("github:42"); err != nil || !ok {
+		t.Fatalf("stored oauth user = %v/%v", ok, err)
+	}
+	var refreshCookie *http.Cookie
+	for _, cookie := range rr.Result().Cookies() {
+		if cookie.Name == sessionRefreshCookie {
+			refreshCookie = cookie
+		}
+	}
+	if refreshCookie == nil || !refreshCookie.HttpOnly || refreshCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("refresh cookie = %+v", refreshCookie)
+	}
+
+	refreshReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
+	refreshReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	refreshReq.AddCookie(refreshCookie)
+	refreshRR := httptest.NewRecorder()
+	h.ServeHTTP(refreshRR, refreshReq)
+	if refreshRR.Code != http.StatusOK {
+		t.Fatalf("refresh status = %d body %q", refreshRR.Code, refreshRR.Body.String())
+	}
+	var refreshed oauthSessionResponse
+	if err := json.Unmarshal(refreshRR.Body.Bytes(), &refreshed); err != nil {
+		t.Fatalf("decode refresh: %v", err)
+	}
+	if refreshed.AccessToken == "" || refreshed.UserID != "github:42" {
+		t.Fatalf("refresh body = %+v", refreshed)
+	}
+
+	logoutReq := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
+	logoutReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	logoutRR := httptest.NewRecorder()
+	h.ServeHTTP(logoutRR, logoutReq)
+	if logoutRR.Code != http.StatusNoContent {
+		t.Fatalf("logout status = %d", logoutRR.Code)
+	}
+}
+
 func TestReadyEndpointRequiresStore(t *testing.T) {
 	h := NewMux(Config{AuthMode: "token"})
 	req := httptest.NewRequest(http.MethodGet, "/livez", nil)

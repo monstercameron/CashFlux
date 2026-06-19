@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend OAuth callback sessions.** OAuth callbacks now exchange provider codes with PKCE, upsert users, issue signed short-lived access tokens, and rotate httpOnly refresh cookies through refresh/logout endpoints.
 - **Backend queue depth metrics.** `/metrics` now reports the buffered workspace watch queue depth.
 - **Backend DB latency metrics.** `/metrics` now reports store operation counts and duration sums for SQLite-backed repository calls.
 - **Backend sync metrics.** `/metrics` now reports sync pull/push result counters and LWW reject totals from the gRPC bridge path.

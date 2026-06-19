@@ -59,6 +59,11 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		})
 	})
 	mux.HandleFunc("GET /v1/auth/{provider}", handleOAuthStart(cfg))
+	mux.HandleFunc("GET /v1/auth/{provider}/callback", handleOAuthCallback(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/auth/refresh", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/auth/refresh", handleOAuthRefresh(cfg))
+	mux.HandleFunc("OPTIONS /v1/auth/logout", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/auth/logout", handleOAuthLogout(cfg))
 	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/blobs/{hash}", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
