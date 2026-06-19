@@ -24,6 +24,14 @@ Watch these signals:
 
 Before increasing tenant count or selling a hosted multi-tenant plan, run load and soak tests against the exact deployment shape. Use the results to set admission limits, quotas, and the migration trigger.
 
+Current repo baseline:
+
+- `TestServerLoadSmokeSyncBlobAndWatch` runs in-process through the HTTP server and GoGRPCBridge tunnel.
+- It concurrently pushes workspace snapshots, verifies workspace-watch fan-out, lists the resulting workspaces,
+  then uploads and downloads content-addressed blobs.
+- It is a regression smoke test, not a substitute for a long-running soak against production-like disk, network,
+  TLS proxy, and tenant counts.
+
 Recommended starting thresholds for migration planning:
 
 - p99 write latency stays above the SLO for two consecutive business days.

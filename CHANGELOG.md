@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend load smoke coverage (7.18).** Added an in-process load smoke test covering concurrent sync pushes,
+  workspace watch fan-out, and blob upload/download through the real HTTP/gRPC bridge.
 - **Sign out everywhere endpoint (7.14).** Added `POST /v1/auth/logout-all` to revoke every refresh session
   for the authenticated OAuth user while clearing the current browser cookies and auditing the action.
 - **SOC 2 readiness checklist (7.16).** Added a backend readiness checklist covering access control, change

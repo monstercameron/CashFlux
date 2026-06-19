@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: add backend load smoke baseline (7.18)
+
+- Added `TestServerLoadSmokeSyncBlobAndWatch` as a CI-friendly first load baseline.
+- The test drives concurrent sync pushes through the GoGRPCBridge tunnel, verifies workspace-watch fan-out,
+  lists the resulting workspaces, then uploads and downloads blobs through the HTTP routes.
+- Kept it short and in-process so it catches bridge/blob/watch regressions without becoming a long soak test.
+
 ## 2026-06-19 - fix: reject loose grpc json payloads (7.14)
 
 - Tightened the browser/server JSON codec used by the gRPC bridge to reject unknown fields.
