@@ -117,6 +117,20 @@ func Reports() ui.Node {
 		catBody = Div(Class("rows"), rowNodes)
 	}
 
+	// Top payees: where the money went by merchant/description this period.
+	payees, _ := reports.TopPayees(txns, cs, ce, rates, 8)
+	var payeeNodes []ui.Node
+	for _, p := range payees {
+		name := p.Name
+		if name == "" {
+			name = uistate.T("reports.noPayee")
+		}
+		payeeNodes = append(payeeNodes, Div(Class("row"),
+			Div(Class("row-main"), Span(Class("row-desc"), name)),
+			Span(Class("budget-amount"), fmtMinor(p.Amount)),
+		))
+	}
+
 	net := money.New(flow.Net(), base)
 	return Div(
 		Div(Class("stat-grid"),
@@ -130,6 +144,10 @@ func Reports() ui.Node {
 			P(Class("muted"), narrative),
 			catBody,
 		),
+		If(len(payeeNodes) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("reports.topPayees")),
+			Div(Class("rows"), payeeNodes),
+		)),
 		If(len(netSeries) >= 2, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("dashboard.cashFlow")),
 			P(Class("muted"), uistate.T("reports.trendHint", trendBuckets)),

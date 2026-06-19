@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reports: Top payees (B21).** The Reports screen now also shows where your money went by merchant — the
+  period's expenses grouped by description (case-insensitively) and ranked by total, top 8. Backed by a
+  new pure, table-tested `reports.TopPayees`.
+- **Self-host Docker quickstart.** Added `Dockerfile.server`, `docker-compose.selfhost.yml`, a Caddy
+  reverse-proxy config, a server env template, and `docs/SELF_HOSTING.md` with token setup, TLS,
+  backup/restore, upgrade, and optional OAuth notes.
 - **Split / settle-up — the pure core (B24, internal).** New `internal/split` package for sharing costs
   between household members: `Equal` divides a cost evenly (distributing the rounding remainder so the
   shares sum exactly), `NetBalances` nets who paid against who owes across many shared expenses, and

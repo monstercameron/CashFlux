@@ -753,6 +753,8 @@ var english = Catalog{
 	"reports.net":                    "Net",
 	"reports.trendHint":              "Net cash flow over the last %d periods.",
 	"reports.byCategory":             "Spending by category",
+	"reports.topPayees":              "Top payees",
+	"reports.noPayee":                "(no description)",
 	"reports.empty":                  "No spending in this period yet.",
 	"reports.uncategorized":          "Uncategorized",
 	"dashboard.upcomingBills":        "Upcoming bills",

@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Reports top-payees report (B21)
+
+- Added pure `reports.TopPayees(txns, start, end, rates, n)`: groups expenses by description
+  (case-insensitive, keeping the first spelling), sums base-currency amounts, ranks largest-first (ties by
+  name), returns top n. Mirrors the category-totals conventions (IsExpense, dateutil.InRange, rates.Convert).
+  Table tests: case-insensitive merge, range/income/transfer exclusion, and the n limit.
+- Wired it into the Reports screen as a "Top payees" card (top 8), shown when there are payees; blank
+  descriptions render as "(no description)". Small cohesive report, so core + UI in one commit. New
+  `reports.{topPayees,noPayee}` keys. wasm build green, gofmt + go vet clean.
+
 ## 2026-06-18 — refactor: dashboard bills widget reuses bills.Upcoming (B22)
 
 - The dashboard "Upcoming bills" widget had its own inline liability→bill derivation (a local struct +
