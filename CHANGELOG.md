@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Subscriptions tracker marked complete (B25).** Reconciled the backlog with the shipped
+  `internal/subscriptions` detector and Subscriptions screen, including renewal reminders, CSV export,
+  price-change rows, and spending-share stats.
 - **Per-budget rollover controls (B26).** Budgets now persist a `Rollover` flag, expose it in add/edit
   forms, and show the previous period's carried amount on each rollover-enabled budget row.
 - **Backup-reminder cadence selector (B28).** Settings → Data now has a "Backup reminders" control

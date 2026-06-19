@@ -1014,9 +1014,9 @@ them to a txn).
 
 ### B25. Subscriptions tracker — SPEC (from C38, 2026-06-18)
 **Want:** a view of recurring monthly spend (what am I paying for) + renewal/cancel reminders.
-- [ ] **Pure `internal/subscriptions`** (tested): detect/aggregate recurring charges (Planning `Recurring`
+- [x] **Pure `internal/subscriptions`** (tested): detect/aggregate recurring charges (Planning `Recurring`
       and/or repeated payees); monthly + annualized totals; next renewal date.
-- [ ] **UI:** Subscriptions list (name, cadence, amount, monthly/yearly total, next renewal); "cancel
+- [x] **UI:** Subscriptions list (name, cadence, amount, monthly/yearly total, next renewal); "cancel
       reminder" → **B19** task; show total monthly subscription burden.
 - [ ] _Notes:_ a focused view over the same recurring data, not a new store.
 

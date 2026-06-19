@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: reconcile subscriptions tracker TODO (B25)
+
+- Audited B25 against source and prior commits: `internal/subscriptions` now detects repeated charges,
+  computes monthly/annual totals and next renewals, exports CSV, detects price changes, and feeds a dedicated
+  Subscriptions screen.
+- The UI already lists cadence, charge, monthly cost, next renewal, total monthly burden, spending share, and
+  creates a renewal/cancel reminder task via the B19 task path.
+- Marked the B25 pure-core and UI checklist items complete; no code changes were needed for this reconciliation.
+
 ## 2026-06-19 - feat: add per-budget rollover controls (B26)
 
 - Added `domain.Budget.Rollover` so rollover is a persisted per-budget choice instead of only a global
