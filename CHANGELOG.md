@@ -28,6 +28,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend OAuth JSON errors (7.19).** OAuth start/callback/refresh/logout failures now return stable
+  machine-readable JSON error reasons.
 - **Backend audit/metrics JSON errors (7.19).** Audit, metrics, and CORS preflight failures now return stable
   machine-readable JSON error reasons.
 - **Backend blob JSON errors (7.19).** Blob upload/download failures now return stable machine-readable

@@ -4380,8 +4380,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       machine-readable error details; no internal leakage in messages.
       `internal/server.BackendErrorTaxonomy` now pins stable reasons and gRPC/HTTP mappings, and
       `docs/BACKEND_ERRORS.md` documents the table. Account export/delete, admin usage, blob, audit, metrics,
-      and CORS preflight errors now return JSON details. Remaining: migrate OAuth and miscellaneous general HTTP
-      errors.
+      OAuth/session, and CORS preflight errors now return JSON details. Remaining: migrate status/readiness,
+      max-in-flight, rate-limit, and fallback encode errors.
 - [x] Config via env/secret manager with validation on boot; **feature flags** (billing on/off, AI proxy
       on/off, self-host mode) so deployments differ safely.
 - [x] Runbooks (deploy, rollback, restore, rotate keys, revoke sessions, handle past-due); on-call docs.

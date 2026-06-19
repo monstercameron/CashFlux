@@ -54,7 +54,8 @@ storage quota, and `503` for unavailable dependencies/readiness.
 
 ## Migration Note
 
-HTTP account, admin support, blob, audit, metrics, and CORS preflight errors now return JSON bodies shaped like:
+HTTP account, admin support, blob, audit, metrics, OAuth/session, and CORS preflight errors now return JSON
+bodies shaped like:
 
 ```json
 {"error":{"reason":"REQUEST_INVALID","message":"invalid day"}}

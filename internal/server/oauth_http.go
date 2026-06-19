@@ -20,27 +20,27 @@ func handleOAuthStart(cfg Config) http.HandlerFunc {
 		providerName := strings.TrimSpace(r.PathValue("provider"))
 		provider, ok := cfg.OAuthProviders[providerName]
 		if !ok {
-			http.Error(w, "oauth provider is not configured", http.StatusNotFound)
+			writeErrorJSON(w, ErrorReasonNotFound, "oauth provider is not configured")
 			return
 		}
 		authURL := oauthAuthURL(providerName, provider)
 		if authURL == "" {
-			http.Error(w, "oauth provider is not supported", http.StatusNotFound)
+			writeErrorJSON(w, ErrorReasonNotFound, "oauth provider is not supported")
 			return
 		}
 		state, err := randomURLToken(32)
 		if err != nil {
-			http.Error(w, "build oauth state", http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "build oauth state")
 			return
 		}
 		verifier, err := randomURLToken(48)
 		if err != nil {
-			http.Error(w, "build oauth verifier", http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "build oauth verifier")
 			return
 		}
 		nonce, err := randomURLToken(32)
 		if err != nil {
-			http.Error(w, "build oauth nonce", http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "build oauth nonce")
 			return
 		}
 		challenge := pkceChallenge(verifier)
@@ -82,59 +82,59 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 		providerName := strings.TrimSpace(r.PathValue("provider"))
 		provider, ok := cfg.OAuthProviders[providerName]
 		if !ok {
-			http.Error(w, "oauth provider is not configured", http.StatusNotFound)
+			writeErrorJSON(w, ErrorReasonNotFound, "oauth provider is not configured")
 			return
 		}
 		code := strings.TrimSpace(r.URL.Query().Get("code"))
 		state := strings.TrimSpace(r.URL.Query().Get("state"))
 		if code == "" || state == "" {
-			http.Error(w, "oauth code and state are required", http.StatusBadRequest)
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "oauth code and state are required")
 			return
 		}
 		cookie, err := r.Cookie(oauthStateCookie)
 		if err != nil {
-			http.Error(w, "oauth state cookie is missing", http.StatusBadRequest)
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "oauth state cookie is missing")
 			return
 		}
 		cookieState, verifier, nonce, ok := parseOAuthStateCookie(cookie.Value)
 		if !ok || cookieState != state {
-			http.Error(w, "oauth state mismatch", http.StatusBadRequest)
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "oauth state mismatch")
 			return
 		}
 		token, err := exchangeOAuthCode(r, providerName, provider, code, verifier)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, err.Error())
 			return
 		}
 		if err := validateOAuthIDToken(providerName, provider, token.IDToken, nonce); err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, err.Error())
 			return
 		}
 		user, err := fetchOAuthUser(r, providerName, provider, token.AccessToken)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, err.Error())
 			return
 		}
 		if store == nil {
-			http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
 		if err := store.UpsertUser(user); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "user upsert failed")
 			return
 		}
 		now := time.Now().UTC()
 		auditFromRequest(r, store, AuthUser{ID: user.ID}, "auth.login", "user", user.ID)
 		access, refresh, err := issueStoredSessionPair(cfg, store, user.ID, now, "")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
 			return
 		}
 		clearOAuthStateCookie(w, providerName, requestIsSecure(r))
 		setRefreshCookie(w, refresh, requestIsSecure(r), now.Add(sessionRefreshTTL))
 		csrf, err := setCSRFCookie(w, requestIsSecure(r), now.Add(sessionRefreshTTL))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "csrf cookie issue failed")
 			return
 		}
 		resp := oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: user.ID}
@@ -146,35 +146,35 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
-			http.Error(w, "origin not allowed", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
 		if !validCSRF(r) {
-			http.Error(w, "csrf token is invalid", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "csrf token is invalid")
 			return
 		}
 		cookie, err := r.Cookie(sessionRefreshCookie)
 		if err != nil {
-			http.Error(w, "refresh token is missing", http.StatusUnauthorized)
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is missing")
 			return
 		}
 		if store == nil {
-			http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
 		now := time.Now().UTC()
 		claims, ok := verifySessionClaims(cfg, cookie.Value, "refresh", now)
 		if !ok {
-			http.Error(w, "refresh token is invalid", http.StatusUnauthorized)
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is invalid")
 			return
 		}
 		if strings.TrimSpace(claims.JTI) == "" || strings.TrimSpace(claims.Family) == "" {
-			http.Error(w, "refresh token is invalid", http.StatusUnauthorized)
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is invalid")
 			return
 		}
 		session, ok, err := store.ConsumeRefreshSession(claims.JTI, sessionTokenHash(cookie.Value), now)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "refresh token lookup failed")
 			return
 		}
 		if !ok {
@@ -182,19 +182,19 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 				_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
 				auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.reuse", "session_family", session.FamilyID)
 			}
-			http.Error(w, "refresh token is invalid", http.StatusUnauthorized)
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is invalid")
 			return
 		}
 		access, refresh, err := issueStoredSessionPair(cfg, store, session.UserID, now, session.FamilyID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
 			return
 		}
 		auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh", "user", session.UserID)
 		setRefreshCookie(w, refresh, requestIsSecure(r), now.Add(sessionRefreshTTL))
 		csrf, err := setCSRFCookie(w, requestIsSecure(r), now.Add(sessionRefreshTTL))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "csrf cookie issue failed")
 			return
 		}
 		w.Header().Set(sessionCSRFHeader, csrf)
@@ -205,11 +205,11 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 func handleOAuthLogout(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
-			http.Error(w, "origin not allowed", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
 		if !validCSRF(r) {
-			http.Error(w, "csrf token is invalid", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "csrf token is invalid")
 			return
 		}
 		now := time.Now().UTC()

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: return json errors for oauth (7.19)
+
+- Migrated OAuth start/callback plus refresh/logout failures to stable JSON error reasons.
+- Preserved existing status behavior for provider lookup, callback validation, CSRF, refresh-token, and upstream
+  provider failures.
+- Added HTTP tests for OAuth/session reason bodies.
+- Remaining 7.19 plain-text errors are the general status/readiness, max-in-flight, rate-limit, and fallback
+  encode paths.
+
 ## 2026-06-19 - feat: return json errors for audit metrics (7.19)
 
 - Migrated audit, metrics, and shared CORS preflight failures to `writeErrorJSON`.

@@ -934,6 +934,7 @@ func TestOAuthStartRejectsUnconfiguredProvider(t *testing.T) {
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("unconfigured provider status = %d, want 404", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonNotFound)
 }
 
 func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
@@ -1026,6 +1027,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	if refreshRR.Code != http.StatusForbidden {
 		t.Fatalf("refresh without csrf status = %d, want 403", refreshRR.Code)
 	}
+	assertHTTPErrorReason(t, refreshRR, ErrorReasonPermissionDenied)
 
 	refreshReq = httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
 	refreshReq.Header.Set("Origin", "http://127.0.0.1:8080")
@@ -1067,6 +1069,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	if reuseRR.Code != http.StatusUnauthorized {
 		t.Fatalf("reused refresh status = %d body %q", reuseRR.Code, reuseRR.Body.String())
 	}
+	assertHTTPErrorReason(t, reuseRR, ErrorReasonUnauthenticated)
 
 	revokedReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
 	revokedReq.Header.Set("Origin", "http://127.0.0.1:8080")
@@ -1078,6 +1081,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	if revokedRR.Code != http.StatusUnauthorized {
 		t.Fatalf("family revoked refresh status = %d body %q", revokedRR.Code, revokedRR.Body.String())
 	}
+	assertHTTPErrorReason(t, revokedRR, ErrorReasonUnauthenticated)
 
 	logoutReq := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
 	logoutReq.Header.Set("Origin", "http://127.0.0.1:8080")
@@ -1182,6 +1186,7 @@ func TestOAuthCallbackRejectsGoogleIDTokenAudience(t *testing.T) {
 	if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "audience") {
 		t.Fatalf("callback status/body = %d/%q, want bad audience", rr.Code, rr.Body.String())
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUpstreamUnavailable)
 }
 
 func TestOAuthCallbackRequiresGoogleIDToken(t *testing.T) {
@@ -1220,6 +1225,7 @@ func TestOAuthCallbackRequiresGoogleIDToken(t *testing.T) {
 	if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "required") {
 		t.Fatalf("callback status/body = %d/%q, want missing id token", rr.Code, rr.Body.String())
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUpstreamUnavailable)
 }
 
 func TestReadyEndpointRequiresStore(t *testing.T) {
