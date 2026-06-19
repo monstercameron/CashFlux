@@ -31,6 +31,12 @@
     var series = spec.series || [];
     if (!series.length) return;
 
+    // Animate the chart in only on its first draw (not on every data tick — el
+    // persists across re-renders), and never under reduced motion (§6.16).
+    var animate = !el.hasAttribute("data-cf-drawn") &&
+      !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    el.setAttribute("data-cf-drawn", "1");
+
     var W = el.clientWidth || 320;
     var H = el.clientHeight || 160;
     var fg = cssVar("--text-faint", "#888890");
@@ -86,12 +92,20 @@
       var bw = Math.max(1, (groupW * 0.8) / series.length);
       series.forEach(function (s, si) {
         var color = s.color || defColor;
-        g.selectAll(".bar-" + si).data(s.points || []).enter().append("rect")
+        var finalY = function (p) { return Math.min(y(p.y), y(0)); };
+        var finalH = function (p) { return Math.abs(y(p.y) - y(0)); };
+        var bars = g.selectAll(".bar-" + si).data(s.points || []).enter().append("rect")
           .attr("x", function (p) { return x(p.x) - (bw * series.length) / 2 + si * bw; })
-          .attr("y", function (p) { return Math.min(y(p.y), y(0)); })
           .attr("width", bw)
-          .attr("height", function (p) { return Math.abs(y(p.y) - y(0)); })
           .attr("fill", color);
+        if (animate) {
+          // Grow each bar up from the baseline on first paint.
+          bars.attr("y", y(0)).attr("height", 0)
+            .transition().duration(450).ease(d3.easeCubicOut)
+            .attr("y", finalY).attr("height", finalH);
+        } else {
+          bars.attr("y", finalY).attr("height", finalH);
+        }
       });
       return;
     }
@@ -123,8 +137,14 @@
       var line = d3.line()
         .x(function (p) { return x(p.x); })
         .y(function (p) { return y(p.y); });
-      g.append("path").datum(pts)
+      var path = g.append("path").datum(pts)
         .attr("fill", "none").attr("stroke", color).attr("stroke-width", 1.6).attr("d", line);
+      if (animate) {
+        // Draw the line on left-to-right on first paint.
+        var total = path.node().getTotalLength();
+        path.attr("stroke-dasharray", total + " " + total).attr("stroke-dashoffset", total)
+          .transition().duration(600).ease(d3.easeCubicInOut).attr("stroke-dashoffset", 0);
+      }
     });
   };
 
