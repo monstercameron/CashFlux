@@ -33,6 +33,43 @@ func widgetRoute(id string) string {
 	return ""
 }
 
+// widgetIcon maps a dashboard tile's stable id to a leading header glyph (C46),
+// so KPI tiles are scannable by shape, not just text. A zero (invalid) name means
+// the tile gets no icon (e.g. user custom-page widgets).
+func widgetIcon(id string) icon.Name {
+	switch id {
+	case "kpi-networth":
+		return icon.Accounts
+	case "kpi-liabilities":
+		return icon.CreditCard
+	case "accounts":
+		return icon.Landmark
+	case "trend", "cashflow":
+		return icon.TrendingUp
+	case "bills":
+		return icon.Bills
+	case "freshness":
+		return icon.Clock
+	case "kpi-income":
+		return icon.ArrowDownCircle
+	case "kpi-spending":
+		return icon.ArrowUpCircle
+	case "recent":
+		return icon.Receipt
+	case "savings":
+		return icon.Reports
+	case "breakdown", "budgets":
+		return icon.Budgets
+	case "goals":
+		return icon.Goals
+	case "todo":
+		return icon.Todo
+	case "highlight":
+		return icon.Insights
+	}
+	return ""
+}
+
 // gridCols is the bento width Pack flows tiles into.
 const gridCols = 4
 
@@ -244,6 +281,11 @@ func widget(props WidgetProps) uic.Node {
 	var titleNode uic.Node = H3(props.Title)
 	if route := widgetRoute(props.ID); route != "" {
 		titleNode = uic.CreateElement(viewTitle, viewTitleProps{Title: props.Title, Route: route})
+	}
+	// A leading glyph makes KPI tiles scannable by shape (C46); decorative, so it
+	// sits beside the (still-clickable) title rather than inside the link.
+	if ic := widgetIcon(props.ID); ic.Valid() {
+		titleNode = Span(Class("inline-flex items-center gap-1.5 min-w-0"), Icon(ic, Class("w-4 h-4 shrink-0 text-dim")), titleNode)
 	}
 	args = append(args,
 		Div(Class("wh"),

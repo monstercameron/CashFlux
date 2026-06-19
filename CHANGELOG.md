@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard KPI tiles have leading header icons (C46).** Each tile header now leads with a glyph keyed off
+  its stable id — Net worth (wallet), Income (down-circle), Spending (up-circle), Liabilities (credit-card),
+  Recent (receipt), Budgets/Breakdown (pie), Goals (target), To-do (check), Accounts (landmark), Net-worth
+  trend / cash flow (trending-up), Bills (calendar), Freshness (clock), Highlights (insights). Derived via a
+  `widgetIcon(id)` map, so no per-tile wiring; user custom-page widgets stay icon-less.
 - **First-run empty states show a friendly glyph (C46).** The CTA empty-state block (e.g. "Add your first
   goal") now renders a muted icon above the message — defaulting to a neutral box, with an optional per-screen
   `Icon` — so otherwise-blank panels feel intentional. Transient "no match" / "all done" lines stay text-only.
