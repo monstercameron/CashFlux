@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — refactor: unify anomaly detection (remove duplicate)
+
+- While exploring the Insights screen I found `internal/insights.Detect` — the canonical category-spend anomaly
+  detector already powering the Insights highlights card and the dashboard widget. My earlier
+  `reports.SpendingAnomalies` (shipped a few commits ago for the Reports "Heads up" card) duplicated it.
+- Consolidated: the Reports heads-up now calls the shared `detectSpendingAnomalies` (screens helper over
+  `insights.Detect` + `ledger.CategorySpendSeries`), filtered to `insights.Up` (overspending), top 3, rendering
+  `a.Category`/`a.PctChange` via the existing reports.anomaly key. Deleted `internal/reports/anomaly.go` and its
+  test (~180 lines of redundant code/test removed).
+- Lesson: grep for existing packages before adding a new detector — full-repo knowledge isn't a given in a
+  shared tree. wasm build green; reports tests green natively (the earlier FAIL was just leftover GOOS=js in
+  the shell, not a real failure). Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: net-worth change on Reports (B21)
 
 - Added a "Change this period" stat to the Reports net-worth card: the last step of the existing `nwSeries`

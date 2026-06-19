@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
@@ -160,13 +161,16 @@ func Reports() ui.Node {
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
 
 	// Heads-up: categories spending well above their recent monthly norm (top 3).
+	// Reuses the shared insights detector (also behind the Insights highlights and
+	// dashboard widget), filtered to overspending.
 	var anomalyNodes []ui.Node
-	if anomalies, err := reports.SpendingAnomalies(txns, time.Now(), 3, 50, 5000, rates); err == nil {
-		for i, a := range anomalies {
-			if i >= 3 {
-				break
-			}
-			anomalyNodes = append(anomalyNodes, P(Class("muted"), uistate.T("reports.anomaly", nameOf(a.CategoryID), a.OverPct)))
+	for _, a := range detectSpendingAnomalies(txns, cats, rates) {
+		if a.Direction != insights.Up {
+			continue
+		}
+		anomalyNodes = append(anomalyNodes, P(Class("muted"), uistate.T("reports.anomaly", a.Category, a.PctChange)))
+		if len(anomalyNodes) >= 3 {
+			break
 		}
 	}
 

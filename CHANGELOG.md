@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Unified anomaly detection.** The Reports "Heads up" card now uses the shared `internal/insights` detector
+  (already behind the Insights highlights and dashboard widget) instead of a second, redundant detector,
+  removing duplicated logic while keeping the same overspend heads-up.
+
 ### Added
 - **Net-worth change on Reports (B21).** The net-worth card now shows a "Change this period" figure (the most
   recent period's net-worth delta, color-cued up/down) alongside assets/liabilities/net, so wealth direction
