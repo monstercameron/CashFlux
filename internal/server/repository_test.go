@@ -92,6 +92,59 @@ func TestStoreAuditEventsAppendHashChain(t *testing.T) {
 	}
 }
 
+func TestStoreRefreshSessionConsumeAndRevokeFamily(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 4, 30, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	session := RefreshSession{
+		JTI:       "jti-1",
+		FamilyID:  "family-1",
+		UserID:    "u1",
+		TokenHash: "hash-1",
+		ExpiresAt: now.Add(time.Hour),
+	}
+	if err := s.PutRefreshSession(session); err != nil {
+		t.Fatalf("PutRefreshSession: %v", err)
+	}
+	consumed, ok, err := s.ConsumeRefreshSession("jti-1", "hash-1", now)
+	if err != nil || !ok {
+		t.Fatalf("ConsumeRefreshSession valid = %+v/%v/%v", consumed, ok, err)
+	}
+	if consumed.FamilyID != "family-1" || consumed.UserID != "u1" || consumed.UsedAt.IsZero() {
+		t.Fatalf("consumed session = %+v", consumed)
+	}
+	reused, ok, err := s.ConsumeRefreshSession("jti-1", "hash-1", now.Add(time.Second))
+	if err != nil || ok {
+		t.Fatalf("ConsumeRefreshSession reused = %+v/%v/%v", reused, ok, err)
+	}
+	if reused.FamilyID != "family-1" || reused.UsedAt.IsZero() {
+		t.Fatalf("reused session metadata = %+v", reused)
+	}
+
+	next := RefreshSession{
+		JTI:       "jti-2",
+		FamilyID:  "family-1",
+		UserID:    "u1",
+		TokenHash: "hash-2",
+		ExpiresAt: now.Add(time.Hour),
+	}
+	if err := s.PutRefreshSession(next); err != nil {
+		t.Fatalf("PutRefreshSession next: %v", err)
+	}
+	if err := s.RevokeRefreshSessionFamily("family-1", now.Add(2*time.Second)); err != nil {
+		t.Fatalf("RevokeRefreshSessionFamily: %v", err)
+	}
+	revoked, ok, err := s.ConsumeRefreshSession("jti-2", "hash-2", now.Add(3*time.Second))
+	if err != nil || ok {
+		t.Fatalf("ConsumeRefreshSession revoked = %+v/%v/%v", revoked, ok, err)
+	}
+	if revoked.RevokedAt.IsZero() {
+		t.Fatalf("revoked session missing timestamp = %+v", revoked)
+	}
+}
+
 func TestStoreRecordsDBMetrics(t *testing.T) {
 	s := openTestStore(t)
 	metrics := NewMetrics()

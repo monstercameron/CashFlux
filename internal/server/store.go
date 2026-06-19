@@ -11,7 +11,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 2
+const CurrentServerSchemaVersion = 3
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -122,6 +122,12 @@ func (s *Store) migrate() error {
 		}
 		version = 2
 	}
+	if version < 3 {
+		if err := s.migrateTo3(); err != nil {
+			return err
+		}
+		version = 3
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -143,6 +149,13 @@ func (s *Store) migrateTo1() error {
 func (s *Store) migrateTo2() error {
 	if _, err := s.db.Exec(serverSchemaV2); err != nil {
 		return fmt.Errorf("server store: migrate v2: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) migrateTo3() error {
+	if _, err := s.db.Exec(serverSchemaV3); err != nil {
+		return fmt.Errorf("server store: migrate v3: %w", err)
 	}
 	return nil
 }
@@ -231,4 +244,18 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_events_id ON audit_events(id);
 CREATE INDEX IF NOT EXISTS idx_audit_events_actor ON audit_events(actor_id, id);
+`
+
+const serverSchemaV3 = `
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  jti TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT NOT NULL DEFAULT '',
+  revoked_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family ON refresh_tokens(family_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 `

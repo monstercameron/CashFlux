@@ -802,6 +802,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	if refreshed.AccessToken == "" || refreshed.UserID != "github:42" {
 		t.Fatalf("refresh body = %+v", refreshed)
 	}
+	oldRefreshCookie := refreshCookie
 	for _, cookie := range refreshRR.Result().Cookies() {
 		if cookie.Name == sessionRefreshCookie {
 			refreshCookie = cookie
@@ -809,6 +810,31 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 		if cookie.Name == sessionCSRFCookie {
 			csrfCookie = cookie
 		}
+	}
+	if oldRefreshCookie.Value == refreshCookie.Value {
+		t.Fatal("refresh token was not rotated")
+	}
+
+	reuseReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
+	reuseReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	reuseReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
+	reuseReq.AddCookie(oldRefreshCookie)
+	reuseReq.AddCookie(csrfCookie)
+	reuseRR := httptest.NewRecorder()
+	h.ServeHTTP(reuseRR, reuseReq)
+	if reuseRR.Code != http.StatusUnauthorized {
+		t.Fatalf("reused refresh status = %d body %q", reuseRR.Code, reuseRR.Body.String())
+	}
+
+	revokedReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
+	revokedReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	revokedReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
+	revokedReq.AddCookie(refreshCookie)
+	revokedReq.AddCookie(csrfCookie)
+	revokedRR := httptest.NewRecorder()
+	h.ServeHTTP(revokedRR, revokedReq)
+	if revokedRR.Code != http.StatusUnauthorized {
+		t.Fatalf("family revoked refresh status = %d body %q", revokedRR.Code, revokedRR.Body.String())
 	}
 
 	logoutReq := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)

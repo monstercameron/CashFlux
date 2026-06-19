@@ -9,7 +9,8 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - **Backend rotating refresh sessions.** OAuth sessions now persist refresh-token `jti`/family records in
   SQLite, rotate refresh cookies on every refresh, detect reuse, revoke the whole session family on reuse,
-  and revoke the active family on logout while keeping access tokens short-lived.
+  and revoke the active family on logout while keeping access tokens short-lived. Repository and OAuth HTTP
+  tests cover consume, rotation, reuse rejection, and family revocation.
 - **Backup reminders wired into notifications (B28).** A new `notify` event (`backup-due`, with a default
   in-app rule) and a `notifyfeed.BackupCandidates` generator that turns the backup cadence into a gentle,
   informational "back up your data" reminder — surfaced at most once per cadence period (ISO-week for weekly,

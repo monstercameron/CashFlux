@@ -3,7 +3,7 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
-## 2026-06-19 - feat: rotate backend refresh sessions
+## 2026-06-19 - feat: rotate backend refresh sessions (verified)
 
 - Added persisted OAuth refresh sessions in SQLite schema v3: each refresh token carries a `jti` and family id,
   and the database stores only the token hash plus expiry/used/revoked timestamps.

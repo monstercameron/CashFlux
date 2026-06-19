@@ -26,7 +26,7 @@ func TestOpenStoreMigratesSchema(t *testing.T) {
 	}
 	for _, table := range []string{
 		"users", "workspaces", "snapshots", "snapshot_history", "blobs",
-		"workspace_blobs", "ai_keys", "usage", "audit_events",
+		"workspace_blobs", "ai_keys", "usage", "audit_events", "refresh_tokens",
 	} {
 		if !tableExists(t, s.db, table) {
 			t.Fatalf("missing table %s", table)

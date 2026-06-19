@@ -19,13 +19,19 @@ const (
 )
 
 type sessionClaims struct {
-	Sub  string `json:"sub"`
-	Type string `json:"typ"`
-	Exp  int64  `json:"exp"`
+	Sub    string `json:"sub"`
+	Type   string `json:"typ"`
+	Exp    int64  `json:"exp"`
+	JTI    string `json:"jti,omitempty"`
+	Family string `json:"fam,omitempty"`
 }
 
 func issueSessionToken(cfg Config, userID, tokenType string, ttl time.Duration, now time.Time) (string, error) {
-	if strings.TrimSpace(userID) == "" {
+	return issueSessionTokenWithClaims(cfg, sessionClaims{Sub: userID, Type: tokenType, Exp: now.Add(ttl).Unix()})
+}
+
+func issueSessionTokenWithClaims(cfg Config, claims sessionClaims) (string, error) {
+	if strings.TrimSpace(claims.Sub) == "" {
 		return "", fmt.Errorf("server session: user id is required")
 	}
 	secret := sessionSecret(cfg)
@@ -33,7 +39,7 @@ func issueSessionToken(cfg Config, userID, tokenType string, ttl time.Duration, 
 		return "", fmt.Errorf("server session: signing secret is not configured")
 	}
 	header, _ := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
-	payload, _ := json.Marshal(sessionClaims{Sub: userID, Type: tokenType, Exp: now.Add(ttl).Unix()})
+	payload, _ := json.Marshal(claims)
 	unsigned := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload)
 	mac := hmac.New(sha256.New, secret)
 	_, _ = mac.Write([]byte(unsigned))
@@ -41,36 +47,49 @@ func issueSessionToken(cfg Config, userID, tokenType string, ttl time.Duration, 
 }
 
 func verifySessionToken(cfg Config, token, tokenType string, now time.Time) (string, bool) {
+	claims, ok := verifySessionClaims(cfg, token, tokenType, now)
+	if !ok {
+		return "", false
+	}
+	return claims.Sub, true
+}
+
+func verifySessionClaims(cfg Config, token, tokenType string, now time.Time) (sessionClaims, bool) {
 	secret := sessionSecret(cfg)
 	if len(secret) == 0 {
-		return "", false
+		return sessionClaims{}, false
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return "", false
+		return sessionClaims{}, false
 	}
 	unsigned := parts[0] + "." + parts[1]
 	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
-		return "", false
+		return sessionClaims{}, false
 	}
 	mac := hmac.New(sha256.New, secret)
 	_, _ = mac.Write([]byte(unsigned))
 	if !hmac.Equal(sig, mac.Sum(nil)) {
-		return "", false
+		return sessionClaims{}, false
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", false
+		return sessionClaims{}, false
 	}
 	var claims sessionClaims
 	if err := json.Unmarshal(payload, &claims); err != nil {
-		return "", false
+		return sessionClaims{}, false
 	}
 	if claims.Type != tokenType || strings.TrimSpace(claims.Sub) == "" || now.Unix() >= claims.Exp {
-		return "", false
+		return sessionClaims{}, false
 	}
-	return claims.Sub, true
+	return claims, true
+}
+
+func sessionTokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 func sessionSecret(cfg Config) []byte {

@@ -119,6 +119,76 @@ func (s *Store) GetUserByID(userID string) (User, bool, error) {
 	return u, true, nil
 }
 
+type RefreshSession struct {
+	JTI       string
+	FamilyID  string
+	UserID    string
+	TokenHash string
+	ExpiresAt time.Time
+	UsedAt    time.Time
+	RevokedAt time.Time
+}
+
+func (s *Store) PutRefreshSession(session RefreshSession) error {
+	if strings.TrimSpace(session.JTI) == "" || strings.TrimSpace(session.FamilyID) == "" || strings.TrimSpace(session.UserID) == "" || strings.TrimSpace(session.TokenHash) == "" || session.ExpiresAt.IsZero() {
+		return fmt.Errorf("server store: refresh session jti, family, user, hash, and expiry are required")
+	}
+	defer s.observeDB("PutRefreshSession", time.Now())
+	_, err := s.db.Exec(`
+INSERT INTO refresh_tokens(jti, family_id, user_id, token_hash, expires_at, used_at, revoked_at)
+VALUES(?, ?, ?, ?, ?, '', '')`,
+		session.JTI, session.FamilyID, session.UserID, session.TokenHash, formatTime(session.ExpiresAt.UTC()))
+	if err != nil {
+		return fmt.Errorf("server store: put refresh session: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ConsumeRefreshSession(jti, tokenHash string, now time.Time) (RefreshSession, bool, error) {
+	if strings.TrimSpace(jti) == "" || strings.TrimSpace(tokenHash) == "" {
+		return RefreshSession{}, false, fmt.Errorf("server store: refresh jti and hash are required")
+	}
+	defer s.observeDB("ConsumeRefreshSession", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: begin consume refresh session: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	row := tx.QueryRow(`
+SELECT jti, family_id, user_id, token_hash, expires_at, used_at, revoked_at
+FROM refresh_tokens
+WHERE jti = ?`, jti)
+	session, err := scanRefreshSession(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RefreshSession{}, false, nil
+	}
+	if err != nil {
+		return RefreshSession{}, false, err
+	}
+	if session.TokenHash != tokenHash || !session.UsedAt.IsZero() || !session.RevokedAt.IsZero() || !now.Before(session.ExpiresAt) {
+		return session, false, tx.Commit()
+	}
+	if _, err := tx.Exec(`UPDATE refresh_tokens SET used_at = ? WHERE jti = ?`, formatTime(now.UTC()), jti); err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: mark refresh session used: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: commit refresh session: %w", err)
+	}
+	session.UsedAt = now.UTC()
+	return session, true, nil
+}
+
+func (s *Store) RevokeRefreshSessionFamily(familyID string, now time.Time) error {
+	if strings.TrimSpace(familyID) == "" {
+		return fmt.Errorf("server store: refresh family is required")
+	}
+	defer s.observeDB("RevokeRefreshSessionFamily", time.Now())
+	if _, err := s.db.Exec(`UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ? AND revoked_at = ''`, formatTime(now.UTC()), familyID); err != nil {
+		return fmt.Errorf("server store: revoke refresh family: %w", err)
+	}
+	return nil
+}
+
 // AppendAuditEvent stores a security-relevant event and links it to the previous
 // event hash. Payloads intentionally carry ids and metadata, never secrets.
 func (s *Store) AppendAuditEvent(event AuditEvent) (AuditEvent, error) {
@@ -228,6 +298,36 @@ func auditEventHash(event AuditEvent) string {
 
 type auditScanner interface {
 	Scan(dest ...any) error
+}
+
+type refreshSessionScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanRefreshSession(row refreshSessionScanner) (RefreshSession, error) {
+	var session RefreshSession
+	var expiresAt, usedAt, revokedAt string
+	if err := row.Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &expiresAt, &usedAt, &revokedAt); err != nil {
+		return RefreshSession{}, fmt.Errorf("server store: scan refresh session: %w", err)
+	}
+	var err error
+	session.ExpiresAt, err = parseTime(expiresAt)
+	if err != nil {
+		return RefreshSession{}, fmt.Errorf("server store: parse refresh expiry: %w", err)
+	}
+	if strings.TrimSpace(usedAt) != "" {
+		session.UsedAt, err = parseTime(usedAt)
+		if err != nil {
+			return RefreshSession{}, fmt.Errorf("server store: parse refresh used time: %w", err)
+		}
+	}
+	if strings.TrimSpace(revokedAt) != "" {
+		session.RevokedAt, err = parseTime(revokedAt)
+		if err != nil {
+			return RefreshSession{}, fmt.Errorf("server store: parse refresh revoked time: %w", err)
+		}
+	}
+	return session, nil
 }
 
 func scanAuditEvent(row auditScanner) (AuditEvent, error) {

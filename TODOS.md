@@ -4149,9 +4149,12 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       requests in tests, and gRPC Sync/AI services are covered by unary/stream auth interceptors.
 - [x] Strict per-user **tenant isolation** enforced at the query layer (every query filters by `user_id`);
       add isolation tests that try to read another user's workspace/blob and must fail. ★
-- [ ] Short-lived access tokens (JWT, ~15m) + rotating refresh tokens (httpOnly, Secure, SameSite);
+- [x] Short-lived access tokens (JWT, ~15m) + rotating refresh tokens (httpOnly, Secure, SameSite);
       refresh reuse detection → revoke session family.
-- [ ] Session revocation (logout, device revoke, "sign out everywhere"); token `jti` denylist or version.
+      SQLite-backed refresh-token `jti`/family rows now store hashes only; refresh consumes+rotates the
+      token and reuse revokes the family.
+- [~] Session revocation (logout, device revoke, "sign out everywhere"); token `jti` denylist or version.
+      Logout now revokes the presented refresh-token family. Remaining: device revoke and sign out everywhere.
 - [x] OAuth: PKCE + `state` (CSRF), nonce, redirect-URI allow-list, validate `iss`/`aud`.
       Google callbacks now require an ID token and validate issuer, audience, and nonce before issuing sessions.
       Redirect URLs are now constrained to `/v1/auth/{provider}/callback`; OAuth state cookies now bind

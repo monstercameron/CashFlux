@@ -123,15 +123,16 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		now := time.Now().UTC()
 		auditFromRequest(r, store, AuthUser{ID: user.ID}, "auth.login", "user", user.ID)
-		access, refresh, err := issueSessionPair(cfg, user.ID, time.Now().UTC())
+		access, refresh, err := issueStoredSessionPair(cfg, store, user.ID, now, "")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		clearOAuthStateCookie(w, providerName, requestIsSecure(r))
-		setRefreshCookie(w, refresh, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
-		csrf, err := setCSRFCookie(w, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
+		setRefreshCookie(w, refresh, requestIsSecure(r), now.Add(sessionRefreshTTL))
+		csrf, err := setCSRFCookie(w, requestIsSecure(r), now.Add(sessionRefreshTTL))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -157,25 +158,47 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, "refresh token is missing", http.StatusUnauthorized)
 			return
 		}
-		userID, ok := verifySessionToken(cfg, cookie.Value, "refresh", time.Now().UTC())
+		if store == nil {
+			http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		now := time.Now().UTC()
+		claims, ok := verifySessionClaims(cfg, cookie.Value, "refresh", now)
 		if !ok {
 			http.Error(w, "refresh token is invalid", http.StatusUnauthorized)
 			return
 		}
-		access, refresh, err := issueSessionPair(cfg, userID, time.Now().UTC())
+		if strings.TrimSpace(claims.JTI) == "" || strings.TrimSpace(claims.Family) == "" {
+			http.Error(w, "refresh token is invalid", http.StatusUnauthorized)
+			return
+		}
+		session, ok, err := store.ConsumeRefreshSession(claims.JTI, sessionTokenHash(cookie.Value), now)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		auditFromRequest(r, store, AuthUser{ID: userID}, "auth.token.refresh", "user", userID)
-		setRefreshCookie(w, refresh, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
-		csrf, err := setCSRFCookie(w, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
+		if !ok {
+			if strings.TrimSpace(session.FamilyID) != "" {
+				_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
+				auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.reuse", "session_family", session.FamilyID)
+			}
+			http.Error(w, "refresh token is invalid", http.StatusUnauthorized)
+			return
+		}
+		access, refresh, err := issueStoredSessionPair(cfg, store, session.UserID, now, session.FamilyID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh", "user", session.UserID)
+		setRefreshCookie(w, refresh, requestIsSecure(r), now.Add(sessionRefreshTTL))
+		csrf, err := setCSRFCookie(w, requestIsSecure(r), now.Add(sessionRefreshTTL))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set(sessionCSRFHeader, csrf)
-		writeJSON(w, oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: userID})
+		writeJSON(w, oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: session.UserID})
 	}
 }
 
@@ -189,9 +212,13 @@ func handleOAuthLogout(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, "csrf token is invalid", http.StatusForbidden)
 			return
 		}
+		now := time.Now().UTC()
 		if cookie, err := r.Cookie(sessionRefreshCookie); err == nil {
-			if userID, ok := verifySessionToken(cfg, cookie.Value, "refresh", time.Now().UTC()); ok {
-				auditFromRequest(r, store, AuthUser{ID: userID}, "auth.logout", "user", userID)
+			if claims, ok := verifySessionClaims(cfg, cookie.Value, "refresh", now); ok {
+				if store != nil && strings.TrimSpace(claims.Family) != "" {
+					_ = store.RevokeRefreshSessionFamily(claims.Family, now)
+				}
+				auditFromRequest(r, store, AuthUser{ID: claims.Sub}, "auth.logout", "user", claims.Sub)
 			}
 		}
 		setRefreshCookie(w, "", requestIsSecure(r), time.Unix(0, 0))
@@ -441,6 +468,48 @@ func issueSessionPair(cfg Config, userID string, now time.Time) (string, string,
 	}
 	refresh, err := issueSessionToken(cfg, userID, "refresh", sessionRefreshTTL, now)
 	if err != nil {
+		return "", "", err
+	}
+	return access, refresh, nil
+}
+
+func issueStoredSessionPair(cfg Config, store *Store, userID string, now time.Time, familyID string) (string, string, error) {
+	if store == nil {
+		return "", "", fmt.Errorf("store is not configured")
+	}
+	familyID = strings.TrimSpace(familyID)
+	if familyID == "" {
+		var err error
+		familyID, err = randomURLToken(24)
+		if err != nil {
+			return "", "", fmt.Errorf("server session: generate refresh family: %w", err)
+		}
+	}
+	jti, err := randomURLToken(24)
+	if err != nil {
+		return "", "", fmt.Errorf("server session: generate refresh jti: %w", err)
+	}
+	access, err := issueSessionToken(cfg, userID, "access", sessionAccessTTL, now)
+	if err != nil {
+		return "", "", err
+	}
+	refresh, err := issueSessionTokenWithClaims(cfg, sessionClaims{
+		Sub:    userID,
+		Type:   "refresh",
+		Exp:    now.Add(sessionRefreshTTL).Unix(),
+		JTI:    jti,
+		Family: familyID,
+	})
+	if err != nil {
+		return "", "", err
+	}
+	if err := store.PutRefreshSession(RefreshSession{
+		JTI:       jti,
+		FamilyID:  familyID,
+		UserID:    userID,
+		TokenHash: sessionTokenHash(refresh),
+		ExpiresAt: now.Add(sessionRefreshTTL),
+	}); err != nil {
 		return "", "", err
 	}
 	return access, refresh, nil
