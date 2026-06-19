@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: large-transaction notifications (B19)
+
+- Completed the notify event coverage for `EventLargeTransaction` (the constant existed but had no generator or
+  default rule). Added `notifyfeed.LargeTransactionCandidates(ruleID, txns, threshold, since, rates, text)`:
+  base-currency expense magnitude ≥ threshold, on/after `since` (so the caller scopes it to the gap since last
+  open), keyed `txn:<id>` so each big charge fires exactly once; non-positive threshold yields nothing.
+- Added a `default-large` rule (threshold `defaultLargeTxnMinor` = 50000 = $500) and updated defaults_test
+  (5→6 rules, added the event to the coverage list + a threshold assertion).
+- The catch-up wiring in app/notifyrun.go (passing recent txns + the rule threshold) is the deferred piece
+  (app/ collision); the rule sits inert until then, producing no candidates. Table tests cover the in-window
+  big expense, small/old/income exclusions, the txn-id key, and zero-threshold. Fixed an unused `now` in the
+  test. notify + notifyfeed tests green, wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: settle-up CSV export (B24)
 
 - Added pure `split.CSV(transfers, name, amount)` (From,To,Amount header; callback-based name/amount, FX/format

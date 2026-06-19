@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/notify"
@@ -180,4 +181,51 @@ func BudgetCandidates(
 		})
 	}
 	return out
+}
+
+// LargeTransactionCandidates produces a notify.Candidate for each expense whose
+// base-currency magnitude meets or exceeds threshold (minor units) — the "a big
+// charge just hit your account" alert. Only expenses on or after since are
+// considered (a zero since means no lower bound), so the caller scopes it to the
+// gap since the app was last open; each is keyed by transaction id so a given
+// charge fires exactly once. A non-positive threshold yields nothing. text
+// renders the localized title and body from the description and amount.
+func LargeTransactionCandidates(
+	ruleID string,
+	txns []domain.Transaction,
+	threshold int64,
+	since time.Time,
+	rates currency.Rates,
+	text func(desc string, amount int64) (title, body string),
+) ([]notify.Candidate, error) {
+	if threshold <= 0 {
+		return nil, nil
+	}
+	var out []notify.Candidate
+	for _, t := range txns {
+		if !t.IsExpense() {
+			continue
+		}
+		if !since.IsZero() && t.Date.Before(since) {
+			continue
+		}
+		conv, err := rates.Convert(t.Amount.Abs(), rates.Base)
+		if err != nil {
+			return nil, err
+		}
+		if conv.Amount < threshold {
+			continue
+		}
+		title, body := text(t.Desc, conv.Amount)
+		out = append(out, notify.Candidate{
+			RuleID:        ruleID,
+			Event:         notify.EventLargeTransaction,
+			OccurrenceKey: "txn:" + t.ID,
+			At:            t.Date,
+			Title:         title,
+			Body:          body,
+			Severity:      notify.SeverityWarning,
+		})
+	}
+	return out, nil
 }

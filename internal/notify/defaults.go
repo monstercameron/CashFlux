@@ -4,6 +4,10 @@ package notify
 // bill-due rule starts notifying.
 const defaultBillLeadDays = 7
 
+// defaultLargeTxnMinor is the default "large transaction" threshold in base-
+// currency minor units (e.g. 50000 = $500.00). Users tune it per their budget.
+const defaultLargeTxnMinor = 50000
+
 // DefaultRules returns the recommended Phase-A notification rules — one per
 // supported event — all enabled and delivered in-app, with no quiet hours and no
 // frequency cap (the per-event occurrence keys already bound how often each can
@@ -21,5 +25,6 @@ func DefaultRules() []Rule {
 		{ID: "default-stale", Event: EventStaleBalance, Enabled: true, Channels: inApp},
 		{ID: "default-digest", Event: EventDigest, Enabled: true, Channels: inApp},
 		{ID: "default-backup", Event: EventBackupDue, Enabled: true, Channels: inApp},
+		{ID: "default-large", Event: EventLargeTransaction, Enabled: true, Channels: inApp, Threshold: defaultLargeTxnMinor},
 	}
 }

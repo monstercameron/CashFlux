@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Large-transaction notifications (B19).** A `notifyfeed.LargeTransactionCandidates` generator plus a default
+  in-app rule (`default-large`, threshold $500) complete the notify event coverage: an expense at or above the
+  threshold (in base currency, since the last open) becomes a once-per-transaction "a big charge hit your
+  account" alert through the same B19 catch-up engine. Pure and table-tested.
+
+### Added
 - **Settle-up CSV export (B24).** New pure, table-tested `split.CSV` and a Download CSV button on the Split
   screen's settle-up card, so you can save or share the who-owes-whom plan (From, To, Amount) — matching the
   CSV export the Bills, Subscriptions, and Reports screens already offer.

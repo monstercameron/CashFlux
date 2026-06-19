@@ -8,11 +8,55 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
 )
+
+func TestLargeTransactionCandidates(t *testing.T) {
+	since := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)
+	rates := currency.Rates{Base: "USD"}
+	text := func(desc string, amount int64) (string, string) {
+		return "Large charge: " + desc, fmt.Sprintf("%d", amount)
+	}
+	txns := []domain.Transaction{
+		{ID: "a", Desc: "TV", Amount: money.New(-60000, "USD"), Date: time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC)},    // big, in window
+		{ID: "b", Desc: "Coffee", Amount: money.New(-500, "USD"), Date: time.Date(2026, time.June, 11, 0, 0, 0, 0, time.UTC)},  // small
+		{ID: "c", Desc: "Old TV", Amount: money.New(-90000, "USD"), Date: time.Date(2026, time.May, 30, 0, 0, 0, 0, time.UTC)}, // big but before since
+		{ID: "d", Desc: "Bonus", Amount: money.New(80000, "USD"), Date: time.Date(2026, time.June, 12, 0, 0, 0, 0, time.UTC)},  // income, excluded
+	}
+	got, err := LargeTransactionCandidates("rule-large", txns, 50000, since, rates, text)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d candidates, want 1 (the in-window big expense): %+v", len(got), got)
+	}
+	c := got[0]
+	if c.RuleID != "rule-large" || c.Event != notify.EventLargeTransaction {
+		t.Errorf("RuleID/Event = %q/%q", c.RuleID, c.Event)
+	}
+	if c.OccurrenceKey != "txn:a" {
+		t.Errorf("OccurrenceKey = %q, want txn:a", c.OccurrenceKey)
+	}
+	if c.Severity != notify.SeverityWarning {
+		t.Errorf("Severity = %v, want warning", c.Severity)
+	}
+}
+
+func TestLargeTransactionCandidatesZeroThreshold(t *testing.T) {
+	txns := []domain.Transaction{{ID: "a", Amount: money.New(-99999, "USD"), Date: time.Now()}}
+	got, err := LargeTransactionCandidates("r", txns, 0, time.Time{}, currency.Rates{Base: "USD"},
+		func(string, int64) (string, string) { return "", "" })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("zero threshold should yield nothing, got %+v", got)
+	}
+}
 
 func TestBackupCandidates(t *testing.T) {
 	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
