@@ -46,6 +46,11 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative blob max bytes accepted")
 	}
 	invalid = valid
+	invalid.BlobIOTimeout = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative blob io timeout accepted")
+	}
+	invalid = valid
 	invalid.AIUpstreamRetries = -1
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("negative ai upstream retries accepted")

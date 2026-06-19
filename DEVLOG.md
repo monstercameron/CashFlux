@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend blob io deadlines
+
+- Added `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` with a 10 second default for blob disk operations.
+- Routed blob HTTP PUT/GET through context-aware store reads/writes that observe request cancellation and configured deadlines.
+- Covered canceled blob read/write contexts and negative timeout config validation in server tests.
+
 ## 2026-06-19 - feat: bound self-host log retention
 
 - Configured self-host Compose services to use Docker's `local` log driver with 10 MB files and 10 retained files.

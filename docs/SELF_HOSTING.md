@@ -114,6 +114,8 @@ If you add a volume or sidecar, keep writable paths explicit and prefer read-onl
 
 AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI_UPSTREAM_RETRIES` to keep upstream OpenAI failures bounded. The defaults are a 45 second deadline and two retries for transient `429`/`5xx` responses or transport errors.
 
+Blob disk reads and writes use `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` so request cancellation and slow storage do not hang blob endpoints indefinitely. The default is 10 seconds.
+
 ## Logging
 
 Set `CASHFLUX_SERVER_LOG_FORMAT=json` for structured production logs, or `text` for local development. `CASHFLUX_SERVER_LOG_LEVEL` accepts `debug`, `info`, `warn`, and `error`. Sensitive attributes such as tokens, keys, secrets, cookies, passwords, and authorization values are redacted before logs are written.

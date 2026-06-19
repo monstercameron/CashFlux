@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend blob I/O deadlines.** Blob PUT/GET now use a configurable `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` and context-aware blob store operations.
 - **Self-host log retention policy.** The self-host Compose stack now uses Docker's local log driver with bounded rotation, and the observability runbook documents stdout collection, retention, and access policy.
 - **Backend SLO and alerting artifacts.** Added Prometheus alert rules plus an observability runbook with SLOs, dashboard queries, and alert routing guidance.
 - **Backend trace/request log correlation.** HTTP and gRPC handlers now extract W3C trace IDs and include `trace_id` alongside request IDs in structured logs.

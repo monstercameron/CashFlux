@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -51,7 +52,9 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		blob, err := store.PutBlob(blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes)
+		ctx, cancel := blobIOContext(r.Context(), cfg)
+		defer cancel()
+		blob, err := store.PutBlobContext(ctx, blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -176,12 +179,21 @@ func readHTTPBlob(w http.ResponseWriter, r *http.Request, cfg Config, store *Sto
 		http.Error(w, "blob not found", http.StatusNotFound)
 		return Blob{}, nil, false
 	}
-	data, err := store.ReadBlob(blobRoot(cfg), hash)
+	ctx, cancel := blobIOContext(r.Context(), cfg)
+	defer cancel()
+	data, err := store.ReadBlobContext(ctx, blobRoot(cfg), hash)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return Blob{}, nil, false
 	}
 	return blob, data, true
+}
+
+func blobIOContext(parent context.Context, cfg Config) (context.Context, context.CancelFunc) {
+	if cfg.BlobIOTimeout <= 0 {
+		return context.WithCancel(parent)
+	}
+	return context.WithTimeout(parent, cfg.BlobIOTimeout)
 }
 
 func writeBlobHeaders(w http.ResponseWriter, blob Blob) {

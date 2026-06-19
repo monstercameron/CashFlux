@@ -4243,7 +4243,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 ### 7.16 Reliability, SRE & disaster recovery
 - [~] Context deadlines/timeouts on all I/O (DB, upstream OpenAI, blob store); cancellation propagation.
-      OpenAI proxy calls now have configurable upstream deadlines; remaining: DB/blob deadlines.
+      OpenAI proxy calls now have configurable upstream deadlines; blob PUT/GET now use
+      `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` and context-aware store operations. Remaining: DB deadlines.
 - [~] Retries with jittered exponential backoff for transient upstream failures; circuit breaker on the
       AI upstream; idempotent writes (idempotency keys on mutating HTTP; PUT semantics on sync).
       OpenAI proxy retries transient transport, 429, and 5xx failures; remaining: circuit breaker and write idempotency keys.

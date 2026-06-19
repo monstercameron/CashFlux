@@ -42,6 +42,7 @@ type Config struct {
 	AIRequestsPerDay                  int64
 	AITokensPerDay                    int64
 	BlobMaxBytes                      int64
+	BlobIOTimeout                     time.Duration
 	GRPCReadLimitBytes                int64
 	GRPCKeepaliveInterval             time.Duration
 	GRPCIdleTimeout                   time.Duration
@@ -92,6 +93,7 @@ func FromEnv() (Config, error) {
 	cfg.AIRequestsPerDay = envInt64("CASHFLUX_SERVER_AI_REQUESTS_PER_DAY", 0)
 	cfg.AITokensPerDay = envInt64("CASHFLUX_SERVER_AI_TOKENS_PER_DAY", 0)
 	cfg.BlobMaxBytes = envInt64("CASHFLUX_SERVER_BLOB_MAX_BYTES", 32<<20)
+	cfg.BlobIOTimeout = envDuration("CASHFLUX_SERVER_BLOB_IO_TIMEOUT", 10*time.Second)
 	cfg.GRPCReadLimitBytes = envInt64("CASHFLUX_SERVER_GRPC_READ_LIMIT_BYTES", 16<<20)
 	cfg.GRPCKeepaliveInterval = envDuration("CASHFLUX_SERVER_GRPC_KEEPALIVE_INTERVAL", 30*time.Second)
 	cfg.GRPCIdleTimeout = envDuration("CASHFLUX_SERVER_GRPC_IDLE_TIMEOUT", 90*time.Second)
@@ -138,8 +140,8 @@ func (c Config) Validate() error {
 	if c.AIUpstreamTimeout < 0 {
 		return fmt.Errorf("server: ai upstream timeout must be non-negative")
 	}
-	if c.BlobMaxBytes < 0 {
-		return fmt.Errorf("server: blob max bytes must be non-negative")
+	if c.BlobMaxBytes < 0 || c.BlobIOTimeout < 0 {
+		return fmt.Errorf("server: blob limits must be non-negative")
 	}
 	if c.TokenSHA256 != "" {
 		decoded, err := hex.DecodeString(c.TokenSHA256)

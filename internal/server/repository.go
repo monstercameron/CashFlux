@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -430,8 +431,16 @@ func (s *Store) SnapshotHistory(workspaceID string, limit int) ([]Snapshot, erro
 
 // PutBlob stores bytes under a sha256 content-addressed path and records metadata.
 func (s *Store) PutBlob(root string, data []byte, mime, name string, maxBytes int64) (Blob, error) {
+	return s.PutBlobContext(context.Background(), root, data, mime, name, maxBytes)
+}
+
+// PutBlobContext stores bytes under a sha256 content-addressed path and observes cancellation before disk and metadata writes.
+func (s *Store) PutBlobContext(ctx context.Context, root string, data []byte, mime, name string, maxBytes int64) (Blob, error) {
 	if maxBytes > 0 && int64(len(data)) > maxBytes {
 		return Blob{}, fmt.Errorf("server store: blob is %d bytes, exceeds limit %d", len(data), maxBytes)
+	}
+	if err := ctx.Err(); err != nil {
+		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
 	}
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
@@ -450,6 +459,9 @@ func (s *Store) PutBlob(root string, data []byte, mime, name string, maxBytes in
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob mkdir: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
+	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		if err := os.WriteFile(path, data, 0o600); err != nil {
 			return Blob{}, fmt.Errorf("server store: blob write: %w", err)
@@ -457,7 +469,10 @@ func (s *Store) PutBlob(root string, data []byte, mime, name string, maxBytes in
 	} else if err != nil {
 		return Blob{}, fmt.Errorf("server store: blob stat: %w", err)
 	}
-	if _, err := s.db.Exec(`
+	if err := ctx.Err(); err != nil {
+		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `
 INSERT INTO blobs(hash, size, mime, created_at)
 VALUES(?, ?, ?, ?)
 ON CONFLICT(hash) DO UPDATE SET size = excluded.size, mime = excluded.mime`,
@@ -469,18 +484,32 @@ ON CONFLICT(hash) DO UPDATE SET size = excluded.size, mime = excluded.mime`,
 
 // ReadBlob reads content-addressed blob bytes from disk.
 func (s *Store) ReadBlob(root, hash string) ([]byte, error) {
+	return s.ReadBlobContext(context.Background(), root, hash)
+}
+
+// ReadBlobContext reads content-addressed blob bytes from disk and observes cancellation around disk I/O.
+func (s *Store) ReadBlobContext(ctx context.Context, root, hash string) ([]byte, error) {
 	path, err := blobPath(root, hash)
 	if err != nil {
 		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("server store: blob read canceled: %w", err)
 	}
 	if _, ok, err := s.GetBlob(hash); err != nil {
 		return nil, err
 	} else if !ok {
 		return nil, os.ErrNotExist
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("server store: blob read canceled: %w", err)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("server store: blob read: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("server store: blob read canceled: %w", err)
 	}
 	sum := sha256.Sum256(data)
 	if hex.EncodeToString(sum[:]) != hash {

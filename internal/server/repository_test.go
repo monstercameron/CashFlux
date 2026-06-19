@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -322,6 +323,24 @@ func TestBlobStoreRejectsOversizedAndHashMismatch(t *testing.T) {
 	}
 	if _, err := s.ReadBlob(root, blob.Hash); err == nil {
 		t.Fatal("hash-mismatched blob read accepted")
+	}
+}
+
+func TestBlobStoreHonorsCanceledContext(t *testing.T) {
+	s := openTestStore(t)
+	root := filepath.Join(t.TempDir(), "blobs")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.PutBlobContext(ctx, root, []byte("abc"), "text/plain", "a.txt", 16); err == nil || !strings.Contains(err.Error(), "canceled") {
+		t.Fatalf("PutBlobContext canceled err = %v", err)
+	}
+
+	blob, err := s.PutBlob(root, []byte("abc"), "text/plain", "a.txt", 16)
+	if err != nil {
+		t.Fatalf("PutBlob: %v", err)
+	}
+	if _, err := s.ReadBlobContext(ctx, root, blob.Hash); err == nil || !strings.Contains(err.Error(), "canceled") {
+		t.Fatalf("ReadBlobContext canceled err = %v", err)
 	}
 }
 
