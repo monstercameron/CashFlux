@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SOC 2 readiness checklist (7.16).** Added a backend readiness checklist covering access control, change
+  management, monitoring/availability, vendor management, and incident response.
 - **Server migration dry-run (7.16).** Added `cashflux-server migrate-check`, which migrates a temporary
   SQLite/WAL copy and reports the resulting schema version without mutating live data.
 - **Serve the SPA under a URL sub-path (B30).** The app now routes correctly when hosted under a sub-path

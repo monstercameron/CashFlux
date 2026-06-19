@@ -391,6 +391,29 @@ func TestOperationsRunbookDefinesRequiredProcedures(t *testing.T) {
 	}
 }
 
+func TestSOC2ReadinessChecklistCoversCoreControls(t *testing.T) {
+	data, err := os.ReadFile("../../docs/SOC2_READINESS.md")
+	if err != nil {
+		t.Fatalf("read SOC 2 readiness checklist: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"Access Control",
+		"Change Management",
+		"Monitoring And Availability",
+		"Vendor Management",
+		"Incident Response",
+		"cashflux-server migrate-check",
+		"subprocessor list",
+		"request_id",
+		"postmortems",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("SOC 2 readiness checklist missing %q", want)
+		}
+	}
+}
+
 func TestScaleLimitsDocumentSQLiteCeilingAndMigrationPath(t *testing.T) {
 	data, err := os.ReadFile("../../docs/SCALE_LIMITS.md")
 	if err != nil {

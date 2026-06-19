@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: add soc2 readiness checklist (7.16)
+
+- Added `docs/SOC2_READINESS.md` as an engineering control checklist, not a certification claim.
+- Covered access control, change management, monitoring/availability, vendor management, and incident response.
+- Cross-linked it from the operations runbook and pinned the required sections with a deploy doc test.
+
 ## 2026-06-19 - docs: pin pci scope boundary (7.16)
 
 - Added a PCI scope minimization section to the legal compliance pack.

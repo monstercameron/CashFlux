@@ -1,6 +1,6 @@
 # CashFlux Operations Runbook
 
-This runbook covers recurring operator tasks for the optional CashFlux backend. Use it with `docs/SELF_HOSTING.md`, `docs/OBSERVABILITY.md`, and `docs/INCIDENT_RESPONSE.md`.
+This runbook covers recurring operator tasks for the optional CashFlux backend. Use it with `docs/SELF_HOSTING.md`, `docs/OBSERVABILITY.md`, `docs/INCIDENT_RESPONSE.md`, and `docs/SOC2_READINESS.md`.
 
 ## Deploy
 

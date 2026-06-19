@@ -4388,8 +4388,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       Done: billing endpoints only create Stripe-hosted Checkout/customer-portal sessions and consume
       webhooks; `docs/LEGAL_COMPLIANCE.md` now pins the no-card-data boundary, allowed billing identifiers,
       and Stripe Radar/payment-method ownership with a deploy doc test.
-- [ ] **SOC 2 readiness checklist** (access control, change mgmt, monitoring, vendor mgmt, IR) — even if
+- [x] **SOC 2 readiness checklist** (access control, change mgmt, monitoring, vendor mgmt, IR) — even if
       not certifying, build to the controls so enterprise/audit asks are answerable.
+      Done: `docs/SOC2_READINESS.md` defines access control, change management, monitoring/availability,
+      vendor management, and incident-response controls with a deploy doc test pinning the checklist.
 - [~] Encryption-in-transit + at-rest documented; key management policy; access logging to prod data.
       Master-key source/length/rotation guidance is documented for AI-key encryption at rest. Remaining:
       formal production data access logging policy.
