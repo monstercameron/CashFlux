@@ -4185,8 +4185,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       server is selected; entitlement = always-on for self-host.
       Done: Self-hosted mode hides the Cloud price/trial/Checkout/portal controls and explains the custom
       backend is treated as always-on infrastructure.
-- [ ] **Auth method adapts to the server:** support a lighter **single-user access-token** mode (paste
+- [x] **Auth method adapts to the server:** support a lighter **single-user access-token** mode (paste
       a token the server printed) in addition to OAuth; show whichever the chosen server advertises.
+      Done: Settings defaults Cloud to OAuth and self-hosted to token auth, then Test connection consumes
+      `/v1/version` auth discovery to show the printed-token field or the advertised Google/GitHub OAuth buttons.
 - [ ] **Switch-server flow:** changing the URL signs out of the old server and re-points sync; local
       data untouched; clear "only changes where it syncs" copy.
 - [ ] Sync chip tooltip names the active server; onboarding mentions both paths once.

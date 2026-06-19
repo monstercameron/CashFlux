@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/store"
@@ -28,6 +29,7 @@ type backendVersionResponse struct {
 	APIVersion          string `json:"apiVersion"`
 	MinClientAPIVersion string `json:"minClientApiVersion"`
 	AuthMode            string `json:"authMode"`
+	AuthProviders       []string `json:"authProviders"`
 }
 
 type billingSessionResponse struct {
@@ -50,7 +52,7 @@ func backendOrigin(endpoint string) string {
 	return u.Scheme + "://" + u.Host
 }
 
-func testBackendConnection(endpoint, token string, onDone func(string), onError func(string)) {
+func testBackendConnection(endpoint, token string, onDone func(backendauth.Discovery), onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
 	token = strings.TrimSpace(token)
 	go func() {
@@ -81,10 +83,7 @@ func testBackendConnection(endpoint, token string, onDone func(string), onError 
 			onError("Backend API version is not compatible.")
 			return
 		}
-		if version.AuthMode == "" {
-			version.AuthMode = "token"
-		}
-		onDone(version.AuthMode)
+		onDone(backendauth.Discovery{AuthMode: version.AuthMode, AuthProviders: version.AuthProviders}.Normalize())
 	}()
 }
 

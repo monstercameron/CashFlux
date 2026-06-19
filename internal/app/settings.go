@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/contrast"
@@ -373,6 +374,12 @@ func globalSettingsForm() uic.Node {
 	serverMode := uic.UseState(string(pr.ServerMode))
 	serverURL := uic.UseState(pr.ServerURL)
 	serverToken := uic.UseState(pr.ServerToken)
+	initialAuth := backendauth.Discovery{AuthMode: backendauth.ModeToken}
+	if pr.ServerMode == prefs.ServerCloud {
+		initialAuth = backendauth.Discovery{AuthMode: backendauth.ModeOAuth, AuthProviders: []string{"google", "github"}}
+	}
+	serverAuthMode := uic.UseState(initialAuth.AuthMode)
+	serverAuthProviders := uic.UseState(strings.Join(initialAuth.AuthProviders, ","))
 	billingInterval := uic.UseState("annual")
 	saveOAuthSession := func(token, csrf, userID string) {
 		p := prefsAtom.Get()
@@ -389,6 +396,13 @@ func globalSettingsForm() uic.Node {
 	}
 	onServerMode := func(v string) {
 		serverMode.Set(v)
+		if prefs.ServerMode(v) == prefs.ServerCloud {
+			serverAuthMode.Set(backendauth.ModeOAuth)
+			serverAuthProviders.Set("google,github")
+		} else {
+			serverAuthMode.Set(backendauth.ModeToken)
+			serverAuthProviders.Set("")
+		}
 		p := prefsAtom.Get()
 		p.ServerMode = prefs.ServerMode(v)
 		savePrefs(p)
@@ -410,6 +424,14 @@ func globalSettingsForm() uic.Node {
 		cloudPrice = uistate.T("settings.cloudPriceMonthly")
 	}
 	cloudSelected := prefs.ServerMode(serverMode.Get()) == prefs.ServerCloud
+	authDiscovery := backendauth.Discovery{
+		AuthMode:      serverAuthMode.Get(),
+		AuthProviders: strings.Split(serverAuthProviders.Get(), ","),
+	}.Normalize()
+	oauthProviders := authDiscovery.OAuthProvidersOrFallback(nil)
+	showTokenAuth := authDiscovery.UsesToken()
+	showGoogleOAuth := containsString(oauthProviders, "google")
+	showGitHubOAuth := containsString(oauthProviders, "github")
 	uploadKey := uic.UseEvent(func() {
 		uploadOpenAIKeyToBackend(serverURL.Get(), serverToken.Get(), aiKey.Get(), func() {
 			notify(uistate.T("settings.serverKeyStored"), false)
@@ -418,8 +440,11 @@ func globalSettingsForm() uic.Node {
 		})
 	})
 	testBackend := uic.UseEvent(func() {
-		testBackendConnection(serverURL.Get(), serverToken.Get(), func(authMode string) {
-			notify(uistate.T("settings.serverTestOK", authMode), false)
+		testBackendConnection(serverURL.Get(), serverToken.Get(), func(discovery backendauth.Discovery) {
+			discovery = discovery.Normalize()
+			serverAuthMode.Set(discovery.AuthMode)
+			serverAuthProviders.Set(strings.Join(discovery.AuthProviders, ","))
+			notify(uistate.T("settings.serverTestOK", discovery.AuthMode), false)
 		}, func(msg string) {
 			notify(uistate.T("settings.serverTestFailed", strings.TrimSpace(msg)), true)
 		})
@@ -550,13 +575,14 @@ func globalSettingsForm() uic.Node {
 			OnSelect: onServerMode,
 		}),
 		Input(Class("set-input mt-[0.45rem]"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
-		Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken)),
+		If(showTokenAuth, Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken))),
 		If(cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.backendNote"))),
 		If(!cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.selfHostedNote"))),
+		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.authMode", authDiscovery.AuthMode)),
 		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.syncStatus", syncStatusLabel())),
 		Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
-			Button(Class("btn"), Type("button"), OnClick(signInGoogle), uistate.T("settings.signInGoogle")),
-			Button(Class("btn"), Type("button"), OnClick(signInGitHub), uistate.T("settings.signInGitHub")),
+			If(showGoogleOAuth, Button(Class("btn"), Type("button"), OnClick(signInGoogle), uistate.T("settings.signInGoogle"))),
+			If(showGitHubOAuth, Button(Class("btn"), Type("button"), OnClick(signInGitHub), uistate.T("settings.signInGitHub"))),
 			If(strings.TrimSpace(serverToken.Get()) != "", Button(Class("btn"), Type("button"), OnClick(signOut), uistate.T("settings.signOut"))),
 			Button(Class("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
 			Button(Class("btn"), Type("button"), OnClick(syncNow), uistate.T("settings.syncNow")),
@@ -775,6 +801,16 @@ func memberChip(m domain.Member) uic.Node {
 		Span(Style(map[string]string{"width": "9px", "height": "9px", "border-radius": "50%", "background": color})),
 		m.Name,
 	)
+}
+
+func containsString(items []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, item := range items {
+		if strings.TrimSpace(item) == target {
+			return true
+		}
+	}
+	return false
 }
 
 // baseCurrencyOptions builds the base-currency <option> list from the registered

@@ -260,7 +260,7 @@ func customPageRow(props customPageRowProps) uic.Node {
 		link,
 		Button(Class("rail-section shrink-0 px-1.5 py-1 text-faint hover:text-fg"), Type("button"),
 			Title(uistate.T("pages.menu")),
-			OnClick(func() { open.Set(!open.Get()) }), "⋯"),
+			OnClick(func() { open.Set(!open.Get()) }), ui.Icon(icon.MoreH, Class("w-4 h-4"))),
 		menu,
 	)
 }

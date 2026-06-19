@@ -600,6 +600,7 @@ var english = Catalog{
 	"settings.serverModeCloud":   "Cloud",
 	"settings.serverModeSelf":    "Self-hosted",
 	"settings.selfHostedNote":    "Self-hosted mode uses your backend as always-on infrastructure and hides CashFlux Cloud billing controls.",
+	"settings.authMode":          "Auth mode: %s",
 	"settings.testBackend":       "Test connection",
 	"settings.serverTestOK":      "Connected to backend (%s auth).",
 	"settings.serverTestFailed":  "Backend connection failed: %s",

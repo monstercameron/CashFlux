@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: adapt backend auth controls (7.12)
+
+- Added a small pure backend-auth discovery helper that normalizes `/v1/version` auth modes and OAuth provider lists.
+- Settings now starts Cloud as OAuth and self-hosted as token mode, then updates the visible controls after Test connection
+  based on what the selected server advertises.
+- Token-mode self-hosting keeps the printed-token field, while OAuth servers show only their advertised Google/GitHub
+  sign-in buttons; sync and AI still use the same stored bearer token after either path.
+
 ## 2026-06-19 - feat: add backend oauth login ui (7.7)
 
 - Added a popup-oriented OAuth callback path: `GET /v1/auth/{provider}?returnTo=<app>` stores the app return

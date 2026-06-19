@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Server-advertised auth controls (7.12).** Settings now adapts backend auth controls from `/v1/version`,
+  showing the printed-token field for token-mode self-hosting and only the advertised OAuth provider buttons
+  for OAuth servers.
 - **Quick-add menu now has leading icons (C46).** Each "+ Add" menu item shows its glyph — New transaction
   (arrow-left-right), New account (wallet), New budget (pie), New goal (target), Scan a document (scan-line) —
   so the menu is scannable by shape, not just text.

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
@@ -114,7 +115,7 @@ func WorkspaceSwitcher() uic.Node {
 				wsColorDot(active.Color),
 				Span(Class("truncate"), active.Name),
 			),
-			Span(Class("text-faint"), "▾"),
+			ui.Icon(icon.ChevronDown, Class("w-4 h-4 text-faint shrink-0")),
 		),
 		menu,
 	)
