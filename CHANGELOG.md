@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Re-render stress E2E guards against chrome duplication.** `e2e/rerender.test.mjs` fires many re-render
+  triggers (rail collapse toggling, add-menu open/close, rapid same-route re-clicks, cross navigation, browser
+  back/forward) and asserts exactly one rail / top bar / `<h1>` / `#app` subtree throughout — a standing guard
+  for the "page duplicates on rerender" symptom (not reproducible via these paths, so the trigger is elsewhere).
 - **Hardened sub-path routing with a deep contract test (B30).** `internal/routebase` gains a contract test
   that mirrors the full register → match → strip → highlight cycle across several base prefixes (`""`,
   `/CashFlux`, `/app`, `/a/b`, `/Repo-Name`): route registrations stay unique under the prefix, the wildcard is
