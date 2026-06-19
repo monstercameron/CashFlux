@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Left rail items were not navigable (routing regression).** A Layout/outlet router restructure left child
+  routes rendering outside the Shell (into a missing outlet), so clicking most rail items showed nothing.
+  Reverted to flat per-route registration — each route renders its own Shell + screen, which the history router
+  resolves to exactly one Shell (it only stacks routes registered as layouts, and none are). Added a
+  `screens.TestRailRoutesResolve` registry-invariant guard plus a Playwright E2E that clicks every rail item.
+
 ### Added
 - **Ad-hoc Unicode chrome glyphs replaced with real icons (C46).** The shared controls and chrome now use
   typed `ui.Icon`s instead of `▾ ‹ › ✕ ⋯ ⚙`: the period stepper (chevron-left/right), the FlipPanel close (x),

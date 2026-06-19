@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: restore left-rail navigation (routing regression) + tests
+
+- User reported most left-rail items were not navigable. Root cause: the B3 Layout/outlet restructure in
+  app.Run — `/` registered as `router.Options{Layout:true}` rendering the Shell around `router.GetOutlet()`,
+  with every other screen registered to return bare `route.View()`. Child routes ended up rendering outside the
+  Shell / into a missing outlet, so clicking a rail item produced no visible screen.
+- Confirmed against the framework router source that the flat structure never double-rendered (the history
+  router only stacks a parent when it's registered as a layout, and the pre-B3 code registered none) — so B3
+  "fixed" a non-bug and introduced this regression. Reverted to flat per-route registration: each screen route
+  renders its own Shell wrapping its View; `/p/:slug` and `*` likewise. Kept B30's RoutePath prefixing. Removed
+  the now-dead shellLabelsForCurrentRoute/customPageSlug helpers.
+- Regression guards: `internal/screens/registry_test.go` (wasm lane) asserts the registry that drives both
+  routing and the rail stays sound — unique rooted paths, non-nil views, known rail groups, "/" at the head, no
+  collision with the /p/ pattern — so a route can't silently fall through to the "*" catch-all again. Plus a
+  Playwright E2E that loads the app and clicks every rail item, asserting the URL + screen heading update and the
+  rail renders exactly once (deep nav coverage).
+
 ## 2026-06-19 - feat: replace ad-hoc Unicode chrome glyphs with real icons (C46)
 
 - Continued the C46 iconography pass through the chrome/control layer. Swapped every ad-hoc Unicode glyph for a
