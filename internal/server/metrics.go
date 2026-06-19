@@ -13,6 +13,7 @@ import (
 type Metrics struct {
 	mu                   sync.Mutex
 	http                 map[metricKey]metricValue
+	httpBuckets          map[metricKey][]int64
 	grpc                 map[metricKey]metricValue
 	streamsActive        int64
 	streamDurations      map[metricKey]metricValue
@@ -37,9 +38,12 @@ type metricValue struct {
 	DurationSecs float64
 }
 
+var httpDurationBuckets = []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10}
+
 func NewMetrics() *Metrics {
 	return &Metrics{
 		http:            map[metricKey]metricValue{},
+		httpBuckets:     map[metricKey][]int64{},
 		grpc:            map[metricKey]metricValue{},
 		streamDurations: map[metricKey]metricValue{},
 		syncPulls:       map[string]int64{},
@@ -53,7 +57,9 @@ func (m *Metrics) ObserveHTTP(route string, status int, elapsed time.Duration) {
 	if m == nil {
 		return
 	}
-	m.observe(m.http, metricKey{Name: route, Status: fmt.Sprintf("%d", status)}, elapsed)
+	key := metricKey{Name: route, Status: fmt.Sprintf("%d", status)}
+	m.observe(m.http, key, elapsed)
+	m.observeHTTPBucket(key, elapsed)
 }
 
 func (m *Metrics) ObserveGRPC(method, status string, elapsed time.Duration) {
@@ -192,11 +198,30 @@ func (m *Metrics) observe(dst map[metricKey]metricValue, key metricKey, elapsed 
 	dst[key] = v
 }
 
+func (m *Metrics) observeHTTPBucket(key metricKey, elapsed time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.httpBuckets == nil {
+		m.httpBuckets = map[metricKey][]int64{}
+	}
+	counts := m.httpBuckets[key]
+	if len(counts) != len(httpDurationBuckets) {
+		counts = make([]int64, len(httpDurationBuckets))
+	}
+	seconds := elapsed.Seconds()
+	for i, bucket := range httpDurationBuckets {
+		if seconds <= bucket {
+			counts[i]++
+		}
+	}
+	m.httpBuckets[key] = counts
+}
+
 func (m *Metrics) WritePrometheus(w io.Writer) {
 	if m == nil {
 		m = NewMetrics()
 	}
-	httpRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows, queueDepths := m.snapshot()
+	httpRows, httpBucketRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows, queueDepths := m.snapshot()
 	_, _ = io.WriteString(w, "# HELP cashflux_server_up Server process health.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_server_up gauge\n")
 	_, _ = io.WriteString(w, "cashflux_server_up 1\n")
@@ -209,6 +234,14 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	_, _ = io.WriteString(w, "# TYPE cashflux_http_request_duration_seconds_sum counter\n")
 	for _, row := range httpRows {
 		_, _ = fmt.Fprintf(w, "cashflux_http_request_duration_seconds_sum{route=%q,status=%q} %.6f\n", row.Key.Name, row.Key.Status, row.Value.DurationSecs)
+	}
+	_, _ = io.WriteString(w, "# HELP cashflux_http_request_duration_seconds_bucket HTTP request duration histogram buckets by route and status.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_http_request_duration_seconds_bucket histogram\n")
+	for _, row := range httpBucketRows {
+		for i, bucket := range httpDurationBuckets {
+			_, _ = fmt.Fprintf(w, "cashflux_http_request_duration_seconds_bucket{route=%q,status=%q,le=%q} %d\n", row.Key.Name, row.Key.Status, fmtFloat(bucket), row.Buckets[i])
+		}
+		_, _ = fmt.Fprintf(w, "cashflux_http_request_duration_seconds_bucket{route=%q,status=%q,le=%q} %d\n", row.Key.Name, row.Key.Status, "+Inf", row.Count)
 	}
 	_, _ = io.WriteString(w, "# HELP cashflux_grpc_requests_total gRPC requests by method and status.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_grpc_requests_total counter\n")
@@ -285,13 +318,20 @@ type namedMetricRow struct {
 	Value metricValue
 }
 
-func (m *Metrics) snapshot() ([]metricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow, []labelMetricRow) {
+type bucketMetricRow struct {
+	Key     metricKey
+	Buckets []int64
+	Count   int64
+}
+
+func (m *Metrics) snapshot() ([]metricRow, []bucketMetricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow, []labelMetricRow) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	httpRows := metricRows(m.http)
+	httpBucketRows := bucketMetricRows(m.httpBuckets, m.http)
 	grpcRows := metricRows(m.grpc)
 	streamRows := metricRows(m.streamDurations)
-	return httpRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db), labelMetricRows(m.queueDepths)
+	return httpRows, httpBucketRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db), labelMetricRows(m.queueDepths)
 }
 
 func metricRows(src map[metricKey]metricValue) []metricRow {
@@ -327,4 +367,22 @@ func namedMetricRows(src map[string]metricValue) []namedMetricRow {
 		return strings.Compare(rows[i].Name, rows[j].Name) < 0
 	})
 	return rows
+}
+
+func bucketMetricRows(src map[metricKey][]int64, counts map[metricKey]metricValue) []bucketMetricRow {
+	rows := make([]bucketMetricRow, 0, len(src))
+	for key, buckets := range src {
+		copied := append([]int64(nil), buckets...)
+		rows = append(rows, bucketMetricRow{Key: key, Buckets: copied, Count: counts[key].Count})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		left := rows[i].Key.Name + "\x00" + rows[i].Key.Status
+		right := rows[j].Key.Name + "\x00" + rows[j].Key.Status
+		return strings.Compare(left, right) < 0
+	})
+	return rows
+}
+
+func fmtFloat(v float64) string {
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", v), "0"), ".")
 }

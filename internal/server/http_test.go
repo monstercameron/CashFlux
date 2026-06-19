@@ -316,6 +316,7 @@ func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	}
 	for _, want := range []string{
 		`cashflux_http_requests_total{route="/v1/version",status="200"} 1`,
+		`cashflux_http_request_duration_seconds_bucket{route="/v1/version",status="200",le="+Inf"} 1`,
 		`cashflux_grpc_requests_total{method="/cashflux.v1.SyncService/ListWorkspaces",status="OK"} 1`,
 		`cashflux_grpc_stream_duration_seconds_sum{method="/cashflux.v1.SyncService/WatchWorkspaces",status="OK"} 0.003000`,
 	} {

@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend slo alerts
+
+- Added `deploy/prometheus-rules.yml` for backend-down, HTTP/gRPC error-rate, and HTTP latency alerts.
+- Added `docs/OBSERVABILITY.md` with SLO targets, dashboard queries, and alert routing expectations.
+- Covered the observability artifacts with deploy tests that assert the expected metrics and runbook sections.
+
 ## 2026-06-19 - feat: correlate backend trace logs
 
 - Extracted W3C `traceparent` trace IDs from HTTP headers and gRPC metadata.

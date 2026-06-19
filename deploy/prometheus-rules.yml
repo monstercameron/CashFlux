@@ -1,0 +1,56 @@
+groups:
+  - name: cashflux-slos
+    rules:
+      - alert: CashFluxBackendDown
+        expr: cashflux_server_up == 0
+        for: 2m
+        labels:
+          severity: page
+          service: cashflux-server
+        annotations:
+          summary: CashFlux backend is down
+          description: cashflux_server_up has been 0 for more than 2 minutes.
+
+      - alert: CashFluxHighErrorRate
+        expr: |
+          (
+            sum(rate(cashflux_http_requests_total{status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(cashflux_http_requests_total[5m])), 0.001)
+          ) > 0.01
+        for: 10m
+        labels:
+          severity: page
+          service: cashflux-server
+        annotations:
+          summary: CashFlux HTTP 5xx error rate is above 1%
+          description: More than 1% of HTTP requests have returned 5xx for 10 minutes.
+
+      - alert: CashFluxHighGRPCErrorRate
+        expr: |
+          (
+            sum(rate(cashflux_grpc_requests_total{status!="OK"}[5m]))
+            /
+            clamp_min(sum(rate(cashflux_grpc_requests_total[5m])), 0.001)
+          ) > 0.01
+        for: 10m
+        labels:
+          severity: page
+          service: cashflux-server
+        annotations:
+          summary: CashFlux gRPC error rate is above 1%
+          description: More than 1% of gRPC calls have returned non-OK status for 10 minutes.
+
+      - alert: CashFluxHighHTTPLatency
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(cashflux_http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: ticket
+          service: cashflux-server
+        annotations:
+          summary: CashFlux p99 HTTP latency is above 1s
+          description: p99 HTTP request latency has been above 1 second for 10 minutes; inspect route-level metrics and logs.

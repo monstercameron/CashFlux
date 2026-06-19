@@ -4235,7 +4235,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 #### Health & dashboards
 - [x] `/livez` (process up) + `/readyz` (DB reachable, migrations applied, deps ok) distinct probes.
-- [ ] Dashboards + **SLOs** (availability, p99 latency, error rate) with alerting + on-call routing.
+- [x] Dashboards + **SLOs** (availability, p99 latency, error rate) with alerting + on-call routing.
+      `docs/OBSERVABILITY.md` now defines SLOs, dashboard queries, and routing; `deploy/prometheus-rules.yml`
+      adds backend-down, HTTP/gRPC error-rate, and latency alerts.
 
 ### 7.16 Reliability, SRE & disaster recovery
 - [~] Context deadlines/timeouts on all I/O (DB, upstream OpenAI, blob store); cancellation propagation.

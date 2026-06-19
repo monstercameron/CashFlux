@@ -39,3 +39,38 @@ func TestServerDockerfileRunsAsNonRoot(t *testing.T) {
 		}
 	}
 }
+
+func TestObservabilityArtifactsDefineSLOAlerts(t *testing.T) {
+	rules, err := os.ReadFile("../../deploy/prometheus-rules.yml")
+	if err != nil {
+		t.Fatalf("read prometheus rules: %v", err)
+	}
+	ruleText := string(rules)
+	for _, want := range []string{
+		"CashFluxBackendDown",
+		"CashFluxHighErrorRate",
+		"CashFluxHighGRPCErrorRate",
+		"CashFluxHighHTTPLatency",
+		"cashflux_server_up",
+		"cashflux_http_requests_total",
+		"cashflux_grpc_requests_total",
+		"cashflux_http_request_duration_seconds_bucket",
+		"histogram_quantile",
+		"severity: page",
+	} {
+		if !strings.Contains(ruleText, want) {
+			t.Fatalf("prometheus rules missing %q", want)
+		}
+	}
+
+	runbook, err := os.ReadFile("../../docs/OBSERVABILITY.md")
+	if err != nil {
+		t.Fatalf("read observability runbook: %v", err)
+	}
+	runbookText := string(runbook)
+	for _, want := range []string{"Service-Level Objectives", "Dashboard Queries", "Alerts And Routing", "trace_id"} {
+		if !strings.Contains(runbookText, want) {
+			t.Fatalf("observability runbook missing %q", want)
+		}
+	}
+}
