@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Budget rollover & sinking-fund math (B26).** New pure, table-tested `internal/budgeting` helpers:
+  `Carryover` advances envelope budgeting one period (last period's remaining — negative when overspent —
+  plus this period's limit), the single-step recurrence behind a "carried over $X" badge; and a sinking-fund
+  trio (`SinkingFundContribution` with ceiling rounding so the goal is always met by the deadline,
+  `SinkingFundAccrued` capped at target so it never overshoots, and `SinkingFundProgress`) for saving
+  steadily toward a known future expense. Logic-first per the SDLC; the per-budget toggle + UI build on this.
 - **Backend blob garbage collection.** Added `cashflux-server gc-blobs`, weekly self-host systemd examples, and Prometheus counters for blob GC sweeps/deletions.
 - **Structured backend logging foundation.** The server now configures `log/slog` with text/json
   formats, runtime log levels, and redaction for token/key/secret/cookie/password attributes.

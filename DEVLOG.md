@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: budget rollover & sinking-fund math (B26)
+
+- B26 wants envelope rollover + sinking funds. Verified first (per the spec): the budget engine already
+  carries unspent forward across periods via `EnvelopeAvailable`, which re-derives the running balance from
+  the whole transaction history. What was missing is the *single-step* recurrence and the sinking-fund math.
+- Added pure `internal/budgeting/rollover.go`: `Carryover(prevRemaining, limit)` (advance one period — feed
+  it last period's `Status.Remaining`, which is negative on overspend, plus this period's limit); and the
+  sinking-fund trio `SinkingFundContribution` (ceiling division so the target is met on/before the deadline
+  rather than a few cents short), `SinkingFundAccrued` (contribution × made, capped at target so the rounded
+  final period doesn't overshoot, with currency + overflow guards), and `SinkingFundProgress` (capped 0–100).
+- Did the int64 arithmetic directly on `Money.Amount` and re-wrapped via `money.New` — the money package has
+  no Mul/Div, matching how budgeting already computes. Table tests cover even/remainder splits, the
+  reaches-target invariant, the overspend-as-debt carry, capping, and the currency/overflow error paths.
+- Logic-first per the SDLC. Deferred (domain + UI, parallel-session overlap in app/): the per-budget
+  `Rollover bool` field, the "carried over $X" badge, and a sinking-fund budget type / methodology selector.
+- Native budgeting tests green (-count=1), vet clean, gofmt clean, wasm build green.
+
 ## 2026-06-19 - feat: add backend blob garbage collection
 
 - Added `cashflux-server gc-blobs` to sweep unreferenced blob metadata/files through the existing content-addressed store cleanup path.
