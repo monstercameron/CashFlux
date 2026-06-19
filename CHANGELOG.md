@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Split / settle-up — the pure core (B24, internal).** New `internal/split` package for sharing costs
+  between household members: `Equal` divides a cost evenly (distributing the rounding remainder so the
+  shares sum exactly), `NetBalances` nets who paid against who owes across many shared expenses, and
+  `SettleUp` proposes a small, deterministic set of "X pays Y $Z" transfers to clear the balances. All
+  integer minor units, table-tested. The Split-on-a-transaction and Settle-up views build on this next.
 - **Self-host token rotation helper.** `cashflux-server rotate-token` now prints a fresh high-entropy
   bearer token and matching `CASHFLUX_SERVER_TOKEN_SHA256` value for self-host deployments.
 - **Billing-disabled entitlement seam.** `IsCloudActive` now centralizes Cloud entitlement checks
@@ -400,6 +405,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **AI proxy is gRPC-only.** Retired the legacy `/v1/ai/key`, `/v1/ai/chat`, and `/v1/ai/vision`
+  HTTP routes so key upload, model listing, chat, and vision all use authenticated AIService RPCs
+  over the GoGRPCBridge `/grpc` tunnel.
 - **Backend AI proxy cancellation is pinned by tests.** Canceling an AI request context now has regression
   coverage proving the upstream OpenAI request sees the canceled context and the service returns `Canceled`.
 - **AI screens can use the backend proxy instead of browser OpenAI calls.** Insights, Allocate, and Documents now

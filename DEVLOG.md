@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: split / settle-up pure core (B24, step 1)
+
+- New pure `internal/split` (no syscall/js, table-tested): `Equal(total, members)` even split with exact
+  remainder distribution (1000¢/3 → 334/333/333, shares always sum to total); `Expense` + `NetBalances`
+  (credit the payer the total, debit each participant their share → per-member net, sums to zero);
+  `SettleUp(balances)` greedy debtor↔creditor matching (descending, ties by id) yielding a small,
+  deterministic set of `Transfer`s that fully settle when balances sum to zero.
+- Tests: even-split rounding (incl. exact-sum invariant + nil for no members), net-balance computation
+  and zero-sum, settle-up correctness (apply transfers → everyone at zero) and the simple two-party chain.
+  `go vet` clean. The Split-on-a-transaction action + Settle-up view (UI, ties to members + transfers)
+  build on this next.
+
+## 2026-06-18 - fix: force AI proxy through grpc
+
+- Retired the legacy `/v1/ai/key`, `/v1/ai/chat`, and `/v1/ai/vision` HTTP routes from the backend mux.
+- Kept AI key upload, model listing, chat, and vision on the authenticated `AIService` gRPC contract over the
+  GoGRPCBridge `/grpc` tunnel.
+- Added an HTTP regression test that asserts the old `/v1/ai/*` routes return 404, so a stale client path fails
+  loudly instead of looking like a supported CORS path.
+
 ## 2026-06-18 - feat: add self-host token rotation command
 
 - Added `server.GenerateAccessToken`, returning a random bearer token plus the SHA-256 digest expected by
