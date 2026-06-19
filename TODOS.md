@@ -4186,13 +4186,13 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 > `fmt.Println`. Logs/metrics/traces must be safe (no secrets/PII) and correlatable.
 
 #### Structured logging (`log/slog`) ★
-- [ ] Adopt `log/slog` with a **JSON handler** in prod (text in dev); single configured logger injected
+- [x] Adopt `log/slog` with a **JSON handler** in prod (text in dev); single configured logger injected
       via context — no package-global `log`. ★
-- [ ] **Request/RPC-scoped logger**: attach a generated **request id / correlation id** (propagate via
+- [x] **Request/RPC-scoped logger**: attach a generated **request id / correlation id** (propagate via
       gRPC metadata + HTTP header `X-Request-ID`) and `user_id`, `workspace_id`, `rpc`/`route`,
       `device_id`, latency, status to every log line. ★
 - [x] **Leveling**: Debug/Info/Warn/Error with a runtime-configurable level (env); sane prod default Info.
-- [ ] **Redaction is mandatory**: never log AI keys, tokens, OAuth secrets, cookies, full datasets, blob
+- [x] **Redaction is mandatory**: never log AI keys, tokens, OAuth secrets, cookies, full datasets, blob
       bytes, or PII. A `slog` middleware/`ReplaceAttr` that scrubs known-sensitive keys + a deny-list;
       log sizes/hashes/ids instead of contents. Add a test that asserts secrets never appear in output. ★
 - [ ] **Audit log** as a *separate*, append-only structured stream for security-relevant events (login,

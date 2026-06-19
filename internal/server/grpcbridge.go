@@ -18,8 +18,8 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		store = stores[0]
 	}
 	grpcServer := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg))),
-		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg))),
+		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), LoggingUnaryInterceptor(cfg.Logger)),
+		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg)), LoggingStreamInterceptor(cfg.Logger)),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncService(store))
 	RegisterAIServiceServer(grpcServer, newAIService(store, cfg))

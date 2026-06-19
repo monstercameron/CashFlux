@@ -54,6 +54,7 @@ func (s *SyncService) ListWorkspacesRPC(ctx context.Context, req backendrpc.List
 }
 
 func (s *SyncService) GetWorkspaceRPC(ctx context.Context, req backendrpc.GetWorkspaceRequest) (backendrpc.GetWorkspaceResponse, error) {
+	SetLogScope(ctx, LogScope{WorkspaceID: req.ID})
 	workspace, found, err := s.Get(ctx, req.ID)
 	if err != nil {
 		return backendrpc.GetWorkspaceResponse{}, err
@@ -72,6 +73,7 @@ func (s *SyncService) GetWorkspaceRPC(ctx context.Context, req backendrpc.GetWor
 }
 
 func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWorkspaceRequest) (backendrpc.PutWorkspaceResponse, error) {
+	SetLogScope(ctx, LogScope{WorkspaceID: req.Workspace.ID, DeviceID: req.Workspace.DeviceID})
 	clientUpdatedAt, err := parseOptionalRPCTime(req.ClientUpdatedAt)
 	if err != nil {
 		return backendrpc.PutWorkspaceResponse{}, err
@@ -118,6 +120,7 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 }
 
 func (s *SyncService) DeleteWorkspaceRPC(ctx context.Context, req backendrpc.DeleteWorkspaceRequest) (backendrpc.DeleteWorkspaceResponse, error) {
+	SetLogScope(ctx, LogScope{WorkspaceID: req.ID, DeviceID: req.DeviceID})
 	updatedAt, err := parseOptionalRPCTime(req.UpdatedAt)
 	if err != nil {
 		return backendrpc.DeleteWorkspaceResponse{}, err

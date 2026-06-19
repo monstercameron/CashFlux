@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strconv"
@@ -47,6 +48,7 @@ type Config struct {
 	GRPCMaxUpgradesPerClientPerMinute int
 	LogFormat                         string
 	LogLevel                          string
+	Logger                            *slog.Logger
 }
 
 type OAuthProviderConfig struct {

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Request-scoped backend logging.** HTTP and gRPC requests now log request IDs, route/RPC names, status, latency, authenticated user IDs, and workspace/device context when available.
 - **Backend request IDs.** HTTP responses now carry `X-Request-ID`, incoming request IDs are
   propagated into context, and gRPC requests propagate the same ID from metadata.
 - **Structured backend logging foundation.** The server now configures `log/slog` with text/json

@@ -1,9 +1,17 @@
 package server
 
 import (
+	"bufio"
+	"context"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"strings"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 // NewLogger builds the server logger from Config.
@@ -42,3 +50,180 @@ func redactLogAttr(_ []string, attr slog.Attr) slog.Attr {
 	}
 	return attr
 }
+
+type loggerContextKey struct{}
+type logScopeContextKey struct{}
+
+type LogScope struct {
+	UserID      string
+	WorkspaceID string
+	DeviceID    string
+}
+
+func ContextWithLogger(ctx context.Context, logger *slog.Logger) context.Context {
+	if logger == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, loggerContextKey{}, logger)
+}
+
+func LoggerFromContext(ctx context.Context) *slog.Logger {
+	if logger, ok := ctx.Value(loggerContextKey{}).(*slog.Logger); ok && logger != nil {
+		return logger
+	}
+	return slog.Default()
+}
+
+func ContextWithLogScope(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(logScopeContextKey{}).(*LogScope); ok {
+		return ctx
+	}
+	return context.WithValue(ctx, logScopeContextKey{}, &LogScope{})
+}
+
+func SetLogScope(ctx context.Context, scope LogScope) {
+	current, ok := ctx.Value(logScopeContextKey{}).(*LogScope)
+	if !ok || current == nil {
+		return
+	}
+	if scope.UserID != "" {
+		current.UserID = scope.UserID
+	}
+	if scope.WorkspaceID != "" {
+		current.WorkspaceID = scope.WorkspaceID
+	}
+	if scope.DeviceID != "" {
+		current.DeviceID = scope.DeviceID
+	}
+}
+
+func LogScopeFromContext(ctx context.Context) (LogScope, bool) {
+	scope, ok := ctx.Value(logScopeContextKey{}).(*LogScope)
+	if !ok || scope == nil {
+		return LogScope{}, false
+	}
+	return *scope, true
+}
+
+func requestLogMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		ctx := ContextWithLogScope(ContextWithLogger(r.Context(), logger))
+		next.ServeHTTP(rec, r.WithContext(ctx))
+		id, _ := RequestIDFromContext(ctx)
+		args := []any{
+			"request_id", id,
+			"method", r.Method,
+			"route", r.URL.Path,
+			"status", rec.status,
+			"duration_ms", time.Since(start).Milliseconds(),
+		}
+		if user, ok := AuthUserFromContext(ctx); ok {
+			args = append(args, "user_id", user.ID)
+		}
+		args = appendLogScopeArgs(ctx, args)
+		logger.Info("http request", args...)
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	return hijacker.Hijack()
+}
+
+func (r *statusRecorder) Flush() {
+	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func LoggingUnaryInterceptor(logger *slog.Logger) grpc.UnaryServerInterceptor {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		start := time.Now()
+		ctx = ContextWithLogScope(ContextWithLogger(ctx, logger))
+		resp, err := handler(ctx, req)
+		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), time.Since(start))
+		return resp, err
+	}
+}
+
+func LoggingStreamInterceptor(logger *slog.Logger) grpc.StreamServerInterceptor {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		start := time.Now()
+		ctx := ContextWithLogScope(ContextWithLogger(stream.Context(), logger))
+		err := handler(srv, loggingServerStream{ServerStream: stream, ctx: ctx})
+		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), time.Since(start))
+		return err
+	}
+}
+
+func logRPC(ctx context.Context, logger *slog.Logger, method, code string, elapsed time.Duration) {
+	id, _ := RequestIDFromContext(ctx)
+	args := []any{
+		"request_id", id,
+		"rpc", method,
+		"status", code,
+		"duration_ms", elapsed.Milliseconds(),
+	}
+	if user, ok := AuthUserFromContext(ctx); ok {
+		args = append(args, "user_id", user.ID)
+	}
+	args = appendLogScopeArgs(ctx, args)
+	logger.Info("grpc request", args...)
+}
+
+func appendLogScopeArgs(ctx context.Context, args []any) []any {
+	scope, ok := LogScopeFromContext(ctx)
+	if !ok {
+		return args
+	}
+	if scope.UserID != "" && !logArgsContain(args, "user_id") {
+		args = append(args, "user_id", scope.UserID)
+	}
+	if scope.WorkspaceID != "" {
+		args = append(args, "workspace_id", scope.WorkspaceID)
+	}
+	if scope.DeviceID != "" {
+		args = append(args, "device_id", scope.DeviceID)
+	}
+	return args
+}
+
+func logArgsContain(args []any, key string) bool {
+	for i := 0; i+1 < len(args); i += 2 {
+		if got, ok := args[i].(string); ok && got == key {
+			return true
+		}
+	}
+	return false
+}
+
+type loggingServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s loggingServerStream) Context() context.Context { return s.ctx }

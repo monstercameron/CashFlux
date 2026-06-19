@@ -63,7 +63,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("PUT /v1/blobs/{hash}", handlePutBlob(cfg, store))
 	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
-	return requestIDMiddleware(mux)
+	return requestIDMiddleware(requestLogMiddleware(cfg.Logger, mux))
 }
 
 func handleCORSPreflight(cfg Config) http.HandlerFunc {

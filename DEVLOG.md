@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: log backend request scopes
+
+- Added HTTP request logging and gRPC unary/stream logging interceptors around the existing backend mux and bridge.
+- Added per-request log scope helpers so sync RPCs can attach workspace and device IDs without logging request bodies.
+- Covered HTTP and gRPC log fields in server tests, including request ID, route/RPC, status, latency-adjacent fields, user ID, workspace ID, and device ID.
+
 ## 2026-06-18 - feat: propagate backend request ids
 
 - Added request-id context helpers and HTTP middleware that returns `X-Request-ID` on every backend route.

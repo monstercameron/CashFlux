@@ -31,6 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 	logger := server.NewLogger(os.Stdout, cfg)
+	cfg.Logger = logger
 	if token := cfg.TokenForDisplay(); token != "" {
 		logger.Warn("generated self-host access token", "token", token)
 		logger.Warn("persist generated token", "hint", "set CASHFLUX_SERVER_TOKEN_SHA256 to the sha256 of this token, or CASHFLUX_SERVER_TOKEN for local development, to keep it stable across restarts")

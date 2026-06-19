@@ -96,6 +96,7 @@ func authorizedBlobRequest(w http.ResponseWriter, r *http.Request, cfg Config, s
 		http.Error(w, "missing bearer token", http.StatusUnauthorized)
 		return AuthUser{}, false
 	}
+	SetLogScope(r.Context(), LogScope{UserID: user.ID})
 	return user, true
 }
 
