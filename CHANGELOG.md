@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend AI proxy feature flag.** `CASHFLUX_SERVER_AI_PROXY_ENABLED=false` now disables AI key/model/chat/vision RPCs with a clear failed-precondition response.
 - **Workspace stream backpressure.** WatchWorkspaces streams are now capped per user with a configurable gRPC stream limit.
 - **Backend metrics endpoint.** Added an auth-gated `/metrics` endpoint that emits Prometheus text format process health.
 - **Workspace sync caching.** `GetWorkspace` now returns an ETag and honors `IfNoneMatch` to avoid resending unchanged datasets over the gRPC bridge.

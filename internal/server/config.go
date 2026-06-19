@@ -33,6 +33,7 @@ type Config struct {
 	GeneratedToken                    bool
 	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
+	AIProxyDisabled                   bool
 	AIAllowedModels                   []string
 	AIUpstreamTimeout                 time.Duration
 	AIUpstreamRetries                 int
@@ -75,6 +76,7 @@ func FromEnv() (Config, error) {
 	cfg.TokenSHA256 = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN_SHA256"))
 	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
+	cfg.AIProxyDisabled = !envBool("CASHFLUX_SERVER_AI_PROXY_ENABLED", true)
 	cfg.AIAllowedModels = envCSV("CASHFLUX_SERVER_AI_MODELS")
 	cfg.AIUpstreamTimeout = envDuration("CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT", 45*time.Second)
 	cfg.AIUpstreamRetries = int(envInt64("CASHFLUX_SERVER_AI_UPSTREAM_RETRIES", 2))

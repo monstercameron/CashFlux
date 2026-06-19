@@ -11,6 +11,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
@@ -79,5 +81,32 @@ func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 	}
 	if chatResp.Content != "grpc says hi" || chatResp.Usage.TotalTokens != 13 {
 		t.Fatalf("Chat response = %+v", chatResp)
+	}
+}
+
+func TestAIServiceGRPCBridgeDisabled(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{
+		AuthMode:        "token",
+		Token:           "dev-token",
+		MasterKey:       "0123456789abcdef0123456789abcdef",
+		AIProxyDisabled: true,
+		AppOrigin:       "*",
+	}
+	bridge := httptest.NewServer(NewMux(cfg, store))
+	defer bridge.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	var models backendrpc.ListModelsResponse
+	err = conn.Invoke(ctx, backendrpc.MethodAIListModels, backendrpc.ListModelsRequest{}, &models, backendrpc.JSONCallOptions()...)
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("disabled ListModels err = %v, want failed precondition", err)
 	}
 }

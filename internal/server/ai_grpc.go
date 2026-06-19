@@ -35,6 +35,9 @@ type aiServiceServer interface {
 }
 
 func (s *AIService) SetKey(ctx context.Context, req backendrpc.SetKeyRequest) (backendrpc.SetKeyResponse, error) {
+	if err := s.ensureEnabled(); err != nil {
+		return backendrpc.SetKeyResponse{}, err
+	}
 	if s == nil || s.store == nil {
 		return backendrpc.SetKeyResponse{}, status.Error(codes.FailedPrecondition, "ai service store is not configured")
 	}
@@ -63,6 +66,9 @@ func (s *AIService) SetKey(ctx context.Context, req backendrpc.SetKeyRequest) (b
 }
 
 func (s *AIService) ListModelsRPC(ctx context.Context, req backendrpc.ListModelsRequest) (backendrpc.ListModelsResponse, error) {
+	if err := s.ensureEnabled(); err != nil {
+		return backendrpc.ListModelsResponse{}, err
+	}
 	if _, err := syncUser(ctx); err != nil {
 		return backendrpc.ListModelsResponse{}, err
 	}

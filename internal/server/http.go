@@ -123,6 +123,7 @@ func newAIService(store *Store, cfg Config) *AIService {
 	return NewAIService(store, AIServiceConfig{
 		MasterKey:       []byte(cfg.MasterKey),
 		BaseURL:         cfg.OpenAIBaseURL,
+		Disabled:        cfg.AIProxyDisabled,
 		AllowedModels:   cfg.AIAllowedModels,
 		UpstreamTimeout: cfg.AIUpstreamTimeout,
 		UpstreamRetries: cfg.AIUpstreamRetries,

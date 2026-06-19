@@ -29,6 +29,7 @@ type aiHTTPDoer interface {
 type AIService struct {
 	store           *Store
 	client          aiHTTPDoer
+	enabled         bool
 	baseURL         string
 	masterKey       []byte
 	allowedModels   map[string]struct{}
@@ -44,6 +45,7 @@ type AIServiceConfig struct {
 	MasterKey       []byte
 	BaseURL         string
 	Client          aiHTTPDoer
+	Disabled        bool
 	AllowedModels   []string
 	UpstreamTimeout time.Duration
 	UpstreamRetries int
@@ -97,6 +99,7 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 	return &AIService{
 		store:           store,
 		client:          client,
+		enabled:         !cfg.Disabled,
 		baseURL:         baseURL,
 		masterKey:       cfg.MasterKey,
 		allowedModels:   allowedModels,
@@ -110,6 +113,9 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 }
 
 func (s *AIService) Chat(ctx context.Context, req AIChatRequest) (AICompletion, error) {
+	if err := s.ensureEnabled(); err != nil {
+		return AICompletion{}, err
+	}
 	if strings.TrimSpace(req.Model) == "" || len(req.Messages) == 0 {
 		return AICompletion{}, status.Error(codes.InvalidArgument, "model and messages are required")
 	}
@@ -124,6 +130,9 @@ func (s *AIService) Chat(ctx context.Context, req AIChatRequest) (AICompletion, 
 }
 
 func (s *AIService) Vision(ctx context.Context, req AIVisionRequest) (AICompletion, error) {
+	if err := s.ensureEnabled(); err != nil {
+		return AICompletion{}, err
+	}
 	if strings.TrimSpace(req.Model) == "" || strings.TrimSpace(req.SystemPrompt) == "" || strings.TrimSpace(req.UserText) == "" || strings.TrimSpace(req.ImageURL) == "" {
 		return AICompletion{}, status.Error(codes.InvalidArgument, "model, system prompt, user text, and image url are required")
 	}
@@ -158,6 +167,13 @@ func (s *AIService) ListModels(context.Context) []string {
 	}
 	sort.Strings(models)
 	return models
+}
+
+func (s *AIService) ensureEnabled() error {
+	if s != nil && !s.enabled {
+		return status.Error(codes.FailedPrecondition, "ai proxy is disabled")
+	}
+	return nil
 }
 
 func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, error) {

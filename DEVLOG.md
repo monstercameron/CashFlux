@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: gate backend ai proxy
+
+- Added `CASHFLUX_SERVER_AI_PROXY_ENABLED` as an environment feature flag.
+- Made AI key upload, model listing, chat, and vision RPCs fail closed when the proxy is disabled.
+- Covered env parsing and disabled gRPC behavior in server tests.
+
 ## 2026-06-18 - feat: cap backend workspace streams
 
 - Added `CASHFLUX_SERVER_GRPC_MAX_STREAMS_PER_USER` with validation and env parsing.

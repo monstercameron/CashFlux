@@ -4258,7 +4258,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       CI proto-/API-compat guard (the bridge ships an `api_compat_guard` tool — reuse the pattern).
 - [ ] Consistent **error taxonomy** (gRPC codes ↔ HTTP statuses) with stable, documented error reasons;
       machine-readable error details; no internal leakage in messages.
-- [ ] Config via env/secret manager with validation on boot; **feature flags** (billing on/off, AI proxy
+- [x] Config via env/secret manager with validation on boot; **feature flags** (billing on/off, AI proxy
       on/off, self-host mode) so deployments differ safely.
 - [ ] Runbooks (deploy, rollback, restore, rotate keys, revoke sessions, handle past-due); on-call docs.
 - [ ] Admin tooling (read-only support views; usage lookups) — built on the same isolation guarantees.

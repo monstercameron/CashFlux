@@ -105,6 +105,17 @@ func TestFromEnvLoadsHTTPLimits(t *testing.T) {
 	}
 }
 
+func TestFromEnvLoadsAIProxyFlag(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_AI_PROXY_ENABLED", "false")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if !cfg.AIProxyDisabled {
+		t.Fatal("AIProxyDisabled = false, want true")
+	}
+}
+
 func TestFromEnvLoadsGRPCStreamLimit(t *testing.T) {
 	t.Setenv("CASHFLUX_SERVER_GRPC_MAX_STREAMS_PER_USER", "3")
 	cfg, err := FromEnv()
