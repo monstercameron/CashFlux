@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **OAuth start endpoint.** `GET /v1/auth/{provider}` now redirects configured Google/GitHub providers
+  with PKCE S256 and a short-lived HttpOnly state/verifier cookie.
 - **OAuth provider discovery config.** The backend now loads Google/GitHub OAuth client settings from
   environment variables and exposes configured provider names from `/v1/version` with CORS for client reachability checks.
 - **AI model listing over gRPC.** `AIService.ListModels` now returns the configured model allow-list

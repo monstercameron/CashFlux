@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -125,6 +126,60 @@ func TestHealthReadyAndVersionEndpoints(t *testing.T) {
 	}
 	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "http://127.0.0.1:8080" {
 		t.Fatalf("version CORS origin = %q", got)
+	}
+}
+
+func TestOAuthStartRedirectsWithPKCEState(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{
+		AuthMode: "oauth",
+		OAuthProviders: map[string]OAuthProviderConfig{
+			"github": {
+				ClientID:     "github-id",
+				ClientSecret: "github-secret",
+				RedirectURL:  "http://127.0.0.1:8081/v1/auth/github/callback",
+			},
+		},
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("oauth start status = %d body %q", rr.Code, rr.Body.String())
+	}
+	loc, err := url.Parse(rr.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect: %v", err)
+	}
+	if loc.Scheme != "https" || loc.Host != "github.com" || loc.Path != "/login/oauth/authorize" {
+		t.Fatalf("redirect location = %s", loc.String())
+	}
+	q := loc.Query()
+	if q.Get("client_id") != "github-id" || q.Get("redirect_uri") != "http://127.0.0.1:8081/v1/auth/github/callback" {
+		t.Fatalf("redirect query = %s", loc.RawQuery)
+	}
+	if q.Get("response_type") != "code" || q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" || q.Get("state") == "" {
+		t.Fatalf("missing pkce/state query = %s", loc.RawQuery)
+	}
+	cookies := rr.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != oauthStateCookie || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode {
+		t.Fatalf("oauth cookies = %+v", cookies)
+	}
+	if !strings.HasPrefix(cookies[0].Value, q.Get("state")+".") {
+		t.Fatalf("state cookie value does not match redirect state")
+	}
+}
+
+func TestOAuthStartRejectsUnconfiguredProvider(t *testing.T) {
+	h := NewMux(Config{AuthMode: "oauth", OAuthProviders: map[string]OAuthProviderConfig{
+		"github": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/callback"},
+	}}, openTestStore(t))
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("unconfigured provider status = %d, want 404", rr.Code)
 	}
 }
 

@@ -3974,8 +3974,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Health + readiness endpoints; graceful shutdown that drains active streams.
 
 ### 7.6 HTTP endpoints (OAuth + blobs)
-- [ ] OAuth: `GET /v1/auth/:provider` (PKCE + `state`) and `…/callback` → upsert `users` → issue session
-      (short-lived JWT access + httpOnly refresh cookie); `refresh` + `logout`.
+- [~] OAuth: `GET /v1/auth/:provider` redirects with PKCE + `state`. Remaining: callback code exchange
+      -> upsert `users` -> issue session (short-lived JWT access + httpOnly refresh cookie); `refresh` + `logout`.
 - [x] Provider config (Google, GitHub) per environment (client id/secret, redirect URIs).
 - [~] Blobs: `PUT /v1/blobs/:hash` (verify the bytes hash to `:hash`, size cap, store if absent),
       `GET /v1/blobs/:hash` (immutable / long cache headers), `HEAD` for existence; auth + refcount on link.

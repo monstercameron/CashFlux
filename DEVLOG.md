@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: start oauth login
+
+- Added `GET /v1/auth/{provider}` for configured Google/GitHub providers.
+- The start endpoint generates a random OAuth `state` plus PKCE verifier, stores them in a short-lived HttpOnly
+  SameSite=Lax cookie scoped to the callback path, and redirects to the provider with an S256 challenge.
+- Covered the redirect shape and cookie behavior in server tests, including rejection for an unconfigured provider.
+- Remaining OAuth work: callback code exchange, user upsert, access/refresh token issue, refresh, and logout.
+
 ## 2026-06-18 - feat: configure oauth providers
 
 - Added `OAuthProviderConfig` to backend config, loaded from `CASHFLUX_SERVER_OAUTH_GOOGLE_*` and
