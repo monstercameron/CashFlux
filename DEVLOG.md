@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: weekly digest reminder — all four events live (B19, step 10)
+
+- Added `weeklyDigestCandidates(app, now)`: summarizes the *previous* completed ISO-week's income vs
+  spending via `reports.IncomeVsExpense` over `period.NewWindow(Week, now, weekStart).Shift(-1).Range()`,
+  keyed by the *current* week (`notify.WeekKey(now)`) so the first open each week shows last week's recap.
+  Emits nothing when the week had no activity (quiet weeks don't nag). Money formatted with a local
+  `fmtBaseMoney` (accounting style). New `notify.digest{Title,Body}` keys.
+- **All four recommended Phase-A notification events now fire end-to-end**: stale-balance, bill-due,
+  budget-threshold, and the weekly digest — each idempotent via the delivered log, surfaced as the single
+  on-open summary toast. B19's core user-facing behavior is complete; the in-app center (a list view) and
+  the Settings rules UI (toggle channels/thresholds/quiet hours) are the remaining polish. wasm build
+  green, gofmt clean.
+
 ## 2026-06-18 — feat: budget-threshold reminders in the catch-up (B19, step 9)
 
 - Extended `runNotifyCatchUp` with the budget-threshold event. New `currentBudgetStatuses(app, now)` helper

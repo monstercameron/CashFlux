@@ -79,6 +79,8 @@ var english = Catalog{
 	"notify.budgetOverBody":  "You've spent more than this budget's limit.",
 	"notify.budgetNearTitle": "%s is near its limit",
 	"notify.budgetNearBody":  "You're close to this budget's limit.",
+	"notify.digestTitle":     "Your week in review",
+	"notify.digestBody":      "Last week: %s in, %s out.",
 	"notify.summary":         "You have %d reminders waiting.",
 	"nav.bills":              "Bills",
 	"bills.totalDue":         "Total due soon",

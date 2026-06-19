@@ -12,8 +12,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/notifyfeed"
+	"github.com/monstercameron/CashFlux/internal/period"
+	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -52,6 +55,7 @@ func runNotifyCatchUp() {
 			}
 			return uistate.T("notify.budgetNearTitle", name), uistate.T("notify.budgetNearBody")
 		})...)
+	cands = append(cands, weeklyDigestCandidates(app, now)...)
 
 	log := loadDeliveredLog()
 	out := notify.CatchUp(notify.DefaultRules(), cands, now, log)
@@ -67,6 +71,34 @@ func runNotifyCatchUp() {
 	}
 	notice := uistate.UseNotice()
 	notice.Set(notice.Get().With(msg, false))
+}
+
+// weeklyDigestCandidates emits a once-per-ISO-week summary of the previous
+// completed week's income and spending (keyed by the current week, so the first
+// open each week shows last week's recap). It produces nothing when there was no
+// activity, so a quiet week doesn't nag.
+func weeklyDigestCandidates(app *appstate.App, now time.Time) []notify.Candidate {
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
+	prev := period.NewWindow(period.Week, now, weekStart).Shift(-1)
+	ps, pe := prev.Range()
+	flow, err := reports.IncomeVsExpense(app.Transactions(), ps, pe, rates)
+	if err != nil || (flow.Income == 0 && flow.Expense == 0) {
+		return nil
+	}
+	title := uistate.T("notify.digestTitle")
+	body := uistate.T("notify.digestBody", fmtBaseMoney(flow.Income, base), fmtBaseMoney(flow.Expense, base))
+	return notifyfeed.DigestCandidates("default-digest", notify.WeekKey(now), title, body, now)
+}
+
+// fmtBaseMoney formats a base-currency minor-units value in the app's accounting
+// style (symbol + grouping), for notification text.
+func fmtBaseMoney(v int64, base string) string {
+	return money.FormatAccounting(v, currency.Decimals(base), currency.Symbol(base))
 }
 
 // currentBudgetStatuses evaluates every budget over its own current period (as

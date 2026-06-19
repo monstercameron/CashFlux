@@ -9,9 +9,10 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - **Reminders on open — notifications are live (B19).** When you open CashFlux it now surfaces a gentle
   "while you were away" toast for anything that needs attention — accounts whose balance has gone stale,
-  bills due within a week, and budgets that are near or over their limit. Each reminder fires at most once
-  per its natural period (a stale account weekly, a bill once per due date, a budget once per state per
-  month), tracked in a persisted delivered log so reopening doesn't re-nag.
+  bills due within a week, and budgets that are near or over their limit — plus a once-a-week recap of
+  last week's money in and out. Each reminder fires at most once per its natural period (a stale account
+  weekly, a bill once per due date, a budget once per state per month, the digest once per week), tracked
+  in a persisted delivered log so reopening doesn't re-nag.
   Boot-safe (a notification hiccup can never block startup). The full in-app center + per-rule settings
   build on this.
 - **Notifications: first event evaluator (B19, internal).** New pure `internal/notifyfeed` package bridges
@@ -439,6 +440,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Wrong-passcode shake on the lock screen (§6.18).** Entering an incorrect passcode now shakes the input
+  field — the familiar "no" cue — in addition to the red message. Implemented with the Web Animations API (no
+  stylesheet needed) and skipped under `prefers-reduced-motion`.
 - **Tactile press feedback on interactive controls (§6.16).** Buttons, nav items, segmented controls, the
   add/menu buttons, checkboxes, and chips now dip 1px on `:active`, so a click reads as a physical press
   instead of a dead state. Gated behind `prefers-reduced-motion` to honor the app's motion preferences.
