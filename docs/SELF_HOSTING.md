@@ -39,6 +39,18 @@ CashFlux can run with an optional backend for sync and AI proxying. The web app 
 
 The gRPC tunnel is exposed at `wss://<domain>/grpc` through Caddy. The client derives that tunnel URL from the HTTPS server URL.
 
+## Connect CashFlux Settings
+
+After the stack is healthy, open CashFlux Settings and choose the self-hosted backend option.
+
+1. Set the server URL to `https://<domain>`; do not include `/grpc` or `/v1`.
+2. Paste the printed `CASHFLUX_SERVER_TOKEN` into the access token field.
+3. Use Test connection before saving. The app calls `/v1/version` for compatibility and derives
+   `wss://<domain>/grpc` for sync and AI proxy RPCs.
+
+Keep the printed token private. The server stores only `CASHFLUX_SERVER_TOKEN_SHA256` in production config; the
+plaintext token belongs in the user's password manager and CashFlux Settings only.
+
 ## Deployment Surface
 
 The backend ships as one `cashflux-server` binary with a configured data directory. The container image builds

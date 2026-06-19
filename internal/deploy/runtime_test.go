@@ -125,6 +125,27 @@ func TestSelfHostDocsDefineMasterKeyHandling(t *testing.T) {
 	}
 }
 
+func TestSelfHostDocsWalkUserThroughPastingTokenIntoSettings(t *testing.T) {
+	data, err := os.ReadFile("../../docs/SELF_HOSTING.md")
+	if err != nil {
+		t.Fatalf("read self-host docs: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"## Connect CashFlux Settings",
+		"Set the server URL to `https://<domain>`",
+		"Paste the printed `CASHFLUX_SERVER_TOKEN`",
+		"Use Test connection before saving",
+		"/v1/version",
+		"wss://<domain>/grpc",
+		"CASHFLUX_SERVER_TOKEN_SHA256",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("self-host docs missing token paste guidance %q", want)
+		}
+	}
+}
+
 func TestServerDockerfileRunsAsNonRoot(t *testing.T) {
 	data, err := os.ReadFile("../../Dockerfile.server")
 	if err != nil {

@@ -4177,7 +4177,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 #### In-app hook
 - [ ] Settings → Cloud (self-hosted): a **"Deploy your own server"** link → the deploy docs (with the
       referral disclosure), shown near the self-hosted server-URL field.
-- [ ] After deploy, the docs walk the user to paste the printed token into Settings (ties to §7.12 token auth).
+- [x] After deploy, the docs walk the user to paste the printed token into Settings (ties to §7.12 token auth).
+      Done: `docs/SELF_HOSTING.md` now has a post-deploy Settings checklist for the server URL, printed
+      `CASHFLUX_SERVER_TOKEN`, `/v1/version` test connection, and derived `/grpc` tunnel.
 
 #### Ops/docs
 - [x] Self-host runbook: backups (SQLite WAL checkpoint + blobs), upgrades (pull new image), TLS, restore.

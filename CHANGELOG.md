@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Self-host token setup docs (7.13).** Added a post-deploy Settings checklist so operators know to paste the
+  printed access token, test `/v1/version`, and let the app derive the `/grpc` tunnel.
 - **Backend API compatibility guard (7.19).** Added `cmd/api_compat_guard`, CI coverage, and proto
   deprecation-window docs to keep `/v1`, `cashflux.v1`, and server compatibility constants aligned.
 - **Backend error model.** Added `docs/BACKEND_ERRORS.md` documenting gRPC code mappings, HTTP status

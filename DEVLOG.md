@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: add self-host token setup checklist (7.13)
+
+- Added a `docs/SELF_HOSTING.md` post-deploy Settings checklist for the self-host base URL, printed
+  `CASHFLUX_SERVER_TOKEN`, `/v1/version` test connection, and derived `wss://<domain>/grpc` bridge URL.
+- Added deploy coverage so the setup docs keep telling users to paste the plaintext token into CashFlux
+  Settings while only the SHA-256 digest lives in production config.
+- Marked the 7.13 token-paste docs TODO complete.
+
 ## 2026-06-19 - ci: add backend api compatibility guard (7.19)
 
 - Added `cmd/api_compat_guard` as a lightweight CI guard while generated proto drift tooling remains blocked on
