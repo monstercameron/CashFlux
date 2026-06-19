@@ -161,6 +161,14 @@ docker compose -f docker-compose.selfhost.yml run --rm cashflux-server retention
 
 The repository includes `deploy/cashflux-retention.example.service` and `deploy/cashflux-retention.example.timer` for weekly pruning. Keep off-box backup retention aligned with your legal/privacy requirements and test restore before deleting older backups.
 
+Blob garbage collection removes unreferenced content-addressed blob files and metadata:
+
+```sh
+docker compose -f docker-compose.selfhost.yml run --rm cashflux-server gc-blobs
+```
+
+The repository includes `deploy/cashflux-blob-gc.example.service` and `deploy/cashflux-blob-gc.example.timer` for weekly blob GC. Monitor `cashflux_blob_gc_sweeps_total` and `cashflux_blob_gc_deleted_total`. Audit listing is capped at 500 rows per request and snapshot history is capped per write, so list/history growth stays bounded.
+
 ## Logging
 
 Set `CASHFLUX_SERVER_LOG_FORMAT=json` for structured production logs, or `text` for local development. `CASHFLUX_SERVER_LOG_LEVEL` accepts `debug`, `info`, `warn`, and `error`. Sensitive attributes such as tokens, keys, secrets, cookies, passwords, and authorization values are redacted before logs are written.

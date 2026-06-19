@@ -296,8 +296,20 @@ func TestBlobStoreContentAddressingLinksAndGC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sweep unlinked: %v", err)
 	}
+	metrics := NewMetrics()
+	metrics.ObserveBlobGC(deleted)
 	if deleted != 1 {
 		t.Fatalf("deleted unlinked blobs = %d, want 1", deleted)
+	}
+	var metricsOut strings.Builder
+	metrics.WritePrometheus(&metricsOut)
+	for _, want := range []string{
+		"cashflux_blob_gc_sweeps_total 1",
+		"cashflux_blob_gc_deleted_total 1",
+	} {
+		if !strings.Contains(metricsOut.String(), want) {
+			t.Fatalf("blob gc metric missing %q in %q", want, metricsOut.String())
+		}
 	}
 	if _, ok, err := s.GetBlob(blob.Hash); err != nil || ok {
 		t.Fatalf("blob metadata after sweep = ok %v err %v, want missing", ok, err)

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend blob garbage collection.** Added `cashflux-server gc-blobs`, weekly self-host systemd examples, and Prometheus counters for blob GC sweeps/deletions.
 - **Structured backend logging foundation.** The server now configures `log/slog` with text/json
   formats, runtime log levels, and redaction for token/key/secret/cookie/password attributes.
 - **Distinct backend liveness probe.** Added `/livez` as a process-up probe separate from

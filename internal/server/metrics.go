@@ -19,6 +19,8 @@ type Metrics struct {
 	streamDurations      map[metricKey]metricValue
 	blobStoredBytes      int64
 	blobTransferredBytes int64
+	blobGCSweeps         int64
+	blobGCDeleted        int64
 	aiProxyRequests      int64
 	aiProxyTokens        int64
 	syncPulls            map[string]int64
@@ -112,6 +114,18 @@ func (m *Metrics) ObserveBlobTransferred(bytes int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.blobTransferredBytes += bytes
+}
+
+func (m *Metrics) ObserveBlobGC(deleted int) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.blobGCSweeps++
+	if deleted > 0 {
+		m.blobGCDeleted += int64(deleted)
+	}
 }
 
 func (m *Metrics) ObserveAIProxy(tokens int64) {
@@ -221,7 +235,7 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	if m == nil {
 		m = NewMetrics()
 	}
-	httpRows, httpBucketRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows, queueDepths := m.snapshot()
+	httpRows, httpBucketRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, blobGCSweeps, blobGCDeleted, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows, queueDepths := m.snapshot()
 	_, _ = io.WriteString(w, "# HELP cashflux_server_up Server process health.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_server_up gauge\n")
 	_, _ = io.WriteString(w, "cashflux_server_up 1\n")
@@ -267,6 +281,12 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	_, _ = io.WriteString(w, "# HELP cashflux_blob_transferred_bytes_total Blob bytes served by the backend.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_blob_transferred_bytes_total counter\n")
 	_, _ = fmt.Fprintf(w, "cashflux_blob_transferred_bytes_total %d\n", blobTransferredBytes)
+	_, _ = io.WriteString(w, "# HELP cashflux_blob_gc_sweeps_total Blob garbage-collection sweeps run.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_blob_gc_sweeps_total counter\n")
+	_, _ = fmt.Fprintf(w, "cashflux_blob_gc_sweeps_total %d\n", blobGCSweeps)
+	_, _ = io.WriteString(w, "# HELP cashflux_blob_gc_deleted_total Unreferenced blobs deleted by garbage collection.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_blob_gc_deleted_total counter\n")
+	_, _ = fmt.Fprintf(w, "cashflux_blob_gc_deleted_total %d\n", blobGCDeleted)
 	_, _ = io.WriteString(w, "# HELP cashflux_ai_proxy_requests_total AI proxy completions served by the backend.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_ai_proxy_requests_total counter\n")
 	_, _ = fmt.Fprintf(w, "cashflux_ai_proxy_requests_total %d\n", aiProxyRequests)
@@ -324,14 +344,14 @@ type bucketMetricRow struct {
 	Count   int64
 }
 
-func (m *Metrics) snapshot() ([]metricRow, []bucketMetricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow, []labelMetricRow) {
+func (m *Metrics) snapshot() ([]metricRow, []bucketMetricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow, []labelMetricRow) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	httpRows := metricRows(m.http)
 	httpBucketRows := bucketMetricRows(m.httpBuckets, m.http)
 	grpcRows := metricRows(m.grpc)
 	streamRows := metricRows(m.streamDurations)
-	return httpRows, httpBucketRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db), labelMetricRows(m.queueDepths)
+	return httpRows, httpBucketRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.blobGCSweeps, m.blobGCDeleted, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db), labelMetricRows(m.queueDepths)
 }
 
 func metricRows(src map[metricKey]metricValue) []metricRow {

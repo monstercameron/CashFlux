@@ -73,6 +73,22 @@ func main() {
 		logger.Info("server retention complete", "audit_events_deleted", result.AuditEventsDeleted, "snapshot_history_deleted", result.SnapshotHistoryDeleted, "backup_directories_deleted", result.BackupDirectoriesDeleted)
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "gc-blobs" {
+		store, err := server.OpenStore(filepath.Join(cfg.DataDir, "cashflux-server.db"))
+		if err != nil {
+			logger.Error("open store failed", "error", err)
+			os.Exit(1)
+		}
+		defer func() { _ = store.Close() }()
+		deleted, err := store.SweepUnreferencedBlobs(filepath.Join(cfg.DataDir, "blobs"))
+		if err != nil {
+			logger.Error("server blob gc failed", "error", err)
+			os.Exit(1)
+		}
+		cfg.Metrics.ObserveBlobGC(deleted)
+		logger.Info("server blob gc complete", "deleted", deleted)
+		return
+	}
 	if token := cfg.TokenForDisplay(); token != "" {
 		logger.Warn("generated self-host access token", "token", token)
 		logger.Warn("persist generated token", "hint", "set CASHFLUX_SERVER_TOKEN_SHA256 to the sha256 of this token, or CASHFLUX_SERVER_TOKEN for local development, to keep it stable across restarts")

@@ -208,6 +208,26 @@ func TestRetentionArtifactsDefineSchedule(t *testing.T) {
 	}
 }
 
+func TestBlobGCArtifactsDefineSchedule(t *testing.T) {
+	service, err := os.ReadFile("../../deploy/cashflux-blob-gc.example.service")
+	if err != nil {
+		t.Fatalf("read blob gc service: %v", err)
+	}
+	if !strings.Contains(string(service), "cashflux-server gc-blobs") {
+		t.Fatalf("blob gc service missing command: %s", service)
+	}
+	timer, err := os.ReadFile("../../deploy/cashflux-blob-gc.example.timer")
+	if err != nil {
+		t.Fatalf("read blob gc timer: %v", err)
+	}
+	timerText := string(timer)
+	for _, want := range []string{"OnCalendar=", "Persistent=true", "RandomizedDelaySec="} {
+		if !strings.Contains(timerText, want) {
+			t.Fatalf("blob gc timer missing %q", want)
+		}
+	}
+}
+
 func TestIncidentResponseRunbookDefinesStatusAndComms(t *testing.T) {
 	data, err := os.ReadFile("../../docs/INCIDENT_RESPONSE.md")
 	if err != nil {

@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend blob garbage collection
+
+- Added `cashflux-server gc-blobs` to sweep unreferenced blob metadata/files through the existing content-addressed store cleanup path.
+- Added Prometheus counters for blob GC sweeps and deleted blobs, plus weekly systemd service/timer examples for self-host installs.
+- Documented the GC schedule and the existing audit/snapshot list caps in self-hosting docs; deploy and repository tests cover the command artifacts and metrics.
+
 ## 2026-06-18 — feat: Split rail icon (B24)
 
 - Added a Lucide "split" `icon.Split` and wired `/split` into `railMeta` (`nav.split`), so the Split screen

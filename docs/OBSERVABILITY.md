@@ -23,6 +23,7 @@ Use `CASHFLUX_SERVER_LOG_FORMAT=json` in production so collectors can parse fiel
 - Active streams: `cashflux_grpc_streams_active`
 - Sync conflicts: `rate(cashflux_sync_lww_rejects_total[5m])`
 - Blob throughput: `rate(cashflux_blob_bytes_transferred_total[5m])`
+- Blob GC: `increase(cashflux_blob_gc_deleted_total[24h])` and `increase(cashflux_blob_gc_sweeps_total[24h])`
 - AI proxy usage: `rate(cashflux_ai_proxy_requests_total[5m])` and `rate(cashflux_ai_proxy_tokens_total[5m])`
 - DB operation rate/latency: `sum by (operation) (rate(cashflux_db_queries_total[5m]))`
 

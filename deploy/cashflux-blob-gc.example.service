@@ -1,0 +1,12 @@
+[Unit]
+Description=CashFlux self-host blob garbage collection
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cashflux
+ExecStart=/usr/bin/docker compose -f docker-compose.selfhost.yml run --rm cashflux-server gc-blobs
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

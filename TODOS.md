@@ -4284,7 +4284,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       the choice on real numbers, not speculation. ★ Done: `docs/SCALE_LIMITS.md` documents the
       single-writer ceiling, capacity signals, migration triggers, and sharded-SQLite/Postgres/object-storage path.
 - [ ] Quotas/fair-use enforced (storage cap, rate limits) with clear `resource-exhausted` responses.
-- [ ] Pagination/limits on any list endpoint; cap snapshot history; blob GC scheduled + monitored.
+- [x] Pagination/limits on any list endpoint; cap snapshot history; blob GC scheduled + monitored.
+      Done: audit listing is capped, snapshot history is capped/pruned, and `cashflux-server gc-blobs`
+      plus weekly timer examples and Prometheus GC counters cover scheduled/monitored blob cleanup.
 - [x] Caching: immutable blob cache headers (+ CDN later); ETag/If-None-Match on `GetWorkspace`.
 
 ### 7.19 API governance & operability
