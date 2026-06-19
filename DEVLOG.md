@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: subscriptions' share of spending (B25)
+
+- Added a "Share of spending" stat to the Subscriptions grid: `subscriptions.MonthlyTotal(subs) * 100 /` this
+  month's expense (from `ledger.PeriodTotals` over `dateutil.MonthRange(now)`). Rendered as a Fragment when
+  there's no spending this month, so it simply drops out of the grid rather than dividing by zero. UI-only;
+  added the subs.shareOfSpending i18n key. gofmt clean, i18n tests + wasm build green. Restored docs from HEAD.
+
 ## 2026-06-19 — feat: biggest deposits (B21)
 
 - Added pure `reports.LargestIncome` mirroring LargestExpenses (gated on IsIncome, reuses ExpenseItem as the

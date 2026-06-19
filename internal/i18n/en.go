@@ -113,6 +113,7 @@ var english = Catalog{
 	"subs.monthlyBurden":     "Monthly subscriptions",
 	"subs.annualBurden":      "Yearly subscriptions",
 	"subs.count":             "Active subscriptions",
+	"subs.shareOfSpending":   "Share of spending",
 	"subs.empty":             "No recurring charges detected yet. Subscriptions show up once a charge repeats on a regular schedule.",
 	"subs.perMonth":          "%s / mo",
 	"subs.next":              "next %s",

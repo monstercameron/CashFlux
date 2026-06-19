@@ -4,11 +4,14 @@ package screens
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -104,11 +107,21 @@ func Subscriptions() ui.Node {
 		},
 	)
 
+	// Subscriptions as a share of this month's spending — a "how much of my
+	// outflow is recurring?" gauge, shown only when there's spending to compare to.
+	shareStat := Fragment()
+	ms, me := dateutil.MonthRange(time.Now())
+	if _, expense, err := ledger.PeriodTotals(app.Transactions(), ms, me, rates); err == nil && expense.Amount > 0 {
+		pct := subscriptions.MonthlyTotal(subs) * 100 / expense.Amount
+		shareStat = stat(uistate.T("subs.shareOfSpending"), fmt.Sprintf("%d%%", pct), "")
+	}
+
 	return Div(
 		If(len(subs) > 0, Div(Class("stat-grid"),
 			stat(uistate.T("subs.monthlyBurden"), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base)), "neg"),
 			stat(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
 			stat(uistate.T("subs.count"), fmt.Sprintf("%d", len(subs)), ""),
+			shareStat,
 		)),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("nav.subscriptions")),

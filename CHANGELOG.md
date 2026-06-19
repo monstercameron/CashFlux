@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Subscriptions' share of spending (B25).** The Subscriptions stat grid now shows what percent of this
+  month's spending goes to recurring subscriptions, so the recurring slice of your outflow is visible at a
+  glance. Shown only when there's spending this month to compare against.
+
+### Added
 - **Biggest deposits (B21).** New pure, table-tested `reports.LargestIncome` (the income mirror of
   LargestExpenses) and a "Biggest deposits" card on the Reports screen listing the period's largest individual
   income transactions — completing the income picture alongside income-by-source.
