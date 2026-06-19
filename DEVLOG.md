@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend legal endpoints (7.11)
+
+- Added public `/legal/privacy` and `/legal/terms` JSON endpoints for Cloud onboarding/legal discovery.
+- Advertised the legal endpoints from backend root discovery and covered the route/content-type shape in tests.
+- Documented the endpoints in `docs/LEGAL_ENDPOINTS.md`; account export/delete remains tracked as the open part
+  of the compliance TODO.
+
 ## 2026-06-19 - test: add backend sqli audit guard (7.14)
 
 - Added a repository source audit test that rejects dynamic SQL formatting/builders and keeps key tenant

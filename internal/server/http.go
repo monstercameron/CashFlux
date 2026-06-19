@@ -35,6 +35,15 @@ type StatusResponse struct {
 	UpdatedAt  time.Time         `json:"updatedAt"`
 }
 
+// LegalResponse exposes public legal document metadata for Cloud onboarding.
+type LegalResponse struct {
+	Slug        string   `json:"slug"`
+	Title       string   `json:"title"`
+	Version     string   `json:"version"`
+	EffectiveAt string   `json:"effectiveAt"`
+	Summary     []string `json:"summary"`
+}
+
 // NewMux returns the backend HTTP surface that exists before gRPC/proto wiring.
 func NewMux(cfg Config, stores ...*Store) http.Handler {
 	var store *Store
@@ -59,10 +68,14 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 				"/readyz",
 				"/v1/version",
 				"/v1/audit",
+				"/legal/privacy",
+				"/legal/terms",
 				"/grpc",
 			},
 		})
 	})
+	mux.HandleFunc("GET /legal/privacy", handleLegalDocument(privacyPolicyDocument()))
+	mux.HandleFunc("GET /legal/terms", handleLegalDocument(termsDocument()))
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -129,6 +142,42 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
 	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddlewareSampled(cfg.Logger, cfg.Metrics, cfg.LogHotPathSampleRate, userRateLimitMiddleware(cfg.HTTPUserRateLimitPerMinute, cfg, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, mux))))))
+}
+
+func handleLegalDocument(doc LegalResponse) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, doc)
+	}
+}
+
+func privacyPolicyDocument() LegalResponse {
+	return LegalResponse{
+		Slug:        "privacy",
+		Title:       "CashFlux Privacy Policy",
+		Version:     "draft-2026-06-19",
+		EffectiveAt: "2026-06-19",
+		Summary: []string{
+			"CashFlux Cloud stores sync snapshots, blob metadata, account metadata, usage counters, and encrypted BYO AI keys needed to provide optional sync and AI proxy services.",
+			"CashFlux does not sell personal data. Payment card processing is delegated to Stripe when billing is enabled.",
+			"Users can keep using CashFlux locally without Cloud. Self-hosted servers keep data under the operator's control.",
+			"Account export and deletion are planned compliance surfaces and remain tracked separately before public Cloud launch.",
+		},
+	}
+}
+
+func termsDocument() LegalResponse {
+	return LegalResponse{
+		Slug:        "terms",
+		Title:       "CashFlux Terms of Service",
+		Version:     "draft-2026-06-19",
+		EffectiveAt: "2026-06-19",
+		Summary: []string{
+			"CashFlux Cloud is optional. The local-first app remains usable without a paid server account.",
+			"Users are responsible for the financial data and provider keys they add, including any self-hosted deployment configuration.",
+			"Cloud billing, trials, entitlements, and subscription management are planned Stripe-backed surfaces and remain subject to launch configuration.",
+			"CashFlux provides budgeting tools and automation helpers, not financial, tax, legal, or investment advice.",
+		},
+	}
 }
 
 func handleCORSPreflight(cfg Config) http.HandlerFunc {

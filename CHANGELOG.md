@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend legal endpoints (7.11).** Added public `/legal/privacy` and `/legal/terms` JSON discovery
+  endpoints for Cloud onboarding and billing surfaces.
 - **Backend SQLi audit coverage (7.14).** Added a repository source guard that rejects dynamic SQL construction
   patterns and pins parameterized user/workspace predicates.
 - **Backend usage support view (7.19).** Added authenticated `/v1/admin/usage`, a read-only usage lookup scoped

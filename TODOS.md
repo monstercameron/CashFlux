@@ -4094,7 +4094,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       gRPC auth interceptor for Sync/AI RPCs and the blob endpoints; past-due grace window; lapse →
       reject cloud RPCs (clear status code) while local app keeps working.
 - [ ] Storage fair-use cap per user (blob bytes); soft-warn → block new uploads over cap; overage copy.
-- [ ] Privacy/compliance: privacy policy + terms endpoints; account export + **delete account**
+- [~] Privacy/compliance: privacy policy + terms endpoints; account export + **delete account**.
+      Public `/legal/privacy` and `/legal/terms` JSON endpoints are now mounted and documented in
+      `docs/LEGAL_ENDPOINTS.md`. Remaining: self-serve account export and delete-account purge flow.
       (purge server data + blobs); GDPR/CCPA data-request path.
 - [ ] Tests: webhook state transitions, entitlement gate (trial/active/past-due/canceled), cap enforcement.
 

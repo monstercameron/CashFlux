@@ -316,8 +316,10 @@ func TestRootEndpointAdvertisesBackend(t *testing.T) {
 	if body.Service != "cashflux-server" || body.Status != "ok" {
 		t.Fatalf("root response = %+v", body)
 	}
-	if !rootEndpointContains(body.Endpoints, "/grpc") || !rootEndpointContains(body.Endpoints, "/v1/version") {
-		t.Fatalf("root endpoints = %+v", body.Endpoints)
+	for _, endpoint := range []string{"/grpc", "/v1/version", "/legal/privacy", "/legal/terms"} {
+		if !rootEndpointContains(body.Endpoints, endpoint) {
+			t.Fatalf("root endpoints = %+v, missing %s", body.Endpoints, endpoint)
+		}
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/missing", nil)
@@ -325,6 +327,46 @@ func TestRootEndpointAdvertisesBackend(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("missing route status = %d, want 404", rr.Code)
+	}
+}
+
+func TestLegalEndpointsArePublicJSON(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token"}, openTestStore(t))
+	for _, tc := range []struct {
+		path string
+		slug string
+	}{
+		{path: "/legal/privacy", slug: "privacy"},
+		{path: "/legal/terms", slug: "terms"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status = %d body %q", rr.Code, rr.Body.String())
+			}
+			if got := rr.Header().Get("Content-Type"); got != "application/json" {
+				t.Fatalf("content-type = %q, want application/json", got)
+			}
+			var body LegalResponse
+			if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+				t.Fatalf("decode legal response: %v", err)
+			}
+			if body.Slug != tc.slug || body.Title == "" || body.Version == "" || body.EffectiveAt == "" || len(body.Summary) == 0 {
+				t.Fatalf("legal body = %+v", body)
+			}
+		})
+	}
+}
+
+func TestLegalEndpointsRequireGET(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token"}, openTestStore(t))
+	req := httptest.NewRequest(http.MethodPost, "/legal/privacy", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("post legal status = %d, want 405", rr.Code)
 	}
 }
 
