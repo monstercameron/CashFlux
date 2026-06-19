@@ -39,6 +39,8 @@ interprets the dataset — it stores and forwards.
   refcount/GC. Bytes live on disk by hash.
 - `ai_keys(user_id, provider, ciphertext, nonce)` — encrypted BYO key (AES-GCM).
 - `usage(user_id, day, requests, tokens)` — per-user metering for rate limits.
+- `subscriptions(user_id, stripe_customer, stripe_sub, status, plan, current_period_end, trial_end)` — current
+  Stripe-backed Cloud entitlement state; webhooks update it and entitlement checks read it.
 
 ## Sync (last-write-wins, snapshot-based)
 The dataset is already a single JSON snapshot (`store.ExportJSON`), so sync ships that

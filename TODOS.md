@@ -4089,7 +4089,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Stripe integration: products/prices (annual + monthly), Checkout session creation, customer portal session.
 - [ ] Stripe **webhook** handler (checkout.completed, subscription.updated/deleted, invoice.payment_failed)
       → update `subscriptions` table; idempotent; signature-verified.
-- [ ] `subscriptions(user_id, stripe_customer, stripe_sub, status, plan, current_period_end, trial_end)`.
+- [x] `subscriptions(user_id, stripe_customer, stripe_sub, status, plan, current_period_end, trial_end)`.
+      Done: schema v4 adds the table with unique Stripe customer/subscription ids and repository upsert/lookup
+      coverage for current subscription state.
 - [ ] **Entitlement gate**: a single `IsCloudActive(user)` check (active|trial|grace) enforced in the
       gRPC auth interceptor for Sync/AI RPCs and the blob endpoints; past-due grace window; lapse →
       reject cloud RPCs (clear status code) while local app keeps working.

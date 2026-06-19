@@ -66,6 +66,18 @@ type Usage struct {
 	Tokens   int64
 }
 
+// Subscription is the server-side Stripe subscription state for one Cloud user.
+type Subscription struct {
+	UserID             string
+	StripeCustomer     string
+	StripeSubscription string
+	Status             string
+	Plan               string
+	CurrentPeriodEnd   time.Time
+	TrialEnd           time.Time
+	UpdatedAt          time.Time
+}
+
 // AccountExport is the self-serve server-side data bundle for a user.
 type AccountExport struct {
 	ExportedAt      time.Time    `json:"exportedAt"`
@@ -368,6 +380,10 @@ type refreshSessionScanner interface {
 	Scan(dest ...any) error
 }
 
+type subscriptionScanner interface {
+	Scan(dest ...any) error
+}
+
 func scanRefreshSession(row refreshSessionScanner) (RefreshSession, error) {
 	var session RefreshSession
 	var expiresAt, usedAt, revokedAt string
@@ -406,6 +422,38 @@ func scanAuditEvent(row auditScanner) (AuditEvent, error) {
 		return AuditEvent{}, fmt.Errorf("server store: parse audit time: %w", err)
 	}
 	return event, nil
+}
+
+func scanSubscription(row subscriptionScanner) (Subscription, bool, error) {
+	var sub Subscription
+	var currentPeriodEnd, trialEnd, updatedAt string
+	err := row.Scan(
+		&sub.UserID,
+		&sub.StripeCustomer,
+		&sub.StripeSubscription,
+		&sub.Status,
+		&sub.Plan,
+		&currentPeriodEnd,
+		&trialEnd,
+		&updatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Subscription{}, false, nil
+	}
+	if err != nil {
+		return Subscription{}, false, fmt.Errorf("server store: scan subscription: %w", err)
+	}
+	var parseErr error
+	if sub.CurrentPeriodEnd, parseErr = parseOptionalTime(currentPeriodEnd); parseErr != nil {
+		return Subscription{}, false, fmt.Errorf("server store: parse subscription current_period_end: %w", parseErr)
+	}
+	if sub.TrialEnd, parseErr = parseOptionalTime(trialEnd); parseErr != nil {
+		return Subscription{}, false, fmt.Errorf("server store: parse subscription trial_end: %w", parseErr)
+	}
+	if sub.UpdatedAt, parseErr = parseTime(updatedAt); parseErr != nil {
+		return Subscription{}, false, fmt.Errorf("server store: parse subscription updated_at: %w", parseErr)
+	}
+	return sub, true, nil
 }
 
 // PutWorkspace inserts or replaces a workspace registry row.
@@ -967,6 +1015,60 @@ func (s *Store) GetUsage(userID string, day time.Time) (Usage, bool, error) {
 	return usage, true, nil
 }
 
+// PutSubscription upserts the current Stripe subscription state for a user.
+func (s *Store) PutSubscription(sub Subscription) error {
+	if strings.TrimSpace(sub.UserID) == "" || strings.TrimSpace(sub.StripeCustomer) == "" ||
+		strings.TrimSpace(sub.StripeSubscription) == "" || strings.TrimSpace(sub.Status) == "" ||
+		strings.TrimSpace(sub.Plan) == "" {
+		return fmt.Errorf("server store: subscription user, customer, subscription, status, and plan are required")
+	}
+	if sub.UpdatedAt.IsZero() {
+		sub.UpdatedAt = time.Now().UTC()
+	}
+	defer s.observeDB("PutSubscription", time.Now())
+	_, err := s.db.Exec(`
+INSERT INTO subscriptions(user_id, stripe_customer, stripe_subscription, status, plan, current_period_end, trial_end, updated_at)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(user_id) DO UPDATE SET
+  stripe_customer = excluded.stripe_customer,
+  stripe_subscription = excluded.stripe_subscription,
+  status = excluded.status,
+  plan = excluded.plan,
+  current_period_end = excluded.current_period_end,
+  trial_end = excluded.trial_end,
+  updated_at = excluded.updated_at`,
+		strings.TrimSpace(sub.UserID),
+		strings.TrimSpace(sub.StripeCustomer),
+		strings.TrimSpace(sub.StripeSubscription),
+		strings.TrimSpace(sub.Status),
+		strings.TrimSpace(sub.Plan),
+		formatOptionalTime(sub.CurrentPeriodEnd),
+		formatOptionalTime(sub.TrialEnd),
+		formatTime(sub.UpdatedAt))
+	if err != nil {
+		return fmt.Errorf("server store: put subscription: %w", err)
+	}
+	return nil
+}
+
+// GetSubscription returns the current subscription row for a user.
+func (s *Store) GetSubscription(userID string) (Subscription, bool, error) {
+	defer s.observeDB("GetSubscription", time.Now())
+	return scanSubscription(s.db.QueryRow(`
+SELECT user_id, stripe_customer, stripe_subscription, status, plan, current_period_end, trial_end, updated_at
+FROM subscriptions
+WHERE user_id = ?`, strings.TrimSpace(userID)))
+}
+
+// GetSubscriptionByStripeID returns a row by Stripe subscription id for webhook updates.
+func (s *Store) GetSubscriptionByStripeID(stripeSubscription string) (Subscription, bool, error) {
+	defer s.observeDB("GetSubscriptionByStripeID", time.Now())
+	return scanSubscription(s.db.QueryRow(`
+SELECT user_id, stripe_customer, stripe_subscription, status, plan, current_period_end, trial_end, updated_at
+FROM subscriptions
+WHERE stripe_subscription = ?`, strings.TrimSpace(stripeSubscription)))
+}
+
 // UsageWithinLimit reports whether the user has not exceeded the supplied daily limits.
 func (s *Store) UsageWithinLimit(userID string, day time.Time, maxRequests, maxTokens int64) (bool, error) {
 	if maxRequests < 0 || maxTokens < 0 {
@@ -1181,6 +1283,21 @@ func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
 func parseTime(s string) (time.Time, error) { return time.Parse(time.RFC3339Nano, s) }
 
 func usageDay(t time.Time) string { return t.UTC().Format("2006-01-02") }
+
+func formatOptionalTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return formatTime(t)
+}
+
+func parseOptionalTime(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, nil
+	}
+	return parseTime(s)
+}
 
 func scanSnapshot(row snapshotScanner) (Snapshot, error) {
 	var snapshot Snapshot

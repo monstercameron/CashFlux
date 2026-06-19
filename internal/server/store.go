@@ -11,7 +11,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 3
+const CurrentServerSchemaVersion = 4
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -128,6 +128,12 @@ func (s *Store) migrate() error {
 		}
 		version = 3
 	}
+	if version < 4 {
+		if err := s.migrateTo4(); err != nil {
+			return err
+		}
+		version = 4
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -156,6 +162,13 @@ func (s *Store) migrateTo2() error {
 func (s *Store) migrateTo3() error {
 	if _, err := s.db.Exec(serverSchemaV3); err != nil {
 		return fmt.Errorf("server store: migrate v3: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) migrateTo4() error {
+	if _, err := s.db.Exec(serverSchemaV4); err != nil {
+		return fmt.Errorf("server store: migrate v4: %w", err)
 	}
 	return nil
 }
@@ -258,4 +271,20 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family ON refresh_tokens(family_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+`
+
+const serverSchemaV4 = `
+CREATE TABLE IF NOT EXISTS subscriptions (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  stripe_customer TEXT NOT NULL,
+  stripe_subscription TEXT NOT NULL,
+  status TEXT NOT NULL,
+  plan TEXT NOT NULL,
+  current_period_end TEXT NOT NULL,
+  trial_end TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(stripe_customer),
+  UNIQUE(stripe_subscription)
+);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
 `

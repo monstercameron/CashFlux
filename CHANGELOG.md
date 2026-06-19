@@ -41,6 +41,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend subscription persistence (7.10).** Added the server `subscriptions` table and repository APIs for
+  current Stripe subscription state lookup by user or Stripe subscription id.
 - **Backend AI usage alerts (7.20).** Added configurable AI proxy daily request/token alert thresholds that
   append audit events when a user crosses warning lines before hard caps trip.
 - **Backend AI abuse kill switch (7.20).** Added `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS` to deny selected users

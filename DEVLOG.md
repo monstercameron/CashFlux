@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend subscription persistence (7.10)
+
+- Added schema v4 with a `subscriptions` table keyed by user id and unique Stripe customer/subscription ids.
+- Added repository upsert and lookup helpers for current subscription state, including trial/period timestamps.
+- Covered migration presence, update behavior, lookup by Stripe subscription id, and duplicate Stripe id rejection.
+- Marked the subscription-table TODO complete; webhook handling and entitlement enforcement remain open.
+
 ## 2026-06-19 - feat: add backend ai usage alerts (7.20)
 
 - Added `CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY` and `CASHFLUX_SERVER_AI_ALERT_TOKENS_PER_DAY`.

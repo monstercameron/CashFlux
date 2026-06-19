@@ -647,6 +647,71 @@ func TestUsageCountersValidateAndIsolateDays(t *testing.T) {
 	}
 }
 
+func TestSubscriptionStoreUpsertAndLookup(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 13, 30, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser u1: %v", err)
+	}
+	if err := s.UpsertUser(User{ID: "u2", Provider: "github", Subject: "bob", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser u2: %v", err)
+	}
+	trialEnd := now.Add(14 * 24 * time.Hour)
+	periodEnd := now.Add(30 * 24 * time.Hour)
+	if err := s.PutSubscription(Subscription{
+		UserID:             "u1",
+		StripeCustomer:     "cus_123",
+		StripeSubscription: "sub_123",
+		Status:             "trialing",
+		Plan:               "personal_annual",
+		CurrentPeriodEnd:   periodEnd,
+		TrialEnd:           trialEnd,
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatalf("PutSubscription: %v", err)
+	}
+	got, ok, err := s.GetSubscription("u1")
+	if err != nil || !ok {
+		t.Fatalf("GetSubscription = %+v/%v/%v", got, ok, err)
+	}
+	if got.Status != "trialing" || got.Plan != "personal_annual" || !got.TrialEnd.Equal(trialEnd) ||
+		!got.CurrentPeriodEnd.Equal(periodEnd) || got.StripeCustomer != "cus_123" {
+		t.Fatalf("subscription = %+v", got)
+	}
+	byStripe, ok, err := s.GetSubscriptionByStripeID("sub_123")
+	if err != nil || !ok || byStripe.UserID != "u1" {
+		t.Fatalf("GetSubscriptionByStripeID = %+v/%v/%v", byStripe, ok, err)
+	}
+	if _, ok, err := s.GetSubscription("u2"); err != nil || ok {
+		t.Fatalf("cross-user subscription = ok %v err %v", ok, err)
+	}
+
+	if err := s.PutSubscription(Subscription{
+		UserID:             "u1",
+		StripeCustomer:     "cus_123",
+		StripeSubscription: "sub_123",
+		Status:             "active",
+		Plan:               "personal_monthly",
+		CurrentPeriodEnd:   periodEnd.Add(30 * 24 * time.Hour),
+		UpdatedAt:          now.Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("PutSubscription update: %v", err)
+	}
+	got, ok, err = s.GetSubscription("u1")
+	if err != nil || !ok || got.Status != "active" || got.Plan != "personal_monthly" || !got.TrialEnd.IsZero() {
+		t.Fatalf("updated subscription = %+v/%v/%v", got, ok, err)
+	}
+	if err := s.PutSubscription(Subscription{UserID: "u2", StripeCustomer: "cus_123", StripeSubscription: "sub_456", Status: "active", Plan: "personal_annual"}); err == nil {
+		t.Fatal("duplicate stripe customer accepted")
+	}
+	if err := s.PutSubscription(Subscription{UserID: "u2", StripeCustomer: "cus_456", StripeSubscription: "sub_123", Status: "active", Plan: "personal_annual"}); err == nil {
+		t.Fatal("duplicate stripe subscription accepted")
+	}
+	if err := s.PutSubscription(Subscription{UserID: "u2", StripeCustomer: "cus_456", StripeSubscription: "", Status: "active", Plan: "personal_annual"}); err == nil {
+		t.Fatal("missing stripe subscription accepted")
+	}
+}
+
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	s, err := OpenStore(filepath.Join(t.TempDir(), "cashflux.db"))
