@@ -12,7 +12,8 @@ and every commit updates this file under `Unreleased`.
 - **Renewing-soon subscriptions (B25).** New pure, table-tested `subscriptions.UpcomingRenewals` (subs renewing
   within N days, soonest first) surfaced as a "Renewing soon" card on the Subscriptions screen.
 - **Backup reminder checklist reconciled (B28).** Marked the automated backup reminder TODO complete against
-  the shipped `lastBackupAt`, cadence, B19 catch-up, Settings selector, and export-stamp wiring.
+  the shipped `lastBackupAt`, cadence, B19 catch-up, Settings selector, export-stamp wiring, and completed
+  checklist state.
 - **Recurring-aware bills (B22).** Bills, the dashboard bill widget, and bill-due notifications now include
   negative Planning recurring items alongside liability-account minimum payments, advancing stale recurring
   due dates to the next upcoming cadence occurrence.

@@ -1047,9 +1047,9 @@ expenses).
 
 ### B28. Automated backup reminders — SPEC (from C38, 2026-06-18)
 **Want:** nudge periodic backups so data isn't lost (ties B17 recovery + Export #31).
-- [ ] Track `lastBackupAt`; given a cadence (Off/weekly/monthly), decide if a nudge is due (reuse the
+- [x] Track `lastBackupAt`; given a cadence (Off/weekly/monthly), decide if a nudge is due (reuse the
       **B19 catch-up-on-wake** evaluation).
-- [ ] **UI:** gentle, dismissible "Back up your data" nudge (one-tap → Export JSON `cashflux.json`);
+- [x] **UI:** gentle, dismissible "Back up your data" nudge (one-tap → Export JSON `cashflux.json`);
       Settings cadence. Non-naggy (B17/B18 ethos). _Could ship as a B19 notification rule._
 
 ### B29. Multi-device / shared-household sync — SPEC (expands Phase 3 §3.1/3.2; #1 home-use gap)

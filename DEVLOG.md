@@ -17,7 +17,7 @@ problems and fixes, and what's next.
   converts due backups into B19 candidates, `notifyrun` persists `lastBackupAt` and cadence in localStorage,
   and successful JSON export stamps the backup time.
 - Settings already exposes Monthly / Weekly / Off, and the reminder is suppressed for fresh empty installs.
-  Marked the B28 checklist complete.
+  Marked the B28 checklist complete in `TODOS.md` with this reconciliation atom.
 
 ## 2026-06-19 - feat: include recurring outflows in bills (B22)
 
