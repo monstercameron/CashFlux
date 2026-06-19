@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"os"
 	"sort"
@@ -139,6 +140,9 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.DataDir) == "" {
 		return fmt.Errorf("server: data dir is required")
 	}
+	if !validAppOrigin(c.AppOrigin) {
+		return fmt.Errorf("server: app origin must be an https origin, or http loopback for local development")
+	}
 	if c.MasterKey != "" && !validAESKeyLength(len(c.MasterKey)) {
 		return fmt.Errorf("server: master key must be 16, 24, or 32 bytes")
 	}
@@ -229,10 +233,42 @@ func validOAuthRedirectURL(provider, redirect string) bool {
 	if err != nil || u.Scheme == "" || u.Host == "" || u.Fragment != "" {
 		return false
 	}
-	if u.Scheme != "https" && u.Scheme != "http" {
+	if !secureBrowserURL(u) {
 		return false
 	}
 	return u.Path == "/v1/auth/"+strings.TrimSpace(provider)+"/callback"
+}
+
+func validAppOrigin(origin string) bool {
+	origin = strings.TrimSpace(origin)
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return false
+	}
+	return secureBrowserURL(u)
+}
+
+func secureBrowserURL(u *url.URL) bool {
+	switch u.Scheme {
+	case "https":
+		return true
+	case "http":
+		return isLoopbackHost(u.Hostname())
+	default:
+		return false
+	}
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func envOr(key, fallback string) string {

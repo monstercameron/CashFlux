@@ -26,6 +26,16 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("unsupported auth mode accepted")
 	}
 	invalid = valid
+	invalid.AppOrigin = "http://cashflux.example"
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("non-tls app origin accepted")
+	}
+	invalid = valid
+	invalid.AppOrigin = "*"
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("wildcard app origin accepted")
+	}
+	invalid = valid
 	invalid.MasterKey = "short"
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("short master key accepted")
@@ -128,10 +138,21 @@ func TestConfigValidate(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("bad oauth redirect accepted")
 	}
+	invalid = valid
+	invalid.OAuthProviders = map[string]OAuthProviderConfig{"github": {
+		ClientID: "id", ClientSecret: "secret", RedirectURL: "http://cashflux.example/v1/auth/github/callback",
+	}}
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("non-tls oauth redirect accepted")
+	}
 	valid.AuthMode = "oauth"
 	valid.OAuthProviders = map[string]OAuthProviderConfig{"google": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/v1/auth/google/callback"}}
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("oauth config rejected: %v", err)
+	}
+	valid.AppOrigin = "https://cashflux.example"
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("https app origin rejected: %v", err)
 	}
 }
 

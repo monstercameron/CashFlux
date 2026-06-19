@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: enforce tls-safe browser config
+
+- Tightened backend config validation for browser-facing URLs: `CASHFLUX_SERVER_APP_ORIGIN` must now be an
+  HTTPS origin, with HTTP allowed only for localhost/loopback development, and wildcard origins are rejected.
+- Applied the same TLS rule to OAuth redirect URLs after the existing `/v1/auth/{provider}/callback` path
+  allow-list, so production OAuth callbacks cannot be configured over cleartext HTTP.
+- Added config tests for wildcard origins, non-loopback HTTP origins, non-loopback HTTP OAuth redirects, and
+  the allowed HTTPS/loopback cases. This closes the self-host security-defaults item; full TLS redirect/cipher
+  policy remains tracked under the broader transport TODO.
+
 ## 2026-06-19 — feat: subscription price-change detection (B25)
 
 - Added `subscriptions.DetectPriceChanges` to catch when a recurring charge's price changes. The existing

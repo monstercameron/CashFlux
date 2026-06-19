@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend TLS-safe browser config defaults.** Server config now rejects wildcard CORS origins and rejects
+  cleartext browser origins or OAuth redirect URLs unless they target loopback local development, keeping
+  production app origins and OAuth callbacks HTTPS-only by default.
 - **Subscription price-change detection (B25).** New pure, table-tested `subscriptions.DetectPriceChanges`:
   the "your subscription went up" signal. Where `Detect` groups by name and amount (so a price change splits
   into two), this groups recurring charges by name only, confirms a regular cadence, and reports the most

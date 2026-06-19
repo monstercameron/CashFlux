@@ -4136,7 +4136,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 #### Ops/docs
 - [x] Self-host runbook: backups (SQLite WAL checkpoint + blobs), upgrades (pull new image), TLS, restore.
-- [ ] Security defaults: token auth on by default, TLS required, sensible limits; never ship a default secret.
+- [x] Security defaults: token auth on by default, TLS required, sensible limits; never ship a default secret.
+      Token mode is the default and generates a high-entropy token if none is configured; production browser
+      origins and OAuth redirects now require HTTPS, with HTTP allowed only for loopback local development.
 
 ### 7.14 Security hardening ★
 
@@ -4163,7 +4165,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `cashflux-server rotate-token` are done.
 
 #### Transport / browser
-- [ ] TLS-only (HSTS, modern ciphers); `wss` for the bridge; redirect HTTP→HTTPS.
+- [~] TLS-only (HSTS, modern ciphers); `wss` for the bridge; redirect HTTP→HTTPS.
+      App origins and OAuth redirects now reject cleartext HTTP except loopback local development. Remaining:
+      deploy/proxy redirect and cipher policy, plus explicit `wss` proxy verification.
 - [x] Security headers: HSTS, X-Content-Type-Options, Referrer-Policy, COOP/COEP, frame-ancestors/CSP
       on any served HTML; lock CORS + WS `WithOriginCheck` to the SPA origin allow-list.
 - [x] CSRF protection on cookie-authed HTTP endpoints (OAuth callback, refresh); SameSite + token.
