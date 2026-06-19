@@ -80,15 +80,16 @@ type Subscription struct {
 
 // AccountExport is the self-serve server-side data bundle for a user.
 type AccountExport struct {
-	ExportedAt      time.Time    `json:"exportedAt"`
-	User            User         `json:"user"`
-	Workspaces      []Workspace  `json:"workspaces"`
-	Snapshots       []Snapshot   `json:"snapshots"`
-	Blobs           []Blob       `json:"blobs"`
-	Usage           []Usage      `json:"usage"`
-	AIKeyProviders  []string     `json:"aiKeyProviders"`
-	AuditEvents     []AuditEvent `json:"auditEvents"`
-	RefreshSessions int          `json:"refreshSessions"`
+	ExportedAt      time.Time     `json:"exportedAt"`
+	User            User          `json:"user"`
+	Workspaces      []Workspace   `json:"workspaces"`
+	Snapshots       []Snapshot    `json:"snapshots"`
+	Blobs           []Blob        `json:"blobs"`
+	Usage           []Usage       `json:"usage"`
+	Subscription    *Subscription `json:"subscription,omitempty"`
+	AIKeyProviders  []string      `json:"aiKeyProviders"`
+	AuditEvents     []AuditEvent  `json:"auditEvents"`
+	RefreshSessions int           `json:"refreshSessions"`
 }
 
 // AuditEvent is a security-relevant, append-only backend event.
@@ -166,6 +167,9 @@ func (s *Store) ExportAccount(userID string, exportedAt time.Time) (AccountExpor
 	if out.Usage, err = s.exportUsage(userID); err != nil {
 		return AccountExport{}, false, err
 	}
+	if out.Subscription, err = s.exportSubscription(userID); err != nil {
+		return AccountExport{}, false, err
+	}
 	if out.AIKeyProviders, err = s.exportAIKeyProviders(userID); err != nil {
 		return AccountExport{}, false, err
 	}
@@ -184,13 +188,24 @@ func (s *Store) DeleteAccount(userID string) (bool, error) {
 		return false, fmt.Errorf("server store: user id is required")
 	}
 	defer s.observeDB("DeleteAccount", time.Now())
-	result, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, userID)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, fmt.Errorf("server store: begin delete account: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM subscriptions WHERE user_id = ?`, userID); err != nil {
+		return false, fmt.Errorf("server store: unlink subscription for account delete: %w", err)
+	}
+	result, err := tx.Exec(`DELETE FROM users WHERE id = ?`, userID)
 	if err != nil {
 		return false, fmt.Errorf("server store: delete account: %w", err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("server store: delete account rows: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("server store: commit delete account: %w", err)
 	}
 	return affected > 0, nil
 }
@@ -1263,6 +1278,17 @@ func (s *Store) exportUsage(userID string) ([]Usage, error) {
 		return nil, fmt.Errorf("server store: export usage rows: %w", err)
 	}
 	return out, nil
+}
+
+func (s *Store) exportSubscription(userID string) (*Subscription, error) {
+	sub, ok, err := s.GetSubscription(userID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	return &sub, nil
 }
 
 func (s *Store) exportAIKeyProviders(userID string) ([]string, error) {

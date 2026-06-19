@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: unlink subscriptions on account delete (7.17)
+
+- Added the current subscription row to the self-serve account export bundle so billing identifiers/status are
+  covered by the GDPR/CCPA export path without decrypting any secrets.
+- Changed `DeleteAccount` to explicitly remove the user's subscription row inside the same transaction that
+  deletes the user row, instead of relying only on the schema cascade.
+- Extended the account export/delete endpoint test with caller/other-user subscription rows to prove export
+  scoping and deletion unlinking.
+
 ## 2026-06-19 - feat: add billing idempotency keys (7.16)
 
 - Added schema v5 with an `idempotency_keys` table scoped by user, route, key, and request hash.

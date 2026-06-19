@@ -16,6 +16,6 @@ Authenticated account data controls:
 - `GET /v1/account/export`
 - `DELETE /v1/account`
 
-Account export returns the authenticated user's server-side Cloud data: user row, workspaces, current snapshots, blob metadata, usage rows, AI-key provider names, audit events, and refresh-session count. It does not decrypt or return BYO AI keys, and it does not inline blob bytes.
+Account export returns the authenticated user's server-side Cloud data: user row, workspaces, current snapshots, blob metadata, usage rows, current subscription identifiers/status, AI-key provider names, audit events, and refresh-session count. It does not decrypt or return BYO AI keys, and it does not inline blob bytes.
 
-Account deletion purges the authenticated user's relational rows through SQLite cascades, then sweeps unreferenced blob metadata and files.
+Account deletion explicitly unlinks the authenticated user's subscription row in the account-delete transaction, purges the remaining relational rows through SQLite cascades, then sweeps unreferenced blob metadata and files.

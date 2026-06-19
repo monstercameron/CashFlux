@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Account export includes billing state (7.17).** Self-serve account export now includes the caller's current
+  Stripe subscription identifiers/status without exposing any other user's billing rows.
 - **Billing idempotency keys (7.16).** Stripe Checkout and customer-portal session endpoints now persist
   `Idempotency-Key` results per user/route/request hash and replay duplicate requests without a second Stripe call.
 - **AI master-key rotation command (7.8).** Added `cashflux-server rotate-ai-master-key`, which re-encrypts
@@ -29,6 +31,8 @@ and every commit updates this file under `Unreleased`.
   empty, so local dev, custom domains, and native tests are unaffected (the wildcard `*` is never prefixed).
 
 ### Changed
+- **Account deletion unlinks billing state (7.17).** `DELETE /v1/account` now explicitly removes the caller's
+  stored subscription row inside the account-delete transaction before purging the user and sweeping blobs.
 - **OAuth ID-token verification (7.20).** Google OAuth callbacks now reject missing or expired ID-token expiry
   claims and future issued-at claims before userinfo fetch or session issuance.
 - **AI proxy request validation (7.14).** The gRPC AI service now rejects malformed chat, vision, and key-upload

@@ -4379,11 +4379,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       covers SEV levels, first response, comms cadence, recovery, and postmortems.
 
 ### 7.17 Compliance & data governance
-- [~] **GDPR/CCPA**: self-serve data **export** + **delete account** (purge DB rows + blobs +
+- [x] **GDPR/CCPA**: self-serve data **export** + **delete account** (purge DB rows + blobs +
       subscription unlink), data-subject request workflow + SLA; right-to-rectify via the app.
       Done: authenticated `/v1/account/export` and `DELETE /v1/account` cover scoped server data export,
-      relational purge, and unreferenced blob sweep. `docs/LEGAL_COMPLIANCE.md` now defines the DSR workflow,
-      SLA target, and right-to-rectify path. Remaining: subscription unlink once billing lands.
+      current subscription export, explicit subscription unlink, relational purge, and unreferenced blob sweep.
+      `docs/LEGAL_COMPLIANCE.md` defines the DSR workflow, SLA target, and right-to-rectify path.
 - [x] Privacy Policy, Terms of Service, Cookie/consent (minimal), DPA template for any sub-processors
       (Stripe, OAuth providers, host) + a public sub-processor list.
       Done: `docs/LEGAL_COMPLIANCE.md` carries launch draft privacy/terms copy, cookie/session notes, DPA

@@ -565,6 +565,28 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	if _, err := store.AddUsage(user.ID, now, 4, 120); err != nil {
 		t.Fatalf("AddUsage: %v", err)
 	}
+	if err := store.PutSubscription(Subscription{
+		UserID:             user.ID,
+		StripeCustomer:     "cus_export",
+		StripeSubscription: "sub_export",
+		Status:             "active",
+		Plan:               "personal_annual",
+		CurrentPeriodEnd:   now.Add(30 * 24 * time.Hour),
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatalf("PutSubscription: %v", err)
+	}
+	if err := store.PutSubscription(Subscription{
+		UserID:             other.ID,
+		StripeCustomer:     "cus_other",
+		StripeSubscription: "sub_other",
+		Status:             "active",
+		Plan:               "personal_annual",
+		CurrentPeriodEnd:   now.Add(30 * 24 * time.Hour),
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatalf("PutSubscription other: %v", err)
+	}
 	if _, err := store.AppendAuditEvent(AuditEvent{Timestamp: now, ActorID: user.ID, Action: "workspace.put", TargetType: "workspace", TargetID: "w-export"}); err != nil {
 		t.Fatalf("AppendAuditEvent: %v", err)
 	}
@@ -595,7 +617,10 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 		t.Fatalf("export related rows = snapshots %d blobs %d usage %d providers %d audit %d",
 			len(export.Snapshots), len(export.Blobs), len(export.Usage), len(export.AIKeyProviders), len(export.AuditEvents))
 	}
-	if strings.Contains(rr.Body.String(), "sk-secret-export") || strings.Contains(rr.Body.String(), "w-other") {
+	if export.Subscription == nil || export.Subscription.StripeCustomer != "cus_export" || export.Subscription.StripeSubscription != "sub_export" {
+		t.Fatalf("export subscription = %+v", export.Subscription)
+	}
+	if strings.Contains(rr.Body.String(), "sk-secret-export") || strings.Contains(rr.Body.String(), "w-other") || strings.Contains(rr.Body.String(), "sub_other") {
 		t.Fatalf("export leaked secret or other user data: %s", rr.Body.String())
 	}
 
@@ -614,6 +639,12 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	}
 	if _, ok, err := store.GetBlob(blob.Hash); err != nil || ok {
 		t.Fatalf("deleted user's blob metadata = ok %v err %v", ok, err)
+	}
+	if _, ok, err := store.GetSubscription(user.ID); err != nil || ok {
+		t.Fatalf("deleted user's subscription = ok %v err %v", ok, err)
+	}
+	if _, ok, err := store.GetSubscription(other.ID); err != nil || !ok {
+		t.Fatalf("other user's subscription = ok %v err %v", ok, err)
 	}
 }
 
