@@ -17,6 +17,7 @@ import (
 type SyncService struct {
 	store             *Store
 	maxStreamsPerUser int
+	metrics           *Metrics
 	watchMu           sync.Mutex
 	watches           map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}
 }
@@ -34,9 +35,12 @@ func NewSyncService(store *Store) *SyncService {
 	return &SyncService{store: store, watches: map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}{}}
 }
 
-func NewSyncServiceWithLimits(store *Store, maxStreamsPerUser int) *SyncService {
+func NewSyncServiceWithLimits(store *Store, maxStreamsPerUser int, metrics ...*Metrics) *SyncService {
 	service := NewSyncService(store)
 	service.maxStreamsPerUser = maxStreamsPerUser
+	if len(metrics) > 0 {
+		service.metrics = metrics[0]
+	}
 	return service
 }
 
@@ -157,6 +161,9 @@ func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchW
 		return nil, nil, status.Error(codes.ResourceExhausted, "too many workspace streams")
 	}
 	s.watches[userID][ch] = struct{}{}
+	if s.metrics != nil {
+		s.metrics.IncActiveStream()
+	}
 	return ch, func() {
 		s.watchMu.Lock()
 		if watchers := s.watches[userID]; watchers != nil {
@@ -166,6 +173,9 @@ func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchW
 			}
 		}
 		s.watchMu.Unlock()
+		if s.metrics != nil {
+			s.metrics.DecActiveStream()
+		}
 		close(ch)
 	}, nil
 }

@@ -11,9 +11,11 @@ import (
 
 // Metrics stores the backend's in-process Prometheus counters.
 type Metrics struct {
-	mu   sync.Mutex
-	http map[metricKey]metricValue
-	grpc map[metricKey]metricValue
+	mu              sync.Mutex
+	http            map[metricKey]metricValue
+	grpc            map[metricKey]metricValue
+	streamsActive   int64
+	streamDurations map[metricKey]metricValue
 }
 
 type metricKey struct {
@@ -28,8 +30,9 @@ type metricValue struct {
 
 func NewMetrics() *Metrics {
 	return &Metrics{
-		http: map[metricKey]metricValue{},
-		grpc: map[metricKey]metricValue{},
+		http:            map[metricKey]metricValue{},
+		grpc:            map[metricKey]metricValue{},
+		streamDurations: map[metricKey]metricValue{},
 	}
 }
 
@@ -47,6 +50,33 @@ func (m *Metrics) ObserveGRPC(method, status string, elapsed time.Duration) {
 	m.observe(m.grpc, metricKey{Name: method, Status: status}, elapsed)
 }
 
+func (m *Metrics) IncActiveStream() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.streamsActive++
+}
+
+func (m *Metrics) DecActiveStream() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.streamsActive > 0 {
+		m.streamsActive--
+	}
+}
+
+func (m *Metrics) ObserveStreamDuration(name, status string, elapsed time.Duration) {
+	if m == nil {
+		return
+	}
+	m.observe(m.streamDurations, metricKey{Name: name, Status: status}, elapsed)
+}
+
 func (m *Metrics) observe(dst map[metricKey]metricValue, key metricKey, elapsed time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -60,7 +90,7 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	if m == nil {
 		m = NewMetrics()
 	}
-	httpRows, grpcRows := m.snapshot()
+	httpRows, grpcRows, activeStreams, streamRows := m.snapshot()
 	_, _ = io.WriteString(w, "# HELP cashflux_server_up Server process health.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_server_up gauge\n")
 	_, _ = io.WriteString(w, "cashflux_server_up 1\n")
@@ -84,6 +114,14 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	for _, row := range grpcRows {
 		_, _ = fmt.Fprintf(w, "cashflux_grpc_request_duration_seconds_sum{method=%q,status=%q} %.6f\n", row.Key.Name, row.Key.Status, row.Value.DurationSecs)
 	}
+	_, _ = io.WriteString(w, "# HELP cashflux_grpc_streams_active Active gRPC server streams.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_grpc_streams_active gauge\n")
+	_, _ = fmt.Fprintf(w, "cashflux_grpc_streams_active %d\n", activeStreams)
+	_, _ = io.WriteString(w, "# HELP cashflux_grpc_stream_duration_seconds_sum gRPC stream duration sum by method and status.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_grpc_stream_duration_seconds_sum counter\n")
+	for _, row := range streamRows {
+		_, _ = fmt.Fprintf(w, "cashflux_grpc_stream_duration_seconds_sum{method=%q,status=%q} %.6f\n", row.Key.Name, row.Key.Status, row.Value.DurationSecs)
+	}
 }
 
 type metricRow struct {
@@ -91,12 +129,13 @@ type metricRow struct {
 	Value metricValue
 }
 
-func (m *Metrics) snapshot() ([]metricRow, []metricRow) {
+func (m *Metrics) snapshot() ([]metricRow, []metricRow, int64, []metricRow) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	httpRows := metricRows(m.http)
 	grpcRows := metricRows(m.grpc)
-	return httpRows, grpcRows
+	streamRows := metricRows(m.streamDurations)
+	return httpRows, grpcRows, m.streamsActive, streamRows
 }
 
 func metricRows(src map[metricKey]metricValue) []metricRow {

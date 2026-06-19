@@ -235,6 +235,7 @@ func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	versionReq := httptest.NewRequest(http.MethodGet, "/v1/version", nil)
 	h.ServeHTTP(httptest.NewRecorder(), versionReq)
 	metrics.ObserveGRPC("/cashflux.v1.SyncService/ListWorkspaces", "OK", 2*time.Millisecond)
+	metrics.ObserveStreamDuration("/cashflux.v1.SyncService/WatchWorkspaces", "OK", 3*time.Millisecond)
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -258,6 +259,7 @@ func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	for _, want := range []string{
 		`cashflux_http_requests_total{route="/v1/version",status="200"} 1`,
 		`cashflux_grpc_requests_total{method="/cashflux.v1.SyncService/ListWorkspaces",status="OK"} 1`,
+		`cashflux_grpc_stream_duration_seconds_sum{method="/cashflux.v1.SyncService/WatchWorkspaces",status="OK"} 0.003000`,
 	} {
 		if !strings.Contains(rr.Body.String(), want) {
 			t.Fatalf("metrics body missing %q in %q", want, rr.Body.String())

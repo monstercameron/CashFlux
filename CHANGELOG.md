@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend stream metrics.** `/metrics` now exports active gRPC stream counts and stream duration sums.
 - **Backend RED metrics.** `/metrics` now includes HTTP and gRPC request totals plus duration sums by route/RPC and status.
 - **Backend AI proxy feature flag.** `CASHFLUX_SERVER_AI_PROXY_ENABLED=false` now disables AI key/model/chat/vision RPCs with a clear failed-precondition response.
 - **Workspace stream backpressure.** WatchWorkspaces streams are now capped per user with a configurable gRPC stream limit.

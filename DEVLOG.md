@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: expose backend stream metrics
+
+- Added active gRPC stream gauge support to the in-process metrics collector.
+- Recorded `WatchWorkspaces` stream duration sums by status.
+- Added tests for active stream increments/decrements and Prometheus stream metric output.
+
 ## 2026-06-19 - feat: collect backend red metrics
 
 - Added an in-process metrics collector for HTTP routes and gRPC methods.

@@ -146,12 +146,21 @@ func (s *SyncService) DeleteWorkspaceRPC(ctx context.Context, req backendrpc.Del
 }
 
 func (s *SyncService) WatchWorkspacesRPC(req backendrpc.WatchWorkspacesRequest, stream grpc.ServerStream) error {
+	start := time.Now()
+	statusCode := codes.OK.String()
+	defer func() {
+		if s.metrics != nil {
+			s.metrics.ObserveStreamDuration(backendrpc.MethodSyncWatchWorkspaces, statusCode, time.Since(start))
+		}
+	}()
 	user, err := syncUser(stream.Context())
 	if err != nil {
+		statusCode = status.Code(err).String()
 		return err
 	}
 	ch, unsubscribe, err := s.subscribeWorkspaces(user.ID)
 	if err != nil {
+		statusCode = status.Code(err).String()
 		return err
 	}
 	defer unsubscribe()
@@ -167,6 +176,7 @@ func (s *SyncService) WatchWorkspacesRPC(req backendrpc.WatchWorkspacesRequest, 
 				continue
 			}
 			if err := stream.SendMsg(&resp); err != nil {
+				statusCode = status.Code(err).String()
 				return err
 			}
 		}

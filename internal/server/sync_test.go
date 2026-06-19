@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,12 +137,17 @@ func TestSyncServiceWatchFanoutIsUserScoped(t *testing.T) {
 }
 
 func TestSyncServiceWatchStreamLimit(t *testing.T) {
-	service := NewSyncServiceWithLimits(openTestStore(t), 1)
+	metrics := NewMetrics()
+	service := NewSyncServiceWithLimits(openTestStore(t), 1, metrics)
 	_, unsubscribe, err := service.subscribeWorkspaces("u1")
 	if err != nil {
 		t.Fatalf("first subscribe: %v", err)
 	}
-	defer unsubscribe()
+	var out bytes.Buffer
+	metrics.WritePrometheus(&out)
+	if !strings.Contains(out.String(), "cashflux_grpc_streams_active 1") {
+		t.Fatalf("active stream metric after subscribe = %q", out.String())
+	}
 	if _, _, err := service.subscribeWorkspaces("u1"); status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("second subscribe = %v, want resource exhausted", err)
 	}
@@ -148,6 +155,12 @@ func TestSyncServiceWatchStreamLimit(t *testing.T) {
 		t.Fatalf("other user subscribe: %v", err)
 	} else {
 		unsubscribeOther()
+	}
+	unsubscribe()
+	out.Reset()
+	metrics.WritePrometheus(&out)
+	if !strings.Contains(out.String(), "cashflux_grpc_streams_active 0") {
+		t.Fatalf("active stream metric after unsubscribe = %q", out.String())
 	}
 }
 
