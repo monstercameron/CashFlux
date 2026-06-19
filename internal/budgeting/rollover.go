@@ -2,7 +2,9 @@ package budgeting
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -17,6 +19,14 @@ import (
 // period's Status.Remaining and this period's limit to advance one period.
 func Carryover(prevRemaining, limit money.Money) (money.Money, error) {
 	return prevRemaining.Add(limit)
+}
+
+// PreviousPeriodRange returns the budget period immediately before the period
+// containing ref. It keeps rollover UI and tests on the same period math as
+// Evaluate/EnvelopeAvailable.
+func PreviousPeriodRange(period domain.Period, ref time.Time, weekStart time.Weekday) (start, end time.Time) {
+	curStart, _ := PeriodRange(period, ref, weekStart)
+	return PeriodRange(period, curStart.Add(-time.Nanosecond), weekStart)
 }
 
 // SinkingFundContribution returns the amount to set aside each period to reach

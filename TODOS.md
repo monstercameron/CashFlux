@@ -1023,11 +1023,13 @@ them to a txn).
 ### B26. Budget rollover / sinking funds — SPEC (from C38, 2026-06-18)
 **Want:** envelope **rollover** (unspent carries over) + **sinking funds** (save toward periodic large
 expenses).
-- [ ] **Verify first:** does the current budget engine roll unspent over? If not, add it.
-- [ ] **Pure `internal/budgeting`** extension (tested): per-budget `Rollover bool`; carry-forward math
+- [x] **Verify first:** does the current budget engine roll unspent over? If not, add it.
+- [x] **Pure `internal/budgeting`** extension (tested): per-budget `Rollover bool`; carry-forward math
       (prev remaining + this limit); sinking-fund accrual (target ÷ months). 
-- [ ] **State/UI:** per-budget rollover toggle; "carried over $X"; a sinking-fund type. Ties the
+- [~] **State/UI:** per-budget rollover toggle; "carried over $X"; a sinking-fund type. Ties the
       methodology selector (envelope/zero-based, D6).
+      Per-budget rollover now persists on `Budget.Rollover`, has add/edit checkboxes, and shows previous-period
+      carried amount in the Budgets list. Remaining: dedicated sinking-fund type/UI.
 - [ ] _Decision:_ sinking funds as a budget feature vs. reuse `goals`.
 
 ### B27. Investment / holdings tracking — SPEC (possibly out-of-scope, from C38, 2026-06-18)

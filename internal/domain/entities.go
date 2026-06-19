@@ -282,6 +282,7 @@ type Budget struct {
 	CategoryID string         `json:"categoryId"`
 	Period     Period         `json:"period"`
 	Limit      money.Money    `json:"limit"`
+	Rollover   bool           `json:"rollover,omitempty"`
 	Custom     map[string]any `json:"custom,omitempty"`
 }
 

@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add per-budget rollover controls (B26)
+
+- Added `domain.Budget.Rollover` so rollover is a persisted per-budget choice instead of only a global
+  envelope methodology concept.
+- Wired the Budgets add/edit forms with a rollover checkbox and show "carried from previous period" on
+  rollover-enabled rows, using the same category rollup and owner scoping as normal budget evaluation.
+- Added a tested `budgeting.PreviousPeriodRange` helper so rollover display shares the period math used by
+  budget evaluation. Sinking-fund math was already present; the remaining B26 work is the product decision
+  and UI for a dedicated sinking-fund type.
+
 ## 2026-06-19 — feat: backup-reminder cadence selector (B28, docs for f9ac390)
 
 - Code shipped in f9ac390 (code-only, docs deferred because the parallel session held CHANGELOG/DEVLOG

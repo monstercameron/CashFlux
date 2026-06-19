@@ -3,7 +3,9 @@ package budgeting
 import (
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -35,6 +37,25 @@ func TestCarryover(t *testing.T) {
 func TestCarryoverCurrencyMismatch(t *testing.T) {
 	if _, err := Carryover(money.New(100, "USD"), money.New(100, "EUR")); !errors.Is(err, money.ErrCurrencyMismatch) {
 		t.Errorf("err = %v, want ErrCurrencyMismatch", err)
+	}
+}
+
+func TestPreviousPeriodRange(t *testing.T) {
+	ref := mustDate("2026-06-15")
+
+	monthlyStart, monthlyEnd := PreviousPeriodRange(domain.PeriodMonthly, ref, time.Sunday)
+	if monthlyStart != mustDate("2026-05-01") || monthlyEnd != mustDate("2026-06-01") {
+		t.Fatalf("monthly previous = %s..%s", monthlyStart.Format("2006-01-02"), monthlyEnd.Format("2006-01-02"))
+	}
+
+	weeklyStart, weeklyEnd := PreviousPeriodRange(domain.PeriodWeekly, ref, time.Monday)
+	if weeklyStart != mustDate("2026-06-08") || weeklyEnd != mustDate("2026-06-15") {
+		t.Fatalf("weekly previous = %s..%s", weeklyStart.Format("2006-01-02"), weeklyEnd.Format("2006-01-02"))
+	}
+
+	quarterStart, quarterEnd := PreviousPeriodRange(domain.PeriodQuarterly, ref, time.Sunday)
+	if quarterStart != mustDate("2026-01-01") || quarterEnd != mustDate("2026-04-01") {
+		t.Fatalf("quarter previous = %s..%s", quarterStart.Format("2006-01-02"), quarterEnd.Format("2006-01-02"))
 	}
 }
 

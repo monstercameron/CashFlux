@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Per-budget rollover controls (B26).** Budgets now persist a `Rollover` flag, expose it in add/edit
+  forms, and show the previous period's carried amount on each rollover-enabled budget row.
 - **Backup-reminder cadence selector (B28).** Settings → Data now has a "Backup reminders" control
   (Monthly / Weekly / Off), persisted locally; the gentle "back up your data" nudge honors it. Fully completes
   the backup-reminder feature (shipped in `f9ac390`).

@@ -59,6 +59,7 @@ func Budgets() ui.Node {
 	catID := ui.UseState(defaultCat)
 	owner := ui.UseState(domain.GroupOwnerID)
 	period := ui.UseState(string(domain.PeriodMonthly))
+	rollover := ui.UseState(false)
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 	// The viewed period comes from the shared top-bar resolution control (C7) —
@@ -71,6 +72,7 @@ func Budgets() ui.Node {
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
 	onPeriod := ui.UseEvent(func(e ui.Event) { period.Set(e.GetValue()) })
+	onRollover := ui.UseEvent(func() { rollover.Set(!rollover.Get()) })
 
 	budgetDefs := app.CustomFieldDefsFor("budget")
 	onCustom := func(key, value string) {
@@ -95,7 +97,7 @@ func Budgets() ui.Node {
 		b := domain.Budget{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			CategoryID: catID.Get(), Period: domain.Period(period.Get()), Limit: money.New(amt, base),
-			Custom: customValuesToMap(budgetDefs, customVals.Get()),
+			Rollover: rollover.Get(), Custom: customValuesToMap(budgetDefs, customVals.Get()),
 		}
 		if err := app.PutBudget(b); err != nil {
 			errMsg.Set(err.Error())
@@ -103,6 +105,7 @@ func Budgets() ui.Node {
 		}
 		name.Set("")
 		limit.Set("")
+		rollover.Set(false)
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		bump()
@@ -116,7 +119,7 @@ func Budgets() ui.Node {
 		bump()
 	}
 
-	saveBudget := func(id, newName, limitStr, periodStr, ownerID string) {
+	saveBudget := func(id, newName, limitStr, periodStr, ownerID string, rollover bool) {
 		for _, b := range app.Budgets() {
 			if b.ID != id {
 				continue
@@ -139,6 +142,7 @@ func Budgets() ui.Node {
 			} else {
 				b.Scope = domain.ScopeIndividual
 			}
+			b.Rollover = rollover
 			if err := app.PutBudget(b); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -170,6 +174,10 @@ func Budgets() ui.Node {
 				Select(Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions),
 				Select(Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get())),
 				Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit)),
+				Label(Class("field flex items-center gap-2"),
+					Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
+					Span(uistate.T("budgets.rollover")),
+				),
 				MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
@@ -192,7 +200,9 @@ func Budgets() ui.Node {
 	// and a parent-category budget rolls up its sub-categories' spend (D5).
 	now := time.Now()
 	statuses := make([]budgeting.Status, 0, len(budgets))
-	paceOver := map[string]string{} // budgetID → formatted projected overspend (in-progress only)
+	paceOver := map[string]string{}  // budgetID → formatted projected overspend (in-progress only)
+	rollCarry := map[string]string{} // budgetID → formatted previous-period carry
+	rollNeg := map[string]bool{}     // budgetID → whether the previous-period carry is negative
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRange(b.Period, viewMonth, weekStart)
 		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
@@ -205,6 +215,13 @@ func Budgets() ui.Node {
 		// finished period or an already-over budget doesn't double up the message.
 		if p := budgeting.ProjectPace(st, bs, be, now); !p.OnTrack && p.Elapsed > 0 && p.Elapsed < 1 && st.State != budgeting.StateOver {
 			paceOver[b.ID] = fmtMoney(p.OverBy)
+		}
+		if b.Rollover {
+			ps, pe := budgeting.PreviousPeriodRange(b.Period, viewMonth, weekStart)
+			if prev, err := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); err == nil {
+				rollCarry[b.ID] = fmtMoney(prev.Remaining)
+				rollNeg[b.ID] = prev.Remaining.IsNegative()
+			}
 		}
 	}
 
@@ -257,7 +274,7 @@ func Budgets() ui.Node {
 		rows := MapKeyed(statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], OnDelete: deleteBudget, OnSave: saveBudget})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], OnDelete: deleteBudget, OnSave: saveBudget})
 			},
 		)
 		listBody = Div(rows)
@@ -282,14 +299,16 @@ func Budgets() ui.Node {
 }
 
 type budgetRowProps struct {
-	Status      budgeting.Status
-	Category    string
-	Members     []domain.Member
-	Envelope    string // formatted envelope balance (envelope methodology); "" hides the line
-	EnvelopeNeg bool   // envelope is overdrawn → danger tone
-	PaceOver    string // formatted projected overspend (pace, in-progress only); "" hides the line
-	OnDelete    func(string)
-	OnSave      func(id, name, limit, period, owner string)
+	Status        budgeting.Status
+	Category      string
+	Members       []domain.Member
+	Envelope      string // formatted envelope balance (envelope methodology); "" hides the line
+	EnvelopeNeg   bool   // envelope is overdrawn → danger tone
+	PaceOver      string // formatted projected overspend (pace, in-progress only); "" hides the line
+	RolloverCarry string // formatted previous-period carry for per-budget rollover; "" hides the line
+	RolloverNeg   bool   // previous-period carry is negative → danger tone
+	OnDelete      func(string)
+	OnSave        func(id, name, limit, period, owner string, rollover bool)
 }
 
 // periodOptions builds the budget-period <option>s with selected marked.
@@ -311,6 +330,13 @@ func ownerSelectOptions(members []domain.Member, selected string) []ui.Node {
 	return opts
 }
 
+func checkedAttr(checked bool) []any {
+	if !checked {
+		return nil
+	}
+	return []any{Attr("checked", "checked")}
+}
+
 // BudgetRow renders one budget's spend vs limit with a progress bar. Clicking
 // Edit swaps in an inline form for the name, limit, and period. It owns all its
 // hooks (declared unconditionally) so the edit toggle never disturbs hook order.
@@ -324,20 +350,23 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	limitS := ui.UseState(limitMajor)
 	periodS := ui.UseState(string(s.Budget.Period))
 	ownerS := ui.UseState(s.Budget.OwnerID)
+	rolloverS := ui.UseState(s.Budget.Rollover)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
 	onPeriod := ui.UseEvent(func(e ui.Event) { periodS.Set(e.GetValue()) })
 	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
+	onRollover := ui.UseEvent(func() { rolloverS.Set(!rolloverS.Get()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(s.Budget.Name)
 		limitS.Set(limitMajor)
 		periodS.Set(string(s.Budget.Period))
 		ownerS.Set(s.Budget.OwnerID)
+		rolloverS.Set(s.Budget.Rollover)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get(), ownerS.Get())
+		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get(), ownerS.Get(), rolloverS.Get())
 		editing.Set(false)
 	}))
 
@@ -360,6 +389,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit)),
 				Select(Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(periodS.Get())),
 				Select(Class("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get())),
+				Label(Class("field flex items-center gap-2"),
+					Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
+					Span(uistate.T("budgets.rollover")),
+				),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
@@ -410,6 +443,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	if props.PaceOver != "" {
 		paceLine = Span(Class("budget-sub text-down"), uistate.T("budgets.paceOver", props.PaceOver))
 	}
+
+	var rolloverLine ui.Node = Fragment()
+	if props.RolloverCarry != "" {
+		cls := "budget-sub font-display"
+		if props.RolloverNeg {
+			cls += " text-down"
+		}
+		rolloverLine = Span(Class(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
+	}
 	return Div(Class("budget"),
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), title),
@@ -420,6 +462,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Div(Class("bar"), Div(Class(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 		Span(Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
 		paceLine,
+		rolloverLine,
 		envLine,
 	)
 }
