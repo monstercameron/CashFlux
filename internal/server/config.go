@@ -51,6 +51,7 @@ type Config struct {
 	HTTPReadTimeout                   time.Duration
 	HTTPWriteTimeout                  time.Duration
 	HTTPMaxInFlight                   int
+	HTTPRateLimitPerMinute            int
 	LogFormat                         string
 	LogLevel                          string
 	Logger                            *slog.Logger
@@ -98,6 +99,7 @@ func FromEnv() (Config, error) {
 	cfg.HTTPReadTimeout = envDuration("CASHFLUX_SERVER_HTTP_READ_TIMEOUT", 15*time.Second)
 	cfg.HTTPWriteTimeout = envDuration("CASHFLUX_SERVER_HTTP_WRITE_TIMEOUT", 60*time.Second)
 	cfg.HTTPMaxInFlight = int(envInt64("CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT", 256))
+	cfg.HTTPRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE", 0))
 	cfg.LogFormat = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_FORMAT", "text"))
 	cfg.LogLevel = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_LEVEL", "info"))
 	if cfg.AuthMode == "token" && cfg.Token == "" && cfg.TokenSHA256 == "" {
@@ -147,7 +149,7 @@ func (c Config) Validate() error {
 	if c.GRPCMaxStreamsPerUser < 0 {
 		return fmt.Errorf("server: grpc stream limits must be non-negative")
 	}
-	if c.HTTPReadTimeout < 0 || c.HTTPWriteTimeout < 0 || c.HTTPMaxInFlight < 0 {
+	if c.HTTPReadTimeout < 0 || c.HTTPWriteTimeout < 0 || c.HTTPMaxInFlight < 0 || c.HTTPRateLimitPerMinute < 0 {
 		return fmt.Errorf("server: http limits must be non-negative")
 	}
 	if c.GRPCIdleTimeout > 0 && c.GRPCKeepaliveInterval <= 0 {

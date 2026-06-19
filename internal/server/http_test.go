@@ -65,6 +65,11 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative http max in-flight accepted")
 	}
 	invalid = valid
+	invalid.HTTPRateLimitPerMinute = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative http rate limit accepted")
+	}
+	invalid = valid
 	invalid.TokenSHA256 = "not-a-digest"
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("bad token sha256 accepted")
@@ -96,12 +101,15 @@ func TestFromEnvLoadsHTTPLimits(t *testing.T) {
 	t.Setenv("CASHFLUX_SERVER_HTTP_READ_TIMEOUT", "5s")
 	t.Setenv("CASHFLUX_SERVER_HTTP_WRITE_TIMEOUT", "7s")
 	t.Setenv("CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT", "17")
+	t.Setenv("CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE", "19")
 	cfg, err := FromEnv()
 	if err != nil {
 		t.Fatalf("FromEnv: %v", err)
 	}
-	if cfg.HTTPReadTimeout != 5*time.Second || cfg.HTTPWriteTimeout != 7*time.Second || cfg.HTTPMaxInFlight != 17 {
-		t.Fatalf("http limits = read %s write %s in-flight %d", cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPMaxInFlight)
+	if cfg.HTTPReadTimeout != 5*time.Second || cfg.HTTPWriteTimeout != 7*time.Second ||
+		cfg.HTTPMaxInFlight != 17 || cfg.HTTPRateLimitPerMinute != 19 {
+		t.Fatalf("http limits = read %s write %s in-flight %d rate %d",
+			cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPMaxInFlight, cfg.HTTPRateLimitPerMinute)
 	}
 }
 
@@ -318,6 +326,63 @@ func TestMaxInFlightMiddlewareRejectsWhenBusy(t *testing.T) {
 	close(release)
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("busy status = %d, want 503", rr.Code)
+	}
+}
+
+func TestRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
+	var hits int
+	h := rateLimitMiddleware(2, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/limited", nil)
+		req.RemoteAddr = "198.51.100.8:1234"
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("request %d status = %d, want 204", i+1, rr.Code)
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/limited", nil)
+	req.RemoteAddr = "198.51.100.8:4567"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("limited status = %d, want 429", rr.Code)
+	}
+	if got := rr.Header().Get("Retry-After"); got != "60" {
+		t.Fatalf("retry-after = %q, want 60", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/limited", nil)
+	req.RemoteAddr = "198.51.100.9:1234"
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("other client status = %d, want 204", rr.Code)
+	}
+	if hits != 3 {
+		t.Fatalf("handler hits = %d, want 3", hits)
+	}
+}
+
+func TestRateLimitMiddlewareHonorsForwardedClient(t *testing.T) {
+	h := rateLimitMiddleware(1, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	first := httptest.NewRequest(http.MethodGet, "/limited", nil)
+	first.RemoteAddr = "198.51.100.1:1234"
+	first.Header.Set("X-Forwarded-For", "203.0.113.7, 198.51.100.10")
+	h.ServeHTTP(httptest.NewRecorder(), first)
+
+	second := httptest.NewRequest(http.MethodGet, "/limited", nil)
+	second.RemoteAddr = "198.51.100.2:1234"
+	second.Header.Set("X-Forwarded-For", "203.0.113.7")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, second)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("forwarded client status = %d, want 429", rr.Code)
 	}
 }
 

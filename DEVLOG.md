@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: rate limit backend http clients
+
+- Added configurable fixed-window HTTP rate limiting per client IP.
+- Returned `429 Too Many Requests` with `Retry-After` when a client exceeds the minute window.
+- Covered env parsing, config validation, direct client IPs, and forwarded client IPs in server tests.
+
 ## 2026-06-19 - feat: add backend root status
 
 - Added an exact `/` backend status response for local browser checks.

@@ -4,8 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 )
 
 // VersionResponse is returned by /v1/version for client compatibility checks.
@@ -95,7 +98,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("PUT /v1/blobs/{hash}", handlePutBlob(cfg, store))
 	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
-	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, cfg.Metrics, mux))))
+	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, cfg.Metrics, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, mux)))))
 }
 
 func handleCORSPreflight(cfg Config) http.HandlerFunc {
@@ -146,6 +149,57 @@ func maxInFlightMiddleware(limit int, next http.Handler) http.Handler {
 			http.Error(w, "server is busy", http.StatusServiceUnavailable)
 		}
 	})
+}
+
+type rateLimitBucket struct {
+	windowStart time.Time
+	count       int
+}
+
+func rateLimitMiddleware(limit int, next http.Handler) http.Handler {
+	if limit <= 0 {
+		return next
+	}
+	var mu sync.Mutex
+	buckets := map[string]rateLimitBucket{}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := clientIP(r)
+		now := time.Now()
+		mu.Lock()
+		bucket := buckets[key]
+		if bucket.windowStart.IsZero() || now.Sub(bucket.windowStart) >= time.Minute {
+			bucket = rateLimitBucket{windowStart: now}
+		}
+		bucket.count++
+		allowed := bucket.count <= limit
+		buckets[key] = bucket
+		mu.Unlock()
+		if !allowed {
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func clientIP(r *http.Request) string {
+	for _, part := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
+		if ip := strings.TrimSpace(part); ip != "" {
+			return ip
+		}
+	}
+	if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
+		return ip
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil && host != "" {
+		return host
+	}
+	if remote := strings.TrimSpace(r.RemoteAddr); remote != "" {
+		return remote
+	}
+	return "unknown"
 }
 
 func newAIService(store *Store, cfg Config) *AIService {

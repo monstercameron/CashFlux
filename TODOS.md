@@ -4172,7 +4172,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
 
 #### Abuse / DoS
-- [ ] Per-user + per-IP rate limits + quotas; the bridge's connection/upgrade caps enabled.
+- [~] Per-user + per-IP rate limits + quotas; HTTP per-IP minute caps and the bridge's connection/upgrade
+      caps are enabled. Remaining: per-user HTTP quotas/rate limits.
 - [x] Global request timeouts/deadlines; max in-flight; slow-loris protection (read/write/idle timeouts).
 - [x] Backpressure on streams; cap concurrent streams per user.
 
