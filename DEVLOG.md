@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: expose sync service over grpc
+
+- Registered `cashflux.v1.SyncService` on the backend gRPC server behind `/grpc`, exposing workspace list, get,
+  put, and delete methods over the GoGRPCBridge tunnel.
+- Added JSON RPC request/response envelopes for workspace metadata while the `.proto`/generated-code atom remains
+  open, keeping the transport real without blocking on local `protoc` setup.
+- Made token-backed sync writes idempotently ensure the authenticated user row exists before inserting workspace
+  records, avoiding foreign-key failures for first-time token users.
+- Added a bridge integration test that opens a real websocket tunnel and verifies put/list/get, stale LWW reject,
+  delete tombstone behavior, and post-delete active listing.
+
 ## 2026-06-18 - feat: route backend ai over grpc bridge
 
 - Registered `cashflux.v1.AIService` on the backend gRPC server behind `/grpc`, with unary `SetKey`, `Chat`,

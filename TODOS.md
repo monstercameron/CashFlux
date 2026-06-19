@@ -4016,8 +4016,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 ### 7.10 Testing & phased rollout
 - [ ] Unit: storage, LWW, encryption, rate-limit, blob hashing + refcount/GC.
-- [ ] Integration: in-proc `grpc.Server` behind the bridge over a real WS; client↔server round-trips
-      (sync push/pull, `WatchWorkspaces`, AI stream, blob up/down).
+- [~] Integration: in-proc `grpc.Server` behind the bridge over a real WS; client↔server round-trips
+      now cover AI `SetKey`/`Chat` and SyncService workspace `Put`/`List`/`Get`/`Delete` unary calls.
+      Remaining: browser autosave push/pull, `WatchWorkspaces`, AI stream, blob up/down.
 - [ ] e2e: two-device sync (LWW + tombstone), offline→reconnect flush, OAuth login, artifact blob
       round-trip, AI proxy streaming with a real key.
 - [ ] Load/abuse: connection caps, oversized payloads, rate limits.

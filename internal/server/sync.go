@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -95,6 +96,9 @@ func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, cli
 	} else {
 		workspace.Version = 1
 	}
+	if err := s.ensureUser(user); err != nil {
+		return PutWorkspaceResult{}, err
+	}
 	if err := s.store.PutWorkspace(workspace); err != nil {
 		return PutWorkspaceResult{}, fmt.Errorf("server sync: put workspace: %w", err)
 	}
@@ -128,4 +132,22 @@ func syncUser(ctx context.Context) (AuthUser, error) {
 		return AuthUser{}, status.Error(codes.Unauthenticated, "authenticated user is required")
 	}
 	return user, nil
+}
+
+func (s *SyncService) ensureUser(user AuthUser) error {
+	if s == nil || s.store == nil {
+		return status.Error(codes.FailedPrecondition, "sync service store is not configured")
+	}
+	var existing string
+	err := s.store.db.QueryRow(`SELECT id FROM users WHERE id = ?`, user.ID).Scan(&existing)
+	if err == nil {
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return fmt.Errorf("server sync: find user: %w", err)
+	}
+	if err := s.store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID, CreatedAt: time.Now().UTC()}); err != nil {
+		return fmt.Errorf("server sync: upsert user: %w", err)
+	}
+	return nil
 }

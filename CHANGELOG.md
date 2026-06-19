@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SyncService over the gRPC bridge.** The backend now registers workspace `List`, `Get`, `Put`, and `Delete`
+  RPCs behind GoGRPCBridge `/grpc`, with a bridge integration test covering LWW accept/reject and tombstones.
 - **AI proxy over the gRPC bridge.** Settings key upload and AI proxy calls now use the GoGRPCBridge `/grpc`
   websocket tunnel with authenticated gRPC unary calls, backed by a bridge integration test for SetKey + Chat.
 - **Backend AI proxy CORS preflight.** The backend now answers local SPA preflight requests for

@@ -13,6 +13,11 @@ const (
 	MethodAISetKey = "/cashflux.v1.AIService/SetKey"
 	MethodAIChat   = "/cashflux.v1.AIService/Chat"
 	MethodAIVision = "/cashflux.v1.AIService/Vision"
+
+	MethodSyncListWorkspaces  = "/cashflux.v1.SyncService/ListWorkspaces"
+	MethodSyncGetWorkspace    = "/cashflux.v1.SyncService/GetWorkspace"
+	MethodSyncPutWorkspace    = "/cashflux.v1.SyncService/PutWorkspace"
+	MethodSyncDeleteWorkspace = "/cashflux.v1.SyncService/DeleteWorkspace"
 )
 
 type SetKeyRequest struct {
@@ -55,6 +60,57 @@ type VisionRequest struct {
 type Completion struct {
 	Content string `json:"content"`
 	Usage   Usage  `json:"usage"`
+}
+
+type Workspace struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Color     string `json:"color,omitempty"`
+	Sort      int    `json:"sort,omitempty"`
+	Deleted   bool   `json:"deleted,omitempty"`
+	Version   int64  `json:"version,omitempty"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	DeviceID  string `json:"deviceId,omitempty"`
+}
+
+type ListWorkspacesRequest struct {
+	IncludeDeleted bool `json:"includeDeleted,omitempty"`
+}
+
+type ListWorkspacesResponse struct {
+	Workspaces []Workspace `json:"workspaces"`
+}
+
+type GetWorkspaceRequest struct {
+	ID string `json:"id"`
+}
+
+type GetWorkspaceResponse struct {
+	Found     bool      `json:"found"`
+	Workspace Workspace `json:"workspace,omitempty"`
+}
+
+type PutWorkspaceRequest struct {
+	Workspace       Workspace `json:"workspace"`
+	ClientUpdatedAt string    `json:"clientUpdatedAt,omitempty"`
+	Force           bool      `json:"force,omitempty"`
+}
+
+type PutWorkspaceResponse struct {
+	Accepted  bool      `json:"accepted"`
+	Workspace Workspace `json:"workspace"`
+	Version   int64     `json:"version"`
+	UpdatedAt string    `json:"updatedAt"`
+}
+
+type DeleteWorkspaceRequest struct {
+	ID        string `json:"id"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	DeviceID  string `json:"deviceId,omitempty"`
+}
+
+type DeleteWorkspaceResponse struct {
+	Deleted bool `json:"deleted"`
 }
 
 type JSONCodec struct{}
