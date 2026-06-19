@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend audit log stream
+
+- Added a durable `audit_events` table with append-only event ids and a previous-hash/hash chain.
+- Recorded audit events for OAuth login/refresh/logout, AI key storage, sync workspace writes/deletes, and blob uploads without storing secrets or payload bytes.
+- Added an authenticated `/v1/audit` NDJSON endpoint plus repository, HTTP, and gRPC integration coverage.
+
 ## 2026-06-19 - feat: harden self-host runtime
 
 - Hardened the self-host Compose services with read-only root filesystems, explicit tmpfs mounts, dropped Linux capabilities, and `no-new-privileges`.

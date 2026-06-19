@@ -50,6 +50,47 @@ func TestRepositoryUserAndWorkspaceFlow(t *testing.T) {
 	}
 }
 
+func TestStoreAuditEventsAppendHashChain(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 2, 10, 0, 0, time.UTC)
+	first, err := s.AppendAuditEvent(AuditEvent{
+		Timestamp:  now,
+		ActorID:    "u1",
+		Action:     "auth.login",
+		TargetType: "user",
+		TargetID:   "u1",
+		IP:         "198.51.100.10",
+		RequestID:  "req-1",
+	})
+	if err != nil {
+		t.Fatalf("AppendAuditEvent first: %v", err)
+	}
+	second, err := s.AppendAuditEvent(AuditEvent{
+		Timestamp:  now.Add(time.Second),
+		ActorID:    "u1",
+		Action:     "workspace.delete",
+		TargetType: "workspace",
+		TargetID:   "w1",
+		RequestID:  "req-2",
+	})
+	if err != nil {
+		t.Fatalf("AppendAuditEvent second: %v", err)
+	}
+	if first.ID == 0 || second.ID <= first.ID {
+		t.Fatalf("audit ids not increasing: first=%d second=%d", first.ID, second.ID)
+	}
+	if first.Hash == "" || second.Hash == "" || second.PreviousHash != first.Hash {
+		t.Fatalf("audit hash chain first=%+v second=%+v", first, second)
+	}
+	events, err := s.ListAuditEvents(first.ID, 10)
+	if err != nil {
+		t.Fatalf("ListAuditEvents: %v", err)
+	}
+	if len(events) != 1 || events[0].ID != second.ID || events[0].Action != "workspace.delete" {
+		t.Fatalf("events after first = %+v", events)
+	}
+}
+
 func TestStoreRecordsDBMetrics(t *testing.T) {
 	s := openTestStore(t)
 	metrics := NewMetrics()

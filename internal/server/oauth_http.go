@@ -123,6 +123,7 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		auditFromRequest(r, store, AuthUser{ID: user.ID}, "auth.login", "user", user.ID)
 		access, refresh, err := issueSessionPair(cfg, user.ID, time.Now().UTC())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -141,7 +142,7 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 	}
 }
 
-func handleOAuthRefresh(cfg Config) http.HandlerFunc {
+func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
@@ -166,6 +167,7 @@ func handleOAuthRefresh(cfg Config) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		auditFromRequest(r, store, AuthUser{ID: userID}, "auth.token.refresh", "user", userID)
 		setRefreshCookie(w, refresh, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
 		csrf, err := setCSRFCookie(w, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
 		if err != nil {
@@ -177,7 +179,7 @@ func handleOAuthRefresh(cfg Config) http.HandlerFunc {
 	}
 }
 
-func handleOAuthLogout(cfg Config) http.HandlerFunc {
+func handleOAuthLogout(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
@@ -186,6 +188,11 @@ func handleOAuthLogout(cfg Config) http.HandlerFunc {
 		if !validCSRF(r) {
 			http.Error(w, "csrf token is invalid", http.StatusForbidden)
 			return
+		}
+		if cookie, err := r.Cookie(sessionRefreshCookie); err == nil {
+			if userID, ok := verifySessionToken(cfg, cookie.Value, "refresh", time.Now().UTC()); ok {
+				auditFromRequest(r, store, AuthUser{ID: userID}, "auth.logout", "user", userID)
+			}
 		}
 		setRefreshCookie(w, "", requestIsSecure(r), time.Unix(0, 0))
 		setExpiredCSRFCookie(w, requestIsSecure(r))

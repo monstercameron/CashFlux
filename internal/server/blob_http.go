@@ -63,6 +63,7 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		if cfg.Metrics != nil {
 			cfg.Metrics.ObserveBlobStored(blob.Size)
 		}
+		auditFromRequest(r, store, user, "blob.put", "blob", blob.Hash)
 		writeJSON(w, BlobResponse{Hash: blob.Hash, Size: blob.Size, Mime: blob.Mime})
 	}
 }

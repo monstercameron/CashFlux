@@ -4209,9 +4209,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] **Redaction is mandatory**: never log AI keys, tokens, OAuth secrets, cookies, full datasets, blob
       bytes, or PII. A `slog` middleware/`ReplaceAttr` that scrubs known-sensitive keys + a deny-list;
       log sizes/hashes/ids instead of contents. Add a test that asserts secrets never appear in output. ★
-- [ ] **Audit log** as a *separate*, append-only structured stream for security-relevant events (login,
+- [x] **Audit log** as a *separate*, append-only structured stream for security-relevant events (login,
       token issue/revoke, key set/replace, subscription change, account/data delete, admin actions),
       with actor, action, target, ip, timestamp; tamper-evident (hash chain) if feasible.
+      Backend audit events now persist in SQLite with append-only ids and previous-hash/hash chaining, and
+      `/v1/audit` streams authenticated NDJSON for recorded login/session, AI-key, sync, and blob actions.
 - [ ] Log sampling for hot paths; structured error logging with stack/cause (wrap with `%w`).
 - [ ] Ship logs to a sink (stdout → collector); retention + access policy; PII-minimized.
 

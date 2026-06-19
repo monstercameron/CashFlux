@@ -1,0 +1,76 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+func auditFromContext(ctx context.Context, store *Store, action, targetType, targetID string) {
+	if store == nil {
+		return
+	}
+	user, ok := AuthUserFromContext(ctx)
+	if !ok {
+		return
+	}
+	requestID, _ := RequestIDFromContext(ctx)
+	_, _ = store.AppendAuditEvent(AuditEvent{
+		Timestamp:  time.Now().UTC(),
+		ActorID:    user.ID,
+		Action:     action,
+		TargetType: targetType,
+		TargetID:   targetID,
+		RequestID:  requestID,
+	})
+}
+
+func auditFromRequest(r *http.Request, store *Store, user AuthUser, action, targetType, targetID string) {
+	if store == nil || strings.TrimSpace(user.ID) == "" {
+		return
+	}
+	requestID, _ := RequestIDFromContext(r.Context())
+	_, _ = store.AppendAuditEvent(AuditEvent{
+		Timestamp:  time.Now().UTC(),
+		ActorID:    user.ID,
+		Action:     action,
+		TargetType: targetType,
+		TargetID:   targetID,
+		IP:         clientIP(r),
+		RequestID:  requestID,
+	})
+}
+
+func handleAuditEvents(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+		if store == nil {
+			http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		if _, ok := httpBearerUser(r, cfg); !ok {
+			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			return
+		}
+		afterID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("afterId")), 10, 64)
+		limit, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("limit")))
+		events, err := store.ListAuditEvents(afterID, limit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		enc := json.NewEncoder(w)
+		for _, event := range events {
+			if err := enc.Encode(event); err != nil {
+				return
+			}
+		}
+	}
+}

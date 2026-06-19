@@ -65,6 +65,20 @@ type Usage struct {
 	Tokens   int64
 }
 
+// AuditEvent is a security-relevant, append-only backend event.
+type AuditEvent struct {
+	ID           int64     `json:"id"`
+	Timestamp    time.Time `json:"timestamp"`
+	ActorID      string    `json:"actorId"`
+	Action       string    `json:"action"`
+	TargetType   string    `json:"targetType"`
+	TargetID     string    `json:"targetId"`
+	IP           string    `json:"ip,omitempty"`
+	RequestID    string    `json:"requestId,omitempty"`
+	PreviousHash string    `json:"previousHash"`
+	Hash         string    `json:"hash"`
+}
+
 // UpsertUser stores an OAuth identity, keyed by provider+subject.
 func (s *Store) UpsertUser(u User) error {
 	if strings.TrimSpace(u.ID) == "" || strings.TrimSpace(u.Provider) == "" || strings.TrimSpace(u.Subject) == "" {
@@ -102,6 +116,117 @@ func (s *Store) GetUserByID(userID string) (User, bool, error) {
 		return User{}, false, fmt.Errorf("server store: parse user time: %w", err)
 	}
 	return u, true, nil
+}
+
+// AppendAuditEvent stores a security-relevant event and links it to the previous
+// event hash. Payloads intentionally carry ids and metadata, never secrets.
+func (s *Store) AppendAuditEvent(event AuditEvent) (AuditEvent, error) {
+	if strings.TrimSpace(event.ActorID) == "" || strings.TrimSpace(event.Action) == "" || strings.TrimSpace(event.TargetType) == "" {
+		return AuditEvent{}, fmt.Errorf("server store: audit actor, action, and target type are required")
+	}
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now().UTC()
+	}
+	event.ActorID = strings.TrimSpace(event.ActorID)
+	event.Action = strings.TrimSpace(event.Action)
+	event.TargetType = strings.TrimSpace(event.TargetType)
+	event.TargetID = strings.TrimSpace(event.TargetID)
+	event.IP = strings.TrimSpace(event.IP)
+	event.RequestID = strings.TrimSpace(event.RequestID)
+
+	defer s.observeDB("AppendAuditEvent", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return AuditEvent{}, fmt.Errorf("server store: begin audit event: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var previousHash string
+	err = tx.QueryRow(`SELECT hash FROM audit_events ORDER BY id DESC LIMIT 1`).Scan(&previousHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		previousHash = ""
+	} else if err != nil {
+		return AuditEvent{}, fmt.Errorf("server store: read previous audit hash: %w", err)
+	}
+	event.PreviousHash = previousHash
+	event.Hash = auditEventHash(event)
+	res, err := tx.Exec(`
+INSERT INTO audit_events(timestamp, actor_id, action, target_type, target_id, ip, request_id, previous_hash, hash)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		formatTime(event.Timestamp), event.ActorID, event.Action, event.TargetType, event.TargetID, event.IP, event.RequestID, event.PreviousHash, event.Hash)
+	if err != nil {
+		return AuditEvent{}, fmt.Errorf("server store: append audit event: %w", err)
+	}
+	event.ID, err = res.LastInsertId()
+	if err != nil {
+		return AuditEvent{}, fmt.Errorf("server store: audit event id: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return AuditEvent{}, fmt.Errorf("server store: commit audit event: %w", err)
+	}
+	return event, nil
+}
+
+// ListAuditEvents returns audit events after the given id, capped by limit.
+func (s *Store) ListAuditEvents(afterID int64, limit int) ([]AuditEvent, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	defer s.observeDB("ListAuditEvents", time.Now())
+	rows, err := s.db.Query(`
+SELECT id, timestamp, actor_id, action, target_type, target_id, ip, request_id, previous_hash, hash
+FROM audit_events
+WHERE id > ?
+ORDER BY id
+LIMIT ?`, afterID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("server store: list audit events: %w", err)
+	}
+	defer rows.Close()
+	var events []AuditEvent
+	for rows.Next() {
+		event, err := scanAuditEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: list audit rows: %w", err)
+	}
+	return events, nil
+}
+
+func auditEventHash(event AuditEvent) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		event.PreviousHash,
+		formatTime(event.Timestamp),
+		event.ActorID,
+		event.Action,
+		event.TargetType,
+		event.TargetID,
+		event.IP,
+		event.RequestID,
+	}, "\x00")))
+	return hex.EncodeToString(sum[:])
+}
+
+type auditScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanAuditEvent(row auditScanner) (AuditEvent, error) {
+	var event AuditEvent
+	var timestamp string
+	if err := row.Scan(&event.ID, &timestamp, &event.ActorID, &event.Action, &event.TargetType, &event.TargetID, &event.IP, &event.RequestID, &event.PreviousHash, &event.Hash); err != nil {
+		return AuditEvent{}, fmt.Errorf("server store: scan audit event: %w", err)
+	}
+	var err error
+	event.Timestamp, err = parseTime(timestamp)
+	if err != nil {
+		return AuditEvent{}, fmt.Errorf("server store: parse audit time: %w", err)
+	}
+	return event, nil
 }
 
 // PutWorkspace inserts or replaces a workspace registry row.

@@ -49,6 +49,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 				"/healthz",
 				"/readyz",
 				"/v1/version",
+				"/v1/audit",
 				"/grpc",
 			},
 		})
@@ -67,6 +68,8 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /metrics", handleMetrics(cfg))
+	mux.HandleFunc("OPTIONS /v1/audit", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/audit", handleAuditEvents(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
@@ -84,9 +87,9 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("GET /v1/auth/{provider}", handleOAuthStart(cfg))
 	mux.HandleFunc("GET /v1/auth/{provider}/callback", handleOAuthCallback(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/auth/refresh", handleCORSPreflight(cfg))
-	mux.HandleFunc("POST /v1/auth/refresh", handleOAuthRefresh(cfg))
+	mux.HandleFunc("POST /v1/auth/refresh", handleOAuthRefresh(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/auth/logout", handleCORSPreflight(cfg))
-	mux.HandleFunc("POST /v1/auth/logout", handleOAuthLogout(cfg))
+	mux.HandleFunc("POST /v1/auth/logout", handleOAuthLogout(cfg, store))
 	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/blobs/{hash}", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {

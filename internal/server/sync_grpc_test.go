@@ -111,6 +111,22 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	if len(list.Workspaces) != 0 {
 		t.Fatalf("active workspaces after delete = %+v", list)
 	}
+	events, err := store.ListAuditEvents(0, 10)
+	if err != nil {
+		t.Fatalf("ListAuditEvents: %v", err)
+	}
+	var sawPut, sawDelete bool
+	for _, event := range events {
+		if event.Action == "workspace.put" && event.TargetID == "w-grpc" && event.ActorID != "" && event.Hash != "" {
+			sawPut = true
+		}
+		if event.Action == "workspace.delete" && event.TargetID == "w-grpc" && event.PreviousHash != "" {
+			sawDelete = true
+		}
+	}
+	if !sawPut || !sawDelete {
+		t.Fatalf("sync audit events = %+v", events)
+	}
 
 	var metricsOut strings.Builder
 	metrics.WritePrometheus(&metricsOut)

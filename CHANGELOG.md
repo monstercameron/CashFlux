@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend audit log stream.** The backend now persists hash-chained audit events for security/data-change actions and exposes them as an authenticated NDJSON stream at `/v1/audit`.
 - **Least-privilege self-host runtime.** Docker Compose now runs the self-host stack with read-only root filesystems, dropped capabilities, hardened tmpfs mounts, and no-new-privileges.
 - **Backend OAuth ID-token claim validation.** Google OAuth callbacks now require an ID token and validate issuer, audience, and nonce claims before issuing a CashFlux session.
 - **Secrets scanning CI.** CI now runs gitleaks with a scoped fixture allowlist to catch committed secrets.

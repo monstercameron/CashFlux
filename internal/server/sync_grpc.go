@@ -125,6 +125,7 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 		if user, ok := AuthUserFromContext(ctx); ok {
 			s.publishWorkspace(user.ID, result.Workspace)
 		}
+		auditFromContext(ctx, s.store, "workspace.put", "workspace", result.Workspace.ID)
 		s.metrics.ObserveSyncPush("accepted")
 	}
 	return backendrpc.PutWorkspaceResponse{
@@ -150,6 +151,7 @@ func (s *SyncService) DeleteWorkspaceRPC(ctx context.Context, req backendrpc.Del
 		return backendrpc.DeleteWorkspaceResponse{}, err
 	}
 	if deleted {
+		auditFromContext(ctx, s.store, "workspace.delete", "workspace", req.ID)
 		s.metrics.ObserveSyncPush("deleted")
 	} else {
 		s.metrics.ObserveSyncPush("delete_missing")

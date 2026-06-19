@@ -62,6 +62,7 @@ func (s *AIService) SetKey(ctx context.Context, req backendrpc.SetKeyRequest) (b
 	if err := s.store.PutAIKey(user.ID, provider, key, s.masterKey); err != nil {
 		return backendrpc.SetKeyResponse{}, err
 	}
+	auditFromContext(ctx, s.store, "ai_key.set", "provider", provider)
 	return backendrpc.SetKeyResponse{Stored: true, Provider: provider}, nil
 }
 

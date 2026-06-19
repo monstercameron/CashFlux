@@ -325,6 +325,47 @@ func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestAuditEndpointStreamsNDJSON(t *testing.T) {
+	store := openTestStore(t)
+	event, err := store.AppendAuditEvent(AuditEvent{
+		Timestamp:  time.Date(2026, time.June, 19, 2, 15, 0, 0, time.UTC),
+		ActorID:    "token:abc",
+		Action:     "workspace.put",
+		TargetType: "workspace",
+		TargetID:   "w1",
+		RequestID:  "req-audit",
+	})
+	if err != nil {
+		t.Fatalf("AppendAuditEvent: %v", err)
+	}
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token", AppOrigin: "http://127.0.0.1:8080"}, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/audit", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("audit status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get("Content-Type") != "application/x-ndjson" {
+		t.Fatalf("audit content-type = %q", rr.Header().Get("Content-Type"))
+	}
+	var got AuditEvent
+	if err := json.NewDecoder(strings.NewReader(rr.Body.String())).Decode(&got); err != nil {
+		t.Fatalf("decode audit ndjson: %v", err)
+	}
+	if got.ID != event.ID || got.Action != "workspace.put" || got.Hash == "" {
+		t.Fatalf("audit event = %+v, want %+v", got, event)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/audit", nil)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized audit status = %d, want 401", rr.Code)
+	}
+}
+
 func TestMaxInFlightMiddlewareRejectsWhenBusy(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
