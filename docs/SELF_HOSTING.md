@@ -117,3 +117,5 @@ AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI
 ## Logging
 
 Set `CASHFLUX_SERVER_LOG_FORMAT=json` for structured production logs, or `text` for local development. `CASHFLUX_SERVER_LOG_LEVEL` accepts `debug`, `info`, `warn`, and `error`. Sensitive attributes such as tokens, keys, secrets, cookies, passwords, and authorization values are redacted before logs are written.
+
+Successful hot-path probes (`/livez`, `/healthz`, `/readyz`, and `/metrics`) are sampled with `CASHFLUX_SERVER_LOG_HOT_PATH_SAMPLE_RATE` to keep production logs useful under frequent health checks. Set it to `1` to log every probe.

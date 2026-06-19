@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 func TestNewLoggerRedactsSensitiveAttrs(t *testing.T) {
@@ -46,6 +48,11 @@ func TestConfigValidateRejectsBadLogConfig(t *testing.T) {
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("bad log level accepted")
 	}
+	cfg.LogLevel = "info"
+	cfg.LogHotPathSampleRate = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("negative log sample rate accepted")
+	}
 }
 
 func TestRequestLogMiddlewareWritesRequestFields(t *testing.T) {
@@ -63,6 +70,41 @@ func TestRequestLogMiddlewareWritesRequestFields(t *testing.T) {
 	for _, want := range []string{`"request_id":"http-1"`, `"method":"GET"`, `"route":"/readyz"`, `"status":202`, `"workspace_id":"w-http"`, `"device_id":"d-http"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("log missing %s in %s", want, out)
+		}
+	}
+}
+
+func TestRequestLogMiddlewareSamplesHotPaths(t *testing.T) {
+	var buf bytes.Buffer
+	logger := NewLogger(&buf, Config{LogFormat: "json", LogLevel: "info"})
+	h := requestIDMiddleware(requestLogMiddlewareSampled(logger, nil, 2, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/livez", nil)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+	}
+	out := buf.String()
+	if got := strings.Count(out, `"route":"/livez"`); got != 2 {
+		t.Fatalf("sampled livez log count = %d in %s", got, out)
+	}
+	if !strings.Contains(out, `"sample_rate":2`) {
+		t.Fatalf("sampled log missing sample_rate: %s", out)
+	}
+}
+
+func TestRequestLogMiddlewareAlwaysLogsServerErrors(t *testing.T) {
+	var buf bytes.Buffer
+	logger := NewLogger(&buf, Config{LogFormat: "json", LogLevel: "info"})
+	h := requestLogMiddlewareSampled(logger, nil, 100, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/livez", nil))
+	out := buf.String()
+	for _, want := range []string{`"level":"ERROR"`, `"msg":"http request failed"`, `"status":500`, `"cause":"Internal Server Error"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("error log missing %s in %s", want, out)
 		}
 	}
 }
@@ -90,5 +132,23 @@ func TestLoggingUnaryInterceptorWritesRPCFields(t *testing.T) {
 	metrics.WritePrometheus(&metricsOut)
 	if !strings.Contains(metricsOut.String(), `cashflux_grpc_requests_total{method="/cashflux.v1.SyncService/ListWorkspaces",status="OK"} 1`) {
 		t.Fatalf("metrics missing grpc count: %s", metricsOut.String())
+	}
+}
+
+func TestLoggingUnaryInterceptorWritesStructuredErrors(t *testing.T) {
+	var buf bytes.Buffer
+	logger := NewLogger(&buf, Config{LogFormat: "json", LogLevel: "info"})
+	interceptor := LoggingUnaryInterceptor(logger, nil)
+	_, err := interceptor(ContextWithRequestID(context.Background(), "rpc-err"), "req", &grpc.UnaryServerInfo{FullMethod: "/cashflux.v1.SyncService/DeleteWorkspace"}, func(ctx context.Context, req any) (any, error) {
+		return nil, status.Error(codes.PermissionDenied, "nope")
+	})
+	if err == nil {
+		t.Fatal("interceptor returned nil error")
+	}
+	out := buf.String()
+	for _, want := range []string{`"level":"ERROR"`, `"msg":"grpc request failed"`, `"status":"PermissionDenied"`, `"cause":"rpc error: code = PermissionDenied desc = nope"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("grpc error log missing %s in %s", want, out)
+		}
 	}
 }

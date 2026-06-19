@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend log sampling and structured errors.** Successful health/metrics probe logs are now sampled, while HTTP 5xx and non-OK gRPC calls emit structured error logs with status and cause fields.
 - **Backend audit log stream.** The backend now persists hash-chained audit events for security/data-change actions and exposes them as an authenticated NDJSON stream at `/v1/audit`.
 - **Least-privilege self-host runtime.** Docker Compose now runs the self-host stack with read-only root filesystems, dropped capabilities, hardened tmpfs mounts, and no-new-privileges.
 - **Backend OAuth ID-token claim validation.** Google OAuth callbacks now require an ID token and validate issuer, audience, and nonce claims before issuing a CashFlux session.

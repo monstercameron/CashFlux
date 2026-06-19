@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -106,9 +107,14 @@ func LogScopeFromContext(ctx context.Context) (LogScope, bool) {
 }
 
 func requestLogMiddleware(logger *slog.Logger, metrics *Metrics, next http.Handler) http.Handler {
+	return requestLogMiddlewareSampled(logger, metrics, 0, next)
+}
+
+func requestLogMiddlewareSampled(logger *slog.Logger, metrics *Metrics, hotPathSampleRate int, next http.Handler) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	var hotPathCount uint64
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
@@ -129,8 +135,38 @@ func requestLogMiddleware(logger *slog.Logger, metrics *Metrics, next http.Handl
 			args = append(args, "user_id", user.ID)
 		}
 		args = appendLogScopeArgs(ctx, args)
-		logger.Info("http request", args...)
+		if rec.status >= 500 {
+			args = append(args, "cause", http.StatusText(rec.status))
+			logger.Error("http request failed", args...)
+			return
+		}
+		if shouldSampleHTTPLog(r, rec.status, hotPathSampleRate, &hotPathCount) {
+			if hotPathSampleRate > 1 && isHotHTTPPath(r.Method, r.URL.Path) && rec.status < 400 {
+				args = append(args, "sample_rate", hotPathSampleRate)
+			}
+			logger.Info("http request", args...)
+		}
 	})
+}
+
+func shouldSampleHTTPLog(r *http.Request, status, sampleRate int, counter *uint64) bool {
+	if sampleRate <= 1 || status >= 400 || !isHotHTTPPath(r.Method, r.URL.Path) {
+		return true
+	}
+	n := atomic.AddUint64(counter, 1)
+	return n == 1 || n%uint64(sampleRate) == 0
+}
+
+func isHotHTTPPath(method, path string) bool {
+	if method != http.MethodGet {
+		return false
+	}
+	switch path {
+	case "/livez", "/healthz", "/readyz", "/metrics":
+		return true
+	default:
+		return false
+	}
 }
 
 type statusRecorder struct {
@@ -169,7 +205,7 @@ func LoggingUnaryInterceptor(logger *slog.Logger, metrics *Metrics) grpc.UnarySe
 		if metrics != nil {
 			metrics.ObserveGRPC(info.FullMethod, status.Code(err).String(), elapsed)
 		}
-		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), elapsed)
+		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), elapsed, err)
 		return resp, err
 	}
 }
@@ -186,12 +222,12 @@ func LoggingStreamInterceptor(logger *slog.Logger, metrics *Metrics) grpc.Stream
 		if metrics != nil {
 			metrics.ObserveGRPC(info.FullMethod, status.Code(err).String(), elapsed)
 		}
-		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), elapsed)
+		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), elapsed, err)
 		return err
 	}
 }
 
-func logRPC(ctx context.Context, logger *slog.Logger, method, code string, elapsed time.Duration) {
+func logRPC(ctx context.Context, logger *slog.Logger, method, code string, elapsed time.Duration, err error) {
 	id, _ := RequestIDFromContext(ctx)
 	args := []any{
 		"request_id", id,
@@ -203,6 +239,11 @@ func logRPC(ctx context.Context, logger *slog.Logger, method, code string, elaps
 		args = append(args, "user_id", user.ID)
 	}
 	args = appendLogScopeArgs(ctx, args)
+	if err != nil {
+		args = append(args, "cause", err.Error())
+		logger.Error("grpc request failed", args...)
+		return
+	}
 	logger.Info("grpc request", args...)
 }
 

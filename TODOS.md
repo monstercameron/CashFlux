@@ -4214,7 +4214,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       with actor, action, target, ip, timestamp; tamper-evident (hash chain) if feasible.
       Backend audit events now persist in SQLite with append-only ids and previous-hash/hash chaining, and
       `/v1/audit` streams authenticated NDJSON for recorded login/session, AI-key, sync, and blob actions.
-- [ ] Log sampling for hot paths; structured error logging with stack/cause (wrap with `%w`).
+- [x] Log sampling for hot paths; structured error logging with stack/cause (wrap with `%w`).
+      Successful health/metrics probes are sampled with `CASHFLUX_SERVER_LOG_HOT_PATH_SAMPLE_RATE`, and
+      HTTP 5xx/non-OK gRPC records now log structured status and cause fields at error level.
 - [ ] Ship logs to a sink (stdout → collector); retention + access policy; PII-minimized.
 
 #### Metrics

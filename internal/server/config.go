@@ -56,6 +56,7 @@ type Config struct {
 	HTTPUserRateLimitPerMinute        int
 	LogFormat                         string
 	LogLevel                          string
+	LogHotPathSampleRate              int
 	Logger                            *slog.Logger
 	Metrics                           *Metrics
 }
@@ -105,6 +106,7 @@ func FromEnv() (Config, error) {
 	cfg.HTTPUserRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE", 0))
 	cfg.LogFormat = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_FORMAT", "text"))
 	cfg.LogLevel = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_LEVEL", "info"))
+	cfg.LogHotPathSampleRate = int(envInt64("CASHFLUX_SERVER_LOG_HOT_PATH_SAMPLE_RATE", 100))
 	if cfg.AuthMode == "token" && cfg.Token == "" && cfg.TokenSHA256 == "" {
 		token, err := randomURLToken(32)
 		if err != nil {
@@ -155,6 +157,9 @@ func (c Config) Validate() error {
 	if c.HTTPReadTimeout < 0 || c.HTTPWriteTimeout < 0 || c.HTTPMaxInFlight < 0 ||
 		c.HTTPRateLimitPerMinute < 0 || c.HTTPUserRateLimitPerMinute < 0 {
 		return fmt.Errorf("server: http limits must be non-negative")
+	}
+	if c.LogHotPathSampleRate < 0 {
+		return fmt.Errorf("server: log hot path sample rate must be non-negative")
 	}
 	if c.GRPCIdleTimeout > 0 && c.GRPCKeepaliveInterval <= 0 {
 		return fmt.Errorf("server: grpc keepalive interval is required when idle timeout is set")

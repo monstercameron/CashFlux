@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: sample backend hot path logs
+
+- Added configurable sampling for successful `/livez`, `/healthz`, `/readyz`, and `/metrics` logs via `CASHFLUX_SERVER_LOG_HOT_PATH_SAMPLE_RATE`.
+- Switched HTTP 5xx and non-OK gRPC request records to structured error logs with status and cause fields.
+- Documented the sampling knob and covered sampling/error log behavior with server logging tests.
+
 ## 2026-06-19 - feat: add backend audit log stream
 
 - Added a durable `audit_events` table with append-only event ids and a previous-hash/hash chain.
