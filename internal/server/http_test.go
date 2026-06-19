@@ -39,6 +39,11 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative blob max bytes accepted")
 	}
 	invalid = valid
+	invalid.TokenSHA256 = "not-a-digest"
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("bad token sha256 accepted")
+	}
+	invalid = valid
 	invalid.GRPCKeepaliveInterval = 30
 	invalid.GRPCIdleTimeout = 30
 	if err := invalid.Validate(); err == nil {
@@ -79,6 +84,20 @@ func TestFromEnvLoadsOAuthProviders(t *testing.T) {
 	}
 	if cfg.OAuthProviders["google"].ClientSecret != "google-secret" {
 		t.Fatalf("google provider = %+v", cfg.OAuthProviders["google"])
+	}
+}
+
+func TestFromEnvGeneratesTokenModeToken(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_AUTH_MODE", "token")
+	t.Setenv("CASHFLUX_SERVER_TOKEN", "")
+	t.Setenv("CASHFLUX_SERVER_TOKEN_SHA256", "")
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if !cfg.GeneratedToken || len(cfg.Token) < 32 || cfg.TokenForDisplay() != cfg.Token {
+		t.Fatalf("generated token config = %+v", cfg)
 	}
 }
 

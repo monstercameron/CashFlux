@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"testing"
@@ -70,6 +72,18 @@ func TestAuthUnaryInterceptorRejectsInvalidToken(t *testing.T) {
 	})
 	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("status = %v, want unauthenticated", status.Code(err))
+	}
+}
+
+func TestAuthUserForTokenAcceptsSHA256Hash(t *testing.T) {
+	sum := sha256.Sum256([]byte("self-host-token"))
+	cfg := Config{AuthMode: "token", TokenSHA256: hex.EncodeToString(sum[:])}
+	user, ok := authUserForToken("self-host-token", cfg)
+	if !ok || user.ID == "" || user.Token != "self-host-token" {
+		t.Fatalf("hashed token auth = %+v/%v", user, ok)
+	}
+	if _, ok := authUserForToken("wrong", cfg); ok {
+		t.Fatal("wrong token accepted against hash")
 	}
 }
 

@@ -19,6 +19,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if token := cfg.TokenForDisplay(); token != "" {
+		log.Printf("generated self-host access token: %s", token)
+		log.Print("set CASHFLUX_SERVER_TOKEN_SHA256 to the sha256 of this token, or CASHFLUX_SERVER_TOKEN for local development, to keep it stable across restarts")
+	}
 	store, err := server.OpenStore(filepath.Join(cfg.DataDir, "cashflux-server.db"))
 	if err != nil {
 		log.Fatal(err)

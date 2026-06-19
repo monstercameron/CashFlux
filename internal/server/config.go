@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"sort"
@@ -26,6 +28,8 @@ type Config struct {
 	AppOrigin                         string
 	MasterKey                         string
 	Token                             string
+	TokenSHA256                       string
+	GeneratedToken                    bool
 	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
 	AIAllowedModels                   []string
@@ -58,6 +62,7 @@ func FromEnv() (Config, error) {
 	cfg.AppOrigin = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_APP_ORIGIN"))
 	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))
 	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
+	cfg.TokenSHA256 = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN_SHA256"))
 	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
 	cfg.AIAllowedModels = envCSV("CASHFLUX_SERVER_AI_MODELS")
@@ -71,6 +76,14 @@ func FromEnv() (Config, error) {
 	cfg.GRPCMaxActiveConnections = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_ACTIVE_CONNECTIONS", 128))
 	cfg.GRPCMaxConnectionsPerClient = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_CONNECTIONS_PER_CLIENT", 8))
 	cfg.GRPCMaxUpgradesPerClientPerMinute = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_UPGRADES_PER_CLIENT_PER_MINUTE", 60))
+	if cfg.AuthMode == "token" && cfg.Token == "" && cfg.TokenSHA256 == "" {
+		token, err := randomURLToken(32)
+		if err != nil {
+			return Config{}, fmt.Errorf("server: generate token: %w", err)
+		}
+		cfg.Token = token
+		cfg.GeneratedToken = true
+	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -93,6 +106,12 @@ func (c Config) Validate() error {
 	}
 	if c.BlobMaxBytes < 0 {
 		return fmt.Errorf("server: blob max bytes must be non-negative")
+	}
+	if c.TokenSHA256 != "" {
+		decoded, err := hex.DecodeString(c.TokenSHA256)
+		if err != nil || len(decoded) != sha256.Size {
+			return fmt.Errorf("server: token sha256 must be a hex-encoded sha256 digest")
+		}
 	}
 	if c.GRPCReadLimitBytes < 0 || c.GRPCKeepaliveInterval < 0 || c.GRPCIdleTimeout < 0 ||
 		c.GRPCMaxActiveConnections < 0 || c.GRPCMaxConnectionsPerClient < 0 || c.GRPCMaxUpgradesPerClientPerMinute < 0 {

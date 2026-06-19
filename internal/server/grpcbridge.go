@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"net/http"
 	"strings"
 
@@ -42,9 +44,28 @@ func grpcTokenValidator(cfg Config) TokenValidator {
 }
 
 func authUserForToken(token string, cfg Config) (AuthUser, bool) {
-	expected := strings.TrimSpace(cfg.Token)
-	if token == "" || expected == "" || subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
+	token = strings.TrimSpace(token)
+	if token == "" {
 		return AuthUser{}, false
 	}
-	return authUserFromToken(token), true
+	expected := strings.TrimSpace(cfg.Token)
+	if expected != "" && subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1 {
+		return authUserFromToken(token), true
+	}
+	expectedHash := strings.TrimSpace(cfg.TokenSHA256)
+	if expectedHash != "" {
+		sum := sha256.Sum256([]byte(token))
+		got := hex.EncodeToString(sum[:])
+		if subtle.ConstantTimeCompare([]byte(got), []byte(expectedHash)) == 1 {
+			return authUserFromToken(token), true
+		}
+	}
+	return AuthUser{}, false
+}
+
+func (c Config) TokenForDisplay() string {
+	if c.GeneratedToken {
+		return c.Token
+	}
+	return ""
 }

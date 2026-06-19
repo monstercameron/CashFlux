@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: harden self-host tokens
+
+- Added `CASHFLUX_SERVER_TOKEN_SHA256` so self-host deployments can store only a SHA-256 digest in config while
+  clients still authenticate with the bearer token.
+- Token comparison now supports both local-development plaintext tokens and digest-backed tokens using
+  constant-time comparisons.
+- In token auth mode, when neither token nor digest is configured, startup generates and prints a high-entropy
+  one-time token plus instructions to persist it via `CASHFLUX_SERVER_TOKEN_SHA256`.
+- Covered digest validation, generated-token config, and hashed bearer authentication in server tests.
+
 ## 2026-06-18 - feat: start oauth login
 
 - Added `GET /v1/auth/{provider}` for configured Google/GitHub providers.

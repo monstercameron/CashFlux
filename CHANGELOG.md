@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Self-host token hardening.** Token mode now accepts `CASHFLUX_SERVER_TOKEN_SHA256`,
+  compares bearer tokens by digest, and generates/prints a high-entropy token when no token is configured.
 - **OAuth start endpoint.** `GET /v1/auth/{provider}` now redirects configured Google/GitHub providers
   with PKCE S256 and a short-lived HttpOnly state/verifier cookie.
 - **OAuth provider discovery config.** The backend now loads Google/GitHub OAuth client settings from
