@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Reports CSV export (B21)
+
+- Added pure `reports.CategoryCSV(rows, name, amount)` — builds the spending-by-category report as CSV
+  bytes via `encoding/csv` (header + Category/Amount/Prior/Change%; blank change when no baseline).
+  Decoupled from formatting via `name`/`amount` callbacks; the amount callback renders plain decimals
+  (`money.FormatMinor`, no symbol/grouping) so the numbers are spreadsheet-friendly. Table-tested against
+  exact rows incl. the blank-change case.
+- Wired a "Download CSV" button into the Reports category card (shown when there are rows) that triggers
+  the existing `screens.downloadBytes` with `spending-by-category.csv`. New `reports.downloadCsv*` keys.
+  wasm build green, gofmt clean.
+
+## 2026-06-18 - feat: add self-host docker quickstart
+
+- Added a server Dockerfile and Docker Compose stack with Caddy TLS termination and a persistent data volume.
+- Added `deploy/cashflux-server.env.example` for token-mode self-hosting, billing disabled by default, optional OAuth providers, and server limits.
+- Added `docs/SELF_HOSTING.md` and linked it from the README with token setup, local dev, TLS, backup/restore, and upgrade notes.
+
 ## 2026-06-18 — feat: Reports top-payees report (B21)
 
 - Added pure `reports.TopPayees(txns, start, end, rates, n)`: groups expenses by description

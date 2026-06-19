@@ -143,6 +143,12 @@ func Reports() ui.Node {
 			H2(Class("card-title"), uistate.T("reports.byCategory")),
 			P(Class("muted"), narrative),
 			catBody,
+			If(len(rowNodes) > 0, Div(Class("flex flex-wrap gap-2 py-1"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes("spending-by-category.csv", "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
+				}), uistate.T("reports.downloadCsv")),
+			)),
 		),
 		If(len(payeeNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.topPayees")),
