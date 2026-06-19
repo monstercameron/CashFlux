@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: goal on-track / pace check (D12)
+
+- Added pure `goals.OnTrack(goal, monthly, from) (onTrack, known, err)` plus `OnTrack`/`PaceKnown` fields on
+  `Status`. Judges a dated goal against its target date at an assumed monthly contribution (reusing Project):
+  complete → on track; no target date or no usable projection → known=false. Evaluate derives the fields from
+  already-computed complete/projected/has (no extra Project call).
+- Did NOT surface on the Goals screen this pass: that screen computes progress directly (not via Evaluate) and
+  has no stored per-goal contribution rate to judge against — wiring it needs a contribution input / product
+  decision. The pure check is immediately useful to Allocate's goal-progress scorer and the Planning forecast.
+- Table tests: on-pace, behind, complete, undated (not judgeable), zero-contribution (not judgeable), plus the
+  Evaluate field wiring. gofmt/vet/native tests green, wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: proportional mode on the Split screen (B24)
 
 - Surfaced `split.ByWeights` on the Split screen behind a "Split by weight" toggle. Added `weighted` +

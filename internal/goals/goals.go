@@ -22,6 +22,8 @@ type Status struct {
 	Complete      bool
 	Projected     time.Time // projected completion date (valid only if HasProjection)
 	HasProjection bool
+	OnTrack       bool // projected to be met on/before the target date (valid only if PaceKnown)
+	PaceKnown     bool // whether OnTrack is meaningful (goal has a target date and a usable projection)
 }
 
 // Remaining returns the amount still needed to reach the target (never negative).
@@ -114,6 +116,33 @@ func MonthlyNeeded(goal domain.Goal, from time.Time) (money.Money, bool, error) 
 	return money.New(per, rem.Currency), true, nil
 }
 
+// OnTrack reports whether, at the given monthly contribution, the goal is
+// projected to be met on or before its target date. known is false when there's
+// nothing to judge — the goal has no target date, or no projection is possible
+// (a non-positive contribution on an unmet goal). An already-complete goal is on
+// track. It's the pace check that complements MonthlyNeeded ("how much to stay on
+// schedule") with "am I on schedule at this rate?".
+func OnTrack(goal domain.Goal, monthly money.Money, from time.Time) (onTrack, known bool, err error) {
+	if goal.TargetDate.IsZero() {
+		return false, false, nil
+	}
+	complete, err := IsComplete(goal)
+	if err != nil {
+		return false, false, err
+	}
+	if complete {
+		return true, true, nil
+	}
+	projected, ok, err := Project(goal, monthly, from)
+	if err != nil {
+		return false, false, err
+	}
+	if !ok {
+		return false, false, nil
+	}
+	return !projected.After(goal.TargetDate), true, nil
+}
+
 // Evaluate returns the full Status for a goal given an assumed monthly
 // contribution and a reference date.
 func Evaluate(goal domain.Goal, monthly money.Money, from time.Time) (Status, error) {
@@ -129,6 +158,17 @@ func Evaluate(goal domain.Goal, monthly money.Money, from time.Time) (Status, er
 	if err != nil {
 		return Status{}, err
 	}
+	// Derive pace from the values already computed (no second Project call):
+	// a dated goal is on track if complete, or projected on/before its target.
+	onTrack, paceKnown := false, false
+	if !goal.TargetDate.IsZero() {
+		switch {
+		case complete:
+			onTrack, paceKnown = true, true
+		case has:
+			onTrack, paceKnown = !projected.After(goal.TargetDate), true
+		}
+	}
 	return Status{
 		Goal:          goal,
 		Percent:       Percent(goal),
@@ -136,5 +176,7 @@ func Evaluate(goal domain.Goal, monthly money.Money, from time.Time) (Status, er
 		Complete:      complete,
 		Projected:     projected,
 		HasProjection: has,
+		OnTrack:       onTrack,
+		PaceKnown:     paceKnown,
 	}, nil
 }

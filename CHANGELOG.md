@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Goal on-track / pace check (D12).** New pure, table-tested `goals.OnTrack` (and `OnTrack`/`PaceKnown`
+  fields on `goals.Status`): at an assumed monthly contribution, reports whether a dated goal is projected to
+  be met on or before its target date — the "am I on schedule?" complement to `MonthlyNeeded`. An
+  already-complete goal is on track; undated goals and zero-contribution unmet goals report "not judgeable".
+
+### Added
 - **Proportional mode on the Split screen (B24).** The Split calculator now has a "Split by weight" toggle:
   switch it on and each included member gets a weight field (a share count or income), splitting the cost
   proportionally instead of evenly (a blank weight defaults to 1, an explicit 0 excludes). Settle-up follows
