@@ -50,6 +50,28 @@ func StaleBalanceCandidates(
 	return out
 }
 
+// DigestCandidates returns a periodic summary as a one-element slice, keyed by
+// the given period key (e.g. notify.WeekKey(now) or notify.MonthKey(now)) so the
+// digest surfaces at most once per period. title and body are the already-
+// rendered summary of that period — the caller computes the figures, keeping the
+// localization and number formatting in the UI layer. An empty title yields no
+// candidate (nothing worth summarizing). Returned as a slice so callers append
+// it uniformly alongside the other generators.
+func DigestCandidates(ruleID, periodKey, title, body string, now time.Time) []notify.Candidate {
+	if title == "" {
+		return nil
+	}
+	return []notify.Candidate{{
+		RuleID:        ruleID,
+		Event:         notify.EventDigest,
+		OccurrenceKey: "digest@" + periodKey,
+		At:            now,
+		Title:         title,
+		Body:          body,
+		Severity:      notify.SeverityInfo,
+	}}
+}
+
 // BillDueCandidates produces a notify.Candidate for each upcoming bill due
 // within withinDays (a non-positive withinDays falls back to a 7-day window).
 // Each occurrence is keyed by its specific due date, so a bill fires once per

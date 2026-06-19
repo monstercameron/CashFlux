@@ -14,8 +14,10 @@ and every commit updates this file under `Unreleased`.
   second generator, `BudgetCandidates`, turns budgets that are near or over their limit into candidates
   (over = critical), deduped per budget + state per month so a budget crossing from near to over still
   fires a fresh alert. A third, `BillDueCandidates`, turns bills due within a window (default 7 days) into
-  candidates keyed by due date (due today/tomorrow = critical). Three of the four recommended Phase-A
-  events now have generators feeding the catch-up engine.
+  candidates keyed by due date (due today/tomorrow = critical). A fourth, `DigestCandidates`, emits a
+  periodic summary keyed by period (week/month). **All four recommended Phase-A notification events now
+  have pure, tested generators feeding the catch-up engine** — the notification logic is complete; the
+  in-app surface follows.
 - **Bills: Download CSV (B22).** A "Download CSV" button on the Bills screen exports your upcoming bills
   (name, due date, days until, amount) as a CSV. Backed by a pure, table-tested `bills.CSV`.
 - **Subscriptions: Download CSV (B25).** A "Download CSV" button on the Subscriptions screen exports your

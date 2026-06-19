@@ -134,6 +134,29 @@ func TestBillDueCandidates(t *testing.T) {
 	}
 }
 
+func TestDigestCandidates(t *testing.T) {
+	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
+
+	got := DigestCandidates("rule-digest", notify.WeekKey(now), "Your week", "You spent $X.", now)
+	if len(got) != 1 {
+		t.Fatalf("got %d candidates, want 1: %+v", len(got), got)
+	}
+	c := got[0]
+	if c.Event != notify.EventDigest || c.Severity != notify.SeverityInfo {
+		t.Errorf("candidate = %+v, want digest + info", c)
+	}
+	if c.OccurrenceKey != "digest@"+notify.WeekKey(now) {
+		t.Errorf("key = %q", c.OccurrenceKey)
+	}
+	if c.Title != "Your week" || c.Body != "You spent $X." {
+		t.Errorf("title/body = %q / %q", c.Title, c.Body)
+	}
+	// Empty title → nothing to summarize.
+	if none := DigestCandidates("r", notify.MonthKey(now), "", "", now); none != nil {
+		t.Errorf("empty title got %+v, want nil", none)
+	}
+}
+
 func TestStaleBalanceCandidatesNoneStale(t *testing.T) {
 	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
 	accounts := []domain.Account{

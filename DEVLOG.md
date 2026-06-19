@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: notifyfeed — digest event evaluator; event set complete (B19, step 6)
+
+- Added `notifyfeed.DigestCandidates(ruleID, periodKey, title, body, now)`: a periodic summary keyed
+  `digest@<periodKey>` (caller passes `notify.WeekKey(now)` or `MonthKey(now)`), severity info. The
+  summary text is rendered by the caller (figures + i18n in the UI), and an empty title yields no
+  candidate. Returned as a one-element slice so it appends uniformly with the other generators.
+- That completes the four recommended Phase-A events — stale-balance, budget-threshold, bill-due, digest —
+  all as pure, table-tested generators. **The B19 notification logic is now complete end-to-end in pure
+  Go** (types, quiet-hours/idempotency, the CatchUp engine, and all four event generators). What remains
+  is purely the wasm surface: persist `lastSeenAt`, call CatchUp on open/visibility, and render the in-app
+  center + browser Notifications — collision-prone appstate/UI work I'm leaving for a focused pass.
+- SW cache rolls to v100. wasm build green, gofmt + go vet clean; full native suite green this iteration.
+
 ## 2026-06-18 — feat: notifyfeed — bill-due event evaluator (B19, step 5)
 
 - Added `notifyfeed.BillDueCandidates(ruleID, upcoming, withinDays, now, text)`: from `bills.Upcoming`
