@@ -91,6 +91,40 @@ func TestSelfHostEnvTemplateDocumentsServerLimits(t *testing.T) {
 	}
 }
 
+func TestSelfHostEnvTemplateDoesNotShipDefaultMasterKey(t *testing.T) {
+	data, err := os.ReadFile("../../deploy/cashflux-server.env.example")
+	if err != nil {
+		t.Fatalf("read env template: %v", err)
+	}
+	env := string(data)
+	if strings.Contains(env, "0123456789abcdef0123456789abcdef") {
+		t.Fatal("env template ships a default-looking master key")
+	}
+	if !strings.Contains(env, "CASHFLUX_SERVER_MASTER_KEY=replace-with-32-byte-secret-from-secret-manager") {
+		t.Fatal("env template does not direct operators to provide a secret-managed master key")
+	}
+}
+
+func TestSelfHostDocsDefineMasterKeyHandling(t *testing.T) {
+	data, err := os.ReadFile("../../docs/SELF_HOSTING.md")
+	if err != nil {
+		t.Fatalf("read self-host docs: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"CASHFLUX_SERVER_MASTER_KEY",
+		"secret manager",
+		"KMS-backed secret",
+		"exactly 16, 24, or 32 bytes",
+		"AES-GCM",
+		"re-encrypted under the new key",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("self-host docs missing master-key guidance %q", want)
+		}
+	}
+}
+
 func TestServerDockerfileRunsAsNonRoot(t *testing.T) {
 	data, err := os.ReadFile("../../Dockerfile.server")
 	if err != nil {

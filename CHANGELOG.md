@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend master-key handling docs.** The self-host env template no longer ships a default-looking master
+  key, and the runbook now directs operators to source `CASHFLUX_SERVER_MASTER_KEY` from a secret manager or
+  KMS-backed secret with the current maintenance-window rotation path.
 - **Backend release supply-chain helper.** Added an example server release script that builds with
   deterministic Go flags, writes checksums, generates a CycloneDX SBOM, and signs the binary/SBOM with
   `cosign sign-blob`.

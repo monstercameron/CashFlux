@@ -4180,8 +4180,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       request-shape rejection tests.
 - [x] Blob upload: verify bytes hash to the claimed `:hash`; cap size; sniff/allow-list MIME; never
       execute or serve as HTML (force download / safe content-type).
-- [ ] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,
+- [~] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,
       never in code or the DB; documented **key rotation** + re-encryption procedure.
+      AI keys already store encrypted AES-GCM ciphertext; self-host docs now require secret-manager/KMS-backed
+      master-key sourcing and document the current maintenance-window re-entry rotation path. Remaining:
+      automated re-encryption command.
 - [ ] Consider per-user dataset encryption-at-rest (envelope encryption) as a later privacy upgrade.
 - [~] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
       Blob paths now reject malformed hashes before disk access and stay rooted under the blob directory.
@@ -4287,7 +4290,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] **PCI scope minimized** by using Stripe Checkout/Elements (no card data touches the server).
 - [ ] **SOC 2 readiness checklist** (access control, change mgmt, monitoring, vendor mgmt, IR) — even if
       not certifying, build to the controls so enterprise/audit asks are answerable.
-- [ ] Encryption-in-transit + at-rest documented; key management policy; access logging to prod data.
+- [~] Encryption-in-transit + at-rest documented; key management policy; access logging to prod data.
+      Master-key source/length/rotation guidance is documented for AI-key encryption at rest. Remaining:
+      formal production data access logging policy.
 
 ### 7.18 Performance, scale & limits
 - [ ] Load + soak tests (sync push/pull, blob up/down, AI streaming, WatchWorkspaces fan-out); publish

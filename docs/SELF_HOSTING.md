@@ -127,6 +127,15 @@ Caddy terminates TLS and proxies websocket upgrades to the server. Keep ports `8
 
 Do not expose a default token or example master key in production. Generate real token material with `rotate-token`, set the SHA-256 digest in the env file, and store the plaintext token in a password manager.
 
+Set `CASHFLUX_SERVER_MASTER_KEY` from a secret manager, KMS-backed secret, or password manager entry that is
+available only to the deploy process. It must be exactly 16, 24, or 32 bytes; prefer 32 bytes. This key
+encrypts stored BYO AI keys with AES-GCM and must not be committed to the repository, copied into tickets, or
+stored beside backups.
+
+Master-key rotation currently requires a maintenance window: back up the server, stop the stack, change the
+secret, start the stack, and have users re-enter BYO AI keys so they are re-encrypted under the new key. Use
+`docs/OPERATIONS_RUNBOOK.md#rotate-master-key` for the step-by-step procedure.
+
 ## Container Runtime Hardening
 
 The Compose stack runs the CashFlux server as the non-root `cashflux` user with a read-only root filesystem, a writable `/data` volume, a small hardened `/tmp` tmpfs, all Linux capabilities dropped, and `no-new-privileges` enabled. Caddy also runs with a read-only root filesystem and drops all capabilities except `NET_BIND_SERVICE` so it can bind ports 80/443.

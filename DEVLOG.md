@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: document backend master-key handling
+
+- Removed the default-looking `CASHFLUX_SERVER_MASTER_KEY` value from the self-host env template and replaced
+  it with an explicit secret-manager placeholder.
+- Expanded self-host docs with the master-key source policy: secret manager/KMS/password-manager only,
+  exact AES key lengths, no ticket/backup/repo copies, and a maintenance-window rotation path where users
+  re-enter BYO AI keys for re-encryption under the new key.
+- Added deploy tests that reject the old sample key and pin the self-host master-key guidance.
+
 ## 2026-06-19 - feat: add server release supply-chain helper
 
 - Added `deploy/release-server.example.sh`, an operator-facing backend release helper that builds
