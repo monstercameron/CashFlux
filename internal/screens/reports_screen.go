@@ -48,7 +48,8 @@ func Reports() ui.Node {
 
 	// Cash-flow trend: net for each of the last trendBuckets periods of the
 	// viewed resolution, ending with the current one.
-	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
+	pr := uistate.UsePrefs().Get()
+	weekStart := pr.WeekStartWeekday()
 	startCur := period.Truncate(w.Res, w.From, weekStart)
 	bounds := make([]time.Time, 0, trendBuckets+1)
 	for k := 0; k <= trendBuckets; k++ {
@@ -131,6 +132,23 @@ func Reports() ui.Node {
 		))
 	}
 
+	// Biggest individual expenses this period.
+	largest, _ := reports.LargestExpenses(txns, cs, ce, rates, 8)
+	var largestNodes []ui.Node
+	for _, e := range largest {
+		desc := e.Desc
+		if desc == "" {
+			desc = nameOf(e.CategoryID)
+		}
+		largestNodes = append(largestNodes, Div(Class("row"),
+			Div(Class("row-main"),
+				Span(Class("row-desc"), desc),
+				Span(Class("row-meta"), pr.FormatDate(e.Date)),
+			),
+			Span(Class("budget-amount"), fmtMinor(e.Amount)),
+		))
+	}
+
 	net := money.New(flow.Net(), base)
 	return Div(
 		Div(Class("stat-grid"),
@@ -153,6 +171,10 @@ func Reports() ui.Node {
 		If(len(payeeNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.topPayees")),
 			Div(Class("rows"), payeeNodes),
+		)),
+		If(len(largestNodes) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("reports.biggestExpenses")),
+			Div(Class("rows"), largestNodes),
 		)),
 		If(len(netSeries) >= 2, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("dashboard.cashFlow")),

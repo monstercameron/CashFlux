@@ -769,6 +769,7 @@ var english = Catalog{
 	"reports.trendHint":              "Net cash flow over the last %d periods.",
 	"reports.byCategory":             "Spending by category",
 	"reports.topPayees":              "Top payees",
+	"reports.biggestExpenses":        "Biggest expenses",
 	"reports.noPayee":                "(no description)",
 	"reports.downloadCsv":            "Download CSV",
 	"reports.downloadCsvTitle":       "Download the spending-by-category breakdown as a CSV file",

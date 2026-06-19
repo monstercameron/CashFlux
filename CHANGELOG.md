@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reports: Biggest expenses (B21).** The Reports screen now lists the period's largest individual
+  purchases (description, date, amount), backed by a new pure, table-tested `reports.LargestExpenses`.
 - **Reminders on open — notifications are live (B19).** When you open CashFlux it now surfaces a gentle
   "while you were away" toast for anything that needs attention — accounts whose balance has gone stale,
   bills due within a week, and budgets that are near or over their limit — plus a once-a-week recap of

@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Reports largest-expenses report (B21)
+
+- Added pure `reports.LargestExpenses(txns, start, end, rates, n)`: the period's biggest individual
+  expenses, largest first (ties → most recent date, then description). Same conventions as the other
+  reports (IsExpense, dateutil.InRange, base-currency convert). Table-tested incl. range/income/transfer
+  exclusion and the n-limit + tie-break.
+- Wired a "Biggest expenses" card on the Reports screen (top 8): description (or category name when blank)
+  + date + amount. Bound a `pr := uistate.UsePrefs().Get()` for the date formatting (was only taking
+  `WeekStartWeekday()` before). Kept the work in the reports package + my reports_screen.go to avoid the
+  hot app/ layer (a concurrent push race this session confirmed the parallel agent is active there). New
+  `reports.biggestExpenses` key. wasm build green, gofmt + go vet clean.
+
 ## 2026-06-18 — feat: weekly digest reminder — all four events live (B19, step 10)
 
 - Added `weeklyDigestCandidates(app, now)`: summarizes the *previous* completed ISO-week's income vs
