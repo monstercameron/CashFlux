@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: rotate backend refresh sessions
+
+- Added persisted OAuth refresh sessions in SQLite schema v3: each refresh token carries a `jti` and family id,
+  and the database stores only the token hash plus expiry/used/revoked timestamps.
+- Refresh now consumes the current row, issues a new refresh token in the same family, and treats reuse,
+  revocation, expiry, or hash mismatch as invalid. Reuse of a known token revokes the entire family and audits
+  `auth.token.reuse`.
+- Logout revokes the presented refresh family before clearing cookies. Device revoke and sign-out-everywhere
+  remain a follow-up surface on top of the same family/session table.
+- Added repository coverage for consume/reuse/family revoke, migration coverage for `refresh_tokens`, and an
+  OAuth HTTP test that proves rotation, reuse rejection, and family revocation.
+
 ## 2026-06-19 — feat: wire backup reminders into notifications (B28)
 
 - Bridged the B28 backup cadence core into the B19 notification system. Added `notify.EventBackupDue` plus a
