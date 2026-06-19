@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -33,7 +34,8 @@ func Bills() ui.Node {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	pr := uistate.UsePrefs().Get()
 
-	upcoming := bills.Upcoming(app.Accounts(), time.Now())
+	now := time.Now()
+	upcoming := bills.Upcoming(app.Accounts(), now)
 
 	// remind creates a to-do dated to the bill's due date, so a "pay this" task
 	// surfaces in time (B22, via the existing to-do system).
@@ -99,7 +101,49 @@ func Bills() ui.Node {
 			H2(Class("card-title"), uistate.T("nav.bills")),
 			body,
 		),
+		If(len(upcoming) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("bills.calendar", monthLabel(now))),
+			billsCalendar(bills.MonthCalendar(upcoming, now.Year(), now.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
+		)),
 	)
+}
+
+// monthLabel renders a month/year heading like "June 2026".
+func monthLabel(t time.Time) string { return t.Format("January 2006") }
+
+// billsCalendar renders the month grid: weekday headers plus a cell per day,
+// dimming out-of-month days, outlining today, and dotting days with bills due.
+func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time) ui.Node {
+	todayKey := now.Format("2006-01-02")
+	args := []any{Class("cal-grid")}
+	for i := 0; i < 7; i++ {
+		wd := time.Weekday((int(weekStart) + i) % 7)
+		args = append(args, Div(Class("cal-head"), wd.String()[:3]))
+	}
+	for _, week := range grid {
+		for _, day := range week {
+			cls := "cal-cell"
+			if !day.InMonth {
+				cls += " out"
+			}
+			if day.Date.Format("2006-01-02") == todayKey {
+				cls += " today"
+			}
+			var dot ui.Node = Fragment()
+			if len(day.Bills) > 0 {
+				names := day.Bills[0].Name
+				for _, b := range day.Bills[1:] {
+					names += ", " + b.Name
+				}
+				dot = Span(Class("cal-dot"), Attr("title", names))
+			}
+			args = append(args, Div(Class(cls),
+				Span(Class("cal-day"), strconv.Itoa(day.Date.Day())),
+				dot,
+			))
+		}
+	}
+	return Div(args...)
 }
 
 // billRowData is one bill plus its display-ready amount and date.

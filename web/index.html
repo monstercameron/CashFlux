@@ -233,6 +233,14 @@
       /* Empty-state call-to-action block: centered message + "Add first…" button (§6.5). */
       .empty-cta { display:flex; flex-direction:column; align-items:center; gap:.85rem; padding:1.75rem 1rem; text-align:center; }
       .empty-cta .empty { margin:0; }
+      /* Bills month calendar (B22): a 7-column grid of day cells with due-day dots. */
+      .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:.5rem; }
+      .cal-head { text-align:center; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint); padding:2px 0; }
+      .cal-cell { min-height:46px; border:1px solid var(--border); border-radius:6px; padding:4px 5px; position:relative; }
+      .cal-cell.out { opacity:.35; }
+      .cal-cell.today { border-color:var(--accent); }
+      .cal-day { font-size:12px; color:var(--text-dim); }
+      .cal-dot { position:absolute; bottom:6px; left:6px; width:7px; height:7px; border-radius:50%; background:var(--danger,#d8716f); }
       .badge {
         display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
         text-transform: uppercase; padding: 0.2rem 0.55rem; border-radius: 999px;

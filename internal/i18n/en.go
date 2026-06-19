@@ -84,6 +84,7 @@ var english = Catalog{
 	"bills.reminderTitle": "Pay bill: %s",
 	"bills.reminderNote":  "Payment of %s due %s.",
 	"bills.reminderAdded": "Added a reminder to pay %s.",
+	"bills.calendar":      "%s calendar",
 	"subs.monthlyBurden":  "Monthly subscriptions",
 	"subs.annualBurden":   "Yearly subscriptions",
 	"subs.count":          "Active subscriptions",

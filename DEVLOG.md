@@ -135,7 +135,7 @@ problems and fixes, and what's next.
   through without `Access-Control-Allow-Origin`.
 - Expanded the shared CORS helper to expose `Content-Length`, `Content-Type`, and `ETag`, and to cache
   successful preflight checks for 10 minutes.
-- Verified the allowed-origin preflight path for both AI proxy routes with server tests and a live dev-server probe.
+- Verified the allowed-origin preflight path for both AI proxy routes with server tests.
 
 ## 2026-06-18 - feat: add backend readiness and graceful shutdown
 
@@ -195,8 +195,19 @@ problems and fixes, and what's next.
   callback/cancel shape as the direct OpenAI transport.
 - Insights, Allocate, and Documents now prefer the backend URL/token saved in Settings; direct browser OpenAI calls
   remain as the local-only fallback when no backend token is configured.
-- Verified pure proxy request builders, full native tests, wasm build, server build, and `gwc verify`. Final
-  gRPC/server-streaming client replacement remains a backend TODO.
+- Verified pure proxy request builders, full native tests, wasm build, and server build. Final gRPC/server-streaming
+  client replacement remains a backend TODO.
+
+## 2026-06-18 — feat: Bills month-calendar view (B22)
+
+- Rendered the calendar on the Bills screen from `bills.MonthCalendar(upcoming, year, month, weekStart)`:
+  a CSS `.cal-grid` (7 columns) with weekday headers, a cell per day (out-of-month dimmed, today outlined
+  via `.today`), and a `.cal-dot` on days with bills due (the dot's `title` lists the bill names). Built
+  the children as a `[]any` accumulator (`Div(args...)`) since the shorthand funcs take `...any` and a
+  `[]ui.Node` can't be spread directly.
+- Added `.cal-*` CSS to index.html and a `bills.calendar` ("June 2026 calendar") i18n key. Shown only when
+  there are upcoming bills. Completes B22's headline calendar view; mark-paid (State layer) remains the
+  one deferred piece. wasm build green, gofmt clean.
 
 ## 2026-06-18 — feat: bills month-calendar layout helper (B22)
 
