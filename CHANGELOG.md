@@ -44,6 +44,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Cloud pricing controls (7.11 Group B).** Added Settings controls for annual/monthly Cloud pricing,
+  Stripe Checkout redirects, and Stripe customer-portal management.
 - **Backend Stripe billing sessions (7.11).** Added authenticated billing endpoints for Stripe Checkout and
   customer-portal session creation using configured annual/monthly price ids.
 - **Backend Stripe webhook state updates (7.11).** Added a signed Stripe webhook endpoint that updates

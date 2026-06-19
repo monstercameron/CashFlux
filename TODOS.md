@@ -4120,8 +4120,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       error / not-signed-in; "last synced" tooltip; "Sync now"; opens Cloud settings.
 - [ ] **Contextual upgrade sheet** when a free user taps a Cloud-only action (non-blocking; benefits +
       price + Start trial + Maybe later). Never blocks local features.
-- [ ] **Pricing screen**: annual/monthly segmented toggle (annual-first), price, trial note, Subscribe
+- [x] **Pricing screen**: annual/monthly segmented toggle (annual-first), price, trial note, Subscribe
       → Stripe Checkout (redirect); trust line (cancel/export anytime, encrypted, BYO key).
+      Done: Settings now shows annual/monthly Cloud pricing with trial/trust copy, calls the backend
+      Checkout endpoint, and redirects to the returned Stripe URL.
 - [ ] **Account/subscription states** wired end-to-end: signed-out, free, trial (+days-left banner),
       active, past-due (grace banner), canceled → **graceful downgrade-to-local** (data stays).
 - [ ] **AI key (Cloud)**: move key entry into Cloud settings (encrypted server-side, shown as "Key set",

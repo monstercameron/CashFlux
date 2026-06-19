@@ -372,6 +372,7 @@ func globalSettingsForm() uic.Node {
 	pr := prefsAtom.Get().Normalize()
 	serverURL := uic.UseState(pr.ServerURL)
 	serverToken := uic.UseState(pr.ServerToken)
+	billingInterval := uic.UseState("annual")
 	onServerURL := uic.UseEvent(func(v string) {
 		serverURL.Set(v)
 		p := prefsAtom.Get()
@@ -384,6 +385,10 @@ func globalSettingsForm() uic.Node {
 		p.ServerToken = strings.TrimSpace(v)
 		savePrefs(p)
 	})
+	cloudPrice := uistate.T("settings.cloudPriceAnnual")
+	if billingInterval.Get() == "monthly" {
+		cloudPrice = uistate.T("settings.cloudPriceMonthly")
+	}
 	uploadKey := uic.UseEvent(func() {
 		uploadOpenAIKeyToBackend(serverURL.Get(), serverToken.Get(), aiKey.Get(), func() {
 			notify(uistate.T("settings.serverKeyStored"), false)
@@ -396,6 +401,16 @@ func globalSettingsForm() uic.Node {
 			notify(uistate.T("settings.serverTestOK", authMode), false)
 		}, func(msg string) {
 			notify(uistate.T("settings.serverTestFailed", strings.TrimSpace(msg)), true)
+		})
+	})
+	startCheckout := uic.UseEvent(func() {
+		startBillingCheckout(serverURL.Get(), serverToken.Get(), billingInterval.Get(), func(msg string) {
+			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
+		})
+	})
+	openPortal := uic.UseEvent(func() {
+		openBillingPortal(serverURL.Get(), serverToken.Get(), func(msg string) {
+			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
 		})
 	})
 
@@ -488,6 +503,24 @@ func globalSettingsForm() uic.Node {
 			Button(Class("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
 			A(Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
+		Div(Class("set-label"), uistate.T("settings.cloudPlanTitle")),
+		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudPlanNote")),
+		Div(Class("text-[18px] font-semibold mt-[0.45rem]"), cloudPrice),
+		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudTrialNote")),
+		ui.Segmented(ui.SegmentedProps{
+			Label: uistate.T("settings.cloudPlanBilling"),
+			Options: []ui.SegOption{
+				{Value: "annual", Label: uistate.T("settings.cloudPlanAnnual")},
+				{Value: "monthly", Label: uistate.T("settings.cloudPlanMonthly")},
+			},
+			Selected: billingInterval.Get(),
+			OnSelect: func(v string) { billingInterval.Set(v) },
+		}),
+		Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
+			Button(Class("btn btn-primary"), Type("button"), OnClick(startCheckout), uistate.T("settings.cloudSubscribe")),
+			Button(Class("btn"), Type("button"), OnClick(openPortal), uistate.T("settings.manageSub")),
+		),
+		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudTrustLine")),
 		Select(Class("set-input mt-[0.45rem]"), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
 			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
 			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),

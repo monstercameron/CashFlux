@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add cloud pricing controls (7.11)
+
+- Added a CashFlux Cloud block to the global Settings panel with annual/monthly pricing, the 14-day trial note,
+  and cancel/export/key-encryption trust copy.
+- Wired Subscribe to `POST /v1/billing/checkout` and Manage subscription to `POST /v1/billing/portal`; both use
+  the saved backend URL/token and redirect to the Stripe URL returned by the server.
+- Kept AI key upload and AI proxy calls on the existing GoGRPCBridge tunnel; billing redirects use the HTTP
+  endpoints intended for browser navigation.
+
 ## 2026-06-19 - feat: add stripe billing sessions (7.11)
 
 - Added authenticated `POST /v1/billing/checkout` and `POST /v1/billing/portal` endpoints.
