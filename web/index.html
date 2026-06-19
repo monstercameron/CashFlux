@@ -296,6 +296,16 @@
         min-width: 24px; min-height: 24px; display: inline-grid; place-items: center;
       }
       .btn-del { min-width: 32px; min-height: 32px; }
+      /* Tactile press feedback: interactive controls dip slightly on press so a
+         click feels responsive (§6.16). Gated behind reduced-motion. */
+      @media (prefers-reduced-motion: no-preference) {
+        .btn:active, .btn-primary:active, .nav-link:active, .data-btn:active,
+        .seg-btn:active, .menu-btn:active, .check:active, .btn-del:active,
+        .member-add:active, .member-chip:active, .set-btn:active, .rstep:active,
+        .toast-x:active, .nav:active, .nv:active {
+          transform: translateY(1px);
+        }
+      }
       .err { color: #fca5a5; margin: 0.6rem 0 0; font-size: 0.88rem; }
 
       /* Visually hidden but available to screen readers (e.g. an idle live region). */

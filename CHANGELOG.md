@@ -438,6 +438,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Tactile press feedback on interactive controls (§6.16).** Buttons, nav items, segmented controls, the
+  add/menu buttons, checkboxes, and chips now dip 1px on `:active`, so a click reads as a physical press
+  instead of a dead state. Gated behind `prefers-reduced-motion` to honor the app's motion preferences.
 - **The dashboard "Upcoming bills" widget now shares the Bills screen's logic (B22).** It derives its
   bills from the same `bills.Upcoming`, so the widget and the screen always show the same due dates
   (including correct month-end clamping) instead of two slightly different calculations.
