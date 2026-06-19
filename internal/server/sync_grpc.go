@@ -99,6 +99,11 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 			dataset = snapshot.Dataset
 		}
 	}
+	if result.Accepted {
+		if user, ok := AuthUserFromContext(ctx); ok {
+			s.publishWorkspace(user.ID, result.Workspace)
+		}
+	}
 	return backendrpc.PutWorkspaceResponse{
 		Accepted:  result.Accepted,
 		Workspace: rpcWorkspace(result.Workspace),

@@ -18,9 +18,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
+	"google.golang.org/grpc"
 )
 
 const syncMetaPrefix = "cashflux:sync-meta:"
+const syncDeviceIDKey = "cashflux:sync-device-id"
 
 type syncMeta struct {
 	UpdatedAt string `json:"updatedAt,omitempty"`
@@ -32,6 +34,7 @@ var syncPushMu sync.Mutex
 
 func startBackendSync() {
 	pullActiveWorkspaceFromBackend(true)
+	startBackendWatch()
 	cb := js.FuncOf(func(js.Value, []js.Value) any {
 		if js.Global().Get("document").Get("visibilityState").String() == "visible" {
 			pullActiveWorkspaceFromBackend(true)
@@ -71,10 +74,11 @@ func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 		var resp backendrpc.PutWorkspaceResponse
 		err = conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
 			Workspace: backendrpc.Workspace{
-				ID:    w.ID,
-				Name:  w.Name,
-				Color: w.Color,
-				Sort:  workspaceSort(r, w.ID),
+				ID:       w.ID,
+				Name:     w.Name,
+				Color:    w.Color,
+				Sort:     workspaceSort(r, w.ID),
+				DeviceID: syncDeviceID(),
 			},
 			Dataset:         dataset,
 			ClientUpdatedAt: updatedAt.UTC().Format(time.RFC3339Nano),
@@ -91,6 +95,56 @@ func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 		}
 		saveSyncMeta(w.ID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: hash})
 	}()
+}
+
+func startBackendWatch() {
+	pr := uistate.LoadPrefs().Normalize()
+	if strings.TrimSpace(pr.ServerURL) == "" || strings.TrimSpace(pr.ServerToken) == "" {
+		return
+	}
+	go func() {
+		for {
+			ctx := context.Background()
+			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+			if err != nil {
+				logSyncError("backend sync watch dial failed", err)
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodSyncWatchWorkspaces, backendrpc.JSONCallOptions()...)
+			if err == nil {
+				err = stream.SendMsg(&backendrpc.WatchWorkspacesRequest{IncludeDeleted: true})
+			}
+			if err == nil {
+				err = stream.CloseSend()
+			}
+			if err == nil {
+				readBackendWatch(stream)
+			} else {
+				logSyncError("backend sync watch failed", err)
+			}
+			_ = conn.Close()
+			time.Sleep(3 * time.Second)
+		}
+	}()
+}
+
+func readBackendWatch(stream grpc.ClientStream) {
+	for {
+		var event backendrpc.WatchWorkspacesResponse
+		if err := stream.RecvMsg(&event); err != nil {
+			logSyncError("backend sync watch closed", err)
+			return
+		}
+		if strings.TrimSpace(event.Workspace.ID) == "" || event.Workspace.DeviceID == syncDeviceID() {
+			continue
+		}
+		r := loadRegistry()
+		active, ok := r.Active()
+		if ok && active.ID == event.Workspace.ID {
+			pullActiveWorkspaceFromBackend(true)
+		}
+	}
 }
 
 func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
@@ -176,6 +230,25 @@ func saveSyncMeta(workspaceID string, meta syncMeta) {
 	if data, err := json.Marshal(meta); err == nil {
 		lsSet(syncMetaKey(workspaceID), string(data))
 	}
+}
+
+func syncDeviceID() string {
+	if id := strings.TrimSpace(lsGet(syncDeviceIDKey)); id != "" {
+		return id
+	}
+	id := ""
+	crypto := js.Global().Get("crypto")
+	if !crypto.IsUndefined() && !crypto.IsNull() {
+		randomUUID := crypto.Get("randomUUID")
+		if randomUUID.Type() == js.TypeFunction {
+			id = randomUUID.Invoke().String()
+		}
+	}
+	if strings.TrimSpace(id) == "" {
+		id = "browser-" + time.Now().UTC().Format("20060102150405.000000000")
+	}
+	lsSet(syncDeviceIDKey, id)
+	return id
 }
 
 func parseSyncMetaTime(meta syncMeta) (time.Time, bool) {

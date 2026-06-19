@@ -106,7 +106,6 @@ func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, cli
 	if err := s.store.PutWorkspace(workspace); err != nil {
 		return PutWorkspaceResult{}, fmt.Errorf("server sync: put workspace: %w", err)
 	}
-	s.publishWorkspace(user.ID, workspace)
 	return PutWorkspaceResult{
 		Accepted:  true,
 		Workspace: workspace,

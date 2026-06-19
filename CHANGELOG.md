@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Browser sync watch subscription.** The wasm app now opens `SyncService.WatchWorkspaces`
+  over the gRPC bridge, ignores same-device echoes, and pulls the active workspace when another device changes it.
 - **SyncService workspace watch stream.** The backend now exposes `WatchWorkspaces` over the
   GoGRPCBridge tunnel with per-user in-process fan-out for workspace put/delete events.
 - **Browser autosave sync over gRPC.** The wasm app now pushes changed active-workspace snapshots through

@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: subscribe browser to sync watches
+
+- The wasm sync bootstrap now opens a long-lived `WatchWorkspaces` stream through the GoGRPCBridge tunnel when
+  backend URL/token preferences are configured.
+- Added a persisted browser device id (`cashflux:sync-device-id`) and sends it on workspace pushes so the watch
+  loop can ignore same-device echoes.
+- Active-workspace watch events from other devices trigger the existing `GetWorkspace` pull path, reusing the
+  newest-by-`updatedAt` metadata guard before importing/reloading.
+- Moved server watch publication to after the RPC snapshot write so a watch-triggered pull can see the latest
+  dataset instead of racing the snapshot store.
+
 ## 2026-06-18 - feat: stream workspace sync watches
 
 - Added the `WatchWorkspaces` SyncService RPC to the JSON gRPC bridge contract and registered it as a
