@@ -12,10 +12,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -669,8 +671,8 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		),
 		Button(Class("btn"), Type("button"), Title(uistate.T("transactions.toggleClearedTitle")), OnClick(clr), clearedLabel),
 		Span(Class(amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
-		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uistate.T("action.edit"))),
+		If(!props.Txn.IsTransfer(), Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit")))),
 		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteTitle")), OnClick(del), "✕"),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
