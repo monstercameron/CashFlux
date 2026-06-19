@@ -13,9 +13,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -466,8 +468,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), title),
 			Span(Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
-			Button(Class("btn"), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
-			Button(Class("btn-del"), Type("button"), Title(uistate.T("budgets.deleteTitle")), OnClick(del), "✕"),
+			Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+			Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 		),
 		Div(Class("bar"), Div(Class(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 		Span(Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),

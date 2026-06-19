@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Budgets row actions have icons (C46).** Edit leads with a pencil and the delete button uses the `x` glyph
+  (with an aria-label) instead of a bare "✕".
 - **Transactions row actions have icons (C46).** Edit leads with a pencil and the delete button uses the `x`
   glyph (with an aria-label) instead of a bare "✕".
 - **Insights unpin button uses the x icon (C46).** The pinned-insight remove button now uses the `x` glyph
