@@ -4057,7 +4057,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       proto-drift check once codegen is pinned.
 
 ### 7.10 Testing & phased rollout
-- [ ] Unit: storage, LWW, encryption, rate-limit, blob hashing + refcount/GC.
+- [x] Unit: storage, LWW, encryption, rate-limit, blob hashing + refcount/GC.
+      Done: repository, sync, AI, blob, usage, and retention tests cover these units.
 - [~] Integration: in-proc `grpc.Server` behind the bridge over a real WS; client↔server round-trips
       now cover AI `SetKey`/`Chat` and SyncService workspace `Put`/`List`/`Get`/`Delete` unary calls.
       Remaining: browser autosave push/pull e2e, AI stream, blob up/down.

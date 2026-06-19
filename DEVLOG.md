@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: reconcile backend unit coverage (7.10)
+
+- Marked the 7.10 unit coverage item complete against existing focused tests for server storage, snapshot
+  history, LWW sync decisions, AI-key AES-GCM encrypt/decrypt/rotation, usage counters/rate limits, blob
+  hashing/linking/refcount behavior, blob GC, and retention.
+- Added the coverage summary to `docs/BACKEND_SECURITY.md` and pinned it through deploy tests.
+
 ## 2026-06-19 - docs: reconcile backend load abuse coverage (7.10)
 
 - Marked the 7.10 load/abuse item complete against existing server coverage: gRPC stream caps, bridge

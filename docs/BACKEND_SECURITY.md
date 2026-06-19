@@ -30,6 +30,8 @@ section 7.14:
 - Load/abuse tests cover oversized sync snapshots, oversized blobs, storage quota exhaustion, AI request-size
   rejection, per-user workspace stream caps, HTTP rate-limit configuration, and gRPC bridge connection limit
   configuration.
+- Unit tests cover server storage, LWW sync decisions, AES-GCM AI-key encrypt/decrypt/rotation, usage
+  counters/rate limits, content-addressed blob hashing, workspace blob links, and blob GC.
 - Transport and process controls are covered by TLS/self-host Caddy docs, gRPC websocket origin checks,
   secret redaction in logs, Gitleaks, `govulncheck`, and high-severity `gosec` in CI.
 
