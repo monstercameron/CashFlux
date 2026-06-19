@@ -17,7 +17,8 @@ problems and fixes, and what's next.
 - Documented the OAuth decision in `docs/BACKEND_PLAN.md`: the server uses explicit standard-library HTTP
   handlers for auth-code exchange, PKCE/state, userinfo, and ID-token claim validation instead of carrying an
   unused `golang.org/x/oauth2` module.
-- Added deploy coverage so the dependency decision is checked with the rest of the backend runtime docs.
+- Added deploy coverage so the dependency decision is checked with the rest of the backend runtime docs and
+  caught before an unused OAuth module is added back.
 
 ## 2026-06-19 - docs: reconcile backend rollout contract (7.10)
 

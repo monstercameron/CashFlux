@@ -460,6 +460,40 @@ func TestBackendToolchainPinnedForServerAndWASM(t *testing.T) {
 	}
 }
 
+func TestBackendDependencySetDocumentsOAuthChoice(t *testing.T) {
+	goMod, err := os.ReadFile("../../go.mod")
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+	mod := string(goMod)
+	for _, want := range []string{
+		"github.com/monstercameron/GoGRPCBridge",
+		"github.com/ncruces/go-sqlite3",
+		"google.golang.org/grpc",
+		"google.golang.org/protobuf",
+	} {
+		if !strings.Contains(mod, want) {
+			t.Fatalf("go.mod missing backend dependency %q", want)
+		}
+	}
+	if strings.Contains(mod, "golang.org/x/oauth2") {
+		t.Fatal("go.mod should not carry unused golang.org/x/oauth2; OAuth is implemented with stdlib HTTP")
+	}
+
+	plan, err := os.ReadFile("../../docs/BACKEND_PLAN.md")
+	if err != nil {
+		t.Fatalf("read backend plan: %v", err)
+	}
+	for _, want := range []string{
+		"OAuth uses explicit standard-library HTTP handlers",
+		"without carrying an unused `golang.org/x/oauth2` dependency",
+	} {
+		if !strings.Contains(string(plan), want) {
+			t.Fatalf("backend plan missing dependency decision %q", want)
+		}
+	}
+}
+
 func TestBackendPlanDocumentsAIOverGRPC(t *testing.T) {
 	data, err := os.ReadFile("../../docs/BACKEND_PLAN.md")
 	if err != nil {

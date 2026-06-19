@@ -3927,8 +3927,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 ### 7.0 Foundations & toolchain
 - [x] Decide layout: `cmd/cashflux-server/` in this module vs a sibling `server/` module. ★
-- [ ] Add deps: `GoGRPCBridge` (grpctunnel), `google.golang.org/grpc`, `google.golang.org/protobuf`,
+- [x] Add deps: `GoGRPCBridge` (grpctunnel), `google.golang.org/grpc`, `google.golang.org/protobuf`,
       `golang.org/x/oauth2`, `ncruces/go-sqlite3` (already used client-side).
+      Done: bridge/grpc/protobuf/sqlite deps are pinned. OAuth intentionally uses explicit stdlib HTTP
+      handlers for PKCE/state/token/userinfo flows, so `golang.org/x/oauth2` is not carried as an unused module.
 - [ ] protoc + `protoc-gen-go` + `protoc-gen-go-grpc` (or `buf`); add a codegen step (Makefile / `gwc`-style)
       and a CI **proto-drift check** (generated code matches `.proto`).
 - [x] Pin server Go toolchain (1.26) and confirm the client gRPC code builds for `js/wasm`.

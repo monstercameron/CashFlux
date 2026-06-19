@@ -118,6 +118,10 @@ restricted to the app origin; no secrets in logs; usage/audit logging.
 Go · `net/http` + chi · GoGRPCBridge · `google.golang.org/grpc` · `ncruces/go-sqlite3` (WAL) ·
 AES-GCM · blobs on disk (S3 adapter later). Ships as one binary + a data dir.
 
+Dependency note: OAuth uses explicit standard-library HTTP handlers for auth-code exchange, PKCE/state,
+userinfo, and ID-token claim validation without carrying an unused `golang.org/x/oauth2` dependency. Keep the
+dependency set small unless a provider flow needs the library.
+
 ## Deployment & ops
 - Single binary + SQLite file + `blobs/` dir behind TLS (Caddy) or a managed host
   (fly.io). Backups = WAL-checkpoint the SQLite file + copy `blobs/`.

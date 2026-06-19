@@ -29,7 +29,7 @@ and every commit updates this file under `Unreleased`.
 
 ### Changed
 - **Backend dependency reconciliation.** Documented the backend dependency set and the intentional stdlib OAuth
-  implementation, avoiding an unused `golang.org/x/oauth2` module.
+  implementation, avoiding an unused `golang.org/x/oauth2` module, with deploy coverage for the decision.
 - **Backend rollout contract reconciliation.** Tightened `docs/BACKEND_PLAN.md` so backend phases are explicitly
   independently shippable/reversible, preserve the local-first app fallback, and stay covered by deploy tests.
 - **Backend unit coverage reconciliation.** Documented that storage, LWW sync, AI-key encryption, usage
