@@ -932,11 +932,13 @@ behind the typed `chartspec` interface; pin + SW-cache D3 for offline); (2) narr
 (deterministic default + optional AI enhance); (3) shareable = **all four** — Print-to-PDF + standalone
 HTML + PNG image + CSV/JSON; (4)/(5) builder's discretion (recommend Spending + Net-worth history +
 Year-end/tax first; new **Reports** nav screen). Ready to build bottom-up.
-- [ ] **★ Export design note (D3 + shareable):** D3 is a live JS dep — for the **standalone HTML / PNG /
+- [x] **★ Export design note (D3 + shareable):** D3 is a live JS dep — for the **standalone HTML / PNG /
       PDF** exports, embed the **already-rendered static SVG** (snapshot the chart's SVG markup), NOT a
       live-D3 dependency, so shared files open anywhere offline with no JS. In-app reports use live D3;
       exports use the rendered SVG snapshot. Pin D3 + add it to the service-worker cache (B14) for the
       app's own offline use.
+      `docs/REPORT_EXPORTS.md` now records the SVG-snapshot export policy, privacy guardrail, CSV/JSON data
+      source rule, and D3 `7.9.0` service-worker cache requirement.
 Want: a reports engine — charts, descriptions, number-change percents, polished graphical style, **shareable**.
 
 **Concept:** a **Reports** section that turns the ledger/budgets/accounts into structured, visual reports

@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Report export design note (B21).** Added `docs/REPORT_EXPORTS.md` to pin the shareable-report policy:
+  visual exports embed already-rendered static SVG snapshots instead of live D3, CSV/JSON export typed data,
+  and D3 7.9.0 stays service-worker cached for the app runtime.
 - **Spending stats on Reports (B21).** New pure, table-tested `reports.SpendingStats` (count, total, mean, and
   median — median resists big-purchase skew) surfaced as a "%d purchases · average · median" line on Reports.
 - **Renewing-soon subscriptions (B25).** New pure, table-tested `subscriptions.UpcomingRenewals` (subs renewing

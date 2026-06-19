@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: add report export design note (B21)
+
+- Added `docs/REPORT_EXPORTS.md` for the D3/shareable report export policy: visual exports should embed
+  the already-rendered static SVG instead of live D3, while CSV/JSON exports come from typed report data.
+- Documented the privacy guardrail for financial report exports and pinned the runtime expectation that D3
+  7.9.0 remains service-worker cached for offline app sessions.
+- Added a deploy/documentation test that checks the note and the service-worker D3 cache entry.
+
 ## 2026-06-19 — feat: spending stats + renewing-soon (catch-up docs)
 
 - Batched docs for four commits shipped code-first while the parallel session held en.go/docs:

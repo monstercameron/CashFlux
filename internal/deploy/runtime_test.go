@@ -372,3 +372,33 @@ func TestBackendSecurityNotesDocumentProtectedRoutes(t *testing.T) {
 		}
 	}
 }
+
+func TestReportExportDesignDocumentsOfflineSnapshots(t *testing.T) {
+	data, err := os.ReadFile("../../docs/REPORT_EXPORTS.md")
+	if err != nil {
+		t.Fatalf("read report export design: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"snapshot the already-rendered static SVG markup",
+		"must not depend on live D3",
+		"PDF",
+		"standalone HTML",
+		"PNG",
+		"CSV",
+		"JSON",
+		"contains financial data",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("report export design missing %q", want)
+		}
+	}
+
+	sw, err := os.ReadFile("../../web/sw.js")
+	if err != nil {
+		t.Fatalf("read service worker: %v", err)
+	}
+	if !strings.Contains(string(sw), "https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js") {
+		t.Fatal("service worker does not pin/cache D3 7.9.0")
+	}
+}
