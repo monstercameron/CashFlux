@@ -17,6 +17,8 @@ and every commit updates this file under `Unreleased`.
   empty, so local dev, custom domains, and native tests are unaffected (the wildcard `*` is never prefixed).
 
 ### Changed
+- **Server deploy/migration procedure (7.16).** The operations runbook now places backup, migration dry-run,
+  forward rebuild, and Caddy stream-drain verification into the deploy sequence.
 - **Self-host TLS policy (7.14).** The bundled Caddy config now pins TLS 1.2/1.3 with modern AEAD cipher suites
   while preserving long-lived `/grpc` websocket streams.
 - **Self-host Docker quickstart status (7.12).** Confirmed the Compose quickstart, env template, Caddy TLS notes,
@@ -29,6 +31,8 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **Server migrations are tested idempotent (7.16).** Reopening an already migrated SQLite store now has
+  coverage for schema stability, single metadata row, and preserved user data.
 - **Billing checkout content type validation (7.14).** Checkout requests with an explicit non-JSON
   `Content-Type` now fail with `REQUEST_UNSUPPORTED_MEDIA` before any Stripe call.
 - **Stripe webhook body cap (7.14).** Oversized webhook payloads now return `REQUEST_TOO_LARGE` before Stripe

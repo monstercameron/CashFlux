@@ -19,14 +19,15 @@ This runbook covers recurring operator tasks for the optional CashFlux backend. 
 
    This must print the supported `schema_version` without changing the live database. If it fails, stop the deploy and keep the backup from step 2.
 
-4. Pull and rebuild:
+4. Pull and rebuild. The self-host proxy keeps `/grpc` websocket streams alive during reloads with
+   `stream_close_delay`, so prefer this forward deploy path over stopping both services first:
 
    ```sh
    git pull --ff-only
    docker compose -f docker-compose.selfhost.yml up -d --build
    ```
 
-5. Verify:
+5. Verify the new process before doing any cleanup:
 
    ```sh
    curl -fsS https://<domain>/status

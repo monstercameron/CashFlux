@@ -382,6 +382,7 @@ func TestOperationsRunbookDefinesRequiredProcedures(t *testing.T) {
 		"cashflux-server backup",
 		"cashflux-server migrate-check",
 		"cashflux-server rotate-token",
+		"stream_close_delay",
 		"/v1/audit",
 	} {
 		if !strings.Contains(runbook, want) {

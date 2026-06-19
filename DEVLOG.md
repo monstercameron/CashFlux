@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: cover server migration idempotency (7.16)
+
+- Added a store test that opens/migrates a DB, writes a user, closes it, then opens it again to rerun
+  migrations against the same file.
+- Verified the schema version stays current, `schema_meta` remains a single row, and existing user data survives.
+- Closed the deploy/migration TODO with the runbook path: backup, `migrate-check`, forward rebuild through Caddy's
+  stream-drain proxy, then `/status`/`/readyz`/metrics verification.
+
 ## 2026-06-19 - feat: add server migration dry-run (7.16)
 
 - Added `server.DryRunStoreMigrations`, which copies the SQLite database plus WAL/SHM sidecars to a temp

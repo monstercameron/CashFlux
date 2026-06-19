@@ -137,6 +137,42 @@ func TestDryRunStoreMigrationsHandlesMissingDB(t *testing.T) {
 	}
 }
 
+func TestOpenStoreMigrationsAreIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cashflux.db")
+	first, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore first: %v", err)
+	}
+	if err := first.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: time.Date(2026, time.June, 19, 19, 0, 0, 0, time.UTC)}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatalf("Close first: %v", err)
+	}
+	second, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore second: %v", err)
+	}
+	defer second.Close()
+	version, err := second.SchemaVersion()
+	if err != nil {
+		t.Fatalf("SchemaVersion: %v", err)
+	}
+	if version != CurrentServerSchemaVersion {
+		t.Fatalf("schema version = %d, want %d", version, CurrentServerSchemaVersion)
+	}
+	var schemaRows int
+	if err := second.db.QueryRow("SELECT COUNT(*) FROM schema_meta").Scan(&schemaRows); err != nil {
+		t.Fatalf("schema_meta count: %v", err)
+	}
+	if schemaRows != 1 {
+		t.Fatalf("schema_meta rows = %d, want 1", schemaRows)
+	}
+	if _, ok, err := second.GetUserByID("u1"); err != nil || !ok {
+		t.Fatalf("user after migration rerun = ok %v err %v", ok, err)
+	}
+}
+
 func TestStoreReady(t *testing.T) {
 	s, err := OpenStore(filepath.Join(t.TempDir(), "cashflux.db"))
 	if err != nil {
