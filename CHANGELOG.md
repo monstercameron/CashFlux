@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **First-run empty states show a friendly glyph (C46).** The CTA empty-state block (e.g. "Add your first
+  goal") now renders a muted icon above the message — defaulting to a neutral box, with an optional per-screen
+  `Icon` — so otherwise-blank panels feel intentional. Transient "no match" / "all done" lines stay text-only.
 - **AI actions share a sparkle glyph (C46).** "Explain my month", "Ask about your money", and "Read with AI"
   now lead with the same `sparkles` icon, so AI affordances read as one consistent family.
 - **Planning and Documents row actions have icons (C46) — completes the row-action icon pass.** The recurring/

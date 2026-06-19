@@ -3,6 +3,8 @@
 package screens
 
 import (
+	"github.com/monstercameron/CashFlux/internal/icon"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -16,6 +18,10 @@ type emptyCTAProps struct {
 	// FocusID is the id of the add form's first field; clicking the button moves
 	// the cursor there (see focusByID). Empty FocusID renders just the message.
 	FocusID string
+	// Icon is the muted glyph shown above a first-run empty state (CTA variant).
+	// Unset falls back to a neutral box glyph (C46). Ignored for the bare-message
+	// variant, where a glyph would clutter transient "no match" / "all done" lines.
+	Icon icon.Name
 }
 
 // EmptyStateCTA renders a friendly empty-state block: a short message plus a
@@ -29,7 +35,14 @@ func EmptyStateCTA(props emptyCTAProps) ui.Node {
 	if props.FocusID == "" {
 		return P(Class("empty"), props.Message)
 	}
+	// A muted glyph above the first-run message makes an otherwise-blank panel feel
+	// intentional and inviting (C46).
+	glyph := props.Icon
+	if !glyph.Valid() {
+		glyph = icon.Box
+	}
 	return Div(Class("empty-cta"),
+		uiw.Icon(glyph, Class("w-8 h-8 text-faint")),
 		P(Class("empty"), props.Message),
 		Button(Class("btn btn-primary"), Type("button"), OnClick(onClick), props.CTALabel),
 	)
