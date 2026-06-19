@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **AI actions share a sparkle glyph (C46).** "Explain my month", "Ask about your money", and "Read with AI"
+  now lead with the same `sparkles` icon, so AI affordances read as one consistent family.
 - **Planning and Documents row actions have icons (C46) — completes the row-action icon pass.** The recurring/
   plan delete buttons, the import-row remove + edit, and delete-import-history now use pencil/`x` glyphs (with
   aria-labels). With this, every per-row Edit/Delete button across the screens reads from the typed icon set.

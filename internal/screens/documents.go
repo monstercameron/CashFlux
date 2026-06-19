@@ -302,7 +302,7 @@ func Documents() ui.Node {
 			Div(Class("flex flex-wrap gap-2 items-center"),
 				Button(Class("btn"), Type("button"), OnClick(chooseImage), uistate.T("documents.chooseImage")),
 				If(imageURL.Get() != "", Span(Class("muted"), uistate.T("documents.imageReady"))),
-				Button(Class("btn btn-primary"), Type("button"), OnClick(readAI), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
+				Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), OnClick(readAI), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
 			),
 			If(aiErr.Get() != "", P(Class("err"), Attr("role", "alert"), aiErr.Get())),
 		),

@@ -205,7 +205,7 @@ func Insights() ui.Node {
 			Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
 		)
 	default:
-		action = Button(Class("btn btn-primary"), Type("button"), OnClick(explain), uistate.T("insights.explainTitle"))
+		action = Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), OnClick(explain), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.explainTitle")))
 	}
 
 	// Pinned insights, newest first.
@@ -238,7 +238,7 @@ func Insights() ui.Node {
 			// with a disabled preview + key hint when no key is set (C9).
 			If(key != "" || useBackendAI, Form(Class("form-grid"), OnSubmit(ask),
 				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("insights.askPlaceholder")), Value(question.Get()), OnInput(onQuestion)),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("insights.ask")),
+				Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("submit"), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.ask"))),
 			)),
 			If(key == "" && !useBackendAI, Div(
 				Input(Class("field field-wide"), Type("text"), Attr("disabled", "disabled"), Placeholder(uistate.T("insights.askPlaceholder"))),
