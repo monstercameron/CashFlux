@@ -107,19 +107,23 @@ func TestSyncServicePutWorkspaceRejectsCrossUserIDTakeover(t *testing.T) {
 }
 
 func TestSyncServiceWatchFanoutIsUserScoped(t *testing.T) {
-	service := NewSyncService(openTestStore(t))
+	metrics := NewMetrics()
+	service := NewSyncServiceWithLimits(openTestStore(t), 0, metrics)
 	u1, unsubscribe1, err := service.subscribeWorkspaces("u1")
 	if err != nil {
 		t.Fatalf("subscribe u1: %v", err)
 	}
-	defer unsubscribe1()
 	u2, unsubscribe2, err := service.subscribeWorkspaces("u2")
 	if err != nil {
 		t.Fatalf("subscribe u2: %v", err)
 	}
-	defer unsubscribe2()
 
 	service.publishWorkspace("u1", Workspace{ID: "w1", Name: "Home", Version: 2})
+	var out strings.Builder
+	metrics.WritePrometheus(&out)
+	if !strings.Contains(out.String(), `cashflux_queue_depth{queue="workspace_watch"} 1`) {
+		t.Fatalf("queue depth after publish = %q", out.String())
+	}
 
 	select {
 	case event := <-u1:
@@ -133,6 +137,13 @@ func TestSyncServiceWatchFanoutIsUserScoped(t *testing.T) {
 	case event := <-u2:
 		t.Fatalf("u2 watcher received cross-user event %+v", event)
 	default:
+	}
+	unsubscribe1()
+	unsubscribe2()
+	out.Reset()
+	metrics.WritePrometheus(&out)
+	if !strings.Contains(out.String(), `cashflux_queue_depth{queue="workspace_watch"} 0`) {
+		t.Fatalf("queue depth after unsubscribe = %q", out.String())
 	}
 }
 

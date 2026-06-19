@@ -163,6 +163,7 @@ func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchW
 	s.watches[userID][ch] = struct{}{}
 	if s.metrics != nil {
 		s.metrics.IncActiveStream()
+		s.updateWatchQueueDepthLocked()
 	}
 	return ch, func() {
 		s.watchMu.Lock()
@@ -176,6 +177,7 @@ func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchW
 		if s.metrics != nil {
 			s.metrics.DecActiveStream()
 		}
+		s.updateWatchQueueDepth()
 		close(ch)
 	}, nil
 }
@@ -190,6 +192,29 @@ func (s *SyncService) publishWorkspace(userID string, workspace Workspace) {
 		default:
 		}
 	}
+	s.updateWatchQueueDepthLocked()
+}
+
+func (s *SyncService) updateWatchQueueDepth() {
+	if s == nil || s.metrics == nil {
+		return
+	}
+	s.watchMu.Lock()
+	defer s.watchMu.Unlock()
+	s.updateWatchQueueDepthLocked()
+}
+
+func (s *SyncService) updateWatchQueueDepthLocked() {
+	if s == nil || s.metrics == nil {
+		return
+	}
+	var depth int64
+	for _, watchers := range s.watches {
+		for ch := range watchers {
+			depth += int64(len(ch))
+		}
+	}
+	s.metrics.SetQueueDepth("workspace_watch", depth)
 }
 
 func syncUser(ctx context.Context) (AuthUser, error) {

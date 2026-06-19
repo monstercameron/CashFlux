@@ -24,6 +24,7 @@ type Metrics struct {
 	syncPushes           map[string]int64
 	syncLWWRejects       int64
 	db                   map[string]metricValue
+	queueDepths          map[string]int64
 }
 
 type metricKey struct {
@@ -44,6 +45,7 @@ func NewMetrics() *Metrics {
 		syncPulls:       map[string]int64{},
 		syncPushes:      map[string]int64{},
 		db:              map[string]metricValue{},
+		queueDepths:     map[string]int64{},
 	}
 }
 
@@ -166,6 +168,21 @@ func (m *Metrics) ObserveDB(operation string, elapsed time.Duration) {
 	m.db[operation] = v
 }
 
+func (m *Metrics) SetQueueDepth(name string, depth int64) {
+	if m == nil {
+		return
+	}
+	if depth < 0 {
+		depth = 0
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.queueDepths == nil {
+		m.queueDepths = map[string]int64{}
+	}
+	m.queueDepths[name] = depth
+}
+
 func (m *Metrics) observe(dst map[metricKey]metricValue, key metricKey, elapsed time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -179,7 +196,7 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	if m == nil {
 		m = NewMetrics()
 	}
-	httpRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows := m.snapshot()
+	httpRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows, queueDepths := m.snapshot()
 	_, _ = io.WriteString(w, "# HELP cashflux_server_up Server process health.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_server_up gauge\n")
 	_, _ = io.WriteString(w, "cashflux_server_up 1\n")
@@ -246,6 +263,11 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	for _, row := range dbRows {
 		_, _ = fmt.Fprintf(w, "cashflux_db_query_duration_seconds_sum{operation=%q} %.6f\n", row.Name, row.Value.DurationSecs)
 	}
+	_, _ = io.WriteString(w, "# HELP cashflux_queue_depth Buffered backend queue depth by queue.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_queue_depth gauge\n")
+	for _, row := range queueDepths {
+		_, _ = fmt.Fprintf(w, "cashflux_queue_depth{queue=%q} %d\n", row.Name, row.Value)
+	}
 }
 
 type metricRow struct {
@@ -263,13 +285,13 @@ type namedMetricRow struct {
 	Value metricValue
 }
 
-func (m *Metrics) snapshot() ([]metricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow) {
+func (m *Metrics) snapshot() ([]metricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow, []labelMetricRow) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	httpRows := metricRows(m.http)
 	grpcRows := metricRows(m.grpc)
 	streamRows := metricRows(m.streamDurations)
-	return httpRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db)
+	return httpRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db), labelMetricRows(m.queueDepths)
 }
 
 func metricRows(src map[metricKey]metricValue) []metricRow {

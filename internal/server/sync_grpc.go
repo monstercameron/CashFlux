@@ -191,6 +191,7 @@ func (s *SyncService) WatchWorkspacesRPC(req backendrpc.WatchWorkspacesRequest, 
 				statusCode = status.Code(err).String()
 				return err
 			}
+			s.updateWatchQueueDepth()
 		}
 	}
 }

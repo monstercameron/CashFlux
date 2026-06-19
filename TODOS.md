@@ -4202,10 +4202,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Ship logs to a sink (stdout → collector); retention + access policy; PII-minimized.
 
 #### Metrics
-- [~] Prometheus/OpenTelemetry metrics: request rate/latency/errors per RPC + route (RED), active WS
+- [x] Prometheus/OpenTelemetry metrics: request rate/latency/errors per RPC + route (RED), active WS
       connections, stream durations, sync push/pull counts + conflict/LWW rejects, blob bytes
       stored/transferred, AI proxy tokens/requests per user, DB query latency, queue depths.
-      RED route/RPC counters, active stream gauges, stream duration sums, blob byte counters, AI proxy request/token counters, sync push/pull/LWW reject counters, and DB operation latency counters are exported; remaining: queue metrics.
+      RED route/RPC counters, active stream gauges, stream duration sums, blob byte counters, AI proxy request/token counters, sync push/pull/LWW reject counters, DB operation latency counters, and workspace-watch queue depth gauges are exported.
 - [ ] Business metrics (privacy-respecting): signups, trials, conversions, MRR (from billing webhooks).
 - [x] `/metrics` endpoint (auth-gated or internal-only).
 

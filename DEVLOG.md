@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: expose backend queue metrics
+
+- Added a backend queue depth gauge to the metrics collector.
+- Recorded the buffered `WatchWorkspaces` fanout queue depth on subscribe, publish, delivery, and unsubscribe.
+- Covered queued and drained workspace-watch depth in sync service tests.
+
 ## 2026-06-19 - feat: expose backend db metrics
 
 - Added store operation counters and duration sums to the backend metrics collector.
