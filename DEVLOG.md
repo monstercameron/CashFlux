@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: spending by member (B21)
+
+- Added pure `reports.SpendingByMember(txns, start, end, rates)` (mirrors SpendingByCategory: per-member
+  expense totals, base currency, largest first, transfers/income excluded, empty MemberID = unassigned).
+  Table tests: sort + exclusions, empty-member bucket, empty input.
+- Surfaced it on the Reports screen as a "Spending by member" card, shown only when more than one member/bucket
+  has spend (so a single-member household doesn't get a redundant card). Resolves names from app.Members(),
+  labels the empty id "(unassigned)". Added `reports.byMember`/`reports.noMember` i18n keys.
+- Shipped core + UI in one commit since the surfacing is small and cohesive. Restored CHANGELOG/DEVLOG from
+  HEAD first (both re-truncated to 0 bytes). gofmt clean, reports + i18n tests green, wasm build green.
+
 ## 2026-06-19 — feat: cash runway on the Reports screen (B21)
 
 - Surfaced `reports.EstimateRunway` on the Reports stat grid. Liquid balance = sum of `ledger.Balance` for

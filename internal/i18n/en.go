@@ -784,6 +784,8 @@ var english = Catalog{
 	"reports.byCategory":             "Spending by category",
 	"reports.topPayees":              "Top payees",
 	"reports.biggestExpenses":        "Biggest expenses",
+	"reports.byMember":               "Spending by member",
+	"reports.noMember":               "(unassigned)",
 	"reports.savingsTrend":           "Savings-rate trend",
 	"reports.runway":                 "Cash runway",
 	"reports.runwayMonths":           "%d months",

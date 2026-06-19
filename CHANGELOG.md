@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Spending by member (B21).** A new pure, table-tested `reports.SpendingByMember` totals each household
+  member's expenses for the period (largest first; transfers and income excluded), and the Reports screen
+  shows a "Spending by member" card whenever more than one member (or an unassigned bucket) has spend — the
+  household "who spent what?" view.
 - **Cash runway on the Reports screen (B21).** The Reports stat grid now shows a "Cash runway" figure —
   how many months your spendable cash (checking/debit/savings/cash accounts) would last at the average burn
   over the last six full months. Color-cued (under three months reads as a warning, six-plus as healthy) and

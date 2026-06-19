@@ -198,6 +198,24 @@ func Reports() ui.Node {
 		))
 	}
 
+	// Spending by member: the household "who spent what" view this period.
+	memberSpend, _ := reports.SpendingByMember(txns, cs, ce, rates)
+	memberName := make(map[string]string, len(app.Members()))
+	for _, m := range app.Members() {
+		memberName[m.ID] = m.Name
+	}
+	var memberNodes []ui.Node
+	for _, ms := range memberSpend {
+		name := memberName[ms.MemberID]
+		if name == "" {
+			name = uistate.T("reports.noMember")
+		}
+		memberNodes = append(memberNodes, Div(Class("row"),
+			Div(Class("row-main"), Span(Class("row-desc"), name)),
+			Span(Class("budget-amount"), fmtMinor(ms.Amount)),
+		))
+	}
+
 	net := money.New(flow.Net(), base)
 	return Div(
 		Div(Class("stat-grid"),
@@ -225,6 +243,10 @@ func Reports() ui.Node {
 		If(len(largestNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.biggestExpenses")),
 			Div(Class("rows"), largestNodes),
+		)),
+		If(len(memberSpend) > 1, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("reports.byMember")),
+			Div(Class("rows"), memberNodes),
 		)),
 		If(len(netSeries) >= 2, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("dashboard.cashFlow")),
