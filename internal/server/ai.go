@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"sort"
@@ -21,6 +22,19 @@ import (
 const defaultOpenAIBaseURL = "https://api.openai.com/v1"
 
 var defaultAIModels = []string{"gpt-4o-mini", "gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o", "gpt-4.1", "o4-mini"}
+
+const (
+	maxAIModelLength          = 128
+	maxAIChatMessages         = 64
+	maxAIMessageContentBytes  = 64 << 10
+	maxAIChatContentBytes     = 256 << 10
+	maxAIProviderLength       = 32
+	maxAIKeyLength            = 1024
+	maxAIVisionPromptBytes    = 64 << 10
+	maxAIVisionImageURLBytes  = 4 << 20
+	maxAIVisionSchemaNameSize = 128
+	maxAIVisionSchemaBytes    = 64 << 10
+)
 
 type aiHTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -135,10 +149,11 @@ func (s *AIService) Chat(ctx context.Context, req AIChatRequest) (AICompletion, 
 	if err := s.ensureEnabled(); err != nil {
 		return AICompletion{}, err
 	}
-	if strings.TrimSpace(req.Model) == "" || len(req.Messages) == 0 {
-		return AICompletion{}, status.Error(codes.InvalidArgument, "model and messages are required")
-	}
+	req.Model = strings.TrimSpace(req.Model)
 	if err := s.validateModel(req.Model); err != nil {
+		return AICompletion{}, err
+	}
+	if err := validateAIChatRequest(req); err != nil {
 		return AICompletion{}, err
 	}
 	body, err := ai.BuildRequest(req.Model, req.Messages, req.Temperature)
@@ -152,10 +167,11 @@ func (s *AIService) Vision(ctx context.Context, req AIVisionRequest) (AICompleti
 	if err := s.ensureEnabled(); err != nil {
 		return AICompletion{}, err
 	}
-	if strings.TrimSpace(req.Model) == "" || strings.TrimSpace(req.SystemPrompt) == "" || strings.TrimSpace(req.UserText) == "" || strings.TrimSpace(req.ImageURL) == "" {
-		return AICompletion{}, status.Error(codes.InvalidArgument, "model, system prompt, user text, and image url are required")
-	}
+	req.Model = strings.TrimSpace(req.Model)
 	if err := s.validateModel(req.Model); err != nil {
+		return AICompletion{}, err
+	}
+	if err := validateAIVisionRequest(req); err != nil {
 		return AICompletion{}, err
 	}
 	var (
@@ -348,13 +364,88 @@ func retryBackoff(attempt int) time.Duration {
 }
 
 func (s *AIService) validateModel(model string) error {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return status.Error(codes.InvalidArgument, "model is required")
+	}
+	if len(model) > maxAIModelLength {
+		return status.Error(codes.InvalidArgument, "model is too long")
+	}
 	if len(s.allowedModels) == 0 {
 		return nil
 	}
-	if _, ok := s.allowedModels[strings.TrimSpace(model)]; ok {
+	if _, ok := s.allowedModels[model]; ok {
 		return nil
 	}
 	return status.Error(codes.InvalidArgument, "model is not allowed")
+}
+
+func validateAIChatRequest(req AIChatRequest) error {
+	if len(req.Messages) == 0 {
+		return status.Error(codes.InvalidArgument, "messages are required")
+	}
+	if len(req.Messages) > maxAIChatMessages {
+		return status.Error(codes.InvalidArgument, "too many messages")
+	}
+	if err := validateAITemperature(req.Temperature); err != nil {
+		return err
+	}
+	var total int
+	for _, msg := range req.Messages {
+		role := strings.TrimSpace(msg.Role)
+		if role != ai.RoleSystem && role != ai.RoleUser && role != ai.RoleAssistant {
+			return status.Error(codes.InvalidArgument, "message role is invalid")
+		}
+		content := strings.TrimSpace(msg.Content)
+		if content == "" {
+			return status.Error(codes.InvalidArgument, "message content is required")
+		}
+		if len(msg.Content) > maxAIMessageContentBytes {
+			return status.Error(codes.InvalidArgument, "message content is too large")
+		}
+		total += len(msg.Content)
+		if total > maxAIChatContentBytes {
+			return status.Error(codes.InvalidArgument, "chat content is too large")
+		}
+	}
+	return nil
+}
+
+func validateAIVisionRequest(req AIVisionRequest) error {
+	if strings.TrimSpace(req.SystemPrompt) == "" || strings.TrimSpace(req.UserText) == "" || strings.TrimSpace(req.ImageURL) == "" {
+		return status.Error(codes.InvalidArgument, "system prompt, user text, and image url are required")
+	}
+	if len(req.SystemPrompt) > maxAIVisionPromptBytes || len(req.UserText) > maxAIVisionPromptBytes {
+		return status.Error(codes.InvalidArgument, "vision prompt is too large")
+	}
+	if len(req.ImageURL) > maxAIVisionImageURLBytes {
+		return status.Error(codes.InvalidArgument, "image url is too large")
+	}
+	if err := validateAITemperature(req.Temperature); err != nil {
+		return err
+	}
+	if len(req.Schema) > 0 || strings.TrimSpace(req.SchemaName) != "" {
+		if strings.TrimSpace(req.SchemaName) == "" || len(req.Schema) == 0 {
+			return status.Error(codes.InvalidArgument, "schema name and schema are required together")
+		}
+		if len(req.SchemaName) > maxAIVisionSchemaNameSize {
+			return status.Error(codes.InvalidArgument, "schema name is too long")
+		}
+		if len(req.Schema) > maxAIVisionSchemaBytes {
+			return status.Error(codes.InvalidArgument, "schema is too large")
+		}
+		if !json.Valid(req.Schema) {
+			return status.Error(codes.InvalidArgument, "schema must be valid JSON")
+		}
+	}
+	return nil
+}
+
+func validateAITemperature(temperature float64) error {
+	if math.IsNaN(temperature) || math.IsInf(temperature, 0) || temperature < 0 || temperature > 2 {
+		return status.Error(codes.InvalidArgument, "temperature is invalid")
+	}
+	return nil
 }
 
 func (s *AIService) checkUsageLimit(userID string, day time.Time) error {

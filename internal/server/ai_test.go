@@ -146,6 +146,41 @@ func TestAIServiceRejectsDisallowedModel(t *testing.T) {
 	}
 }
 
+func TestAIServiceRejectsMalformedChatBeforeKeyLoad(t *testing.T) {
+	store := openTestStore(t)
+	called := false
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey: []byte("0123456789abcdef0123456789abcdef"),
+		Client: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			called = true
+			return nil, nil
+		}),
+	})
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
+
+	for _, tc := range []struct {
+		name string
+		req  AIChatRequest
+	}{
+		{name: "missing messages", req: AIChatRequest{Model: "gpt-4o-mini"}},
+		{name: "too many messages", req: AIChatRequest{Model: "gpt-4o-mini", Messages: repeatAIMessages(maxAIChatMessages + 1)}},
+		{name: "invalid role", req: AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: "developer", Content: "hello"}}}},
+		{name: "empty content", req: AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: " "}}}},
+		{name: "content too large", req: AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: strings.Repeat("x", maxAIMessageContentBytes+1)}}}},
+		{name: "temperature too high", req: AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}, Temperature: 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := svc.Chat(ctx, tc.req)
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("Chat err = %v code %v, want invalid argument", err, status.Code(err))
+			}
+		})
+	}
+	if called {
+		t.Fatal("malformed chat request reached upstream")
+	}
+}
+
 func TestAIServiceRejectsOversizedRequestBeforeKeyLoad(t *testing.T) {
 	store := openTestStore(t)
 	master := []byte("0123456789abcdef0123456789abcdef")
@@ -162,6 +197,61 @@ func TestAIServiceRejectsOversizedRequestBeforeKeyLoad(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "ai request is too large") {
 		t.Fatalf("oversized request err = %v", err)
+	}
+}
+
+func TestAIServiceRejectsMalformedVisionBeforeKeyLoad(t *testing.T) {
+	store := openTestStore(t)
+	called := false
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey: []byte("0123456789abcdef0123456789abcdef"),
+		Client: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			called = true
+			return nil, nil
+		}),
+	})
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
+	valid := AIVisionRequest{
+		Model:        "gpt-4o-mini",
+		SystemPrompt: "read receipts",
+		UserText:     "extract",
+		ImageURL:     "data:image/png;base64,AAAA",
+	}
+
+	for _, tc := range []struct {
+		name string
+		req  AIVisionRequest
+	}{
+		{name: "missing prompt", req: func() AIVisionRequest { r := valid; r.SystemPrompt = ""; return r }()},
+		{name: "image too large", req: func() AIVisionRequest {
+			r := valid
+			r.ImageURL = strings.Repeat("x", maxAIVisionImageURLBytes+1)
+			return r
+		}()},
+		{name: "bad temperature", req: func() AIVisionRequest { r := valid; r.Temperature = -0.1; return r }()},
+		{name: "schema without name", req: func() AIVisionRequest { r := valid; r.Schema = json.RawMessage(`{"type":"object"}`); return r }()},
+		{name: "malformed schema", req: func() AIVisionRequest {
+			r := valid
+			r.SchemaName = "transactions"
+			r.Schema = json.RawMessage(`{"type":`)
+			return r
+		}()},
+		{name: "schema too large", req: func() AIVisionRequest {
+			r := valid
+			r.SchemaName = "transactions"
+			r.Schema = json.RawMessage(`{"x":"` + strings.Repeat("x", maxAIVisionSchemaBytes) + `"}`)
+			return r
+		}()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := svc.Vision(ctx, tc.req)
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("Vision err = %v code %v, want invalid argument", err, status.Code(err))
+			}
+		})
+	}
+	if called {
+		t.Fatal("malformed vision request reached upstream")
 	}
 }
 
@@ -289,6 +379,14 @@ func TestAIServiceAuditsUsageAlertsWhenThresholdsCross(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
+
+func repeatAIMessages(n int) []ai.Message {
+	out := make([]ai.Message, n)
+	for i := range out {
+		out[i] = ai.Message{Role: ai.RoleUser, Content: "hello"}
+	}
+	return out
+}
 
 type cancelAwareClient struct {
 	started chan struct{}

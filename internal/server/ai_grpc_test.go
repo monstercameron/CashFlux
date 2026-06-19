@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,5 +109,37 @@ func TestAIServiceGRPCBridgeDisabled(t *testing.T) {
 	err = conn.Invoke(ctx, backendrpc.MethodAIListModels, backendrpc.ListModelsRequest{}, &models, backendrpc.JSONCallOptions()...)
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("disabled ListModels err = %v, want failed precondition", err)
+	}
+}
+
+func TestAIServiceGRPCBridgeRejectsOversizedKey(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{
+		AuthMode:  "token",
+		Token:     "dev-token",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+		AppOrigin: "*",
+	}
+	bridge := httptest.NewServer(NewMux(cfg, store))
+	defer bridge.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	var keyResp backendrpc.SetKeyResponse
+	err = conn.Invoke(ctx, backendrpc.MethodAISetKey, backendrpc.SetKeyRequest{
+		Provider: "openai",
+		Key:      "sk-" + strings.Repeat("x", maxAIKeyLength),
+	}, &keyResp, backendrpc.JSONCallOptions()...)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("oversized SetKey err = %v code %v, want invalid argument", err, status.Code(err))
+	}
+	if _, ok, err := store.GetAIKey(authUserFromToken("dev-token").ID, "openai", []byte(cfg.MasterKey)); err != nil || ok {
+		t.Fatalf("stored key ok=%v err=%v, want none", ok, err)
 	}
 }

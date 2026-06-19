@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: bound ai proxy request shapes (7.14)
+
+- Added field-level validation for AI chat and vision RPCs before the service loads an encrypted key or contacts
+  OpenAI.
+- Bounded model names, message counts/content, vision prompts, image URLs, schemas, temperatures, provider names,
+  and key upload size.
+- Covered malformed chat/vision requests and oversized key upload through service and gRPC bridge tests.
+
 ## 2026-06-19 - docs: add referral-fraud guardrails (7.20)
 
 - Added referral-fraud guardrails to the Cloud business plan for the DigitalOcean self-host referral path.

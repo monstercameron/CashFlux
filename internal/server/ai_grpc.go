@@ -52,7 +52,13 @@ func (s *AIService) SetKey(ctx context.Context, req backendrpc.SetKeyRequest) (b
 	if provider == "" {
 		provider = "openai"
 	}
+	if len(provider) > maxAIProviderLength {
+		return backendrpc.SetKeyResponse{}, status.Error(codes.InvalidArgument, "provider is too long")
+	}
 	key := strings.TrimSpace(req.Key)
+	if len(key) > maxAIKeyLength {
+		return backendrpc.SetKeyResponse{}, status.Error(codes.InvalidArgument, "openai key is too long")
+	}
 	if provider != "openai" || !strings.HasPrefix(key, "sk-") {
 		return backendrpc.SetKeyResponse{}, status.Error(codes.InvalidArgument, "invalid openai key")
 	}
