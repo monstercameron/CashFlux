@@ -36,6 +36,15 @@ const (
 	ThemeSystem Theme = "system"
 )
 
+// ServerMode distinguishes paid CashFlux Cloud from a user-managed backend.
+type ServerMode string
+
+// The supported backend choices.
+const (
+	ServerCloud      ServerMode = "cloud"
+	ServerSelfHosted ServerMode = "self-hosted"
+)
+
 // defaultAccent is the out-of-the-box accent color: a seagreen that clears WCAG
 // AA for UI/large elements (3:1) against BOTH the dark and light theme surfaces
 // (dark 4.09:1, light 3.63:1), unlike the original lighter mint #54b884 which
@@ -67,15 +76,16 @@ type Prefs struct {
 	// RememberAIKey opts into persisting the OpenAI key on this device across
 	// reloads (off by default — the key is otherwise session-only). When on, the
 	// key is written to its own localStorage entry, separate from the dataset.
-	RememberAIKey bool   `json:"rememberAiKey,omitempty"`
-	ServerURL     string `json:"serverUrl,omitempty"`
-	ServerToken   string `json:"serverToken,omitempty"`
+	RememberAIKey bool       `json:"rememberAiKey,omitempty"`
+	ServerMode    ServerMode `json:"serverMode,omitempty"`
+	ServerURL     string     `json:"serverUrl,omitempty"`
+	ServerToken   string     `json:"serverToken,omitempty"`
 }
 
 // Default returns the out-of-the-box preferences (Sunday week start, ISO dates,
 // dark theme, green accent, comfortable density, 100% scale).
 func Default() Prefs {
-	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerURL: DefaultServerURL}
+	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL}
 }
 
 // Normalize fills any blank or unrecognized field with its default, so partial or
@@ -98,6 +108,11 @@ func (p Prefs) Normalize() Prefs {
 	}
 	if !isHexColor(p.Accent) {
 		p.Accent = defaultAccent
+	}
+	switch p.ServerMode {
+	case ServerCloud, ServerSelfHosted:
+	default:
+		p.ServerMode = ServerSelfHosted
 	}
 	if p.ServerURL == "" {
 		p.ServerURL = DefaultServerURL

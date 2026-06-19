@@ -370,9 +370,16 @@ func globalSettingsForm() uic.Node {
 	memberChips = append(memberChips, Button(Class("member-add"), Type("button"), OnClick(goManageMembers), uistate.T("settings.addMember")))
 
 	pr := prefsAtom.Get().Normalize()
+	serverMode := uic.UseState(string(pr.ServerMode))
 	serverURL := uic.UseState(pr.ServerURL)
 	serverToken := uic.UseState(pr.ServerToken)
 	billingInterval := uic.UseState("annual")
+	onServerMode := func(v string) {
+		serverMode.Set(v)
+		p := prefsAtom.Get()
+		p.ServerMode = prefs.ServerMode(v)
+		savePrefs(p)
+	}
 	onServerURL := uic.UseEvent(func(v string) {
 		serverURL.Set(v)
 		p := prefsAtom.Get()
@@ -389,6 +396,7 @@ func globalSettingsForm() uic.Node {
 	if billingInterval.Get() == "monthly" {
 		cloudPrice = uistate.T("settings.cloudPriceMonthly")
 	}
+	cloudSelected := prefs.ServerMode(serverMode.Get()) == prefs.ServerCloud
 	uploadKey := uic.UseEvent(func() {
 		uploadOpenAIKeyToBackend(serverURL.Get(), serverToken.Get(), aiKey.Get(), func() {
 			notify(uistate.T("settings.serverKeyStored"), false)
@@ -495,32 +503,44 @@ func globalSettingsForm() uic.Node {
 		}}),
 		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.rememberKeyNote")),
 		Div(Class("set-label"), uistate.T("settings.backendTitle")),
+		ui.Segmented(ui.SegmentedProps{
+			Label: uistate.T("settings.serverMode"),
+			Options: []ui.SegOption{
+				{Value: string(prefs.ServerCloud), Label: uistate.T("settings.serverModeCloud")},
+				{Value: string(prefs.ServerSelfHosted), Label: uistate.T("settings.serverModeSelf")},
+			},
+			Selected: serverMode.Get(),
+			OnSelect: onServerMode,
+		}),
 		Input(Class("set-input mt-[0.45rem]"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
 		Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken)),
-		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.backendNote")),
+		If(cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.backendNote"))),
+		If(!cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.selfHostedNote"))),
 		Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
 			Button(Class("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
 			Button(Class("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
 			A(Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
-		Div(Class("set-label"), uistate.T("settings.cloudPlanTitle")),
-		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudPlanNote")),
-		Div(Class("text-[18px] font-semibold mt-[0.45rem]"), cloudPrice),
-		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudTrialNote")),
-		ui.Segmented(ui.SegmentedProps{
-			Label: uistate.T("settings.cloudPlanBilling"),
-			Options: []ui.SegOption{
-				{Value: "annual", Label: uistate.T("settings.cloudPlanAnnual")},
-				{Value: "monthly", Label: uistate.T("settings.cloudPlanMonthly")},
-			},
-			Selected: billingInterval.Get(),
-			OnSelect: func(v string) { billingInterval.Set(v) },
-		}),
-		Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
-			Button(Class("btn btn-primary"), Type("button"), OnClick(startCheckout), uistate.T("settings.cloudSubscribe")),
-			Button(Class("btn"), Type("button"), OnClick(openPortal), uistate.T("settings.manageSub")),
-		),
-		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudTrustLine")),
+		If(cloudSelected, Fragment(
+			Div(Class("set-label"), uistate.T("settings.cloudPlanTitle")),
+			P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudPlanNote")),
+			Div(Class("text-[18px] font-semibold mt-[0.45rem]"), cloudPrice),
+			P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudTrialNote")),
+			ui.Segmented(ui.SegmentedProps{
+				Label: uistate.T("settings.cloudPlanBilling"),
+				Options: []ui.SegOption{
+					{Value: "annual", Label: uistate.T("settings.cloudPlanAnnual")},
+					{Value: "monthly", Label: uistate.T("settings.cloudPlanMonthly")},
+				},
+				Selected: billingInterval.Get(),
+				OnSelect: func(v string) { billingInterval.Set(v) },
+			}),
+			Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
+				Button(Class("btn btn-primary"), Type("button"), OnClick(startCheckout), uistate.T("settings.cloudSubscribe")),
+				Button(Class("btn"), Type("button"), OnClick(openPortal), uistate.T("settings.manageSub")),
+			),
+			P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.cloudTrustLine")),
+		)),
 		Select(Class("set-input mt-[0.45rem]"), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
 			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
 			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),

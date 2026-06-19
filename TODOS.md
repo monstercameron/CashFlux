@@ -4145,14 +4145,18 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 > [`docs/CLOUD_BUSINESS_PLAN.md`](./docs/CLOUD_BUSINESS_PLAN.md) §13. Gate *operations*, not features.
 
 #### Client
-- [ ] **Settings → Cloud** leads with a segmented **Server: Cloud / Self-hosted** control; the rest of
+- [x] **Settings → Cloud** leads with a segmented **Server: Cloud / Self-hosted** control; the rest of
       the section adapts to the choice.
+      Done: Settings persists a Cloud/Self-hosted server mode and branches the backend/billing helper copy
+      from that choice.
 - [x] Self-hosted: **base-URL field** + **Test connection** (reachability + version/compat ping) before
       save; persist the URL; use it for the gRPC bridge (`wss`) and HTTP OAuth/blob endpoints.
       Done: Settings persists the backend URL/token locally, Test connection validates `/v1/version`, and the
       sync/AI clients derive the GoGRPCBridge `/grpc` tunnel from the same base URL.
-- [ ] Hide all billing surfaces (pricing, trial banner, manage-subscription, storage cap) when a custom
+- [x] Hide all billing surfaces (pricing, trial banner, manage-subscription, storage cap) when a custom
       server is selected; entitlement = always-on for self-host.
+      Done: Self-hosted mode hides the Cloud price/trial/Checkout/portal controls and explains the custom
+      backend is treated as always-on infrastructure.
 - [ ] **Auth method adapts to the server:** support a lighter **single-user access-token** mode (paste
       a token the server printed) in addition to OAuth; show whichever the chosen server advertises.
 - [ ] **Switch-server flow:** changing the URL signs out of the old server and re-points sync; local

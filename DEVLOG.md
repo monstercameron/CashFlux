@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add server mode setting (7.12)
+
+- Added `prefs.ServerMode` with normalized `cloud` and `self-hosted` values; default is self-hosted so the open
+  server path remains the first-class local/default setup.
+- Added a Settings segmented control for Cloud vs Self-hosted above the backend URL/token fields.
+- Hid Cloud billing controls in self-hosted mode and swapped the helper text to explain that a custom backend is
+  treated as always-on infrastructure.
+- Covered preference normalization for valid Cloud mode and invalid-mode fallback.
+
 ## 2026-06-19 - feat: add cloud pricing controls (7.11)
 
 - Added a CashFlux Cloud block to the global Settings panel with annual/monthly pricing, the 14-day trial note,

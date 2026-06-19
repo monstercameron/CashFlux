@@ -44,6 +44,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Server mode setting (7.12).** Added a persisted Cloud/Self-hosted Settings control and hides Cloud billing
+  controls when self-hosted mode is selected.
 - **Cloud pricing controls (7.11 Group B).** Added Settings controls for annual/monthly Cloud pricing,
   Stripe Checkout redirects, and Stripe customer-portal management.
 - **Backend Stripe billing sessions (7.11).** Added authenticated billing endpoints for Stripe Checkout and
