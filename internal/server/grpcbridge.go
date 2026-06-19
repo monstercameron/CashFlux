@@ -22,7 +22,7 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		grpc.StreamInterceptor(AuthStreamInterceptor(grpcTokenValidator(cfg))),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncService(store))
-	RegisterAIServiceServer(grpcServer, newHTTPAIService(store, cfg))
+	RegisterAIServiceServer(grpcServer, newAIService(store, cfg))
 	return grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
 		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),

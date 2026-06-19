@@ -407,7 +407,8 @@ and every commit updates this file under `Unreleased`.
 ### Changed
 - **AI proxy is gRPC-only.** Retired the legacy `/v1/ai/key`, `/v1/ai/chat`, and `/v1/ai/vision`
   HTTP routes so key upload, model listing, chat, and vision all use authenticated AIService RPCs
-  over the GoGRPCBridge `/grpc` tunnel.
+  over the GoGRPCBridge `/grpc` tunnel. The HTTP mux now has regression coverage that keeps those
+  routes unmounted.
 - **Backend AI proxy cancellation is pinned by tests.** Canceling an AI request context now has regression
   coverage proving the upstream OpenAI request sees the canceled context and the service returns `Canceled`.
 - **AI screens can use the backend proxy instead of browser OpenAI calls.** Insights, Allocate, and Documents now

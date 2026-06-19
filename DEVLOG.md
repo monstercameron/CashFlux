@@ -22,6 +22,7 @@ problems and fixes, and what's next.
   GoGRPCBridge `/grpc` tunnel.
 - Added an HTTP regression test that asserts the old `/v1/ai/*` routes return 404, so a stale client path fails
   loudly instead of looking like a supported CORS path.
+- Follow-up commit keeps the log/TODO marker with the actual mux removal after the shared worktree moved forward.
 
 ## 2026-06-18 - feat: add self-host token rotation command
 

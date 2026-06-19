@@ -212,103 +212,17 @@ func TestReadyEndpointRequiresStore(t *testing.T) {
 	}
 }
 
-func TestAIKeyEndpointStoresEncryptedKey(t *testing.T) {
-	store := openTestStore(t)
-	cfg := Config{AuthMode: "token", MasterKey: "0123456789abcdef0123456789abcdef", Token: "dev-token"}
-	h := NewMux(cfg, store)
-	req := httptest.NewRequest(http.MethodPost, "/v1/ai/key", bytes.NewBufferString(`{"provider":"openai","key":"sk-secret"}`))
-	req.Header.Set("Authorization", "Bearer dev-token")
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("store key status = %d body %q", rr.Code, rr.Body.String())
-	}
-	var body AIKeyResponse
-	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
-		t.Fatalf("decode key response: %v", err)
-	}
-	if !body.Stored || body.Provider != "openai" {
-		t.Fatalf("key response = %+v", body)
-	}
-	user, ok := httpBearerUser(req, cfg)
-	if !ok {
-		t.Fatal("bearer user missing")
-	}
-	got, ok, err := store.GetAIKey(user.ID, "openai", []byte(cfg.MasterKey))
-	if err != nil || !ok || got != "sk-secret" {
-		t.Fatalf("stored key = %q/%v/%v", got, ok, err)
-	}
-}
-
-func TestAIKeyEndpointRejectsMissingAuthAndMaster(t *testing.T) {
-	store := openTestStore(t)
-	req := httptest.NewRequest(http.MethodPost, "/v1/ai/key", bytes.NewBufferString(`{"provider":"openai","key":"sk-secret"}`))
-	rr := httptest.NewRecorder()
-	NewMux(Config{AuthMode: "token", MasterKey: "0123456789abcdef0123456789abcdef", Token: "dev-token"}, store).ServeHTTP(rr, req)
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("missing auth status = %d", rr.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/v1/ai/key", bytes.NewBufferString(`{"provider":"openai","key":"sk-secret"}`))
-	req.Header.Set("Authorization", "Bearer dev-token")
-	rr = httptest.NewRecorder()
-	NewMux(Config{AuthMode: "token", Token: "dev-token"}, store).ServeHTTP(rr, req)
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("missing master status = %d", rr.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/v1/ai/key", bytes.NewBufferString(`{"provider":"openai","key":"sk-secret"}`))
-	req.Header.Set("Authorization", "Bearer wrong")
-	rr = httptest.NewRecorder()
-	NewMux(Config{AuthMode: "token", MasterKey: "0123456789abcdef0123456789abcdef", Token: "dev-token"}, store).ServeHTTP(rr, req)
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("wrong token status = %d", rr.Code)
-	}
-}
-
-func TestAIKeyEndpointCORS(t *testing.T) {
+func TestLegacyAIHTTPEndpointsAreNotMounted(t *testing.T) {
 	h := NewMux(Config{AuthMode: "token", AppOrigin: "http://127.0.0.1:8080"})
-	req := httptest.NewRequest(http.MethodOptions, "/v1/ai/key", nil)
-	req.Header.Set("Origin", "http://127.0.0.1:8080")
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusNoContent || rr.Header().Get("Access-Control-Allow-Origin") != "http://127.0.0.1:8080" {
-		t.Fatalf("allowed cors status/header = %d/%q", rr.Code, rr.Header().Get("Access-Control-Allow-Origin"))
-	}
-
-	req = httptest.NewRequest(http.MethodOptions, "/v1/ai/key", nil)
-	req.Header.Set("Origin", "https://evil.example")
-	rr = httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("forbidden cors status = %d", rr.Code)
-	}
-}
-
-func TestAIProxyEndpointCORS(t *testing.T) {
-	h := NewMux(Config{AuthMode: "token", AppOrigin: "http://127.0.0.1:8080"})
-	for _, path := range []string{"/v1/ai/chat", "/v1/ai/vision"} {
-		req := httptest.NewRequest(http.MethodOptions, path, nil)
-		req.Header.Set("Origin", "http://127.0.0.1:8080")
-		req.Header.Set("Access-Control-Request-Method", "POST")
-		req.Header.Set("Access-Control-Request-Headers", "authorization,content-type")
-		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, req)
-		if rr.Code != http.StatusNoContent {
-			t.Fatalf("%s preflight status = %d, want 204", path, rr.Code)
-		}
-		if rr.Header().Get("Access-Control-Allow-Origin") != "http://127.0.0.1:8080" {
-			t.Fatalf("%s allow-origin = %q", path, rr.Header().Get("Access-Control-Allow-Origin"))
-		}
-		if !strings.Contains(rr.Header().Get("Access-Control-Allow-Methods"), "POST") {
-			t.Fatalf("%s allow-methods = %q", path, rr.Header().Get("Access-Control-Allow-Methods"))
-		}
-		if !strings.Contains(rr.Header().Get("Access-Control-Expose-Headers"), "ETag") {
-			t.Fatalf("%s expose-headers = %q", path, rr.Header().Get("Access-Control-Expose-Headers"))
-		}
-		if rr.Header().Get("Access-Control-Max-Age") != "600" {
-			t.Fatalf("%s max-age = %q", path, rr.Header().Get("Access-Control-Max-Age"))
+	for _, path := range []string{"/v1/ai/key", "/v1/ai/chat", "/v1/ai/vision"} {
+		for _, method := range []string{http.MethodOptions, http.MethodPost} {
+			req := httptest.NewRequest(method, path, nil)
+			req.Header.Set("Origin", "http://127.0.0.1:8080")
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusNotFound {
+				t.Fatalf("%s %s status = %d, want 404", method, path, rr.Code)
+			}
 		}
 	}
 }
@@ -467,88 +381,7 @@ func TestBlobEndpointCORS(t *testing.T) {
 	}
 }
 
-func TestAIChatEndpoint(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer sk-secret" {
-			t.Fatalf("authorization = %q", got)
-		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"server says hi"}}],"usage":{"total_tokens":11}}`))
-	}))
-	defer upstream.Close()
-
-	store := openTestStore(t)
-	cfg := Config{AuthMode: "token", MasterKey: "0123456789abcdef0123456789abcdef", Token: "dev-token", OpenAIBaseURL: upstream.URL}
-	reqForUser := httptest.NewRequest(http.MethodPost, "/v1/ai/key", bytes.NewBufferString(`{}`))
-	reqForUser.Header.Set("Authorization", "Bearer dev-token")
-	user, ok := httpBearerUser(reqForUser, cfg)
-	if !ok {
-		t.Fatal("bearer user missing")
-	}
-	if err := store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID}); err != nil {
-		t.Fatalf("UpsertUser: %v", err)
-	}
-	if err := store.PutAIKey(user.ID, "openai", "sk-secret", []byte(cfg.MasterKey)); err != nil {
-		t.Fatalf("PutAIKey: %v", err)
-	}
-
-	h := NewMux(cfg, store)
-	req := httptest.NewRequest(http.MethodPost, "/v1/ai/chat", bytes.NewBufferString(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}`))
-	req.Header.Set("Authorization", "Bearer dev-token")
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("chat status = %d body %q", rr.Code, rr.Body.String())
-	}
-	var body AICompletion
-	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
-		t.Fatalf("decode chat response: %v", err)
-	}
-	if body.Content != "server says hi" || body.Usage.TotalTokens != 11 {
-		t.Fatalf("chat response = %+v", body)
-	}
-}
-
 func blobHash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
-}
-
-func TestAIChatEndpointAppliesConfiguredGuards(t *testing.T) {
-	store := openTestStore(t)
-	cfg := Config{
-		AuthMode:          "token",
-		MasterKey:         "0123456789abcdef0123456789abcdef",
-		Token:             "dev-token",
-		AIAllowedModels:   []string{"gpt-4o-mini"},
-		AIRequestMaxBytes: 64,
-	}
-	reqForUser := httptest.NewRequest(http.MethodPost, "/v1/ai/key", bytes.NewBufferString(`{}`))
-	reqForUser.Header.Set("Authorization", "Bearer dev-token")
-	user, ok := httpBearerUser(reqForUser, cfg)
-	if !ok {
-		t.Fatal("bearer user missing")
-	}
-	if err := store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID}); err != nil {
-		t.Fatalf("UpsertUser: %v", err)
-	}
-	if err := store.PutAIKey(user.ID, "openai", "sk-secret", []byte(cfg.MasterKey)); err != nil {
-		t.Fatalf("PutAIKey: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/ai/chat", bytes.NewBufferString(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`))
-	req.Header.Set("Authorization", "Bearer dev-token")
-	rr := httptest.NewRecorder()
-	NewMux(cfg, store).ServeHTTP(rr, req)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("disallowed model status = %d body %q", rr.Code, rr.Body.String())
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/v1/ai/chat", bytes.NewBufferString(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"`+strings.Repeat("x", 200)+`"}]}`))
-	req.Header.Set("Authorization", "Bearer dev-token")
-	rr = httptest.NewRecorder()
-	NewMux(cfg, store).ServeHTTP(rr, req)
-	if rr.Code != http.StatusTooManyRequests {
-		t.Fatalf("oversized request status = %d body %q", rr.Code, rr.Body.String())
-	}
 }

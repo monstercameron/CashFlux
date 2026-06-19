@@ -3929,8 +3929,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       re-model every entity in proto; only the sync/AI envelopes are typed.
 - [ ] `SyncService`: `ListWorkspaces`, `GetWorkspace`, `PutWorkspace`, `DeleteWorkspace`,
       `WatchWorkspaces` (server stream).
-- [~] `AIService`: `SetKey` and `ListModels` unary RPCs are done; `Chat` and `Vision` unary proxy calls are
-      done as the compatibility path. Remaining: final server-streaming `Chat`/`Vision` chunk responses.
+- [~] `AIService`: `SetKey`, `ListModels`, `Chat`, and `Vision` unary RPCs are done over the
+      GoGRPCBridge `/grpc` tunnel. Remaining: final server-streaming `Chat`/`Vision` chunk responses.
 - [ ] Error model: map to gRPC `codes` / `google.rpc.Status` (unauthenticated; failed-precondition for a
       stale push when `force` is off; resource-exhausted for quota).
 
@@ -3962,6 +3962,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] `Chat`/`Vision` server proxy path: load+decrypt the user's key, call OpenAI (reusing the
       `internal/ai` request builders), map upstream errors to status, and count usage. Remaining: stream chunks
       back over the final server-streaming surface.
+- [x] Legacy HTTP AI routes retired: `/v1/ai/key`, `/v1/ai/chat`, and `/v1/ai/vision` are no longer mounted;
+      key upload, model listing, chat, and vision now use authenticated `AIService` RPCs over `/grpc`.
 - [x] Model allow-list; per-user rate limit + usage metering; request-size caps; **redact key in logs**.
 - [x] Cancellation: propagate client `ctx` cancel to the upstream call (stop billing on disconnect).
 - [~] Tests: mock upstream chat/vision, key encrypt round-trip, rate-limit trip, missing-key clear error, and
