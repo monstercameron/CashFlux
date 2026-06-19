@@ -38,6 +38,8 @@ type AIService struct {
 	requestMaxBytes int64
 	requestsPerDay  int64
 	tokensPerDay    int64
+	alertRequests   int64
+	alertTokens     int64
 	blockedUsers    map[string]struct{}
 	metrics         *Metrics
 	now             func() time.Time
@@ -54,6 +56,8 @@ type AIServiceConfig struct {
 	RequestMaxBytes int64
 	RequestsPerDay  int64
 	TokensPerDay    int64
+	AlertRequests   int64
+	AlertTokens     int64
 	BlockedUserIDs  []string
 	Metrics         *Metrics
 	Now             func() time.Time
@@ -119,6 +123,8 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 		requestMaxBytes: cfg.RequestMaxBytes,
 		requestsPerDay:  cfg.RequestsPerDay,
 		tokensPerDay:    cfg.TokensPerDay,
+		alertRequests:   cfg.AlertRequests,
+		alertTokens:     cfg.AlertTokens,
 		blockedUsers:    blockedUsers,
 		metrics:         cfg.Metrics,
 		now:             now,
@@ -203,7 +209,8 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	if s.requestMaxBytes > 0 && int64(len(body)) > s.requestMaxBytes {
 		return AICompletion{}, status.Error(codes.ResourceExhausted, "ai request is too large")
 	}
-	if err := s.checkUsageLimit(user.ID, s.now()); err != nil {
+	day := s.now()
+	if err := s.checkUsageLimit(user.ID, day); err != nil {
 		return AICompletion{}, err
 	}
 	key, ok, err := s.store.GetAIKey(user.ID, "openai", s.masterKey)
@@ -242,9 +249,15 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 		return AICompletion{}, status.Errorf(codes.Internal, "parse openai response: %v", err)
 	}
 	usage := ai.ParseUsage(data)
-	if _, err := s.store.AddUsage(user.ID, s.now(), 1, int64(usage.TotalTokens)); err != nil {
+	previous, _, err := s.store.GetUsage(user.ID, day)
+	if err != nil {
+		return AICompletion{}, fmt.Errorf("server ai: get usage before alert: %w", err)
+	}
+	next, err := s.store.AddUsage(user.ID, day, 1, int64(usage.TotalTokens))
+	if err != nil {
 		return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
 	}
+	s.auditAIUsageAlerts(ctx, day, previous, next)
 	s.metrics.ObserveAIProxy(int64(usage.TotalTokens))
 	return AICompletion{Content: content, Usage: usage}, nil
 }
@@ -255,6 +268,22 @@ func (s *AIService) aiBlocked(userID string) bool {
 	}
 	_, ok := s.blockedUsers[strings.TrimSpace(userID)]
 	return ok
+}
+
+func (s *AIService) auditAIUsageAlerts(ctx context.Context, day time.Time, previous, next Usage) {
+	if s == nil || s.store == nil {
+		return
+	}
+	if crossedUsageAlert(previous.Requests, next.Requests, s.alertRequests) {
+		auditFromContext(ctx, s.store, "ai.usage_alert.requests", "usage", usageDay(day))
+	}
+	if crossedUsageAlert(previous.Tokens, next.Tokens, s.alertTokens) {
+		auditFromContext(ctx, s.store, "ai.usage_alert.tokens", "usage", usageDay(day))
+	}
+}
+
+func crossedUsageAlert(previous, next, threshold int64) bool {
+	return threshold > 0 && previous < threshold && next >= threshold
 }
 
 func (s *AIService) doUpstream(ctx context.Context, body []byte, key string) (*http.Response, error) {

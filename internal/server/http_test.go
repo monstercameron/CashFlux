@@ -76,6 +76,16 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative ai upstream timeout accepted")
 	}
 	invalid = valid
+	invalid.AIAlertRequestsPerDay = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative ai alert requests accepted")
+	}
+	invalid = valid
+	invalid.AIAlertTokensPerDay = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative ai alert tokens accepted")
+	}
+	invalid = valid
 	invalid.HTTPReadTimeout = -1
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("negative http read timeout accepted")
@@ -201,6 +211,18 @@ func TestFromEnvLoadsAIBlockedUsers(t *testing.T) {
 	if len(cfg.AIBlockedUserIDs) != 3 || cfg.AIBlockedUserIDs[0] != "u1" ||
 		cfg.AIBlockedUserIDs[1] != "github:blocked" || cfg.AIBlockedUserIDs[2] != "token:abc" {
 		t.Fatalf("AIBlockedUserIDs = %+v", cfg.AIBlockedUserIDs)
+	}
+}
+
+func TestFromEnvLoadsAIUsageAlerts(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY", "25")
+	t.Setenv("CASHFLUX_SERVER_AI_ALERT_TOKENS_PER_DAY", "5000")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if cfg.AIAlertRequestsPerDay != 25 || cfg.AIAlertTokensPerDay != 5000 {
+		t.Fatalf("ai alerts = requests %d tokens %d", cfg.AIAlertRequestsPerDay, cfg.AIAlertTokensPerDay)
 	}
 }
 

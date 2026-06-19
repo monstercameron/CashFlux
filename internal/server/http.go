@@ -341,6 +341,8 @@ func newAIService(store *Store, cfg Config) *AIService {
 		RequestMaxBytes: cfg.AIRequestMaxBytes,
 		RequestsPerDay:  cfg.AIRequestsPerDay,
 		TokensPerDay:    cfg.AITokensPerDay,
+		AlertRequests:   cfg.AIAlertRequestsPerDay,
+		AlertTokens:     cfg.AIAlertTokensPerDay,
 		BlockedUserIDs:  cfg.AIBlockedUserIDs,
 		Metrics:         cfg.Metrics,
 	})

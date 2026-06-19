@@ -42,6 +42,8 @@ type Config struct {
 	AIRequestMaxBytes                 int64
 	AIRequestsPerDay                  int64
 	AITokensPerDay                    int64
+	AIAlertRequestsPerDay             int64
+	AIAlertTokensPerDay               int64
 	AIBlockedUserIDs                  []string
 	BlobMaxBytes                      int64
 	BlobIOTimeout                     time.Duration
@@ -99,6 +101,8 @@ func FromEnv() (Config, error) {
 	cfg.AIRequestMaxBytes = envInt64("CASHFLUX_SERVER_AI_REQUEST_MAX_BYTES", 4<<20)
 	cfg.AIRequestsPerDay = envInt64("CASHFLUX_SERVER_AI_REQUESTS_PER_DAY", 0)
 	cfg.AITokensPerDay = envInt64("CASHFLUX_SERVER_AI_TOKENS_PER_DAY", 0)
+	cfg.AIAlertRequestsPerDay = envInt64("CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY", 0)
+	cfg.AIAlertTokensPerDay = envInt64("CASHFLUX_SERVER_AI_ALERT_TOKENS_PER_DAY", 0)
 	cfg.AIBlockedUserIDs = envCSV("CASHFLUX_SERVER_AI_BLOCKED_USER_IDS")
 	cfg.BlobMaxBytes = envInt64("CASHFLUX_SERVER_BLOB_MAX_BYTES", 32<<20)
 	cfg.BlobIOTimeout = envDuration("CASHFLUX_SERVER_BLOB_IO_TIMEOUT", 10*time.Second)
@@ -150,7 +154,8 @@ func (c Config) Validate() error {
 	if c.MasterKey != "" && !validAESKeyLength(len(c.MasterKey)) {
 		return fmt.Errorf("server: master key must be 16, 24, or 32 bytes")
 	}
-	if c.AIRequestMaxBytes < 0 || c.AIRequestsPerDay < 0 || c.AITokensPerDay < 0 || c.AIUpstreamRetries < 0 {
+	if c.AIRequestMaxBytes < 0 || c.AIRequestsPerDay < 0 || c.AITokensPerDay < 0 ||
+		c.AIAlertRequestsPerDay < 0 || c.AIAlertTokensPerDay < 0 || c.AIUpstreamRetries < 0 {
 		return fmt.Errorf("server: ai limits must be non-negative")
 	}
 	if c.AIUpstreamTimeout < 0 {

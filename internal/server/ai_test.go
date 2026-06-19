@@ -237,6 +237,55 @@ func TestAIServiceBlocksUserBeforeKeyLoadOrUpstream(t *testing.T) {
 	}
 }
 
+func TestAIServiceAuditsUsageAlertsWhenThresholdsCross(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	day := time.Date(2026, time.June, 18, 12, 0, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "u-alert", Provider: "token", Subject: "u-alert", CreatedAt: day}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u-alert", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	if _, err := store.AddUsage("u-alert", day, 1, 9); err != nil {
+		t.Fatalf("AddUsage: %v", err)
+	}
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey:     master,
+		AlertRequests: 2,
+		AlertTokens:   10,
+		Now:           func() time.Time { return day },
+		Client: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":2}}`)),
+			}, nil
+		}),
+	})
+	if _, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u-alert"}), AIChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+	}); err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	events, err := store.ListAuditEvents(0, 10)
+	if err != nil {
+		t.Fatalf("ListAuditEvents: %v", err)
+	}
+	var sawRequests, sawTokens bool
+	for _, event := range events {
+		if event.Action == "ai.usage_alert.requests" && event.TargetID == "2026-06-18" {
+			sawRequests = true
+		}
+		if event.Action == "ai.usage_alert.tokens" && event.TargetID == "2026-06-18" {
+			sawTokens = true
+		}
+	}
+	if !sawRequests || !sawTokens {
+		t.Fatalf("usage alert events requests=%v tokens=%v events=%+v", sawRequests, sawTokens, events)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }

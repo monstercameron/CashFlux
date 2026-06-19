@@ -4397,7 +4397,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] **Referral-fraud guards** (DO referral path): detect self-referral/farming; honest disclosure;
       don't tie product behavior to referral outcomes.
 - [ ] Trial abuse limits (one trial per account/identity); payment-fraud handling via Stripe Radar.
-- [~] AI-proxy abuse: per-user token/req caps, anomaly alerts, kill-switch per user; cost-control even
+- [x] AI-proxy abuse: per-user token/req caps, anomaly alerts, kill-switch per user; cost-control even
       though tokens are BYO (protect bandwidth/compute + the user's own bill).
       Per-user request/token caps already gate usage; `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS` now denies selected
-      users before key load or upstream calls. Remaining: anomaly alerts/cost alerting.
+      users before key load or upstream calls. `CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY` and
+      `CASHFLUX_SERVER_AI_ALERT_TOKENS_PER_DAY` append audit alerts when daily warning lines are crossed.

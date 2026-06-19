@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend ai usage alerts (7.20)
+
+- Added `CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY` and `CASHFLUX_SERVER_AI_ALERT_TOKENS_PER_DAY`.
+- AI proxy calls now append audit events when daily request/token warning lines are crossed.
+- Added env validation/parsing coverage and an AI service audit-alert regression test.
+- Marked the AI-proxy abuse TODO complete; signup, referral, and trial abuse items remain open.
+
 ## 2026-06-19 - fix: count transactions when deciding member reassign-before-delete
 
 - `ReassignOwner` already moves a member's transactions (via their MemberID), but the Members screen's

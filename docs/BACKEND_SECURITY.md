@@ -39,6 +39,9 @@ section 7.14:
   connection/stream/upgrade caps.
 - AI proxy abuse controls include per-user daily request/token caps and an operator kill switch via
   `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS`, which denies selected users before key load or upstream calls.
+- Optional AI usage alert thresholds (`CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY` and
+  `CASHFLUX_SERVER_AI_ALERT_TOKENS_PER_DAY`) append audit events when a user crosses daily request/token
+  warning lines, giving operators anomaly and cost-control signals before hard caps trip.
 - Load/abuse tests cover oversized sync snapshots, oversized blobs, storage quota exhaustion, AI request-size
   rejection, per-user workspace stream caps, HTTP rate-limit configuration, and gRPC bridge connection limit
   configuration.

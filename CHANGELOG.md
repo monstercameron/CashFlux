@@ -41,6 +41,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend AI usage alerts (7.20).** Added configurable AI proxy daily request/token alert thresholds that
+  append audit events when a user crosses warning lines before hard caps trip.
 - **Backend AI abuse kill switch (7.20).** Added `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS` to deny selected users
   before AI-key load or upstream OpenAI calls.
 - **Backend auth abuse limiter (7.20).** Added a dedicated per-IP OAuth/session route rate limit via
