@@ -451,6 +451,31 @@ func TestBackendErrorModelDocumentsStatusCodesAndLWWRejection(t *testing.T) {
 	}
 }
 
+func TestLegalCompliancePackDocumentsLaunchRequirements(t *testing.T) {
+	data, err := os.ReadFile("../../docs/LEGAL_COMPLIANCE.md")
+	if err != nil {
+		t.Fatalf("read legal compliance pack: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"Privacy Policy Draft",
+		"Terms Of Service Draft",
+		"Cookie And Consent Note",
+		"DPA Template Outline",
+		"Public Subprocessors",
+		"Data Subject Request Workflow",
+		"GET /v1/account/export",
+		"DELETE /v1/account",
+		"Stripe",
+		"OpenAI",
+		"30 days",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("legal compliance pack missing %q", want)
+		}
+	}
+}
+
 func TestReportExportDesignDocumentsOfflineSnapshots(t *testing.T) {
 	data, err := os.ReadFile("../../docs/REPORT_EXPORTS.md")
 	if err != nil {

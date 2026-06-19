@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend compliance docs (7.17).** Added the legal compliance pack with launch draft privacy/terms,
+  cookie/consent note, DPA outline, public subprocessors list, and data-subject request workflow.
 - **Backend account export/delete (7.11).** Added authenticated `/v1/account/export` and `DELETE /v1/account`
   compliance endpoints with scoped export data, secret omission, and blob GC after account deletion.
 - **Backend legal endpoints (7.11).** Added public `/legal/privacy` and `/legal/terms` JSON discovery

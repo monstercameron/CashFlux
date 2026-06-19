@@ -1,5 +1,7 @@
 # Backend Legal Endpoints
 
+See `docs/LEGAL_COMPLIANCE.md` for the launch draft privacy/terms text, cookie note, DPA outline, subprocessor list, and data-subject request workflow.
+
 CashFlux Cloud exposes public legal-document discovery endpoints for onboarding and billing surfaces:
 
 - `GET /legal/privacy`

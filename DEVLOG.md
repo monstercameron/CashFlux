@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: add legal compliance pack (7.17)
+
+- Added `docs/LEGAL_COMPLIANCE.md` with launch draft privacy/terms copy, cookie/consent notes, DPA outline,
+  public subprocessors, and the data-subject request workflow.
+- Linked the compliance pack from `docs/LEGAL_ENDPOINTS.md`.
+- Added a deploy doc guard test so required legal/compliance sections stay present.
+- Marked the privacy/terms/DPA/subprocessor TODO complete; counsel review remains called out in the doc.
+
 ## 2026-06-19 - feat: add backend account export delete (7.11)
 
 - Added authenticated `GET /v1/account/export` for scoped server-side Cloud data export.

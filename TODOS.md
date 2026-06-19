@@ -4339,10 +4339,12 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] **GDPR/CCPA**: self-serve data **export** + **delete account** (purge DB rows + blobs +
       subscription unlink), data-subject request workflow + SLA; right-to-rectify via the app.
       Done: authenticated `/v1/account/export` and `DELETE /v1/account` cover scoped server data export,
-      relational purge, and unreferenced blob sweep. Remaining: subscription unlink, DSR workflow/SLA, and
-      formal right-to-rectify documentation.
-- [ ] Privacy Policy, Terms of Service, Cookie/consent (minimal), DPA template for any sub-processors
+      relational purge, and unreferenced blob sweep. `docs/LEGAL_COMPLIANCE.md` now defines the DSR workflow,
+      SLA target, and right-to-rectify path. Remaining: subscription unlink once billing lands.
+- [x] Privacy Policy, Terms of Service, Cookie/consent (minimal), DPA template for any sub-processors
       (Stripe, OAuth providers, host) + a public sub-processor list.
+      Done: `docs/LEGAL_COMPLIANCE.md` carries launch draft privacy/terms copy, cookie/session notes, DPA
+      outline, public subprocessors list, and counsel-review caveat; a deploy doc test pins the sections.
 - [x] Data retention + deletion schedule (snapshots history, logs, audit, backups); document residency.
       Done: retention env windows plus `cashflux-server retention` prune audit events, snapshot history,
       and local backup dirs; weekly timer examples and self-host docs define residency and defaults.
