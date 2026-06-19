@@ -44,6 +44,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend Stripe billing sessions (7.11).** Added authenticated billing endpoints for Stripe Checkout and
+  customer-portal session creation using configured annual/monthly price ids.
 - **Backend Stripe webhook state updates (7.11).** Added a signed Stripe webhook endpoint that updates
   stored subscription state for checkout, subscription update/delete, and payment-failed events.
 - **Backend storage fair-use warnings (7.11).** Added `CASHFLUX_SERVER_STORAGE_WARN_BYTES` so blob uploads can

@@ -4086,7 +4086,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 > plan now, household later. Recommended pricing ~$34.99/yr / $3.99/mo, 14-day trial (validate).
 
 #### Server (billing + entitlements)
-- [ ] Stripe integration: products/prices (annual + monthly), Checkout session creation, customer portal session.
+- [x] Stripe integration: products/prices (annual + monthly), Checkout session creation, customer portal session.
+      Done: authenticated billing endpoints create Stripe Checkout sessions from configured annual/monthly
+      price ids and customer-portal sessions from stored subscription customer ids.
 - [x] Stripe **webhook** handler (checkout.completed, subscription.updated/deleted, invoice.payment_failed)
       → update `subscriptions` table; idempotent; signature-verified.
       Done: `POST /v1/billing/stripe/webhook` verifies Stripe signatures and upserts subscription state for

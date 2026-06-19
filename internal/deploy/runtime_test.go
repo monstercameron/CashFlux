@@ -107,6 +107,18 @@ func TestSelfHostEnvTemplateDoesNotShipDefaultMasterKey(t *testing.T) {
 	if !strings.Contains(env, "CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET=") {
 		t.Fatal("env template missing stripe webhook secret placeholder")
 	}
+	for _, want := range []string{
+		"CASHFLUX_SERVER_STRIPE_SECRET_KEY=",
+		"CASHFLUX_SERVER_STRIPE_PRICE_ANNUAL=",
+		"CASHFLUX_SERVER_STRIPE_PRICE_MONTHLY=",
+		"CASHFLUX_SERVER_STRIPE_SUCCESS_URL=",
+		"CASHFLUX_SERVER_STRIPE_CANCEL_URL=",
+		"CASHFLUX_SERVER_STRIPE_PORTAL_RETURN_URL=",
+	} {
+		if !strings.Contains(env, want) {
+			t.Fatalf("env template missing stripe billing setting %q", want)
+		}
+	}
 }
 
 func TestSelfHostDocsDefineMasterKeyHandling(t *testing.T) {

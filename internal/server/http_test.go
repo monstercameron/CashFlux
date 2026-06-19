@@ -256,6 +256,27 @@ func TestFromEnvLoadsStorageQuota(t *testing.T) {
 	}
 }
 
+func TestFromEnvLoadsStripeBillingConfig(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_STRIPE_API_BASE_URL", "http://127.0.0.1:1212/v1")
+	t.Setenv("CASHFLUX_SERVER_STRIPE_SECRET_KEY", "sk_test")
+	t.Setenv("CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET", "whsec_test")
+	t.Setenv("CASHFLUX_SERVER_STRIPE_PRICE_ANNUAL", "price_annual")
+	t.Setenv("CASHFLUX_SERVER_STRIPE_PRICE_MONTHLY", "price_monthly")
+	t.Setenv("CASHFLUX_SERVER_STRIPE_SUCCESS_URL", "https://cashflux.example.com/success")
+	t.Setenv("CASHFLUX_SERVER_STRIPE_CANCEL_URL", "https://cashflux.example.com/cancel")
+	t.Setenv("CASHFLUX_SERVER_STRIPE_PORTAL_RETURN_URL", "https://cashflux.example.com/cloud")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if cfg.StripeAPIBaseURL != "http://127.0.0.1:1212/v1" || cfg.StripeSecretKey != "sk_test" ||
+		cfg.StripeWebhookSecret != "whsec_test" || cfg.StripePriceAnnual != "price_annual" ||
+		cfg.StripePriceMonthly != "price_monthly" || cfg.StripeSuccessURL == "" ||
+		cfg.StripeCancelURL == "" || cfg.StripePortalReturnURL == "" {
+		t.Fatalf("stripe config = %+v", cfg)
+	}
+}
+
 func TestFromEnvLoadsRetentionWindows(t *testing.T) {
 	t.Setenv("CASHFLUX_SERVER_AUDIT_RETENTION_DAYS", "90")
 	t.Setenv("CASHFLUX_SERVER_SNAPSHOT_HISTORY_RETENTION_DAYS", "45")
@@ -1757,6 +1778,126 @@ func TestStripeWebhookPaymentFailedMarksPastDue(t *testing.T) {
 	if err != nil || !ok || got.Status != "past_due" || got.Plan != "personal_annual" {
 		t.Fatalf("subscription after payment failed = %+v/%v/%v", got, ok, err)
 	}
+}
+
+func TestBillingCheckoutCreatesStripeSession(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 19, 15, 0, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	var gotForm url.Values
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/checkout/sessions" {
+			t.Fatalf("stripe path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer sk_test" {
+			t.Fatalf("stripe auth = %q", r.Header.Get("Authorization"))
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("ParseForm: %v", err)
+		}
+		gotForm = r.PostForm
+		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.test/session"}`))
+	}))
+	defer stripe.Close()
+	cfg := Config{
+		AuthMode:           "token",
+		Token:              "dev-token",
+		Billing:            true,
+		StripeAPIBaseURL:   stripe.URL,
+		StripeSecretKey:    "sk_test",
+		StripePriceAnnual:  "price_annual",
+		StripePriceMonthly: "price_monthly",
+		StripeSuccessURL:   "https://cashflux.example.com/success",
+		StripeCancelURL:    "https://cashflux.example.com/cancel",
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout", strings.NewReader(`{"interval":"monthly"}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("checkout status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var body billingSessionResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil || body.URL == "" {
+		t.Fatalf("checkout body = %+v err %v", body, err)
+	}
+	if gotForm.Get("mode") != "subscription" || gotForm.Get("line_items[0][price]") != "price_monthly" ||
+		gotForm.Get("client_reference_id") != user.ID || gotForm.Get("subscription_data[metadata][plan]") != "personal_monthly" {
+		t.Fatalf("checkout form = %+v", gotForm)
+	}
+}
+
+func TestBillingPortalCreatesStripeSession(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 19, 15, 5, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutSubscription(Subscription{
+		UserID:             user.ID,
+		StripeCustomer:     "cus_123",
+		StripeSubscription: "sub_123",
+		Status:             "active",
+		Plan:               "personal_annual",
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatalf("PutSubscription: %v", err)
+	}
+	var gotForm url.Values
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/billing_portal/sessions" {
+			t.Fatalf("stripe path = %s", r.URL.Path)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("ParseForm: %v", err)
+		}
+		gotForm = r.PostForm
+		_, _ = w.Write([]byte(`{"url":"https://billing.stripe.test/session"}`))
+	}))
+	defer stripe.Close()
+	cfg := Config{
+		AuthMode:              "token",
+		Token:                 "dev-token",
+		Billing:               true,
+		StripeAPIBaseURL:      stripe.URL,
+		StripeSecretKey:       "sk_test",
+		StripePortalReturnURL: "https://cashflux.example.com/cloud",
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/portal", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("portal status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if gotForm.Get("customer") != "cus_123" || gotForm.Get("return_url") != cfg.StripePortalReturnURL {
+		t.Fatalf("portal form = %+v", gotForm)
+	}
+}
+
+func TestBillingCheckoutRejectsInvalidInterval(t *testing.T) {
+	store := openTestStore(t)
+	seedSyncUser(t, store, authUserFromToken("dev-token").ID, time.Now().UTC())
+	cfg := Config{
+		AuthMode:          "token",
+		Token:             "dev-token",
+		Billing:           true,
+		StripeSecretKey:   "sk_test",
+		StripePriceAnnual: "price_annual",
+		StripeSuccessURL:  "https://cashflux.example.com/success",
+		StripeCancelURL:   "https://cashflux.example.com/cancel",
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout", strings.NewReader(`{"interval":"weekly"}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("invalid interval status = %d body %q", rr.Code, rr.Body.String())
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonInvalidArgument)
 }
 
 func blobHash(data []byte) string {

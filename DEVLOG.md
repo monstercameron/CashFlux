@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add stripe billing sessions (7.11)
+
+- Added authenticated `POST /v1/billing/checkout` and `POST /v1/billing/portal` endpoints.
+- Checkout sessions choose the configured annual/monthly Stripe price and attach the CashFlux user id/plan in
+  session and subscription metadata.
+- Portal sessions use the stored Stripe customer id from the current subscription row.
+- Added fake-Stripe tests for Checkout form fields, portal form fields, invalid interval handling, and env parsing
+  for billing settings.
+
 ## 2026-06-19 - test: cover custom-field defs in the export/import round trip
 
 - While auditing export/import for losslessness, noticed the canonical round-trip test fixture populated every

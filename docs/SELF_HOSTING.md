@@ -196,9 +196,11 @@ the per-user warning line. Set `CASHFLUX_SERVER_STORAGE_MAX_BYTES` to enforce a 
 storage. The default `0` is unlimited for self-hosting; when set, blob uploads that would exceed the user's
 distinct linked blob bytes return HTTP 507 with `storage quota exceeded`.
 
-Hosted billing deployments set `CASHFLUX_SERVER_BILLING=true` and `CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET` so
-`/v1/billing/stripe/webhook` can verify Stripe signatures before updating subscription state. Leave billing
-disabled for ordinary self-hosting.
+Hosted billing deployments set `CASHFLUX_SERVER_BILLING=true`, `CASHFLUX_SERVER_STRIPE_SECRET_KEY`, the
+annual/monthly Stripe price ids, Checkout return URLs, portal return URL, and
+`CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET`. The server creates Checkout/customer-portal sessions and verifies
+`/v1/billing/stripe/webhook` signatures before updating subscription state. Leave billing disabled for ordinary
+self-hosting.
 
 For status-page and incident handling, expose `/status` through the same TLS host and use `docs/INCIDENT_RESPONSE.md` for severity levels, update cadence, recovery, and postmortems.
 

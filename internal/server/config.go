@@ -33,7 +33,14 @@ type Config struct {
 	Token                             string
 	TokenSHA256                       string
 	GeneratedToken                    bool
+	StripeAPIBaseURL                  string
+	StripeSecretKey                   string
 	StripeWebhookSecret               string
+	StripePriceAnnual                 string
+	StripePriceMonthly                string
+	StripeSuccessURL                  string
+	StripeCancelURL                   string
+	StripePortalReturnURL             string
 	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
 	AIProxyDisabled                   bool
@@ -94,7 +101,14 @@ func FromEnv() (Config, error) {
 	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))
 	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
 	cfg.TokenSHA256 = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN_SHA256"))
+	cfg.StripeAPIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_API_BASE_URL"))
+	cfg.StripeSecretKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_SECRET_KEY"))
 	cfg.StripeWebhookSecret = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET"))
+	cfg.StripePriceAnnual = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_PRICE_ANNUAL"))
+	cfg.StripePriceMonthly = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_PRICE_MONTHLY"))
+	cfg.StripeSuccessURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_SUCCESS_URL"))
+	cfg.StripeCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_CANCEL_URL"))
+	cfg.StripePortalReturnURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_PORTAL_RETURN_URL"))
 	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
 	cfg.AIProxyDisabled = !envBool("CASHFLUX_SERVER_AI_PROXY_ENABLED", true)

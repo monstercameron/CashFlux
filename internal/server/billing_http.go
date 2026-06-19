@@ -8,12 +8,163 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const stripeSignatureHeader = "Stripe-Signature"
+
+type billingSessionResponse struct {
+	URL string `json:"url"`
+}
+
+type checkoutRequest struct {
+	Interval string `json:"interval"`
+}
+
+func handleBillingCheckout(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := authorizedBillingRequest(w, r, cfg, store)
+		if !ok {
+			return
+		}
+		var req checkoutRequest
+		if r.Body != nil {
+			_ = json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&req)
+		}
+		price, plan, ok := stripePriceForInterval(w, cfg, req.Interval)
+		if !ok {
+			return
+		}
+		form := url.Values{}
+		form.Set("mode", "subscription")
+		form.Set("success_url", strings.TrimSpace(cfg.StripeSuccessURL))
+		form.Set("cancel_url", strings.TrimSpace(cfg.StripeCancelURL))
+		form.Set("client_reference_id", user.ID)
+		form.Set("line_items[0][price]", price)
+		form.Set("line_items[0][quantity]", "1")
+		form.Set("metadata[user_id]", user.ID)
+		form.Set("metadata[plan]", plan)
+		form.Set("subscription_data[metadata][user_id]", user.ID)
+		form.Set("subscription_data[metadata][plan]", plan)
+		form.Set("allow_promotion_codes", "true")
+		sessionURL, err := createStripeSession(r, cfg, "/checkout/sessions", form)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "stripe checkout session failed")
+			return
+		}
+		writeJSON(w, billingSessionResponse{URL: sessionURL})
+	}
+}
+
+func handleBillingPortal(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := authorizedBillingRequest(w, r, cfg, store)
+		if !ok {
+			return
+		}
+		sub, ok, err := store.GetSubscription(user.ID)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "subscription lookup failed")
+			return
+		}
+		if !ok || strings.TrimSpace(sub.StripeCustomer) == "" {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "stripe customer is not configured")
+			return
+		}
+		form := url.Values{}
+		form.Set("customer", sub.StripeCustomer)
+		form.Set("return_url", strings.TrimSpace(cfg.StripePortalReturnURL))
+		sessionURL, err := createStripeSession(r, cfg, "/billing_portal/sessions", form)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "stripe portal session failed")
+			return
+		}
+		writeJSON(w, billingSessionResponse{URL: sessionURL})
+	}
+}
+
+func authorizedBillingRequest(w http.ResponseWriter, r *http.Request, cfg Config, store *Store) (AuthUser, bool) {
+	if !writeCORS(w, r, cfg) {
+		writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+		return AuthUser{}, false
+	}
+	if store == nil {
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
+		return AuthUser{}, false
+	}
+	if !cfg.Billing {
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "billing is disabled")
+		return AuthUser{}, false
+	}
+	if strings.TrimSpace(cfg.StripeSecretKey) == "" {
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "stripe secret key is not configured")
+		return AuthUser{}, false
+	}
+	user, ok := httpBearerUser(r, cfg)
+	if !ok {
+		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
+		return AuthUser{}, false
+	}
+	SetLogScope(r.Context(), LogScope{UserID: user.ID})
+	return user, true
+}
+
+func stripePriceForInterval(w http.ResponseWriter, cfg Config, interval string) (string, string, bool) {
+	switch strings.ToLower(strings.TrimSpace(interval)) {
+	case "", "annual", "yearly":
+		price := strings.TrimSpace(cfg.StripePriceAnnual)
+		if price == "" {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "annual stripe price is not configured")
+			return "", "", false
+		}
+		return price, "personal_annual", true
+	case "monthly":
+		price := strings.TrimSpace(cfg.StripePriceMonthly)
+		if price == "" {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "monthly stripe price is not configured")
+			return "", "", false
+		}
+		return price, "personal_monthly", true
+	default:
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "billing interval is invalid")
+		return "", "", false
+	}
+}
+
+func createStripeSession(r *http.Request, cfg Config, path string, form url.Values) (string, error) {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.StripeAPIBaseURL), "/")
+	if baseURL == "" {
+		baseURL = "https://api.stripe.com/v1"
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, baseURL+path, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(cfg.StripeSecretKey))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("stripe status %d", resp.StatusCode)
+	}
+	var out struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(out.URL) == "" {
+		return "", fmt.Errorf("stripe session missing url")
+	}
+	return strings.TrimSpace(out.URL), nil
+}
 
 type stripeEvent struct {
 	Type string `json:"type"`

@@ -68,6 +68,8 @@ debounced autosave and on reconnect; pull on load and on tab focus; apply the ne
 CashFlux uses one user-facing backend base URL in Settings. The client derives two transports from it:
 
 - **HTTP JSON/blob routes:** use the configured base URL directly, e.g. `http://127.0.0.1:8081/v1/version`
+- **Billing routes:** authenticated `POST /v1/billing/checkout` and `POST /v1/billing/portal` create Stripe
+  Checkout and customer-portal sessions using configured price ids and return URLs.
   and `/v1/blobs/{hash}`. OAuth and blob bytes stay on HTTP; AI and sync do not.
 - **Stripe webhooks:** `POST /v1/billing/stripe/webhook` verifies Stripe signatures with
   `CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET` before updating subscription state.

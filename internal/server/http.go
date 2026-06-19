@@ -70,6 +70,8 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 				"/v1/version",
 				"/v1/audit",
 				"/v1/account/export",
+				"/v1/billing/checkout",
+				"/v1/billing/portal",
 				"/v1/billing/stripe/webhook",
 				"/legal/privacy",
 				"/legal/terms",
@@ -117,6 +119,10 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("GET /v1/account/export", handleAccountExport(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/account", handleCORSPreflight(cfg))
 	mux.HandleFunc("DELETE /v1/account", handleAccountDelete(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/billing/checkout", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/billing/checkout", handleBillingCheckout(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/billing/portal", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/billing/portal", handleBillingPortal(cfg, store))
 	mux.HandleFunc("POST /v1/billing/stripe/webhook", handleStripeWebhook(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
