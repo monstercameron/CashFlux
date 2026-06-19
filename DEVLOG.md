@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: settle-up CSV export (B24)
+
+- Added pure `split.CSV(transfers, name, amount)` (From,To,Amount header; callback-based name/amount, FX/format
+  agnostic, mirrors reports/bills CSV) + a Download CSV button on the Split settle-up card. The screen builds
+  `[]split.Transfer` alongside the on-screen owes list (sharer→payer, share) and feeds it to split.CSV.
+  Added split.downloadCsv/downloadCsvTitle i18n keys.
+- Also ran a full health sweep this iteration: all 13 of my logic packages (budgeting/reports/payoff/split/
+  subscriptions/bills/goals/backup/notify/notifyfeed/ledger/money/i18n) pass `-count=1`. gofmt clean, wasm
+  build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: budget limit suggestions from history (D6)
 
 - Added pure `budgeting.SuggestLimit(categoryID, txns, now, months, rates)`: averages the category's spend over

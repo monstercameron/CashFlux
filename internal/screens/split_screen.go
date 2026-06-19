@@ -116,6 +116,7 @@ func Split() ui.Node {
 
 	// Settle-up: each sharer who isn't the payer owes the payer their share.
 	var owes []ui.Node
+	var transfers []split.Transfer
 	if payer := payerS.Get(); payer != "" && amt > 0 {
 		for _, id := range ids {
 			if id == payer {
@@ -125,6 +126,7 @@ func Split() ui.Node {
 				Span(Class("row-desc"), uistate.T("split.owes", nameByID[id], nameByID[payer])),
 				Span(Class("budget-amount"), fmtMoney(money.New(shareByID[id], base))),
 			))
+			transfers = append(transfers, split.Transfer{From: id, To: payer, Amount: shareByID[id]})
 		}
 	}
 
@@ -152,6 +154,13 @@ func Split() ui.Node {
 		If(len(owes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("split.settleUp")),
 			Div(Class("rows"), owes),
+			Div(Class("flex flex-wrap gap-2 py-1"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
+					nm := func(id string) string { return nameByID[id] }
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes("settle-up.csv", "text/csv", split.CSV(transfers, nm, csvAmount))
+				}), uistate.T("split.downloadCsv")),
+			),
 		)),
 	)
 }

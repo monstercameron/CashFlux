@@ -94,6 +94,8 @@ var english = Catalog{
 	"split.owes":             "%s owes %s",
 	"split.byWeight":         "Split by weight (shares or income)",
 	"split.weight":           "Weight",
+	"split.downloadCsv":      "Download CSV",
+	"split.downloadCsvTitle": "Download the settle-up plan as a CSV file",
 	"bills.totalDue":         "Total due soon",
 	"bills.annualCost":       "Per year",
 	"bills.count":            "Upcoming bills",

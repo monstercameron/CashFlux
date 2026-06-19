@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Settle-up CSV export (B24).** New pure, table-tested `split.CSV` and a Download CSV button on the Split
+  screen's settle-up card, so you can save or share the who-owes-whom plan (From, To, Amount) — matching the
+  CSV export the Bills, Subscriptions, and Reports screens already offer.
+
+### Added
 - **Budget limit suggestions from history (D6).** New pure, table-tested `budgeting.SuggestLimit` computes a
   category's average monthly spend over recent full months (averaged across its span of activity, so new
   categories aren't diluted), and the Budgets add form now shows "You've averaged $X/mo here recently." for the
