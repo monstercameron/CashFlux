@@ -11,7 +11,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -122,7 +124,7 @@ func artifactRow(props artifactRowProps) ui.Node {
 				Div(Class("row-meta"), meta+" · "+artifacts.HumanSize(a.Size)),
 			),
 		),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("action.delete")), OnClick(del), "✕"),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
 

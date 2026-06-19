@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -268,7 +270,7 @@ func workflowRow(props workflowRowProps) ui.Node {
 				Button(Class("btn"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
 				Button(Class("btn btn-primary"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow")),
 				Button(Class("btn"), Type("button"), OnClick(toggle), enableLabel),
-				Button(Class("btn-del"), Type("button"), Title(uistate.T("action.delete")), OnClick(del), "✕"),
+				Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 			),
 		),
 		result,

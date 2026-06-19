@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Artifacts and Workflows delete buttons use the x icon (C46).** Both screens' per-row delete now uses the
+  `x` glyph (with an aria-label) instead of a bare "✕".
 - **Budgets row actions have icons (C46).** Edit leads with a pencil and the delete button uses the `x` glyph
   (with an aria-label) instead of a bare "✕".
 - **Transactions row actions have icons (C46).** Edit leads with a pencil and the delete button uses the `x`
