@@ -9,8 +9,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -274,8 +276,8 @@ func TaskRow(props taskRowProps) ui.Node {
 			Span(Class("row-desc"), t.Title),
 			Div(Class("task-meta"), meta),
 		),
-		Button(Class("btn"), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("todo.deleteTitle")), OnClick(del), "✕"),
+		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
 

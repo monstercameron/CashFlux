@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **To-do row actions have icons (C46).** Edit leads with a pencil and the delete button uses the `x` glyph
+  (with an aria-label) instead of a bare "✕".
 - **Members row actions have icons (C46).** View-transactions leads with a list glyph, Edit with a pencil, and
   the delete button uses the `x` glyph (with an aria-label) instead of a bare "✕".
 - **Goals row actions have icons (C46).** Contribute leads with a plus-circle, Edit with a pencil, and the
