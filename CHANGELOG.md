@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Financial runway estimator (B21).** New pure, table-tested `reports.EstimateRunway` and
+  `reports.AverageMonthlyExpense`: from a cash balance and recent monthly spend they compute how many
+  months (and days) of buffer you have — the classic "how long would my savings last?" metric. A
+  non-positive burn reads as sustainable (never depletes); the average skips fully-inactive months so gaps
+  in history don't understate the burn. Logic-first per the SDLC; the Reports-screen surfacing builds on it.
 - **Budget pace warning on screen (D2).** Each budget row now shows a gentle "at this pace, projected to go
   over by $X" line while its period is still in progress and current spending is trending over — backed by
   `budgeting.ProjectPace`. Hidden once the period ends or the budget is already over (so it never doubles up

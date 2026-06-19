@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: financial runway estimator (B21)
+
+- Added pure `reports.EstimateRunway(balance, monthlyBurn) Runway` (Months/Days/Sustainable) + a companion
+  `reports.AverageMonthlyExpense(flows)` that averages Expense across monthly PeriodFlows, skipping
+  fully-inactive buckets (no income AND no expense) so empty months don't drag the burn toward zero. Built on
+  the existing `IncomeExpenseSeries` shape so a caller does `EstimateRunway(liquidBalance, AverageMonthlyExpense(series))`.
+- Edge handling: non-positive burn → Sustainable (balance never depletes); non-positive balance with burn →
+  zero runway; leftover prorated into days against a 30-day month (always 0–29, no overflow at realistic
+  amounts). Table tests cover all branches + an end-to-end average→runway.
+- Logic-first per the SDLC; surfacing on the Reports screen needs a liquid-balance (cash-accounts-only)
+  computation, deferred to a follow-up. gofmt/vet/native reports tests green, wasm build green.
+- Restored CHANGELOG/DEVLOG from HEAD first (parallel session re-truncated both to 0 bytes again).
+
 ## 2026-06-19 — feat: budget pace warning on screen (D2)
 
 - Surfaced `budgeting.ProjectPace` on the Budgets screen. In the per-budget evaluation loop I now also call
