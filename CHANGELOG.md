@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Billing-disabled entitlement seam.** `IsCloudActive` now centralizes Cloud entitlement checks
+  and treats billing-disabled self-host deployments as active by default.
 - **Self-host token hardening.** Token mode now accepts `CASHFLUX_SERVER_TOKEN_SHA256`,
   compares bearer tokens by digest, and generates/prints a high-entropy token when no token is configured.
 - **OAuth start endpoint.** `GET /v1/auth/{provider}` now redirects configured Google/GitHub providers

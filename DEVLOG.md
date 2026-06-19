@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add cloud entitlement seam
+
+- Added `IsCloudActive` as the single server-side seam for future Sync/AI/blob entitlement checks.
+- Billing-disabled deployments, including self-host token mode, return active by default so self-host remains
+  always-on while Stripe/subscription work is still absent.
+- Billing-enabled deployments currently return inactive until subscription state lands, keeping the future gate
+  explicit instead of silently allowing a half-wired paid mode.
+- Added focused tests for billing-disabled active, missing-user rejection, and billing-enabled inactive behavior.
+
 ## 2026-06-18 - feat: harden self-host tokens
 
 - Added `CASHFLUX_SERVER_TOKEN_SHA256` so self-host deployments can store only a SHA-256 digest in config while
