@@ -4241,9 +4241,12 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `cashflux-server rotate-token` are done.
 
 #### Transport / browser
-- [~] TLS-only (HSTS, modern ciphers); `wss` for the bridge; redirect HTTP→HTTPS.
+- [x] TLS-only (HSTS, modern ciphers); `wss` for the bridge; redirect HTTP→HTTPS.
       App origins and OAuth redirects now reject cleartext HTTP except loopback local development. Remaining:
       deploy/proxy redirect and cipher policy, plus explicit `wss` proxy verification.
+      Done: app/OAuth config rejects cleartext non-loopback origins, Caddy terminates TLS with TLS 1.2/1.3
+      AEAD ciphers and automatic HTTP-to-HTTPS redirects, and the self-host docs/tests pin the `/grpc`
+      `wss://<domain>/grpc` tunnel and long-lived websocket proxy settings.
 - [x] Security headers: HSTS, X-Content-Type-Options, Referrer-Policy, COOP/COEP, frame-ancestors/CSP
       on any served HTML; lock CORS + WS `WithOriginCheck` to the SPA origin allow-list.
 - [x] CSRF protection on cookie-authed HTTP endpoints (OAuth callback, refresh); SameSite + token.

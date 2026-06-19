@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Self-host TLS policy (7.14).** The bundled Caddy config now pins TLS 1.2/1.3 with modern AEAD cipher suites
+  while preserving long-lived `/grpc` websocket streams.
 - **Self-host Docker quickstart status (7.12).** Confirmed the Compose quickstart, env template, Caddy TLS notes,
   README docs link, and in-app Settings link are all wired.
 - **Export/import round-trip test now covers custom-field definitions.** The lossless-export test exercised

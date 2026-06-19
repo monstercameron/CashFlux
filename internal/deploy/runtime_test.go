@@ -673,6 +673,9 @@ func TestSelfHostCaddyKeepsGRPCWebsocketStreamsAlive(t *testing.T) {
 	for _, want := range []string{
 		"{$CASHFLUX_DOMAIN}",
 		"reverse_proxy cashflux-server:8081",
+		"protocols tls1.2 tls1.3",
+		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+		"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
 		"header_up X-Forwarded-Proto {scheme}",
 		"header_up X-Forwarded-Host {host}",
 		"keepalive 2m",

@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: pin self-host tls policy (7.14)
+
+- Added an explicit TLS 1.2/1.3 policy and modern AEAD cipher suites to `deploy/Caddyfile.selfhost`.
+- Kept the existing reverse-proxy websocket keepalive/stream settings for long-lived GoGRPCBridge `/grpc`
+  connections.
+- Updated the self-host TLS notes and deploy tests that pin the Caddyfile requirements.
+
 ## 2026-06-19 - docs: close docker quickstart status (7.12)
 
 - Audited the self-host path and found the remaining "link from Settings" already satisfied by the Cloud/server
