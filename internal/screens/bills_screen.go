@@ -94,6 +94,7 @@ func Bills() ui.Node {
 	return Div(
 		If(len(upcoming) > 0, Div(Class("stat-grid"),
 			stat(uistate.T("bills.totalDue"), fmtMoney(money.New(total, base)), "neg"),
+			stat(uistate.T("bills.annualCost"), fmtMoney(money.New(total*12, base)), ""),
 			stat(uistate.T("bills.count"), fmt.Sprintf("%d", len(upcoming)), ""),
 			stat(uistate.T("bills.nextDue"), nextDue, ""),
 		)),

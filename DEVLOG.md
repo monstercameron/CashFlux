@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: annual bill cost on the Bills screen (B22)
+
+- Added a "Per year" stat to the Bills grid: the already-computed (FX-converted) monthly bill total × 12.
+  Bills are monthly recurring (Upcoming derives one occurrence per liability account), so ×12 is the right
+  annualization. UI-only — kept the sum screen-side because each bill's amount is FX-converted before summing
+  (the bills package stays currency-agnostic via callbacks). Added the bills.annualCost i18n key. gofmt clean,
+  i18n tests + wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: net-worth breakdown on Reports (B21)
 
 - Added a "Net worth" stat card (assets / liabilities / net, toned pos/neg/accent) to the Reports screen above

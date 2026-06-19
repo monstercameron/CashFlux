@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Annual bill cost on the Bills screen (B22).** The Bills stat grid now shows a "Per year" figure (the
+  upcoming monthly obligations × 12) next to "Total due soon", so the yearly weight of recurring debt payments
+  is visible at a glance.
+
+### Added
 - **Net-worth breakdown on Reports (B21).** The Reports screen now shows a "Net worth" card with assets,
   liabilities, and net totals (as of now) above the existing net-worth trend chart, so you see the composition
   and not just the line. Backed by the existing `ledger.NetWorth`.

@@ -95,6 +95,7 @@ var english = Catalog{
 	"split.byWeight":         "Split by weight (shares or income)",
 	"split.weight":           "Weight",
 	"bills.totalDue":         "Total due soon",
+	"bills.annualCost":       "Per year",
 	"bills.count":            "Upcoming bills",
 	"bills.nextDue":          "Next due",
 	"bills.empty":            "No upcoming bills. Bills are derived from liability accounts that have a statement due-day and a minimum payment.",
