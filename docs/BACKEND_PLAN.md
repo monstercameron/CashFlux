@@ -25,7 +25,7 @@ interprets the dataset — it stores and forwards.
   uses — consistent, no cgo), WAL mode. One DB file.
 - **Blob store:** content-addressed files on disk (`blobs/<sha256>`), pluggable to an
   S3-compatible bucket later. Dedup + integrity for free (hash = name).
-- **Streaming:** Server-Sent Events for AI responses.
+- **Streaming:** gRPC server streams over the GoGRPCBridge tunnel for AI chunk responses.
 
 ## Data model (server SQLite)
 - `users(id, provider, subject, email, created_at)` — one row per OAuth identity.
@@ -65,8 +65,8 @@ debounced autosave and on reconnect; pull on load and on tab focus; apply the ne
 ## Transport and auth handshake
 CashFlux uses one user-facing backend base URL in Settings. The client derives two transports from it:
 
-- **HTTP JSON/blob routes:** use the configured base URL directly, e.g. `http://127.0.0.1:8081/v1/version`,
-  `/v1/ai/key`, and `/v1/blobs/{hash}`.
+- **HTTP JSON/blob routes:** use the configured base URL directly, e.g. `http://127.0.0.1:8081/v1/version`
+  and `/v1/blobs/{hash}`. OAuth and blob bytes stay on HTTP; AI and sync do not.
 - **gRPC bridge routes:** convert the same base URL to a websocket `/grpc` target (`http` → `ws`, `https` →
   `wss`) and dial it with GoGRPCBridge `BuildTunnelConn`.
 
@@ -93,13 +93,13 @@ Keeps the synced snapshot small even with images/datasets.
   deduped by hash across workspaces. Refcount via `workspace_blobs`; GC unreferenced.
 
 ## AI proxy (per-user encrypted BYO key)
-- `POST /v1/ai/key {provider, key}` → encrypt with AES-GCM (master key from env/secret
-  manager) → store ciphertext. Entered once over TLS; never returned to the client.
-- `POST /v1/ai/chat` and `/v1/ai/vision` → server loads + decrypts the user's key, calls
-  OpenAI, **streams SSE** back. Enforces a model allow-list, per-user rate limit + usage
-  metering, and request-size caps.
-- The client stops calling OpenAI directly and calls the proxy with its session token, so
-  the key never lives in the browser after setup.
+- `AIService.SetKey {provider, key}` over `/grpc` encrypts the BYO key with AES-GCM (master key from env/secret
+  manager) and stores only ciphertext. Entered once over TLS; never returned to the client.
+- `AIService.Chat`, `AIService.Vision`, and `AIService.ListModels` run over the GoGRPCBridge `/grpc` tunnel.
+  The server loads + decrypts the user's key, calls OpenAI, enforces the model allow-list, applies per-user
+  rate limits/usage metering/request-size caps, and maps upstream failures to gRPC status codes.
+- The legacy HTTP AI routes are retired: `/v1/ai/key`, `/v1/ai/chat`, and `/v1/ai/vision` are not mounted.
+  The client keeps direct OpenAI as the local-only fallback, but backend proxy traffic uses authenticated gRPC.
 
 ## Auth (OAuth)
 - `GET /v1/auth/:provider` (google|github) → redirect with PKCE + `state`.
@@ -115,8 +115,8 @@ in every query; request-size limits (dataset + blob caps); per-user rate limitin
 restricted to the app origin; no secrets in logs; usage/audit logging.
 
 ## Tech stack
-Go · `net/http` + chi · `ncruces/go-sqlite3` (WAL) · `golang.org/x/oauth2` · AES-GCM ·
-SSE streaming · blobs on disk (S3 adapter later). Ships as one binary + a data dir.
+Go · `net/http` + chi · GoGRPCBridge · `google.golang.org/grpc` · `ncruces/go-sqlite3` (WAL) ·
+AES-GCM · blobs on disk (S3 adapter later). Ships as one binary + a data dir.
 
 ## Deployment & ops
 - Single binary + SQLite file + `blobs/` dir behind TLS (Caddy) or a managed host
@@ -132,8 +132,8 @@ SSE streaming · blobs on disk (S3 adapter later). Ships as one binary + a data 
 2. **Artifact extraction:** move `domain.Artifact.Bytes` out of the synced snapshot —
    dataset carries the hash/metadata; bytes go to the blob endpoints (kept locally as a
    cache). This is the one schema-shaped change to the client.
-3. **AI calls via proxy:** replace direct OpenAI calls (`internal/ai`) with proxy calls;
-   key setup posts to `/v1/ai/key`.
+3. **AI calls via proxy:** prefer `AIService` over the `/grpc` GoGRPCBridge tunnel when backend URL/token prefs
+   are configured; direct OpenAI remains a local-only fallback.
 4. **OAuth login + token handling**, while preserving offline-first (no login required to
    use the app locally; sync/AI activate when signed in).
 

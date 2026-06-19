@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: align backend plan with gRPC AI proxy
+
+- Updated `docs/BACKEND_PLAN.md` so the AI proxy path matches current behavior: `AIService.SetKey`,
+  `ListModels`, `Chat`, and `Vision` run over the GoGRPCBridge `/grpc` tunnel.
+- Removed the stale plan language that described `/v1/ai/key`, `/v1/ai/chat`, `/v1/ai/vision`, and SSE as the
+  active backend AI transport.
+- Added deploy coverage to keep the plan aligned with the retired legacy HTTP AI routes.
+
 ## 2026-06-19 - feat: add backend proto contract (7.1)
 
 - Added `proto/cashflux/v1/cashflux.proto` as the canonical backend contract for the GoGRPCBridge path:

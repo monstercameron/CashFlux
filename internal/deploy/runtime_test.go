@@ -446,3 +446,33 @@ func TestBackendToolchainPinnedForServerAndWASM(t *testing.T) {
 		}
 	}
 }
+
+func TestBackendPlanDocumentsAIOverGRPC(t *testing.T) {
+	data, err := os.ReadFile("../../docs/BACKEND_PLAN.md")
+	if err != nil {
+		t.Fatalf("read backend plan: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"AIService.SetKey",
+		"AIService.Chat",
+		"AIService.Vision",
+		"GoGRPCBridge `/grpc` tunnel",
+		"The legacy HTTP AI routes are retired",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("backend plan missing %q", want)
+		}
+	}
+	for _, legacy := range []string{
+		"POST /v1/ai/key",
+		"POST /v1/ai/chat",
+		"POST /v1/ai/vision",
+		"streams SSE",
+		"SSE streaming",
+	} {
+		if strings.Contains(doc, legacy) {
+			t.Fatalf("backend plan still documents legacy AI transport %q", legacy)
+		}
+	}
+}

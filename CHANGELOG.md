@@ -11,6 +11,10 @@ and every commit updates this file under `Unreleased`.
   tests covering SyncService/AIService methods, opaque dataset bytes, and blob references.
 - **Backend toolchain pin reconciliation (7.0).** Locked the server/client backend toolchain expectation
   with deploy coverage for `go.mod` Go 1.26.0 and the `golang:1.26-alpine` server build image.
+
+### Changed
+- **Backend AI transport docs.** Updated `docs/BACKEND_PLAN.md` to describe AI key upload, chat, vision, and
+  model listing over `AIService` on `/grpc`; the old `/v1/ai/*` HTTP/SSE proxy routes are documented as retired.
 - **Liquid-balance helper.** New pure, table-tested `ledger.LiquidBalance` sums spendable cash (checking,
   debit, savings, cash; non-archived, FX-converted) — the canonical figure behind the cash-runway metric. The
   Reports runway now uses it instead of an inline loop.
