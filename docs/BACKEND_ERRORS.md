@@ -52,6 +52,12 @@ storage quota, and `503` for unavailable dependencies/readiness.
 
 ## Migration Note
 
-Existing plain-text HTTP error bodies are being migrated to JSON details using the stable reasons above. Until
+HTTP account and admin support routes now return JSON bodies shaped like:
+
+```json
+{"error":{"reason":"REQUEST_INVALID","message":"invalid day"}}
+```
+
+Remaining plain-text HTTP error bodies are being migrated to JSON details using the stable reasons above. Until
 that migration is complete, handlers must still choose the mapped HTTP status and avoid leaking secrets, tokens,
 datasets, blob bytes, or internal stack details.

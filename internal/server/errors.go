@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"google.golang.org/grpc/codes"
@@ -30,6 +31,17 @@ type ErrorTaxonomy struct {
 	HTTP   int
 }
 
+// ErrorResponse is the machine-readable HTTP error body.
+type ErrorResponse struct {
+	Error ErrorDetail `json:"error"`
+}
+
+// ErrorDetail describes a backend error without leaking internal details.
+type ErrorDetail struct {
+	Reason  ErrorReason `json:"reason"`
+	Message string      `json:"message"`
+}
+
 // BackendErrorTaxonomy is the stable reason/code/status table for backend API errors.
 var BackendErrorTaxonomy = []ErrorTaxonomy{
 	{Reason: ErrorReasonUnauthenticated, GRPC: codes.Unauthenticated, HTTP: http.StatusUnauthorized},
@@ -53,4 +65,18 @@ func LookupErrorTaxonomy(reason ErrorReason) (ErrorTaxonomy, bool) {
 		}
 	}
 	return ErrorTaxonomy{}, false
+}
+
+func writeErrorJSON(w http.ResponseWriter, reason ErrorReason, message string) {
+	row, ok := LookupErrorTaxonomy(reason)
+	if !ok {
+		row = ErrorTaxonomy{Reason: ErrorReasonInternal, HTTP: http.StatusInternalServerError}
+		reason = ErrorReasonInternal
+		message = "internal server error"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(row.HTTP)
+	if err := json.NewEncoder(w).Encode(ErrorResponse{Error: ErrorDetail{Reason: reason, Message: message}}); err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
 }

@@ -16,30 +16,30 @@ type AdminUsageResponse struct {
 func handleAdminUsage(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
-			http.Error(w, "origin not allowed", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
 		if store == nil {
-			http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
 		user, ok := httpBearerUser(r, cfg)
 		if !ok {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
 		}
 		day := time.Now().UTC()
 		if raw := r.URL.Query().Get("day"); raw != "" {
 			parsed, err := time.Parse("2006-01-02", raw)
 			if err != nil {
-				http.Error(w, "invalid day", http.StatusBadRequest)
+				writeErrorJSON(w, ErrorReasonInvalidArgument, "invalid day")
 				return
 			}
 			day = parsed
 		}
 		usage, ok, err := store.GetUsage(user.ID, day)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "usage lookup failed")
 			return
 		}
 		if !ok {

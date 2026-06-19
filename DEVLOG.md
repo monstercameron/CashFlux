@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: return json error details for account admin (7.19)
+
+- Added `writeErrorJSON` and the shared `ErrorResponse` shape for machine-readable HTTP errors.
+- Migrated account export/delete and admin usage errors to stable JSON reasons.
+- Covered unauthenticated account/admin errors, invalid admin day input, and unknown-reason fallback.
+- Left the 7.19 TODO in progress while blob/OAuth/audit/metrics/plain HTTP errors still need migration.
+
 ## 2026-06-19 - feat: add backend error taxonomy (7.19)
 
 - Added `internal/server.BackendErrorTaxonomy` with stable reason strings and gRPC/HTTP status mappings.

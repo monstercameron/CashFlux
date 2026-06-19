@@ -13,11 +13,11 @@ func handleAccountExport(cfg Config, store *Store) http.HandlerFunc {
 		}
 		export, found, err := store.ExportAccount(user.ID, timeNowUTC())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "account export failed")
 			return
 		}
 		if !found {
-			http.Error(w, "account not found", http.StatusNotFound)
+			writeErrorJSON(w, ErrorReasonNotFound, "account not found")
 			return
 		}
 		auditFromRequest(r, store, user, "account.export", "user", user.ID)
@@ -34,15 +34,15 @@ func handleAccountDelete(cfg Config, store *Store) http.HandlerFunc {
 		auditFromRequest(r, store, user, "account.delete", "user", user.ID)
 		deleted, err := store.DeleteAccount(user.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "account delete failed")
 			return
 		}
 		if !deleted {
-			http.Error(w, "account not found", http.StatusNotFound)
+			writeErrorJSON(w, ErrorReasonNotFound, "account not found")
 			return
 		}
 		if _, err := store.SweepUnreferencedBlobs(blobRoot(cfg)); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "blob cleanup failed")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -51,16 +51,16 @@ func handleAccountDelete(cfg Config, store *Store) http.HandlerFunc {
 
 func authorizedAccountRequest(w http.ResponseWriter, r *http.Request, cfg Config, store *Store) (AuthUser, bool) {
 	if !writeCORS(w, r, cfg) {
-		http.Error(w, "origin not allowed", http.StatusForbidden)
+		writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 		return AuthUser{}, false
 	}
 	if store == nil {
-		http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 		return AuthUser{}, false
 	}
 	user, ok := httpBearerUser(r, cfg)
 	if !ok {
-		http.Error(w, "missing bearer token", http.StatusUnauthorized)
+		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 		return AuthUser{}, false
 	}
 	SetLogScope(r.Context(), LogScope{UserID: user.ID})

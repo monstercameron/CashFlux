@@ -546,6 +546,45 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestAccountAndAdminErrorsReturnMachineReadableReasons(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token", AppOrigin: "http://127.0.0.1:8080"}, openTestStore(t))
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+		status int
+		reason ErrorReason
+		auth   bool
+	}{
+		{name: "account export unauthenticated", method: http.MethodGet, path: "/v1/account/export", status: http.StatusUnauthorized, reason: ErrorReasonUnauthenticated},
+		{name: "account delete unauthenticated", method: http.MethodDelete, path: "/v1/account", status: http.StatusUnauthorized, reason: ErrorReasonUnauthenticated},
+		{name: "admin bad day", method: http.MethodGet, path: "/v1/admin/usage?day=2026-99-99", status: http.StatusBadRequest, reason: ErrorReasonInvalidArgument, auth: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("Origin", "http://127.0.0.1:8080")
+			if tc.auth {
+				req.Header.Set("Authorization", "Bearer dev-token")
+			}
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != tc.status {
+				t.Fatalf("status = %d body %q, want %d", rr.Code, rr.Body.String(), tc.status)
+			}
+			if rr.Header().Get("Content-Type") != "application/json" {
+				t.Fatalf("content-type = %q", rr.Header().Get("Content-Type"))
+			}
+			var body ErrorResponse
+			if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode error: %v", err)
+			}
+			if body.Error.Reason != tc.reason || body.Error.Message == "" {
+				t.Fatalf("error body = %+v, want reason %s", body, tc.reason)
+			}
+		})
+	}
+}
+
 func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	metrics := NewMetrics()
 	h := NewMux(Config{AuthMode: "token", Token: "dev-token", Metrics: metrics}, openTestStore(t))
