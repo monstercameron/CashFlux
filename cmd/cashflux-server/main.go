@@ -73,6 +73,16 @@ func main() {
 		logger.Info("server retention complete", "audit_events_deleted", result.AuditEventsDeleted, "snapshot_history_deleted", result.SnapshotHistoryDeleted, "backup_directories_deleted", result.BackupDirectoriesDeleted)
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "migrate-check" {
+		version, err := server.DryRunStoreMigrations(filepath.Join(cfg.DataDir, "cashflux-server.db"))
+		if err != nil {
+			logger.Error("server migration dry-run failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("server migration dry-run complete", "schema_version", version)
+		fmt.Printf("schema_version=%d\n", version)
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "gc-blobs" {
 		store, err := server.OpenStore(filepath.Join(cfg.DataDir, "cashflux-server.db"))
 		if err != nil {

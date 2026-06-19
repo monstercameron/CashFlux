@@ -142,6 +142,8 @@ docker compose -f docker-compose.selfhost.yml up -d --build
 ```
 
 Migrations run on server startup. Back up the data volume before upgrading. The server rejects a database schema newer than it supports.
+Before rebuilding, run `docker compose -f docker-compose.selfhost.yml run --rm cashflux-server migrate-check`
+to apply migrations to a temporary database copy and confirm the target binary can migrate safely.
 
 For recurring operations, use `docs/OPERATIONS_RUNBOOK.md` for deploy, rollback, restore, key rotation, session revocation, and past-due handling. Use `docs/OBSERVABILITY.md` for metrics/logs and `docs/INCIDENT_RESPONSE.md` during incidents.
 

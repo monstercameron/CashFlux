@@ -11,14 +11,22 @@ This runbook covers recurring operator tasks for the optional CashFlux backend. 
    docker compose -f docker-compose.selfhost.yml run --rm cashflux-server backup /data/backups
    ```
 
-3. Pull and rebuild:
+3. Dry-run migrations against a temporary copy of the SQLite database:
+
+   ```sh
+   docker compose -f docker-compose.selfhost.yml run --rm cashflux-server migrate-check
+   ```
+
+   This must print the supported `schema_version` without changing the live database. If it fails, stop the deploy and keep the backup from step 2.
+
+4. Pull and rebuild:
 
    ```sh
    git pull --ff-only
    docker compose -f docker-compose.selfhost.yml up -d --build
    ```
 
-4. Verify:
+5. Verify:
 
    ```sh
    curl -fsS https://<domain>/status
@@ -26,7 +34,7 @@ This runbook covers recurring operator tasks for the optional CashFlux backend. 
    curl -fsS -H "Authorization: Bearer <token>" https://<domain>/metrics >/dev/null
    ```
 
-5. Watch logs and metrics for at least 15 minutes: HTTP/gRPC errors, p99 latency, queue depth, database errors, and websocket upgrade failures.
+6. Watch logs and metrics for at least 15 minutes: HTTP/gRPC errors, p99 latency, queue depth, database errors, and websocket upgrade failures.
 
 ## Rollback
 

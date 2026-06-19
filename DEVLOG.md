@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add server migration dry-run (7.16)
+
+- Added `server.DryRunStoreMigrations`, which copies the SQLite database plus WAL/SHM sidecars to a temp
+  directory, runs the normal startup migrations on the copy, and returns the resulting schema version.
+- Added `cashflux-server migrate-check` for pre-deploy checks and documented it between backup and rebuild.
+- Covered missing-database dry-runs and an old-schema database that migrates in the copy while the live DB stays
+  unchanged.
+
 ## 2026-06-19 - fix: reject non-json billing checkout bodies (7.14)
 
 - Added a media-type check to the checkout JSON decoder: explicit request bodies must be `application/json`.

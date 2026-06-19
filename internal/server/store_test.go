@@ -82,6 +82,61 @@ INSERT INTO schema_meta(id, version) VALUES(1, 99);`); err != nil {
 	}
 }
 
+func TestDryRunStoreMigrationsDoesNotMutateLiveDB(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cashflux.db")
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("open seed db: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_meta (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL);`); err != nil {
+		t.Fatalf("seed schema meta: %v", err)
+	}
+	for _, stmt := range []string{serverSchemaV1, serverSchemaV2, serverSchemaV3} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("seed schema: %v", err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, 3);`); err != nil {
+		t.Fatalf("seed schema version: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close seed db: %v", err)
+	}
+
+	version, err := DryRunStoreMigrations(path)
+	if err != nil {
+		t.Fatalf("DryRunStoreMigrations: %v", err)
+	}
+	if version != CurrentServerSchemaVersion {
+		t.Fatalf("dry-run version = %d, want %d", version, CurrentServerSchemaVersion)
+	}
+	db, err = sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("reopen live db: %v", err)
+	}
+	defer db.Close()
+	var liveVersion int
+	if err := db.QueryRow("SELECT version FROM schema_meta WHERE id = 1").Scan(&liveVersion); err != nil {
+		t.Fatalf("live schema version: %v", err)
+	}
+	if liveVersion != 3 {
+		t.Fatalf("live schema version = %d, want unchanged 3", liveVersion)
+	}
+	if tableExists(t, db, "subscriptions") {
+		t.Fatal("dry-run created subscriptions table in live database")
+	}
+}
+
+func TestDryRunStoreMigrationsHandlesMissingDB(t *testing.T) {
+	version, err := DryRunStoreMigrations(filepath.Join(t.TempDir(), "cashflux.db"))
+	if err != nil {
+		t.Fatalf("DryRunStoreMigrations missing db: %v", err)
+	}
+	if version != CurrentServerSchemaVersion {
+		t.Fatalf("dry-run missing db version = %d, want %d", version, CurrentServerSchemaVersion)
+	}
+}
+
 func TestStoreReady(t *testing.T) {
 	s, err := OpenStore(filepath.Join(t.TempDir(), "cashflux.db"))
 	if err != nil {

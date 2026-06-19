@@ -380,6 +380,7 @@ func TestOperationsRunbookDefinesRequiredProcedures(t *testing.T) {
 		"## Revoke Sessions",
 		"## Past-Due Billing",
 		"cashflux-server backup",
+		"cashflux-server migrate-check",
 		"cashflux-server rotate-token",
 		"/v1/audit",
 	} {

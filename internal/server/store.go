@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -41,6 +42,67 @@ func OpenStore(path string) (*Store, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// DryRunStoreMigrations applies migrations to a temporary copy of path and
+// returns the migrated schema version without mutating the live database.
+func DryRunStoreMigrations(path string) (int, error) {
+	tempDir, err := os.MkdirTemp("", "cashflux-migrate-check-*")
+	if err != nil {
+		return 0, fmt.Errorf("server store: migration dry-run tempdir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+	tempPath := filepath.Join(tempDir, filepath.Base(path))
+	if _, err := os.Stat(path); err == nil {
+		if err := copyStoreFile(path, tempPath); err != nil {
+			return 0, err
+		}
+		for _, suffix := range []string{"-wal", "-shm"} {
+			if _, err := os.Stat(path + suffix); err == nil {
+				if err := copyStoreFile(path+suffix, tempPath+suffix); err != nil {
+					return 0, err
+				}
+			} else if err != nil && !os.IsNotExist(err) {
+				return 0, fmt.Errorf("server store: migration dry-run stat sidecar: %w", err)
+			}
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return 0, fmt.Errorf("server store: migration dry-run stat: %w", err)
+	}
+	store, err := OpenStore(tempPath)
+	if err != nil {
+		return 0, fmt.Errorf("server store: migration dry-run: %w", err)
+	}
+	defer func() { _ = store.Close() }()
+	version, err := store.SchemaVersion()
+	if err != nil {
+		return 0, fmt.Errorf("server store: migration dry-run version: %w", err)
+	}
+	return version, nil
+}
+
+func copyStoreFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("server store: migration dry-run open %s: %w", filepath.Base(src), err)
+	}
+	defer func() { _ = in.Close() }()
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+		return fmt.Errorf("server store: migration dry-run mkdir: %w", err)
+	}
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("server store: migration dry-run create %s: %w", filepath.Base(dst), err)
+	}
+	_, copyErr := io.Copy(out, in)
+	closeErr := out.Close()
+	if copyErr != nil {
+		return fmt.Errorf("server store: migration dry-run copy %s: %w", filepath.Base(src), copyErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("server store: migration dry-run close %s: %w", filepath.Base(dst), closeErr)
+	}
+	return nil
 }
 
 // Close releases the database.

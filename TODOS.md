@@ -4358,8 +4358,12 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       off-box storage; **documented + periodically rehearsed restore**; define **RPO/RTO**. Done:
       `cashflux-server backup` checkpoints WAL, snapshots DB + blobs with a manifest, the self-host
       runbook defines scheduled/off-box backup, restore rehearsal, RPO/RTO, and tests cover the restore path.
-- [ ] Zero-/low-downtime deploys; safe forward-only migrations (run on boot, reject newer schema);
+- [~] Zero-/low-downtime deploys; safe forward-only migrations (run on boot, reject newer schema);
       migration dry-run + rollback plan; data-migration backfills idempotent.
+      Done: `cashflux-server migrate-check` applies migrations to a temporary DB/WAL copy and reports
+      the resulting schema version without mutating the live SQLite file; deploy docs require backup,
+      migration dry-run, then rebuild. Remaining: explicit low-downtime deployment procedure and future
+      data-backfill idempotency checks as migrations grow.
 - [x] Resource limits (memory/CPU/FD/conn); OOM-safe; bounded queues; graceful degradation under load.
       Done: self-host Compose caps CPU/memory/PIDs/open files for server+Caddy, env docs expose
       HTTP/gRPC connection and stream limits, and deploy tests pin the runtime ceilings/backpressure knobs.
