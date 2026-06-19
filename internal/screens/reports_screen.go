@@ -261,6 +261,12 @@ func Reports() ui.Node {
 		If(len(incomeNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.incomeBySource")),
 			Div(Class("rows"), incomeNodes),
+			Div(Class("flex flex-wrap gap-2 py-1"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes("income-by-source.csv", "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
+				}), uistate.T("reports.downloadCsv")),
+			),
 		)),
 		If(len(payeeNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.topPayees")),
@@ -273,6 +279,18 @@ func Reports() ui.Node {
 		If(len(memberSpend) > 1, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.byMember")),
 			Div(Class("rows"), memberNodes),
+			Div(Class("flex flex-wrap gap-2 py-1"),
+				Button(Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					nm := func(id string) string {
+						if n := memberName[id]; n != "" {
+							return n
+						}
+						return uistate.T("reports.noMember")
+					}
+					downloadBytes("spending-by-member.csv", "text/csv", reports.MemberCSV(memberSpend, nm, csvAmount))
+				}), uistate.T("reports.downloadCsv")),
+			),
 		)),
 		If(len(netSeries) >= 2, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("dashboard.cashFlow")),

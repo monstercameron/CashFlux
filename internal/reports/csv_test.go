@@ -37,3 +37,32 @@ func TestCategoryCSV(t *testing.T) {
 		t.Errorf("new row = %q", lines[3])
 	}
 }
+
+func TestMemberCSV(t *testing.T) {
+	rows := []MemberSpend{
+		{MemberID: "alice", Amount: 40000},
+		{MemberID: "", Amount: 5000}, // unassigned
+	}
+	name := func(id string) string {
+		if id == "" {
+			return "(unassigned)"
+		}
+		return map[string]string{"alice": "Alice"}[id]
+	}
+	amount := func(v int64) string { return strconv.FormatInt(v/100, 10) }
+
+	out := string(MemberCSV(rows, name, amount))
+	lines := strings.Split(strings.TrimRight(out, "\r\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("got %d lines, want 3 (header + 2): %q", len(lines), out)
+	}
+	if strings.TrimRight(lines[0], "\r") != "Member,Amount" {
+		t.Errorf("header = %q", lines[0])
+	}
+	if strings.TrimRight(lines[1], "\r") != "Alice,400" {
+		t.Errorf("alice row = %q", lines[1])
+	}
+	if strings.TrimRight(lines[2], "\r") != "(unassigned),50" {
+		t.Errorf("unassigned row = %q", lines[2])
+	}
+}

@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Downloadable income & member breakdowns (B21).** The Reports screen's "Income by source" and "Spending by
+  member" cards now each have a Download CSV button, matching spending-by-category. Income reuses
+  `reports.CategoryCSV`; a new pure, table-tested `reports.MemberCSV` backs the member export.
+
+### Added
 - **Income by source (B21).** New pure, table-tested `reports.IncomeByCategory` (income totals by category,
   largest first, transfers/expenses excluded) and an "Income by source" card on the Reports screen — the
   symmetric "where the money comes from" view alongside spending.

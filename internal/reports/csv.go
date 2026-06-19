@@ -27,3 +27,18 @@ func CategoryCSV(rows []CategorySpend, name func(id string) string, amount func(
 	w.Flush()
 	return buf.Bytes()
 }
+
+// MemberCSV renders a spending-by-member report as CSV bytes: a header row then
+// one row per member with the resolved name and amount. Like CategoryCSV it is
+// decoupled from formatting via callbacks (name resolves a member id, amount
+// renders minor units as a plain decimal). Pure, standard-library only.
+func MemberCSV(rows []MemberSpend, name func(id string) string, amount func(int64) string) []byte {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{"Member", "Amount"})
+	for _, r := range rows {
+		_ = w.Write([]string{name(r.MemberID), amount(r.Amount)})
+	}
+	w.Flush()
+	return buf.Bytes()
+}

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: downloadable income & member breakdowns (B21)
+
+- Added Download CSV buttons to the Reports "Income by source" and "Spending by member" cards. Income reuses
+  the existing `reports.CategoryCSV` (income rows are CategorySpend with Amount only → Prior/Change blank). For
+  members, added a new pure `reports.MemberCSV(rows, name, amount)` (Member,Amount header) with a table test
+  covering the unassigned bucket. Both buttons reuse the existing downloadCsv/downloadCsvTitle i18n keys, so no
+  new strings.
+- gofmt clean, reports tests green, wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: income by source (B21)
 
 - Added pure `reports.IncomeByCategory` mirroring SpendingByCategory but gated on `IsIncome` (positive,
