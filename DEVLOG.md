@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: sync browser autosave over grpc
+
+- Wired the wasm autosave loop to push changed active-workspace snapshots through `SyncService.PutWorkspace`
+  over the `/grpc` GoGRPCBridge tunnel when backend URL/token preferences are configured.
+- Added boot/focus pulls via `SyncService.GetWorkspace`; newer server snapshots import into the local store,
+  update localStorage, and reload after focus-time applies so mounted views show the server copy.
+- Added per-workspace sync metadata (`cashflux:sync-meta:<workspaceID>`) with server `updatedAt`, version, and
+  dataset hash so first-run and stale-overwrite decisions are explicit.
+- Added pure `internal/syncstate` tests for the remote-apply rule: fresh browsers can accept server data, while
+  existing local datasets without sync metadata are not silently overwritten.
+
 ## 2026-06-18 - feat: sync dataset snapshots over grpc
 
 - Extended SyncService `PutWorkspace` and `GetWorkspace` RPC envelopes with opaque dataset bytes, matching the

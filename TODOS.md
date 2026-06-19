@@ -3985,9 +3985,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 ### 7.7 Client integration (wasm app) ★
 - [x] gRPC client over the bridge: `BuildTunnelConn` (wss to backend) + a metadata interceptor that
       attaches the auth token.
-- [~] Sync client layered over the existing autosave: server SyncService now accepts/returns opaque dataset
-      snapshots over `/grpc` with LWW stale-reject recovery data. Remaining: browser debounced autosave push,
-      pull on load/focus, apply newest-by-`updatedAt`, and map `internal/app/workspace.go` registry ↔ server ids.
+- [~] Sync client layered over the existing autosave: browser autosave now pushes changed active-workspace
+      snapshots over `/grpc`, pulls newer server snapshots on boot/focus, applies newest-by-`updatedAt` using
+      local sync metadata, and maps local workspace ids directly to server workspace ids. Remaining: offline
+      mutation queue/retry UI, explicit conflict UX, and multi-device watch updates.
 - [ ] Offline-first: a mutation/queue so the app works offline; flush on reconnect; status surface
       (synced / offline / syncing / error) + a "Sync now" action.
 - [ ] **Artifact extraction (client schema change):** move `domain.Artifact.Bytes` out of the synced

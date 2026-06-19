@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Browser autosave sync over gRPC.** The wasm app now pushes changed active-workspace snapshots through
+  SyncService over GoGRPCBridge and pulls newer server snapshots on boot/focus using local sync metadata.
 - **Sync snapshots over gRPC.** Workspace `Put` and `Get` RPCs now carry opaque dataset snapshot bytes, storing
   them in the existing current/history snapshot tables and returning the server copy on stale LWW rejects.
 - **SyncService over the gRPC bridge.** The backend now registers workspace `List`, `Get`, `Put`, and `Delete`

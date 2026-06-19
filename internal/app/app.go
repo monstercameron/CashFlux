@@ -90,6 +90,7 @@ func Run() {
 
 	// Persist the dataset to localStorage so it survives a reload.
 	startDatasetAutosave()
+	startBackendSync()
 
 	utils.WaitForever()
 }

@@ -19,6 +19,7 @@ const datasetStoreKey = "cashflux:dataset"
 // localStorage keys then reloads; without this the dying page's pagehide/ticker
 // save would write the *old* in-memory dataset back over the swapped-in one.
 var suspendAutosave bool
+var hadLocalDataset bool
 
 // hydrateDataset loads the saved dataset from localStorage into the store, or
 // seeds the sample dataset on first run (nothing saved yet) so a new household
@@ -31,13 +32,16 @@ func hydrateDataset() {
 	}
 	v := js.Global().Get("localStorage").Call("getItem", datasetStoreKey)
 	if v.IsNull() || v.IsUndefined() || v.String() == "" {
+		hadLocalDataset = false
 		if err := app.LoadSample(); err != nil {
 			app.Log().Error("seed sample failed", "err", err)
 		}
 		return
 	}
+	hadLocalDataset = true
 	if err := app.ImportJSON([]byte(v.String())); err != nil {
 		app.Log().Error("dataset hydrate failed; seeding sample", "err", err)
+		hadLocalDataset = false
 		_ = app.LoadSample()
 	}
 }
@@ -72,6 +76,13 @@ func startDatasetAutosave() {
 		return
 	}
 	last := ""
+	if hadLocalDataset {
+		data, err := app.ExportJSONRedacted()
+		if err != nil {
+			return
+		}
+		last = string(data)
+	}
 	save := func() {
 		if suspendAutosave {
 			return // a workspace switch is rewriting storage; don't clobber it
@@ -90,6 +101,11 @@ func startDatasetAutosave() {
 		if s := string(data); s != last {
 			last = s
 			js.Global().Get("localStorage").Call("setItem", datasetStoreKey, s)
+			if hadLocalDataset {
+				pushActiveWorkspaceToBackend(data, time.Now().UTC())
+			} else {
+				hadLocalDataset = true
+			}
 		}
 	}
 	cb := js.FuncOf(func(js.Value, []js.Value) any { save(); return nil })
