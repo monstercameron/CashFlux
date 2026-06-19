@@ -4101,9 +4101,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       flag); `IsCloudActive` returns true when billing is disabled.
 - [x] **Version/compat endpoint** for the client's Test-connection + too-old/too-new warnings (reuse a
       schemaVersion-style ping).
-- [ ] **Docker quickstart** + one-command run; sample config (.env) with TLS notes; docs linked from
-      Settings.
-- [ ] Self-host docs: backups (SQLite WAL + blobs), upgrade path, optional OAuth setup.
+- [~] **Docker quickstart** + one-command run; sample config (.env) with TLS notes; docs linked from
+      README. Remaining: link from Settings.
+- [x] Self-host docs: backups (SQLite WAL + blobs), upgrade path, optional OAuth setup.
 
 ### 7.13 Turnkey self-host deploy + DO referral ★
 
@@ -4117,7 +4117,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] **cloud-init / user-data script**: installs Docker, runs the compose stack, generates + prints the
       first-run access token, configures Caddy for the droplet's domain/IP. Hosted at a stable URL.
 - [ ] **One-command installer** (`curl -fsSL <url>/install.sh | sh`) for any fresh VPS (host-agnostic).
-- [ ] Config via `.env` (domain, auth mode token|oauth, master key, fair-use off, providers if oauth).
+- [x] Config via `.env` (domain, auth mode token|oauth, master key, fair-use off, providers if oauth).
 - [ ] **DO Marketplace 1-Click**: Packer build of a droplet image; submit for vendor approval (later,
       after the script path is proven).
 
@@ -4133,7 +4133,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] After deploy, the docs walk the user to paste the printed token into Settings (ties to §7.12 token auth).
 
 #### Ops/docs
-- [ ] Self-host runbook: backups (SQLite WAL checkpoint + blobs), upgrades (pull new image), TLS, restore.
+- [x] Self-host runbook: backups (SQLite WAL checkpoint + blobs), upgrades (pull new image), TLS, restore.
 - [ ] Security defaults: token auth on by default, TLS required, sensible limits; never ship a default secret.
 
 ### 7.14 Security hardening ★

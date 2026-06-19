@@ -1,0 +1,13 @@
+.git
+.tmp
+.tools
+data
+bin
+web/bin
+web/wasm_exec.js
+static/bin
+static/wasm_exec.js
+.review-screenshots
+*.log
+.env
+.env.*

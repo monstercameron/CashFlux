@@ -60,6 +60,14 @@ go test ./...
 Serve `web/` (it contains `index.html`, the manifest, and the service worker) with the wasm bundle in
 `web/bin/`.
 
+### Optional backend self-hosting
+
+CashFlux can also run an optional backend for multi-device sync and encrypted BYO OpenAI key proxying.
+The browser app talks to the server through the GoGRPCBridge `/grpc` tunnel; AI proxy calls are not
+exposed as direct browser HTTP routes. See [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md) for the
+Docker Compose quickstart, `.env` template, TLS notes, backup/restore runbook, upgrades, and optional
+OAuth provider setup.
+
 ### Hosting (SPA history fallback)
 
 CashFlux uses clean (non-hash) client-side routes, so any static host must **rewrite unknown

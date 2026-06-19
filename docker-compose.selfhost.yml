@@ -1,0 +1,30 @@
+services:
+  cashflux-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    env_file:
+      - ./deploy/cashflux-server.env
+    volumes:
+      - cashflux-data:/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.9-alpine
+    depends_on:
+      - cashflux-server
+    env_file:
+      - ./deploy/cashflux-server.env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile.selfhost:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  cashflux-data:
+  caddy-data:
+  caddy-config:
