@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: read cloud entitlements from subscriptions (7.10)
+
+- Changed `IsCloudActive` so billing-enabled deployments read the current subscription row instead of returning
+  inactive unconditionally.
+- Treated `active`, `trialing`, and in-period `past_due` as active Cloud states.
+- Added focused entitlement tests for missing store, missing subscription, active/trial/grace/expired states,
+  and repository-backed reads.
+- Marked the entitlement-gate TODO in progress; Sync/AI/blob endpoint enforcement still needs wiring.
+
 ## 2026-06-19 - feat: add backend subscription persistence (7.10)
 
 - Added schema v4 with a `subscriptions` table keyed by user id and unique Stripe customer/subscription ids.
