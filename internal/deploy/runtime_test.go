@@ -42,6 +42,51 @@ func TestSelfHostComposeConfiguresLogRetention(t *testing.T) {
 	}
 }
 
+func TestSelfHostComposeSetsResourceLimits(t *testing.T) {
+	data, err := os.ReadFile("../../docker-compose.selfhost.yml")
+	if err != nil {
+		t.Fatalf("read compose file: %v", err)
+	}
+	compose := string(data)
+	for _, want := range []string{
+		`cpus: "1.0"`,
+		"mem_limit: 512m",
+		"pids_limit: 256",
+		"soft: 4096",
+		"hard: 4096",
+		`cpus: "0.5"`,
+		"mem_limit: 256m",
+		"pids_limit: 128",
+		"soft: 2048",
+		"hard: 2048",
+	} {
+		if !strings.Contains(compose, want) {
+			t.Fatalf("compose file missing resource limit %q", want)
+		}
+	}
+}
+
+func TestSelfHostEnvTemplateDocumentsServerLimits(t *testing.T) {
+	data, err := os.ReadFile("../../deploy/cashflux-server.env.example")
+	if err != nil {
+		t.Fatalf("read env template: %v", err)
+	}
+	env := string(data)
+	for _, want := range []string{
+		"CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT=256",
+		"CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE=0",
+		"CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE=0",
+		"CASHFLUX_SERVER_GRPC_MAX_ACTIVE_CONNECTIONS=128",
+		"CASHFLUX_SERVER_GRPC_MAX_CONNECTIONS_PER_CLIENT=8",
+		"CASHFLUX_SERVER_GRPC_MAX_UPGRADES_PER_CLIENT_PER_MINUTE=60",
+		"CASHFLUX_SERVER_GRPC_MAX_STREAMS_PER_USER=8",
+	} {
+		if !strings.Contains(env, want) {
+			t.Fatalf("env template missing server limit %q", want)
+		}
+	}
+}
+
 func TestServerDockerfileRunsAsNonRoot(t *testing.T) {
 	data, err := os.ReadFile("../../Dockerfile.server")
 	if err != nil {

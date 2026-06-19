@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Self-host runtime resource limits.** The self-host Compose stack now sets CPU, memory, PID, and file-descriptor caps for the server and Caddy, and the env template documents the HTTP/gRPC connection and queue limits.
 - **Self-host backup command and restore rehearsal.** `cashflux-server backup` now checkpoints SQLite WAL, copies the database and blob tree into a timestamped backup directory, writes a SHA-256 manifest with RPO/RTO notes, and the self-host runbook includes scheduled/off-box backup and restore rehearsal guidance.
 - **Backend blob I/O deadlines.** Blob PUT/GET now use a configurable `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` and context-aware blob store operations.
 - **Self-host log retention policy.** The self-host Compose stack now uses Docker's local log driver with bounded rotation, and the observability runbook documents stdout collection, retention, and access policy.

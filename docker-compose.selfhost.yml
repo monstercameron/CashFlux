@@ -10,6 +10,13 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cpus: "1.0"
+    mem_limit: 512m
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
     cap_drop:
       - ALL
     security_opt:
@@ -38,6 +45,13 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=16m
       - /run:rw,noexec,nosuid,nodev,size=16m
+    cpus: "0.5"
+    mem_limit: 256m
+    pids_limit: 128
+    ulimits:
+      nofile:
+        soft: 2048
+        hard: 2048
     cap_drop:
       - ALL
     cap_add:

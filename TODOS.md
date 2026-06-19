@@ -4255,7 +4255,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       runbook defines scheduled/off-box backup, restore rehearsal, RPO/RTO, and tests cover the restore path.
 - [ ] Zero-/low-downtime deploys; safe forward-only migrations (run on boot, reject newer schema);
       migration dry-run + rollback plan; data-migration backfills idempotent.
-- [ ] Resource limits (memory/CPU/FD/conn); OOM-safe; bounded queues; graceful degradation under load.
+- [x] Resource limits (memory/CPU/FD/conn); OOM-safe; bounded queues; graceful degradation under load.
+      Done: self-host Compose caps CPU/memory/PIDs/open files for server+Caddy, env docs expose
+      HTTP/gRPC connection and stream limits, and deploy tests pin the runtime ceilings/backpressure knobs.
 - [ ] Status page + incident response runbook (sev levels, comms, postmortems).
 
 ### 7.17 Compliance & data governance

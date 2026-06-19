@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: set self-host resource limits
+
+- Added Compose CPU, memory, PID, and file-descriptor caps for `cashflux-server` and Caddy so a self-host install has explicit container-level guardrails.
+- Exposed the existing HTTP max-in-flight/rate-limit and gRPC connection/stream limits in `deploy/cashflux-server.env.example`.
+- Documented the runtime limits in the self-hosting runbook and added deploy tests that pin both the Compose resource caps and the server limit knobs.
+
 ## 2026-06-19 - feat: add self-host backup command
 
 - Added `cashflux-server backup [out-dir]`, backed by `server.RunBackup`, to checkpoint SQLite WAL and copy `cashflux-server.db` plus the sharded blob tree into a timestamped backup directory.
