@@ -598,6 +598,7 @@ func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated metrics status = %d, want 401", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUnauthenticated)
 
 	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	req.Header.Set("Authorization", "Bearer dev-token")
@@ -663,6 +664,7 @@ func TestAuditEndpointStreamsNDJSON(t *testing.T) {
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthorized audit status = %d, want 401", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonUnauthenticated)
 }
 
 func TestAdminUsageEndpointIsReadOnlyAndScopedToAuthenticatedUser(t *testing.T) {

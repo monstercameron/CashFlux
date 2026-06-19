@@ -47,22 +47,22 @@ func auditFromRequest(r *http.Request, store *Store, user AuthUser, action, targ
 func handleAuditEvents(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
-			http.Error(w, "origin not allowed", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
 		if store == nil {
-			http.Error(w, "store is not configured", http.StatusServiceUnavailable)
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
 		if _, ok := httpBearerUser(r, cfg); !ok {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
 		}
 		afterID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("afterId")), 10, 64)
 		limit, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("limit")))
 		events, err := store.ListAuditEvents(afterID, limit)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErrorJSON(w, ErrorReasonInternal, "audit lookup failed")
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-ndjson")

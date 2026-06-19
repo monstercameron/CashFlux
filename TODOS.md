@@ -4379,8 +4379,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] Consistent **error taxonomy** (gRPC codes ↔ HTTP statuses) with stable, documented error reasons;
       machine-readable error details; no internal leakage in messages.
       `internal/server.BackendErrorTaxonomy` now pins stable reasons and gRPC/HTTP mappings, and
-      `docs/BACKEND_ERRORS.md` documents the table. Account export/delete, admin usage, and blob routes now
-      return JSON error details. Remaining: migrate OAuth/audit/metrics/plain middleware HTTP errors.
+      `docs/BACKEND_ERRORS.md` documents the table. Account export/delete, admin usage, blob, audit, metrics,
+      and CORS preflight errors now return JSON details. Remaining: migrate OAuth and miscellaneous general HTTP
+      errors.
 - [x] Config via env/secret manager with validation on boot; **feature flags** (billing on/off, AI proxy
       on/off, self-host mode) so deployments differ safely.
 - [x] Runbooks (deploy, rollback, restore, rotate keys, revoke sessions, handle past-due); on-call docs.

@@ -188,7 +188,7 @@ func termsDocument() LegalResponse {
 func handleCORSPreflight(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
-			http.Error(w, "origin not allowed", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -198,7 +198,7 @@ func handleCORSPreflight(cfg Config) http.HandlerFunc {
 func handleMetrics(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := httpBearerUser(r, cfg); !ok {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")

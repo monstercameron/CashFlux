@@ -28,6 +28,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend audit/metrics JSON errors (7.19).** Audit, metrics, and CORS preflight failures now return stable
+  machine-readable JSON error reasons.
 - **Backend blob JSON errors (7.19).** Blob upload/download failures now return stable machine-readable
   JSON error reasons for auth, validation, size, media-type, quota, and lookup failures.
 - **Backend JSON error details (7.19).** Account and admin support HTTP errors now return stable

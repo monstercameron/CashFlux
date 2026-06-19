@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: return json errors for audit metrics (7.19)
+
+- Migrated audit, metrics, and shared CORS preflight failures to `writeErrorJSON`.
+- Extended HTTP tests to assert stable JSON reasons for unauthenticated audit and metrics requests.
+- Left OAuth and miscellaneous general HTTP errors as the remaining plain-text migration work.
+
 ## 2026-06-19 - feat: return json errors for blobs (7.19)
 
 - Migrated blob upload/download/auth/quota failures to `writeErrorJSON`.
