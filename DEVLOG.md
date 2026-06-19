@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: debt snowball / avalanche planner (D9)
+
+- Added pure `payoff.BuildPlan(debts, extra, strategy)` alongside the existing single-debt `Project`. Models
+  the real debt-snowball mechanic: a constant monthly budget (sum of all minimums + extra), held flat as
+  debts clear so freed minimums accelerate the rest. Each month: accrue interest, pay every active minimum,
+  then dump the leftover on the strategy's focus debt (`Snowball` = smallest balance, `Avalanche` = highest
+  APR), cascading to the next focus when one clears mid-month.
+- Viability: rejects negative extra / non-positive budget, and returns ok=false the first month total balance
+  fails to fall (interest outpaces the budget) — plus the existing maxMonths cap. Tracks payoff Order, and a
+  conservation invariant (TotalPaid == principal + TotalInterest) is asserted in tests.
+- Table tests: snowball vs avalanche pick different focuses (and avalanche pays ≤ interest — the optimality
+  property), 0%/12-month exact, no-debts, already-paid skipped, not-viable, negative-extra, zero-budget.
+- Logic-first per the SDLC; the Planning-screen strategy comparison UI is a follow-up. gofmt/vet/native tests
+  green, wasm build green. Restored CHANGELOG/DEVLOG from HEAD first (re-truncated to 0 bytes).
+
 ## 2026-06-19 — feat: spending-by-weekday insight (B21)
 
 - Added pure `reports.SpendingByWeekday` returning a `[7]int64` indexed by `time.Weekday` (Sunday=0), so

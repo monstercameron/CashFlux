@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Debt snowball / avalanche planner (D9).** New pure, table-tested `payoff.BuildPlan`: simulates clearing
+  several debts together with the classic debt-snowball method — pay every minimum, then throw all remaining
+  firepower (extra plus minimums freed by cleared debts) at one focus debt chosen by strategy (`Snowball` =
+  smallest balance first, `Avalanche` = highest APR first), cascading when a debt clears mid-month. Reports
+  total months, total interest, total paid, and the payoff order; flags plans that can never clear. The
+  Planning-screen comparison builds on this.
+
+### Added
 - **Spending-by-weekday insight (B21).** New pure, table-tested `reports.SpendingByWeekday` (totals indexed
   Sunday–Saturday) and `reports.PeakWeekday`, and the Reports screen now shows a one-line insight — "Most
   spending happens on Fridays ($X)." — surfacing the day money tends to leave.
