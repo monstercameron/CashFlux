@@ -3954,7 +3954,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] `WatchWorkspaces` server stream: in-proc per-user pub/sub notifies other devices of a change;
       heartbeat/keepalive; clean unsubscribe on disconnect.
 - [~] Tests: LWW accept/reject by timestamp, tombstone propagation, cross-user isolation, watch fan-out,
-      oversized-payload rejection.
+      and oversized-payload rejection are covered. Remaining: broader e2e tombstone propagation.
 
 ### 7.4 AIService (per-user encrypted BYO key) ★
 - [x] `SetKey`: validate, AES-GCM encrypt, store; never return the key.

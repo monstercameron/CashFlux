@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - fix: reject oversized sync snapshots
+
+- Added a typed repository size-limit error for snapshot datasets so the transport can distinguish payload limits
+  from generic storage failures.
+- `SyncService.PutWorkspace` now maps an over-limit dataset to gRPC `ResourceExhausted` instead of leaking a
+  generic server error.
+- Added a real GoGRPCBridge integration test that sends `defaultSnapshotMaxBytes+1` bytes through
+  `PutWorkspace` and verifies the `ResourceExhausted` status.
+
 ## 2026-06-18 - feat: subscribe browser to sync watches
 
 - The wasm sync bootstrap now opens a long-lived `WatchWorkspaces` stream through the GoGRPCBridge tunnel when

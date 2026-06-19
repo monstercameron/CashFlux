@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
@@ -87,6 +88,9 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 			Version:     result.Version,
 			UpdatedAt:   result.UpdatedAt,
 		}, defaultSnapshotMaxBytes, defaultSnapshotHistoryLimit); err != nil {
+			if errors.Is(err, errPayloadTooLarge) {
+				return backendrpc.PutWorkspaceResponse{}, status.Error(codes.ResourceExhausted, "sync dataset is too large")
+			}
 			return backendrpc.PutWorkspaceResponse{}, err
 		}
 		dataset = req.Dataset

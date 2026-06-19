@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+var errPayloadTooLarge = errors.New("server store: payload too large")
+
 // User is an authenticated backend account.
 type User struct {
 	ID        string
@@ -189,7 +191,7 @@ func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error
 		return fmt.Errorf("server store: snapshot workspace id is required")
 	}
 	if maxBytes > 0 && len(snapshot.Dataset) > maxBytes {
-		return fmt.Errorf("server store: snapshot dataset is %d bytes, exceeds limit %d", len(snapshot.Dataset), maxBytes)
+		return fmt.Errorf("%w: snapshot dataset is %d bytes, exceeds limit %d", errPayloadTooLarge, len(snapshot.Dataset), maxBytes)
 	}
 	if snapshot.UpdatedAt.IsZero() {
 		snapshot.UpdatedAt = time.Now().UTC()

@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Sync oversized snapshot rejection.** `PutWorkspace` now maps over-limit datasets to
+  `ResourceExhausted` over the gRPC bridge, with bridge coverage for the rejection path.
 - **Browser sync watch subscription.** The wasm app now opens `SyncService.WatchWorkspaces`
   over the gRPC bridge, ignores same-device echoes, and pulls the active workspace when another device changes it.
 - **SyncService workspace watch stream.** The backend now exposes `WatchWorkspaces` over the

@@ -9,6 +9,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
@@ -146,5 +148,30 @@ func TestSyncServiceGRPCBridgeWatchWorkspaces(t *testing.T) {
 	}
 	if event.Workspace.ID != "w-watch" || event.Workspace.Name != "Watched" || event.Workspace.Version != 1 {
 		t.Fatalf("WatchWorkspaces event = %+v", event)
+	}
+}
+
+func TestSyncServiceGRPCBridgeRejectsOversizedSnapshot(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{AuthMode: "token", Token: "dev-token", AppOrigin: "*"}
+	bridge := httptest.NewServer(NewMux(cfg, store))
+	defer bridge.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	var put backendrpc.PutWorkspaceResponse
+	err = conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+		Workspace:       backendrpc.Workspace{ID: "w-too-large", Name: "Too Large"},
+		Dataset:         make([]byte, defaultSnapshotMaxBytes+1),
+		ClientUpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	}, &put, backendrpc.JSONCallOptions()...)
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("oversized PutWorkspace err = %v, want resource exhausted", err)
 	}
 }
