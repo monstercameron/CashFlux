@@ -46,6 +46,25 @@ func TestWithPasscodeAndVerify(t *testing.T) {
 	}
 }
 
+func TestWithPasscodePreservesDisplayPrefs(t *testing.T) {
+	// A user who hid the lock-screen quotes/meta and then changes their passcode
+	// must keep those display choices — they're unrelated to the credential.
+	c := Config{HideQuotes: true, HideMeta: true}.WithPasscode("1234", "s", 5, "")
+	if !c.HideQuotes || !c.HideMeta {
+		t.Errorf("changing the passcode dropped display prefs: %+v", c)
+	}
+	// Defaults (shown) are preserved too.
+	d := Config{}.WithPasscode("1234", "s", 5, "")
+	if d.HideQuotes || d.HideMeta {
+		t.Errorf("display prefs should default to shown, got %+v", d)
+	}
+	// Re-setting a passcode re-activates the gate (clears any prior suspension).
+	susp := Config{Suspended: true}.WithPasscode("1234", "s", 5, "")
+	if susp.Suspended {
+		t.Error("setting a passcode should leave the lock active, not suspended")
+	}
+}
+
 func TestValidHintAndStorage(t *testing.T) {
 	// Empty hint is always fine; a hint containing the passcode is rejected.
 	if !ValidHint("", "1234") {

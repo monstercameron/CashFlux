@@ -62,7 +62,11 @@ func HashPasscode(passcode, salt string) string {
 // passcode (hashed with salt), auto-lock window, and optional hint. An empty
 // passcode or salt is rejected (returns the config unchanged) so the lock can't
 // be enabled without a real secret. A negative auto-lock window is clamped to 0
-// (manual/reload only). A hint that would leak the passcode is dropped.
+// (manual/reload only). A hint that would leak the passcode is dropped. The
+// lock-screen display preferences (HideQuotes/HideMeta) are carried over from the
+// receiver — they're unrelated to the credential, so changing the passcode must
+// not silently reset them. The lock is left active (un-suspended), since setting
+// a passcode is an explicit re-enable.
 func (c Config) WithPasscode(passcode, salt string, autoLockMinutes int, hint string) Config {
 	if passcode == "" || salt == "" {
 		return c
@@ -79,6 +83,8 @@ func (c Config) WithPasscode(passcode, salt string, autoLockMinutes int, hint st
 		Hash:            HashPasscode(passcode, salt),
 		AutoLockMinutes: autoLockMinutes,
 		Hint:            strings.TrimSpace(hint),
+		HideQuotes:      c.HideQuotes,
+		HideMeta:        c.HideMeta,
 	}
 }
 
