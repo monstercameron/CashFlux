@@ -154,6 +154,17 @@ func Reports() ui.Node {
 	fmtMinor := func(v int64) string { return fmtMoney(money.New(v, base)) }
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
 
+	// Heads-up: categories spending well above their recent monthly norm (top 3).
+	var anomalyNodes []ui.Node
+	if anomalies, err := reports.SpendingAnomalies(txns, time.Now(), 3, 50, 5000, rates); err == nil {
+		for i, a := range anomalies {
+			if i >= 3 {
+				break
+			}
+			anomalyNodes = append(anomalyNodes, P(Class("muted"), uistate.T("reports.anomaly", nameOf(a.CategoryID), a.OverPct)))
+		}
+	}
+
 	// Category rows are plain text (no interactive controls), so building them in
 	// a loop is safe (no On* hooks involved).
 	var rowNodes []ui.Node
@@ -286,6 +297,10 @@ func Reports() ui.Node {
 			If(noSpendDays > 0, stat(uistate.T("reports.noSpendDays"), fmt.Sprintf("%d", noSpendDays), "pos")),
 		),
 		If(spendTrend != "", P(Class("muted"), spendTrend)),
+		If(len(anomalyNodes) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("reports.headsUp")),
+			Div(anomalyNodes),
+		)),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.byCategory")),
 			P(Class("muted"), narrative),

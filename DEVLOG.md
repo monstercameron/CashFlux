@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: spending anomaly heads-up (B21)
+
+- Added pure `reports.SpendingAnomalies(txns, now, months, overPct, minMinor, rates)`: per category, compares
+  the current month's spend to the trailing-`months` average (span-based denominator like SuggestLimit, so a
+  young category isn't diluted) and flags those over by ≥ overPct AND ≥ minMinor absolute, biggest overage
+  first. More robust than the existing vs-last-period delta; the floor skips noise on tiny categories.
+- Surfaced as a "Heads up" card on Reports (top 3): "%s is %d%% above its usual." Placed the computation after
+  `nameOf` is in scope (first attempt referenced it too early — moved it). Added reports.headsUp/anomaly keys.
+- Table tests: a 200%-over category flagged while steady rent / sub-floor / no-baseline categories are not;
+  steady-only and edge (zero months / empty) cases. gofmt clean, reports + i18n tests green, wasm build green.
+
 ## 2026-06-19 — feat: minimum-payment guidance on Planning (D9)
 
 - Added pure `payoff.MinimumViablePayment(balance, apr)` = first-month interest + 1 minor unit (the first

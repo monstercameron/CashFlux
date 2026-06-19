@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Spending anomaly heads-up (B21).** New pure, table-tested `reports.SpendingAnomalies` flags categories
+  whose current-month spend runs well above their trailing monthly average (more robust than a single
+  prior-period delta, with an absolute floor to skip noise). The Reports screen shows a "Heads up" card —
+  e.g. "Dining is 200% above its usual." — for the top few.
+
+### Added
 - **Minimum-payment guidance on Planning (D9).** New pure, table-tested `payoff.MinimumViablePayment` (the
   smallest monthly payment that ever clears a debt). The payoff calculator's "payment too low" message now
   names the exact figure: "Pay at least $X a month to start clearing it."
