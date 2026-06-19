@@ -10,11 +10,16 @@ import (
 	"google.golang.org/grpc"
 )
 
-func NewGRPCBridgeHandler(cfg Config) http.Handler {
+func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
+	var store *Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(AuthUnaryInterceptor(grpcTokenValidator(cfg))),
 		grpc.StreamInterceptor(AuthStreamInterceptor(grpcTokenValidator(cfg))),
 	)
+	RegisterAIServiceServer(grpcServer, newHTTPAIService(store, cfg))
 	return grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
 		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),

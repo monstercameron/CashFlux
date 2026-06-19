@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **AI proxy over the gRPC bridge.** Settings key upload and AI proxy calls now use the GoGRPCBridge `/grpc`
+  websocket tunnel with authenticated gRPC unary calls, backed by a bridge integration test for SetKey + Chat.
 - **Backend AI proxy CORS preflight.** The backend now answers local SPA preflight requests for
   `/v1/ai/chat` and `/v1/ai/vision`, exposes response metadata headers, and caches successful preflights
   so browser-based AI proxy calls can reach the local dev server.

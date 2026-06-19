@@ -55,7 +55,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			BillingEnabled:      cfg.Billing,
 		})
 	})
-	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg))
+	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/blobs/{hash}", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
@@ -279,6 +279,9 @@ func writeCORS(w http.ResponseWriter, r *http.Request, cfg Config) bool {
 
 func allowedOrigin(origin, configured string) bool {
 	configured = strings.TrimSpace(configured)
+	if configured == "*" {
+		return true
+	}
 	if configured != "" {
 		return origin == configured
 	}

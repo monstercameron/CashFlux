@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: route backend ai over grpc bridge
+
+- Registered `cashflux.v1.AIService` on the backend gRPC server behind `/grpc`, with unary `SetKey`, `Chat`,
+  and `Vision` methods using the existing token interceptor and encrypted-key store.
+- Moved the wasm backend AI transport and Settings key upload from browser `fetch` calls to
+  `syncbridge.Dial(...).Invoke(...)`, so the client reaches the backend through GoGRPCBridge.
+- Added a native bridge integration test that opens a real websocket tunnel, invokes `SetKey`, then invokes
+  `Chat` against a mock OpenAI upstream to prove the key is stored and reused through gRPC.
+- Kept the existing HTTP AI endpoints in place as a compatibility/debug surface; the app client path no longer
+  depends on them.
+
 ## 2026-06-18 - fix: allow backend ai proxy cors
 
 - Added explicit `OPTIONS` handlers for `/v1/ai/chat` and `/v1/ai/vision`; browser preflight no longer falls

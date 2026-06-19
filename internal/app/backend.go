@@ -3,8 +3,12 @@
 package app
 
 import (
+	"context"
 	"strings"
-	"syscall/js"
+
+	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/syncbridge"
+	"google.golang.org/grpc/status"
 )
 
 const defaultBackendURL = "http://127.0.0.1:8081"
@@ -24,43 +28,28 @@ func uploadOpenAIKeyToBackend(endpoint, token, key string, onDone func(), onErro
 		onError("Add your OpenAI key before uploading it.")
 		return
 	}
-	body := `{"provider":"openai","key":` + js.Global().Get("JSON").Call("stringify", key).String() + `}`
-	opts := map[string]any{
-		"method": "POST",
-		"headers": map[string]any{
-			"Authorization": "Bearer " + token,
-			"Content-Type":  "application/json",
-		},
-		"body": body,
-	}
-	var onText, onResp, onCatch js.Func
-	release := func() {
-		onText.Release()
-		onResp.Release()
-		onCatch.Release()
-	}
-	status := 0
-	onResp = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		status = args[0].Get("status").Int()
-		return args[0].Call("text")
-	})
-	onText = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		text := args[0].String()
-		release()
-		if status >= 200 && status < 300 {
+	go func() {
+		ctx := context.Background()
+		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: endpoint, Token: token})
+		if err != nil {
+			onError("Couldn't reach the backend server.")
+			return
+		}
+		defer conn.Close()
+		var out backendrpc.SetKeyResponse
+		err = conn.Invoke(ctx, backendrpc.MethodAISetKey, backendrpc.SetKeyRequest{Provider: "openai", Key: key}, &out, backendrpc.JSONCallOptions()...)
+		if err == nil && out.Stored {
 			onDone()
-			return nil
+			return
 		}
-		if strings.TrimSpace(text) == "" {
-			text = "Backend rejected the key upload."
+		if err == nil {
+			onError("Backend rejected the key upload.")
+			return
 		}
-		onError(text)
-		return nil
-	})
-	onCatch = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		release()
-		onError("Couldn't reach the backend server.")
-		return nil
-	})
-	js.Global().Call("fetch", endpoint+"/v1/ai/key", opts).Call("then", onResp).Call("then", onText).Call("catch", onCatch)
+		if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
+			onError(st.Message())
+			return
+		}
+		onError(err.Error())
+	}()
 }

@@ -3994,8 +3994,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       snapshot → upload via blob `PUT` (sha256), download via `GET`, keep a local cache; the dataset
       carries a `BlobRef`. Migrate existing inline artifacts on first sync.
 - [~] AI via proxy: Insights, Allocate, and Documents prefer the backend AI proxy when backend URL/token prefs are
-      configured; direct OpenAI remains optional/local-only. Remaining: switch the final transport to
-      `AIService` streams once the gRPC/server-streaming surface exists.
+      configured; direct OpenAI remains optional/local-only. The client now uses `AIService` unary calls over the
+      `/grpc` GoGRPCBridge tunnel for key upload, chat, and vision. Remaining: switch chat/vision to final
+      server-streaming responses once streaming chunks are implemented.
 - [ ] OAuth login UI + token handling, preserving offline-first (no login required to use locally).
 - [ ] Settings: backend URL, sign in/out, sync status; conflict/LWW UX ("a newer version was on the
       server — pulled it").
