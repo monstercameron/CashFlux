@@ -92,5 +92,9 @@ func Run() {
 	startDatasetAutosave()
 	startBackendSync()
 
+	// Surface "while you were away" reminders (stale balances, bills due soon)
+	// once on load, deduped via the persisted delivered log (B19). Boot-safe.
+	runNotifyCatchUp()
+
 	utils.WaitForever()
 }

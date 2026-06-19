@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reminders on open — notifications are live (B19).** When you open CashFlux it now surfaces a gentle
+  "while you were away" toast for anything that needs attention — accounts whose balance has gone stale
+  and bills due within a week. Each reminder fires at most once per its natural period (a stale account
+  weekly, a bill once per due date), tracked in a persisted delivered log so reopening doesn't re-nag.
+  Boot-safe (a notification hiccup can never block startup). The full in-app center + per-rule settings
+  build on this.
 - **Notifications: first event evaluator (B19, internal).** New pure `internal/notifyfeed` package bridges
   domain data to notification candidates. Its first generator, `StaleBalanceCandidates`, turns
   freshness's stale-account detection into weekly de-duped notify candidates — the first concrete event

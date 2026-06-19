@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: wire notify catch-up on load (B19, step 8 — live!)
+
+- Wired the pure notify pipeline into the wasm shell: new `internal/app/notifyrun.go` (`runNotifyCatchUp`)
+  is called once at the end of `Run()`. It gathers the current stale-balance (via `app.FreshnessWindows()`)
+  and bill-due (via `bills.Upcoming`) occurrences through the `notifyfeed` generators, runs
+  `notify.CatchUp(notify.DefaultRules(), …)` against a delivered log persisted in localStorage
+  (`cashflux:notify:delivered`, JSON of `DeliveredLog.Keys()`), and surfaces a single summary toast via the
+  existing `uistate.UseNotice()` atom (the one reminder's title, or "N reminders waiting").
+- Safety: the whole function is wrapped in `defer recover()` so a notification problem can never break app
+  boot. Idempotency is the delivered log (the generators emit "current state" occurrences keyed by
+  week/due-date, so they dedupe naturally); no `lastSeenAt` needed for these event types.
+- Scope of this first wiring: stale-balance + bill-due (need only accounts). Budget-threshold needs the
+  per-period budget-status assembly and the digest needs the period summary — both follow, as does the
+  in-app center + Settings rules UI. New `notify.{staleTitle,staleBody,billTitle,billBody,summary}` keys.
+  wasm build green, gofmt clean.
+
 ## 2026-06-18 — feat: notify.DefaultRules — recommended rule set (B19, step 7)
 
 - Added `notify.DefaultRules()` — one Rule per supported event (bill-due, budget-threshold, stale-balance,
