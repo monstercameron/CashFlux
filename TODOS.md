@@ -4245,7 +4245,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 ### 7.18 Performance, scale & limits
 - [ ] Load + soak tests (sync push/pull, blob up/down, AI streaming, WatchWorkspaces fan-out); publish
       a baseline like the bridge's benchmark snapshots; perf regression gate in CI.
-- [ ] DB tuning: WAL, `busy_timeout`, sensible `PRAGMA`s; single-writer awareness; per-request conn use.
+- [x] DB tuning: WAL, `busy_timeout`, sensible `PRAGMA`s; single-writer awareness; per-request conn use.
 - [ ] **Scale ceiling — be honest:** SQLite is single-writer. Document the throughput boundary and the
       **migration path to Postgres (or per-tenant SQLite sharding)** for true multi-tenant scale; gate
       the choice on real numbers, not speculation. ★

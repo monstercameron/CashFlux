@@ -11,6 +11,7 @@ import (
 )
 
 const CurrentServerSchemaVersion = 1
+const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
 type Store struct {
@@ -26,7 +27,9 @@ func OpenStore(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("server store: open: %w", err)
 	}
-	if _, err := db.Exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;"); err != nil {
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if _, err := db.Exec(fmt.Sprintf("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = %d;", sqliteBusyTimeoutMillis)); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("server store: pragmas: %w", err)
 	}

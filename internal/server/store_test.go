@@ -34,6 +34,33 @@ func TestOpenStoreMigratesSchema(t *testing.T) {
 	}
 }
 
+func TestOpenStoreAppliesSQLiteTuning(t *testing.T) {
+	s, err := OpenStore(filepath.Join(t.TempDir(), "cashflux.db"))
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	defer s.Close()
+
+	stats := s.db.Stats()
+	if stats.MaxOpenConnections != 1 {
+		t.Fatalf("MaxOpenConnections = %d, want 1", stats.MaxOpenConnections)
+	}
+	var journalMode string
+	if err := s.db.QueryRow("PRAGMA journal_mode;").Scan(&journalMode); err != nil {
+		t.Fatalf("journal_mode: %v", err)
+	}
+	if journalMode != "wal" {
+		t.Fatalf("journal_mode = %q, want wal", journalMode)
+	}
+	var busyTimeout int
+	if err := s.db.QueryRow("PRAGMA busy_timeout;").Scan(&busyTimeout); err != nil {
+		t.Fatalf("busy_timeout: %v", err)
+	}
+	if busyTimeout != sqliteBusyTimeoutMillis {
+		t.Fatalf("busy_timeout = %d, want %d", busyTimeout, sqliteBusyTimeoutMillis)
+	}
+}
+
 func TestOpenStoreRejectsNewerSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cashflux.db")
 	db, err := sql.Open("sqlite3", path)

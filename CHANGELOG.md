@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SQLite server tuning.** Backend store connections now enforce WAL mode, a busy timeout, and a single-writer pool shape for SQLite concurrency.
 - **Graceful backend WAL checkpoint.** Server shutdown now drains requests, checkpoints SQLite WAL state, and flushes stdout-backed logs before exit.
 - **Request-scoped backend logging.** HTTP and gRPC requests now log request IDs, route/RPC names, status, latency, authenticated user IDs, and workspace/device context when available.
 - **Backend request IDs.** HTTP responses now carry `X-Request-ID`, incoming request IDs are

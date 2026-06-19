@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: tune backend sqlite connection
+
+- Set the backend SQLite pool to one open/idle connection so writes stay serialized around SQLite's single-writer model.
+- Added a five-second `busy_timeout` alongside the existing WAL and foreign-key PRAGMAs.
+- Added a store test that verifies WAL mode, busy timeout, and pool limits after opening the server database.
+
 ## 2026-06-18 - feat: checkpoint backend wal on shutdown
 
 - Added `Store.CheckpointWAL` to run `PRAGMA wal_checkpoint(TRUNCATE)` through the existing SQLite handle.
