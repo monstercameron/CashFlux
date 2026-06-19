@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +16,8 @@ import (
 
 func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	store := openTestStore(t)
-	cfg := Config{AuthMode: "token", Token: "dev-token", AppOrigin: "*"}
+	metrics := NewMetrics()
+	cfg := Config{AuthMode: "token", Token: "dev-token", AppOrigin: "*", Metrics: metrics}
 	bridge := httptest.NewServer(NewMux(cfg, store))
 	defer bridge.Close()
 
@@ -108,6 +110,22 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	}
 	if len(list.Workspaces) != 0 {
 		t.Fatalf("active workspaces after delete = %+v", list)
+	}
+
+	var metricsOut strings.Builder
+	metrics.WritePrometheus(&metricsOut)
+	for _, want := range []string{
+		`cashflux_sync_pulls_total{result="found"} 1`,
+		`cashflux_sync_pulls_total{result="list"} 2`,
+		`cashflux_sync_pulls_total{result="not_modified"} 1`,
+		`cashflux_sync_pushes_total{result="accepted"} 1`,
+		`cashflux_sync_pushes_total{result="deleted"} 1`,
+		`cashflux_sync_pushes_total{result="lww_rejected"} 1`,
+		`cashflux_sync_lww_rejects_total 1`,
+	} {
+		if !strings.Contains(metricsOut.String(), want) {
+			t.Fatalf("missing metric %q in:\n%s", want, metricsOut.String())
+		}
 	}
 }
 

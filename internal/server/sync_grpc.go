@@ -52,6 +52,7 @@ func (s *SyncService) ListWorkspacesRPC(ctx context.Context, req backendrpc.List
 	for _, workspace := range workspaces {
 		out = append(out, rpcWorkspace(workspace))
 	}
+	s.metrics.ObserveSyncPull("list")
 	return backendrpc.ListWorkspacesResponse{Workspaces: out}, nil
 }
 
@@ -62,12 +63,14 @@ func (s *SyncService) GetWorkspaceRPC(ctx context.Context, req backendrpc.GetWor
 		return backendrpc.GetWorkspaceResponse{}, err
 	}
 	if !found {
+		s.metrics.ObserveSyncPull("missing")
 		return backendrpc.GetWorkspaceResponse{Found: false}, nil
 	}
 	etag := workspaceETag(workspace)
 	resp := backendrpc.GetWorkspaceResponse{Found: true, ETag: etag, Workspace: rpcWorkspace(workspace)}
 	if strings.TrimSpace(req.IfNoneMatch) == etag {
 		resp.NotModified = true
+		s.metrics.ObserveSyncPull("not_modified")
 		return resp, nil
 	}
 	if found {
@@ -79,6 +82,7 @@ func (s *SyncService) GetWorkspaceRPC(ctx context.Context, req backendrpc.GetWor
 			resp.Dataset = snapshot.Dataset
 		}
 	}
+	s.metrics.ObserveSyncPull("found")
 	return resp, nil
 }
 
@@ -114,11 +118,14 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 		if ok {
 			dataset = snapshot.Dataset
 		}
+		s.metrics.ObserveSyncPush("lww_rejected")
+		s.metrics.ObserveSyncLWWReject()
 	}
 	if result.Accepted {
 		if user, ok := AuthUserFromContext(ctx); ok {
 			s.publishWorkspace(user.ID, result.Workspace)
 		}
+		s.metrics.ObserveSyncPush("accepted")
 	}
 	return backendrpc.PutWorkspaceResponse{
 		Accepted:  result.Accepted,
@@ -141,6 +148,11 @@ func (s *SyncService) DeleteWorkspaceRPC(ctx context.Context, req backendrpc.Del
 	deleted, err := s.Delete(ctx, req.ID, updatedAt, req.DeviceID)
 	if err != nil {
 		return backendrpc.DeleteWorkspaceResponse{}, err
+	}
+	if deleted {
+		s.metrics.ObserveSyncPush("deleted")
+	} else {
+		s.metrics.ObserveSyncPush("delete_missing")
 	}
 	return backendrpc.DeleteWorkspaceResponse{Deleted: deleted}, nil
 }

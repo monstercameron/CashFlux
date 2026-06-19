@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: expose backend sync metrics
+
+- Added sync pull and push result counters to the backend metrics collector.
+- Recorded List/Get/Put/Delete outcomes from the gRPC sync bridge, including not-modified pulls and delete misses.
+- Added a dedicated LWW reject counter and covered the metrics in the bridge round-trip test.
+
 ## 2026-06-19 - feat: expose backend ai metrics
 
 - Added AI proxy request and token counters to the backend metrics collector.
