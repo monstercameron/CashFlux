@@ -92,6 +92,8 @@ var english = Catalog{
 	"split.noMembers":        "Add household members first, then you can split an expense between them.",
 	"split.settleUp":         "Settle up",
 	"split.owes":             "%s owes %s",
+	"split.byWeight":         "Split by weight (shares or income)",
+	"split.weight":           "Weight",
 	"bills.totalDue":         "Total due soon",
 	"bills.count":            "Upcoming bills",
 	"bills.nextDue":          "Next due",

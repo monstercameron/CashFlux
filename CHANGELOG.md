@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Proportional mode on the Split screen (B24).** The Split calculator now has a "Split by weight" toggle:
+  switch it on and each included member gets a weight field (a share count or income), splitting the cost
+  proportionally instead of evenly (a blank weight defaults to 1, an explicit 0 excludes). Settle-up follows
+  the weighted shares. Backed by `split.ByWeights`.
+
+### Added
 - **Weighted expense split (B24).** New pure, table-tested `split.ByWeights`: splits a shared cost in
   proportion to per-member weights (share counts like 2:1, or incomes to split by earnings), distributing the
   rounding remainder by the largest-remainder method so shares sum exactly. Zero-weight members get nothing.

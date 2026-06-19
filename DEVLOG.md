@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: proportional mode on the Split screen (B24)
+
+- Surfaced `split.ByWeights` on the Split screen behind a "Split by weight" toggle. Added `weighted` +
+  `weights` (per-member string map) state; in weighted mode shares come from ByWeights (blank weight → 1, so a
+  fresh proportional split == even until adjusted; explicit 0 excludes), else from Equal as before. Settle-up
+  already reads shareByID, so it follows either mode.
+- Per-member weight inputs would put an OnInput hook inside the member loop (forbidden), so I extracted a
+  `SplitMemberRow` component that owns its weight-input hook (toggle + weight field + share). Added
+  split.byWeight/split.weight i18n keys.
+- gofmt clean, i18n tests + wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: weighted expense split (B24)
 
 - Added pure `split.ByWeights(total, []WeightedMember)` next to the existing even `Equal`. Splits in

@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -35,6 +36,8 @@ func Split() ui.Node {
 	amountS := ui.UseState("")
 	selected := ui.UseState(map[string]bool{})
 	payerS := ui.UseState("")
+	weighted := ui.UseState(false)
+	weights := ui.UseState(map[string]string{})
 	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
 	onPayer := ui.UseEvent(func(e ui.Event) { payerS.Set(e.GetValue()) })
 	toggle := func(id string) {
@@ -46,6 +49,15 @@ func Split() ui.Node {
 		next[id] = !next[id]
 		selected.Set(next)
 	}
+	setWeight := func(id, v string) {
+		cur := weights.Get()
+		next := make(map[string]string, len(cur)+1)
+		for k, val := range cur {
+			next[k] = val
+		}
+		next[id] = v
+		weights.Set(next)
+	}
 
 	amt, _ := money.ParseMinor(strings.TrimSpace(amountS.Get()), dec)
 	var ids []string
@@ -55,8 +67,27 @@ func Split() ui.Node {
 		}
 	}
 	shareByID := map[string]int64{}
-	for _, s := range split.Equal(amt, ids) {
-		shareByID[s.MemberID] = s.Amount
+	if weighted.Get() {
+		// Proportional split: a blank or invalid weight defaults to 1 (so a fresh
+		// proportional split behaves like an even one until weights are set); an
+		// explicit 0 excludes that member from the share.
+		wm := make([]split.WeightedMember, 0, len(ids))
+		for _, id := range ids {
+			w := int64(1)
+			if s := strings.TrimSpace(weights.Get()[id]); s != "" {
+				if v, err := strconv.Atoi(s); err == nil {
+					w = int64(v)
+				}
+			}
+			wm = append(wm, split.WeightedMember{MemberID: id, Weight: w})
+		}
+		for _, s := range split.ByWeights(amt, wm) {
+			shareByID[s.MemberID] = s.Amount
+		}
+	} else {
+		for _, s := range split.Equal(amt, ids) {
+			shareByID[s.MemberID] = s.Amount
+		}
 	}
 	nameByID := map[string]string{}
 	for _, m := range members {
@@ -67,15 +98,14 @@ func Split() ui.Node {
 		func(m domain.Member) any { return m.ID },
 		func(m domain.Member) ui.Node {
 			on := selected.Get()[m.ID]
-			share := Fragment()
+			share := ""
 			if on && amt > 0 {
-				share = Span(Class("budget-amount"), fmtMoney(money.New(shareByID[m.ID], base)))
+				share = fmtMoney(money.New(shareByID[m.ID], base))
 			}
-			id := m.ID
-			return Div(Class("row"),
-				uiw.ToggleRow(uiw.ToggleRowProps{Label: m.Name, On: on, OnChange: func(bool) { toggle(id) }}),
-				share,
-			)
+			return ui.CreateElement(SplitMemberRow, splitMemberRowProps{
+				Member: m, On: on, Weighted: weighted.Get(), Weight: weights.Get()[m.ID],
+				Share: share, OnToggle: toggle, OnWeight: setWeight,
+			})
 		},
 	)
 
@@ -113,6 +143,7 @@ func Split() ui.Node {
 				Input(Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(Class("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
 			),
+			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("split.members")),
@@ -122,5 +153,39 @@ func Split() ui.Node {
 			H2(Class("card-title"), uistate.T("split.settleUp")),
 			Div(Class("rows"), owes),
 		)),
+	)
+}
+
+type splitMemberRowProps struct {
+	Member   domain.Member
+	On       bool
+	Weighted bool
+	Weight   string // current weight input value (proportional mode)
+	Share    string // pre-formatted share; "" hides the amount
+	OnToggle func(id string)
+	OnWeight func(id, value string)
+}
+
+// SplitMemberRow renders one member in the split picker: an include toggle, a
+// weight input (only in proportional mode while included), and the computed
+// share. It owns its weight-input hook (per the no-hooks-in-loops rule), so the
+// member list can render many rows safely.
+func SplitMemberRow(props splitMemberRowProps) ui.Node {
+	m := props.Member
+	onWeight := ui.UseEvent(func(v string) { props.OnWeight(m.ID, v) })
+
+	weightField := Fragment()
+	if props.Weighted && props.On {
+		weightField = Input(Class("field"), Type("number"), Attr("aria-label", uistate.T("split.weight")),
+			Placeholder(uistate.T("split.weight")), Value(props.Weight), Step("1"), OnInput(onWeight))
+	}
+	share := Fragment()
+	if props.Share != "" {
+		share = Span(Class("budget-amount"), props.Share)
+	}
+	return Div(Class("row"),
+		uiw.ToggleRow(uiw.ToggleRowProps{Label: m.Name, On: props.On, OnChange: func(bool) { props.OnToggle(m.ID) }}),
+		weightField,
+		share,
 	)
 }
