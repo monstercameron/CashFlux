@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add billing business metrics (7.15)
+
+- Added aggregate billing webhook metrics without user identifiers: signup, trial start, conversion,
+  cancellation, payment failure, and estimated active MRR cents.
+- Wired metrics from subscription transitions so repeated active updates do not double-count MRR, while canceled
+  events remove the active plan estimate.
+- Covered checkout trial, conversion, cancellation, and MRR output through the Prometheus writer.
+
 ## 2026-06-19 - test: cover billing state transitions (7.11)
 
 - Added explicit coverage for `customer.subscription.deleted` so Stripe deleted-subscription events mark the

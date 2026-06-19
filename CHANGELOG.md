@@ -46,6 +46,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend business metrics (7.15).** Billing webhooks now publish privacy-safe aggregate signup, trial,
+  conversion, cancellation, payment-failure, and estimated MRR metrics.
 - **Backend billing coverage (7.11).** Added explicit subscription-deleted webhook coverage alongside the
   existing entitlement-state and storage-cap tests.
 - **Server mode setting (7.12).** Added a persisted Cloud/Self-hosted Settings control and hides Cloud billing

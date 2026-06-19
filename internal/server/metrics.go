@@ -28,6 +28,8 @@ type Metrics struct {
 	syncLWWRejects       int64
 	db                   map[string]metricValue
 	queueDepths          map[string]int64
+	billingEvents        map[billingMetricKey]int64
+	billingMRRCents      int64
 }
 
 type metricKey struct {
@@ -38,6 +40,12 @@ type metricKey struct {
 type metricValue struct {
 	Count        int64
 	DurationSecs float64
+}
+
+type billingMetricKey struct {
+	Event  string
+	Plan   string
+	Status string
 }
 
 var httpDurationBuckets = []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10}
@@ -52,6 +60,7 @@ func NewMetrics() *Metrics {
 		syncPushes:      map[string]int64{},
 		db:              map[string]metricValue{},
 		queueDepths:     map[string]int64{},
+		billingEvents:   map[billingMetricKey]int64{},
 	}
 }
 
@@ -203,6 +212,30 @@ func (m *Metrics) SetQueueDepth(name string, depth int64) {
 	m.queueDepths[name] = depth
 }
 
+func (m *Metrics) ObserveBillingEvent(event, plan, status string) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.billingEvents == nil {
+		m.billingEvents = map[billingMetricKey]int64{}
+	}
+	m.billingEvents[billingMetricKey{Event: normalizedMetricLabel(event, "unknown"), Plan: normalizedMetricLabel(plan, "unknown"), Status: normalizedMetricLabel(status, "unknown")}]++
+}
+
+func (m *Metrics) ObserveBillingMRRDelta(cents int64) {
+	if m == nil || cents == 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.billingMRRCents += cents
+	if m.billingMRRCents < 0 {
+		m.billingMRRCents = 0
+	}
+}
+
 func (m *Metrics) observe(dst map[metricKey]metricValue, key metricKey, elapsed time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -235,7 +268,7 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	if m == nil {
 		m = NewMetrics()
 	}
-	httpRows, httpBucketRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, blobGCSweeps, blobGCDeleted, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows, queueDepths := m.snapshot()
+	httpRows, httpBucketRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, blobGCSweeps, blobGCDeleted, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows, queueDepths, billingRows, billingMRRCents := m.snapshot()
 	_, _ = io.WriteString(w, "# HELP cashflux_server_up Server process health.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_server_up gauge\n")
 	_, _ = io.WriteString(w, "cashflux_server_up 1\n")
@@ -321,6 +354,14 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	for _, row := range queueDepths {
 		_, _ = fmt.Fprintf(w, "cashflux_queue_depth{queue=%q} %d\n", row.Name, row.Value)
 	}
+	_, _ = io.WriteString(w, "# HELP cashflux_billing_events_total Privacy-safe billing webhook business events by type, plan, and status.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_billing_events_total counter\n")
+	for _, row := range billingRows {
+		_, _ = fmt.Fprintf(w, "cashflux_billing_events_total{event=%q,plan=%q,status=%q} %d\n", row.Key.Event, row.Key.Plan, row.Key.Status, row.Value)
+	}
+	_, _ = io.WriteString(w, "# HELP cashflux_billing_mrr_cents Estimated active monthly recurring revenue in cents from billing webhooks.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_billing_mrr_cents gauge\n")
+	_, _ = fmt.Fprintf(w, "cashflux_billing_mrr_cents %d\n", billingMRRCents)
 }
 
 type metricRow struct {
@@ -344,14 +385,19 @@ type bucketMetricRow struct {
 	Count   int64
 }
 
-func (m *Metrics) snapshot() ([]metricRow, []bucketMetricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow, []labelMetricRow) {
+type billingMetricRow struct {
+	Key   billingMetricKey
+	Value int64
+}
+
+func (m *Metrics) snapshot() ([]metricRow, []bucketMetricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow, []labelMetricRow, []billingMetricRow, int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	httpRows := metricRows(m.http)
 	httpBucketRows := bucketMetricRows(m.httpBuckets, m.http)
 	grpcRows := metricRows(m.grpc)
 	streamRows := metricRows(m.streamDurations)
-	return httpRows, httpBucketRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.blobGCSweeps, m.blobGCDeleted, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db), labelMetricRows(m.queueDepths)
+	return httpRows, httpBucketRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.blobGCSweeps, m.blobGCDeleted, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db), labelMetricRows(m.queueDepths), billingMetricRows(m.billingEvents), m.billingMRRCents
 }
 
 func metricRows(src map[metricKey]metricValue) []metricRow {
@@ -376,6 +422,27 @@ func labelMetricRows(src map[string]int64) []labelMetricRow {
 		return strings.Compare(rows[i].Name, rows[j].Name) < 0
 	})
 	return rows
+}
+
+func billingMetricRows(src map[billingMetricKey]int64) []billingMetricRow {
+	rows := make([]billingMetricRow, 0, len(src))
+	for key, value := range src {
+		rows = append(rows, billingMetricRow{Key: key, Value: value})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		left := rows[i].Key.Event + "\x00" + rows[i].Key.Plan + "\x00" + rows[i].Key.Status
+		right := rows[j].Key.Event + "\x00" + rows[j].Key.Plan + "\x00" + rows[j].Key.Status
+		return strings.Compare(left, right) < 0
+	})
+	return rows
+}
+
+func normalizedMetricLabel(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func namedMetricRows(src map[string]metricValue) []namedMetricRow {

@@ -232,7 +232,7 @@ func handleStripeWebhook(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "stripe event is invalid")
 			return
 		}
-		if err := applyStripeEvent(store, event, time.Now().UTC()); err != nil {
+		if err := applyStripeEvent(store, event, time.Now().UTC(), cfg.Metrics); err != nil {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, err.Error())
 			return
 		}
@@ -272,7 +272,7 @@ func validStripeSignature(header string, body []byte, secret string, now time.Ti
 	return hmac.Equal([]byte(want), []byte(signature))
 }
 
-func applyStripeEvent(store *Store, event stripeEvent, now time.Time) error {
+func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *Metrics) error {
 	switch strings.TrimSpace(event.Type) {
 	case "checkout.session.completed":
 		var session stripeCheckoutSessionObject
@@ -286,14 +286,19 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time) error {
 		if userID == "" || strings.TrimSpace(session.Customer) == "" || strings.TrimSpace(session.Subscription) == "" {
 			return fmt.Errorf("stripe checkout session is missing subscription identity")
 		}
-		return store.PutSubscription(Subscription{
+		next := Subscription{
 			UserID:             userID,
 			StripeCustomer:     session.Customer,
 			StripeSubscription: session.Subscription,
 			Status:             metadataValueDefault(session.Metadata, "trialing", "subscription_status", "status"),
 			Plan:               metadataValueDefault(session.Metadata, "unknown", "plan", "price"),
 			UpdatedAt:          now,
-		})
+		}
+		if err := store.PutSubscription(next); err != nil {
+			return err
+		}
+		observeBillingTransition(metrics, event.Type, Subscription{}, next)
+		return nil
 	case "customer.subscription.updated", "customer.subscription.deleted":
 		var sub stripeSubscriptionObject
 		if err := json.Unmarshal(event.Data.Object, &sub); err != nil {
@@ -302,7 +307,16 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time) error {
 		if event.Type == "customer.subscription.deleted" {
 			sub.Status = "canceled"
 		}
-		return putStripeSubscription(store, sub, now)
+		previous := existingSubscriptionForStripe(store, sub.ID)
+		next, err := stripeSubscriptionRecord(store, sub, now)
+		if err != nil {
+			return err
+		}
+		if err := store.PutSubscription(next); err != nil {
+			return err
+		}
+		observeBillingTransition(metrics, event.Type, previous, next)
+		return nil
 	case "invoice.payment_failed":
 		var invoice stripeInvoiceObject
 		if err := json.Unmarshal(event.Data.Object, &invoice); err != nil {
@@ -315,31 +329,44 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time) error {
 		if !ok {
 			return fmt.Errorf("stripe invoice subscription is unknown")
 		}
+		previous := existing
 		existing.Status = "past_due"
 		existing.UpdatedAt = now
 		if strings.TrimSpace(invoice.Customer) != "" {
 			existing.StripeCustomer = invoice.Customer
 		}
-		return store.PutSubscription(existing)
+		if err := store.PutSubscription(existing); err != nil {
+			return err
+		}
+		observeBillingTransition(metrics, event.Type, previous, existing)
+		return nil
 	default:
 		return nil
 	}
 }
 
 func putStripeSubscription(store *Store, sub stripeSubscriptionObject, now time.Time) error {
+	record, err := stripeSubscriptionRecord(store, sub, now)
+	if err != nil {
+		return err
+	}
+	return store.PutSubscription(record)
+}
+
+func stripeSubscriptionRecord(store *Store, sub stripeSubscriptionObject, now time.Time) (Subscription, error) {
 	userID := metadataValue(sub.Metadata, "user_id", "cashflux_user_id")
 	if userID == "" {
 		if existing, ok, err := store.GetSubscriptionByStripeID(sub.ID); err != nil {
-			return err
+			return Subscription{}, err
 		} else if ok {
 			userID = existing.UserID
 		}
 	}
 	if userID == "" || strings.TrimSpace(sub.Customer) == "" || strings.TrimSpace(sub.ID) == "" ||
 		strings.TrimSpace(sub.Status) == "" {
-		return fmt.Errorf("stripe subscription is missing required fields")
+		return Subscription{}, fmt.Errorf("stripe subscription is missing required fields")
 	}
-	return store.PutSubscription(Subscription{
+	return Subscription{
 		UserID:             userID,
 		StripeCustomer:     sub.Customer,
 		StripeSubscription: sub.ID,
@@ -348,7 +375,7 @@ func putStripeSubscription(store *Store, sub stripeSubscriptionObject, now time.
 		CurrentPeriodEnd:   unixTime(sub.CurrentPeriodEnd),
 		TrialEnd:           unixTime(sub.TrialEnd),
 		UpdatedAt:          now,
-	})
+	}, nil
 }
 
 func stripeSubscriptionPlan(sub stripeSubscriptionObject) string {
@@ -365,6 +392,64 @@ func stripeSubscriptionPlan(sub stripeSubscriptionObject) string {
 		}
 	}
 	return "unknown"
+}
+
+func existingSubscriptionForStripe(store *Store, stripeSubscription string) Subscription {
+	existing, ok, err := store.GetSubscriptionByStripeID(stripeSubscription)
+	if err != nil || !ok {
+		return Subscription{}
+	}
+	return existing
+}
+
+func observeBillingTransition(metrics *Metrics, eventType string, previous, next Subscription) {
+	if metrics == nil {
+		return
+	}
+	plan := strings.TrimSpace(next.Plan)
+	if plan == "" {
+		plan = previous.Plan
+	}
+	status := strings.TrimSpace(next.Status)
+	switch strings.TrimSpace(eventType) {
+	case "checkout.session.completed":
+		metrics.ObserveBillingEvent("signup", plan, status)
+		if status == "trialing" {
+			metrics.ObserveBillingEvent("trial_start", plan, status)
+		}
+	case "customer.subscription.updated":
+		if !billableSubscriptionStatus(previous.Status) && billableSubscriptionStatus(next.Status) {
+			metrics.ObserveBillingEvent("conversion", plan, status)
+		}
+	case "customer.subscription.deleted":
+		metrics.ObserveBillingEvent("cancellation", plan, status)
+	case "invoice.payment_failed":
+		metrics.ObserveBillingEvent("payment_failed", plan, status)
+	}
+	metrics.ObserveBillingMRRDelta(subscriptionMRRCents(next) - subscriptionMRRCents(previous))
+}
+
+func subscriptionMRRCents(sub Subscription) int64 {
+	if !billableSubscriptionStatus(sub.Status) {
+		return 0
+	}
+	switch strings.TrimSpace(sub.Plan) {
+	case "personal_monthly":
+		return 399
+	case "personal_annual":
+		return 292
+	default:
+		return 0
+	}
+}
+
+func billableSubscriptionStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "active", "past_due":
+		return true
+	default:
+		return false
+	}
 }
 
 func metadataValue(metadata map[string]string, keys ...string) string {

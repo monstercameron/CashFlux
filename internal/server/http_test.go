@@ -1822,6 +1822,73 @@ func TestStripeWebhookSubscriptionDeletedMarksCanceled(t *testing.T) {
 	}
 }
 
+func TestStripeWebhookRecordsBusinessMetrics(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 15, 10, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	metrics := NewMetrics()
+	cfg := Config{AuthMode: "token", Billing: true, StripeWebhookSecret: "whsec_test", Metrics: metrics}
+	h := NewMux(cfg, store)
+	send := func(payload []byte) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/v1/billing/stripe/webhook", bytes.NewReader(payload))
+		req.Header.Set(stripeSignatureHeader, testStripeSignature(t, payload, cfg.StripeWebhookSecret, time.Now().UTC()))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("webhook status = %d body %q", rr.Code, rr.Body.String())
+		}
+	}
+	send([]byte(`{
+		"type":"checkout.session.completed",
+		"data":{"object":{
+			"customer":"cus_123",
+			"subscription":"sub_123",
+			"client_reference_id":"u1",
+			"metadata":{"plan":"personal_annual","status":"trialing"}
+		}}
+	}`))
+	send([]byte(`{
+		"type":"customer.subscription.updated",
+		"data":{"object":{
+			"id":"sub_123",
+			"customer":"cus_123",
+			"status":"active",
+			"current_period_end":1781820000,
+			"metadata":{"user_id":"u1","plan":"personal_annual"}
+		}}
+	}`))
+	var activeOut strings.Builder
+	metrics.WritePrometheus(&activeOut)
+	if !strings.Contains(activeOut.String(), `cashflux_billing_mrr_cents 292`) {
+		t.Fatalf("active metrics missing MRR in %s", activeOut.String())
+	}
+	send([]byte(`{
+		"type":"customer.subscription.deleted",
+		"data":{"object":{
+			"id":"sub_123",
+			"customer":"cus_123",
+			"status":"active",
+			"metadata":{"user_id":"u1","plan":"personal_annual"}
+		}}
+	}`))
+	var out strings.Builder
+	metrics.WritePrometheus(&out)
+	for _, want := range []string{
+		`cashflux_billing_events_total{event="signup",plan="personal_annual",status="trialing"} 1`,
+		`cashflux_billing_events_total{event="trial_start",plan="personal_annual",status="trialing"} 1`,
+		`cashflux_billing_events_total{event="conversion",plan="personal_annual",status="active"} 1`,
+		`cashflux_billing_events_total{event="cancellation",plan="personal_annual",status="canceled"} 1`,
+		`cashflux_billing_mrr_cents 0`,
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("metrics missing %q in %s", want, out.String())
+		}
+	}
+}
+
 func TestBillingCheckoutCreatesStripeSession(t *testing.T) {
 	store := openTestStore(t)
 	user := authUserFromToken("dev-token")

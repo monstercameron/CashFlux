@@ -26,6 +26,8 @@ Use `CASHFLUX_SERVER_LOG_FORMAT=json` in production so collectors can parse fiel
 - Blob GC: `increase(cashflux_blob_gc_deleted_total[24h])` and `increase(cashflux_blob_gc_sweeps_total[24h])`
 - AI proxy usage: `rate(cashflux_ai_proxy_requests_total[5m])` and `rate(cashflux_ai_proxy_tokens_total[5m])`
 - DB operation rate/latency: `sum by (operation) (rate(cashflux_db_queries_total[5m]))`
+- Billing funnel: `increase(cashflux_billing_events_total[24h])` by event/plan/status, plus
+  `cashflux_billing_mrr_cents` for estimated active MRR without user labels.
 
 ## Alerts And Routing
 
