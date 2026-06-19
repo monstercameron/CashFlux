@@ -22,7 +22,20 @@ import (
 type ShellProps struct {
 	Title    string
 	Subtitle string
-	View     func() uic.Node
+	// ActivePath is the LOGICAL route path of the screen this Shell renders (e.g.
+	// "/accounts"), supplied by the route factory. It is threaded to the rail and
+	// breadcrumb so the active highlight moves on navigation: the chrome cannot
+	// read it from router.InspectCurrentRoute() at render time because Sidebar and
+	// TopBar are memoized (no prop change) and would not re-render on a route
+	// change, freezing the highlight (regression covered by e2e/navigation.test.mjs).
+	ActivePath string
+	View       func() uic.Node
+}
+
+// sidebarProps carries the active route path so the rail re-renders and the
+// highlight follows each navigation.
+type sidebarProps struct {
+	ActivePath string
 }
 
 // Shell renders the candidate-C application chrome: a fixed left rail and an
@@ -44,17 +57,17 @@ func Shell(props ShellProps) uic.Node {
 		}
 		focusMain()
 		return nil
-	}, router.InspectCurrentRoute().Path)
+	}, props.ActivePath)
 
 	// The skip link must include the current path: a document <base href> is set so
 	// deep-link refreshes resolve assets, but that also makes a bare "#main" resolve
 	// against the base (navigating to the root). Anchoring it to the live path keeps
 	// "skip to content" an in-page jump on every route.
 	return Div(Class("flex h-screen overflow-hidden bg-base text-fg font-sans"),
-		A(Class("skip-link"), Attr("href", router.InspectCurrentRoute().Path+"#main"), uistate.T("a11y.skipToContent")),
-		uic.CreateElement(Sidebar),
+		A(Class("skip-link"), Attr("href", uistate.RoutePath(props.ActivePath)+"#main"), uistate.T("a11y.skipToContent")),
+		uic.CreateElement(Sidebar, sidebarProps{ActivePath: props.ActivePath}),
 		Main(Class("cf-scroll flex-1 min-w-0 overflow-y-auto"), Attr("id", "main"), Attr("tabindex", "-1"),
-			uic.CreateElement(TopBar, topBarProps{Title: props.Title}),
+			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
 			Div(Class("p-[10px]"), uic.CreateElement(props.View)),
 		),
 		uic.CreateElement(SettingsHost),
@@ -139,8 +152,8 @@ func railHeader(label string) uic.Node {
 
 // Sidebar renders the left rail: brand header, primary navigation, the user's
 // custom "My pages", the System group, and a household card that opens settings.
-func Sidebar() uic.Node {
-	current := uistate.LogicalPath(router.InspectCurrentRoute().Path)
+func Sidebar(props sidebarProps) uic.Node {
+	current := props.ActivePath
 	hidden := uistate.UseHiddenModules().Get()
 	cls := "rail w-60 shrink-0 border-r border-line flex flex-col"
 	if uistate.UseRailCollapsed().Get() {
@@ -354,6 +367,10 @@ func HouseholdCard() uic.Node {
 
 type topBarProps struct {
 	Title string
+	// ActivePath is the logical route path, threaded from the route so the
+	// breadcrumb "are we home" and period-aware checks react to navigation rather
+	// than reading a frozen router snapshot.
+	ActivePath string
 }
 
 // TopBar is the sticky page header inside the scrolling main pane: a (currently
@@ -364,7 +381,7 @@ func TopBar(props topBarProps) uic.Node {
 	// Breadcrumb: Dashboard (clickable) › current screen. Off the dashboard the
 	// home crumb navigates back; on it, just the title shows.
 	onHome := func() { nav.Navigate(uistate.RoutePath("/")) }
-	curPath := uistate.LogicalPath(router.InspectCurrentRoute().Path)
+	curPath := props.ActivePath
 	onDashboard := curPath == "/"
 	// The time-resolution control only makes sense where there's a period concept;
 	// on Members/Categories/Rules/etc. it does nothing, so hide it there (C4).

@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Active rail highlight (and breadcrumb) didn't follow navigation.** The Sidebar/TopBar derived the current
+  screen from a non-reactive `router.InspectCurrentRoute()` snapshot and, taking no props, were memoized — so
+  the highlight froze on the first screen ("the menu item doesn't move"). Each route's logical path is now
+  threaded from its factory through `ShellProps.ActivePath` to the rail and top bar, so the highlight and the
+  breadcrumb "are-we-home" check react to every navigation. Verified by a Playwright E2E that clicks all 20
+  rail items and asserts the URL, heading, exactly one active item, and exactly one rail/top bar.
 - **Left rail items were not navigable (routing regression).** A Layout/outlet router restructure left child
   routes rendering outside the Shell (into a missing outlet), so clicking most rail items showed nothing.
   Reverted to flat per-route registration — each route renders its own Shell + screen, which the history router

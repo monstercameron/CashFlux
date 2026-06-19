@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: rail highlight follows navigation; add Playwright nav E2E
+
+- After restoring navigation, a real Playwright E2E (e2e/navigation.test.mjs, run via e2e/run.ps1 against a
+  tiny static server in e2e/serve.go) surfaced the second half of the user's report: the URL updated but the
+  active rail item stayed stuck on Dashboard and the <h1> lagged. Root cause: Shell rendered the Sidebar with
+  NO props, so the framework memoized it and it never re-rendered on a route change; its active state came from
+  a non-reactive router.InspectCurrentRoute() read, frozen at first mount.
+- Fix: thread each route's logical path from its factory through ShellProps.ActivePath into Sidebar and TopBar
+  (both now take it as a prop), so the chrome re-renders and the highlight/breadcrumb follow navigation. The
+  route factory is the source of truth, so this is deterministic and independent of router snapshot timing.
+- The E2E now passes: 20/20 rail items navigate, the highlight follows, and the chrome renders exactly once
+  (also a guard against the "page duplicates" symptom during navigation). Built wasm into web/bin and served it
+  directly because `gwc dev` can't serve the HTML shell (B1). Next: explore the intermittent rerender
+  duplication the user noted, and harden the sub-path (RoutePath) routing with more tests.
+
 ## 2026-06-19 - fix: restore left-rail navigation (routing regression) + tests
 
 - User reported most left-rail items were not navigable. Root cause: the B3 Layout/outlet restructure in

@@ -61,9 +61,10 @@ func Run() {
 		route := route // capture per iteration
 		r.Register(uistate.RoutePath(route.Path), func(router.Attrs) *router.Element {
 			return ui.CreateElement(Shell, ShellProps{
-				Title:    uistate.T(route.Title),
-				Subtitle: uistate.T(route.Subtitle),
-				View:     route.View,
+				Title:      uistate.T(route.Title),
+				Subtitle:   uistate.T(route.Subtitle),
+				ActivePath: route.Path,
+				View:       route.View,
 			})
 		})
 	}
@@ -79,14 +80,15 @@ func Run() {
 			}
 		}
 		return ui.CreateElement(Shell, ShellProps{
-			Title: title,
-			View:  func() ui.Node { return screens.CustomPage(slug) },
+			Title:      title,
+			ActivePath: "/p/" + slug,
+			View:       func() ui.Node { return screens.CustomPage(slug) },
 		})
 	})
 	// Unknown paths fall back to the dashboard, still inside the Shell.
 	r.Register("*", func(router.Attrs) *router.Element {
 		home := screens.All()[0]
-		return ui.CreateElement(Shell, ShellProps{Title: uistate.T(home.Title), Subtitle: uistate.T(home.Subtitle), View: home.View})
+		return ui.CreateElement(Shell, ShellProps{Title: uistate.T(home.Title), Subtitle: uistate.T(home.Subtitle), ActivePath: home.Path, View: home.View})
 	})
 
 	r.Mount("#app")
