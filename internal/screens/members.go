@@ -89,6 +89,15 @@ func Members() ui.Node {
 				owned++
 			}
 		}
+		// Transactions can be assigned to a member directly (MemberID), independent
+		// of account ownership. Count them too, so a member used only as a
+		// transaction tag still routes through reassign-before-delete (which clears
+		// those MemberIDs) instead of being deleted out from under them.
+		for _, t := range app.Transactions() {
+			if t.MemberID == memberID {
+				owned++
+			}
+		}
 		return owned
 	}
 
