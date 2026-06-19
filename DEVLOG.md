@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: spending-by-weekday insight (B21)
+
+- Added pure `reports.SpendingByWeekday` returning a `[7]int64` indexed by `time.Weekday` (Sunday=0), so
+  callers read `totals[t.Weekday]` directly, plus `PeakWeekday` (highest-spend day, ok=false when all zero,
+  ties to earliest). Transfers/income excluded. Table tests cover bucketing/exclusions, peak, and tie.
+- Surfaced as a one-line muted insight under the category narrative: "Most spending happens on %s (%s)." using
+  `time.Weekday.String()` for the day name (English; full weekday localization is a future refinement) and the
+  formatted amount. Added the `reports.peakWeekday` i18n key.
+- Docs were intact this iteration (no truncation). gofmt clean, reports + i18n tests green, wasm build green.
+
 ## 2026-06-19 — feat: spending by member (B21)
 
 - Added pure `reports.SpendingByMember(txns, start, end, rates)` (mirrors SpendingByCategory: per-member

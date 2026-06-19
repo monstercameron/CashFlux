@@ -216,6 +216,14 @@ func Reports() ui.Node {
 		))
 	}
 
+	// Spending-by-weekday insight: which day money tends to leave.
+	weekdayPeakLine := ""
+	if wd, err := reports.SpendingByWeekday(txns, cs, ce, rates); err == nil {
+		if d, ok := reports.PeakWeekday(wd); ok {
+			weekdayPeakLine = uistate.T("reports.peakWeekday", d.String(), fmtMinor(wd[d]))
+		}
+	}
+
 	net := money.New(flow.Net(), base)
 	return Div(
 		Div(Class("stat-grid"),
@@ -228,6 +236,7 @@ func Reports() ui.Node {
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.byCategory")),
 			P(Class("muted"), narrative),
+			If(weekdayPeakLine != "", P(Class("muted"), weekdayPeakLine)),
 			catBody,
 			If(len(rowNodes) > 0, Div(Class("flex flex-wrap gap-2 py-1"),
 				Button(Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {

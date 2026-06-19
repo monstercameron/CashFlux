@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Spending-by-weekday insight (B21).** New pure, table-tested `reports.SpendingByWeekday` (totals indexed
+  Sunday–Saturday) and `reports.PeakWeekday`, and the Reports screen now shows a one-line insight — "Most
+  spending happens on Fridays ($X)." — surfacing the day money tends to leave.
 - **Spending by member (B21).** A new pure, table-tested `reports.SpendingByMember` totals each household
   member's expenses for the period (largest first; transfers and income excluded), and the Reports screen
   shows a "Spending by member" card whenever more than one member (or an unassigned bucket) has spend — the
