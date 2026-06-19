@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: biggest deposits (B21)
+
+- Added pure `reports.LargestIncome` mirroring LargestExpenses (gated on IsIncome, reuses ExpenseItem as the
+  generic largest-item shape, top-n with deterministic tie-break). Surfaced a "Biggest deposits" card on the
+  Reports screen above income-by-source, reusing the screen's nameOf/fmtMinor/pr helpers. Added the
+  reports.biggestDeposits i18n key.
+- Table test covers top-n + expense/transfer/out-of-range exclusions. gofmt clean, reports + i18n tests green,
+  wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: annual bill cost on the Bills screen (B22)
 
 - Added a "Per year" stat to the Bills grid: the already-computed (FX-converted) monthly bill total × 12.

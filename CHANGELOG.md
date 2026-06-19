@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Biggest deposits (B21).** New pure, table-tested `reports.LargestIncome` (the income mirror of
+  LargestExpenses) and a "Biggest deposits" card on the Reports screen listing the period's largest individual
+  income transactions — completing the income picture alongside income-by-source.
+
+### Added
 - **Annual bill cost on the Bills screen (B22).** The Bills stat grid now shows a "Per year" figure (the
   upcoming monthly obligations × 12) next to "Total due soon", so the yearly weight of recurring debt payments
   is visible at a glance.

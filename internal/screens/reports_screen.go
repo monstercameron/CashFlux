@@ -218,6 +218,23 @@ func Reports() ui.Node {
 		))
 	}
 
+	// Biggest deposits: the largest individual income transactions this period.
+	bigIncome, _ := reports.LargestIncome(txns, cs, ce, rates, 8)
+	var bigIncomeNodes []ui.Node
+	for _, e := range bigIncome {
+		desc := e.Desc
+		if desc == "" {
+			desc = nameOf(e.CategoryID)
+		}
+		bigIncomeNodes = append(bigIncomeNodes, Div(Class("row"),
+			Div(Class("row-main"),
+				Span(Class("row-desc"), desc),
+				Span(Class("row-meta"), pr.FormatDate(e.Date)),
+			),
+			Span(Class("budget-amount"), fmtMinor(e.Amount)),
+		))
+	}
+
 	// Income by source: where the money comes from this period.
 	incomeRows, _ := reports.IncomeByCategory(txns, cs, ce, rates)
 	var incomeNodes []ui.Node
@@ -260,6 +277,10 @@ func Reports() ui.Node {
 				}), uistate.T("reports.downloadCsv")),
 			)),
 		),
+		If(len(bigIncomeNodes) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("reports.biggestDeposits")),
+			Div(Class("rows"), bigIncomeNodes),
+		)),
 		If(len(incomeNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.incomeBySource")),
 			Div(Class("rows"), incomeNodes),
