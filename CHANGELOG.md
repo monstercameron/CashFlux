@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Structured backend logging foundation.** The server now configures `log/slog` with text/json
+  formats, runtime log levels, and redaction for token/key/secret/cookie/password attributes.
 - **Distinct backend liveness probe.** Added `/livez` as a process-up probe separate from
   `/readyz`, which remains the SQLite readiness check.
 - **Split a shared expense (B24).** A new **Split** screen in the Tools nav: enter an amount, tick who's

@@ -107,3 +107,7 @@ Do not expose a default token or example master key in production. Generate real
 ## Reliability Knobs
 
 AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI_UPSTREAM_RETRIES` to keep upstream OpenAI failures bounded. The defaults are a 45 second deadline and two retries for transient `429`/`5xx` responses or transport errors.
+
+## Logging
+
+Set `CASHFLUX_SERVER_LOG_FORMAT=json` for structured production logs, or `text` for local development. `CASHFLUX_SERVER_LOG_LEVEL` accepts `debug`, `info`, `warn`, and `error`. Sensitive attributes such as tokens, keys, secrets, cookies, passwords, and authorization values are redacted before logs are written.

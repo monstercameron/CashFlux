@@ -45,6 +45,8 @@ type Config struct {
 	GRPCMaxActiveConnections          int
 	GRPCMaxConnectionsPerClient       int
 	GRPCMaxUpgradesPerClientPerMinute int
+	LogFormat                         string
+	LogLevel                          string
 }
 
 type OAuthProviderConfig struct {
@@ -80,6 +82,8 @@ func FromEnv() (Config, error) {
 	cfg.GRPCMaxActiveConnections = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_ACTIVE_CONNECTIONS", 128))
 	cfg.GRPCMaxConnectionsPerClient = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_CONNECTIONS_PER_CLIENT", 8))
 	cfg.GRPCMaxUpgradesPerClientPerMinute = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_UPGRADES_PER_CLIENT_PER_MINUTE", 60))
+	cfg.LogFormat = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_FORMAT", "text"))
+	cfg.LogLevel = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_LEVEL", "info"))
 	if cfg.AuthMode == "token" && cfg.Token == "" && cfg.TokenSHA256 == "" {
 		token, err := randomURLToken(32)
 		if err != nil {
@@ -129,6 +133,14 @@ func (c Config) Validate() error {
 	}
 	if c.GRPCIdleTimeout > 0 && c.GRPCKeepaliveInterval >= c.GRPCIdleTimeout {
 		return fmt.Errorf("server: grpc keepalive interval must be less than idle timeout")
+	}
+	if c.LogFormat != "" && c.LogFormat != "text" && c.LogFormat != "json" {
+		return fmt.Errorf("server: log format must be text or json")
+	}
+	switch c.LogLevel {
+	case "", "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("server: log level must be debug, info, warn, or error")
 	}
 	for name, provider := range c.OAuthProviders {
 		if strings.TrimSpace(name) == "" {

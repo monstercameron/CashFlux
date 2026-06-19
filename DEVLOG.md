@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add backend structured logging
+
+- Added `server.NewLogger` with text/json handlers, `CASHFLUX_SERVER_LOG_FORMAT`, and `CASHFLUX_SERVER_LOG_LEVEL`.
+- Switched `cmd/cashflux-server` from package `log` to a configured `slog` logger for startup, shutdown, and fatal errors.
+- Added redaction for sensitive attribute names and tests covering redaction, level filtering, and config validation.
+
 ## 2026-06-18 - feat: add backend liveness probe
 
 - Added `GET /livez` so orchestration can distinguish process liveness from database readiness.
