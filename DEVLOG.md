@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: reject invalid billing checkout json (7.14)
+
+- Replaced the checkout handler's best-effort JSON decode with a strict optional-body decoder.
+- Capped the checkout JSON body at 64 KiB and reject malformed JSON, unknown fields, and trailing JSON before
+  computing Stripe form fields or calling Stripe.
+- Added regression coverage for each rejected shape and asserted Stripe is not contacted.
+
 ## 2026-06-19 - feat: serve the SPA under a URL sub-path on GitHub Pages (B30)
 
 - The user reported in-app nav drops the `/CashFlux/` base on the Pages site. Root cause confirmed against the

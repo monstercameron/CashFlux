@@ -2009,6 +2009,54 @@ func TestBillingCheckoutRejectsInvalidInterval(t *testing.T) {
 	assertHTTPErrorReason(t, rr, ErrorReasonInvalidArgument)
 }
 
+func TestBillingCheckoutRejectsMalformedJSON(t *testing.T) {
+	store := openTestStore(t)
+	seedSyncUser(t, store, authUserFromToken("dev-token").ID, time.Now().UTC())
+	stripeCalled := false
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stripeCalled = true
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer stripe.Close()
+	cfg := Config{
+		AuthMode:          "token",
+		Token:             "dev-token",
+		Billing:           true,
+		StripeAPIBaseURL:  stripe.URL,
+		StripeSecretKey:   "sk_test",
+		StripePriceAnnual: "price_annual",
+		StripeSuccessURL:  "https://cashflux.example.com/success",
+		StripeCancelURL:   "https://cashflux.example.com/cancel",
+	}
+	h := NewMux(cfg, store)
+	for _, tc := range []struct {
+		name   string
+		body   string
+		reason ErrorReason
+		status int
+	}{
+		{name: "malformed", body: `{"interval":`, reason: ErrorReasonInvalidArgument, status: http.StatusBadRequest},
+		{name: "unknown field", body: `{"interval":"annual","coupon":"free"}`, reason: ErrorReasonInvalidArgument, status: http.StatusBadRequest},
+		{name: "trailing object", body: `{"interval":"annual"} {"interval":"monthly"}`, reason: ErrorReasonInvalidArgument, status: http.StatusBadRequest},
+		{name: "too large", body: strings.Repeat(" ", 64<<10) + `{"interval":"annual"}`, reason: ErrorReasonPayloadTooLarge, status: http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stripeCalled = false
+			req := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout", strings.NewReader(tc.body))
+			req.Header.Set("Authorization", "Bearer dev-token")
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != tc.status {
+				t.Fatalf("checkout status = %d body %q, want %d", rr.Code, rr.Body.String(), tc.status)
+			}
+			assertHTTPErrorReason(t, rr, tc.reason)
+			if stripeCalled {
+				t.Fatal("stripe was called for invalid checkout JSON")
+			}
+		})
+	}
+}
+
 func TestBillingCheckoutRejectsUsedTrial(t *testing.T) {
 	store := openTestStore(t)
 	user := authUserFromToken("dev-token")

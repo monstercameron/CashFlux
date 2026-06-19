@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,8 +32,8 @@ func handleBillingCheckout(cfg Config, store *Store) http.HandlerFunc {
 			return
 		}
 		var req checkoutRequest
-		if r.Body != nil {
-			_ = json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&req)
+		if !decodeOptionalJSONBody(w, r, &req, 64<<10) {
+			return
 		}
 		price, plan, ok := stripePriceForInterval(w, cfg, req.Interval)
 		if !ok {
@@ -82,6 +83,33 @@ func allowBillingCheckout(w http.ResponseWriter, store *Store, userID string) bo
 	default:
 		return true
 	}
+}
+
+func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64) bool {
+	if r.Body == nil {
+		return true
+	}
+	reader := http.MaxBytesReader(w, r.Body, maxBytes)
+	dec := json.NewDecoder(reader)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		if errors.Is(err, io.EOF) {
+			return true
+		}
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeErrorJSON(w, ErrorReasonPayloadTooLarge, "request body is too large")
+			return false
+		}
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "request body must be valid JSON")
+		return false
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); err != io.EOF {
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "request body must contain a single JSON object")
+		return false
+	}
+	return true
 }
 
 func handleBillingPortal(cfg Config, store *Store) http.HandlerFunc {

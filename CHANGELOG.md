@@ -27,6 +27,8 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **Billing checkout JSON validation (7.14).** Checkout requests now reject malformed, oversized, unknown-field,
+  or trailing JSON before any Stripe call.
 - **Deep-link refresh verification (B1).** Hard-refreshing clean SPA routes now has browser coverage online
   and offline after service-worker activation.
 - **Nested routing no longer duplicates the app shell (B3).** The root route is now the single layout route
