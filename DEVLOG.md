@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: keep lock-screen display prefs across a passcode change
+
+- Found a latent bug in the app-lock flow: `applock.Config.WithPasscode` constructed a brand-new `Config`
+  and dropped the `HideQuotes`/`HideMeta` lock-screen display toggles, so changing the passcode silently
+  reverted them to shown. The library now carries those two fields from the receiver (they're orthogonal to
+  the credential) and leaves the lock active (un-suspended), with a regression test.
+- The library fix alone wasn't enough: `enableAppLock` seeded from a fresh `applock.Config{}`, so the
+  preserved-receiver prefs never reached it. Changed it to seed from `loadAppLock()` — the current config —
+  so the carry-over actually takes effect; on first set `loadAppLock` returns the zero config and defaults
+  still apply. Two granular commits (library + UI path).
+- Next: pure-logic packages are well-covered and guarded; remaining backlog items need the browser oracle,
+  product decisions, or belong to the in-flight backend work.
+
 ## 2026-06-19 - docs: add legal compliance pack (7.17)
 
 - Added `docs/LEGAL_COMPLIANCE.md` with launch draft privacy/terms copy, cookie/consent notes, DPA outline,

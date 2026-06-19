@@ -12,6 +12,10 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **App-lock display prefs reset on passcode change.** Changing the passcode rebuilt the lock config from
+  scratch, silently turning the lock-screen quotes/meta back on. `applock.WithPasscode` now carries those
+  display choices over (they're unrelated to the credential) and the UI path seeds from the current config,
+  so a passcode change keeps the user's lock-screen preferences.
 - **Allocate weight inputs were unlabeled (C6).** The five criterion-weight fields showed as bare "1" boxes
   (label only on hover/placeholder). Each now has a visible caption (Returns / Stability / Liquidity / Debt
   reduction / Goal progress) via a wrapping `<label>`, which also gives screen readers an accessible name.
