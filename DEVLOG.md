@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend secrets scanning
+
+- Added gitleaks to the main CI workflow.
+- Added a scoped `.gitleaks.toml` allowlist for documented and test fixture keys.
+- Verified gitleaks locally against the working tree alongside the existing vet, vulnerability, and gosec checks.
+
 ## 2026-06-19 - feat: add security disclosure policy
 
 - Added `SECURITY.md` with supported-version scope, private reporting guidance, and handling expectations.

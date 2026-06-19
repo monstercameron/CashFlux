@@ -1,0 +1,6 @@
+[allowlist]
+description = "CashFlux test and documentation fixtures"
+regexes = [
+  '''0123456789abcdef0123456789abcdef''',
+  '''dGhlIHNhbXBsZSBub25jZQ==''',
+]

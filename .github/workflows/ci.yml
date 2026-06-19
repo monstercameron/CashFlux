@@ -27,6 +27,9 @@ jobs:
       - name: Security scan
         run: go run github.com/securego/gosec/v2/cmd/gosec@latest -severity high -confidence medium ./...
 
+      - name: Secrets scan
+        run: go run github.com/zricethezav/gitleaks/v8@latest detect --no-git --source . --config .gitleaks.toml --redact --verbose
+
       - name: Test (pure logic packages — js/wasm view packages are build-tagged out)
         run: go test ./...
 

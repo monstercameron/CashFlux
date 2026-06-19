@@ -4187,7 +4187,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       watches Go modules and GitHub Actions weekly.
 - [ ] Reproducible builds; SBOM (e.g. `cyclonedx`); sign release artifacts/images (cosign).
 - [x] `SECURITY.md` + `security.txt` + a coordinated vuln-disclosure process.
-- [ ] Periodic threat-model review; pre-launch pen-test pass; secrets scanning (gitleaks) in CI.
+- [~] Periodic threat-model review; pre-launch pen-test pass; secrets scanning (gitleaks) in CI.
+      Gitleaks now runs in CI; remaining: periodic threat-model review and pre-launch pen-test pass.
 - [ ] Least-privilege runtime: non-root container, read-only FS where possible, drop caps, minimal base image.
 
 ### 7.15 Observability — structured logging (slog), metrics, tracing ★
