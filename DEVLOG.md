@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: checkpoint backend wal on shutdown
+
+- Added `Store.CheckpointWAL` to run `PRAGMA wal_checkpoint(TRUNCATE)` through the existing SQLite handle.
+- Wired graceful server shutdown to drain HTTP work, checkpoint WAL state, and sync stdout-backed logs before exit.
+- Added a server store test covering the checkpoint path.
+
 ## 2026-06-18 - feat: log backend request scopes
 
 - Added HTTP request logging and gRPC unary/stream logging interceptors around the existing backend mux and bridge.

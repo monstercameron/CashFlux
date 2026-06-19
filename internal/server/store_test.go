@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
@@ -66,6 +68,16 @@ func TestStoreReady(t *testing.T) {
 	}
 	if err := s.Ready(); err == nil {
 		t.Fatal("Ready succeeded after Close")
+	}
+}
+
+func TestStoreCheckpointWAL(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: time.Date(2026, time.June, 18, 23, 20, 0, 0, time.UTC)}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.CheckpointWAL(context.Background()); err != nil {
+		t.Fatalf("CheckpointWAL: %v", err)
 	}
 }
 

@@ -73,6 +73,13 @@ func main() {
 			logger.Error("server shutdown failed", "error", err)
 			os.Exit(1)
 		}
+		if err := store.CheckpointWAL(shutdownCtx); err != nil {
+			logger.Error("server wal checkpoint failed", "error", err)
+			os.Exit(1)
+		}
+		if err := os.Stdout.Sync(); err != nil {
+			logger.Debug("server log flush skipped", "error", err)
+		}
 		if err := <-errc; err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("server exited after shutdown", "error", err)
 			os.Exit(1)

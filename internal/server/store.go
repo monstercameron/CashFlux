@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -39,6 +40,17 @@ func OpenStore(path string) (*Store, error) {
 
 // Close releases the database.
 func (s *Store) Close() error { return s.db.Close() }
+
+// CheckpointWAL flushes the SQLite write-ahead log back into the main database file.
+func (s *Store) CheckpointWAL(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("server store: not configured")
+	}
+	if _, err := s.db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE);"); err != nil {
+		return fmt.Errorf("server store: checkpoint wal: %w", err)
+	}
+	return nil
+}
 
 // Ready verifies the backing store can serve requests.
 func (s *Store) Ready() error {

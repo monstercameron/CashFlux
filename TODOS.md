@@ -4223,7 +4223,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] Retries with jittered exponential backoff for transient upstream failures; circuit breaker on the
       AI upstream; idempotent writes (idempotency keys on mutating HTTP; PUT semantics on sync).
       OpenAI proxy retries transient transport, 429, and 5xx failures; remaining: circuit breaker and write idempotency keys.
-- [ ] Graceful shutdown: stop accepting, drain active streams/requests, checkpoint WAL, flush logs.
+- [x] Graceful shutdown: stop accepting, drain active streams/requests, checkpoint WAL, flush logs.
 - [ ] **Backups + tested restore**: scheduled SQLite WAL checkpoint + file copy + blobs dir snapshot to
       off-box storage; **documented + periodically rehearsed restore**; define **RPO/RTO**.
 - [ ] Zero-/low-downtime deploys; safe forward-only migrations (run on boot, reject newer schema);
