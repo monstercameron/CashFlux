@@ -36,6 +36,7 @@ func Subscriptions() ui.Node {
 
 	subs, _ := subscriptions.Detect(app.Transactions(), rates, 2)
 	changes, _ := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3)
+	soon := subscriptions.UpcomingRenewals(subs, 7, time.Now())
 
 	var annual int64
 	for _, s := range subs {
@@ -136,6 +137,21 @@ func Subscriptions() ui.Node {
 		If(len(changes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("subs.priceChangesTitle")),
 			Div(Class("rows"), changeRows),
+		)),
+		If(len(soon) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("subs.renewingSoon")),
+			Div(Class("rows"), MapKeyed(soon,
+				func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
+				func(s subscriptions.Subscription) ui.Node {
+					return Div(Class("row"),
+						Div(Class("row-main"),
+							Span(Class("row-desc"), s.Name),
+							Span(Class("row-meta"), pr.FormatDate(s.NextRenewal)),
+						),
+						Span(Class("budget-amount"), fmtMoney(money.New(s.Amount, base))),
+					)
+				},
+			)),
 		)),
 	)
 }
