@@ -299,7 +299,7 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time) error {
 		if err := json.Unmarshal(event.Data.Object, &sub); err != nil {
 			return fmt.Errorf("stripe subscription is invalid")
 		}
-		if event.Type == "customer.subscription.deleted" && strings.TrimSpace(sub.Status) == "" {
+		if event.Type == "customer.subscription.deleted" {
 			sub.Status = "canceled"
 		}
 		return putStripeSubscription(store, sub, now)

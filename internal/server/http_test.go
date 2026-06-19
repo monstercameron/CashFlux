@@ -1780,6 +1780,48 @@ func TestStripeWebhookPaymentFailedMarksPastDue(t *testing.T) {
 	}
 }
 
+func TestStripeWebhookSubscriptionDeletedMarksCanceled(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 14, 45, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutSubscription(Subscription{
+		UserID:             "u1",
+		StripeCustomer:     "cus_123",
+		StripeSubscription: "sub_123",
+		Status:             "active",
+		Plan:               "personal_annual",
+		CurrentPeriodEnd:   now.Add(24 * time.Hour),
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatalf("PutSubscription: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Billing: true, StripeWebhookSecret: "whsec_test"}
+	h := NewMux(cfg, store)
+	payload := []byte(`{
+		"type":"customer.subscription.deleted",
+		"data":{"object":{
+			"id":"sub_123",
+			"customer":"cus_123",
+			"status":"active",
+			"current_period_end":1781820000,
+			"metadata":{"user_id":"u1","plan":"personal_annual"}
+		}}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/stripe/webhook", bytes.NewReader(payload))
+	req.Header.Set(stripeSignatureHeader, testStripeSignature(t, payload, cfg.StripeWebhookSecret, time.Now().UTC()))
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("deleted status = %d body %q", rr.Code, rr.Body.String())
+	}
+	got, ok, err := store.GetSubscription("u1")
+	if err != nil || !ok || got.Status != "canceled" || got.Plan != "personal_annual" {
+		t.Fatalf("subscription after deleted = %+v/%v/%v", got, ok, err)
+	}
+}
+
 func TestBillingCheckoutCreatesStripeSession(t *testing.T) {
 	store := openTestStore(t)
 	user := authUserFromToken("dev-token")

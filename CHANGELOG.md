@@ -15,6 +15,8 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **Stripe deleted webhooks could preserve an active status.** `customer.subscription.deleted` now forces
+  stored subscription state to `canceled` even if the event object carries a stale status value.
 - **Deleting a member left their transactions dangling.** The Members screen decided whether to reassign
   before deleting by counting only owned accounts, budgets, and goals — not transactions, which carry a
   direct member tag. A member used only as a transaction tag was deleted outright, leaving those
@@ -44,6 +46,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend billing coverage (7.11).** Added explicit subscription-deleted webhook coverage alongside the
+  existing entitlement-state and storage-cap tests.
 - **Server mode setting (7.12).** Added a persisted Cloud/Self-hosted Settings control and hides Cloud billing
   controls when self-hosted mode is selected.
 - **Cloud pricing controls (7.11 Group B).** Added Settings controls for annual/monthly Cloud pricing,

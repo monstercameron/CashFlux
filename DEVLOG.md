@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: cover billing state transitions (7.11)
+
+- Added explicit coverage for `customer.subscription.deleted` so Stripe deleted-subscription events mark the
+  stored subscription `canceled`.
+- Fixed the deleted-event handler to force `canceled` instead of preserving a stale object status.
+- Audited the rest of the 7.11 test line: webhook upsert/payment-failed/signature checks, entitlement
+  active/trial/past-due/canceled states, inactive endpoint denial, storage cap, and storage warning coverage
+  are already present.
+
 ## 2026-06-19 - feat: add server mode setting (7.12)
 
 - Added `prefs.ServerMode` with normalized `cloud` and `self-hosted` values; default is self-hosted so the open

@@ -4111,7 +4111,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       AI secrets/blob bytes; `DELETE /v1/account` purges the caller's relational rows and sweeps unreferenced
       blobs.
       (purge server data + blobs); GDPR/CCPA data-request path.
-- [ ] Tests: webhook state transitions, entitlement gate (trial/active/past-due/canceled), cap enforcement.
+- [x] Tests: webhook state transitions, entitlement gate (trial/active/past-due/canceled), cap enforcement.
+      Done: webhook upsert/payment-failed/deleted/signature tests, entitlement active/trial/past-due/canceled
+      tests, inactive endpoint denial, storage cap, and storage warning tests are in place.
 
 #### Client (Cloud UX)
 - [ ] **Cloud settings section** (global FlipPanel): signed-out pitch + OAuth buttons; signed-in plan
