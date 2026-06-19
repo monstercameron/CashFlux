@@ -272,11 +272,42 @@ func TestBlobStoreRejectsOversizedAndHashMismatch(t *testing.T) {
 	if _, err := s.PutBlob(root, []byte("too big"), "text/plain", "big.txt", 2); err == nil {
 		t.Fatal("oversized blob accepted")
 	}
-	if err := os.WriteFile(blobPath(root, blob.Hash), []byte("tampered"), 0o600); err != nil {
+	path, err := blobPath(root, blob.Hash)
+	if err != nil {
+		t.Fatalf("blobPath: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("tampered"), 0o600); err != nil {
 		t.Fatalf("tamper blob: %v", err)
 	}
 	if _, err := s.ReadBlob(root, blob.Hash); err == nil {
 		t.Fatal("hash-mismatched blob read accepted")
+	}
+}
+
+func TestBlobPathRejectsTraversal(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "blobs")
+	for _, hash := range []string{
+		"",
+		"abc",
+		"../outside",
+		strings.Repeat("g", sha256.Size*2),
+		strings.Repeat("a", sha256.Size*2) + "../outside",
+	} {
+		if _, err := blobPath(root, hash); err == nil {
+			t.Fatalf("blobPath accepted %q", hash)
+		}
+	}
+	hash := strings.Repeat("a", sha256.Size*2)
+	path, err := blobPath(root, hash)
+	if err != nil {
+		t.Fatalf("valid blobPath: %v", err)
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		t.Fatalf("blob path rel: %v", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		t.Fatalf("blob path escaped root: %s", path)
 	}
 }
 

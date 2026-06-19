@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend blob path hardening.** Content-addressed blob paths now reject malformed hashes before disk access and keep blob files rooted under the configured blob directory.
 - **Backend per-user HTTP rate limiting.** Authenticated HTTP requests can now be capped per user per minute with `CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE`.
 - **Backend HTTP rate limiting.** Backend HTTP requests can now be capped per client IP per minute with `CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE`.
 - **Backend root status endpoint.** Visiting the backend root now returns a small JSON service/status payload with the key local endpoints instead of a confusing 404.

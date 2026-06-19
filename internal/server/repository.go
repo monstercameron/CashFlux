@@ -318,7 +318,10 @@ func (s *Store) PutBlob(root string, data []byte, mime, name string, maxBytes in
 		CreatedAt: time.Now().UTC(),
 	}
 	defer s.observeDB("PutBlob", time.Now())
-	path := blobPath(root, hash)
+	path, err := blobPath(root, hash)
+	if err != nil {
+		return Blob{}, err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob mkdir: %w", err)
 	}
@@ -341,12 +344,16 @@ ON CONFLICT(hash) DO UPDATE SET size = excluded.size, mime = excluded.mime`,
 
 // ReadBlob reads content-addressed blob bytes from disk.
 func (s *Store) ReadBlob(root, hash string) ([]byte, error) {
+	path, err := blobPath(root, hash)
+	if err != nil {
+		return nil, err
+	}
 	if _, ok, err := s.GetBlob(hash); err != nil {
 		return nil, err
 	} else if !ok {
 		return nil, os.ErrNotExist
 	}
-	data, err := os.ReadFile(blobPath(root, hash))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("server store: blob read: %w", err)
 	}
@@ -455,7 +462,11 @@ WHERE wb.hash IS NULL`)
 		return 0, fmt.Errorf("server store: unreferenced blob rows: %w", err)
 	}
 	for _, blob := range blobs {
-		_ = os.Remove(blobPath(root, blob.Hash))
+		path, err := blobPath(root, blob.Hash)
+		if err != nil {
+			return 0, err
+		}
+		_ = os.Remove(path)
 		if _, err := s.db.Exec(`DELETE FROM blobs WHERE hash = ?`, blob.Hash); err != nil {
 			return 0, fmt.Errorf("server store: delete blob metadata: %w", err)
 		}
@@ -676,9 +687,17 @@ func scanBlob(row blobScanner) (Blob, error) {
 	return blob, nil
 }
 
-func blobPath(root, hash string) string {
-	if len(hash) < 4 {
-		return filepath.Join(root, hash)
+func blobPath(root, hash string) (string, error) {
+	if !validBlobHash(hash) {
+		return "", fmt.Errorf("server store: invalid blob hash")
 	}
-	return filepath.Join(root, hash[:2], hash[2:4], hash)
+	path := filepath.Join(root, hash[:2], hash[2:4], hash)
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("server store: blob path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("server store: blob path escapes root")
+	}
+	return path, nil
 }

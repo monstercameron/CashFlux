@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: harden backend blob paths
+
+- Made backend blob path construction reject malformed hashes before disk reads, writes, or sweeps.
+- Kept generated blob paths constrained below the configured blob root.
+- Added repository tests for traversal-like hashes and valid content-addressed paths.
+
 ## 2026-06-19 - feat: rate limit backend http users
 
 - Added a configurable fixed-window HTTP rate limit keyed by authenticated user id.

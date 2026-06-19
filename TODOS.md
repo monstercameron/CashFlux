@@ -4169,7 +4169,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,
       never in code or the DB; documented **key rotation** + re-encryption procedure.
 - [ ] Consider per-user dataset encryption-at-rest (envelope encryption) as a later privacy upgrade.
-- [ ] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
+- [~] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
+      Blob paths now reject malformed hashes before disk access and stay rooted under the blob directory.
+      Remaining: formal SQLi audit coverage.
 
 #### Abuse / DoS
 - [x] Per-user + per-IP rate limits + quotas; HTTP per-IP/per-user minute caps, AI request/token quotas,
