@@ -1005,11 +1005,13 @@ them to a txn).
 
 ### B24. Split / shared expenses & settle-up between members — SPEC (from C38, 2026-06-18)
 **Want:** split a transaction across members ("50/50") and track **who owes whom** with a settle-up view.
-- [ ] **Pure `internal/split`** (tested): a transaction split (by member, share/%/amount); per-member
+- [x] **Pure `internal/split`** (tested): a transaction split (by member, share/%/amount); per-member
       balances ("X owes Y $Z"); settle-up suggestions (minimal transfers). Reuses members + `money`.
 - [ ] **Model:** a `Split` on transactions + settlement records.
-- [ ] **UI:** "Split…" on a transaction (equal / % / custom); a **Settle up** view of net balances +
+- [~] **UI:** "Split…" on a transaction (equal / % / custom); a **Settle up** view of net balances +
       "record a settlement" (creates a transfer).
+      Standalone Split calculator now supports even and weighted splits, shows who owes whom, and exports the
+      settle-up plan as CSV. Remaining: transaction-row entry point and persisted settlement transfer.
 - [ ] _Decision:_ split at txn level vs. a separate shared-ledger; start with equal/percent + net-balance.
 
 ### B25. Subscriptions tracker — SPEC (from C38, 2026-06-18)

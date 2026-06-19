@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Split tracker status reconciled (B24).** Marked the shipped pure split/settle-up engine complete and
+  recorded the standalone Split screen as partial UI coverage, with transaction-level persistence still open.
 - **Subscriptions tracker marked complete (B25).** Reconciled the backlog with the shipped
   `internal/subscriptions` detector and Subscriptions screen, including renewal reminders, CSV export,
   price-change rows, and spending-share stats.

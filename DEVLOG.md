@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: reconcile split tracker TODO (B24)
+
+- Audited B24 against source and prior commits: `internal/split` has tested equal, weighted, net-balance,
+  settle-up, and CSV helpers, and `/split` exposes a standalone calculator with proportional mode.
+- Marked the pure core complete and the UI partial. The remaining work is still real: attach split data to
+  transactions, persist settlement records/transfers, and add the transaction-row entry point.
+
 ## 2026-06-19 - docs: reconcile subscriptions tracker TODO (B25)
 
 - Audited B25 against source and prior commits: `internal/subscriptions` now detects repeated charges,
