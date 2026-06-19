@@ -3988,7 +3988,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 ### 7.5 gRPC bridge transport ★
 - [x] `grpctunnel.Wrap(grpcServer, …)` at `/grpc`: `WithOriginCheck` (SPA origin allow-list),
       `WithKeepalive`, `WithReadLimitBytes`, `WithMaxActiveConnections` / `…PerClient` / `…UpgradesPerMinute`.
-- [ ] TLS / `wss` (server or reverse proxy); confirm WS survives the proxy/LB (keepalive, idle timeout).
+- [x] TLS / `wss` (server or reverse proxy); confirm WS survives the proxy/LB (keepalive, idle timeout).
+      Done: self-host Caddy terminates TLS, exposes `wss://<domain>/grpc`, forwards websocket upgrades, and
+      pins upstream keepalive plus long stream timeout/close-delay settings for `/grpc` streams.
 - [x] Health + readiness endpoints; graceful shutdown that drains active streams.
 
 ### 7.6 HTTP endpoints (OAuth + blobs)
@@ -4032,7 +4034,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 ### 7.9 Deploy & ops
 - [ ] Single binary + data dir; Dockerfile; config via env.
-- [ ] TLS (Caddy / managed) + `wss`; reverse-proxy WS keepalive/timeouts tuned.
+- [x] TLS (Caddy / managed) + `wss`; reverse-proxy WS keepalive/timeouts tuned.
+      Done in `deploy/Caddyfile.selfhost` and `docs/SELF_HOSTING.md`.
 - [ ] Backups: WAL-checkpoint the SQLite file + copy the blobs dir; documented restore runbook.
 - [ ] Migrations run on boot; structured logs + OpenTelemetry (the bridge supports it); basic per-user usage metrics.
 - [ ] CI: build server, run server tests, proto-drift check, lint + vuln scan.

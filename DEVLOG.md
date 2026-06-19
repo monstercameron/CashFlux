@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - deploy: tune self-host gRPC websocket proxy
+
+- Updated `deploy/Caddyfile.selfhost` so the TLS-terminating self-host proxy keeps upstream connections alive
+  and allows long-lived `/grpc` websocket streams used by sync/watch.
+- Documented the reverse-proxy requirement in `docs/SELF_HOSTING.md`: preserve websocket upgrades, avoid short
+  idle timeouts on `/grpc`, and forward host/proto headers.
+- Marked the TLS/`wss` backend TODO complete and added deploy coverage for the Caddyfile + self-hosting notes.
+
 ## 2026-06-19 - docs: align backend plan with gRPC AI proxy
 
 - Updated `docs/BACKEND_PLAN.md` so the AI proxy path matches current behavior: `AIService.SetKey`,

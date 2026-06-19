@@ -123,7 +123,11 @@ For capacity planning, use `docs/SCALE_LIMITS.md`. The self-host backend intenti
 
 ## TLS And Proxy Notes
 
-Caddy terminates TLS and proxies websocket upgrades to the server. Keep ports `80` and `443` reachable for automatic certificates. If you use another reverse proxy, preserve websocket upgrades and forward `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto`.
+Caddy terminates TLS and proxies websocket upgrades to the server. Keep ports `80` and `443` reachable for
+automatic certificates. The bundled `deploy/Caddyfile.selfhost` keeps upstream HTTP connections alive, allows
+long-lived `/grpc` websocket streams, and delays stream close during reloads so browser sync/watch streams can
+survive normal proxy restarts. If you use another reverse proxy, preserve websocket upgrades, avoid short idle
+timeouts on `/grpc`, and forward `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto`.
 
 Do not expose a default token or example master key in production. Generate real token material with `rotate-token`, set the SHA-256 digest in the env file, and store the plaintext token in a password manager.
 

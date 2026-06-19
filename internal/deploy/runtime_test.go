@@ -476,3 +476,40 @@ func TestBackendPlanDocumentsAIOverGRPC(t *testing.T) {
 		}
 	}
 }
+
+func TestSelfHostCaddyKeepsGRPCWebsocketStreamsAlive(t *testing.T) {
+	caddy, err := os.ReadFile("../../deploy/Caddyfile.selfhost")
+	if err != nil {
+		t.Fatalf("read self-host Caddyfile: %v", err)
+	}
+	caddyfile := string(caddy)
+	for _, want := range []string{
+		"{$CASHFLUX_DOMAIN}",
+		"reverse_proxy cashflux-server:8081",
+		"header_up X-Forwarded-Proto {scheme}",
+		"header_up X-Forwarded-Host {host}",
+		"keepalive 2m",
+		"keepalive_interval 30s",
+		"stream_timeout 24h",
+		"stream_close_delay 5m",
+	} {
+		if !strings.Contains(caddyfile, want) {
+			t.Fatalf("self-host Caddyfile missing %q", want)
+		}
+	}
+
+	doc, err := os.ReadFile("../../docs/SELF_HOSTING.md")
+	if err != nil {
+		t.Fatalf("read self-hosting doc: %v", err)
+	}
+	text := string(doc)
+	for _, want := range []string{
+		"wss://<domain>/grpc",
+		"long-lived `/grpc` websocket streams",
+		"avoid short idle",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("self-hosting doc missing %q", want)
+		}
+	}
+}

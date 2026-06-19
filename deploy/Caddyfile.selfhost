@@ -6,5 +6,11 @@
 	reverse_proxy cashflux-server:8081 {
 		header_up X-Forwarded-Proto {scheme}
 		header_up X-Forwarded-Host {host}
+		transport http {
+			keepalive 2m
+			keepalive_interval 30s
+		}
+		stream_timeout 24h
+		stream_close_delay 5m
 	}
 }
