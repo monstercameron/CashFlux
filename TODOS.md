@@ -4067,9 +4067,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Load/abuse: connection caps, oversized payloads, rate limits.
       Done: server tests cover gRPC stream caps, bridge connection-limit config, oversized sync/blob/AI payloads,
       storage quota exhaustion, and HTTP/user rate-limit configuration.
-- [ ] **Rollout (each independently shippable; app works without the backend throughout):**
+- [x] **Rollout (each independently shippable; app works without the backend throughout):**
       (1) OAuth + snapshot sync (artifacts still inline) → (2) blob store + client artifact extraction →
       (3) AI proxy + encrypted keys + metering.
+      Done in `docs/BACKEND_PLAN.md`: each phase is independently shippable/reversible, and local budgeting
+      keeps working if a backend phase is disabled.
 
 ### 7.11 Monetization — billing + Cloud UX (paid tier) ★
 

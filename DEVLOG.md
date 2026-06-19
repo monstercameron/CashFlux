@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: reconcile backend rollout contract (7.10)
+
+- Tightened `docs/BACKEND_PLAN.md` with an explicit rollout rule: auth/snapshot sync, blob extraction, and AI
+  proxy phases must each be independently shippable and reversible.
+- Marked the 7.10 phased-rollout checklist complete while preserving the local-first fallback: if a backend
+  phase is disabled, local budgeting keeps working and clients fall back to the prior backend phase.
+- Added deploy coverage for the rollout text so the plan does not drift.
+
 ## 2026-06-19 — fix: Budgets Quarter<Month anomaly (C40)
 
 - Root cause (confirmed against the C40 narrowing notes): `budgets.go` evaluated each budget over

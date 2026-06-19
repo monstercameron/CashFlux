@@ -24,7 +24,7 @@ and every commit updates this file under `Unreleased`.
 
 ### Changed
 - **Backend rollout contract reconciliation.** Tightened `docs/BACKEND_PLAN.md` so backend phases are explicitly
-  independently shippable/reversible and preserve the local-first app fallback.
+  independently shippable/reversible, preserve the local-first app fallback, and stay covered by deploy tests.
 - **Backend unit coverage reconciliation.** Documented that storage, LWW sync, AI-key encryption, usage
   rate limits, blob hashing/linking, and blob GC are covered by focused server unit tests.
 - **Backend load/abuse test coverage reconciliation.** Documented the existing coverage for gRPC stream caps,

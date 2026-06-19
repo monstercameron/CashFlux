@@ -142,7 +142,9 @@ AES-GCM · blobs on disk (S3 adapter later). Ships as one binary + a data dir.
 2. **Blob store + client artifact extraction** — keeps sync small as artifacts grow.
 3. **AI proxy + encrypted keys + metering** — removes the key from the browser.
 
-The local-first app keeps working at every phase; the backend only adds sync/proxy.
+Rollout rule: each phase must be independently shippable and reversible. The local-first app keeps working at
+every phase; the backend only adds sync/proxy. If a phase has to be disabled, clients keep local data and fall
+back to the prior phase instead of blocking local budgeting.
 
 ## Risks / open items
 - **LWW data loss** across simultaneous-device edits (accepted) — mitigated by

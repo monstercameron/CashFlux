@@ -490,6 +490,30 @@ func TestBackendPlanDocumentsAIOverGRPC(t *testing.T) {
 	}
 }
 
+func TestBackendPlanDocumentsPhasedRollout(t *testing.T) {
+	data, err := os.ReadFile("../../docs/BACKEND_PLAN.md")
+	if err != nil {
+		t.Fatalf("read backend plan: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"## Phasing (each independently shippable)",
+		"Auth + snapshot sync (LWW)",
+		"artifacts still inline",
+		"Blob store + client artifact extraction",
+		"AI proxy + encrypted keys + metering",
+		"Rollout rule: each phase must be independently shippable and reversible",
+		"The local-first app keeps working at",
+		"every phase",
+		"fall",
+		"back to the prior phase",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("backend plan missing rollout text %q", want)
+		}
+	}
+}
+
 func TestSelfHostCaddyKeepsGRPCWebsocketStreamsAlive(t *testing.T) {
 	caddy, err := os.ReadFile("../../deploy/Caddyfile.selfhost")
 	if err != nil {
