@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Accounts row actions have icons (C46).** View-transactions leads with a list glyph, Edit with a pencil, the
+  more-actions toggle uses more-horizontal, and the delete button uses the `x` glyph (with an aria-label).
 - **Rules row actions have icons (C46).** Edit leads with a pencil and the delete button uses the `x` glyph
   (with an aria-label) instead of a bare "✕".
 - **Categories row actions have icons (C46).** Edit leads with a pencil and the delete button uses the `x`

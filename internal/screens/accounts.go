@@ -14,10 +14,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/textutil"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -596,10 +598,10 @@ func AccountRow(props accountRowProps) ui.Node {
 		),
 		Span(Class(amountClass(props.Balance)), fmtMoney(props.Balance)),
 		// Primary actions inline; everything else in the ⋯ menu.
-		Button(Class("btn"), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uistate.T("nav.transactions")),
-		Button(Class("btn"), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, Class("w-4 h-4 shrink-0")), Span(uistate.T("nav.transactions"))),
+		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
 		Div(Class("add-wrap"),
-			Button(Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), OnClick(toggleMenu), Span(Attr("aria-hidden", "true"), "⋯")),
+			Button(Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), OnClick(toggleMenu), uiw.Icon(icon.MoreH, Class("w-4 h-4"))),
 			Div(Class("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(Class("add-menu"+menuHidden), Attr("role", "menu"),
 				If(!a.Archived, Button(Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),
@@ -607,7 +609,7 @@ func AccountRow(props accountRowProps) ui.Node {
 				Button(Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
 			),
 		),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("accounts.deleteTitle")), OnClick(del), "✕"),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
 
