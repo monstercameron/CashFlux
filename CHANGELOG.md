@@ -451,6 +451,8 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Dashboard tiles ease their hover border (§6.11).** Bento tiles (`.w`) gained a `border-color` transition so
+  the hover highlight fades in smoothly instead of snapping.
 - **Charts draw in on first paint (§6.16).** Bar charts grow up from the baseline and line/trend charts draw
   left-to-right the first time they render, instead of snapping into place. Animates once per chart (guarded by
   a `data-cf-drawn` flag so data ticks don't re-trigger it) and is skipped under `prefers-reduced-motion`.
