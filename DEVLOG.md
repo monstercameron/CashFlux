@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add ai master-key rotation command (7.8)
+
+- Added `Store.RotateAIKeys`, which decrypts every stored BYO AI key with the old master key and re-encrypts
+  it with the new master key inside one transaction.
+- Added `cashflux-server rotate-ai-master-key`, using `CASHFLUX_SERVER_OLD_MASTER_KEY` plus the current
+  `CASHFLUX_SERVER_MASTER_KEY`, and printing `ai_keys_rotated=N`.
+- Covered successful re-encryption and wrong-old-key rollback behavior, then smoke-tested the CLI on a temp
+  data directory.
+
 ## 2026-06-19 - feat: add ai upstream circuit breaker (7.16)
 
 - Added a short global AI upstream circuit breaker that opens after three consecutive transport/5xx failures.

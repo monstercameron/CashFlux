@@ -613,6 +613,73 @@ func TestAIKeyRejectsBadMasterAndWrongAAD(t *testing.T) {
 	}
 }
 
+func TestRotateAIKeysReencryptsWithoutPlaintext(t *testing.T) {
+	s := openTestStore(t)
+	oldMaster := []byte("0123456789abcdef0123456789abcdef")
+	newMaster := []byte("abcdef0123456789abcdef0123456789")
+	now := time.Date(2026, time.June, 19, 16, 0, 0, 0, time.UTC)
+	for _, user := range []User{
+		{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: now},
+		{ID: "u2", Provider: "token", Subject: "u2", CreatedAt: now},
+	} {
+		if err := s.UpsertUser(user); err != nil {
+			t.Fatalf("UpsertUser %+v: %v", user, err)
+		}
+	}
+	if err := s.PutAIKey("u1", "openai", "sk-one", oldMaster); err != nil {
+		t.Fatalf("PutAIKey u1: %v", err)
+	}
+	if err := s.PutAIKey("u2", "openai", "sk-two", oldMaster); err != nil {
+		t.Fatalf("PutAIKey u2: %v", err)
+	}
+	count, err := s.RotateAIKeys(oldMaster, newMaster)
+	if err != nil {
+		t.Fatalf("RotateAIKeys: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("rotated count = %d, want 2", count)
+	}
+	if _, ok, err := s.GetAIKey("u1", "openai", oldMaster); err == nil || ok {
+		t.Fatalf("old master still decrypted key: ok=%v err=%v", ok, err)
+	}
+	for _, tc := range []struct {
+		user string
+		want string
+	}{
+		{user: "u1", want: "sk-one"},
+		{user: "u2", want: "sk-two"},
+	} {
+		got, ok, err := s.GetAIKey(tc.user, "openai", newMaster)
+		if err != nil || !ok || got != tc.want {
+			t.Fatalf("GetAIKey %s after rotation = %q/%v/%v, want %q", tc.user, got, ok, err, tc.want)
+		}
+	}
+}
+
+func TestRotateAIKeysWrongOldKeyDoesNotMutate(t *testing.T) {
+	s := openTestStore(t)
+	oldMaster := []byte("0123456789abcdef0123456789abcdef")
+	wrongOld := []byte("11111111111111111111111111111111")
+	newMaster := []byte("abcdef0123456789abcdef0123456789")
+	if err := s.UpsertUser(User{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutAIKey("u1", "openai", "sk-one", oldMaster); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	count, err := s.RotateAIKeys(wrongOld, newMaster)
+	if err == nil || count != 0 {
+		t.Fatalf("wrong-old rotation = count %d err %v, want error", count, err)
+	}
+	got, ok, err := s.GetAIKey("u1", "openai", oldMaster)
+	if err != nil || !ok || got != "sk-one" {
+		t.Fatalf("old master after failed rotation = %q/%v/%v", got, ok, err)
+	}
+	if _, ok, err := s.GetAIKey("u1", "openai", newMaster); err == nil || ok {
+		t.Fatalf("new master after failed rotation = ok %v err %v, want decrypt error", ok, err)
+	}
+}
+
 func TestUsageCountersIncrementAndLimit(t *testing.T) {
 	s := openTestStore(t)
 	day := time.Date(2026, time.June, 18, 23, 30, 0, 0, time.FixedZone("offset", -4*60*60))

@@ -165,8 +165,10 @@ available only to the deploy process. It must be exactly 16, 24, or 32 bytes; pr
 encrypts stored BYO AI keys with AES-GCM and must not be committed to the repository, copied into tickets, or
 stored beside backups.
 
-Master-key rotation currently requires a maintenance window: back up the server, stop the stack, change the
-secret, start the stack, and have users re-enter BYO AI keys so they are re-encrypted under the new key. Use
+Master-key rotation requires a maintenance window: back up the server, pause AI key writes, set the new
+`CASHFLUX_SERVER_MASTER_KEY`, set `CASHFLUX_SERVER_OLD_MASTER_KEY` for one `cashflux-server rotate-ai-master-key`
+run so stored BYO AI keys are re-encrypted under the new key, then remove the old-key environment variable
+before restart. Use
 `docs/OPERATIONS_RUNBOOK.md#rotate-master-key` for the step-by-step procedure.
 
 ## Container Runtime Hardening

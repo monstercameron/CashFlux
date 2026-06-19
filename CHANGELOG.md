@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **AI master-key rotation command (7.8).** Added `cashflux-server rotate-ai-master-key`, which re-encrypts
+  stored AI keys from `CASHFLUX_SERVER_OLD_MASTER_KEY` to the current `CASHFLUX_SERVER_MASTER_KEY`.
 - **AI upstream circuit breaker (7.16).** The backend AI proxy now opens a short fail-fast window after
   repeated upstream transport or 5xx failures, then resets after cooldown and a successful upstream response.
 - **Backend load smoke coverage (7.18).** Added an in-process load smoke test covering concurrent sync pushes,

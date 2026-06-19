@@ -83,6 +83,27 @@ func main() {
 		fmt.Printf("schema_version=%d\n", version)
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "rotate-ai-master-key" {
+		oldMasterKey := os.Getenv("CASHFLUX_SERVER_OLD_MASTER_KEY")
+		if oldMasterKey == "" {
+			logger.Error("old master key is required", "env", "CASHFLUX_SERVER_OLD_MASTER_KEY")
+			os.Exit(1)
+		}
+		store, err := server.OpenStore(filepath.Join(cfg.DataDir, "cashflux-server.db"))
+		if err != nil {
+			logger.Error("open store failed", "error", err)
+			os.Exit(1)
+		}
+		defer func() { _ = store.Close() }()
+		count, err := store.RotateAIKeys([]byte(oldMasterKey), []byte(cfg.MasterKey))
+		if err != nil {
+			logger.Error("server ai master-key rotation failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("server ai master-key rotation complete", "rotated_count", count)
+		fmt.Printf("ai_keys_rotated=%d\n", count)
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "gc-blobs" {
 		store, err := server.OpenStore(filepath.Join(cfg.DataDir, "cashflux-server.db"))
 		if err != nil {

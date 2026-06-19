@@ -966,6 +966,71 @@ func (s *Store) GetAIKey(userID, provider string, masterKey []byte) (string, boo
 	return string(plaintext), true, nil
 }
 
+func (s *Store) RotateAIKeys(oldMasterKey, newMasterKey []byte) (int, error) {
+	oldGCM, err := aesGCM(oldMasterKey)
+	if err != nil {
+		return 0, err
+	}
+	newGCM, err := aesGCM(newMasterKey)
+	if err != nil {
+		return 0, err
+	}
+	defer s.observeDB("RotateAIKeys", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("server store: begin ai key rotation: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.Query(`SELECT user_id, provider, ciphertext, nonce FROM ai_keys ORDER BY user_id, provider`)
+	if err != nil {
+		return 0, fmt.Errorf("server store: read ai keys for rotation: %w", err)
+	}
+	type rotatedKey struct {
+		userID     string
+		provider   string
+		ciphertext []byte
+		nonce      []byte
+	}
+	var keys []rotatedKey
+	for rows.Next() {
+		var key rotatedKey
+		var ciphertext, nonce []byte
+		if err := rows.Scan(&key.userID, &key.provider, &ciphertext, &nonce); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("server store: scan ai key for rotation: %w", err)
+		}
+		aad := []byte(key.userID + "|" + key.provider)
+		plaintext, err := oldGCM.Open(nil, nonce, ciphertext, aad)
+		if err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("server store: decrypt ai key for rotation: %w", err)
+		}
+		key.nonce = make([]byte, newGCM.NonceSize())
+		if _, err := io.ReadFull(rand.Reader, key.nonce); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("server store: ai key rotation nonce: %w", err)
+		}
+		key.ciphertext = newGCM.Seal(nil, key.nonce, plaintext, aad)
+		keys = append(keys, key)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("server store: close ai key rotation rows: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("server store: ai key rotation rows: %w", err)
+	}
+	for _, key := range keys {
+		if _, err := tx.Exec(`UPDATE ai_keys SET ciphertext = ?, nonce = ? WHERE user_id = ? AND provider = ?`,
+			key.ciphertext, key.nonce, key.userID, key.provider); err != nil {
+			return 0, fmt.Errorf("server store: update rotated ai key: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("server store: commit ai key rotation: %w", err)
+	}
+	return len(keys), nil
+}
+
 func aesGCM(masterKey []byte) (cipher.AEAD, error) {
 	if !validAESKeyLength(len(masterKey)) {
 		return nil, fmt.Errorf("server store: master key must be 16, 24, or 32 bytes")

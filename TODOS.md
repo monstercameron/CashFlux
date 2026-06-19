@@ -4036,9 +4036,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       server — pulled it").
 
 ### 7.8 Security & privacy ★
-- [~] AES-GCM key management (master-key source + rotation); AI keys encrypted at rest.
-      AI keys are encrypted at rest and master-key sourcing/maintenance-window rotation is documented; remaining:
-      automated re-encryption command.
+- [x] AES-GCM key management (master-key source + rotation); AI keys encrypted at rest.
+      AI keys are encrypted at rest; master-key sourcing is documented; `cashflux-server rotate-ai-master-key`
+      re-encrypts stored AI keys from `CASHFLUX_SERVER_OLD_MASTER_KEY` to the current master key.
 - [x] Strict per-user data isolation enforced in every query (with isolation tests).
       Reconciled against §7.14: repository/service queries scope by authenticated user id, with cross-user
       workspace/blob isolation coverage.
@@ -4269,11 +4269,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       Remaining: malformed protobuf/codegen audit and broader request-shape rejection tests.
 - [x] Blob upload: verify bytes hash to the claimed `:hash`; cap size; sniff/allow-list MIME; never
       execute or serve as HTML (force download / safe content-type).
-- [~] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,
+- [x] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,
       never in code or the DB; documented **key rotation** + re-encryption procedure.
       AI keys already store encrypted AES-GCM ciphertext; self-host docs now require secret-manager/KMS-backed
-      master-key sourcing and document the current maintenance-window re-entry rotation path. Remaining:
-      automated re-encryption command.
+      master-key sourcing, and `cashflux-server rotate-ai-master-key` provides the maintenance-window
+      re-encryption path without asking users to re-enter keys.
 - [ ] Consider per-user dataset encryption-at-rest (envelope encryption) as a later privacy upgrade.
 - [x] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
       Blob paths now reject malformed hashes before disk access and stay rooted under the blob directory.

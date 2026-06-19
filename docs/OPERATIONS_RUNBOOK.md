@@ -82,14 +82,15 @@ Token mode uses a bearer token for self-host access.
 
 ## Rotate Master Key
 
-The master key encrypts stored AI keys. A full re-encryption command is not available yet, so rotation requires a maintenance window.
+The master key encrypts stored AI keys. Rotate it during a maintenance window and keep the old key in a
+temporary secret only for the re-encryption run.
 
-1. Ask users to re-enter BYO AI keys after the rotation.
-2. Back up the server.
-3. Stop the stack.
-4. Update `CASHFLUX_SERVER_MASTER_KEY`.
-5. Delete old `ai_keys` rows only after confirming users can re-save keys.
-6. Start the stack and verify AI key save plus AI proxy chat through the gRPC tunnel.
+1. Back up the server.
+2. Stop the stack or otherwise pause AI key writes.
+3. Set the new `CASHFLUX_SERVER_MASTER_KEY`.
+4. Set `CASHFLUX_SERVER_OLD_MASTER_KEY` to the previous value for one command invocation.
+5. Run `cashflux-server rotate-ai-master-key`; it prints `ai_keys_rotated=N`.
+6. Remove `CASHFLUX_SERVER_OLD_MASTER_KEY`, restart the stack, and verify AI key save plus AI proxy chat through the gRPC tunnel.
 
 ## Revoke Sessions
 
