@@ -136,6 +136,33 @@ func largeTransactionCandidates(app *appstate.App, now time.Time) []notify.Candi
 // export, so the backup reminder knows how long it's been (B28).
 const lastBackupKey = "cashflux:lastBackupAt"
 
+// backupCadenceKey holds the user's chosen backup-reminder cadence (B28); unset
+// defaults to the gentle monthly cadence.
+const backupCadenceKey = "cashflux:backupCadence"
+
+// loadBackupCadence reads the chosen reminder cadence, defaulting to the gentle
+// monthly cadence when unset (an explicit "off" disables reminders).
+func loadBackupCadence() backup.Cadence {
+	ls := js.Global().Get("localStorage")
+	if !ls.Truthy() {
+		return backup.DefaultCadence
+	}
+	v := ls.Call("getItem", backupCadenceKey)
+	if !v.Truthy() {
+		return backup.DefaultCadence
+	}
+	return backup.ParseCadence(v.String())
+}
+
+// saveBackupCadence persists the chosen reminder cadence (Settings → Data).
+func saveBackupCadence(c backup.Cadence) {
+	ls := js.Global().Get("localStorage")
+	if !ls.Truthy() {
+		return
+	}
+	ls.Call("setItem", backupCadenceKey, string(c))
+}
+
 // recordBackupNow stamps the current time as the last backup — called after a
 // successful data export. Safe to call from any package-app code (no-op without
 // localStorage).
@@ -172,7 +199,7 @@ func backupReminderCandidates(app *appstate.App, now time.Time) []notify.Candida
 	if len(app.Transactions()) == 0 {
 		return nil
 	}
-	return notifyfeed.BackupCandidates("default-backup", backup.DefaultCadence, loadLastBackup(), now,
+	return notifyfeed.BackupCandidates("default-backup", loadBackupCadence(), loadLastBackup(), now,
 		func(daysSince int) (title, body string) {
 			if daysSince <= 0 {
 				return uistate.T("notify.backupTitle"), uistate.T("notify.backupBodyNever")

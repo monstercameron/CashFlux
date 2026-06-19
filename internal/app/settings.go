@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/contrast"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -257,6 +258,9 @@ func globalSettingsForm() uic.Node {
 		savePrefs(p)
 	})
 	onLang := uic.UseEvent(func(e uic.Event) { uistate.SetActiveLanguage(i18n.Lang(e.GetValue())) })
+	onBackupCadence := uic.UseEvent(func(e uic.Event) {
+		saveBackupCadence(backup.ParseCadence(e.GetValue()))
+	})
 	onScale := uic.UseEvent(func(e uic.Event) {
 		p := prefsAtom.Get()
 		if n, err := strconv.Atoi(e.GetValue()); err == nil {
@@ -539,6 +543,13 @@ func globalSettingsForm() uic.Node {
 			dataBtn(uistate.T("settings.import"), false, func() { importJSON(bump, notify) }),
 			dataBtn(uistate.T("settings.loadSample"), false, func() { loadSample(bump, notify) }),
 			dataBtn(uistate.T("settings.wipe"), true, func() { wipeData(bump, notify) }),
+		),
+		Div(Class("set-label"), uistate.T("settings.backupCadence")),
+		P(Class("muted text-xs"), uistate.T("settings.backupCadenceHint")),
+		Select(Class("set-input"), Attr("aria-label", uistate.T("settings.backupCadence")), Title(uistate.T("settings.backupCadence")), OnChange(onBackupCadence),
+			Option(Value("monthly"), SelectedIf(loadBackupCadence() == backup.Monthly), uistate.T("settings.cadenceMonthly")),
+			Option(Value("weekly"), SelectedIf(loadBackupCadence() == backup.Weekly), uistate.T("settings.cadenceWeekly")),
+			Option(Value("off"), SelectedIf(loadBackupCadence() == backup.Off), uistate.T("settings.cadenceOff")),
 		),
 		Div(Class("set-label"), uistate.T("ws.section")),
 		P(Class("muted text-xs"), uistate.T("ws.sectionHint")),
