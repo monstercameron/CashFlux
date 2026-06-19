@@ -1036,6 +1036,7 @@ var english = Catalog{
 	"workflows.runNow":           "Run now",
 	"workflows.enable":           "Enable",
 	"workflows.disable":          "Disable",
+	"workflows.actionWord":       "action",
 	"workflows.actionsWord":      "actions",
 	"workflows.effectsWord":      "effects",
 	"workflows.applied":          "Done:",

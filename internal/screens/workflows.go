@@ -262,7 +262,7 @@ func workflowRow(props workflowRowProps) ui.Node {
 		Div(Class("flex items-center justify-between gap-2 flex-wrap"),
 			Div(Class("row-main"),
 				Div(Class("row-desc"), w.Name),
-				Div(Class("row-meta"), triggerLabel(w.Trigger.Kind)+conditionSuffix(w.Condition)+" · "+strconv.Itoa(len(w.Actions))+" "+uistate.T("workflows.actionsWord")),
+				Div(Class("row-meta"), triggerLabel(w.Trigger.Kind)+conditionSuffix(w.Condition)+" · "+actionsLabel(len(w.Actions))),
 			),
 			Div(Class("flex gap-2 flex-wrap"),
 				Button(Class("btn"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
@@ -328,6 +328,16 @@ func actionLabel(a workflow.Action) string {
 	default:
 		return string(a.Kind)
 	}
+}
+
+// actionsLabel renders the action count with correct singular/plural wording
+// ("1 action" vs "2 actions") instead of always-plural "N actions" (C54).
+func actionsLabel(n int) string {
+	word := uistate.T("workflows.actionsWord")
+	if n == 1 {
+		word = uistate.T("workflows.actionWord")
+	}
+	return strconv.Itoa(n) + " " + word
 }
 
 func triggerLabel(k workflow.TriggerKind) string {
