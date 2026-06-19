@@ -812,6 +812,7 @@ var english = Catalog{
 	"accounts.markUpdatedTitle":   "Mark balance as checked today",
 	"accounts.editTitle":          "Edit account",
 	"accounts.deleteTitle":        "Delete account",
+	"accounts.deleteHasTxns":      "This account still has transactions. Archive it to keep the history, or move or delete those transactions first.",
 
 	// Dashboard
 	"dashboard.netWorth":             "Net worth",

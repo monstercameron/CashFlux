@@ -152,6 +152,15 @@ func Accounts() ui.Node {
 	}))
 
 	deleteAccount := func(accountID string) {
+		// Refuse to delete an account that still has transactions (including the far
+		// leg of a transfer): deleting the row would orphan them. Steer the user to
+		// Archive, which retires the account but keeps its history.
+		for _, t := range app.Transactions() {
+			if t.AccountID == accountID || t.TransferAccountID == accountID {
+				errMsg.Set(uistate.T("accounts.deleteHasTxns"))
+				return
+			}
+		}
 		if err := app.DeleteAccount(accountID); err != nil {
 			errMsg.Set(err.Error())
 			return

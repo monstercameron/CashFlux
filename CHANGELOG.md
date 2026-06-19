@@ -12,6 +12,10 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **Deleting an account with transactions would orphan them.** The Accounts delete button removed the
+  account row outright, leaving its transactions (and the far leg of any transfer) pointing at an account
+  that no longer existed. Delete is now refused when the account still has transactions, with a message
+  steering to Archive (which retires the account but keeps its history).
 - **App-lock display prefs reset on passcode change.** Changing the passcode rebuilt the lock config from
   scratch, silently turning the lock-screen quotes/meta back on. `applock.WithPasscode` now carries those
   display choices over (they're unrelated to the credential) and the UI path seeds from the current config,
@@ -28,6 +32,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend AI abuse kill switch (7.20).** Added `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS` to deny selected users
+  before AI-key load or upstream OpenAI calls.
 - **Backend auth abuse limiter (7.20).** Added a dedicated per-IP OAuth/session route rate limit via
   `CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE`.
 - **Backend general JSON errors (7.19).** Readiness, version CORS, blob preflight, in-flight, rate-limit,

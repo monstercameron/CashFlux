@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: guard account deletion against orphaning transactions
+
+- Continued the dangling-reference audit (after the member-delete fix). Accounts had the same shape: the
+  delete button called `app.DeleteAccount` unconditionally, and neither the app nor the store cascades or
+  guards, so deleting an account with transactions left them pointing at a dead `AccountID`/`TransferAccountID`.
+- Unlike members (which had an existing `ReassignOwner` cleanup path) and categories (whose tree defensively
+  promotes orphans to roots), accounts have no reassign path and the app already offers **Archive** as the
+  soft-retire route. So the spec-aligned, least-surprising fix is to refuse delete when transactions remain
+  and steer the user to Archive — implemented at the screen level so the store/import API is untouched.
+- Decision: did not add cascade-delete or a reassign-account UI; those are larger product calls. Blocking is
+  purely protective (it only removes the never-desirable "orphan them" path) and reversible via Archive.
+
+## 2026-06-19 - feat: add backend ai abuse kill switch (7.20)
+
+- Added `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS` and passed it into the AI proxy service.
+- Blocked users receive `PermissionDenied` before key load, quota checks, or upstream OpenAI requests.
+- Added env parsing and AI service tests for the denylist behavior.
+- Marked the AI-proxy abuse TODO in progress; anomaly alerts are still open.
+
 ## 2026-06-19 - feat: add backend auth abuse limiter (7.20)
 
 - Added `CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE` with a default per-IP cap for OAuth start/callback and
