@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Large-transaction alerts are live (B19).** Opening CashFlux now surfaces a "while you were away" alert for
+  any unusually large charge in the last 30 days (at or above the rule's threshold), wired through the
+  catch-up engine and de-duped per transaction so it shows once. Completes the large-transaction notification
+  end to end.
+
+### Added
 - **Large-transaction notifications (B19).** A `notifyfeed.LargeTransactionCandidates` generator plus a default
   in-app rule (`default-large`, threshold $500) complete the notify event coverage: an expense at or above the
   threshold (in base currency, since the last open) becomes a once-per-transaction "a big charge hit your

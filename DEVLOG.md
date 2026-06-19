@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: wire large-transaction alerts into catch-up (B19)
+
+- Wired `notifyfeed.LargeTransactionCandidates` into `runNotifyCatchUp` (my app/notifyrun.go). Added
+  `largeTransactionCandidates(app, now)`: reads the threshold from the `default-large` rule, uses a 30-day
+  `since` window (so the first open doesn't replay all history; the txn-id key handles repeats), and renders
+  notify.largeTitle/largeBody (with a largeNoDesc fallback for blank descriptions). default-large is already in
+  DefaultRules, so CatchUp gates it.
+- Backup reminders remain deferred: they need a persisted `lastBackupAt` (updated by the export flow) that
+  doesn't exist yet — without it there's nothing to judge the cadence against.
+- gofmt clean, i18n tests + wasm build green. Restored docs from HEAD first; committed app/notifyrun.go
+  path-scoped (it's my file in app/, parallel session works elsewhere there).
+
 ## 2026-06-19 — feat: large-transaction notifications (B19)
 
 - Completed the notify event coverage for `EventLargeTransaction` (the constant existed but had no generator or

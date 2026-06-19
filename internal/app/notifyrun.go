@@ -56,6 +56,7 @@ func runNotifyCatchUp() {
 			return uistate.T("notify.budgetNearTitle", name), uistate.T("notify.budgetNearBody")
 		})...)
 	cands = append(cands, weeklyDigestCandidates(app, now)...)
+	cands = append(cands, largeTransactionCandidates(app, now)...)
 
 	log := loadDeliveredLog()
 	out := notify.CatchUp(notify.DefaultRules(), cands, now, log)
@@ -93,6 +94,40 @@ func weeklyDigestCandidates(app *appstate.App, now time.Time) []notify.Candidate
 	title := uistate.T("notify.digestTitle")
 	body := uistate.T("notify.digestBody", fmtBaseMoney(flow.Income, base), fmtBaseMoney(flow.Expense, base))
 	return notifyfeed.DigestCandidates("default-digest", notify.WeekKey(now), title, body, now)
+}
+
+// largeTransactionCandidates flags recent unusually large expenses (B19), over
+// the last 30 days so the first open doesn't replay the whole history; each is
+// keyed by transaction id so a given charge surfaces once. The threshold comes
+// from the default-large rule; a zero/absent threshold disables it.
+func largeTransactionCandidates(app *appstate.App, now time.Time) []notify.Candidate {
+	var threshold int64
+	for _, r := range notify.DefaultRules() {
+		if r.ID == "default-large" {
+			threshold = int64(r.Threshold)
+		}
+	}
+	if threshold <= 0 {
+		return nil
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	since := now.AddDate(0, 0, -30)
+	out, err := notifyfeed.LargeTransactionCandidates("default-large", app.Transactions(), threshold, since, rates,
+		func(desc string, amount int64) (title, body string) {
+			label := desc
+			if label == "" {
+				label = uistate.T("notify.largeNoDesc")
+			}
+			return uistate.T("notify.largeTitle", fmtBaseMoney(amount, base)), uistate.T("notify.largeBody", label)
+		})
+	if err != nil {
+		return nil
+	}
+	return out
 }
 
 // fmtBaseMoney formats a base-currency minor-units value in the app's accounting
