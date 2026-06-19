@@ -5,9 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
 )
 
@@ -87,6 +89,48 @@ func TestBudgetCandidates(t *testing.T) {
 	}
 	if near.OccurrenceKey != "fun:near@"+notify.MonthKey(now) {
 		t.Errorf("near key = %q", near.OccurrenceKey)
+	}
+}
+
+func TestBillDueCandidates(t *testing.T) {
+	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
+	mk := func(id string, days int) bills.Bill {
+		return bills.Bill{
+			AccountID: id, Name: id, Amount: money.New(5000, "USD"),
+			DueDate: now.AddDate(0, 0, days), DaysUntil: days,
+		}
+	}
+	upcoming := []bills.Bill{
+		mk("today", 0),  // due today → critical
+		mk("soon", 5),   // within window → warning
+		mk("later", 20), // beyond the 7-day window → excluded
+	}
+	text := func(name string, days int) (string, string) {
+		return name + " due", fmt.Sprintf("%d days", days)
+	}
+
+	got := BillDueCandidates("rule-bill", upcoming, 7, now, text)
+	if len(got) != 2 {
+		t.Fatalf("got %d candidates, want 2 (today, soon): %+v", len(got), got)
+	}
+	by := map[string]notify.Candidate{}
+	for _, c := range got {
+		by[c.Title] = c
+	}
+	today := by["today due"]
+	if today.Event != notify.EventBillDue || today.Severity != notify.SeverityCritical {
+		t.Errorf("today candidate = %+v, want bill-due + critical", today)
+	}
+	if today.OccurrenceKey != "today@"+now.Format("2006-01-02") {
+		t.Errorf("today key = %q", today.OccurrenceKey)
+	}
+	if by["soon due"].Severity != notify.SeverityWarning {
+		t.Errorf("soon severity = %v, want warning", by["soon due"].Severity)
+	}
+
+	// A non-positive window falls back to 7 days (so "later" still excluded).
+	if dflt := BillDueCandidates("r", upcoming, 0, now, text); len(dflt) != 2 {
+		t.Errorf("default window got %d, want 2", len(dflt))
 	}
 }
 

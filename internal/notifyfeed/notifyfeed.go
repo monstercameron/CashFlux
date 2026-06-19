@@ -9,11 +9,16 @@ package notifyfeed
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/notify"
 )
+
+// defaultBillWindow is how many days ahead a bill is considered "due soon" when
+// the rule doesn't specify its own window.
+const defaultBillWindow = 7
 
 // StaleBalanceCandidates produces a notify.Candidate for each account whose
 // balance is currently stale (per freshness), deduped to one per account per
@@ -40,6 +45,46 @@ func StaleBalanceCandidates(
 			Title:         title,
 			Body:          body,
 			Severity:      notify.SeverityWarning,
+		})
+	}
+	return out
+}
+
+// BillDueCandidates produces a notify.Candidate for each upcoming bill due
+// within withinDays (a non-positive withinDays falls back to a 7-day window).
+// Each occurrence is keyed by its specific due date, so a bill fires once per
+// due date (idempotent across opens) and again next cycle. A bill due today or
+// tomorrow is critical; otherwise a warning. text renders the localized title
+// and body from the bill name and days until due. Candidates are tagged with
+// ruleID.
+func BillDueCandidates(
+	ruleID string,
+	upcoming []bills.Bill,
+	withinDays int,
+	now time.Time,
+	text func(name string, daysUntil int) (title, body string),
+) []notify.Candidate {
+	if withinDays <= 0 {
+		withinDays = defaultBillWindow
+	}
+	var out []notify.Candidate
+	for _, b := range upcoming {
+		if b.DaysUntil < 0 || b.DaysUntil > withinDays {
+			continue
+		}
+		sev := notify.SeverityWarning
+		if b.DaysUntil <= 1 {
+			sev = notify.SeverityCritical
+		}
+		title, body := text(b.Name, b.DaysUntil)
+		out = append(out, notify.Candidate{
+			RuleID:        ruleID,
+			Event:         notify.EventBillDue,
+			OccurrenceKey: b.AccountID + "@" + b.DueDate.Format("2006-01-02"),
+			At:            now,
+			Title:         title,
+			Body:          body,
+			Severity:      sev,
 		})
 	}
 	return out

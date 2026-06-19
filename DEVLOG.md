@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: notifyfeed — bill-due event evaluator (B19, step 5)
+
+- Added `notifyfeed.BillDueCandidates(ruleID, upcoming, withinDays, now, text)`: from `bills.Upcoming`
+  output, emits a `notify.Candidate` per bill due within `withinDays` (non-positive → 7-day default).
+  Keyed `<accountID>@<due-date>` so each due occurrence fires once (idempotent across opens) and the next
+  cycle's date is a fresh key. Due today/tomorrow → critical, else warning. Title/body via the `text`
+  callback. Decision-light: "due soon" is just `bills.Bill.DaysUntil` against the window.
+- Table tests cover the window filter, severity by days-until, the due-date occurrence key, and the
+  default-window fallback. `go vet` clean. Three of the four recommended Phase-A events now have pure,
+  tested generators (stale-balance, budget-threshold, bill-due); only the periodic digest remains, plus
+  the wasm wiring (lastSeenAt + in-app center) gated on the broader scope decision.
+
 ## 2026-06-18 — feat: notifyfeed — budget-threshold event evaluator (B19, step 4)
 
 - Added `notifyfeed.BudgetCandidates(ruleID, statuses, now, text)`: maps `budgeting.Status` values whose
