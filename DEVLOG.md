@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: ledger.LiquidBalance + runway de-dup (docs)
+
+- Catch-up doc for 483c388 (pure `ledger.LiquidBalance` — spendable cash across non-archived cash-type
+  accounts, FX-converted, table-tested) and e11cf80 (Reports runway refactored to call it, −14 lines of inline
+  loop). Committed docs-only once the parallel session released CHANGELOG/DEVLOG.
+
 ## 2026-06-19 - docs: decide investments scope (B27)
 
 - Added `docs/INVESTMENTS_SCOPE.md` to settle B27 before build: CashFlux core keeps brokerage, 401k,

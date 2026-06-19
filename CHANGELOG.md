@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend toolchain pin reconciliation (7.0).** Locked the server/client backend toolchain expectation
+  with deploy coverage for `go.mod` Go 1.26.0 and the `golang:1.26-alpine` server build image.
+- **Liquid-balance helper.** New pure, table-tested `ledger.LiquidBalance` sums spendable cash (checking,
+  debit, savings, cash; non-archived, FX-converted) — the canonical figure behind the cash-runway metric. The
+  Reports runway now uses it instead of an inline loop.
 - **Investments scope decision (B27).** Added `docs/INVESTMENTS_SCOPE.md` documenting the balance-only
   core decision: no holdings, cost basis, tax lots, live prices, or market-data dependency in CashFlux core.
 - **Transaction attachment references (B23).** Transactions now carry persisted `AttachmentRef` links to
