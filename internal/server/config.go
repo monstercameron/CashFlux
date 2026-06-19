@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -176,6 +177,9 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(provider.ClientID) == "" || strings.TrimSpace(provider.ClientSecret) == "" || strings.TrimSpace(provider.RedirectURL) == "" {
 			return fmt.Errorf("server: oauth provider %q requires client id, client secret, and redirect url", name)
 		}
+		if !validOAuthRedirectURL(name, provider.RedirectURL) {
+			return fmt.Errorf("server: oauth provider %q redirect url must use /v1/auth/%s/callback", name, name)
+		}
 	}
 	switch c.AuthMode {
 	case "token", "oauth":
@@ -201,6 +205,17 @@ func (c Config) OAuthProviderNames() []string {
 }
 
 func validAESKeyLength(n int) bool { return n == 16 || n == 24 || n == 32 }
+
+func validOAuthRedirectURL(provider, redirect string) bool {
+	u, err := url.Parse(strings.TrimSpace(redirect))
+	if err != nil || u.Scheme == "" || u.Host == "" || u.Fragment != "" {
+		return false
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return false
+	}
+	return u.Path == "/v1/auth/"+strings.TrimSpace(provider)+"/callback"
+}
 
 func envOr(key, fallback string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {

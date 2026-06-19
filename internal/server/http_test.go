@@ -95,8 +95,15 @@ func TestConfigValidate(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("partial oauth provider accepted")
 	}
+	invalid = valid
+	invalid.OAuthProviders = map[string]OAuthProviderConfig{"github": {
+		ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/oauth/callback",
+	}}
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("bad oauth redirect accepted")
+	}
 	valid.AuthMode = "oauth"
-	valid.OAuthProviders = map[string]OAuthProviderConfig{"google": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/callback"}}
+	valid.OAuthProviders = map[string]OAuthProviderConfig{"google": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/v1/auth/google/callback"}}
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("oauth config rejected: %v", err)
 	}
@@ -182,7 +189,7 @@ func TestHealthReadyAndVersionEndpoints(t *testing.T) {
 		AuthMode: "oauth",
 		Billing:  false,
 		OAuthProviders: map[string]OAuthProviderConfig{
-			"google": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/callback"},
+			"google": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/v1/auth/google/callback"},
 		},
 		AppOrigin: "http://127.0.0.1:8080",
 	}, store)
@@ -487,7 +494,7 @@ func TestOAuthStartRedirectsWithPKCEState(t *testing.T) {
 
 func TestOAuthStartRejectsUnconfiguredProvider(t *testing.T) {
 	h := NewMux(Config{AuthMode: "oauth", OAuthProviders: map[string]OAuthProviderConfig{
-		"github": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/callback"},
+		"github": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/v1/auth/github/callback"},
 	}}, openTestStore(t))
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google", nil)
 	rr := httptest.NewRecorder()

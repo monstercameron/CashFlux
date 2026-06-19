@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: validate backend oauth redirects
+
+- Added config validation for OAuth provider redirect URLs.
+- Required each provider to use the exact `/v1/auth/{provider}/callback` route and rejected fragments or unsupported schemes.
+- Updated OAuth config tests and fixtures for the stricter callback path.
+
 ## 2026-06-19 - feat: harden backend blob paths
 
 - Made backend blob path construction reject malformed hashes before disk reads, writes, or sweeps.
