@@ -66,6 +66,21 @@ func maybeLockOnBoot() {
 
 // showAppLockGate covers the whole app with a modal passcode gate (building it on
 // first use). A correct passcode hides it. No-op when the lock isn't enabled.
+// animateGateIn fades the lock gate in with a faint scale settle — the mirror of
+// the unlock fade-out — so the gate doesn't pop. No-op under reduced motion.
+func animateGateIn(gate js.Value) {
+	if m := js.Global().Call("matchMedia", "(prefers-reduced-motion: reduce)"); !m.IsNull() && !m.IsUndefined() && m.Get("matches").Bool() {
+		return
+	}
+	gate.Call("animate",
+		[]any{
+			map[string]any{"opacity": 0, "transform": "scale(1.01)"},
+			map[string]any{"opacity": 1, "transform": "scale(1)"},
+		},
+		map[string]any{"duration": 220, "easing": "ease-out"},
+	)
+}
+
 func showAppLockGate() {
 	if !loadAppLock().Active() {
 		return
@@ -75,6 +90,7 @@ func showAppLockGate() {
 		gate.Get("style").Set("display", "grid")
 		refreshLockMeta(doc)
 		resetAppLockInput(doc)
+		animateGateIn(gate)
 		return
 	}
 	buildAppLockGate(doc)
@@ -128,6 +144,7 @@ func buildAppLockGate(doc js.Value) {
 
 	gate.Call("appendChild", card)
 	doc.Get("body").Call("appendChild", gate)
+	animateGateIn(gate)
 
 	fails := 0
 	hintBtnEl := func() js.Value { return doc.Call("getElementById", "cf-lock-hint-btn") }
