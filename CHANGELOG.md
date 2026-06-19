@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Members row actions have icons (C46).** View-transactions leads with a list glyph, Edit with a pencil, and
+  the delete button uses the `x` glyph (with an aria-label) instead of a bare "✕".
 - **Goals row actions have icons (C46).** Contribute leads with a plus-circle, Edit with a pencil, and the
   delete button uses the `x` glyph (with an explicit aria-label) instead of a bare "✕".
 - **Re-render stress E2E guards against chrome duplication.** `e2e/rerender.test.mjs` fires many re-render
