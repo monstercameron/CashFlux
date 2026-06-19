@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: bound backend http requests
+
+- Added configurable HTTP read/write timeouts for the backend server.
+- Added a max in-flight middleware that returns 503 when the server is saturated.
+- Covered env parsing, validation, and busy-shed behavior in server tests.
+
 ## 2026-06-18 - feat: add backend security headers
 
 - Added a server-wide security-header middleware around the backend mux.

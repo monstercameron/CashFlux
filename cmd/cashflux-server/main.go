@@ -46,6 +46,8 @@ func main() {
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           server.NewMux(cfg, store),
+		ReadTimeout:       cfg.HTTPReadTimeout,
+		WriteTimeout:      cfg.HTTPWriteTimeout,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       90 * time.Second,
 	}

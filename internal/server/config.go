@@ -46,6 +46,9 @@ type Config struct {
 	GRPCMaxActiveConnections          int
 	GRPCMaxConnectionsPerClient       int
 	GRPCMaxUpgradesPerClientPerMinute int
+	HTTPReadTimeout                   time.Duration
+	HTTPWriteTimeout                  time.Duration
+	HTTPMaxInFlight                   int
 	LogFormat                         string
 	LogLevel                          string
 	Logger                            *slog.Logger
@@ -84,6 +87,9 @@ func FromEnv() (Config, error) {
 	cfg.GRPCMaxActiveConnections = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_ACTIVE_CONNECTIONS", 128))
 	cfg.GRPCMaxConnectionsPerClient = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_CONNECTIONS_PER_CLIENT", 8))
 	cfg.GRPCMaxUpgradesPerClientPerMinute = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_UPGRADES_PER_CLIENT_PER_MINUTE", 60))
+	cfg.HTTPReadTimeout = envDuration("CASHFLUX_SERVER_HTTP_READ_TIMEOUT", 15*time.Second)
+	cfg.HTTPWriteTimeout = envDuration("CASHFLUX_SERVER_HTTP_WRITE_TIMEOUT", 60*time.Second)
+	cfg.HTTPMaxInFlight = int(envInt64("CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT", 256))
 	cfg.LogFormat = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_FORMAT", "text"))
 	cfg.LogLevel = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_LEVEL", "info"))
 	if cfg.AuthMode == "token" && cfg.Token == "" && cfg.TokenSHA256 == "" {
@@ -129,6 +135,9 @@ func (c Config) Validate() error {
 	if c.GRPCReadLimitBytes < 0 || c.GRPCKeepaliveInterval < 0 || c.GRPCIdleTimeout < 0 ||
 		c.GRPCMaxActiveConnections < 0 || c.GRPCMaxConnectionsPerClient < 0 || c.GRPCMaxUpgradesPerClientPerMinute < 0 {
 		return fmt.Errorf("server: grpc bridge limits must be non-negative")
+	}
+	if c.HTTPReadTimeout < 0 || c.HTTPWriteTimeout < 0 || c.HTTPMaxInFlight < 0 {
+		return fmt.Errorf("server: http limits must be non-negative")
 	}
 	if c.GRPCIdleTimeout > 0 && c.GRPCKeepaliveInterval <= 0 {
 		return fmt.Errorf("server: grpc keepalive interval is required when idle timeout is set")

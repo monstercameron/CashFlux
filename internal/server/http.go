@@ -63,7 +63,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("PUT /v1/blobs/{hash}", handlePutBlob(cfg, store))
 	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
-	return securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, mux)))
+	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, mux))))
 }
 
 func handleCORSPreflight(cfg Config) http.HandlerFunc {
@@ -86,6 +86,22 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		header.Set("Cross-Origin-Embedder-Policy", "require-corp")
 		header.Set("Content-Security-Policy", "frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
+	})
+}
+
+func maxInFlightMiddleware(limit int, next http.Handler) http.Handler {
+	if limit <= 0 {
+		return next
+	}
+	sem := make(chan struct{}, limit)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case sem <- struct{}{}:
+			defer func() { <-sem }()
+			next.ServeHTTP(w, r)
+		default:
+			http.Error(w, "server is busy", http.StatusServiceUnavailable)
+		}
 	})
 }
 

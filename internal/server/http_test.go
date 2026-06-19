@@ -50,6 +50,16 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative ai upstream timeout accepted")
 	}
 	invalid = valid
+	invalid.HTTPReadTimeout = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative http read timeout accepted")
+	}
+	invalid = valid
+	invalid.HTTPMaxInFlight = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative http max in-flight accepted")
+	}
+	invalid = valid
 	invalid.TokenSHA256 = "not-a-digest"
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("bad token sha256 accepted")
@@ -74,6 +84,19 @@ func TestConfigValidate(t *testing.T) {
 	valid.OAuthProviders = map[string]OAuthProviderConfig{"google": {ClientID: "id", ClientSecret: "secret", RedirectURL: "http://127.0.0.1/callback"}}
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("oauth config rejected: %v", err)
+	}
+}
+
+func TestFromEnvLoadsHTTPLimits(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_HTTP_READ_TIMEOUT", "5s")
+	t.Setenv("CASHFLUX_SERVER_HTTP_WRITE_TIMEOUT", "7s")
+	t.Setenv("CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT", "17")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if cfg.HTTPReadTimeout != 5*time.Second || cfg.HTTPWriteTimeout != 7*time.Second || cfg.HTTPMaxInFlight != 17 {
+		t.Fatalf("http limits = read %s write %s in-flight %d", cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPMaxInFlight)
 	}
 }
 
@@ -176,6 +199,24 @@ func TestSecurityHeaders(t *testing.T) {
 		if got := rr.Header().Get(name); got != value {
 			t.Fatalf("%s = %q, want %q", name, got, value)
 		}
+	}
+}
+
+func TestMaxInFlightMiddlewareRejectsWhenBusy(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	h := maxInFlightMiddleware(1, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		<-release
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	go h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/slow", nil))
+	<-entered
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/second", nil))
+	close(release)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("busy status = %d, want 503", rr.Code)
 	}
 }
 
