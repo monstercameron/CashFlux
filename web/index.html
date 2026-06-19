@@ -256,7 +256,10 @@
 
       /* Rows */
       .rows { display: flex; flex-direction: column; }
-      .row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.6rem 0; border-top: 1px solid var(--border); }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.6rem 0; border-top: 1px solid var(--border); transition: background 0.12s ease; }
+      /* Row hover affordance: a subtle highlight so the cursor's row is obvious and
+         the list is easier to scan (§6.16). Inset slightly so it reads as a band. */
+      .row:hover { background: var(--bg-elev); }
       .row:first-child { border-top: 0; }
       /* Inline-edit rows: a full-width block (not the flex .row) so the nested
          .form-grid expands to multiple columns and editing looks like adding,
@@ -344,6 +347,10 @@
       .budget-sub.fig + .budget-sub::before { content: "·"; margin: 0 0.35rem; color: var(--text-dim); }
       .bar { height: 8px; background: var(--bg-elev); border-radius: 999px; overflow: hidden; margin: 0.45rem 0 0.35rem; }
       .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+      /* Progress/budget bars grow into place on load and update instead of snapping (§6.16). */
+      @media (prefers-reduced-motion: no-preference) {
+        .bar-fill { transition: width 0.45s cubic-bezier(0.2, 0.75, 0.2, 1); }
+      }
       .bar-fill.near { background: #f59e0b; }
       .bar-fill.over { background: var(--danger); }
 
