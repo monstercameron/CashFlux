@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add ai streaming rpc surface (7.1/7.4)
+
+- Added `CompletionChunk`, `ChatStream`, and `VisionStream` to the proto/backendrpc contract and regenerated
+  the checked-in descriptors.
+- Registered server-streaming AI handlers over the GoGRPCBridge tunnel. They reuse the existing validated
+  Chat/Vision proxy path and send the final completion as a terminal chunk, so clients can move to streaming
+  transport before token-level upstream streaming lands.
+- Covered `ChatStream` through the bridge with encrypted-key lookup, upstream call, terminal chunk receive, and
+  stream EOF.
+
 ## 2026-06-19 - feat: add proto codegen drift check (7.0/7.1)
 
 - Added `buf.yaml` and `buf.gen.yaml` so `go run github.com/bufbuild/buf/cmd/buf@v1.57.2 generate` produces

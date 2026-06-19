@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -82,6 +84,64 @@ func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 	}
 	if chatResp.Content != "grpc says hi" || chatResp.Usage.TotalTokens != 13 {
 		t.Fatalf("Chat response = %+v", chatResp)
+	}
+}
+
+func TestAIServiceGRPCBridgeChatStream(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-stream-secret" {
+			t.Fatalf("authorization = %q", got)
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"stream says hi"}}],"usage":{"total_tokens":21}}`))
+	}))
+	defer upstream.Close()
+
+	store := openTestStore(t)
+	cfg := Config{
+		AuthMode:      "token",
+		Token:         "dev-token",
+		MasterKey:     "0123456789abcdef0123456789abcdef",
+		OpenAIBaseURL: upstream.URL,
+		AppOrigin:     "*",
+	}
+	bridge := httptest.NewServer(NewMux(cfg, store))
+	defer bridge.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	var keyResp backendrpc.SetKeyResponse
+	if err := conn.Invoke(ctx, backendrpc.MethodAISetKey, backendrpc.SetKeyRequest{Provider: "openai", Key: "sk-stream-secret"}, &keyResp, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("SetKey invoke: %v", err)
+	}
+	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodAIChatStream, backendrpc.JSONCallOptions()...)
+	if err != nil {
+		t.Fatalf("ChatStream stream: %v", err)
+	}
+	if err := stream.SendMsg(&backendrpc.ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []backendrpc.Message{{Role: ai.RoleUser, Content: "hello stream"}},
+	}); err != nil {
+		t.Fatalf("ChatStream send: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("ChatStream close send: %v", err)
+	}
+	var chunk backendrpc.CompletionChunk
+	if err := stream.RecvMsg(&chunk); err != nil {
+		t.Fatalf("ChatStream recv: %v", err)
+	}
+	if !chunk.Done || chunk.Content != "stream says hi" || chunk.Usage.TotalTokens != 21 {
+		t.Fatalf("ChatStream chunk = %+v", chunk)
+	}
+	var extra backendrpc.CompletionChunk
+	if err := stream.RecvMsg(&extra); err != io.EOF {
+		t.Fatalf("ChatStream second recv = %v/%+v, want EOF", err, extra)
 	}
 }
 

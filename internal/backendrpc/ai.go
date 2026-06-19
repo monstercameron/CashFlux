@@ -13,10 +13,12 @@ import (
 )
 
 const (
-	MethodAISetKey     = "/cashflux.v1.AIService/SetKey"
-	MethodAIListModels = "/cashflux.v1.AIService/ListModels"
-	MethodAIChat       = "/cashflux.v1.AIService/Chat"
-	MethodAIVision     = "/cashflux.v1.AIService/Vision"
+	MethodAISetKey       = "/cashflux.v1.AIService/SetKey"
+	MethodAIListModels   = "/cashflux.v1.AIService/ListModels"
+	MethodAIChat         = "/cashflux.v1.AIService/Chat"
+	MethodAIVision       = "/cashflux.v1.AIService/Vision"
+	MethodAIChatStream   = "/cashflux.v1.AIService/ChatStream"
+	MethodAIVisionStream = "/cashflux.v1.AIService/VisionStream"
 
 	MethodSyncListWorkspaces  = "/cashflux.v1.SyncService/ListWorkspaces"
 	MethodSyncGetWorkspace    = "/cashflux.v1.SyncService/GetWorkspace"
@@ -71,6 +73,12 @@ type VisionRequest struct {
 type Completion struct {
 	Content string `json:"content"`
 	Usage   Usage  `json:"usage"`
+}
+
+type CompletionChunk struct {
+	Content string `json:"content,omitempty"`
+	Usage   Usage  `json:"usage,omitempty"`
+	Done    bool   `json:"done,omitempty"`
 }
 
 type Workspace struct {

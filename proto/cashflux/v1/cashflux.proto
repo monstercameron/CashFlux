@@ -129,6 +129,12 @@ message Completion {
   Usage usage = 2;
 }
 
+message CompletionChunk {
+  string content = 1;
+  Usage usage = 2;
+  bool done = 3;
+}
+
 service SyncService {
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
   rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
@@ -142,4 +148,6 @@ service AIService {
   rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
   rpc Chat(ChatRequest) returns (Completion);
   rpc Vision(VisionRequest) returns (Completion);
+  rpc ChatStream(ChatRequest) returns (stream CompletionChunk);
+  rpc VisionStream(VisionRequest) returns (stream CompletionChunk);
 }

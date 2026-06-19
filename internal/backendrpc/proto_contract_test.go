@@ -26,6 +26,8 @@ func TestProtoContractCoversBackendRPCMethods(t *testing.T) {
 		"rpc ListModels",
 		"rpc Chat",
 		"rpc Vision",
+		"rpc ChatStream",
+		"rpc VisionStream",
 	} {
 		if !strings.Contains(proto, want) {
 			t.Fatalf("backend proto missing %q", want)
@@ -76,6 +78,8 @@ func TestGeneratedProtoMethodNamesMatchBridgeConstants(t *testing.T) {
 		{name: "ai list models", manual: MethodAIListModels, generated: backendrpcpb.AIService_ListModels_FullMethodName},
 		{name: "ai chat", manual: MethodAIChat, generated: backendrpcpb.AIService_Chat_FullMethodName},
 		{name: "ai vision", manual: MethodAIVision, generated: backendrpcpb.AIService_Vision_FullMethodName},
+		{name: "ai chat stream", manual: MethodAIChatStream, generated: backendrpcpb.AIService_ChatStream_FullMethodName},
+		{name: "ai vision stream", manual: MethodAIVisionStream, generated: backendrpcpb.AIService_VisionStream_FullMethodName},
 	} {
 		if tc.manual != tc.generated {
 			t.Fatalf("%s method = %q, generated %q", tc.name, tc.manual, tc.generated)

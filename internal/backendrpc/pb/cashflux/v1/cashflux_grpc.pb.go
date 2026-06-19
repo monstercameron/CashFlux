@@ -277,10 +277,12 @@ var SyncService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AIService_SetKey_FullMethodName     = "/cashflux.v1.AIService/SetKey"
-	AIService_ListModels_FullMethodName = "/cashflux.v1.AIService/ListModels"
-	AIService_Chat_FullMethodName       = "/cashflux.v1.AIService/Chat"
-	AIService_Vision_FullMethodName     = "/cashflux.v1.AIService/Vision"
+	AIService_SetKey_FullMethodName       = "/cashflux.v1.AIService/SetKey"
+	AIService_ListModels_FullMethodName   = "/cashflux.v1.AIService/ListModels"
+	AIService_Chat_FullMethodName         = "/cashflux.v1.AIService/Chat"
+	AIService_Vision_FullMethodName       = "/cashflux.v1.AIService/Vision"
+	AIService_ChatStream_FullMethodName   = "/cashflux.v1.AIService/ChatStream"
+	AIService_VisionStream_FullMethodName = "/cashflux.v1.AIService/VisionStream"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -291,6 +293,8 @@ type AIServiceClient interface {
 	ListModels(ctx context.Context, in *ListModelsRequest, opts ...grpc.CallOption) (*ListModelsResponse, error)
 	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*Completion, error)
 	Vision(ctx context.Context, in *VisionRequest, opts ...grpc.CallOption) (*Completion, error)
+	ChatStream(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CompletionChunk], error)
+	VisionStream(ctx context.Context, in *VisionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CompletionChunk], error)
 }
 
 type aIServiceClient struct {
@@ -341,6 +345,44 @@ func (c *aIServiceClient) Vision(ctx context.Context, in *VisionRequest, opts ..
 	return out, nil
 }
 
+func (c *aIServiceClient) ChatStream(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CompletionChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AIService_ServiceDesc.Streams[0], AIService_ChatStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ChatRequest, CompletionChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_ChatStreamClient = grpc.ServerStreamingClient[CompletionChunk]
+
+func (c *aIServiceClient) VisionStream(ctx context.Context, in *VisionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CompletionChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AIService_ServiceDesc.Streams[1], AIService_VisionStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VisionRequest, CompletionChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_VisionStreamClient = grpc.ServerStreamingClient[CompletionChunk]
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -349,6 +391,8 @@ type AIServiceServer interface {
 	ListModels(context.Context, *ListModelsRequest) (*ListModelsResponse, error)
 	Chat(context.Context, *ChatRequest) (*Completion, error)
 	Vision(context.Context, *VisionRequest) (*Completion, error)
+	ChatStream(*ChatRequest, grpc.ServerStreamingServer[CompletionChunk]) error
+	VisionStream(*VisionRequest, grpc.ServerStreamingServer[CompletionChunk]) error
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -370,6 +414,12 @@ func (UnimplementedAIServiceServer) Chat(context.Context, *ChatRequest) (*Comple
 }
 func (UnimplementedAIServiceServer) Vision(context.Context, *VisionRequest) (*Completion, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Vision not implemented")
+}
+func (UnimplementedAIServiceServer) ChatStream(*ChatRequest, grpc.ServerStreamingServer[CompletionChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method ChatStream not implemented")
+}
+func (UnimplementedAIServiceServer) VisionStream(*VisionRequest, grpc.ServerStreamingServer[CompletionChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method VisionStream not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -464,6 +514,28 @@ func _AIService_Vision_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_ChatStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ChatRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AIServiceServer).ChatStream(m, &grpc.GenericServerStream[ChatRequest, CompletionChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_ChatStreamServer = grpc.ServerStreamingServer[CompletionChunk]
+
+func _AIService_VisionStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VisionRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AIServiceServer).VisionStream(m, &grpc.GenericServerStream[VisionRequest, CompletionChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_VisionStreamServer = grpc.ServerStreamingServer[CompletionChunk]
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -488,6 +560,17 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AIService_Vision_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ChatStream",
+			Handler:       _AIService_ChatStream_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "VisionStream",
+			Handler:       _AIService_VisionStream_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "cashflux/v1/cashflux.proto",
 }

@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **AI streaming RPC surface (7.1/7.4).** Added `ChatStream` and `VisionStream` server-streaming RPCs over the
+  gRPC tunnel, returning terminal completion chunks while preserving the existing unary AI calls.
 - **Proto codegen and drift check (7.0/7.1).** Added Buf-based generation for
   `proto/cashflux/v1/cashflux.proto`, checked-in Go/gRPC descriptors under `internal/backendrpc/pb`, and a CI
   drift check.

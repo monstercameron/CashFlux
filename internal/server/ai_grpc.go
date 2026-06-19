@@ -22,7 +22,10 @@ func RegisterAIServiceServer(s grpc.ServiceRegistrar, srv *AIService) {
 			{MethodName: "Chat", Handler: aiChatHandler},
 			{MethodName: "Vision", Handler: aiVisionHandler},
 		},
-		Streams:  []grpc.StreamDesc{},
+		Streams: []grpc.StreamDesc{
+			{StreamName: "ChatStream", Handler: aiChatStreamHandler, ServerStreams: true},
+			{StreamName: "VisionStream", Handler: aiVisionStreamHandler, ServerStreams: true},
+		},
 		Metadata: "cashflux/v1/ai.proto",
 	}, srv)
 }
@@ -32,6 +35,8 @@ type aiServiceServer interface {
 	ListModelsRPC(context.Context, backendrpc.ListModelsRequest) (backendrpc.ListModelsResponse, error)
 	ChatRPC(context.Context, backendrpc.ChatRequest) (backendrpc.Completion, error)
 	VisionRPC(context.Context, backendrpc.VisionRequest) (backendrpc.Completion, error)
+	ChatStreamRPC(backendrpc.ChatRequest, grpc.ServerStream) error
+	VisionStreamRPC(backendrpc.VisionRequest, grpc.ServerStream) error
 }
 
 func (s *AIService) SetKey(ctx context.Context, req backendrpc.SetKeyRequest) (backendrpc.SetKeyResponse, error) {
@@ -110,6 +115,46 @@ func (s *AIService) VisionRPC(ctx context.Context, req backendrpc.VisionRequest)
 	return backendrpc.Completion{Content: out.Content, Usage: rpcUsage(out.Usage)}, nil
 }
 
+func (s *AIService) ChatStreamRPC(req backendrpc.ChatRequest, stream grpc.ServerStream) error {
+	start := time.Now()
+	statusCode := codes.OK.String()
+	defer func() {
+		if s.metrics != nil {
+			s.metrics.ObserveStreamDuration(backendrpc.MethodAIChatStream, statusCode, time.Since(start))
+		}
+	}()
+	completion, err := s.ChatRPC(stream.Context(), req)
+	if err != nil {
+		statusCode = status.Code(err).String()
+		return err
+	}
+	if err := stream.SendMsg(&backendrpc.CompletionChunk{Content: completion.Content, Usage: completion.Usage, Done: true}); err != nil {
+		statusCode = status.Code(err).String()
+		return err
+	}
+	return nil
+}
+
+func (s *AIService) VisionStreamRPC(req backendrpc.VisionRequest, stream grpc.ServerStream) error {
+	start := time.Now()
+	statusCode := codes.OK.String()
+	defer func() {
+		if s.metrics != nil {
+			s.metrics.ObserveStreamDuration(backendrpc.MethodAIVisionStream, statusCode, time.Since(start))
+		}
+	}()
+	completion, err := s.VisionRPC(stream.Context(), req)
+	if err != nil {
+		statusCode = status.Code(err).String()
+		return err
+	}
+	if err := stream.SendMsg(&backendrpc.CompletionChunk{Content: completion.Content, Usage: completion.Usage, Done: true}); err != nil {
+		statusCode = status.Code(err).String()
+		return err
+	}
+	return nil
+}
+
 func aiMessages(messages []backendrpc.Message) []ai.Message {
 	out := make([]ai.Message, 0, len(messages))
 	for _, msg := range messages {
@@ -184,4 +229,20 @@ func aiVisionHandler(srv any, ctx context.Context, dec func(any) error, intercep
 		return srv.(aiServiceServer).VisionRPC(ctx, req.(backendrpc.VisionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func aiChatStreamHandler(srv any, stream grpc.ServerStream) error {
+	var in backendrpc.ChatRequest
+	if err := stream.RecvMsg(&in); err != nil {
+		return err
+	}
+	return srv.(aiServiceServer).ChatStreamRPC(in, stream)
+}
+
+func aiVisionStreamHandler(srv any, stream grpc.ServerStream) error {
+	var in backendrpc.VisionRequest
+	if err := stream.RecvMsg(&in); err != nil {
+		return err
+	}
+	return srv.(aiServiceServer).VisionStreamRPC(in, stream)
 }

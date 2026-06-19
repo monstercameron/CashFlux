@@ -1293,6 +1293,66 @@ func (x *Completion) GetUsage() *Usage {
 	return nil
 }
 
+type CompletionChunk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Content       string                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	Usage         *Usage                 `protobuf:"bytes,2,opt,name=usage,proto3" json:"usage,omitempty"`
+	Done          bool                   `protobuf:"varint,3,opt,name=done,proto3" json:"done,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompletionChunk) Reset() {
+	*x = CompletionChunk{}
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompletionChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompletionChunk) ProtoMessage() {}
+
+func (x *CompletionChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompletionChunk.ProtoReflect.Descriptor instead.
+func (*CompletionChunk) Descriptor() ([]byte, []int) {
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *CompletionChunk) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *CompletionChunk) GetUsage() *Usage {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+func (x *CompletionChunk) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
+}
+
 var File_cashflux_v1_cashflux_proto protoreflect.FileDescriptor
 
 const file_cashflux_v1_cashflux_proto_rawDesc = "" +
@@ -1386,19 +1446,26 @@ const file_cashflux_v1_cashflux_proto_rawDesc = "" +
 	"\n" +
 	"Completion\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12(\n" +
-	"\x05usage\x18\x02 \x01(\v2\x12.cashflux.v1.UsageR\x05usage2\xd0\x03\n" +
+	"\x05usage\x18\x02 \x01(\v2\x12.cashflux.v1.UsageR\x05usage\"i\n" +
+	"\x0fCompletionChunk\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\tR\acontent\x12(\n" +
+	"\x05usage\x18\x02 \x01(\v2\x12.cashflux.v1.UsageR\x05usage\x12\x12\n" +
+	"\x04done\x18\x03 \x01(\bR\x04done2\xd0\x03\n" +
 	"\vSyncService\x12Y\n" +
 	"\x0eListWorkspaces\x12\".cashflux.v1.ListWorkspacesRequest\x1a#.cashflux.v1.ListWorkspacesResponse\x12S\n" +
 	"\fGetWorkspace\x12 .cashflux.v1.GetWorkspaceRequest\x1a!.cashflux.v1.GetWorkspaceResponse\x12S\n" +
 	"\fPutWorkspace\x12 .cashflux.v1.PutWorkspaceRequest\x1a!.cashflux.v1.PutWorkspaceResponse\x12\\\n" +
 	"\x0fDeleteWorkspace\x12#.cashflux.v1.DeleteWorkspaceRequest\x1a$.cashflux.v1.DeleteWorkspaceResponse\x12^\n" +
-	"\x0fWatchWorkspaces\x12#.cashflux.v1.WatchWorkspacesRequest\x1a$.cashflux.v1.WatchWorkspacesResponse0\x012\x97\x02\n" +
+	"\x0fWatchWorkspaces\x12#.cashflux.v1.WatchWorkspacesRequest\x1a$.cashflux.v1.WatchWorkspacesResponse0\x012\xab\x03\n" +
 	"\tAIService\x12A\n" +
 	"\x06SetKey\x12\x1a.cashflux.v1.SetKeyRequest\x1a\x1b.cashflux.v1.SetKeyResponse\x12M\n" +
 	"\n" +
 	"ListModels\x12\x1e.cashflux.v1.ListModelsRequest\x1a\x1f.cashflux.v1.ListModelsResponse\x129\n" +
 	"\x04Chat\x12\x18.cashflux.v1.ChatRequest\x1a\x17.cashflux.v1.Completion\x12=\n" +
-	"\x06Vision\x12\x1a.cashflux.v1.VisionRequest\x1a\x17.cashflux.v1.CompletionBHZFgithub.com/monstercameron/CashFlux/internal/backendrpc/pb;backendrpcpbb\x06proto3"
+	"\x06Vision\x12\x1a.cashflux.v1.VisionRequest\x1a\x17.cashflux.v1.Completion\x12F\n" +
+	"\n" +
+	"ChatStream\x12\x18.cashflux.v1.ChatRequest\x1a\x1c.cashflux.v1.CompletionChunk0\x01\x12J\n" +
+	"\fVisionStream\x12\x1a.cashflux.v1.VisionRequest\x1a\x1c.cashflux.v1.CompletionChunk0\x01BHZFgithub.com/monstercameron/CashFlux/internal/backendrpc/pb;backendrpcpbb\x06proto3"
 
 var (
 	file_cashflux_v1_cashflux_proto_rawDescOnce sync.Once
@@ -1412,7 +1479,7 @@ func file_cashflux_v1_cashflux_proto_rawDescGZIP() []byte {
 	return file_cashflux_v1_cashflux_proto_rawDescData
 }
 
-var file_cashflux_v1_cashflux_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_cashflux_v1_cashflux_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_cashflux_v1_cashflux_proto_goTypes = []any{
 	(*Workspace)(nil),               // 0: cashflux.v1.Workspace
 	(*DatasetEnvelope)(nil),         // 1: cashflux.v1.DatasetEnvelope
@@ -1436,6 +1503,7 @@ var file_cashflux_v1_cashflux_proto_goTypes = []any{
 	(*ChatRequest)(nil),             // 19: cashflux.v1.ChatRequest
 	(*VisionRequest)(nil),           // 20: cashflux.v1.VisionRequest
 	(*Completion)(nil),              // 21: cashflux.v1.Completion
+	(*CompletionChunk)(nil),         // 22: cashflux.v1.CompletionChunk
 }
 var file_cashflux_v1_cashflux_proto_depIdxs = []int32{
 	0,  // 0: cashflux.v1.ListWorkspacesResponse.workspaces:type_name -> cashflux.v1.Workspace
@@ -1445,29 +1513,34 @@ var file_cashflux_v1_cashflux_proto_depIdxs = []int32{
 	0,  // 4: cashflux.v1.WatchWorkspacesResponse.workspace:type_name -> cashflux.v1.Workspace
 	17, // 5: cashflux.v1.ChatRequest.messages:type_name -> cashflux.v1.Message
 	18, // 6: cashflux.v1.Completion.usage:type_name -> cashflux.v1.Usage
-	3,  // 7: cashflux.v1.SyncService.ListWorkspaces:input_type -> cashflux.v1.ListWorkspacesRequest
-	5,  // 8: cashflux.v1.SyncService.GetWorkspace:input_type -> cashflux.v1.GetWorkspaceRequest
-	7,  // 9: cashflux.v1.SyncService.PutWorkspace:input_type -> cashflux.v1.PutWorkspaceRequest
-	9,  // 10: cashflux.v1.SyncService.DeleteWorkspace:input_type -> cashflux.v1.DeleteWorkspaceRequest
-	11, // 11: cashflux.v1.SyncService.WatchWorkspaces:input_type -> cashflux.v1.WatchWorkspacesRequest
-	13, // 12: cashflux.v1.AIService.SetKey:input_type -> cashflux.v1.SetKeyRequest
-	15, // 13: cashflux.v1.AIService.ListModels:input_type -> cashflux.v1.ListModelsRequest
-	19, // 14: cashflux.v1.AIService.Chat:input_type -> cashflux.v1.ChatRequest
-	20, // 15: cashflux.v1.AIService.Vision:input_type -> cashflux.v1.VisionRequest
-	4,  // 16: cashflux.v1.SyncService.ListWorkspaces:output_type -> cashflux.v1.ListWorkspacesResponse
-	6,  // 17: cashflux.v1.SyncService.GetWorkspace:output_type -> cashflux.v1.GetWorkspaceResponse
-	8,  // 18: cashflux.v1.SyncService.PutWorkspace:output_type -> cashflux.v1.PutWorkspaceResponse
-	10, // 19: cashflux.v1.SyncService.DeleteWorkspace:output_type -> cashflux.v1.DeleteWorkspaceResponse
-	12, // 20: cashflux.v1.SyncService.WatchWorkspaces:output_type -> cashflux.v1.WatchWorkspacesResponse
-	14, // 21: cashflux.v1.AIService.SetKey:output_type -> cashflux.v1.SetKeyResponse
-	16, // 22: cashflux.v1.AIService.ListModels:output_type -> cashflux.v1.ListModelsResponse
-	21, // 23: cashflux.v1.AIService.Chat:output_type -> cashflux.v1.Completion
-	21, // 24: cashflux.v1.AIService.Vision:output_type -> cashflux.v1.Completion
-	16, // [16:25] is the sub-list for method output_type
-	7,  // [7:16] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	18, // 7: cashflux.v1.CompletionChunk.usage:type_name -> cashflux.v1.Usage
+	3,  // 8: cashflux.v1.SyncService.ListWorkspaces:input_type -> cashflux.v1.ListWorkspacesRequest
+	5,  // 9: cashflux.v1.SyncService.GetWorkspace:input_type -> cashflux.v1.GetWorkspaceRequest
+	7,  // 10: cashflux.v1.SyncService.PutWorkspace:input_type -> cashflux.v1.PutWorkspaceRequest
+	9,  // 11: cashflux.v1.SyncService.DeleteWorkspace:input_type -> cashflux.v1.DeleteWorkspaceRequest
+	11, // 12: cashflux.v1.SyncService.WatchWorkspaces:input_type -> cashflux.v1.WatchWorkspacesRequest
+	13, // 13: cashflux.v1.AIService.SetKey:input_type -> cashflux.v1.SetKeyRequest
+	15, // 14: cashflux.v1.AIService.ListModels:input_type -> cashflux.v1.ListModelsRequest
+	19, // 15: cashflux.v1.AIService.Chat:input_type -> cashflux.v1.ChatRequest
+	20, // 16: cashflux.v1.AIService.Vision:input_type -> cashflux.v1.VisionRequest
+	19, // 17: cashflux.v1.AIService.ChatStream:input_type -> cashflux.v1.ChatRequest
+	20, // 18: cashflux.v1.AIService.VisionStream:input_type -> cashflux.v1.VisionRequest
+	4,  // 19: cashflux.v1.SyncService.ListWorkspaces:output_type -> cashflux.v1.ListWorkspacesResponse
+	6,  // 20: cashflux.v1.SyncService.GetWorkspace:output_type -> cashflux.v1.GetWorkspaceResponse
+	8,  // 21: cashflux.v1.SyncService.PutWorkspace:output_type -> cashflux.v1.PutWorkspaceResponse
+	10, // 22: cashflux.v1.SyncService.DeleteWorkspace:output_type -> cashflux.v1.DeleteWorkspaceResponse
+	12, // 23: cashflux.v1.SyncService.WatchWorkspaces:output_type -> cashflux.v1.WatchWorkspacesResponse
+	14, // 24: cashflux.v1.AIService.SetKey:output_type -> cashflux.v1.SetKeyResponse
+	16, // 25: cashflux.v1.AIService.ListModels:output_type -> cashflux.v1.ListModelsResponse
+	21, // 26: cashflux.v1.AIService.Chat:output_type -> cashflux.v1.Completion
+	21, // 27: cashflux.v1.AIService.Vision:output_type -> cashflux.v1.Completion
+	22, // 28: cashflux.v1.AIService.ChatStream:output_type -> cashflux.v1.CompletionChunk
+	22, // 29: cashflux.v1.AIService.VisionStream:output_type -> cashflux.v1.CompletionChunk
+	19, // [19:30] is the sub-list for method output_type
+	8,  // [8:19] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_cashflux_v1_cashflux_proto_init() }
@@ -1481,7 +1554,7 @@ func file_cashflux_v1_cashflux_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cashflux_v1_cashflux_proto_rawDesc), len(file_cashflux_v1_cashflux_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
