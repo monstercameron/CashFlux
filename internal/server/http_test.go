@@ -66,6 +66,11 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative storage max bytes accepted")
 	}
 	invalid = valid
+	invalid.StorageWarnBytes = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative storage warn bytes accepted")
+	}
+	invalid = valid
 	invalid.AIUpstreamRetries = -1
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("negative ai upstream retries accepted")
@@ -239,12 +244,13 @@ func TestFromEnvLoadsGRPCStreamLimit(t *testing.T) {
 
 func TestFromEnvLoadsStorageQuota(t *testing.T) {
 	t.Setenv("CASHFLUX_SERVER_STORAGE_MAX_BYTES", "12345")
+	t.Setenv("CASHFLUX_SERVER_STORAGE_WARN_BYTES", "10000")
 	cfg, err := FromEnv()
 	if err != nil {
 		t.Fatalf("FromEnv: %v", err)
 	}
-	if cfg.StorageMaxBytes != 12345 {
-		t.Fatalf("StorageMaxBytes = %d, want 12345", cfg.StorageMaxBytes)
+	if cfg.StorageMaxBytes != 12345 || cfg.StorageWarnBytes != 10000 {
+		t.Fatalf("storage quota = max %d warn %d", cfg.StorageMaxBytes, cfg.StorageWarnBytes)
 	}
 }
 
@@ -1559,6 +1565,30 @@ func TestBlobEndpointRejectsStorageQuotaExceeded(t *testing.T) {
 		t.Fatalf("quota body = %q", rr.Body.String())
 	}
 	assertHTTPErrorReason(t, rr, ErrorReasonResourceExhausted)
+}
+
+func TestBlobEndpointWarnsNearStorageQuota(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 19, 14, 10, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutWorkspace(Workspace{ID: "w1", UserID: user.ID, Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Token: "dev-token", DataDir: t.TempDir(), StorageMaxBytes: 10, StorageWarnBytes: 4, BlobMaxBytes: 1024}
+	h := NewMux(cfg, store)
+	data := []byte("abcd")
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+blobHash(data)+"?workspaceId=w1", bytes.NewReader(data))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("quota warning status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get(storageWarningHeader) != "storage quota warning" {
+		t.Fatalf("storage warning header = %q", rr.Header().Get(storageWarningHeader))
+	}
 }
 
 func TestBlobEndpointRejectsInactiveCloudEntitlement(t *testing.T) {

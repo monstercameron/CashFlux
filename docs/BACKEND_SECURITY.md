@@ -37,6 +37,8 @@ section 7.14:
 - Request-size and abuse controls are enabled across the backend: dataset caps, blob size/storage caps, AI request
   caps, OAuth/session auth-route rate limits, HTTP in-flight/rate limits, per-user rate limits, and gRPC bridge
   connection/stream/upgrade caps.
+- Blob fair-use controls include a soft per-user warning threshold and a hard per-user linked-byte cap for
+  distinct uploaded blobs.
 - AI proxy abuse controls include per-user daily request/token caps and an operator kill switch via
   `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS`, which denies selected users before key load or upstream calls.
 - Optional AI usage alert thresholds (`CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY` and

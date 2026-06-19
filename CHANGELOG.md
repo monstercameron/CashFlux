@@ -41,6 +41,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend storage fair-use warnings (7.11).** Added `CASHFLUX_SERVER_STORAGE_WARN_BYTES` so blob uploads can
+  warn before the existing per-user storage cap blocks new over-quota uploads.
 - **Backend entitlement enforcement (7.10).** Billing-enabled deployments now deny inactive Cloud users at the
   gRPC Sync/AI interceptor layer and HTTP blob endpoints while self-host mode remains always-on.
 - **Backend subscription entitlement reads (7.10).** `IsCloudActive` now reads billing-enabled Cloud

@@ -4098,7 +4098,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       Done: billing-disabled self-host stays always-on, and billing-enabled `IsCloudActive` now reads
       `active`, `trialing`, and in-period `past_due` states from `subscriptions`; gRPC Sync/AI interceptors
       and HTTP blob endpoints now reject inactive billing-enabled users.
-- [ ] Storage fair-use cap per user (blob bytes); soft-warn → block new uploads over cap; overage copy.
+- [x] Storage fair-use cap per user (blob bytes); soft-warn → block new uploads over cap; overage copy.
+      Done: `CASHFLUX_SERVER_STORAGE_WARN_BYTES` emits `X-CashFlux-Storage-Warning` before
+      `CASHFLUX_SERVER_STORAGE_MAX_BYTES` blocks new distinct over-quota blob uploads with HTTP 507.
 - [x] Privacy/compliance: privacy policy + terms endpoints; account export + **delete account**.
       Public `/legal/privacy` and `/legal/terms` JSON endpoints are now mounted and documented in
       `docs/LEGAL_ENDPOINTS.md`. Authenticated `/v1/account/export` returns scoped Cloud data without decrypted

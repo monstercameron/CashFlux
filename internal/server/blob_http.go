@@ -12,6 +12,7 @@ import (
 )
 
 const blobWorkspaceHeader = "X-CashFlux-Workspace-ID"
+const storageWarningHeader = "X-CashFlux-Storage-Warning"
 
 type BlobResponse struct {
 	Hash string `json:"hash"`
@@ -52,7 +53,7 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if !withinStorageQuota(w, store, user.ID, hash, int64(len(data)), cfg.StorageMaxBytes) {
+		if !withinStorageQuota(w, store, user.ID, hash, int64(len(data)), cfg) {
 			return
 		}
 		ctx, cancel := blobIOContext(r.Context(), cfg)
@@ -74,8 +75,8 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 	}
 }
 
-func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string, size, maxBytes int64) bool {
-	if maxBytes <= 0 {
+func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string, size int64, cfg Config) bool {
+	if cfg.StorageMaxBytes <= 0 && cfg.StorageWarnBytes <= 0 {
 		return true
 	}
 	linked, err := store.UserBlobLinked(userID, hash)
@@ -91,9 +92,13 @@ func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string
 		writeErrorJSON(w, ErrorReasonInternal, "storage quota check failed")
 		return false
 	}
-	if current+size > maxBytes {
+	next := current + size
+	if cfg.StorageMaxBytes > 0 && next > cfg.StorageMaxBytes {
 		writeErrorJSON(w, ErrorReasonResourceExhausted, "storage quota exceeded")
 		return false
+	}
+	if cfg.StorageWarnBytes > 0 && next >= cfg.StorageWarnBytes {
+		w.Header().Set(storageWarningHeader, "storage quota warning")
 	}
 	return true
 }

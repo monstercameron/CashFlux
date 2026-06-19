@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend storage fair-use warnings (7.11)
+
+- Added `CASHFLUX_SERVER_STORAGE_WARN_BYTES` as a soft warning line before the hard per-user blob cap.
+- Blob uploads now emit `X-CashFlux-Storage-Warning` when a new distinct blob crosses the warning threshold.
+- Kept the existing `CASHFLUX_SERVER_STORAGE_MAX_BYTES` hard block and 507 JSON error for over-quota uploads.
+- Marked the storage fair-use TODO complete with tests for env parsing, validation, warning, and cap behavior.
+
 ## 2026-06-19 - feat: enforce cloud entitlements on backend services (7.10)
 
 - Added gRPC entitlement interceptors after auth/logging so billing-enabled Sync/AI RPCs require an active
