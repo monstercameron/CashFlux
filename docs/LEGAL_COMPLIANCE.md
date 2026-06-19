@@ -33,6 +33,17 @@ Stripe-hosted Checkout and customer portal surfaces when billing is enabled. Cas
 per account/identity before creating Checkout sessions; payment-fraud screening stays in Stripe Checkout/Radar
 so card data and fraud outcomes do not touch product behavior.
 
+## PCI Scope Minimization
+
+CashFlux does not collect, transmit, process, or store payment-card numbers, CVV values, bank account numbers,
+or cardholder authentication data. The server creates Stripe-hosted Checkout and customer-portal sessions and
+stores only Stripe customer/subscription identifiers, plan/status fields, webhook event-derived subscription
+state, and aggregate billing metrics.
+
+Payment-method entry, card updates, invoices, disputes, and fraud screening stay inside Stripe-hosted surfaces
+and Stripe Radar. Do not add raw-card fields, card tokens, or Elements card-entry components to CashFlux server
+routes without a new PCI assessment and legal/security review.
+
 ## Cookie And Consent Note
 
 CashFlux should avoid marketing cookies for launch. Required cookies are limited to OAuth/session security cookies:

@@ -17,6 +17,8 @@ and every commit updates this file under `Unreleased`.
   empty, so local dev, custom domains, and native tests are unaffected (the wildcard `*` is never prefixed).
 
 ### Changed
+- **PCI scope documentation (7.16).** The legal compliance pack now explicitly states that payment-card entry,
+  updates, fraud screening, and cardholder data stay in Stripe-hosted surfaces.
 - **Server deploy/migration procedure (7.16).** The operations runbook now places backup, migration dry-run,
   forward rebuild, and Caddy stream-drain verification into the deploy sequence.
 - **Self-host TLS policy (7.14).** The bundled Caddy config now pins TLS 1.2/1.3 with modern AEAD cipher suites

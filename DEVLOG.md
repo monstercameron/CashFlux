@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: pin pci scope boundary (7.16)
+
+- Added a PCI scope minimization section to the legal compliance pack.
+- Documented that CashFlux only creates Stripe-hosted Checkout/customer-portal sessions and stores billing ids,
+  subscription state, and aggregate metrics.
+- Pinned the no-card-data boundary and Stripe Radar ownership with the deploy documentation test.
+
 ## 2026-06-19 - test: cover server migration idempotency (7.16)
 
 - Added a store test that opens/migrates a DB, writes a user, closes it, then opens it again to rerun

@@ -4384,7 +4384,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Data retention + deletion schedule (snapshots history, logs, audit, backups); document residency.
       Done: retention env windows plus `cashflux-server retention` prune audit events, snapshot history,
       and local backup dirs; weekly timer examples and self-host docs define residency and defaults.
-- [ ] **PCI scope minimized** by using Stripe Checkout/Elements (no card data touches the server).
+- [x] **PCI scope minimized** by using Stripe Checkout/Elements (no card data touches the server).
+      Done: billing endpoints only create Stripe-hosted Checkout/customer-portal sessions and consume
+      webhooks; `docs/LEGAL_COMPLIANCE.md` now pins the no-card-data boundary, allowed billing identifiers,
+      and Stripe Radar/payment-method ownership with a deploy doc test.
 - [ ] **SOC 2 readiness checklist** (access control, change mgmt, monitoring, vendor mgmt, IR) — even if
       not certifying, build to the controls so enterprise/audit asks are answerable.
 - [~] Encryption-in-transit + at-rest documented; key management policy; access logging to prod data.
