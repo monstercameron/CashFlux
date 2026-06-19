@@ -3,17 +3,40 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
-## 2026-06-19 - feat: rotate backend refresh sessions (verified)
+## 2026-06-19 — feat: subscription price-change detection (B25)
 
-- Added persisted OAuth refresh sessions in SQLite schema v3: each refresh token carries a `jti` and family id,
-  and the database stores only the token hash plus expiry/used/revoked timestamps.
-- Refresh now consumes the current row, issues a new refresh token in the same family, and treats reuse,
-  revocation, expiry, or hash mismatch as invalid. Reuse of a known token revokes the entire family and audits
-  `auth.token.reuse`.
-- Logout revokes the presented refresh family before clearing cookies. Device revoke and sign-out-everywhere
-  remain a follow-up surface on top of the same family/session table.
-- Added repository coverage for consume/reuse/family revoke, migration coverage for `refresh_tokens`, and an
-  OAuth HTTP test that proves rotation, reuse rejection, and family revocation.
+- Added `subscriptions.DetectPriceChanges` to catch when a recurring charge's price changes. The existing
+  `Detect` groups by name+amount (key = name|amount), so a price change would surface as two unrelated
+  subscriptions — no good for this. The new detector groups by name only, sorts each series by date, confirms
+  a regular cadence (reusing `classify`/`medianInt`), then walks back from the latest charge to the most
+  recent charge with a different amount: that's the prior price, and the charge right after it dates the
+  change.
+- minCount floors at 3 (not 2): a change needs a before-run and an after-run, so two charges can't tell a
+  change from a one-off. Returns OldAmount/NewAmount/Delta/PercentChange (rounded, guarded against a
+  zero base)/ChangedAt, plus an `Increased()` helper. Sorted most-recent-change first.
+- Documented the heuristic limit: it reports the latest distinct-amount transition, so usage-based/fluctuating
+  charges can be noisy — but the cadence gate filters most of those out.
+- Fixed a builtin shadow (`new` → `cur` param) and a missing `domain` import in the new test file. Table
+  tests: increase, decrease, stable (no change), irregular-spacing (ignored), minCount floor, and
+  most-recent-first ordering across two series. gofmt/vet/native tests green, wasm build green.
+- Logic-first per the SDLC; surfacing it on the Subscriptions screen ("▲ $2/mo since April") is a follow-up.
+  Path-scoped commit per the parallel-tree hazard memory.
+
+## 2026-06-19 — feat: budget pace projection (D2)
+
+- Added `budgeting.ProjectPace(status, start, end, now) Pace` — forecasts end-of-period spend by linear
+  extrapolation (spent ÷ elapsed-fraction), the forward-looking complement to Status. Returns Elapsed,
+  Projected, OverBy, OnTrack.
+- Design choices: recover the limit as `Spent + Remaining` so no `currency.Rates` is needed and the currency
+  always matches `Status.Spent`; `elapsedFraction` clamps to [0,1] and treats a degenerate/zero span as fully
+  elapsed; before any time elapses we can't extrapolate, so projection = spend-so-far; clamp the float
+  projection at MaxInt64 so a near-zero fraction can't overflow int64. Documented that early-period projection
+  is noisy (one big day-one purchase projects huge) → present as a gentle heads-up, not a hard prediction.
+- Table tests: half-period on-track vs over, before-start (no extrapolation), full-period (= actual),
+  currency-follows-Spent, plus elapsedFraction boundaries + degenerate span. gofmt/vet/native tests green,
+  wasm build green.
+- Logic-first per the SDLC; the Budgets-screen "on pace / projected over by $X" badge is a follow-up (app/
+  collision with the parallel session). Path-scoped commit per the parallel-tree hazard memory.
 
 ## 2026-06-19 — feat: wire backup reminders into notifications (B28)
 

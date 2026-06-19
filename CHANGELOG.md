@@ -7,10 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Backend rotating refresh sessions.** OAuth sessions now persist refresh-token `jti`/family records in
-  SQLite, rotate refresh cookies on every refresh, detect reuse, revoke the whole session family on reuse,
-  and revoke the active family on logout while keeping access tokens short-lived. Repository and OAuth HTTP
-  tests cover consume, rotation, reuse rejection, and family revocation.
+- **Subscription price-change detection (B25).** New pure, table-tested `subscriptions.DetectPriceChanges`:
+  the "your subscription went up" signal. Where `Detect` groups by name and amount (so a price change splits
+  into two), this groups recurring charges by name only, confirms a regular cadence, and reports the most
+  recent amount transition — old vs new price, the delta, the rounded percent change, and the date it changed
+  (`Increased()` flags rises). Floors at three charges so a one-off isn't mistaken for a change.
+- **Budget pace projection (D2).** New pure, table-tested `budgeting.ProjectPace`: from a budget's Status and
+  its period bounds it forecasts end-of-period spend at the current rate (spent ÷ fraction-elapsed), reporting
+  the projected total, any projected overspend, and whether you're on track — the forward-looking complement
+  to Status, which only reports spend so far. Recovers the limit from the Status (no rate table needed), guards
+  against extrapolating before any time has elapsed, and clamps to avoid int64 overflow on tiny fractions.
 - **Backup reminders wired into notifications (B28).** A new `notify` event (`backup-due`, with a default
   in-app rule) and a `notifyfeed.BackupCandidates` generator that turns the backup cadence into a gentle,
   informational "back up your data" reminder — surfaced at most once per cadence period (ISO-week for weekly,
