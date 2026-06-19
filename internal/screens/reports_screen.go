@@ -9,7 +9,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
-	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -124,20 +123,7 @@ func Reports() ui.Node {
 	// over the last six *full* months (the current partial month is excluded so it
 	// doesn't understate spending). Liquid = cash-type accounts only.
 	const runwayMonths = 6
-	var liquid int64
-	for _, a := range accounts {
-		if a.Archived {
-			continue
-		}
-		switch a.Type {
-		case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings, domain.TypeCash:
-			if bal, err := ledger.Balance(a, txns); err == nil {
-				if conv, err := rates.Convert(bal, base); err == nil {
-					liquid += conv.Amount
-				}
-			}
-		}
-	}
+	liquid, _ := ledger.LiquidBalance(accounts, txns, rates)
 	curMonth := dateutil.MonthStart(time.Now())
 	monthBounds := make([]time.Time, 0, runwayMonths+1)
 	for k := 0; k <= runwayMonths; k++ {
@@ -145,7 +131,7 @@ func Reports() ui.Node {
 	}
 	monthFlows, _ := reports.IncomeExpenseSeries(txns, monthBounds, rates)
 	burn := reports.AverageMonthlyExpense(monthFlows)
-	runway := reports.EstimateRunway(liquid, burn)
+	runway := reports.EstimateRunway(liquid.Amount, burn)
 
 	cats := app.Categories()
 	catName := make(map[string]string, len(cats))
