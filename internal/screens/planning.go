@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/forecast"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -463,7 +464,7 @@ func RecurringRow(props recurringRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class(amountClass(r.Amount)), fmtMoney(r.Amount)),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("recurring.deleteTitle")), OnClick(del), "✕"),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("recurring.deleteTitle")), Title(uistate.T("recurring.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
 
@@ -505,7 +506,7 @@ func PlanRow(props planRowProps) ui.Node {
 			Width: 120, Height: 28, Label: uistate.T("plans.chartLabel", fmtMoney(end)),
 		})),
 		Span(Class("amount fig "+figTone(end)), uistate.T("plans.projected", fmtMoney(end))),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("plans.deleteTitle")), OnClick(del), "✕"),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("plans.deleteTitle")), Title(uistate.T("plans.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
 

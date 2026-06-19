@@ -14,10 +14,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/spendsummary"
 	"github.com/monstercameron/CashFlux/internal/textutil"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -408,8 +410,8 @@ func DraftRow(props draftRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 		),
 		Span(Class("amount fig"), amtText),
-		Button(Class("btn"), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uistate.T("action.edit")),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("documents.removeRow")), OnClick(rm), "✕"),
+		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
 
@@ -436,7 +438,7 @@ func DocHistoryRow(props docHistoryRowProps) ui.Node {
 			Span(Class("row-desc"), textutil.FirstNonEmpty(d.Filename, docKindLabel(d.Kind))),
 			Span(Class("row-meta"), meta),
 		),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("documents.deleteHistTitle")), OnClick(del), "✕"),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.deleteHistTitle")), Title(uistate.T("documents.deleteHistTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
 

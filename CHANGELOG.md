@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Planning and Documents row actions have icons (C46) — completes the row-action icon pass.** The recurring/
+  plan delete buttons, the import-row remove + edit, and delete-import-history now use pencil/`x` glyphs (with
+  aria-labels). With this, every per-row Edit/Delete button across the screens reads from the typed icon set.
 - **Custom fields, Customize, and custom-page widgets have action icons (C46).** Their delete buttons use the
   `x` glyph (with aria-labels), and the custom-page widget edit button uses a pencil — replacing the bare
   "✕"/"✎" glyphs.
