@@ -96,6 +96,11 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative http user rate limit accepted")
 	}
 	invalid = valid
+	invalid.AuthRateLimitPerMinute = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative auth rate limit accepted")
+	}
+	invalid = valid
 	invalid.AuditRetentionDays = -1
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("negative audit retention accepted")
@@ -162,14 +167,17 @@ func TestFromEnvLoadsHTTPLimits(t *testing.T) {
 	t.Setenv("CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT", "17")
 	t.Setenv("CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE", "19")
 	t.Setenv("CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE", "23")
+	t.Setenv("CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE", "29")
 	cfg, err := FromEnv()
 	if err != nil {
 		t.Fatalf("FromEnv: %v", err)
 	}
 	if cfg.HTTPReadTimeout != 5*time.Second || cfg.HTTPWriteTimeout != 7*time.Second ||
-		cfg.HTTPMaxInFlight != 17 || cfg.HTTPRateLimitPerMinute != 19 || cfg.HTTPUserRateLimitPerMinute != 23 {
-		t.Fatalf("http limits = read %s write %s in-flight %d rate %d user rate %d",
-			cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPMaxInFlight, cfg.HTTPRateLimitPerMinute, cfg.HTTPUserRateLimitPerMinute)
+		cfg.HTTPMaxInFlight != 17 || cfg.HTTPRateLimitPerMinute != 19 || cfg.HTTPUserRateLimitPerMinute != 23 ||
+		cfg.AuthRateLimitPerMinute != 29 {
+		t.Fatalf("http limits = read %s write %s in-flight %d rate %d user rate %d auth rate %d",
+			cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPMaxInFlight, cfg.HTTPRateLimitPerMinute,
+			cfg.HTTPUserRateLimitPerMinute, cfg.AuthRateLimitPerMinute)
 	}
 }
 
@@ -849,6 +857,31 @@ func TestUserRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
 	if hits != 2 {
 		t.Fatalf("handler hits = %d, want 2", hits)
 	}
+}
+
+func TestAuthRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
+	h := authRateLimitMiddleware(1)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github", nil)
+	req.RemoteAddr = "198.51.100.55:1234"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("first auth request status = %d, want 204", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/auth/github", nil)
+	req.RemoteAddr = "198.51.100.55:5678"
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("limited auth status = %d, want 429", rr.Code)
+	}
+	if got := rr.Header().Get("Retry-After"); got != "60" {
+		t.Fatalf("retry-after = %q, want 60", got)
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonRateLimited)
 }
 
 func TestOAuthStartRedirectsWithPKCEState(t *testing.T) {

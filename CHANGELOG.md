@@ -28,6 +28,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend auth abuse limiter (7.20).** Added a dedicated per-IP OAuth/session route rate limit via
+  `CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE`.
 - **Backend general JSON errors (7.19).** Readiness, version CORS, blob preflight, in-flight, rate-limit,
   and encode-fallback failures now use the shared JSON error taxonomy.
 - **Backend OAuth JSON errors (7.19).** OAuth start/callback/refresh/logout failures now return stable

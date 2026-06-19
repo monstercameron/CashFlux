@@ -57,6 +57,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		store.SetMetrics(cfg.Metrics)
 	}
 	mux := http.NewServeMux()
+	authLimiter := authRateLimitMiddleware(cfg.AuthRateLimitPerMinute)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, RootResponse{
 			Service: "cashflux-server",
@@ -129,12 +130,12 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			AuthProviders:       cfg.OAuthProviderNames(),
 		})
 	})
-	mux.HandleFunc("GET /v1/auth/{provider}", handleOAuthStart(cfg))
-	mux.HandleFunc("GET /v1/auth/{provider}/callback", handleOAuthCallback(cfg, store))
+	mux.Handle("GET /v1/auth/{provider}", authLimiter(handleOAuthStart(cfg)))
+	mux.Handle("GET /v1/auth/{provider}/callback", authLimiter(handleOAuthCallback(cfg, store)))
 	mux.HandleFunc("OPTIONS /v1/auth/refresh", handleCORSPreflight(cfg))
-	mux.HandleFunc("POST /v1/auth/refresh", handleOAuthRefresh(cfg, store))
+	mux.Handle("POST /v1/auth/refresh", authLimiter(handleOAuthRefresh(cfg, store)))
 	mux.HandleFunc("OPTIONS /v1/auth/logout", handleCORSPreflight(cfg))
-	mux.HandleFunc("POST /v1/auth/logout", handleOAuthLogout(cfg, store))
+	mux.Handle("POST /v1/auth/logout", authLimiter(handleOAuthLogout(cfg, store)))
 	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/blobs/{hash}", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
@@ -291,6 +292,23 @@ func userRateLimitMiddleware(limit int, cfg Config, next http.Handler) http.Hand
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func authRateLimitMiddleware(limit int) func(http.Handler) http.Handler {
+	limiter := newFixedWindowLimiter(limit)
+	return func(next http.Handler) http.Handler {
+		if limit <= 0 {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !limiter.allow(clientIP(r), time.Now()) {
+				w.Header().Set("Retry-After", "60")
+				writeErrorJSON(w, ErrorReasonRateLimited, "auth rate limit exceeded")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func clientIP(r *http.Request) string {

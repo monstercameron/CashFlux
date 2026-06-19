@@ -57,6 +57,7 @@ type Config struct {
 	HTTPMaxInFlight                   int
 	HTTPRateLimitPerMinute            int
 	HTTPUserRateLimitPerMinute        int
+	AuthRateLimitPerMinute            int
 	AuditRetentionDays                int
 	SnapshotHistoryRetentionDays      int
 	BackupRetentionDays               int
@@ -112,6 +113,7 @@ func FromEnv() (Config, error) {
 	cfg.HTTPMaxInFlight = int(envInt64("CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT", 256))
 	cfg.HTTPRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE", 0))
 	cfg.HTTPUserRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE", 0))
+	cfg.AuthRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE", 20))
 	cfg.AuditRetentionDays = int(envInt64("CASHFLUX_SERVER_AUDIT_RETENTION_DAYS", 365))
 	cfg.SnapshotHistoryRetentionDays = int(envInt64("CASHFLUX_SERVER_SNAPSHOT_HISTORY_RETENTION_DAYS", 180))
 	cfg.BackupRetentionDays = int(envInt64("CASHFLUX_SERVER_BACKUP_RETENTION_DAYS", 30))
@@ -169,7 +171,7 @@ func (c Config) Validate() error {
 		return fmt.Errorf("server: grpc stream limits must be non-negative")
 	}
 	if c.HTTPReadTimeout < 0 || c.HTTPWriteTimeout < 0 || c.HTTPMaxInFlight < 0 ||
-		c.HTTPRateLimitPerMinute < 0 || c.HTTPUserRateLimitPerMinute < 0 {
+		c.HTTPRateLimitPerMinute < 0 || c.HTTPUserRateLimitPerMinute < 0 || c.AuthRateLimitPerMinute < 0 {
 		return fmt.Errorf("server: http limits must be non-negative")
 	}
 	if c.AuditRetentionDays < 0 || c.SnapshotHistoryRetentionDays < 0 || c.BackupRetentionDays < 0 {

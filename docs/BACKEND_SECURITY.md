@@ -35,7 +35,8 @@ section 7.14:
 - Repository SQL injection coverage includes a source guard that rejects dynamic SQL formatting/builders and pins
   parameterized user/workspace predicates.
 - Request-size and abuse controls are enabled across the backend: dataset caps, blob size/storage caps, AI request
-  caps, HTTP in-flight/rate limits, per-user rate limits, and gRPC bridge connection/stream/upgrade caps.
+  caps, OAuth/session auth-route rate limits, HTTP in-flight/rate limits, per-user rate limits, and gRPC bridge
+  connection/stream/upgrade caps.
 - Load/abuse tests cover oversized sync snapshots, oversized blobs, storage quota exhaustion, AI request-size
   rejection, per-user workspace stream caps, HTTP rate-limit configuration, and gRPC bridge connection limit
   configuration.

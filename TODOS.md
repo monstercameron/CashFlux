@@ -4391,7 +4391,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       cross-user isolation tests.
 
 ### 7.20 Anti-abuse & fraud
-- [ ] Signup/login abuse controls (rate limit, optional CAPTCHA on bursts, email/OAuth verification).
+- [~] Signup/login abuse controls (rate limit, optional CAPTCHA on bursts, email/OAuth verification).
+      OAuth/session routes now have a dedicated per-IP `CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE` cap with
+      JSON `RATE_LIMITED` errors. Remaining: optional CAPTCHA-on-burst policy and email/OAuth verification review.
 - [ ] **Referral-fraud guards** (DO referral path): detect self-referral/farming; honest disclosure;
       don't tie product behavior to referral outcomes.
 - [ ] Trial abuse limits (one trial per account/identity); payment-fraud handling via Stripe Radar.

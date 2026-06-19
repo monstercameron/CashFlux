@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend auth abuse limiter (7.20)
+
+- Added `CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE` with a default per-IP cap for OAuth start/callback and
+  refresh/logout routes.
+- Reused the existing fixed-window limiter and JSON `RATE_LIMITED` error response.
+- Added env, validation, and middleware tests for the auth-specific limit.
+- Marked signup/login abuse controls in progress; CAPTCHA and email/OAuth verification policy remain open.
+
 ## 2026-06-19 - feat: complete backend json error migration (7.19)
 
 - Added `SERVER_UNAVAILABLE` for readiness/concurrency failures and migrated the remaining general HTTP paths.
