@@ -64,6 +64,7 @@ func Reports() ui.Node {
 
 	// No-spend days: elapsed days in the period with zero spending (motivating).
 	noSpendDays := reports.NoSpendDays(txns, cs, ce, time.Now())
+	spendStats, _ := reports.SpendingStats(txns, cs, ce, rates)
 
 	// Headline spending trend vs the previous comparable period (up = worse).
 	spendTrend := ""
@@ -306,6 +307,7 @@ func Reports() ui.Node {
 			If(noSpendDays > 0, stat(uistate.T("reports.noSpendDays"), fmt.Sprintf("%d", noSpendDays), "pos")),
 		),
 		If(spendTrend != "", P(Class("muted"), spendTrend)),
+		If(spendStats.Count > 0, P(Class("muted"), uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))),
 		If(len(anomalyNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.headsUp")),
 			Div(anomalyNodes),
