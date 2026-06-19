@@ -14,9 +14,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/formula"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -206,7 +208,7 @@ func SavedFormulaRow(props savedFormulaRowProps) ui.Node {
 		),
 		Span(Class("amount fig"), props.Result),
 		Button(Class("btn"), Type("button"), Title(uistate.T("customize.loadTitle")), OnClick(load), uistate.T("customize.load")),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("customize.deleteTitle")), OnClick(del), "✕"),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("customize.deleteTitle")), Title(uistate.T("customize.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
 

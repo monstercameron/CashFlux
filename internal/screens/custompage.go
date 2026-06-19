@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/pages"
@@ -226,10 +227,10 @@ func customTile(props customTileProps) ui.Node {
 					props.OnResizeH()
 				}
 			}), "↕"),
-		Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.editWidget")),
-			OnClick(func() { editing.Set(!editing.Get()) }), "✎"),
-		Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.deleteWidget")),
-			OnClick(del), "✕"),
+		Button(Class("gear-inline"), Type("button"), Attr("aria-label", uistate.T("pages.editWidget")), Title(uistate.T("pages.editWidget")),
+			OnClick(func() { editing.Set(!editing.Get()) }), uiw.Icon(icon.Pencil, Class("w-4 h-4"))),
+		Button(Class("gear-inline"), Type("button"), Attr("aria-label", uistate.T("pages.deleteWidget")), Title(uistate.T("pages.deleteWidget")),
+			OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 
 	var body ui.Node

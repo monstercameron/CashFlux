@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Custom fields, Customize, and custom-page widgets have action icons (C46).** Their delete buttons use the
+  `x` glyph (with aria-labels), and the custom-page widget edit button uses a pencil — replacing the bare
+  "✕"/"✎" glyphs.
 - **Artifacts and Workflows delete buttons use the x icon (C46).** Both screens' per-row delete now uses the
   `x` glyph (with an aria-label) instead of a bare "✕".
 - **Budgets row actions have icons (C46).** Edit leads with a pencil and the delete button uses the `x` glyph
