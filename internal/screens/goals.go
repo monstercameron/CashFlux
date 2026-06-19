@@ -209,11 +209,22 @@ func Goals() ui.Node {
 		return goals[i].Name < goals[j].Name
 	})
 
-	// Combined progress across all goals (amounts are in the base currency).
+	// Combined progress across all goals, each converted to the base currency via
+	// the FX table (goals may be denominated in different currencies). A goal whose
+	// currency has no rate falls back to its raw amount rather than being dropped.
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	var savedTotal, targetTotal int64
 	for _, g := range goals {
-		savedTotal += g.CurrentAmount.Amount
-		targetTotal += g.TargetAmount.Amount
+		if c, err := rates.Convert(g.CurrentAmount, base); err == nil {
+			savedTotal += c.Amount
+		} else {
+			savedTotal += g.CurrentAmount.Amount
+		}
+		if c, err := rates.Convert(g.TargetAmount, base); err == nil {
+			targetTotal += c.Amount
+		} else {
+			targetTotal += g.TargetAmount.Amount
+		}
 	}
 	overallPct := 0
 	if targetTotal > 0 {
