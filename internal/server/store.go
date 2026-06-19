@@ -12,7 +12,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 4
+const CurrentServerSchemaVersion = 5
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -196,6 +196,12 @@ func (s *Store) migrate() error {
 		}
 		version = 4
 	}
+	if version < 5 {
+		if err := s.migrateTo5(); err != nil {
+			return err
+		}
+		version = 5
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -231,6 +237,13 @@ func (s *Store) migrateTo3() error {
 func (s *Store) migrateTo4() error {
 	if _, err := s.db.Exec(serverSchemaV4); err != nil {
 		return fmt.Errorf("server store: migrate v4: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) migrateTo5() error {
+	if _, err := s.db.Exec(serverSchemaV5); err != nil {
+		return fmt.Errorf("server store: migrate v5: %w", err)
 	}
 	return nil
 }
@@ -349,4 +362,17 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   UNIQUE(stripe_subscription)
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+`
+
+const serverSchemaV5 = `
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  route TEXT NOT NULL,
+  key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  response_body BLOB NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(user_id, route, key)
+);
+CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created ON idempotency_keys(created_at);
 `

@@ -2119,6 +2119,137 @@ func TestBillingPortalCreatesStripeSession(t *testing.T) {
 	}
 }
 
+func TestBillingCheckoutReplaysIdempotencyKey(t *testing.T) {
+	store := openTestStore(t)
+	seedSyncUser(t, store, authUserFromToken("dev-token").ID, time.Now().UTC())
+	stripeCalls := 0
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stripeCalls++
+		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.test/session-first"}`))
+	}))
+	defer stripe.Close()
+	cfg := Config{
+		AuthMode:           "token",
+		Token:              "dev-token",
+		Billing:            true,
+		StripeAPIBaseURL:   stripe.URL,
+		StripeSecretKey:    "sk_test",
+		StripePriceAnnual:  "price_annual",
+		StripePriceMonthly: "price_monthly",
+		StripeSuccessURL:   "https://cashflux.example.com/success",
+		StripeCancelURL:    "https://cashflux.example.com/cancel",
+	}
+	h := NewMux(cfg, store)
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout", strings.NewReader(`{"interval":"monthly"}`))
+		req.Header.Set("Authorization", "Bearer dev-token")
+		req.Header.Set(idempotencyKeyHeader, "checkout-key-1")
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("checkout attempt %d status = %d body %q", i, rr.Code, rr.Body.String())
+		}
+		if !strings.Contains(rr.Body.String(), "session-first") {
+			t.Fatalf("checkout attempt %d body = %q", i, rr.Body.String())
+		}
+	}
+	if stripeCalls != 1 {
+		t.Fatalf("stripe calls = %d, want 1", stripeCalls)
+	}
+}
+
+func TestBillingCheckoutRejectsIdempotencyKeyReuseForDifferentRequest(t *testing.T) {
+	store := openTestStore(t)
+	seedSyncUser(t, store, authUserFromToken("dev-token").ID, time.Now().UTC())
+	stripeCalls := 0
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stripeCalls++
+		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.test/session"}`))
+	}))
+	defer stripe.Close()
+	cfg := Config{
+		AuthMode:           "token",
+		Token:              "dev-token",
+		Billing:            true,
+		StripeAPIBaseURL:   stripe.URL,
+		StripeSecretKey:    "sk_test",
+		StripePriceAnnual:  "price_annual",
+		StripePriceMonthly: "price_monthly",
+		StripeSuccessURL:   "https://cashflux.example.com/success",
+		StripeCancelURL:    "https://cashflux.example.com/cancel",
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout", strings.NewReader(`{"interval":"monthly"}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set(idempotencyKeyHeader, "checkout-key-2")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("first checkout status = %d body %q", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/v1/billing/checkout", strings.NewReader(`{"interval":"annual"}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set(idempotencyKeyHeader, "checkout-key-2")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("reused checkout status = %d body %q", rr.Code, rr.Body.String())
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonInvalidArgument)
+	if stripeCalls != 1 {
+		t.Fatalf("stripe calls = %d, want 1", stripeCalls)
+	}
+}
+
+func TestBillingPortalReplaysIdempotencyKey(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Now().UTC()
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutSubscription(Subscription{
+		UserID:             user.ID,
+		StripeCustomer:     "cus_123",
+		StripeSubscription: "sub_123",
+		Status:             "active",
+		Plan:               "personal_annual",
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatalf("PutSubscription: %v", err)
+	}
+	stripeCalls := 0
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stripeCalls++
+		_, _ = w.Write([]byte(`{"url":"https://billing.stripe.test/session-first"}`))
+	}))
+	defer stripe.Close()
+	cfg := Config{
+		AuthMode:              "token",
+		Token:                 "dev-token",
+		Billing:               true,
+		StripeAPIBaseURL:      stripe.URL,
+		StripeSecretKey:       "sk_test",
+		StripePortalReturnURL: "https://cashflux.example.com/cloud",
+	}
+	h := NewMux(cfg, store)
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/v1/billing/portal", nil)
+		req.Header.Set("Authorization", "Bearer dev-token")
+		req.Header.Set(idempotencyKeyHeader, "portal-key-1")
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("portal attempt %d status = %d body %q", i, rr.Code, rr.Body.String())
+		}
+		if !strings.Contains(rr.Body.String(), "session-first") {
+			t.Fatalf("portal attempt %d body = %q", i, rr.Body.String())
+		}
+	}
+	if stripeCalls != 1 {
+		t.Fatalf("stripe calls = %d, want 1", stripeCalls)
+	}
+}
+
 func TestBillingCheckoutRejectsInvalidInterval(t *testing.T) {
 	store := openTestStore(t)
 	seedSyncUser(t, store, authUserFromToken("dev-token").ID, time.Now().UTC())

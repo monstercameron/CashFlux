@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Billing idempotency keys (7.16).** Stripe Checkout and customer-portal session endpoints now persist
+  `Idempotency-Key` results per user/route/request hash and replay duplicate requests without a second Stripe call.
 - **AI master-key rotation command (7.8).** Added `cashflux-server rotate-ai-master-key`, which re-encrypts
   stored AI keys from `CASHFLUX_SERVER_OLD_MASTER_KEY` to the current `CASHFLUX_SERVER_MASTER_KEY`.
 - **AI upstream circuit breaker (7.16).** The backend AI proxy now opens a short fail-fast window after

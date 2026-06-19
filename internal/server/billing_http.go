@@ -17,6 +17,8 @@ import (
 )
 
 const stripeSignatureHeader = "Stripe-Signature"
+const idempotencyKeyHeader = "Idempotency-Key"
+const maxIdempotencyKeyLength = 128
 
 type billingSessionResponse struct {
 	URL string `json:"url"`
@@ -43,6 +45,10 @@ func handleBillingCheckout(cfg Config, store *Store) http.HandlerFunc {
 		if !allowBillingCheckout(w, store, user.ID) {
 			return
 		}
+		requestHash := billingRequestHash("checkout", user.ID, price, plan)
+		if replayBillingIdempotency(w, r, store, user.ID, requestHash) {
+			return
+		}
 		form := url.Values{}
 		form.Set("mode", "subscription")
 		form.Set("success_url", strings.TrimSpace(cfg.StripeSuccessURL))
@@ -60,7 +66,7 @@ func handleBillingCheckout(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "stripe checkout session failed")
 			return
 		}
-		writeJSON(w, billingSessionResponse{URL: sessionURL})
+		writeBillingSession(w, r, store, user.ID, requestHash, billingSessionResponse{URL: sessionURL})
 	}
 }
 
@@ -135,6 +141,10 @@ func handleBillingPortal(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "stripe customer is not configured")
 			return
 		}
+		requestHash := billingRequestHash("portal", user.ID, sub.StripeCustomer, strings.TrimSpace(cfg.StripePortalReturnURL))
+		if replayBillingIdempotency(w, r, store, user.ID, requestHash) {
+			return
+		}
 		form := url.Values{}
 		form.Set("customer", sub.StripeCustomer)
 		form.Set("return_url", strings.TrimSpace(cfg.StripePortalReturnURL))
@@ -143,8 +153,68 @@ func handleBillingPortal(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "stripe portal session failed")
 			return
 		}
-		writeJSON(w, billingSessionResponse{URL: sessionURL})
+		writeBillingSession(w, r, store, user.ID, requestHash, billingSessionResponse{URL: sessionURL})
 	}
+}
+
+func billingRequestHash(parts ...string) string {
+	h := sha256.New()
+	for _, part := range parts {
+		_, _ = h.Write([]byte(part))
+		_, _ = h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func replayBillingIdempotency(w http.ResponseWriter, r *http.Request, store *Store, userID, requestHash string) bool {
+	key := strings.TrimSpace(r.Header.Get(idempotencyKeyHeader))
+	if key == "" {
+		return false
+	}
+	if len(key) > maxIdempotencyKeyLength {
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "idempotency key is too long")
+		return true
+	}
+	result, ok, err := store.GetIdempotencyResult(userID, r.URL.Path, key)
+	if err != nil {
+		writeErrorJSON(w, ErrorReasonInternal, "idempotency lookup failed")
+		return true
+	}
+	if !ok {
+		return false
+	}
+	if result.RequestHash != requestHash {
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "idempotency key was used for a different request")
+		return true
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(result.ResponseBody)
+	return true
+}
+
+func writeBillingSession(w http.ResponseWriter, r *http.Request, store *Store, userID, requestHash string, response billingSessionResponse) {
+	data, err := json.Marshal(response)
+	if err != nil {
+		writeErrorJSON(w, ErrorReasonInternal, "encode billing response")
+		return
+	}
+	if key := strings.TrimSpace(r.Header.Get(idempotencyKeyHeader)); key != "" && len(key) <= maxIdempotencyKeyLength {
+		if err := store.PutIdempotencyResult(IdempotencyResult{
+			UserID:       userID,
+			Route:        r.URL.Path,
+			Key:          key,
+			RequestHash:  requestHash,
+			ResponseBody: append(data, '\n'),
+			CreatedAt:    time.Now().UTC(),
+		}); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "idempotency store failed")
+			return
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(append(data, '\n'))
 }
 
 func authorizedBillingRequest(w http.ResponseWriter, r *http.Request, cfg Config, store *Store) (AuthUser, bool) {

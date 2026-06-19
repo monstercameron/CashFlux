@@ -205,6 +205,15 @@ type RefreshSession struct {
 	RevokedAt time.Time
 }
 
+type IdempotencyResult struct {
+	UserID       string
+	Route        string
+	Key          string
+	RequestHash  string
+	ResponseBody []byte
+	CreatedAt    time.Time
+}
+
 func (s *Store) PutRefreshSession(session RefreshSession) error {
 	if strings.TrimSpace(session.JTI) == "" || strings.TrimSpace(session.FamilyID) == "" || strings.TrimSpace(session.UserID) == "" || strings.TrimSpace(session.TokenHash) == "" || session.ExpiresAt.IsZero() {
 		return fmt.Errorf("server store: refresh session jti, family, user, hash, and expiry are required")
@@ -216,6 +225,50 @@ VALUES(?, ?, ?, ?, ?, '', '')`,
 		session.JTI, session.FamilyID, session.UserID, session.TokenHash, formatTime(session.ExpiresAt.UTC()))
 	if err != nil {
 		return fmt.Errorf("server store: put refresh session: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) GetIdempotencyResult(userID, route, key string) (IdempotencyResult, bool, error) {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(route) == "" || strings.TrimSpace(key) == "" {
+		return IdempotencyResult{}, false, fmt.Errorf("server store: idempotency user, route, and key are required")
+	}
+	defer s.observeDB("GetIdempotencyResult", time.Now())
+	var out IdempotencyResult
+	var created string
+	err := s.db.QueryRow(`
+SELECT user_id, route, key, request_hash, response_body, created_at
+FROM idempotency_keys
+WHERE user_id = ? AND route = ? AND key = ?`, userID, route, key).
+		Scan(&out.UserID, &out.Route, &out.Key, &out.RequestHash, &out.ResponseBody, &created)
+	if errors.Is(err, sql.ErrNoRows) {
+		return IdempotencyResult{}, false, nil
+	}
+	if err != nil {
+		return IdempotencyResult{}, false, fmt.Errorf("server store: get idempotency result: %w", err)
+	}
+	out.CreatedAt, err = parseTime(created)
+	if err != nil {
+		return IdempotencyResult{}, false, fmt.Errorf("server store: parse idempotency created_at: %w", err)
+	}
+	return out, true, nil
+}
+
+func (s *Store) PutIdempotencyResult(result IdempotencyResult) error {
+	if strings.TrimSpace(result.UserID) == "" || strings.TrimSpace(result.Route) == "" ||
+		strings.TrimSpace(result.Key) == "" || strings.TrimSpace(result.RequestHash) == "" || len(result.ResponseBody) == 0 {
+		return fmt.Errorf("server store: idempotency user, route, key, hash, and response are required")
+	}
+	if result.CreatedAt.IsZero() {
+		result.CreatedAt = time.Now().UTC()
+	}
+	defer s.observeDB("PutIdempotencyResult", time.Now())
+	if _, err := s.db.Exec(`
+INSERT INTO idempotency_keys(user_id, route, key, request_hash, response_body, created_at)
+VALUES(?, ?, ?, ?, ?, ?)
+ON CONFLICT(user_id, route, key) DO NOTHING`,
+		result.UserID, result.Route, result.Key, result.RequestHash, result.ResponseBody, formatTime(result.CreatedAt.UTC())); err != nil {
+		return fmt.Errorf("server store: put idempotency result: %w", err)
 	}
 	return nil
 }

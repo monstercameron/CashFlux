@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add billing idempotency keys (7.16)
+
+- Added schema v5 with an `idempotency_keys` table scoped by user, route, key, and request hash.
+- Checkout and customer-portal session endpoints now replay matching `Idempotency-Key` requests from SQLite and
+  reject key reuse with different billing inputs before calling Stripe again.
+- Added migration coverage plus checkout/portal tests proving duplicate requests make only one Stripe call.
+
 ## 2026-06-19 - feat: add ai master-key rotation command (7.8)
 
 - Added `Store.RotateAIKeys`, which decrypts every stored BYO AI key with the old master key and re-encrypts

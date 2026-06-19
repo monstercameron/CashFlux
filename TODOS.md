@@ -4357,7 +4357,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] Retries with jittered exponential backoff for transient upstream failures; circuit breaker on the
       AI upstream; idempotent writes (idempotency keys on mutating HTTP; PUT semantics on sync).
       OpenAI proxy retries transient transport, 429, and 5xx failures; repeated upstream transport/5xx failures
-      now open a short fail-fast circuit that resets after cooldown/success. Remaining: write idempotency keys.
+      now open a short fail-fast circuit that resets after cooldown/success. Stripe billing checkout/portal
+      endpoints now persist and replay `Idempotency-Key` results per user/route/request hash. Remaining:
+      any future non-PUT mutating HTTP endpoints must use the same idempotency pattern.
 - [x] Graceful shutdown: stop accepting, drain active streams/requests, checkpoint WAL, flush logs.
 - [x] **Backups + tested restore**: scheduled SQLite WAL checkpoint + file copy + blobs dir snapshot to
       off-box storage; **documented + periodically rehearsed restore**; define **RPO/RTO**. Done:
