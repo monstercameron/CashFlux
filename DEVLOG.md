@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add dependency update automation
+
+- Added Dependabot coverage for root Go modules.
+- Added Dependabot coverage for GitHub Actions.
+- Grouped each ecosystem's weekly dependency PRs to keep update review manageable.
+
 ## 2026-06-19 - feat: add backend security ci scans
 
 - Added `govulncheck` to the main CI workflow.
