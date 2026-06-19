@@ -4161,7 +4161,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 #### Input / data
 - [ ] Validate + bound every input: request-size caps (dataset, blob, RPC message), field limits,
       content-type checks; reject malformed protobuf/JSON early.
-- [ ] Blob upload: verify bytes hash to the claimed `:hash`; cap size; sniff/allow-list MIME; never
+- [x] Blob upload: verify bytes hash to the claimed `:hash`; cap size; sniff/allow-list MIME; never
       execute or serve as HTML (force download / safe content-type).
 - [ ] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,
       never in code or the DB; documented **key rotation** + re-encryption procedure.

@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: harden backend blob mime
+
+- Added blob MIME normalization and byte sniffing before storing uploaded artifacts.
+- Rejected HTML/XHTML/SVG uploads and forced served blobs to use attachment disposition.
+- Extended blob HTTP tests for unsafe MIME rejection and download safety headers.
+
 ## 2026-06-19 - feat: add backend oauth sessions
 
 - Added OAuth callback handling with state-cookie validation, PKCE code exchange, provider profile fetch, and user upsert.

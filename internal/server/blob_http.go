@@ -47,9 +47,9 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, "blob hash mismatch", http.StatusBadRequest)
 			return
 		}
-		mime := strings.TrimSpace(r.Header.Get("Content-Type"))
-		if mime == "" {
-			mime = "application/octet-stream"
+		mime, ok := safeBlobMIME(w, r.Header.Get("Content-Type"), data)
+		if !ok {
+			return
 		}
 		blob, err := store.PutBlob(blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes)
 		if err != nil {
@@ -187,7 +187,37 @@ func writeBlobHeaders(w http.ResponseWriter, blob Blob) {
 	w.Header().Set("Content-Type", blob.Mime)
 	w.Header().Set("Content-Length", strconv.FormatInt(blob.Size, 10))
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("Content-Disposition", "attachment")
 	w.Header().Set("ETag", `"`+blob.Hash+`"`)
+}
+
+func safeBlobMIME(w http.ResponseWriter, declared string, data []byte) (string, bool) {
+	declared = strings.ToLower(strings.TrimSpace(strings.Split(declared, ";")[0]))
+	if declared != "" && forbiddenBlobMIME(declared) {
+		http.Error(w, "blob content type is not allowed", http.StatusUnsupportedMediaType)
+		return "", false
+	}
+	sniffed := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
+	if forbiddenBlobMIME(sniffed) {
+		http.Error(w, "blob content type is not allowed", http.StatusUnsupportedMediaType)
+		return "", false
+	}
+	if declared != "" && declared != "application/octet-stream" {
+		return declared, true
+	}
+	if sniffed == "" {
+		return "application/octet-stream", true
+	}
+	return sniffed, true
+}
+
+func forbiddenBlobMIME(mime string) bool {
+	switch mime {
+	case "text/html", "application/xhtml+xml", "image/svg+xml":
+		return true
+	default:
+		return false
+	}
 }
 
 func blobRoot(cfg Config) string {

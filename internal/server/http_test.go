@@ -574,6 +574,9 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 	if rr.Header().Get("Content-Type") != "image/png" || rr.Header().Get("ETag") != `"`+hash+`"` {
 		t.Fatalf("head headers = content-type %q etag %q", rr.Header().Get("Content-Type"), rr.Header().Get("ETag"))
 	}
+	if rr.Header().Get("Content-Disposition") != "attachment" {
+		t.Fatalf("content-disposition = %q", rr.Header().Get("Content-Disposition"))
+	}
 	if rr.Body.Len() != 0 {
 		t.Fatalf("head body length = %d, want 0", rr.Body.Len())
 	}
@@ -642,6 +645,27 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("bad hash status = %d", rr.Code)
+	}
+
+	safeH := NewMux(Config{AuthMode: "token", Token: "dev-token", DataDir: t.TempDir(), BlobMaxBytes: 1024}, store)
+	html := []byte("<!doctype html><script>alert(1)</script>")
+	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+blobHash(html)+"?workspaceId=w1", bytes.NewReader(html))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "text/plain")
+	rr = httptest.NewRecorder()
+	safeH.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("html sniff status = %d, want 415", rr.Code)
+	}
+
+	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`)
+	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+blobHash(svg)+"?workspaceId=w1", bytes.NewReader(svg))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "image/svg+xml")
+	rr = httptest.NewRecorder()
+	safeH.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("svg declared status = %d, want 415", rr.Code)
 	}
 }
 
