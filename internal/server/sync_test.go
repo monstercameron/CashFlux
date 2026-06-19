@@ -106,6 +106,38 @@ func TestSyncServicePutWorkspaceRejectsCrossUserIDTakeover(t *testing.T) {
 	}
 }
 
+func TestSyncServiceRejectsOversizedWorkspaceFields(t *testing.T) {
+	store := openTestStore(t)
+	service := NewSyncService(store)
+	now := time.Date(2026, time.June, 19, 1, 0, 0, 0, time.UTC)
+	seedSyncUser(t, store, "u1", now)
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
+
+	cases := []struct {
+		name      string
+		workspace Workspace
+	}{
+		{name: "id", workspace: Workspace{ID: strings.Repeat("w", maxWorkspaceIDLength+1), Name: "Home"}},
+		{name: "name", workspace: Workspace{ID: "w1", Name: strings.Repeat("n", maxWorkspaceNameLength+1)}},
+		{name: "color", workspace: Workspace{ID: "w1", Name: "Home", Color: strings.Repeat("c", maxWorkspaceColorLength+1)}},
+		{name: "device", workspace: Workspace{ID: "w1", Name: "Home", DeviceID: strings.Repeat("d", maxWorkspaceDeviceLength+1)}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := service.PutWorkspace(ctx, tc.workspace, now, false, now)
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("PutWorkspace err = %v, want invalid argument", err)
+			}
+		})
+	}
+	if _, err := service.Delete(ctx, strings.Repeat("w", maxWorkspaceIDLength+1), now, "device"); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("Delete long id err = %v, want invalid argument", err)
+	}
+	if _, err := service.Delete(ctx, "w1", now, strings.Repeat("d", maxWorkspaceDeviceLength+1)); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("Delete long device err = %v, want invalid argument", err)
+	}
+}
+
 func TestSyncServiceWatchFanoutIsUserScoped(t *testing.T) {
 	metrics := NewMetrics()
 	service := NewSyncServiceWithLimits(openTestStore(t), 0, metrics)

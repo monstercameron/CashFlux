@@ -13,6 +13,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	maxWorkspaceIDLength     = 128
+	maxWorkspaceNameLength   = 160
+	maxWorkspaceColorLength  = 64
+	maxWorkspaceDeviceLength = 128
+)
+
 // SyncService owns per-user workspace RPC behavior above the repository layer.
 type SyncService struct {
 	store             *Store
@@ -82,6 +89,9 @@ func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, cli
 	if strings.TrimSpace(workspace.ID) == "" || strings.TrimSpace(workspace.Name) == "" {
 		return PutWorkspaceResult{}, status.Error(codes.InvalidArgument, "workspace id and name are required")
 	}
+	if err := validateWorkspaceFields(workspace); err != nil {
+		return PutWorkspaceResult{}, err
+	}
 	owner, owned, err := s.store.WorkspaceOwner(workspace.ID)
 	if err != nil {
 		return PutWorkspaceResult{}, fmt.Errorf("server sync: workspace owner: %w", err)
@@ -134,6 +144,9 @@ func (s *SyncService) Delete(ctx context.Context, workspaceID string, updatedAt 
 	if strings.TrimSpace(workspaceID) == "" {
 		return false, status.Error(codes.InvalidArgument, "workspace id is required")
 	}
+	if len(workspaceID) > maxWorkspaceIDLength || len(deviceID) > maxWorkspaceDeviceLength {
+		return false, status.Error(codes.InvalidArgument, "workspace id or device id is too long")
+	}
 	deleted, err := s.store.SoftDeleteWorkspace(user.ID, workspaceID, updatedAt, deviceID)
 	if err != nil {
 		return false, fmt.Errorf("server sync: delete workspace: %w", err)
@@ -144,6 +157,21 @@ func (s *SyncService) Delete(ctx context.Context, workspaceID string, updatedAt 
 		}
 	}
 	return deleted, nil
+}
+
+func validateWorkspaceFields(workspace Workspace) error {
+	switch {
+	case len(workspace.ID) > maxWorkspaceIDLength:
+		return status.Error(codes.InvalidArgument, "workspace id is too long")
+	case len(workspace.Name) > maxWorkspaceNameLength:
+		return status.Error(codes.InvalidArgument, "workspace name is too long")
+	case len(workspace.Color) > maxWorkspaceColorLength:
+		return status.Error(codes.InvalidArgument, "workspace color is too long")
+	case len(workspace.DeviceID) > maxWorkspaceDeviceLength:
+		return status.Error(codes.InvalidArgument, "workspace device id is too long")
+	default:
+		return nil
+	}
 }
 
 func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchWorkspacesResponse, func(), error) {

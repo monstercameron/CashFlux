@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: bound backend sync fields
+
+- Added explicit length limits for sync workspace ids, names, colors, and device ids.
+- Rejected oversized PutWorkspace and Delete workspace metadata with `InvalidArgument`.
+- Added sync service tests for each bounded field.
+
 ## 2026-06-19 - feat: protect backend oauth csrf
 
 - Added a double-submit CSRF cookie/header for cookie-auth refresh and logout endpoints.
