@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: spending stats + renewing-soon (catch-up docs)
+
+- Batched docs for four commits shipped code-first while the parallel session held en.go/docs:
+  `reports.SpendingStats` (26ccbe2 core, 9ce8e48 surface) — count/total/mean/median, median resists
+  big-purchase skew, shown as a Reports line; and `subscriptions.UpcomingRenewals` (dee330c core, 841fad2
+  surface) — subs renewing within 7 days, shown as a "Renewing soon" card. Both pure + table-tested.
+- Committed docs-only path-scoped once CHANGELOG/DEVLOG were no longer staged by the parallel session.
+
+## 2026-06-19 - docs: reconcile backup reminder TODO (B28)
+
+- Audited B28 against source and prior commits: `internal/backup` owns cadence/due logic, `notifyfeed`
+  converts due backups into B19 candidates, `notifyrun` persists `lastBackupAt` and cadence in localStorage,
+  and successful JSON export stamps the backup time.
+- Settings already exposes Monthly / Weekly / Off, and the reminder is suppressed for fresh empty installs.
+  Marked the B28 checklist complete.
+
 ## 2026-06-19 - feat: include recurring outflows in bills (B22)
 
 - Added `bills.UpcomingAll`, which merges liability-account bills with negative Planning recurring items.
