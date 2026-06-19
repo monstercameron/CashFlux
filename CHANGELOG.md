@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Allocate weight inputs were unlabeled (C6).** The five criterion-weight fields showed as bare "1" boxes
+  (label only on hover/placeholder). Each now has a visible caption (Returns / Stability / Liquidity / Debt
+  reduction / Goal progress) via a wrapping `<label>`, which also gives screen readers an accessible name.
+
+### Fixed
 - **Budgets "Quarter" spend appeared less than "Month" (C40).** The Budgets screen anchored each budget's
   period to the *start* of the viewed window, so under a Quarter view a Monthly budget showed the quarter's
   first month (e.g. April) — making quarterly spend look smaller than monthly. Budgets now anchor to today
@@ -23,6 +28,8 @@ and every commit updates this file under `Unreleased`.
   with deploy coverage for `go.mod` Go 1.26.0 and the `golang:1.26-alpine` server build image.
 
 ### Changed
+- **Backend dependency reconciliation.** Documented the backend dependency set and the intentional stdlib OAuth
+  implementation, avoiding an unused `golang.org/x/oauth2` module.
 - **Backend rollout contract reconciliation.** Tightened `docs/BACKEND_PLAN.md` so backend phases are explicitly
   independently shippable/reversible, preserve the local-first app fallback, and stay covered by deploy tests.
 - **Backend unit coverage reconciliation.** Documented that storage, LWW sync, AI-key encryption, usage

@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — fix: label Allocate weight inputs (C6)
+
+- The five Allocate criterion weights had only Title (hover) + Placeholder (hidden once a value like "1" is
+  set), so they read as five anonymous "1" boxes. Wrapped each in a `Label` (flex-col) with a visible
+  muted caption reusing the existing allocate.w* keys; the wrapping label also supplies the accessible name,
+  so dropped the now-redundant Title/Placeholder. gofmt clean, wasm build green.
+
+## 2026-06-19 - docs: reconcile backend dependencies (7.0)
+
+- Marked the 7.0 backend dependency checklist complete against the current dependency set: GoGRPCBridge,
+  gRPC, protobuf, and ncruces SQLite are pinned in `go.mod`.
+- Documented the OAuth decision in `docs/BACKEND_PLAN.md`: the server uses explicit standard-library HTTP
+  handlers for auth-code exchange, PKCE/state, userinfo, and ID-token claim validation instead of carrying an
+  unused `golang.org/x/oauth2` module.
+- Added deploy coverage so the dependency decision is checked with the rest of the backend runtime docs.
+
 ## 2026-06-19 - docs: reconcile backend rollout contract (7.10)
 
 - Tightened `docs/BACKEND_PLAN.md` with an explicit rollout rule: auth/snapshot sync, blob extraction, and AI
