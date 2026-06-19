@@ -78,6 +78,8 @@ func newAIService(store *Store, cfg Config) *AIService {
 		MasterKey:       []byte(cfg.MasterKey),
 		BaseURL:         cfg.OpenAIBaseURL,
 		AllowedModels:   cfg.AIAllowedModels,
+		UpstreamTimeout: cfg.AIUpstreamTimeout,
+		UpstreamRetries: cfg.AIUpstreamRetries,
 		RequestMaxBytes: cfg.AIRequestMaxBytes,
 		RequestsPerDay:  cfg.AIRequestsPerDay,
 		TokensPerDay:    cfg.AITokensPerDay,

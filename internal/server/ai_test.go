@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -197,10 +198,12 @@ func TestAIServiceEnforcesDailyUsageLimits(t *testing.T) {
 }
 
 type cancelAwareClient struct {
+	started chan struct{}
 	sawDone chan struct{}
 }
 
 func (c cancelAwareClient) Do(req *http.Request) (*http.Response, error) {
+	close(c.started)
 	<-req.Context().Done()
 	close(c.sawDone)
 	return nil, req.Context().Err()
@@ -216,7 +219,8 @@ func TestAIServiceCancellationPropagatesToUpstream(t *testing.T) {
 		t.Fatalf("PutAIKey: %v", err)
 	}
 	sawDone := make(chan struct{})
-	svc := NewAIService(store, AIServiceConfig{MasterKey: master, Client: cancelAwareClient{sawDone: sawDone}})
+	started := make(chan struct{})
+	svc := NewAIService(store, AIServiceConfig{MasterKey: master, Client: cancelAwareClient{started: started, sawDone: sawDone}})
 	ctx, cancel := context.WithCancel(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}))
 	errc := make(chan error, 1)
 	go func() {
@@ -226,6 +230,11 @@ func TestAIServiceCancellationPropagatesToUpstream(t *testing.T) {
 		})
 		errc <- err
 	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("upstream request did not start")
+	}
 	cancel()
 	select {
 	case <-sawDone:
@@ -239,5 +248,107 @@ func TestAIServiceCancellationPropagatesToUpstream(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Chat did not return after cancellation")
+	}
+}
+
+type sequenceAIClient struct {
+	responses []*http.Response
+	errors    []error
+	calls     int
+}
+
+func (c *sequenceAIClient) Do(req *http.Request) (*http.Response, error) {
+	c.calls++
+	idx := c.calls - 1
+	if idx < len(c.errors) && c.errors[idx] != nil {
+		return nil, c.errors[idx]
+	}
+	if idx < len(c.responses) && c.responses[idx] != nil {
+		return c.responses[idx], nil
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"retry ok"}}],"usage":{"total_tokens":7}}`)),
+	}, nil
+}
+
+func TestAIServiceRetriesTransientUpstreamStatus(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	if err := store.UpsertUser(User{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u1", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	client := &sequenceAIClient{responses: []*http.Response{
+		{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(`temporary`))},
+		{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"retry ok"}}],"usage":{"total_tokens":7}}`))},
+	}}
+	svc := NewAIService(store, AIServiceConfig{MasterKey: master, Client: client, UpstreamRetries: 1})
+	got, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if got.Content != "retry ok" || got.Usage.TotalTokens != 7 || client.calls != 2 {
+		t.Fatalf("retry response/calls = %+v/%d", got, client.calls)
+	}
+}
+
+type blockingAIClient struct {
+	started chan struct{}
+}
+
+func (c blockingAIClient) Do(req *http.Request) (*http.Response, error) {
+	close(c.started)
+	<-req.Context().Done()
+	return nil, req.Context().Err()
+}
+
+func TestAIServiceUpstreamTimeoutMapsDeadlineExceeded(t *testing.T) {
+	store := openTestStore(t)
+	master := []byte("0123456789abcdef0123456789abcdef")
+	if err := store.UpsertUser(User{ID: "u1", Provider: "token", Subject: "u1", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutAIKey("u1", "openai", "sk-server-secret", master); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	started := make(chan struct{})
+	svc := NewAIService(store, AIServiceConfig{
+		MasterKey:       master,
+		Client:          blockingAIClient{started: started},
+		UpstreamTimeout: 10 * time.Millisecond,
+	})
+	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
+	})
+	if err == nil || status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("timeout err = %v code %v", err, status.Code(err))
+	}
+	select {
+	case <-started:
+	default:
+		t.Fatal("upstream client was not called")
+	}
+}
+
+func TestRetryBackoffIsBoundedJitteredExponential(t *testing.T) {
+	for attempt, bounds := range []struct {
+		min time.Duration
+		max time.Duration
+	}{
+		{100 * time.Millisecond, 150 * time.Millisecond},
+		{200 * time.Millisecond, 300 * time.Millisecond},
+		{400 * time.Millisecond, 600 * time.Millisecond},
+	} {
+		got := retryBackoff(attempt)
+		if got < bounds.min || got >= bounds.max {
+			t.Fatalf("attempt %d backoff = %s, want [%s,%s)", attempt, got, bounds.min, bounds.max)
+		}
 	}
 }

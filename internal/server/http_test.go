@@ -39,6 +39,16 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative blob max bytes accepted")
 	}
 	invalid = valid
+	invalid.AIUpstreamRetries = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative ai upstream retries accepted")
+	}
+	invalid = valid
+	invalid.AIUpstreamTimeout = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative ai upstream timeout accepted")
+	}
+	invalid = valid
 	invalid.TokenSHA256 = "not-a-digest"
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("bad token sha256 accepted")

@@ -33,6 +33,8 @@ type Config struct {
 	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
 	AIAllowedModels                   []string
+	AIUpstreamTimeout                 time.Duration
+	AIUpstreamRetries                 int
 	AIRequestMaxBytes                 int64
 	AIRequestsPerDay                  int64
 	AITokensPerDay                    int64
@@ -66,6 +68,8 @@ func FromEnv() (Config, error) {
 	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
 	cfg.AIAllowedModels = envCSV("CASHFLUX_SERVER_AI_MODELS")
+	cfg.AIUpstreamTimeout = envDuration("CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT", 45*time.Second)
+	cfg.AIUpstreamRetries = int(envInt64("CASHFLUX_SERVER_AI_UPSTREAM_RETRIES", 2))
 	cfg.AIRequestMaxBytes = envInt64("CASHFLUX_SERVER_AI_REQUEST_MAX_BYTES", 4<<20)
 	cfg.AIRequestsPerDay = envInt64("CASHFLUX_SERVER_AI_REQUESTS_PER_DAY", 0)
 	cfg.AITokensPerDay = envInt64("CASHFLUX_SERVER_AI_TOKENS_PER_DAY", 0)
@@ -101,8 +105,11 @@ func (c Config) Validate() error {
 	if c.MasterKey != "" && !validAESKeyLength(len(c.MasterKey)) {
 		return fmt.Errorf("server: master key must be 16, 24, or 32 bytes")
 	}
-	if c.AIRequestMaxBytes < 0 || c.AIRequestsPerDay < 0 || c.AITokensPerDay < 0 {
+	if c.AIRequestMaxBytes < 0 || c.AIRequestsPerDay < 0 || c.AITokensPerDay < 0 || c.AIUpstreamRetries < 0 {
 		return fmt.Errorf("server: ai limits must be non-negative")
+	}
+	if c.AIUpstreamTimeout < 0 {
+		return fmt.Errorf("server: ai upstream timeout must be non-negative")
 	}
 	if c.BlobMaxBytes < 0 {
 		return fmt.Errorf("server: blob max bytes must be non-negative")

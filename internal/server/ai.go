@@ -3,9 +3,11 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"sort"
 	"strings"
@@ -30,6 +32,8 @@ type AIService struct {
 	baseURL         string
 	masterKey       []byte
 	allowedModels   map[string]struct{}
+	upstreamTimeout time.Duration
+	upstreamRetries int
 	requestMaxBytes int64
 	requestsPerDay  int64
 	tokensPerDay    int64
@@ -41,6 +45,8 @@ type AIServiceConfig struct {
 	BaseURL         string
 	Client          aiHTTPDoer
 	AllowedModels   []string
+	UpstreamTimeout time.Duration
+	UpstreamRetries int
 	RequestMaxBytes int64
 	RequestsPerDay  int64
 	TokensPerDay    int64
@@ -94,6 +100,8 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 		baseURL:         baseURL,
 		masterKey:       cfg.MasterKey,
 		allowedModels:   allowedModels,
+		upstreamTimeout: cfg.UpstreamTimeout,
+		upstreamRetries: cfg.UpstreamRetries,
 		requestMaxBytes: cfg.RequestMaxBytes,
 		requestsPerDay:  cfg.RequestsPerDay,
 		tokensPerDay:    cfg.TokensPerDay,
@@ -173,16 +181,19 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	if !ok {
 		return AICompletion{}, status.Error(codes.FailedPrecondition, "openai key is not configured")
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return AICompletion{}, status.Errorf(codes.Internal, "build upstream request: %v", err)
+	upstreamCtx := ctx
+	cancel := func() {}
+	if s.upstreamTimeout > 0 {
+		upstreamCtx, cancel = context.WithTimeout(ctx, s.upstreamTimeout)
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+key)
-	httpReq.Header.Set("Content-Type", "application/json")
-	resp, err := s.client.Do(httpReq)
+	defer cancel()
+	resp, err := s.doUpstream(upstreamCtx, body, key)
 	if err != nil {
 		if ctx.Err() != nil {
 			return AICompletion{}, status.Error(codes.Canceled, "ai request canceled")
+		}
+		if upstreamCtx.Err() == context.DeadlineExceeded {
+			return AICompletion{}, status.Error(codes.DeadlineExceeded, "openai request timed out")
 		}
 		return AICompletion{}, status.Errorf(codes.Unavailable, "openai request failed: %v", err)
 	}
@@ -203,6 +214,67 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 		return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
 	}
 	return AICompletion{Content: content, Usage: usage}, nil
+}
+
+func (s *AIService) doUpstream(ctx context.Context, body []byte, key string) (*http.Response, error) {
+	attempts := s.upstreamRetries + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+"/chat/completions", bytes.NewReader(body))
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "build upstream request: %v", err)
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+key)
+		httpReq.Header.Set("Content-Type", "application/json")
+		resp, err := s.client.Do(httpReq)
+		if err == nil {
+			if !retryableOpenAIStatus(resp.StatusCode) || attempt == attempts-1 {
+				return resp, nil
+			}
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+			_ = resp.Body.Close()
+		} else {
+			lastErr = err
+			if attempt == attempts-1 || ctx.Err() != nil {
+				return nil, err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(retryBackoff(attempt)):
+		}
+	}
+	return nil, lastErr
+}
+
+func retryableOpenAIStatus(code int) bool {
+	return code == http.StatusTooManyRequests || code >= 500
+}
+
+func retryBackoff(attempt int) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+	delay := 100 * time.Millisecond
+	for i := 0; i < attempt && delay < time.Second; i++ {
+		delay *= 2
+	}
+	jitterMax := delay / 2
+	if jitterMax <= 0 {
+		return delay
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(jitterMax)))
+	if err != nil {
+		return delay
+	}
+	return delay + time.Duration(n.Int64())
 }
 
 func (s *AIService) validateModel(model string) error {

@@ -103,3 +103,7 @@ Migrations run on server startup. Back up the data volume before upgrading. The 
 Caddy terminates TLS and proxies websocket upgrades to the server. Keep ports `80` and `443` reachable for automatic certificates. If you use another reverse proxy, preserve websocket upgrades and forward `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto`.
 
 Do not expose a default token or example master key in production. Generate real token material with `rotate-token`, set the SHA-256 digest in the env file, and store the plaintext token in a password manager.
+
+## Reliability Knobs
+
+AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI_UPSTREAM_RETRIES` to keep upstream OpenAI failures bounded. The defaults are a 45 second deadline and two retries for transient `429`/`5xx` responses or transport errors.
