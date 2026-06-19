@@ -55,6 +55,9 @@ type Config struct {
 	HTTPMaxInFlight                   int
 	HTTPRateLimitPerMinute            int
 	HTTPUserRateLimitPerMinute        int
+	AuditRetentionDays                int
+	SnapshotHistoryRetentionDays      int
+	BackupRetentionDays               int
 	LogFormat                         string
 	LogLevel                          string
 	LogHotPathSampleRate              int
@@ -106,6 +109,9 @@ func FromEnv() (Config, error) {
 	cfg.HTTPMaxInFlight = int(envInt64("CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT", 256))
 	cfg.HTTPRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE", 0))
 	cfg.HTTPUserRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE", 0))
+	cfg.AuditRetentionDays = int(envInt64("CASHFLUX_SERVER_AUDIT_RETENTION_DAYS", 365))
+	cfg.SnapshotHistoryRetentionDays = int(envInt64("CASHFLUX_SERVER_SNAPSHOT_HISTORY_RETENTION_DAYS", 180))
+	cfg.BackupRetentionDays = int(envInt64("CASHFLUX_SERVER_BACKUP_RETENTION_DAYS", 30))
 	cfg.LogFormat = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_FORMAT", "text"))
 	cfg.LogLevel = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_LEVEL", "info"))
 	cfg.LogHotPathSampleRate = int(envInt64("CASHFLUX_SERVER_LOG_HOT_PATH_SAMPLE_RATE", 100))
@@ -159,6 +165,9 @@ func (c Config) Validate() error {
 	if c.HTTPReadTimeout < 0 || c.HTTPWriteTimeout < 0 || c.HTTPMaxInFlight < 0 ||
 		c.HTTPRateLimitPerMinute < 0 || c.HTTPUserRateLimitPerMinute < 0 {
 		return fmt.Errorf("server: http limits must be non-negative")
+	}
+	if c.AuditRetentionDays < 0 || c.SnapshotHistoryRetentionDays < 0 || c.BackupRetentionDays < 0 {
+		return fmt.Errorf("server: retention days must be non-negative")
 	}
 	if c.LogHotPathSampleRate < 0 {
 		return fmt.Errorf("server: log hot path sample rate must be non-negative")

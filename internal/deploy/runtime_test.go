@@ -80,6 +80,9 @@ func TestSelfHostEnvTemplateDocumentsServerLimits(t *testing.T) {
 		"CASHFLUX_SERVER_GRPC_MAX_CONNECTIONS_PER_CLIENT=8",
 		"CASHFLUX_SERVER_GRPC_MAX_UPGRADES_PER_CLIENT_PER_MINUTE=60",
 		"CASHFLUX_SERVER_GRPC_MAX_STREAMS_PER_USER=8",
+		"CASHFLUX_SERVER_AUDIT_RETENTION_DAYS=365",
+		"CASHFLUX_SERVER_SNAPSHOT_HISTORY_RETENTION_DAYS=180",
+		"CASHFLUX_SERVER_BACKUP_RETENTION_DAYS=30",
 	} {
 		if !strings.Contains(env, want) {
 			t.Fatalf("env template missing server limit %q", want)
@@ -181,6 +184,26 @@ func TestBackupArtifactsDefineScheduleAndRestoreRunbook(t *testing.T) {
 	} {
 		if !strings.Contains(runbookText, want) {
 			t.Fatalf("self-host runbook missing %q", want)
+		}
+	}
+}
+
+func TestRetentionArtifactsDefineSchedule(t *testing.T) {
+	service, err := os.ReadFile("../../deploy/cashflux-retention.example.service")
+	if err != nil {
+		t.Fatalf("read retention service: %v", err)
+	}
+	if !strings.Contains(string(service), "cashflux-server retention") {
+		t.Fatalf("retention service missing command: %s", service)
+	}
+	timer, err := os.ReadFile("../../deploy/cashflux-retention.example.timer")
+	if err != nil {
+		t.Fatalf("read retention timer: %v", err)
+	}
+	timerText := string(timer)
+	for _, want := range []string{"OnCalendar=", "Persistent=true", "RandomizedDelaySec="} {
+		if !strings.Contains(timerText, want) {
+			t.Fatalf("retention timer missing %q", want)
 		}
 	}
 }

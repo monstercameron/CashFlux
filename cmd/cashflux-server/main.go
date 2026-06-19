@@ -51,6 +51,28 @@ func main() {
 		fmt.Println(backupDir)
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "retention" {
+		store, err := server.OpenStore(filepath.Join(cfg.DataDir, "cashflux-server.db"))
+		if err != nil {
+			logger.Error("open store failed", "error", err)
+			os.Exit(1)
+		}
+		defer func() { _ = store.Close() }()
+		retentionCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := server.RunRetention(retentionCtx, store, server.RetentionOptions{
+			DataDir:                      cfg.DataDir,
+			AuditRetentionDays:           cfg.AuditRetentionDays,
+			SnapshotHistoryRetentionDays: cfg.SnapshotHistoryRetentionDays,
+			BackupRetentionDays:          cfg.BackupRetentionDays,
+		})
+		if err != nil {
+			logger.Error("server retention failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("server retention complete", "audit_events_deleted", result.AuditEventsDeleted, "snapshot_history_deleted", result.SnapshotHistoryDeleted, "backup_directories_deleted", result.BackupDirectoriesDeleted)
+		return
+	}
 	if token := cfg.TokenForDisplay(); token != "" {
 		logger.Warn("generated self-host access token", "token", token)
 		logger.Warn("persist generated token", "hint", "set CASHFLUX_SERVER_TOKEN_SHA256 to the sha256 of this token, or CASHFLUX_SERVER_TOKEN for local development, to keep it stable across restarts")

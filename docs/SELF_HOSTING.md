@@ -139,6 +139,24 @@ Blob disk reads and writes use `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` so request canc
 
 For status-page and incident handling, expose `/status` through the same TLS host and use `docs/INCIDENT_RESPONSE.md` for severity levels, update cadence, recovery, and postmortems.
 
+## Data Retention
+
+CashFlux backend data is stored in the configured data directory on the host that runs the server. No server data leaves that host unless you configure the off-box backup sync described above.
+
+Retention defaults:
+
+- Audit events: 365 days (`CASHFLUX_SERVER_AUDIT_RETENTION_DAYS`).
+- Snapshot history: 180 days (`CASHFLUX_SERVER_SNAPSHOT_HISTORY_RETENTION_DAYS`).
+- Local backup directories: 30 days (`CASHFLUX_SERVER_BACKUP_RETENTION_DAYS`).
+
+Run retention manually:
+
+```sh
+docker compose -f docker-compose.selfhost.yml run --rm cashflux-server retention
+```
+
+The repository includes `deploy/cashflux-retention.example.service` and `deploy/cashflux-retention.example.timer` for weekly pruning. Keep off-box backup retention aligned with your legal/privacy requirements and test restore before deleting older backups.
+
 ## Logging
 
 Set `CASHFLUX_SERVER_LOG_FORMAT=json` for structured production logs, or `text` for local development. `CASHFLUX_SERVER_LOG_LEVEL` accepts `debug`, `info`, `warn`, and `error`. Sensitive attributes such as tokens, keys, secrets, cookies, passwords, and authorization values are redacted before logs are written.

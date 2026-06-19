@@ -81,6 +81,21 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative http user rate limit accepted")
 	}
 	invalid = valid
+	invalid.AuditRetentionDays = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative audit retention accepted")
+	}
+	invalid = valid
+	invalid.SnapshotHistoryRetentionDays = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative snapshot retention accepted")
+	}
+	invalid = valid
+	invalid.BackupRetentionDays = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative backup retention accepted")
+	}
+	invalid = valid
 	invalid.TokenSHA256 = "not-a-digest"
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("bad token sha256 accepted")
@@ -151,6 +166,19 @@ func TestFromEnvLoadsGRPCStreamLimit(t *testing.T) {
 	}
 	if cfg.GRPCMaxStreamsPerUser != 3 {
 		t.Fatalf("GRPCMaxStreamsPerUser = %d, want 3", cfg.GRPCMaxStreamsPerUser)
+	}
+}
+
+func TestFromEnvLoadsRetentionWindows(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_AUDIT_RETENTION_DAYS", "90")
+	t.Setenv("CASHFLUX_SERVER_SNAPSHOT_HISTORY_RETENTION_DAYS", "45")
+	t.Setenv("CASHFLUX_SERVER_BACKUP_RETENTION_DAYS", "14")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if cfg.AuditRetentionDays != 90 || cfg.SnapshotHistoryRetentionDays != 45 || cfg.BackupRetentionDays != 14 {
+		t.Fatalf("retention windows = audit %d snapshot %d backup %d", cfg.AuditRetentionDays, cfg.SnapshotHistoryRetentionDays, cfg.BackupRetentionDays)
 	}
 }
 

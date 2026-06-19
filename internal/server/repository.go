@@ -198,6 +198,20 @@ LIMIT ?`, afterID, limit)
 	return events, nil
 }
 
+// PruneAuditEventsBefore removes audit events older than before and returns the rows deleted.
+func (s *Store) PruneAuditEventsBefore(ctx context.Context, before time.Time) (int64, error) {
+	defer s.observeDB("PruneAuditEventsBefore", time.Now())
+	res, err := s.db.ExecContext(ctx, `DELETE FROM audit_events WHERE timestamp < ?`, formatTime(before.UTC()))
+	if err != nil {
+		return 0, fmt.Errorf("server store: prune audit events: %w", err)
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("server store: audit prune rows: %w", err)
+	}
+	return deleted, nil
+}
+
 func auditEventHash(event AuditEvent) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		event.PreviousHash,
@@ -427,6 +441,20 @@ func (s *Store) SnapshotHistory(workspaceID string, limit int) ([]Snapshot, erro
 		return nil, fmt.Errorf("server store: snapshot history rows: %w", err)
 	}
 	return out, nil
+}
+
+// PruneSnapshotHistoryBefore removes retained prior snapshots older than before.
+func (s *Store) PruneSnapshotHistoryBefore(ctx context.Context, before time.Time) (int64, error) {
+	defer s.observeDB("PruneSnapshotHistoryBefore", time.Now())
+	res, err := s.db.ExecContext(ctx, `DELETE FROM snapshot_history WHERE updated_at < ?`, formatTime(before.UTC()))
+	if err != nil {
+		return 0, fmt.Errorf("server store: prune snapshot history: %w", err)
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("server store: snapshot prune rows: %w", err)
+	}
+	return deleted, nil
 }
 
 // PutBlob stores bytes under a sha256 content-addressed path and records metadata.

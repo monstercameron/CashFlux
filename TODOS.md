@@ -4267,7 +4267,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       subscription unlink), data-subject request workflow + SLA; right-to-rectify via the app.
 - [ ] Privacy Policy, Terms of Service, Cookie/consent (minimal), DPA template for any sub-processors
       (Stripe, OAuth providers, host) + a public sub-processor list.
-- [ ] Data retention + deletion schedule (snapshots history, logs, audit, backups); document residency.
+- [x] Data retention + deletion schedule (snapshots history, logs, audit, backups); document residency.
+      Done: retention env windows plus `cashflux-server retention` prune audit events, snapshot history,
+      and local backup dirs; weekly timer examples and self-host docs define residency and defaults.
 - [ ] **PCI scope minimized** by using Stripe Checkout/Elements (no card data touches the server).
 - [ ] **SOC 2 readiness checklist** (access control, change mgmt, monitoring, vendor mgmt, IR) — even if
       not certifying, build to the controls so enterprise/audit asks are answerable.

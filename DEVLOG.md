@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend retention pruning
+
+- Added retention config windows for audit rows, snapshot history, and local backup directories, defaulting to 365/180/30 days.
+- Added `cashflux-server retention`, backed by store prune helpers plus timestamped backup directory pruning.
+- Added weekly systemd service/timer examples, self-hosting docs for residency/retention, and tests for config, pruning behavior, CLI smoke, and deploy artifacts.
+
 ## 2026-06-19 - feat: add backend status runbook
 
 - Added unauthenticated `GET /status` for status-page polling: 200 when process + SQLite are healthy, 503 with component status when readiness is degraded.

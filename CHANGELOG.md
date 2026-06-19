@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend retention pruning.** Added `cashflux-server retention`, retention env windows, and weekly systemd examples to prune old audit rows, snapshot history, and local backup directories on a documented schedule.
 - **Backend status endpoint and incident runbook.** Added `GET /status` for status-page polling and documented incident severity, communications, recovery, and postmortem handling in `docs/INCIDENT_RESPONSE.md`.
 - **Self-host runtime resource limits.** The self-host Compose stack now sets CPU, memory, PID, and file-descriptor caps for the server and Caddy, and the env template documents the HTTP/gRPC connection and queue limits.
 - **Self-host backup command and restore rehearsal.** `cashflux-server backup` now checkpoints SQLite WAL, copies the database and blob tree into a timestamped backup directory, writes a SHA-256 manifest with RPO/RTO notes, and the self-host runbook includes scheduled/off-box backup and restore rehearsal guidance.
