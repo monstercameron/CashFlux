@@ -4094,9 +4094,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       gRPC auth interceptor for Sync/AI RPCs and the blob endpoints; past-due grace window; lapse →
       reject cloud RPCs (clear status code) while local app keeps working.
 - [ ] Storage fair-use cap per user (blob bytes); soft-warn → block new uploads over cap; overage copy.
-- [~] Privacy/compliance: privacy policy + terms endpoints; account export + **delete account**.
+- [x] Privacy/compliance: privacy policy + terms endpoints; account export + **delete account**.
       Public `/legal/privacy` and `/legal/terms` JSON endpoints are now mounted and documented in
-      `docs/LEGAL_ENDPOINTS.md`. Remaining: self-serve account export and delete-account purge flow.
+      `docs/LEGAL_ENDPOINTS.md`. Authenticated `/v1/account/export` returns scoped Cloud data without decrypted
+      AI secrets/blob bytes; `DELETE /v1/account` purges the caller's relational rows and sweeps unreferenced
+      blobs.
       (purge server data + blobs); GDPR/CCPA data-request path.
 - [ ] Tests: webhook state transitions, entitlement gate (trial/active/past-due/canceled), cap enforcement.
 
@@ -4334,8 +4336,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       covers SEV levels, first response, comms cadence, recovery, and postmortems.
 
 ### 7.17 Compliance & data governance
-- [ ] **GDPR/CCPA**: self-serve data **export** + **delete account** (purge DB rows + blobs +
+- [~] **GDPR/CCPA**: self-serve data **export** + **delete account** (purge DB rows + blobs +
       subscription unlink), data-subject request workflow + SLA; right-to-rectify via the app.
+      Done: authenticated `/v1/account/export` and `DELETE /v1/account` cover scoped server data export,
+      relational purge, and unreferenced blob sweep. Remaining: subscription unlink, DSR workflow/SLA, and
+      formal right-to-rectify documentation.
 - [ ] Privacy Policy, Terms of Service, Cookie/consent (minimal), DPA template for any sub-processors
       (Stripe, OAuth providers, host) + a public sub-processor list.
 - [x] Data retention + deletion schedule (snapshots history, logs, audit, backups); document residency.

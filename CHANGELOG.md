@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend account export/delete (7.11).** Added authenticated `/v1/account/export` and `DELETE /v1/account`
+  compliance endpoints with scoped export data, secret omission, and blob GC after account deletion.
 - **Backend legal endpoints (7.11).** Added public `/legal/privacy` and `/legal/terms` JSON discovery
   endpoints for Cloud onboarding and billing surfaces.
 - **Backend SQLi audit coverage (7.14).** Added a repository source guard that rejects dynamic SQL construction

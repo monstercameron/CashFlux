@@ -7,6 +7,8 @@ Protected HTTP data routes:
 - `/metrics`
 - `/v1/audit`
 - `/v1/admin/usage`
+- `/v1/account/export`
+- `/v1/account` with `DELETE`
 - `/v1/blobs/{hash}` with `GET`, `HEAD`, and `PUT`
 
 Protected gRPC services:
@@ -28,6 +30,8 @@ section 7.14:
   audit queries are scoped by authenticated user id, with cross-user tests covering workspace and blob access.
 - The read-only `/v1/admin/usage` support view ignores caller-supplied user ids and returns only the
   authenticated user's daily request/token counters.
+- Self-serve account export and delete-account routes are authenticated and scoped to the caller. Export omits
+  decrypted AI secrets and blob bytes; deletion cascades relational rows and sweeps unreferenced blobs.
 - Repository SQL injection coverage includes a source guard that rejects dynamic SQL formatting/builders and pins
   parameterized user/workspace predicates.
 - Request-size and abuse controls are enabled across the backend: dataset caps, blob size/storage caps, AI request

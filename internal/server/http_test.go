@@ -450,6 +450,8 @@ func TestHTTPDataRoutesRequireAuthentication(t *testing.T) {
 		{method: http.MethodPut, path: "/v1/blobs/" + hash + "?workspaceId=w1", body: "abc"},
 		{method: http.MethodGet, path: "/v1/blobs/" + hash + "?workspaceId=w1"},
 		{method: http.MethodHead, path: "/v1/blobs/" + hash + "?workspaceId=w1"},
+		{method: http.MethodGet, path: "/v1/account/export"},
+		{method: http.MethodDelete, path: "/v1/account"},
 	} {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
@@ -459,6 +461,88 @@ func TestHTTPDataRoutesRequireAuthentication(t *testing.T) {
 				t.Fatalf("status = %d body %q, want 401", rr.Code, rr.Body.String())
 			}
 		})
+	}
+}
+
+func TestAccountExportAndDeleteEndpoints(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	other := authUserFromToken("other-token")
+	now := time.Date(2026, time.June, 19, 9, 30, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	seedSyncUser(t, store, other.ID, now)
+	if err := store.PutWorkspace(Workspace{ID: "w-export", UserID: user.ID, Name: "Export", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	if err := store.PutWorkspace(Workspace{ID: "w-other", UserID: other.ID, Name: "Other", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace other: %v", err)
+	}
+	if err := store.PutSnapshot(Snapshot{WorkspaceID: "w-export", Dataset: []byte(`{"ok":true}`), Version: 2, UpdatedAt: now}, 1024, 3); err != nil {
+		t.Fatalf("PutSnapshot: %v", err)
+	}
+	dataDir := t.TempDir()
+	blob, err := store.PutBlob(blobRoot(Config{DataDir: dataDir}), []byte("receipt"), "text/plain", "receipt.txt", 1024)
+	if err != nil {
+		t.Fatalf("PutBlob: %v", err)
+	}
+	if err := store.LinkWorkspaceBlob("w-export", blob.Hash); err != nil {
+		t.Fatalf("LinkWorkspaceBlob: %v", err)
+	}
+	if err := store.PutAIKey(user.ID, "openai", "sk-secret-export", []byte("0123456789abcdef0123456789abcdef")); err != nil {
+		t.Fatalf("PutAIKey: %v", err)
+	}
+	if _, err := store.AddUsage(user.ID, now, 4, 120); err != nil {
+		t.Fatalf("AddUsage: %v", err)
+	}
+	if _, err := store.AppendAuditEvent(AuditEvent{Timestamp: now, ActorID: user.ID, Action: "workspace.put", TargetType: "workspace", TargetID: "w-export"}); err != nil {
+		t.Fatalf("AppendAuditEvent: %v", err)
+	}
+	h := NewMux(Config{
+		AuthMode:  "token",
+		Token:     "dev-token",
+		DataDir:   dataDir,
+		MasterKey: "0123456789abcdef0123456789abcdef",
+		AppOrigin: "http://127.0.0.1:8080",
+	}, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/account/export", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("export status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var export AccountExport
+	if err := json.Unmarshal(rr.Body.Bytes(), &export); err != nil {
+		t.Fatalf("decode export: %v", err)
+	}
+	if export.User.ID != user.ID || len(export.Workspaces) != 1 || export.Workspaces[0].ID != "w-export" {
+		t.Fatalf("export user/workspaces = %+v", export)
+	}
+	if len(export.Snapshots) != 1 || len(export.Blobs) != 1 || len(export.Usage) != 1 || len(export.AIKeyProviders) != 1 || len(export.AuditEvents) != 1 {
+		t.Fatalf("export related rows = snapshots %d blobs %d usage %d providers %d audit %d",
+			len(export.Snapshots), len(export.Blobs), len(export.Usage), len(export.AIKeyProviders), len(export.AuditEvents))
+	}
+	if strings.Contains(rr.Body.String(), "sk-secret-export") || strings.Contains(rr.Body.String(), "w-other") {
+		t.Fatalf("export leaked secret or other user data: %s", rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/v1/account", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if _, ok, err := store.GetUserByID(user.ID); err != nil || ok {
+		t.Fatalf("deleted user lookup = ok %v err %v", ok, err)
+	}
+	if _, ok, err := store.GetUserByID(other.ID); err != nil || !ok {
+		t.Fatalf("other user lookup = ok %v err %v", ok, err)
+	}
+	if _, ok, err := store.GetBlob(blob.Hash); err != nil || ok {
+		t.Fatalf("deleted user's blob metadata = ok %v err %v", ok, err)
 	}
 }
 

@@ -66,6 +66,19 @@ type Usage struct {
 	Tokens   int64
 }
 
+// AccountExport is the self-serve server-side data bundle for a user.
+type AccountExport struct {
+	ExportedAt      time.Time    `json:"exportedAt"`
+	User            User         `json:"user"`
+	Workspaces      []Workspace  `json:"workspaces"`
+	Snapshots       []Snapshot   `json:"snapshots"`
+	Blobs           []Blob       `json:"blobs"`
+	Usage           []Usage      `json:"usage"`
+	AIKeyProviders  []string     `json:"aiKeyProviders"`
+	AuditEvents     []AuditEvent `json:"auditEvents"`
+	RefreshSessions int          `json:"refreshSessions"`
+}
+
 // AuditEvent is a security-relevant, append-only backend event.
 type AuditEvent struct {
 	ID           int64     `json:"id"`
@@ -117,6 +130,57 @@ func (s *Store) GetUserByID(userID string) (User, bool, error) {
 		return User{}, false, fmt.Errorf("server store: parse user time: %w", err)
 	}
 	return u, true, nil
+}
+
+// ExportAccount returns the user's server-side Cloud data without decrypted secrets or blob bytes.
+func (s *Store) ExportAccount(userID string, exportedAt time.Time) (AccountExport, bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return AccountExport{}, false, fmt.Errorf("server store: user id is required")
+	}
+	user, ok, err := s.GetUserByID(userID)
+	if err != nil || !ok {
+		return AccountExport{}, ok, err
+	}
+	out := AccountExport{ExportedAt: exportedAt.UTC(), User: user}
+	if out.Workspaces, err = s.ListWorkspaces(userID, true); err != nil {
+		return AccountExport{}, false, err
+	}
+	if out.Snapshots, err = s.exportSnapshots(userID); err != nil {
+		return AccountExport{}, false, err
+	}
+	if out.Blobs, err = s.exportBlobs(userID); err != nil {
+		return AccountExport{}, false, err
+	}
+	if out.Usage, err = s.exportUsage(userID); err != nil {
+		return AccountExport{}, false, err
+	}
+	if out.AIKeyProviders, err = s.exportAIKeyProviders(userID); err != nil {
+		return AccountExport{}, false, err
+	}
+	if out.AuditEvents, err = s.exportAuditEvents(userID); err != nil {
+		return AccountExport{}, false, err
+	}
+	if out.RefreshSessions, err = s.exportRefreshSessionCount(userID); err != nil {
+		return AccountExport{}, false, err
+	}
+	return out, true, nil
+}
+
+// DeleteAccount purges the user's relational server data. Blob files are removed by a follow-up GC sweep.
+func (s *Store) DeleteAccount(userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return false, fmt.Errorf("server store: user id is required")
+	}
+	defer s.observeDB("DeleteAccount", time.Now())
+	result, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, userID)
+	if err != nil {
+		return false, fmt.Errorf("server store: delete account: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("server store: delete account rows: %w", err)
+	}
+	return affected > 0, nil
 }
 
 type RefreshSession struct {
@@ -918,6 +982,113 @@ func (s *Store) UsageWithinLimit(userID string, day time.Time, maxRequests, maxT
 	return usage.Requests <= maxRequests && usage.Tokens <= maxTokens, nil
 }
 
+func (s *Store) exportSnapshots(userID string) ([]Snapshot, error) {
+	defer s.observeDB("ExportSnapshots", time.Now())
+	rows, err := s.db.Query(`
+SELECT s.workspace_id, s.dataset_json, s.version, s.updated_at
+FROM snapshots s
+JOIN workspaces w ON w.id = s.workspace_id
+WHERE w.user_id = ?
+ORDER BY s.workspace_id`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("server store: export snapshots: %w", err)
+	}
+	defer rows.Close()
+	return scanSnapshots(rows, "export snapshots")
+}
+
+func (s *Store) exportBlobs(userID string) ([]Blob, error) {
+	defer s.observeDB("ExportBlobs", time.Now())
+	rows, err := s.db.Query(`
+SELECT DISTINCT b.hash, b.size, b.mime, b.created_at
+FROM blobs b
+JOIN workspace_blobs wb ON wb.hash = b.hash
+JOIN workspaces w ON w.id = wb.workspace_id
+WHERE w.user_id = ?
+ORDER BY b.hash`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("server store: export blobs: %w", err)
+	}
+	defer rows.Close()
+	return scanBlobs(rows, "export blobs")
+}
+
+func (s *Store) exportUsage(userID string) ([]Usage, error) {
+	defer s.observeDB("ExportUsage", time.Now())
+	rows, err := s.db.Query(`SELECT user_id, day, requests, tokens FROM usage WHERE user_id = ? ORDER BY day`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("server store: export usage: %w", err)
+	}
+	defer rows.Close()
+	var out []Usage
+	for rows.Next() {
+		var usage Usage
+		if err := rows.Scan(&usage.UserID, &usage.Day, &usage.Requests, &usage.Tokens); err != nil {
+			return nil, fmt.Errorf("server store: scan export usage: %w", err)
+		}
+		out = append(out, usage)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: export usage rows: %w", err)
+	}
+	return out, nil
+}
+
+func (s *Store) exportAIKeyProviders(userID string) ([]string, error) {
+	defer s.observeDB("ExportAIKeyProviders", time.Now())
+	rows, err := s.db.Query(`SELECT provider FROM ai_keys WHERE user_id = ? ORDER BY provider`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("server store: export ai key providers: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var provider string
+		if err := rows.Scan(&provider); err != nil {
+			return nil, fmt.Errorf("server store: scan export ai provider: %w", err)
+		}
+		out = append(out, provider)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: export ai provider rows: %w", err)
+	}
+	return out, nil
+}
+
+func (s *Store) exportAuditEvents(userID string) ([]AuditEvent, error) {
+	defer s.observeDB("ExportAuditEvents", time.Now())
+	rows, err := s.db.Query(`
+SELECT id, timestamp, actor_id, action, target_type, target_id, ip, request_id, previous_hash, hash
+FROM audit_events
+WHERE actor_id = ?
+ORDER BY id`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("server store: export audit events: %w", err)
+	}
+	defer rows.Close()
+	var out []AuditEvent
+	for rows.Next() {
+		event, err := scanAuditEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: export audit event rows: %w", err)
+	}
+	return out, nil
+}
+
+func (s *Store) exportRefreshSessionCount(userID string) (int, error) {
+	defer s.observeDB("ExportRefreshSessionCount", time.Now())
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ?`, userID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("server store: export refresh session count: %w", err)
+	}
+	return count, nil
+}
+
 func trimSnapshotHistory(tx *sql.Tx, workspaceID string, limit int) error {
 	if limit <= 0 {
 		if _, err := tx.Exec(`DELETE FROM snapshot_history WHERE workspace_id = ?`, workspaceID); err != nil {
@@ -950,6 +1121,36 @@ type snapshotScanner interface {
 
 type blobScanner interface {
 	Scan(dest ...any) error
+}
+
+func scanSnapshots(rows *sql.Rows, label string) ([]Snapshot, error) {
+	var out []Snapshot
+	for rows.Next() {
+		snapshot, err := scanSnapshot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, snapshot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: %s rows: %w", label, err)
+	}
+	return out, nil
+}
+
+func scanBlobs(rows *sql.Rows, label string) ([]Blob, error) {
+	var out []Blob
+	for rows.Next() {
+		blob, err := scanBlob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, blob)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: %s rows: %w", label, err)
+	}
+	return out, nil
 }
 
 func scanWorkspace(row workspaceScanner) (Workspace, error) {

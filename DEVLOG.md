@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend account export delete (7.11)
+
+- Added authenticated `GET /v1/account/export` for scoped server-side Cloud data export.
+- Added authenticated `DELETE /v1/account`, which cascades the caller's DB rows and sweeps unreferenced blobs.
+- Covered export scoping, AI-secret omission, cross-user safety, and blob metadata removal in server tests.
+- Completed the server compliance endpoint TODO; client Cloud settings can still add controls for these routes.
+
 ## 2026-06-19 - feat: add backend legal endpoints (7.11)
 
 - Added public `/legal/privacy` and `/legal/terms` JSON endpoints for Cloud onboarding/legal discovery.

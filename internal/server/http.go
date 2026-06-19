@@ -68,6 +68,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 				"/readyz",
 				"/v1/version",
 				"/v1/audit",
+				"/v1/account/export",
 				"/legal/privacy",
 				"/legal/terms",
 				"/grpc",
@@ -110,6 +111,10 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("GET /v1/audit", handleAuditEvents(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/usage", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/admin/usage", handleAdminUsage(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/account/export", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/account/export", handleAccountExport(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/account", handleCORSPreflight(cfg))
+	mux.HandleFunc("DELETE /v1/account", handleAccountDelete(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
