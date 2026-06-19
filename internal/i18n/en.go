@@ -823,6 +823,7 @@ var english = Catalog{
 	"reports.runway":                 "Cash runway",
 	"reports.runwayMonths":           "%d months",
 	"reports.noSpendDays":            "No-spend days",
+	"reports.netWorthChange":         "Change this period",
 	"reports.noPayee":                "(no description)",
 	"reports.downloadCsv":            "Download CSV",
 	"reports.downloadCsvTitle":       "Download the spending-by-category breakdown as a CSV file",

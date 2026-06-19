@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Net-worth change on Reports (B21).** The net-worth card now shows a "Change this period" figure (the most
+  recent period's net-worth delta, color-cued up/down) alongside assets/liabilities/net, so wealth direction
+  is visible at a glance.
+
+### Added
 - **One-click duplicate cleanup (imports).** The Transactions duplicate notice now has a "Select duplicates"
   button that selects the extra copy in each duplicate group (keeping one), so the existing bulk-delete can
   remove them in a single step.

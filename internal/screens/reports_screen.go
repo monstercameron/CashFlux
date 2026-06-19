@@ -105,6 +105,11 @@ func Reports() ui.Node {
 	}
 	// Net-worth composition (assets vs liabilities) as of now, for a breakdown card.
 	nwNet, nwAssets, nwLiab, _ := ledger.NetWorth(accounts, txns, rates)
+	// Net-worth change over the most recent period of the trend (last step).
+	var nwChange int64
+	if n := len(nwSeries); n >= 2 {
+		nwChange = nwSeries[n-1].Amount - nwSeries[n-2].Amount
+	}
 
 	// Savings-rate trend: percent of income kept per period.
 	srInts, _ := reports.SavingsRateSeries(txns, bounds, rates)
@@ -362,6 +367,7 @@ func Reports() ui.Node {
 				stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
 				stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
 				stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
+				If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
 			),
 		)),
 		If(len(nw) >= 2, Section(Class("card"),

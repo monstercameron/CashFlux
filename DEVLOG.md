@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: net-worth change on Reports (B21)
+
+- Added a "Change this period" stat to the Reports net-worth card: the last step of the existing `nwSeries`
+  (nwSeries[n-1] − nwSeries[n-2]), color-cued via accentFor. Shown when the series has ≥2 points. UI-only,
+  reuses already-computed data; added the reports.netWorthChange i18n key. gofmt clean (no realignment),
+  i18n tests + wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: one-click duplicate cleanup (imports)
 
 - Made the duplicate-transaction notice actionable: added a `selectDuplicates` UseEvent that builds a selection
