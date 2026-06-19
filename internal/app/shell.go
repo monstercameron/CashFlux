@@ -90,6 +90,7 @@ var railMeta = map[string]struct {
 	"/reports":       {"nav.reports", icon.Reports},
 	"/subscriptions": {"nav.subscriptions", icon.Subscriptions},
 	"/bills":         {"nav.bills", icon.Bills},
+	"/split":         {"nav.split", icon.Split},
 	"/insights":      {"nav.insights", icon.Insights},
 	"/documents":     {"nav.documents", icon.Page},
 	"/customize":     {"nav.customize", icon.Customize},

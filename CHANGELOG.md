@@ -7,52 +7,6 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Backend operations runbook.** Added `docs/OPERATIONS_RUNBOOK.md` with deploy, rollback, restore, access-token rotation, master-key rotation, session revocation, past-due billing, and routine check procedures.
-- **Backend retention pruning.** Added `cashflux-server retention`, retention env windows, and weekly systemd examples to prune old audit rows, snapshot history, and local backup directories on a documented schedule.
-- **Backend status endpoint and incident runbook.** Added `GET /status` for status-page polling and documented incident severity, communications, recovery, and postmortem handling in `docs/INCIDENT_RESPONSE.md`.
-- **Self-host runtime resource limits.** The self-host Compose stack now sets CPU, memory, PID, and file-descriptor caps for the server and Caddy, and the env template documents the HTTP/gRPC connection and queue limits.
-- **Self-host backup command and restore rehearsal.** `cashflux-server backup` now checkpoints SQLite WAL, copies the database and blob tree into a timestamped backup directory, writes a SHA-256 manifest with RPO/RTO notes, and the self-host runbook includes scheduled/off-box backup and restore rehearsal guidance.
-- **Backend blob I/O deadlines.** Blob PUT/GET now use a configurable `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` and context-aware blob store operations.
-- **Self-host log retention policy.** The self-host Compose stack now uses Docker's local log driver with bounded rotation, and the observability runbook documents stdout collection, retention, and access policy.
-- **Backend SLO and alerting artifacts.** Added Prometheus alert rules plus an observability runbook with SLOs, dashboard queries, and alert routing guidance.
-- **Backend trace/request log correlation.** HTTP and gRPC handlers now extract W3C trace IDs and include `trace_id` alongside request IDs in structured logs.
-- **Backend log sampling and structured errors.** Successful health/metrics probe logs are now sampled, while HTTP 5xx and non-OK gRPC calls emit structured error logs with status and cause fields.
-- **Backend audit log stream.** The backend now persists hash-chained audit events for security/data-change actions and exposes them as an authenticated NDJSON stream at `/v1/audit`.
-- **Least-privilege self-host runtime.** Docker Compose now runs the self-host stack with read-only root filesystems, dropped capabilities, hardened tmpfs mounts, and no-new-privileges.
-- **Backend OAuth ID-token claim validation.** Google OAuth callbacks now require an ID token and validate issuer, audience, and nonce claims before issuing a CashFlux session.
-- **Secrets scanning CI.** CI now runs gitleaks with a scoped fixture allowlist to catch committed secrets.
-- **Security disclosure policy.** Added `SECURITY.md` and a web-served `.well-known/security.txt` for coordinated vulnerability reports.
-- **Dependency update automation.** Dependabot now watches Go modules and GitHub Actions weekly with grouped PRs.
-- **Backend security CI scans.** CI now runs `govulncheck` and high-severity/medium-confidence `gosec` alongside `go vet`.
-- **Backend OAuth nonce binding.** OAuth starts now bind a nonce into the state cookie, and Google authorization requests include the nonce parameter.
-- **Backend OAuth redirect validation.** OAuth provider config now rejects redirect URLs outside the exact `/v1/auth/{provider}/callback` path.
-- **Backend blob path hardening.** Content-addressed blob paths now reject malformed hashes before disk access and keep blob files rooted under the configured blob directory.
-- **Backend per-user HTTP rate limiting.** Authenticated HTTP requests can now be capped per user per minute with `CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE`.
-- **Backend HTTP rate limiting.** Backend HTTP requests can now be capped per client IP per minute with `CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE`.
-- **Backend root status endpoint.** Visiting the backend root now returns a small JSON service/status payload with the key local endpoints instead of a confusing 404.
-- **Backend sync field bounds.** Sync workspace writes now reject overlong IDs, names, colors, and device identifiers before storage.
-- **Backend OAuth CSRF protection.** Cookie-auth refresh and logout endpoints now require a double-submit CSRF token.
-- **Backend blob MIME hardening.** Blob uploads now reject executable web content types, sniff uploaded bytes, and force downloaded blobs to be attachments.
-- **Backend OAuth callback sessions.** OAuth callbacks now exchange provider codes with PKCE, upsert users, issue signed short-lived access tokens, and rotate httpOnly refresh cookies through refresh/logout endpoints.
-- **Backend queue depth metrics.** `/metrics` now reports the buffered workspace watch queue depth.
-- **Backend DB latency metrics.** `/metrics` now reports store operation counts and duration sums for SQLite-backed repository calls.
-- **Backend sync metrics.** `/metrics` now reports sync pull/push result counters and LWW reject totals from the gRPC bridge path.
-- **Backend AI proxy metrics.** `/metrics` now reports AI proxy request and token counters from successful upstream completions.
-- **Backend blob byte metrics.** `/metrics` now reports blob bytes stored and served through the backend blob endpoints.
-- **Backend stream metrics.** `/metrics` now exports active gRPC stream counts and stream duration sums.
-- **Backend RED metrics.** `/metrics` now includes HTTP and gRPC request totals plus duration sums by route/RPC and status.
-- **Backend AI proxy feature flag.** `CASHFLUX_SERVER_AI_PROXY_ENABLED=false` now disables AI key/model/chat/vision RPCs with a clear failed-precondition response.
-- **Workspace stream backpressure.** WatchWorkspaces streams are now capped per user with a configurable gRPC stream limit.
-- **Backend metrics endpoint.** Added an auth-gated `/metrics` endpoint that emits Prometheus text format process health.
-- **Workspace sync caching.** `GetWorkspace` now returns an ETag and honors `IfNoneMatch` to avoid resending unchanged datasets over the gRPC bridge.
-- **Backend HTTP request limits.** Server HTTP read/write deadlines and max in-flight request shedding are now configurable and tested.
-- **Backend security headers.** Server responses now include HSTS, nosniff, referrer policy, COOP/COEP, and frame-ancestor CSP headers.
-- **Tenant-scoped backend blobs.** Blob PUT/GET/HEAD now require an owned workspace context, link uploads to workspaces, and reject cross-user blob access.
-- **SQLite server tuning.** Backend store connections now enforce WAL mode, a busy timeout, and a single-writer pool shape for SQLite concurrency.
-- **Graceful backend WAL checkpoint.** Server shutdown now drains requests, checkpoints SQLite WAL state, and flushes stdout-backed logs before exit.
-- **Request-scoped backend logging.** HTTP and gRPC requests now log request IDs, route/RPC names, status, latency, authenticated user IDs, and workspace/device context when available.
-- **Backend request IDs.** HTTP responses now carry `X-Request-ID`, incoming request IDs are
-  propagated into context, and gRPC requests propagate the same ID from metadata.
 - **Structured backend logging foundation.** The server now configures `log/slog` with text/json
   formats, runtime log levels, and redaction for token/key/secret/cookie/password attributes.
 - **Distinct backend liveness probe.** Added `/livez` as a process-up probe separate from
@@ -60,7 +14,7 @@ and every commit updates this file under `Unreleased`.
 - **Split a shared expense (B24).** A new **Split** screen in the Tools nav: enter an amount, tick who's
   sharing it, and it shows each member's even share (the rounding remainder distributed so they add up
   exactly); pick who paid and it lists who owes them what. Built on the pure `internal/split` core — no
-  setup, a handy household calculator.
+  setup, a handy household calculator. It has its own split icon in the rail.
 - **Reports: Savings-rate trend (B21).** The Reports screen now charts your savings rate (percent of income
   kept) over the last six periods, so you can see whether it's trending up. Backed by a pure, table-tested
   `reports.SavingsRateSeries`.
