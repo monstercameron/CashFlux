@@ -4356,8 +4356,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Caching: immutable blob cache headers (+ CDN later); ETag/If-None-Match on `GetWorkspace`.
 
 ### 7.19 API governance & operability
-- [ ] Versioned API (`/v1`, proto package versioning); **backward-compat policy** + deprecation windows;
+- [x] Versioned API (`/v1`, proto package versioning); **backward-compat policy** + deprecation windows;
       CI proto-/API-compat guard (the bridge ships an `api_compat_guard` tool — reuse the pattern).
+      Done: `cmd/api_compat_guard` runs in CI and checks `/v1`, `cashflux.v1`, backend compatibility constants,
+      the generated-code target package, and the proto compatibility/deprecation policy.
 - [ ] Consistent **error taxonomy** (gRPC codes ↔ HTTP statuses) with stable, documented error reasons;
       machine-readable error details; no internal leakage in messages.
 - [x] Config via env/secret manager with validation on boot; **feature flags** (billing on/off, AI proxy

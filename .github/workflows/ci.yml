@@ -30,6 +30,9 @@ jobs:
       - name: Secrets scan
         run: go run github.com/zricethezav/gitleaks/v8@latest detect --no-git --source . --config .gitleaks.toml --redact --verbose
 
+      - name: API compatibility guard
+        run: go run ./cmd/api_compat_guard
+
       - name: Test (pure logic packages — js/wasm view packages are build-tagged out)
         run: go test ./...
 

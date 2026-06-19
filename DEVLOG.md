@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - ci: add backend api compatibility guard (7.19)
+
+- Added `cmd/api_compat_guard` as a lightweight CI guard while generated proto drift tooling remains blocked on
+  pinned `protoc`/plugin setup.
+- The guard checks the `cashflux.v1` proto package, backend Go package target, `/v1` server compatibility
+  constants, proto policy docs, and the CI invocation itself.
+- Documented deprecation windows in `proto/README.md` and marked the 7.19 versioned API governance item done.
+
 ## 2026-06-19 — feat: paginate Transactions list (C39)
 
 - Long ledgers built every row at once. Added a `visN` state (default `txnPageSize` = 50); the default render

@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend API compatibility guard (7.19).** Added `cmd/api_compat_guard`, CI coverage, and proto
+  deprecation-window docs to keep `/v1`, `cashflux.v1`, and server compatibility constants aligned.
 - **Backend error model.** Added `docs/BACKEND_ERRORS.md` documenting gRPC code mappings, HTTP status
   equivalents, and the in-band `accepted=false` LWW stale-write response.
 - **Smart-quotes provider (B17.5).** New pure, table-tested `internal/quotes`: a curated set of
