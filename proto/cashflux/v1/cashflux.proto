@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package cashflux.v1;
+
+option go_package = "github.com/monstercameron/CashFlux/internal/backendrpc/pb;backendrpcpb";
+
+message Workspace {
+  string id = 1;
+  string name = 2;
+  string color = 3;
+  int32 sort = 4;
+  bool deleted = 5;
+  int64 version = 6;
+  string updated_at = 7;
+  string device_id = 8;
+}
+
+message DatasetEnvelope {
+  int32 schema_version = 1;
+  bytes gzipped_json = 2;
+}
+
+message BlobRef {
+  string hash = 1;
+  string mime = 2;
+  int64 size = 3;
+  string name = 4;
+}
+
+message ListWorkspacesRequest {
+  bool include_deleted = 1;
+}
+
+message ListWorkspacesResponse {
+  repeated Workspace workspaces = 1;
+}
+
+message GetWorkspaceRequest {
+  string id = 1;
+  string if_none_match = 2;
+}
+
+message GetWorkspaceResponse {
+  bool found = 1;
+  bool not_modified = 2;
+  string etag = 3;
+  Workspace workspace = 4;
+  bytes dataset = 5;
+}
+
+message PutWorkspaceRequest {
+  Workspace workspace = 1;
+  bytes dataset = 2;
+  string client_updated_at = 3;
+  bool force = 4;
+}
+
+message PutWorkspaceResponse {
+  bool accepted = 1;
+  Workspace workspace = 2;
+  bytes dataset = 3;
+  int64 version = 4;
+  string updated_at = 5;
+}
+
+message DeleteWorkspaceRequest {
+  string id = 1;
+  string updated_at = 2;
+  string device_id = 3;
+}
+
+message DeleteWorkspaceResponse {
+  bool deleted = 1;
+}
+
+message WatchWorkspacesRequest {
+  bool include_deleted = 1;
+}
+
+message WatchWorkspacesResponse {
+  Workspace workspace = 1;
+}
+
+message SetKeyRequest {
+  string provider = 1;
+  string key = 2;
+}
+
+message SetKeyResponse {
+  bool stored = 1;
+  string provider = 2;
+}
+
+message ListModelsRequest {}
+
+message ListModelsResponse {
+  repeated string models = 1;
+}
+
+message Message {
+  string role = 1;
+  string content = 2;
+}
+
+message Usage {
+  int32 prompt_tokens = 1;
+  int32 completion_tokens = 2;
+  int32 total_tokens = 3;
+}
+
+message ChatRequest {
+  string model = 1;
+  repeated Message messages = 2;
+  double temperature = 3;
+}
+
+message VisionRequest {
+  string model = 1;
+  string system_prompt = 2;
+  string user_text = 3;
+  string image_url = 4;
+  double temperature = 5;
+  string schema_name = 6;
+  bytes schema = 7;
+}
+
+message Completion {
+  string content = 1;
+  Usage usage = 2;
+}
+
+service SyncService {
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
+  rpc PutWorkspace(PutWorkspaceRequest) returns (PutWorkspaceResponse);
+  rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (DeleteWorkspaceResponse);
+  rpc WatchWorkspaces(WatchWorkspacesRequest) returns (stream WatchWorkspacesResponse);
+}
+
+service AIService {
+  rpc SetKey(SetKeyRequest) returns (SetKeyResponse);
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+  rpc Chat(ChatRequest) returns (Completion);
+  rpc Vision(VisionRequest) returns (Completion);
+}

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend proto contract (7.1)
+
+- Added `proto/cashflux/v1/cashflux.proto` as the canonical backend contract for the GoGRPCBridge path:
+  `SyncService`, `AIService`, shared workspace envelopes, opaque dataset bytes, and blob references.
+- Added `proto/README.md` with the compatibility policy: do not renumber fields, reserve removed fields,
+  keep client entities out of the proto, and keep generated code aligned with `internal/backendrpc`.
+- Left code generation open because this machine does not have `protoc` or the Go plugins installed; tests
+  now pin the contract shape until generated code is introduced.
+
 ## 2026-06-19 - docs: reconcile backend toolchain pin (7.0)
 
 - Reconciled the backend 7.0 toolchain TODO against the current repo: `go.mod` pins Go 1.26.0 and

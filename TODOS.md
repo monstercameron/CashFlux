@@ -3936,12 +3936,14 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       server + `GOOS=js GOARCH=wasm` client builds are part of this atom's verification.
 
 ### 7.1 Proto contracts (shared client+server) ★
-- [ ] `proto/` package + gen output dir; versioning policy (no breaking changes; reserve removed fields).
-- [ ] Common messages: `Workspace{id,name,color,sort,deleted,version,updatedAt,deviceId}`,
+- [~] `proto/` package + gen output dir; versioning policy (no breaking changes; reserve removed fields).
+      `proto/cashflux/v1/cashflux.proto` and `proto/README.md` now define the contract and policy; generated
+      Go output remains blocked on pinned `protoc`/plugin tooling.
+- [x] Common messages: `Workspace{id,name,color,sort,deleted,version,updatedAt,deviceId}`,
       `DatasetEnvelope{schemaVersion, gzippedJson bytes}`, `BlobRef{hash,mime,size,name}`.
-- [ ] Keep the dataset as an opaque **bytes/gzip JSON** field (reuse `store.ExportJSON`) — do **not**
+- [x] Keep the dataset as an opaque **bytes/gzip JSON** field (reuse `store.ExportJSON`) — do **not**
       re-model every entity in proto; only the sync/AI envelopes are typed.
-- [ ] `SyncService`: `ListWorkspaces`, `GetWorkspace`, `PutWorkspace`, `DeleteWorkspace`,
+- [x] `SyncService`: `ListWorkspaces`, `GetWorkspace`, `PutWorkspace`, `DeleteWorkspace`,
       `WatchWorkspaces` (server stream).
 - [~] `AIService`: `SetKey`, `ListModels`, `Chat`, and `Vision` unary RPCs are done over the
       GoGRPCBridge `/grpc` tunnel. Remaining: final server-streaming `Chat`/`Vision` chunk responses.

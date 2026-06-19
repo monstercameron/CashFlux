@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend proto contract (7.1).** Added `proto/cashflux/v1/cashflux.proto` plus contract-policy docs and
+  tests covering SyncService/AIService methods, opaque dataset bytes, and blob references.
 - **Backend toolchain pin reconciliation (7.0).** Locked the server/client backend toolchain expectation
   with deploy coverage for `go.mod` Go 1.26.0 and the `golang:1.26-alpine` server build image.
 - **Liquid-balance helper.** New pure, table-tested `ledger.LiquidBalance` sums spendable cash (checking,
