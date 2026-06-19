@@ -32,3 +32,29 @@ func TestShouldApplyRemote(t *testing.T) {
 		})
 	}
 }
+
+func TestPendingQueueUpsertAndRemove(t *testing.T) {
+	queue := []PendingMutation{
+		{WorkspaceID: "w1", Hash: "old", UpdatedAt: "2026-06-19T10:00:00Z"},
+		{WorkspaceID: "w2", Hash: "keep", UpdatedAt: "2026-06-19T10:01:00Z"},
+	}
+
+	queue = UpsertPending(queue, PendingMutation{WorkspaceID: "w1", Hash: "new", UpdatedAt: "2026-06-19T10:02:00Z"})
+	if len(queue) != 2 || queue[0].WorkspaceID != "w1" || queue[0].Hash != "new" || queue[1].WorkspaceID != "w2" {
+		t.Fatalf("upsert replacement queue = %+v", queue)
+	}
+
+	queue = UpsertPending(queue, PendingMutation{WorkspaceID: "w3", Hash: "third", UpdatedAt: "2026-06-19T10:03:00Z"})
+	if len(queue) != 3 || queue[2].WorkspaceID != "w3" {
+		t.Fatalf("upsert append queue = %+v", queue)
+	}
+
+	queue = RemovePending(queue, "w1", "wrong")
+	if len(queue) != 3 {
+		t.Fatalf("remove with mismatched hash changed queue = %+v", queue)
+	}
+	queue = RemovePending(queue, "w1", "new")
+	if len(queue) != 2 || queue[0].WorkspaceID != "w2" || queue[1].WorkspaceID != "w3" {
+		t.Fatalf("remove accepted queue = %+v", queue)
+	}
+}

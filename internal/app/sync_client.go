@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall/js"
@@ -23,6 +24,8 @@ import (
 
 const syncMetaPrefix = "cashflux:sync-meta:"
 const syncDeviceIDKey = "cashflux:sync-device-id"
+const syncQueueKey = "cashflux:sync-queue"
+const syncStatusKey = "cashflux:sync-status"
 
 type syncMeta struct {
 	UpdatedAt string `json:"updatedAt,omitempty"`
@@ -30,19 +33,44 @@ type syncMeta struct {
 	Version   int64  `json:"version,omitempty"`
 }
 
+type queuedSyncMutation struct {
+	WorkspaceID      string `json:"workspaceId"`
+	Name             string `json:"name,omitempty"`
+	Color            string `json:"color,omitempty"`
+	Sort             int    `json:"sort,omitempty"`
+	DeviceID         string `json:"deviceId,omitempty"`
+	Dataset          string `json:"dataset"`
+	ClientUpdatedAt  string `json:"clientUpdatedAt"`
+	Hash             string `json:"hash"`
+	LastAttemptError string `json:"lastAttemptError,omitempty"`
+}
+
+type syncStatus struct {
+	State        string `json:"state"`
+	Pending      int    `json:"pending,omitempty"`
+	LastSyncedAt string `json:"lastSyncedAt,omitempty"`
+	Message      string `json:"message,omitempty"`
+}
+
 var syncPushMu sync.Mutex
 
 func startBackendSync() {
+	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
 	startBackendWatch()
 	cb := js.FuncOf(func(js.Value, []js.Value) any {
 		if js.Global().Get("document").Get("visibilityState").String() == "visible" {
+			flushBackendSyncQueue()
 			pullActiveWorkspaceFromBackend(true)
 		}
 		return nil
 	})
 	js.Global().Call("addEventListener", "visibilitychange", cb)
 	js.Global().Call("addEventListener", "focus", cb)
+	js.Global().Call("addEventListener", "online", js.FuncOf(func(js.Value, []js.Value) any {
+		flushBackendSyncQueue()
+		return nil
+	}))
 }
 
 func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
@@ -60,40 +88,78 @@ func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 	if meta.Hash == hash {
 		return
 	}
+	enqueueSyncMutation(queuedSyncMutation{
+		WorkspaceID:     w.ID,
+		Name:            w.Name,
+		Color:           w.Color,
+		Sort:            workspaceSort(r, w.ID),
+		DeviceID:        syncDeviceID(),
+		Dataset:         string(dataset),
+		ClientUpdatedAt: updatedAt.UTC().Format(time.RFC3339Nano),
+		Hash:            hash,
+	})
+	flushBackendSyncQueue()
+}
+
+func requestBackendSyncNow() {
+	flushBackendSyncQueue()
+	pullActiveWorkspaceFromBackend(true)
+}
+
+func flushBackendSyncQueue() {
+	pr := uistate.LoadPrefs().Normalize()
+	if strings.TrimSpace(pr.ServerURL) == "" || strings.TrimSpace(pr.ServerToken) == "" {
+		return
+	}
 	go func() {
 		syncPushMu.Lock()
 		defer syncPushMu.Unlock()
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		queue := loadSyncQueue()
+		if len(queue) == 0 {
+			setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+			return
+		}
+		setSyncStatus(syncStatus{State: "syncing", Pending: len(queue)})
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
 		if err != nil {
+			setSyncStatus(syncStatus{State: "offline", Pending: len(queue), Message: "backend unavailable"})
 			logSyncError("backend sync dial failed", err)
 			return
 		}
 		defer conn.Close()
-		var resp backendrpc.PutWorkspaceResponse
-		err = conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
-			Workspace: backendrpc.Workspace{
-				ID:       w.ID,
-				Name:     w.Name,
-				Color:    w.Color,
-				Sort:     workspaceSort(r, w.ID),
-				DeviceID: syncDeviceID(),
-			},
-			Dataset:         dataset,
-			ClientUpdatedAt: updatedAt.UTC().Format(time.RFC3339Nano),
-		}, &resp, backendrpc.JSONCallOptions()...)
-		if err != nil {
-			logSyncError("backend sync push failed", err)
-			return
-		}
-		if !resp.Accepted {
-			if app := appstate.Default; app != nil {
-				app.Log().Warn("backend sync push rejected; newer server snapshot available", "workspace", w.ID)
+		for _, item := range queue {
+			var resp backendrpc.PutWorkspaceResponse
+			err = conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+				Workspace: backendrpc.Workspace{
+					ID:       item.WorkspaceID,
+					Name:     item.Name,
+					Color:    item.Color,
+					Sort:     item.Sort,
+					DeviceID: item.DeviceID,
+				},
+				Dataset:         []byte(item.Dataset),
+				ClientUpdatedAt: item.ClientUpdatedAt,
+			}, &resp, backendrpc.JSONCallOptions()...)
+			if err != nil {
+				item.LastAttemptError = err.Error()
+				upsertQueuedSyncMutation(item)
+				setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: "sync failed"})
+				logSyncError("backend sync push failed", err)
+				return
 			}
-			return
+			removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
+			if !resp.Accepted {
+				setSyncStatus(syncStatus{State: "conflict", Pending: len(loadSyncQueue()), Message: "newer server snapshot available"})
+				if app := appstate.Default; app != nil {
+					app.Log().Warn("backend sync push rejected; newer server snapshot available", "workspace", item.WorkspaceID)
+				}
+				continue
+			}
+			saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash})
 		}
-		saveSyncMeta(w.ID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: hash})
+		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 	}()
 }
 
@@ -170,6 +236,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		err = conn.Invoke(ctx, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: w.ID}, &resp, backendrpc.JSONCallOptions()...)
 		if err != nil {
 			logSyncError("backend sync pull failed", err)
+			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: "pull failed"})
 			return
 		}
 		if !resp.Found || len(resp.Dataset) == 0 {
@@ -196,6 +263,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		lsSet(datasetStoreKey, string(resp.Dataset))
 		hadLocalDataset = true
 		saveSyncMeta(w.ID, syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(resp.Dataset)})
+		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 		if reloadOnApply {
 			reloadPage()
 		}
@@ -229,6 +297,117 @@ func loadSyncMeta(workspaceID string) syncMeta {
 func saveSyncMeta(workspaceID string, meta syncMeta) {
 	if data, err := json.Marshal(meta); err == nil {
 		lsSet(syncMetaKey(workspaceID), string(data))
+	}
+}
+
+func loadSyncQueue() []queuedSyncMutation {
+	var queue []queuedSyncMutation
+	if raw := lsGet(syncQueueKey); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &queue)
+	}
+	return queue
+}
+
+func saveSyncQueue(queue []queuedSyncMutation) {
+	if len(queue) == 0 {
+		lsRemove(syncQueueKey)
+		return
+	}
+	if data, err := json.Marshal(queue); err == nil {
+		lsSet(syncQueueKey, string(data))
+	}
+}
+
+func enqueueSyncMutation(item queuedSyncMutation) {
+	upsertQueuedSyncMutation(item)
+	setSyncStatus(syncStatus{State: "syncing", Pending: len(loadSyncQueue())})
+}
+
+func upsertQueuedSyncMutation(item queuedSyncMutation) {
+	queue := loadSyncQueue()
+	pending := make([]syncstate.PendingMutation, 0, len(queue))
+	for _, q := range queue {
+		pending = append(pending, syncstate.PendingMutation{WorkspaceID: q.WorkspaceID, Hash: q.Hash, UpdatedAt: q.ClientUpdatedAt})
+	}
+	pending = syncstate.UpsertPending(pending, syncstate.PendingMutation{WorkspaceID: item.WorkspaceID, Hash: item.Hash, UpdatedAt: item.ClientUpdatedAt})
+	next := make([]queuedSyncMutation, 0, len(pending))
+	for _, p := range pending {
+		if p.WorkspaceID == item.WorkspaceID && p.Hash == item.Hash {
+			next = append(next, item)
+			continue
+		}
+		for _, q := range queue {
+			if q.WorkspaceID == p.WorkspaceID && q.Hash == p.Hash {
+				next = append(next, q)
+				break
+			}
+		}
+	}
+	saveSyncQueue(next)
+}
+
+func removeQueuedSyncMutation(workspaceID, hash string) {
+	queue := loadSyncQueue()
+	pending := make([]syncstate.PendingMutation, 0, len(queue))
+	byKey := map[string]queuedSyncMutation{}
+	for _, q := range queue {
+		pending = append(pending, syncstate.PendingMutation{WorkspaceID: q.WorkspaceID, Hash: q.Hash, UpdatedAt: q.ClientUpdatedAt})
+		byKey[q.WorkspaceID+"\x00"+q.Hash] = q
+	}
+	pending = syncstate.RemovePending(pending, workspaceID, hash)
+	next := make([]queuedSyncMutation, 0, len(pending))
+	for _, p := range pending {
+		if q, ok := byKey[p.WorkspaceID+"\x00"+p.Hash]; ok {
+			next = append(next, q)
+		}
+	}
+	saveSyncQueue(next)
+}
+
+func setSyncStatus(status syncStatus) {
+	if status.State == "" {
+		status.State = "synced"
+	}
+	if data, err := json.Marshal(status); err == nil {
+		lsSet(syncStatusKey, string(data))
+	}
+}
+
+func loadSyncStatus() syncStatus {
+	var status syncStatus
+	if raw := lsGet(syncStatusKey); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &status)
+	}
+	if status.State == "" {
+		if pending := len(loadSyncQueue()); pending > 0 {
+			status.State = "offline"
+			status.Pending = pending
+		} else {
+			status.State = "synced"
+		}
+	}
+	return status
+}
+
+func syncStatusLabel() string {
+	status := loadSyncStatus()
+	switch status.State {
+	case "syncing":
+		return "Syncing"
+	case "offline":
+		if status.Pending > 0 {
+			return "Offline - " + strconv.Itoa(status.Pending) + " queued"
+		}
+		return "Offline"
+	case "error":
+		return "Sync error"
+	case "conflict":
+		return "Newer server copy available"
+	default:
+		if status.Pending > 0 {
+			return strconv.Itoa(status.Pending) + " queued"
+		}
+		return "Synced"
 	}
 }
 

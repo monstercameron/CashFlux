@@ -4027,10 +4027,13 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] Sync client layered over the existing autosave: browser autosave now pushes changed active-workspace
       snapshots over `/grpc`, pulls newer server snapshots on boot/focus, applies newest-by-`updatedAt` using
       local sync metadata, maps local workspace ids directly to server workspace ids, and subscribes to
-      `WatchWorkspaces` so active-workspace changes from other devices trigger a pull. Remaining: offline
-      mutation queue/retry UI and explicit conflict UX.
-- [ ] Offline-first: a mutation/queue so the app works offline; flush on reconnect; status surface
+      `WatchWorkspaces` so active-workspace changes from other devices trigger a pull. A persisted per-workspace
+      pending mutation queue retries on focus/online/Sync now, and Settings surfaces synced/syncing/offline/error
+      status. Remaining: explicit conflict resolution UX beyond LWW status copy.
+- [~] Offline-first: a mutation/queue so the app works offline; flush on reconnect; status surface
       (synced / offline / syncing / error) + a "Sync now" action.
+      Done: latest pending snapshot per workspace is persisted locally, retrying on focus/online/manual sync with
+      Settings status copy. Remaining: richer queued-change count outside Settings and conflict action sheet.
 - [ ] **Artifact extraction (client schema change):** move `domain.Artifact.Bytes` out of the synced
       snapshot → upload via blob `PUT` (sha256), download via `GET`, keep a local cache; the dataset
       carries a `BlobRef`. Migrate existing inline artifacts on first sync.
@@ -4040,8 +4043,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       Done: backend `ChatStream`/`VisionStream` are implemented, and the wasm AI proxy transport now consumes
       those streaming methods while preserving existing result/error callbacks.
 - [ ] OAuth login UI + token handling, preserving offline-first (no login required to use locally).
-- [ ] Settings: backend URL, sign in/out, sync status; conflict/LWW UX ("a newer version was on the
-      server — pulled it").
+- [~] Settings: backend URL, sign in/out, sync status; conflict/LWW UX ("a newer version was on the server - pulled it").
+      Done: backend URL/token, test connection, key upload, Cloud/self-host mode, Sync now, and sync status are
+      in Settings. Remaining: OAuth sign in/out and richer conflict action sheet.
 
 ### 7.8 Security & privacy ★
 - [x] AES-GCM key management (master-key source + rotation); AI keys encrypted at rest.

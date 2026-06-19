@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Client sync queue and status (7.7).** Browser autosave now persists the latest pending backend mutation per
+  workspace, retries on focus/online/manual sync, and exposes sync status plus a Sync now action in Settings.
 - **Blob bridge round-trip coverage (7.10).** Added an integration test that creates a workspace through the
   gRPC tunnel and verifies authenticated HTTP blob PUT, HEAD, and GET on the same backend server.
 - **Two-device sync bridge e2e (7.3/7.10).** Added integration coverage for two devices connected through

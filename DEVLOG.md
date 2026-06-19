@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add client sync queue status (7.7)
+
+- Added a persisted browser sync queue that keeps the latest unsent snapshot per workspace and retries it on
+  page focus, browser online, startup, and manual Sync now.
+- Settings now shows a compact sync status and exposes Sync now next to the backend connection controls.
+- Added pure queue helper coverage in `internal/syncstate`; richer conflict resolution and OAuth sign-in/out
+  remain tracked separately.
+
 ## 2026-06-19 - test: add blob bridge round-trip coverage (7.10)
 
 - Added a focused integration test that creates a workspace over the GoGRPCBridge tunnel, then uploads and

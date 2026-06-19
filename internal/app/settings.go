@@ -421,6 +421,10 @@ func globalSettingsForm() uic.Node {
 			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
 		})
 	})
+	syncNow := uic.UseEvent(func() {
+		requestBackendSyncNow()
+		notify(uistate.T("settings.syncRequested"), false)
+	})
 
 	// Freshness window editor: per-type day inputs writing Settings.FreshnessOverrides.
 	setFreshness := func(typeKey string, days int) {
@@ -516,8 +520,10 @@ func globalSettingsForm() uic.Node {
 		Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken)),
 		If(cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.backendNote"))),
 		If(!cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.selfHostedNote"))),
+		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.syncStatus", syncStatusLabel())),
 		Div(Class("flex flex-wrap gap-2 mt-[0.45rem]"),
 			Button(Class("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
+			Button(Class("btn"), Type("button"), OnClick(syncNow), uistate.T("settings.syncNow")),
 			Button(Class("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
 			A(Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
