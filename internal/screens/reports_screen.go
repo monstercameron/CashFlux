@@ -216,6 +216,19 @@ func Reports() ui.Node {
 		))
 	}
 
+	// Income by source: where the money comes from this period.
+	incomeRows, _ := reports.IncomeByCategory(txns, cs, ce, rates)
+	var incomeNodes []ui.Node
+	for _, r := range incomeRows {
+		if r.Amount == 0 {
+			continue
+		}
+		incomeNodes = append(incomeNodes, Div(Class("row"),
+			Div(Class("row-main"), Span(Class("row-desc"), nameOf(r.CategoryID))),
+			Span(Class("budget-amount"), fmtMinor(r.Amount)),
+		))
+	}
+
 	// Spending-by-weekday insight: which day money tends to leave.
 	weekdayPeakLine := ""
 	if wd, err := reports.SpendingByWeekday(txns, cs, ce, rates); err == nil {
@@ -245,6 +258,10 @@ func Reports() ui.Node {
 				}), uistate.T("reports.downloadCsv")),
 			)),
 		),
+		If(len(incomeNodes) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("reports.incomeBySource")),
+			Div(Class("rows"), incomeNodes),
+		)),
 		If(len(payeeNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.topPayees")),
 			Div(Class("rows"), payeeNodes),

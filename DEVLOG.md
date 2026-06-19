@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: income by source (B21)
+
+- Added pure `reports.IncomeByCategory` mirroring SpendingByCategory but gated on `IsIncome` (positive,
+  non-transfer); reuses the CategorySpend result type (Amount only, no comparison). Surfaced as an "Income by
+  source" card on the Reports screen between biggest-expenses and top-payees, reusing the screen's nameOf/
+  fmtMinor helpers. Added the `reports.incomeBySource` i18n key.
+- Renamed the test helper `income`→`incomeTxn` (collided with an existing `income` in the package tests).
+  Table tests: sort + expense/transfer/out-of-range exclusions, empty input. gofmt clean, reports + i18n tests
+  green, wasm build green. Restored docs from HEAD first (re-truncated to 0).
+
 ## 2026-06-19 — feat: debt payoff strategy comparison on Planning (D9)
 
 - Surfaced `payoff.BuildPlan` on the Planning screen. Builds `[]payoff.Debt` from non-archived liability

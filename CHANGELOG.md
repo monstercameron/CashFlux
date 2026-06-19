@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Income by source (B21).** New pure, table-tested `reports.IncomeByCategory` (income totals by category,
+  largest first, transfers/expenses excluded) and an "Income by source" card on the Reports screen — the
+  symmetric "where the money comes from" view alongside spending.
+
+### Added
 - **Debt payoff strategy comparison on Planning (D9).** The Planning screen now compares the snowball and
   avalanche methods across your liability accounts (pulling each one's balance, APR, and minimum payment),
   with an optional "extra per month" input. It shows months-to-clear and total interest for each method, the
