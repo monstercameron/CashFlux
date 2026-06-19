@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: collect backend red metrics
+
+- Added an in-process metrics collector for HTTP routes and gRPC methods.
+- Recorded request totals and duration sums from the existing request/RPC logging middleware.
+- Extended `/metrics` and tests to prove route/RPC status counters are exported in Prometheus text format.
+
 ## 2026-06-18 - feat: gate backend ai proxy
 
 - Added `CASHFLUX_SERVER_AI_PROXY_ENABLED` as an environment feature flag.

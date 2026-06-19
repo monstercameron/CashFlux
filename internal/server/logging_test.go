@@ -51,7 +51,7 @@ func TestConfigValidateRejectsBadLogConfig(t *testing.T) {
 func TestRequestLogMiddlewareWritesRequestFields(t *testing.T) {
 	var buf bytes.Buffer
 	logger := NewLogger(&buf, Config{LogFormat: "json", LogLevel: "info"})
-	h := requestIDMiddleware(requestLogMiddleware(logger, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := requestIDMiddleware(requestLogMiddleware(logger, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		SetLogScope(r.Context(), LogScope{WorkspaceID: "w-http", DeviceID: "d-http"})
 		w.WriteHeader(http.StatusAccepted)
 	})))
@@ -70,9 +70,10 @@ func TestRequestLogMiddlewareWritesRequestFields(t *testing.T) {
 func TestLoggingUnaryInterceptorWritesRPCFields(t *testing.T) {
 	var buf bytes.Buffer
 	logger := NewLogger(&buf, Config{LogFormat: "json", LogLevel: "info"})
+	metrics := NewMetrics()
 	ctx := ContextWithAuthUser(ContextWithRequestID(context.Background(), "rpc-1"), AuthUser{ID: "u1"})
 	ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("x-request-id", "rpc-1"))
-	interceptor := LoggingUnaryInterceptor(logger)
+	interceptor := LoggingUnaryInterceptor(logger, metrics)
 	if _, err := interceptor(ctx, "req", &grpc.UnaryServerInfo{FullMethod: "/cashflux.v1.SyncService/ListWorkspaces"}, func(ctx context.Context, req any) (any, error) {
 		SetLogScope(ctx, LogScope{WorkspaceID: "w1", DeviceID: "browser-a"})
 		return "ok", nil
@@ -84,5 +85,10 @@ func TestLoggingUnaryInterceptorWritesRPCFields(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("log missing %s in %s", want, out)
 		}
+	}
+	var metricsOut bytes.Buffer
+	metrics.WritePrometheus(&metricsOut)
+	if !strings.Contains(metricsOut.String(), `cashflux_grpc_requests_total{method="/cashflux.v1.SyncService/ListWorkspaces",status="OK"} 1`) {
+		t.Fatalf("metrics missing grpc count: %s", metricsOut.String())
 	}
 }

@@ -54,6 +54,7 @@ type Config struct {
 	LogFormat                         string
 	LogLevel                          string
 	Logger                            *slog.Logger
+	Metrics                           *Metrics
 }
 
 type OAuthProviderConfig struct {

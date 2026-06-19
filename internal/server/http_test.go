@@ -230,7 +230,11 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func TestMetricsEndpointRequiresAuth(t *testing.T) {
-	h := NewMux(Config{AuthMode: "token", Token: "dev-token"}, openTestStore(t))
+	metrics := NewMetrics()
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token", Metrics: metrics}, openTestStore(t))
+	versionReq := httptest.NewRequest(http.MethodGet, "/v1/version", nil)
+	h.ServeHTTP(httptest.NewRecorder(), versionReq)
+	metrics.ObserveGRPC("/cashflux.v1.SyncService/ListWorkspaces", "OK", 2*time.Millisecond)
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -250,6 +254,14 @@ func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "cashflux_server_up 1") {
 		t.Fatalf("metrics body = %q", rr.Body.String())
+	}
+	for _, want := range []string{
+		`cashflux_http_requests_total{route="/v1/version",status="200"} 1`,
+		`cashflux_grpc_requests_total{method="/cashflux.v1.SyncService/ListWorkspaces",status="OK"} 1`,
+	} {
+		if !strings.Contains(rr.Body.String(), want) {
+			t.Fatalf("metrics body missing %q in %q", want, rr.Body.String())
+		}
 	}
 }
 

@@ -105,7 +105,7 @@ func LogScopeFromContext(ctx context.Context) (LogScope, bool) {
 	return *scope, true
 }
 
-func requestLogMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
+func requestLogMiddleware(logger *slog.Logger, metrics *Metrics, next http.Handler) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -114,6 +114,9 @@ func requestLogMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		ctx := ContextWithLogScope(ContextWithLogger(r.Context(), logger))
 		next.ServeHTTP(rec, r.WithContext(ctx))
+		if metrics != nil {
+			metrics.ObserveHTTP(r.URL.Path, rec.status, time.Since(start))
+		}
 		id, _ := RequestIDFromContext(ctx)
 		args := []any{
 			"request_id", id,
@@ -154,7 +157,7 @@ func (r *statusRecorder) Flush() {
 	}
 }
 
-func LoggingUnaryInterceptor(logger *slog.Logger) grpc.UnaryServerInterceptor {
+func LoggingUnaryInterceptor(logger *slog.Logger, metrics *Metrics) grpc.UnaryServerInterceptor {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -162,12 +165,16 @@ func LoggingUnaryInterceptor(logger *slog.Logger) grpc.UnaryServerInterceptor {
 		start := time.Now()
 		ctx = ContextWithLogScope(ContextWithLogger(ctx, logger))
 		resp, err := handler(ctx, req)
-		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), time.Since(start))
+		elapsed := time.Since(start)
+		if metrics != nil {
+			metrics.ObserveGRPC(info.FullMethod, status.Code(err).String(), elapsed)
+		}
+		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), elapsed)
 		return resp, err
 	}
 }
 
-func LoggingStreamInterceptor(logger *slog.Logger) grpc.StreamServerInterceptor {
+func LoggingStreamInterceptor(logger *slog.Logger, metrics *Metrics) grpc.StreamServerInterceptor {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -175,7 +182,11 @@ func LoggingStreamInterceptor(logger *slog.Logger) grpc.StreamServerInterceptor 
 		start := time.Now()
 		ctx := ContextWithLogScope(ContextWithLogger(stream.Context(), logger))
 		err := handler(srv, loggingServerStream{ServerStream: stream, ctx: ctx})
-		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), time.Since(start))
+		elapsed := time.Since(start)
+		if metrics != nil {
+			metrics.ObserveGRPC(info.FullMethod, status.Code(err).String(), elapsed)
+		}
+		logRPC(ctx, logger, info.FullMethod, status.Code(err).String(), elapsed)
 		return err
 	}
 }

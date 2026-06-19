@@ -23,6 +23,9 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	if len(stores) > 0 {
 		store = stores[0]
 	}
+	if cfg.Metrics == nil {
+		cfg.Metrics = NewMetrics()
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -64,7 +67,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("PUT /v1/blobs/{hash}", handlePutBlob(cfg, store))
 	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
-	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, mux))))
+	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddleware(cfg.Logger, cfg.Metrics, mux))))
 }
 
 func handleCORSPreflight(cfg Config) http.HandlerFunc {
@@ -84,9 +87,7 @@ func handleMetrics(cfg Config) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		_, _ = w.Write([]byte("# HELP cashflux_server_up Server process health.\n"))
-		_, _ = w.Write([]byte("# TYPE cashflux_server_up gauge\n"))
-		_, _ = w.Write([]byte("cashflux_server_up 1\n"))
+		cfg.Metrics.WritePrometheus(w)
 	}
 }
 
