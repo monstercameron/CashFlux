@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backup-reminder cadence selector (B28).** Settings → Data now has a "Backup reminders" control
+  (Monthly / Weekly / Off), persisted locally; the gentle "back up your data" nudge honors it. Fully completes
+  the backup-reminder feature (shipped in `f9ac390`).
 - **Backend master-key handling docs.** The self-host env template no longer ships a default-looking master
   key, and the runbook now directs operators to source `CASHFLUX_SERVER_MASTER_KEY` from a secret manager or
   KMS-backed secret with the current maintenance-window rotation path.

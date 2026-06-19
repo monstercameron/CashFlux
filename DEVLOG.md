@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: backup-reminder cadence selector (B28, docs for f9ac390)
+
+- Code shipped in f9ac390 (code-only, docs deferred because the parallel session held CHANGELOG/DEVLOG
+  mid-commit). Settings → Data "Backup reminders" select (Monthly/Weekly/Off) persisted to localStorage
+  (`cashflux:backupCadence`); `notifyrun.loadBackupCadence` reads it (default Monthly), `saveBackupCadence`
+  writes it. Fully completes B28 (the previously-deferred cadence selector).
+- This is the catch-up doc entry; committed docs-only path-scoped.
+
 ## 2026-06-19 - docs: document backend master-key handling
 
 - Removed the default-looking `CASHFLUX_SERVER_MASTER_KEY` value from the self-host env template and replaced
