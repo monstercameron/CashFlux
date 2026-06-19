@@ -104,6 +104,30 @@ func TestSyncServicePutWorkspaceRejectsCrossUserIDTakeover(t *testing.T) {
 	}
 }
 
+func TestSyncServiceWatchFanoutIsUserScoped(t *testing.T) {
+	service := NewSyncService(openTestStore(t))
+	u1, unsubscribe1 := service.subscribeWorkspaces("u1")
+	defer unsubscribe1()
+	u2, unsubscribe2 := service.subscribeWorkspaces("u2")
+	defer unsubscribe2()
+
+	service.publishWorkspace("u1", Workspace{ID: "w1", Name: "Home", Version: 2})
+
+	select {
+	case event := <-u1:
+		if event.Workspace.ID != "w1" || event.Workspace.Name != "Home" || event.Workspace.Version != 2 {
+			t.Fatalf("u1 event = %+v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("u1 watcher did not receive event")
+	}
+	select {
+	case event := <-u2:
+		t.Fatalf("u2 watcher received cross-user event %+v", event)
+	default:
+	}
+}
+
 func TestSyncServiceRequiresAuthenticatedUser(t *testing.T) {
 	service := NewSyncService(openTestStore(t))
 	if _, err := service.List(context.Background(), false); status.Code(err) != codes.Unauthenticated {

@@ -18,6 +18,7 @@ const (
 	MethodSyncGetWorkspace    = "/cashflux.v1.SyncService/GetWorkspace"
 	MethodSyncPutWorkspace    = "/cashflux.v1.SyncService/PutWorkspace"
 	MethodSyncDeleteWorkspace = "/cashflux.v1.SyncService/DeleteWorkspace"
+	MethodSyncWatchWorkspaces = "/cashflux.v1.SyncService/WatchWorkspaces"
 )
 
 type SetKeyRequest struct {
@@ -114,6 +115,14 @@ type DeleteWorkspaceRequest struct {
 
 type DeleteWorkspaceResponse struct {
 	Deleted bool `json:"deleted"`
+}
+
+type WatchWorkspacesRequest struct {
+	IncludeDeleted bool `json:"includeDeleted,omitempty"`
+}
+
+type WatchWorkspacesResponse struct {
+	Workspace Workspace `json:"workspace"`
 }
 
 type JSONCodec struct{}

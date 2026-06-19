@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SyncService workspace watch stream.** The backend now exposes `WatchWorkspaces` over the
+  GoGRPCBridge tunnel with per-user in-process fan-out for workspace put/delete events.
 - **Browser autosave sync over gRPC.** The wasm app now pushes changed active-workspace snapshots through
   SyncService over GoGRPCBridge and pulls newer server snapshots on boot/focus using local sync metadata.
 - **Sync snapshots over gRPC.** Workspace `Put` and `Get` RPCs now carry opaque dataset snapshot bytes, storing

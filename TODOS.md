@@ -3951,9 +3951,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] `PutWorkspace` LWW: accept when `clientUpdatedAt >= stored.updatedAt` (newest wins, so a stale
       device can't clobber newer data); server-stamp `updatedAt`; bump `version`; honor a `force` flag;
       return the new `{version, updatedAt}` (and current state when rejected so the client re-pulls).
-- [ ] `WatchWorkspaces` server stream: in-proc per-user pub/sub notifies other devices of a change;
+- [x] `WatchWorkspaces` server stream: in-proc per-user pub/sub notifies other devices of a change;
       heartbeat/keepalive; clean unsubscribe on disconnect.
-- [ ] Tests: LWW accept/reject by timestamp, tombstone propagation, cross-user isolation, watch fan-out,
+- [~] Tests: LWW accept/reject by timestamp, tombstone propagation, cross-user isolation, watch fan-out,
       oversized-payload rejection.
 
 ### 7.4 AIService (per-user encrypted BYO key) ★
@@ -3988,7 +3988,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] Sync client layered over the existing autosave: browser autosave now pushes changed active-workspace
       snapshots over `/grpc`, pulls newer server snapshots on boot/focus, applies newest-by-`updatedAt` using
       local sync metadata, and maps local workspace ids directly to server workspace ids. Remaining: offline
-      mutation queue/retry UI, explicit conflict UX, and multi-device watch updates.
+      mutation queue/retry UI, explicit conflict UX, and browser subscription to server watch updates.
 - [ ] Offline-first: a mutation/queue so the app works offline; flush on reconnect; status surface
       (synced / offline / syncing / error) + a "Sync now" action.
 - [ ] **Artifact extraction (client schema change):** move `domain.Artifact.Bytes` out of the synced
@@ -4019,7 +4019,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Unit: storage, LWW, encryption, rate-limit, blob hashing + refcount/GC.
 - [~] Integration: in-proc `grpc.Server` behind the bridge over a real WS; client↔server round-trips
       now cover AI `SetKey`/`Chat` and SyncService workspace `Put`/`List`/`Get`/`Delete` unary calls.
-      Remaining: browser autosave push/pull, `WatchWorkspaces`, AI stream, blob up/down.
+      Remaining: browser autosave push/pull, browser consumption of `WatchWorkspaces`, AI stream, blob up/down.
 - [ ] e2e: two-device sync (LWW + tombstone), offline→reconnect flush, OAuth login, artifact blob
       round-trip, AI proxy streaming with a real key.
 - [ ] Load/abuse: connection caps, oversized payloads, rate limits.

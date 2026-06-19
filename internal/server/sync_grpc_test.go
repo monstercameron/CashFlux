@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
+	"google.golang.org/grpc"
 )
 
 func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
@@ -95,5 +96,55 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	}
 	if len(list.Workspaces) != 0 {
 		t.Fatalf("active workspaces after delete = %+v", list)
+	}
+}
+
+func TestSyncServiceGRPCBridgeWatchWorkspaces(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{AuthMode: "token", Token: "dev-token", AppOrigin: "*"}
+	bridge := httptest.NewServer(NewMux(cfg, store))
+	defer bridge.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	watchConn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("watch Dial: %v", err)
+	}
+	defer watchConn.Close()
+	writeConn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("write Dial: %v", err)
+	}
+	defer writeConn.Close()
+
+	stream, err := watchConn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodSyncWatchWorkspaces, backendrpc.JSONCallOptions()...)
+	if err != nil {
+		t.Fatalf("WatchWorkspaces stream: %v", err)
+	}
+	if err := stream.SendMsg(&backendrpc.WatchWorkspacesRequest{IncludeDeleted: true}); err != nil {
+		t.Fatalf("WatchWorkspaces send request: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("WatchWorkspaces close send: %v", err)
+	}
+
+	var put backendrpc.PutWorkspaceResponse
+	if err := writeConn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+		Workspace:       backendrpc.Workspace{ID: "w-watch", Name: "Watched", DeviceID: "browser-b"},
+		ClientUpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	}, &put, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("PutWorkspace invoke: %v", err)
+	}
+	if !put.Accepted {
+		t.Fatalf("PutWorkspace response = %+v", put)
+	}
+
+	var event backendrpc.WatchWorkspacesResponse
+	if err := stream.RecvMsg(&event); err != nil {
+		t.Fatalf("WatchWorkspaces recv: %v", err)
+	}
+	if event.Workspace.ID != "w-watch" || event.Workspace.Name != "Watched" || event.Workspace.Version != 1 {
+		t.Fatalf("WatchWorkspaces event = %+v", event)
 	}
 }

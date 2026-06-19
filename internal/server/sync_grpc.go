@@ -25,7 +25,9 @@ func RegisterSyncServiceServer(s grpc.ServiceRegistrar, srv *SyncService) {
 			{MethodName: "PutWorkspace", Handler: syncPutWorkspaceHandler},
 			{MethodName: "DeleteWorkspace", Handler: syncDeleteWorkspaceHandler},
 		},
-		Streams:  []grpc.StreamDesc{},
+		Streams: []grpc.StreamDesc{
+			{StreamName: "WatchWorkspaces", Handler: syncWatchWorkspacesHandler, ServerStreams: true},
+		},
 		Metadata: "cashflux/v1/sync.proto",
 	}, srv)
 }
@@ -35,6 +37,7 @@ type syncServiceServer interface {
 	GetWorkspaceRPC(context.Context, backendrpc.GetWorkspaceRequest) (backendrpc.GetWorkspaceResponse, error)
 	PutWorkspaceRPC(context.Context, backendrpc.PutWorkspaceRequest) (backendrpc.PutWorkspaceResponse, error)
 	DeleteWorkspaceRPC(context.Context, backendrpc.DeleteWorkspaceRequest) (backendrpc.DeleteWorkspaceResponse, error)
+	WatchWorkspacesRPC(backendrpc.WatchWorkspacesRequest, grpc.ServerStream) error
 }
 
 func (s *SyncService) ListWorkspacesRPC(ctx context.Context, req backendrpc.ListWorkspacesRequest) (backendrpc.ListWorkspacesResponse, error) {
@@ -118,6 +121,31 @@ func (s *SyncService) DeleteWorkspaceRPC(ctx context.Context, req backendrpc.Del
 		return backendrpc.DeleteWorkspaceResponse{}, err
 	}
 	return backendrpc.DeleteWorkspaceResponse{Deleted: deleted}, nil
+}
+
+func (s *SyncService) WatchWorkspacesRPC(req backendrpc.WatchWorkspacesRequest, stream grpc.ServerStream) error {
+	user, err := syncUser(stream.Context())
+	if err != nil {
+		return err
+	}
+	ch, unsubscribe := s.subscribeWorkspaces(user.ID)
+	defer unsubscribe()
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case resp, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if resp.Workspace.Deleted && !req.IncludeDeleted {
+				continue
+			}
+			if err := stream.SendMsg(&resp); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 func rpcWorkspace(workspace Workspace) backendrpc.Workspace {
@@ -223,4 +251,12 @@ func syncDeleteWorkspaceHandler(srv any, ctx context.Context, dec func(any) erro
 		return srv.(syncServiceServer).DeleteWorkspaceRPC(ctx, req.(backendrpc.DeleteWorkspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func syncWatchWorkspacesHandler(srv any, stream grpc.ServerStream) error {
+	var in backendrpc.WatchWorkspacesRequest
+	if err := stream.RecvMsg(&in); err != nil {
+		return err
+	}
+	return srv.(syncServiceServer).WatchWorkspacesRPC(in, stream)
 }

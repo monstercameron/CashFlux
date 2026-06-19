@@ -5,15 +5,19 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // SyncService owns per-user workspace RPC behavior above the repository layer.
 type SyncService struct {
-	store *Store
+	store   *Store
+	watchMu sync.Mutex
+	watches map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}
 }
 
 // PutWorkspaceResult reports the server-side result of a LWW workspace put.
@@ -26,7 +30,7 @@ type PutWorkspaceResult struct {
 
 // NewSyncService builds the server-side workspace sync service.
 func NewSyncService(store *Store) *SyncService {
-	return &SyncService{store: store}
+	return &SyncService{store: store, watches: map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}{}}
 }
 
 // List returns workspaces strictly scoped to the authenticated user.
@@ -102,6 +106,7 @@ func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, cli
 	if err := s.store.PutWorkspace(workspace); err != nil {
 		return PutWorkspaceResult{}, fmt.Errorf("server sync: put workspace: %w", err)
 	}
+	s.publishWorkspace(user.ID, workspace)
 	return PutWorkspaceResult{
 		Accepted:  true,
 		Workspace: workspace,
@@ -123,7 +128,48 @@ func (s *SyncService) Delete(ctx context.Context, workspaceID string, updatedAt 
 	if err != nil {
 		return false, fmt.Errorf("server sync: delete workspace: %w", err)
 	}
+	if deleted {
+		if workspace, ok, err := s.store.GetWorkspace(user.ID, workspaceID); err == nil && ok {
+			s.publishWorkspace(user.ID, workspace)
+		}
+	}
 	return deleted, nil
+}
+
+func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchWorkspacesResponse, func()) {
+	ch := make(chan backendrpc.WatchWorkspacesResponse, 16)
+	s.watchMu.Lock()
+	if s.watches == nil {
+		s.watches = map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}{}
+	}
+	if s.watches[userID] == nil {
+		s.watches[userID] = map[chan backendrpc.WatchWorkspacesResponse]struct{}{}
+	}
+	s.watches[userID][ch] = struct{}{}
+	s.watchMu.Unlock()
+	return ch, func() {
+		s.watchMu.Lock()
+		if watchers := s.watches[userID]; watchers != nil {
+			delete(watchers, ch)
+			if len(watchers) == 0 {
+				delete(s.watches, userID)
+			}
+		}
+		s.watchMu.Unlock()
+		close(ch)
+	}
+}
+
+func (s *SyncService) publishWorkspace(userID string, workspace Workspace) {
+	resp := backendrpc.WatchWorkspacesResponse{Workspace: rpcWorkspace(workspace)}
+	s.watchMu.Lock()
+	defer s.watchMu.Unlock()
+	for ch := range s.watches[userID] {
+		select {
+		case ch <- resp:
+		default:
+		}
+	}
 }
 
 func syncUser(ctx context.Context) (AuthUser, error) {

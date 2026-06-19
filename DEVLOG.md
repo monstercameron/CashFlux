@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: stream workspace sync watches
+
+- Added the `WatchWorkspaces` SyncService RPC to the JSON gRPC bridge contract and registered it as a
+  server-streaming method on `/grpc`.
+- Added in-process per-user watcher fan-out in `SyncService`; accepted workspace puts and tombstone deletes
+  publish workspace events without crossing user boundaries.
+- Covered the path with a pure per-user fan-out test and a real websocket bridge integration test that opens
+  the watch stream on one connection and receives a put event from another connection.
+- Remaining client work: keep a long-lived browser watch open, ignore same-device echoes, and trigger a pull
+  or status update when another device changes a workspace.
+
 ## 2026-06-18 - feat: sync browser autosave over grpc
 
 - Wired the wasm autosave loop to push changed active-workspace snapshots through `SyncService.PutWorkspace`
