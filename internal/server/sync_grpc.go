@@ -150,7 +150,10 @@ func (s *SyncService) WatchWorkspacesRPC(req backendrpc.WatchWorkspacesRequest, 
 	if err != nil {
 		return err
 	}
-	ch, unsubscribe := s.subscribeWorkspaces(user.ID)
+	ch, unsubscribe, err := s.subscribeWorkspaces(user.ID)
+	if err != nil {
+		return err
+	}
 	defer unsubscribe()
 	for {
 		select {

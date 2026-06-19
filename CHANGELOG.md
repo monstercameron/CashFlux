@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Workspace stream backpressure.** WatchWorkspaces streams are now capped per user with a configurable gRPC stream limit.
 - **Backend metrics endpoint.** Added an auth-gated `/metrics` endpoint that emits Prometheus text format process health.
 - **Workspace sync caching.** `GetWorkspace` now returns an ETag and honors `IfNoneMatch` to avoid resending unchanged datasets over the gRPC bridge.
 - **Backend HTTP request limits.** Server HTTP read/write deadlines and max in-flight request shedding are now configurable and tested.

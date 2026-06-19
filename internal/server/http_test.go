@@ -35,6 +35,11 @@ func TestConfigValidate(t *testing.T) {
 		t.Fatal("negative grpc read limit accepted")
 	}
 	invalid = valid
+	invalid.GRPCMaxStreamsPerUser = -1
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("negative grpc stream limit accepted")
+	}
+	invalid = valid
 	invalid.BlobMaxBytes = -1
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("negative blob max bytes accepted")
@@ -97,6 +102,17 @@ func TestFromEnvLoadsHTTPLimits(t *testing.T) {
 	}
 	if cfg.HTTPReadTimeout != 5*time.Second || cfg.HTTPWriteTimeout != 7*time.Second || cfg.HTTPMaxInFlight != 17 {
 		t.Fatalf("http limits = read %s write %s in-flight %d", cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPMaxInFlight)
+	}
+}
+
+func TestFromEnvLoadsGRPCStreamLimit(t *testing.T) {
+	t.Setenv("CASHFLUX_SERVER_GRPC_MAX_STREAMS_PER_USER", "3")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if cfg.GRPCMaxStreamsPerUser != 3 {
+		t.Fatalf("GRPCMaxStreamsPerUser = %d, want 3", cfg.GRPCMaxStreamsPerUser)
 	}
 }
 

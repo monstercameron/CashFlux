@@ -4171,7 +4171,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 #### Abuse / DoS
 - [ ] Per-user + per-IP rate limits + quotas; the bridge's connection/upgrade caps enabled.
 - [x] Global request timeouts/deadlines; max in-flight; slow-loris protection (read/write/idle timeouts).
-- [ ] Backpressure on streams; cap concurrent streams per user.
+- [x] Backpressure on streams; cap concurrent streams per user.
 
 #### Supply chain / process
 - [ ] CI: `govulncheck`, `gosec` (high sev blocking), `go vet`, dependency pinning + Dependabot/renovate.

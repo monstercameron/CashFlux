@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: cap backend workspace streams
+
+- Added `CASHFLUX_SERVER_GRPC_MAX_STREAMS_PER_USER` with validation and env parsing.
+- Enforced the cap in `WatchWorkspaces` subscriptions, returning `ResourceExhausted` when a user exceeds it.
+- Added sync service tests for same-user rejection and separate-user allowance.
+
 ## 2026-06-18 - feat: add backend metrics endpoint
 
 - Added `GET /metrics` behind the existing bearer-token auth path.

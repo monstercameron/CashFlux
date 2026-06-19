@@ -15,9 +15,10 @@ import (
 
 // SyncService owns per-user workspace RPC behavior above the repository layer.
 type SyncService struct {
-	store   *Store
-	watchMu sync.Mutex
-	watches map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}
+	store             *Store
+	maxStreamsPerUser int
+	watchMu           sync.Mutex
+	watches           map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}
 }
 
 // PutWorkspaceResult reports the server-side result of a LWW workspace put.
@@ -31,6 +32,12 @@ type PutWorkspaceResult struct {
 // NewSyncService builds the server-side workspace sync service.
 func NewSyncService(store *Store) *SyncService {
 	return &SyncService{store: store, watches: map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}{}}
+}
+
+func NewSyncServiceWithLimits(store *Store, maxStreamsPerUser int) *SyncService {
+	service := NewSyncService(store)
+	service.maxStreamsPerUser = maxStreamsPerUser
+	return service
 }
 
 // List returns workspaces strictly scoped to the authenticated user.
@@ -135,17 +142,21 @@ func (s *SyncService) Delete(ctx context.Context, workspaceID string, updatedAt 
 	return deleted, nil
 }
 
-func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchWorkspacesResponse, func()) {
+func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchWorkspacesResponse, func(), error) {
 	ch := make(chan backendrpc.WatchWorkspacesResponse, 16)
 	s.watchMu.Lock()
+	defer s.watchMu.Unlock()
 	if s.watches == nil {
 		s.watches = map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}{}
 	}
 	if s.watches[userID] == nil {
 		s.watches[userID] = map[chan backendrpc.WatchWorkspacesResponse]struct{}{}
 	}
+	if s.maxStreamsPerUser > 0 && len(s.watches[userID]) >= s.maxStreamsPerUser {
+		close(ch)
+		return nil, nil, status.Error(codes.ResourceExhausted, "too many workspace streams")
+	}
 	s.watches[userID][ch] = struct{}{}
-	s.watchMu.Unlock()
 	return ch, func() {
 		s.watchMu.Lock()
 		if watchers := s.watches[userID]; watchers != nil {
@@ -156,7 +167,7 @@ func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchW
 		}
 		s.watchMu.Unlock()
 		close(ch)
-	}
+	}, nil
 }
 
 func (s *SyncService) publishWorkspace(userID string, workspace Workspace) {

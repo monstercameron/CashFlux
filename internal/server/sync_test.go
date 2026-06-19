@@ -106,9 +106,15 @@ func TestSyncServicePutWorkspaceRejectsCrossUserIDTakeover(t *testing.T) {
 
 func TestSyncServiceWatchFanoutIsUserScoped(t *testing.T) {
 	service := NewSyncService(openTestStore(t))
-	u1, unsubscribe1 := service.subscribeWorkspaces("u1")
+	u1, unsubscribe1, err := service.subscribeWorkspaces("u1")
+	if err != nil {
+		t.Fatalf("subscribe u1: %v", err)
+	}
 	defer unsubscribe1()
-	u2, unsubscribe2 := service.subscribeWorkspaces("u2")
+	u2, unsubscribe2, err := service.subscribeWorkspaces("u2")
+	if err != nil {
+		t.Fatalf("subscribe u2: %v", err)
+	}
 	defer unsubscribe2()
 
 	service.publishWorkspace("u1", Workspace{ID: "w1", Name: "Home", Version: 2})
@@ -125,6 +131,23 @@ func TestSyncServiceWatchFanoutIsUserScoped(t *testing.T) {
 	case event := <-u2:
 		t.Fatalf("u2 watcher received cross-user event %+v", event)
 	default:
+	}
+}
+
+func TestSyncServiceWatchStreamLimit(t *testing.T) {
+	service := NewSyncServiceWithLimits(openTestStore(t), 1)
+	_, unsubscribe, err := service.subscribeWorkspaces("u1")
+	if err != nil {
+		t.Fatalf("first subscribe: %v", err)
+	}
+	defer unsubscribe()
+	if _, _, err := service.subscribeWorkspaces("u1"); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("second subscribe = %v, want resource exhausted", err)
+	}
+	if _, unsubscribeOther, err := service.subscribeWorkspaces("u2"); err != nil {
+		t.Fatalf("other user subscribe: %v", err)
+	} else {
+		unsubscribeOther()
 	}
 }
 
