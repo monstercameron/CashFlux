@@ -10,6 +10,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	defaultSnapshotMaxBytes     = 16 << 20
+	defaultSnapshotHistoryLimit = 10
+)
+
 func RegisterSyncServiceServer(s grpc.ServiceRegistrar, srv *SyncService) {
 	s.RegisterService(&grpc.ServiceDesc{
 		ServiceName: "cashflux.v1.SyncService",
@@ -49,7 +54,17 @@ func (s *SyncService) GetWorkspaceRPC(ctx context.Context, req backendrpc.GetWor
 	if err != nil {
 		return backendrpc.GetWorkspaceResponse{}, err
 	}
-	return backendrpc.GetWorkspaceResponse{Found: found, Workspace: rpcWorkspace(workspace)}, nil
+	resp := backendrpc.GetWorkspaceResponse{Found: found, Workspace: rpcWorkspace(workspace)}
+	if found {
+		snapshot, ok, err := s.store.GetSnapshot(workspace.ID)
+		if err != nil {
+			return backendrpc.GetWorkspaceResponse{}, err
+		}
+		if ok {
+			resp.Dataset = snapshot.Dataset
+		}
+	}
+	return resp, nil
 }
 
 func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWorkspaceRequest) (backendrpc.PutWorkspaceResponse, error) {
@@ -61,9 +76,30 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 	if err != nil {
 		return backendrpc.PutWorkspaceResponse{}, err
 	}
+	var dataset []byte
+	if result.Accepted && len(req.Dataset) > 0 {
+		if err := s.store.PutSnapshot(Snapshot{
+			WorkspaceID: result.Workspace.ID,
+			Dataset:     req.Dataset,
+			Version:     result.Version,
+			UpdatedAt:   result.UpdatedAt,
+		}, defaultSnapshotMaxBytes, defaultSnapshotHistoryLimit); err != nil {
+			return backendrpc.PutWorkspaceResponse{}, err
+		}
+		dataset = req.Dataset
+	} else if !result.Accepted {
+		snapshot, ok, err := s.store.GetSnapshot(result.Workspace.ID)
+		if err != nil {
+			return backendrpc.PutWorkspaceResponse{}, err
+		}
+		if ok {
+			dataset = snapshot.Dataset
+		}
+	}
 	return backendrpc.PutWorkspaceResponse{
 		Accepted:  result.Accepted,
 		Workspace: rpcWorkspace(result.Workspace),
+		Dataset:   dataset,
 		Version:   result.Version,
 		UpdatedAt: formatRPCTime(result.UpdatedAt),
 	}, nil

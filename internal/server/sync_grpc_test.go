@@ -34,6 +34,7 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 			Sort:     2,
 			DeviceID: "browser-a",
 		},
+		Dataset:         []byte(`{"schemaVersion":1,"accounts":[]}`),
 		ClientUpdatedAt: clientUpdatedAt.Format(time.RFC3339Nano),
 	}, &put, backendrpc.JSONCallOptions()...)
 	if err != nil {
@@ -41,6 +42,9 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	}
 	if !put.Accepted || put.Version != 1 || put.Workspace.ID != "w-grpc" || put.Workspace.Name != "Home" {
 		t.Fatalf("PutWorkspace response = %+v", put)
+	}
+	if string(put.Dataset) != `{"schemaVersion":1,"accounts":[]}` {
+		t.Fatalf("PutWorkspace dataset = %q", put.Dataset)
 	}
 
 	var list backendrpc.ListWorkspacesResponse
@@ -62,6 +66,9 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	if stale.Accepted || stale.Workspace.Name != "Home" || stale.Version != 1 {
 		t.Fatalf("stale PutWorkspace response = %+v", stale)
 	}
+	if string(stale.Dataset) != `{"schemaVersion":1,"accounts":[]}` {
+		t.Fatalf("stale PutWorkspace dataset = %q", stale.Dataset)
+	}
 
 	var get backendrpc.GetWorkspaceResponse
 	if err := conn.Invoke(ctx, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: "w-grpc"}, &get, backendrpc.JSONCallOptions()...); err != nil {
@@ -69,6 +76,9 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	}
 	if !get.Found || get.Workspace.ID != "w-grpc" {
 		t.Fatalf("GetWorkspace response = %+v", get)
+	}
+	if string(get.Dataset) != `{"schemaVersion":1,"accounts":[]}` {
+		t.Fatalf("GetWorkspace dataset = %q", get.Dataset)
 	}
 
 	var del backendrpc.DeleteWorkspaceResponse

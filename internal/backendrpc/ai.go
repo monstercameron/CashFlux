@@ -88,10 +88,12 @@ type GetWorkspaceRequest struct {
 type GetWorkspaceResponse struct {
 	Found     bool      `json:"found"`
 	Workspace Workspace `json:"workspace,omitempty"`
+	Dataset   []byte    `json:"dataset,omitempty"`
 }
 
 type PutWorkspaceRequest struct {
 	Workspace       Workspace `json:"workspace"`
+	Dataset         []byte    `json:"dataset,omitempty"`
 	ClientUpdatedAt string    `json:"clientUpdatedAt,omitempty"`
 	Force           bool      `json:"force,omitempty"`
 }
@@ -99,6 +101,7 @@ type PutWorkspaceRequest struct {
 type PutWorkspaceResponse struct {
 	Accepted  bool      `json:"accepted"`
 	Workspace Workspace `json:"workspace"`
+	Dataset   []byte    `json:"dataset,omitempty"`
 	Version   int64     `json:"version"`
 	UpdatedAt string    `json:"updatedAt"`
 }

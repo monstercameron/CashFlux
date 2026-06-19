@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: sync dataset snapshots over grpc
+
+- Extended SyncService `PutWorkspace` and `GetWorkspace` RPC envelopes with opaque dataset bytes, matching the
+  backend design: the server stores the exported client dataset as a blob without interpreting entities.
+- Wired accepted workspace puts into the existing snapshot table with current/history retention, and returns the
+  current server snapshot when a stale LWW push is rejected.
+- Expanded the real websocket bridge integration test to prove dataset bytes round-trip through Put/Get and stale
+  rejection recovery.
+
 ## 2026-06-18 - feat: expose sync service over grpc
 
 - Registered `cashflux.v1.SyncService` on the backend gRPC server behind `/grpc`, exposing workspace list, get,
