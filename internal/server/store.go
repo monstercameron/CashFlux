@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
@@ -15,7 +16,8 @@ const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
 type Store struct {
-	db *sql.DB
+	db      *sql.DB
+	metrics *Metrics
 }
 
 // OpenStore opens or creates the server database at path and applies migrations.
@@ -44,11 +46,24 @@ func OpenStore(path string) (*Store, error) {
 // Close releases the database.
 func (s *Store) Close() error { return s.db.Close() }
 
+func (s *Store) SetMetrics(metrics *Metrics) {
+	if s != nil {
+		s.metrics = metrics
+	}
+}
+
+func (s *Store) observeDB(operation string, start time.Time) {
+	if s != nil {
+		s.metrics.ObserveDB(operation, time.Since(start))
+	}
+}
+
 // CheckpointWAL flushes the SQLite write-ahead log back into the main database file.
 func (s *Store) CheckpointWAL(ctx context.Context) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("server store: not configured")
 	}
+	defer s.observeDB("CheckpointWAL", time.Now())
 	if _, err := s.db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE);"); err != nil {
 		return fmt.Errorf("server store: checkpoint wal: %w", err)
 	}
@@ -60,6 +75,7 @@ func (s *Store) Ready() error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("server store: not configured")
 	}
+	defer s.observeDB("Ready", time.Now())
 	if err := s.db.Ping(); err != nil {
 		return fmt.Errorf("server store: ping: %w", err)
 	}
@@ -71,6 +87,7 @@ func (s *Store) Ready() error {
 
 // SchemaVersion returns the current migrated server schema version.
 func (s *Store) SchemaVersion() (int, error) {
+	defer s.observeDB("SchemaVersion", time.Now())
 	var v int
 	err := s.db.QueryRow("SELECT version FROM schema_meta WHERE id = 1").Scan(&v)
 	if err != nil {

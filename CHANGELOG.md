@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend DB latency metrics.** `/metrics` now reports store operation counts and duration sums for SQLite-backed repository calls.
 - **Backend sync metrics.** `/metrics` now reports sync pull/push result counters and LWW reject totals from the gRPC bridge path.
 - **Backend AI proxy metrics.** `/metrics` now reports AI proxy request and token counters from successful upstream completions.
 - **Backend blob byte metrics.** `/metrics` now reports blob bytes stored and served through the backend blob endpoints.

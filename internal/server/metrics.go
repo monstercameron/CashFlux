@@ -23,6 +23,7 @@ type Metrics struct {
 	syncPulls            map[string]int64
 	syncPushes           map[string]int64
 	syncLWWRejects       int64
+	db                   map[string]metricValue
 }
 
 type metricKey struct {
@@ -42,6 +43,7 @@ func NewMetrics() *Metrics {
 		streamDurations: map[metricKey]metricValue{},
 		syncPulls:       map[string]int64{},
 		syncPushes:      map[string]int64{},
+		db:              map[string]metricValue{},
 	}
 }
 
@@ -149,6 +151,21 @@ func (m *Metrics) ObserveSyncLWWReject() {
 	m.syncLWWRejects++
 }
 
+func (m *Metrics) ObserveDB(operation string, elapsed time.Duration) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.db == nil {
+		m.db = map[string]metricValue{}
+	}
+	v := m.db[operation]
+	v.Count++
+	v.DurationSecs += elapsed.Seconds()
+	m.db[operation] = v
+}
+
 func (m *Metrics) observe(dst map[metricKey]metricValue, key metricKey, elapsed time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -162,7 +179,7 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	if m == nil {
 		m = NewMetrics()
 	}
-	httpRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects := m.snapshot()
+	httpRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, aiProxyRequests, aiProxyTokens, syncPulls, syncPushes, syncLWWRejects, dbRows := m.snapshot()
 	_, _ = io.WriteString(w, "# HELP cashflux_server_up Server process health.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_server_up gauge\n")
 	_, _ = io.WriteString(w, "cashflux_server_up 1\n")
@@ -219,6 +236,16 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	_, _ = io.WriteString(w, "# HELP cashflux_sync_lww_rejects_total Sync last-write-wins rejects.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_sync_lww_rejects_total counter\n")
 	_, _ = fmt.Fprintf(w, "cashflux_sync_lww_rejects_total %d\n", syncLWWRejects)
+	_, _ = io.WriteString(w, "# HELP cashflux_db_queries_total Store operations by name.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_db_queries_total counter\n")
+	for _, row := range dbRows {
+		_, _ = fmt.Fprintf(w, "cashflux_db_queries_total{operation=%q} %d\n", row.Name, row.Value.Count)
+	}
+	_, _ = io.WriteString(w, "# HELP cashflux_db_query_duration_seconds_sum Store operation duration sum by name.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_db_query_duration_seconds_sum counter\n")
+	for _, row := range dbRows {
+		_, _ = fmt.Fprintf(w, "cashflux_db_query_duration_seconds_sum{operation=%q} %.6f\n", row.Name, row.Value.DurationSecs)
+	}
 }
 
 type metricRow struct {
@@ -231,13 +258,18 @@ type labelMetricRow struct {
 	Value int64
 }
 
-func (m *Metrics) snapshot() ([]metricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64) {
+type namedMetricRow struct {
+	Name  string
+	Value metricValue
+}
+
+func (m *Metrics) snapshot() ([]metricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64, []labelMetricRow, []labelMetricRow, int64, []namedMetricRow) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	httpRows := metricRows(m.http)
 	grpcRows := metricRows(m.grpc)
 	streamRows := metricRows(m.streamDurations)
-	return httpRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects
+	return httpRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.aiProxyRequests, m.aiProxyTokens, labelMetricRows(m.syncPulls), labelMetricRows(m.syncPushes), m.syncLWWRejects, namedMetricRows(m.db)
 }
 
 func metricRows(src map[metricKey]metricValue) []metricRow {
@@ -257,6 +289,17 @@ func labelMetricRows(src map[string]int64) []labelMetricRow {
 	rows := make([]labelMetricRow, 0, len(src))
 	for name, value := range src {
 		rows = append(rows, labelMetricRow{Name: name, Value: value})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return strings.Compare(rows[i].Name, rows[j].Name) < 0
+	})
+	return rows
+}
+
+func namedMetricRows(src map[string]metricValue) []namedMetricRow {
+	rows := make([]namedMetricRow, 0, len(src))
+	for name, value := range src {
+		rows = append(rows, namedMetricRow{Name: name, Value: value})
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		return strings.Compare(rows[i].Name, rows[j].Name) < 0

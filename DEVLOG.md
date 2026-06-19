@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: expose backend db metrics
+
+- Added store operation counters and duration sums to the backend metrics collector.
+- Attached the mux's shared metrics instance to the SQLite store and timed repository operations.
+- Added repository coverage for exported DB metrics.
+
 ## 2026-06-19 - feat: expose backend sync metrics
 
 - Added sync pull and push result counters to the backend metrics collector.

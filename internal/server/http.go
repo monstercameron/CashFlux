@@ -26,6 +26,9 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	if cfg.Metrics == nil {
 		cfg.Metrics = NewMetrics()
 	}
+	if store != nil {
+		store.SetMetrics(cfg.Metrics)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

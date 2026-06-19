@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -46,6 +47,39 @@ func TestRepositoryUserAndWorkspaceFlow(t *testing.T) {
 	}
 	if _, ok, err := s.GetWorkspace("u2", "w1"); err != nil || ok {
 		t.Fatalf("cross-user get = ok %v err %v, want not found", ok, err)
+	}
+}
+
+func TestStoreRecordsDBMetrics(t *testing.T) {
+	s := openTestStore(t)
+	metrics := NewMetrics()
+	s.SetMetrics(metrics)
+	now := time.Date(2026, time.June, 19, 0, 40, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	if _, ok, err := s.GetWorkspace("u1", "w1"); err != nil || !ok {
+		t.Fatalf("GetWorkspace = %v/%v", ok, err)
+	}
+	if _, err := s.ListWorkspaces("u1", false); err != nil {
+		t.Fatalf("ListWorkspaces: %v", err)
+	}
+
+	var out strings.Builder
+	metrics.WritePrometheus(&out)
+	for _, want := range []string{
+		`cashflux_db_queries_total{operation="GetWorkspace"} 1`,
+		`cashflux_db_queries_total{operation="ListWorkspaces"} 1`,
+		`cashflux_db_queries_total{operation="PutWorkspace"} 1`,
+		`cashflux_db_queries_total{operation="UpsertUser"} 1`,
+		`cashflux_db_query_duration_seconds_sum{operation="GetWorkspace"}`,
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing db metric %q in:\n%s", want, out.String())
+		}
 	}
 }
 

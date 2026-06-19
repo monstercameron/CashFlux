@@ -73,6 +73,7 @@ func (s *Store) UpsertUser(u User) error {
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = time.Now().UTC()
 	}
+	defer s.observeDB("UpsertUser", time.Now())
 	_, err := s.db.Exec(`
 INSERT INTO users(id, provider, subject, email, created_at)
 VALUES(?, ?, ?, ?, ?)
@@ -92,6 +93,7 @@ func (s *Store) PutWorkspace(w Workspace) error {
 	if w.UpdatedAt.IsZero() {
 		w.UpdatedAt = time.Now().UTC()
 	}
+	defer s.observeDB("PutWorkspace", time.Now())
 	_, err := s.db.Exec(`
 INSERT INTO workspaces(id, user_id, name, color, sort, deleted, version, updated_at, device_id)
 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -113,6 +115,7 @@ ON CONFLICT(id) DO UPDATE SET
 
 // ListWorkspaces returns a user's workspaces ordered for display.
 func (s *Store) ListWorkspaces(userID string, includeDeleted bool) ([]Workspace, error) {
+	defer s.observeDB("ListWorkspaces", time.Now())
 	query := `SELECT id, user_id, name, color, sort, deleted, version, updated_at, device_id FROM workspaces WHERE user_id = ?`
 	args := []any{userID}
 	if !includeDeleted {
@@ -141,6 +144,7 @@ func (s *Store) ListWorkspaces(userID string, includeDeleted bool) ([]Workspace,
 
 // GetWorkspace returns one workspace by id, scoped to a user.
 func (s *Store) GetWorkspace(userID, workspaceID string) (Workspace, bool, error) {
+	defer s.observeDB("GetWorkspace", time.Now())
 	row := s.db.QueryRow(`
 SELECT id, user_id, name, color, sort, deleted, version, updated_at, device_id
 FROM workspaces WHERE user_id = ? AND id = ?`, userID, workspaceID)
@@ -155,6 +159,7 @@ FROM workspaces WHERE user_id = ? AND id = ?`, userID, workspaceID)
 }
 
 func (s *Store) WorkspaceOwner(workspaceID string) (string, bool, error) {
+	defer s.observeDB("WorkspaceOwner", time.Now())
 	var userID string
 	err := s.db.QueryRow(`SELECT user_id FROM workspaces WHERE id = ?`, workspaceID).Scan(&userID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -171,6 +176,7 @@ func (s *Store) SoftDeleteWorkspace(userID, workspaceID string, updatedAt time.T
 	if updatedAt.IsZero() {
 		updatedAt = time.Now().UTC()
 	}
+	defer s.observeDB("SoftDeleteWorkspace", time.Now())
 	res, err := s.db.Exec(`
 UPDATE workspaces SET deleted = 1, updated_at = ?, device_id = ?
 WHERE user_id = ? AND id = ?`, formatTime(updatedAt), deviceID, userID, workspaceID)
@@ -196,6 +202,7 @@ func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error
 	if snapshot.UpdatedAt.IsZero() {
 		snapshot.UpdatedAt = time.Now().UTC()
 	}
+	defer s.observeDB("PutSnapshot", time.Now())
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -237,6 +244,7 @@ ON CONFLICT(workspace_id) DO UPDATE SET
 
 // GetSnapshot returns the current dataset snapshot for a workspace.
 func (s *Store) GetSnapshot(workspaceID string) (Snapshot, bool, error) {
+	defer s.observeDB("GetSnapshot", time.Now())
 	row := s.db.QueryRow(`SELECT workspace_id, dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, workspaceID)
 	snapshot, err := scanSnapshot(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -250,6 +258,7 @@ func (s *Store) GetSnapshot(workspaceID string) (Snapshot, bool, error) {
 
 // SnapshotHistory returns retained prior snapshots newest-first.
 func (s *Store) SnapshotHistory(workspaceID string, limit int) ([]Snapshot, error) {
+	defer s.observeDB("SnapshotHistory", time.Now())
 	query := `SELECT workspace_id, dataset_json, version, updated_at FROM snapshot_history WHERE workspace_id = ? ORDER BY version DESC, id DESC`
 	args := []any{workspaceID}
 	if limit > 0 {
@@ -289,6 +298,7 @@ func (s *Store) PutBlob(root string, data []byte, mime, name string, maxBytes in
 		Name:      strings.TrimSpace(name),
 		CreatedAt: time.Now().UTC(),
 	}
+	defer s.observeDB("PutBlob", time.Now())
 	path := blobPath(root, hash)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob mkdir: %w", err)
@@ -330,6 +340,7 @@ func (s *Store) ReadBlob(root, hash string) ([]byte, error) {
 
 // GetBlob returns stored blob metadata.
 func (s *Store) GetBlob(hash string) (Blob, bool, error) {
+	defer s.observeDB("GetBlob", time.Now())
 	row := s.db.QueryRow(`SELECT hash, size, mime, created_at FROM blobs WHERE hash = ?`, hash)
 	blob, err := scanBlob(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -346,6 +357,7 @@ func (s *Store) LinkWorkspaceBlob(workspaceID, hash string) error {
 	if strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(hash) == "" {
 		return fmt.Errorf("server store: workspace id and blob hash are required")
 	}
+	defer s.observeDB("LinkWorkspaceBlob", time.Now())
 	if _, err := s.db.Exec(`INSERT OR IGNORE INTO workspace_blobs(workspace_id, hash) VALUES(?, ?)`, workspaceID, hash); err != nil {
 		return fmt.Errorf("server store: link workspace blob: %w", err)
 	}
@@ -357,6 +369,7 @@ func (s *Store) UserWorkspaceBlob(userID, workspaceID, hash string) (bool, error
 	if strings.TrimSpace(userID) == "" || strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(hash) == "" {
 		return false, fmt.Errorf("server store: user id, workspace id, and blob hash are required")
 	}
+	defer s.observeDB("UserWorkspaceBlob", time.Now())
 	var got string
 	err := s.db.QueryRow(`
 SELECT wb.hash
@@ -374,6 +387,7 @@ WHERE w.user_id = ? AND wb.workspace_id = ? AND wb.hash = ?`, userID, workspaceI
 
 // WorkspaceBlobs returns blob metadata linked to a workspace.
 func (s *Store) WorkspaceBlobs(workspaceID string) ([]Blob, error) {
+	defer s.observeDB("WorkspaceBlobs", time.Now())
 	rows, err := s.db.Query(`
 SELECT b.hash, b.size, b.mime, b.created_at
 FROM blobs b
@@ -400,6 +414,7 @@ ORDER BY b.hash`, workspaceID)
 
 // SweepUnreferencedBlobs deletes metadata and files for blobs no workspace references.
 func (s *Store) SweepUnreferencedBlobs(root string) (int, error) {
+	defer s.observeDB("SweepUnreferencedBlobs", time.Now())
 	rows, err := s.db.Query(`
 SELECT b.hash, b.size, b.mime, b.created_at
 FROM blobs b
@@ -443,6 +458,7 @@ func (s *Store) PutAIKey(userID, provider, key string, masterKey []byte) error {
 		return fmt.Errorf("server store: ai key nonce: %w", err)
 	}
 	ciphertext := gcm.Seal(nil, nonce, []byte(key), []byte(userID+"|"+provider))
+	defer s.observeDB("PutAIKey", time.Now())
 	if _, err := s.db.Exec(`
 INSERT INTO ai_keys(user_id, provider, ciphertext, nonce)
 VALUES(?, ?, ?, ?)
@@ -459,6 +475,7 @@ func (s *Store) GetAIKey(userID, provider string, masterKey []byte) (string, boo
 	if err != nil {
 		return "", false, err
 	}
+	defer s.observeDB("GetAIKey", time.Now())
 	var ciphertext, nonce []byte
 	err = s.db.QueryRow(`SELECT ciphertext, nonce FROM ai_keys WHERE user_id = ? AND provider = ?`, userID, provider).Scan(&ciphertext, &nonce)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -498,6 +515,7 @@ func (s *Store) AddUsage(userID string, day time.Time, requests, tokens int64) (
 		return Usage{}, fmt.Errorf("server store: usage increments must be non-negative")
 	}
 	key := usageDay(day)
+	defer s.observeDB("AddUsage", time.Now())
 	if _, err := s.db.Exec(`
 INSERT INTO usage(user_id, day, requests, tokens)
 VALUES(?, ?, ?, ?)
@@ -519,6 +537,7 @@ ON CONFLICT(user_id, day) DO UPDATE SET
 
 // GetUsage returns a user's usage for the UTC day.
 func (s *Store) GetUsage(userID string, day time.Time) (Usage, bool, error) {
+	defer s.observeDB("GetUsage", time.Now())
 	key := usageDay(day)
 	var usage Usage
 	err := s.db.QueryRow(`SELECT user_id, day, requests, tokens FROM usage WHERE user_id = ? AND day = ?`, userID, key).
