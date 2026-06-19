@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: reconcile backend load abuse coverage (7.10)
+
+- Marked the 7.10 load/abuse item complete against existing server coverage: gRPC stream caps, bridge
+  connection-limit config, oversized sync/blob/AI payload rejection, storage quota exhaustion, and HTTP/user
+  rate-limit configuration.
+- Extended `docs/BACKEND_SECURITY.md` and deploy tests so that coverage remains visible from the backend
+  security map.
+
 ## 2026-06-19 - ci: build backend server in workflow
 
 - Added an explicit `go build ./cmd/cashflux-server` step to `.github/workflows/ci.yml` so backend binary

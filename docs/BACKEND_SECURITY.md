@@ -27,6 +27,9 @@ section 7.14:
   audit queries are scoped by authenticated user id, with cross-user tests covering workspace and blob access.
 - Request-size and abuse controls are enabled across the backend: dataset caps, blob size/storage caps, AI request
   caps, HTTP in-flight/rate limits, per-user rate limits, and gRPC bridge connection/stream/upgrade caps.
+- Load/abuse tests cover oversized sync snapshots, oversized blobs, storage quota exhaustion, AI request-size
+  rejection, per-user workspace stream caps, HTTP rate-limit configuration, and gRPC bridge connection limit
+  configuration.
 - Transport and process controls are covered by TLS/self-host Caddy docs, gRPC websocket origin checks,
   secret redaction in logs, Gitleaks, `govulncheck`, and high-severity `gosec` in CI.
 

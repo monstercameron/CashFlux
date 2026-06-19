@@ -4063,7 +4063,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       Remaining: browser autosave push/pull e2e, AI stream, blob up/down.
 - [ ] e2e: two-device sync (LWW + tombstone), offline→reconnect flush, OAuth login, artifact blob
       round-trip, AI proxy streaming with a real key.
-- [ ] Load/abuse: connection caps, oversized payloads, rate limits.
+- [x] Load/abuse: connection caps, oversized payloads, rate limits.
+      Done: server tests cover gRPC stream caps, bridge connection-limit config, oversized sync/blob/AI payloads,
+      storage quota exhaustion, and HTTP/user rate-limit configuration.
 - [ ] **Rollout (each independently shippable; app works without the backend throughout):**
       (1) OAuth + snapshot sync (artifacts still inline) → (2) blob store + client artifact extraction →
       (3) AI proxy + encrypted keys + metering.
