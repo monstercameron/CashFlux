@@ -1042,10 +1042,12 @@ expenses).
 
 ### B27. Investment / holdings tracking — SPEC (possibly out-of-scope, from C38, 2026-06-18)
 **Want (maybe):** brokerage/401k hold a **balance only** — no holdings/cost-basis/performance.
-- [ ] _Decision FIRST (scope):_ keep investments as a single balance (budgeting app) vs. track holdings.
+- [x] _Decision FIRST (scope):_ keep investments as a single balance (budgeting app) vs. track holdings.
       Full holdings = symbols/qty/cost-basis/**live price** (needs a price feed = online dep, tension with
       local-first/offline). **Recommend out of core**; if pursued, a lightweight **manual** holdings list
       (symbol, qty, manual price), no live feed — purely local. Confirm before any build.
+      Decided in `docs/INVESTMENTS_SCOPE.md`: core remains balance-only; holdings/live pricing stay out of
+      core, with only a possible future manual extension.
 
 ### B28. Automated backup reminders — SPEC (from C38, 2026-06-18)
 **Want:** nudge periodic backups so data isn't lost (ties B17 recovery + Export #31).

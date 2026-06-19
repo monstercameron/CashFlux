@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Investments scope decision (B27).** Added `docs/INVESTMENTS_SCOPE.md` documenting the balance-only
+  core decision: no holdings, cost basis, tax lots, live prices, or market-data dependency in CashFlux core.
 - **Transaction attachment references (B23).** Transactions now carry persisted `AttachmentRef` links to
   Artifact-backed receipts/documents, with SQLite CRUD and dataset export/import round-trip coverage.
 - **Report export design note (B21).** Added `docs/REPORT_EXPORTS.md` to pin the shareable-report policy:

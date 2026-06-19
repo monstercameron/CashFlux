@@ -402,3 +402,24 @@ func TestReportExportDesignDocumentsOfflineSnapshots(t *testing.T) {
 		t.Fatal("service worker does not pin/cache D3 7.9.0")
 	}
 }
+
+func TestInvestmentsScopeDocumentsBalanceOnlyDecision(t *testing.T) {
+	data, err := os.ReadFile("../../docs/INVESTMENTS_SCOPE.md")
+	if err != nil {
+		t.Fatalf("read investments scope doc: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"balance-only",
+		"Do not add holdings",
+		"live market pricing",
+		"local-first",
+		"manual extension",
+		"symbol, quantity, manual price, and as-of date",
+		"Net-worth reports may continue to use account balances",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("investments scope doc missing %q", want)
+		}
+	}
+}

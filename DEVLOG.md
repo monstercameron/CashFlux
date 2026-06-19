@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: decide investments scope (B27)
+
+- Added `docs/INVESTMENTS_SCOPE.md` to settle B27 before build: CashFlux core keeps brokerage, 401k,
+  retirement, and investment accounts as balance-only accounts.
+- Explicitly kept holdings, cost basis, tax lots, live pricing, and market-data dependencies out of core to
+  preserve the local-first/offline model.
+- Left only a possible future manual extension: symbol, quantity, manual price, and as-of date.
+
 ## 2026-06-19 - feat: add transaction attachment references (B23)
 
 - Added `domain.AttachmentRef` and `Transaction.Attachments` so a ledger row can link to one or more
