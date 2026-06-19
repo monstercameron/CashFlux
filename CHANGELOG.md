@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Budgets "Quarter" spend appeared less than "Month" (C40).** The Budgets screen anchored each budget's
+  period to the *start* of the viewed window, so under a Quarter view a Monthly budget showed the quarter's
+  first month (e.g. April) — making quarterly spend look smaller than monthly. Budgets now anchor to today
+  when the viewed window contains today (else to the window's start), so current-period spend is correct
+  under any view, and past-window navigation still works.
+
 ### Added
 - **Smart-quotes provider (B17.5).** New pure, table-tested `internal/quotes`: a curated set of
   finance/motivation quotes with a deterministic once-per-day rotation (`OfDay`), ready for the lock screen's
@@ -16,6 +23,8 @@ and every commit updates this file under `Unreleased`.
   with deploy coverage for `go.mod` Go 1.26.0 and the `golang:1.26-alpine` server build image.
 
 ### Changed
+- **Backend rollout contract reconciliation.** Tightened `docs/BACKEND_PLAN.md` so backend phases are explicitly
+  independently shippable/reversible and preserve the local-first app fallback.
 - **Backend unit coverage reconciliation.** Documented that storage, LWW sync, AI-key encryption, usage
   rate limits, blob hashing/linking, and blob GC are covered by focused server unit tests.
 - **Backend load/abuse test coverage reconciliation.** Documented the existing coverage for gRPC stream caps,

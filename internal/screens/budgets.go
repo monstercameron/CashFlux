@@ -194,17 +194,27 @@ func Budgets() ui.Node {
 	budgets := app.Budgets()
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	viewMonth := periodWin.Get().From
-	cats := app.Categories()
-	// Each budget is evaluated over its own period window around the viewed date,
-	// and a parent-category budget rolls up its sub-categories' spend (D5).
 	now := time.Now()
+	// Budgets track their own cadence. Anchor each budget's period to today when the
+	// viewed window includes today, otherwise to the window's start. Fixes C40: under
+	// a Quarter view the old code anchored to the quarter's START, so a Monthly budget
+	// showed the quarter's FIRST month, making "Quarter" spend appear less than
+	// "Month". Anchoring to today shows the current period under any containing view,
+	// while navigating to a past window still shows that window's period.
+	vw := periodWin.Get()
+	viewFrom, viewTo := vw.Range()
+	anchor := viewFrom
+	if !now.Before(viewFrom) && now.Before(viewTo) {
+		anchor = now
+	}
+	cats := app.Categories()
+	// Each budget rolls up its sub-categories' spend (D5).
 	statuses := make([]budgeting.Status, 0, len(budgets))
 	paceOver := map[string]string{}  // budgetID → formatted projected overspend (in-progress only)
 	rollCarry := map[string]string{} // budgetID → formatted previous-period carry
 	rollNeg := map[string]bool{}     // budgetID → whether the previous-period carry is negative
 	for _, b := range budgets {
-		bs, be := budgeting.PeriodRange(b.Period, viewMonth, weekStart)
+		bs, be := budgeting.PeriodRange(b.Period, anchor, weekStart)
 		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
 		if err != nil {
 			continue
@@ -217,7 +227,7 @@ func Budgets() ui.Node {
 			paceOver[b.ID] = fmtMoney(p.OverBy)
 		}
 		if b.Rollover {
-			ps, pe := budgeting.PreviousPeriodRange(b.Period, viewMonth, weekStart)
+			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
 			if prev, err := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); err == nil {
 				rollCarry[b.ID] = fmtMoney(prev.Remaining)
 				rollNeg[b.ID] = prev.Remaining.IsNegative()
@@ -246,7 +256,7 @@ func Budgets() ui.Node {
 	var assignBanner ui.Node = Fragment()
 	switch method {
 	case budgeting.MethodZeroBased:
-		ms, me := budgeting.PeriodRange(domain.PeriodMonthly, viewMonth, weekStart)
+		ms, me := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
 		income, _, _ := ledger.PeriodTotals(txns, ms, me, rates)
 		toAssign := budgeting.ToAssign(income.Amount, totalLimit)
 		switch {
@@ -260,7 +270,7 @@ func Budgets() ui.Node {
 	case budgeting.MethodEnvelope:
 		assignBanner = P(Class("budget-sub font-display"), uistate.T("budgets.envelopeNote"))
 		for _, b := range budgets {
-			if av, err := budgeting.EnvelopeAvailable(b, txns, viewMonth, weekStart, rates, categorytree.Descendants(cats, b.CategoryID)); err == nil {
+			if av, err := budgeting.EnvelopeAvailable(b, txns, anchor, weekStart, rates, categorytree.Descendants(cats, b.CategoryID)); err == nil {
 				envAvail[b.ID] = fmtMoney(av)
 				envNeg[b.ID] = av.IsNegative()
 			}

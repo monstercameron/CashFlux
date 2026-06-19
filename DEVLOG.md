@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — fix: Budgets Quarter<Month anomaly (C40)
+
+- Root cause (confirmed against the C40 narrowing notes): `budgets.go` evaluated each budget over
+  `PeriodRange(b.Period, periodWin.From, …)` where `periodWin.From` is the viewed window's START. Under a
+  Quarter view that's the quarter start (Apr 1), so a Monthly budget's window resolved to the quarter's FIRST
+  month (April), not June — making the SPENT summary smaller for Quarter than for Month. The shared period
+  engine was fine (dashboard correct, per #61); the bug was the Budgets anchor.
+- Fix: compute an `anchor` = today when `[viewFrom, viewTo)` contains today, else `viewFrom`; use it for all
+  per-budget windows (status, pace, rollover-prev, zero-based income, envelope). Current-period status is now
+  correct under any containing view; viewing a past window still shows that window's period.
+- (Botched a `Set-Content -Encoding utf8` pass that mojibaked the file's em-dashes; restored from HEAD and
+  redid the edit with the editor only. gofmt clean, wasm build green.)
+
 ## 2026-06-19 - docs: reconcile backend unit coverage (7.10)
 
 - Marked the 7.10 unit coverage item complete against existing focused tests for server storage, snapshot
