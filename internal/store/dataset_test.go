@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -31,7 +32,11 @@ func sampleDataset() Dataset {
 		Budgets: []domain.Budget{{ID: "b1", Name: "Food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: "c1", Period: domain.PeriodMonthly, Limit: money.New(50000, "USD")}},
 		Goals:   []domain.Goal{{ID: "g1", Name: "Trip", Scope: domain.ScopeIndividual, OwnerID: "m1", TargetAmount: money.New(200000, "USD"), CurrentAmount: money.New(50000, "USD"), TargetDate: asOf}},
 		Tasks:   []domain.Task{{ID: "k1", Title: "Pay rent", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Source: domain.SourceManual}},
-		Rules:   []rules.Rule{{ID: "r1", Match: "coffee", SetCategoryID: "c1", SetTags: []string{"treats"}}},
+		CustomFields: []customfields.Def{{
+			ID: "cf1", EntityType: "account", Key: "branch", Label: "Branch",
+			Type: customfields.TypeSelect, Options: []string{"east", "west"}, Required: true,
+		}},
+		Rules: []rules.Rule{{ID: "r1", Match: "coffee", SetCategoryID: "c1", SetTags: []string{"treats"}}},
 		Documents: []domain.Document{{
 			ID: "d1", Filename: "june.csv", Kind: domain.DocCSV, UploadedAt: asOf, AccountID: "a1",
 			Status: domain.DocImported, Extracted: []domain.DocumentRow{{Date: "2026-06-01", Description: "Coffee", Amount: "-4.50", Category: "Food"}},
@@ -129,6 +134,11 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if len(imported.Rules) != 1 || imported.Rules[0].Match != "coffee" || len(imported.Rules[0].SetTags) != 1 {
 		t.Errorf("rules lost: %+v", imported.Rules)
+	}
+	if len(imported.CustomFields) != 1 || imported.CustomFields[0].Key != "branch" ||
+		imported.CustomFields[0].Type != customfields.TypeSelect || len(imported.CustomFields[0].Options) != 2 ||
+		!imported.CustomFields[0].Required {
+		t.Errorf("custom field defs lost: %+v", imported.CustomFields)
 	}
 	if len(imported.Documents) != 1 || imported.Documents[0].Kind != domain.DocCSV || len(imported.Documents[0].Extracted) != 1 {
 		t.Errorf("documents lost: %+v", imported.Documents)
