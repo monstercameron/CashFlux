@@ -3,6 +3,7 @@
 package ui
 
 import (
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -139,13 +140,13 @@ func stepperPill(props StepperPillProps) uic.Node {
 			if onPrev != nil {
 				onPrev()
 			}
-		}), "‹"),
+		}), Icon(icon.ChevronLeft, Class("w-4 h-4"))),
 		Span(Class("rlabel fig"), props.Label),
 		Button(Class("rstep"), Type("button"), Attr("aria-label", nextLabel), OnClick(func() {
 			if onNext != nil {
 				onNext()
 			}
-		}), "›"),
+		}), Icon(icon.ChevronRight, Class("w-4 h-4"))),
 	)
 }
 

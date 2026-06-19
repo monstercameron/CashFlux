@@ -5,6 +5,7 @@ package ui
 import (
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/icon"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -206,7 +207,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 									onClose()
 								}
 							}),
-							"✕",
+							Icon(icon.Close, Class("w-4 h-4")),
 						),
 					),
 					Div(Class("set-body"), props.Back),

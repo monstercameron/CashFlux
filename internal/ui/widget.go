@@ -4,6 +4,7 @@ package ui
 
 import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -97,7 +98,7 @@ func widget(props WidgetProps) uic.Node {
 	if props.OnGear != nil || widgetcfg.Has(props.ID) || mode == dashlayout.ModeAutoImportance {
 		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
 	} else {
-		gear = Span(Class("gear-inline"), Attr("aria-hidden", "true"), Style(map[string]string{"visibility": "hidden"}), "⚙")
+		gear = Span(Class("gear-inline"), Attr("aria-hidden", "true"), Style(map[string]string{"visibility": "hidden"}), Icon(icon.Settings, Class("w-4 h-4")))
 	}
 
 	dragSrc := uistate.UseDragSource()
@@ -342,6 +343,6 @@ func gearButton(props gearButtonProps) uic.Node {
 				onClick()
 			}
 		}),
-		Span(Attr("aria-hidden", "true"), "⚙"),
+		Icon(icon.Settings, Class("w-4 h-4")),
 	)
 }
