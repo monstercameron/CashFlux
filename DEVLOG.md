@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: expose backend blob metrics
+
+- Added blob stored/served byte counters to the backend metrics collector.
+- Recorded bytes from authenticated blob PUT and GET handlers.
+- Extended blob endpoint tests to assert the Prometheus counters after upload/download.
+
 ## 2026-06-19 - feat: expose backend stream metrics
 
 - Added active gRPC stream gauge support to the in-process metrics collector.

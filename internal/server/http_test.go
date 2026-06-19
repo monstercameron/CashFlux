@@ -444,6 +444,7 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 		Token:        "dev-token",
 		DataDir:      t.TempDir(),
 		BlobMaxBytes: 1024,
+		Metrics:      NewMetrics(),
 	}
 	h := NewMux(cfg, store)
 
@@ -486,6 +487,17 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 	}
 	if rr.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
 		t.Fatalf("cache-control = %q", rr.Header().Get("Cache-Control"))
+	}
+
+	var metricsOut bytes.Buffer
+	cfg.Metrics.WritePrometheus(&metricsOut)
+	for _, want := range []string{
+		"cashflux_blob_stored_bytes_total 13",
+		"cashflux_blob_transferred_bytes_total 13",
+	} {
+		if !strings.Contains(metricsOut.String(), want) {
+			t.Fatalf("blob metrics missing %q in %q", want, metricsOut.String())
+		}
 	}
 }
 

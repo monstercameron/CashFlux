@@ -60,6 +60,9 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		if cfg.Metrics != nil {
+			cfg.Metrics.ObserveBlobStored(blob.Size)
+		}
 		writeJSON(w, BlobResponse{Hash: blob.Hash, Size: blob.Size, Mime: blob.Mime})
 	}
 }
@@ -80,6 +83,9 @@ func handleGetBlob(cfg Config, store *Store) http.HandlerFunc {
 		writeBlobHeaders(w, blob)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(data)
+		if cfg.Metrics != nil {
+			cfg.Metrics.ObserveBlobTransferred(blob.Size)
+		}
 	}
 }
 

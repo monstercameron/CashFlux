@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend blob byte metrics.** `/metrics` now reports blob bytes stored and served through the backend blob endpoints.
 - **Backend stream metrics.** `/metrics` now exports active gRPC stream counts and stream duration sums.
 - **Backend RED metrics.** `/metrics` now includes HTTP and gRPC request totals plus duration sums by route/RPC and status.
 - **Backend AI proxy feature flag.** `CASHFLUX_SERVER_AI_PROXY_ENABLED=false` now disables AI key/model/chat/vision RPCs with a clear failed-precondition response.
