@@ -645,6 +645,9 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Allocate breakdown no longer runs the score into "returns" (§6.15).** The ranked-suggestion subline rendered
+  "Score 60%returns 100 · …" because the score and breakdown were adjacent inline spans with no separator.
+  Added an explicit "·" separator so it reads "Score 60% · returns 100 · stability 100 · …".
 - **Keyboard focus ring restored on the passcode and command-palette inputs (§6.18).** These raw-DOM inputs set
   `outline:none` inline, which beats the global `:focus-visible` rule and left keyboard users with no visible
   focus indicator on the lock screen and command palette. Dropped the inline `outline:none` from all three

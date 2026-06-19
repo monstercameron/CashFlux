@@ -66,6 +66,9 @@ func AllocRow(props allocRowProps) ui.Node {
 			Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", scorePct))),
 		),
 		Span(Class("budget-sub fig"), scoreLabel),
+		// Explicit separator so the score and the breakdown don't run together
+		// ("Score 60%returns 100") — these are adjacent inline spans (§6.15).
+		Span(Class("budget-sub"), " · "),
 		Span(Class("budget-sub"), uistate.T("allocate.breakdown",
 			r.Breakdown.Returns*100, r.Breakdown.Stability*100, r.Breakdown.Liquidity*100, note)),
 	)
