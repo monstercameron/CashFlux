@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend request IDs.** HTTP responses now carry `X-Request-ID`, incoming request IDs are
+  propagated into context, and gRPC requests propagate the same ID from metadata.
 - **Structured backend logging foundation.** The server now configures `log/slog` with text/json
   formats, runtime log levels, and redaction for token/key/secret/cookie/password attributes.
 - **Distinct backend liveness probe.** Added `/livez` as a process-up probe separate from

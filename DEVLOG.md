@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: propagate backend request ids
+
+- Added request-id context helpers and HTTP middleware that returns `X-Request-ID` on every backend route.
+- Added gRPC unary/stream interceptors that read `x-request-id` metadata, generate one when absent, and attach it to RPC contexts.
+- Covered HTTP supplied/generated IDs and unary gRPC metadata propagation in server tests.
+
 ## 2026-06-18 - feat: add backend structured logging
 
 - Added `server.NewLogger` with text/json handlers, `CASHFLUX_SERVER_LOG_FORMAT`, and `CASHFLUX_SERVER_LOG_LEVEL`.
