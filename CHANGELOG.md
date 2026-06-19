@@ -12,6 +12,15 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **Deleting a member left their transactions dangling.** The Members screen decided whether to reassign
+  before deleting by counting only owned accounts, budgets, and goals — not transactions, which carry a
+  direct member tag. A member used only as a transaction tag was deleted outright, leaving those
+  transactions pointing at a member that no longer existed. The check now counts transactions too, routing
+  the delete through the existing reassign step (which clears/moves their member tag).
+- **Goal totals ignored currency.** The Goals screen summed each goal's raw minor units into the combined
+  Saved / Total target / Overall progress stats, so a goal in a non-base currency skewed the totals. Each
+  amount is now converted through the FX table first (falling back to its raw amount when no rate exists),
+  matching every other screen.
 - **Deleting an account with transactions would orphan them.** The Accounts delete button removed the
   account row outright, leaving its transactions (and the far leg of any transfer) pointing at an account
   that no longer existed. Delete is now refused when the account still has transactions, with a message

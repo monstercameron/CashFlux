@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: count transactions when deciding member reassign-before-delete
+
+- `ReassignOwner` already moves a member's transactions (via their MemberID), but the Members screen's
+  `ownedCount` — which decides whether to open the reassign panel — only counted accounts, budgets, and
+  goals. So a member referenced solely by transactions was deleted directly, dangling those MemberIDs.
+- Fix: count transactions in `ownedCount` too, so the delete routes through the existing reassign path.
+  Screen-only change; the reassign logic was already correct and tested.
+
+## 2026-06-19 - fix: convert goal totals to base currency before summing
+
+- The Goals screen's combined stat cards summed `g.CurrentAmount.Amount` / `g.TargetAmount.Amount` directly,
+  ignoring per-goal currency — the lone screen not routing aggregation through the FX table (CLAUDE.md rule 6).
+- Fix: build `currency.Rates` from settings and `Convert` each amount to base before summing, falling back to
+  the raw amount when a currency has no rate (so data is never dropped). Mirrors bills/transactions/dashboard.
+
 ## 2026-06-19 - fix: guard account deletion against orphaning transactions
 
 - Continued the dangling-reference audit (after the member-delete fix). Accounts had the same shape: the
