@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Self-host token rotation helper.** `cashflux-server rotate-token` now prints a fresh high-entropy
+  bearer token and matching `CASHFLUX_SERVER_TOKEN_SHA256` value for self-host deployments.
 - **Billing-disabled entitlement seam.** `IsCloudActive` now centralizes Cloud entitlement checks
   and treats billing-disabled self-host deployments as active by default.
 - **Self-host token hardening.** Token mode now accepts `CASHFLUX_SERVER_TOKEN_SHA256`,

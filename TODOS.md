@@ -4092,9 +4092,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Sync chip tooltip names the active server; onboarding mentions both paths once.
 
 #### Server
-- [~] Config-driven auth mode: **token (default for self-host)** vs OAuth (providers configured);
+- [x] Config-driven auth mode: **token (default for self-host)** vs OAuth (providers configured);
       token mode can generate/print a first-run access token and authenticate via `CASHFLUX_SERVER_TOKEN_SHA256`.
-      Remaining: rotate command.
+      `cashflux-server rotate-token` prints replacement token material.
 - [x] Make billing/Stripe + entitlement gating **optional / disabled** in self-host mode (a config
       flag); `IsCloudActive` returns true when billing is disabled.
 - [x] **Version/compat endpoint** for the client's Test-connection + too-old/too-new warnings (reuse a
@@ -4147,8 +4147,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       refresh reuse detection → revoke session family.
 - [ ] Session revocation (logout, device revoke, "sign out everywhere"); token `jti` denylist or version.
 - [ ] OAuth: PKCE + `state` (CSRF), nonce, redirect-URI allow-list, validate `iss`/`aud`.
-- [~] Self-host token mode: high-entropy generated token, SHA-256 config storage, and constant-time compare are
-      done. Remaining: rotate command.
+- [x] Self-host token mode: high-entropy generated token, SHA-256 config storage, constant-time compare, and
+      `cashflux-server rotate-token` are done.
 
 #### Transport / browser
 - [ ] TLS-only (HSTS, modern ciphers); `wss` for the bridge; redirect HTTP→HTTPS.

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,15 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "rotate-token" {
+		token, err := server.GenerateAccessToken()
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("CASHFLUX_SERVER_TOKEN=%s\n", token.Token)
+		fmt.Printf("CASHFLUX_SERVER_TOKEN_SHA256=%s\n", token.SHA256)
+		return
+	}
 	cfg, err := server.FromEnv()
 	if err != nil {
 		log.Fatal(err)

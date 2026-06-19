@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add self-host token rotation command
+
+- Added `server.GenerateAccessToken`, returning a random bearer token plus the SHA-256 digest expected by
+  `CASHFLUX_SERVER_TOKEN_SHA256`.
+- Added `cashflux-server rotate-token` so self-host operators can generate a replacement token without starting
+  the HTTP server.
+- Verified the command output shape with `go run ./cmd/cashflux-server rotate-token` and covered digest correctness
+  with a server unit test.
+
 ## 2026-06-18 - feat: add cloud entitlement seam
 
 - Added `IsCloudActive` as the single server-side seam for future Sync/AI/blob entitlement checks.
