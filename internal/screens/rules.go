@@ -7,10 +7,12 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/rulesuggest"
 	"github.com/monstercameron/CashFlux/internal/textutil"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -298,7 +300,7 @@ func RuleRow(props ruleRowProps) ui.Node {
 			Span(Class("row-meta"), meta),
 			If(props.Warning != "", Span(Class("row-meta text-warn"), props.Warning)),
 		),
-		Button(Class("btn"), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
-		Button(Class("btn-del"), Type("button"), Title(uistate.T("rules.deleteTitle")), OnClick(del), "✕"),
+		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("rules.deleteTitle")), Title(uistate.T("rules.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
 }
