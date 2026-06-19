@@ -123,6 +123,9 @@ var english = Catalog{
 	"subs.reminderTitle":     "Review subscription: %s",
 	"subs.reminderNote":      "Recurring charge of %s (%s). Decide whether to keep or cancel it.",
 	"subs.reminderAdded":     "Added a reminder to review %s.",
+	"subs.priceChangesTitle": "Recent price changes",
+	"subs.priceUp":           "Up %s (%s) since %s",
+	"subs.priceDown":         "Down %s (%s) since %s",
 	"nav.documents":          "Documents",
 	"nav.customize":          "Customize",
 

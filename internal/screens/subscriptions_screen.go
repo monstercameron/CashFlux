@@ -32,6 +32,7 @@ func Subscriptions() ui.Node {
 	pr := uistate.UsePrefs().Get()
 
 	subs, _ := subscriptions.Detect(app.Transactions(), rates, 2)
+	changes, _ := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3)
 
 	var annual int64
 	for _, s := range subs {
@@ -76,6 +77,33 @@ func Subscriptions() ui.Node {
 		body = Div(Class("rows"), rows)
 	}
 
+	// Price-change rows have no per-row interactive elements, so they render
+	// inline (no component needed). DetectPriceChanges already sorts them
+	// most-recent-first.
+	changeRows := MapKeyed(changes,
+		func(c subscriptions.PriceChange) any { return c.Name + "|" + fmt.Sprint(c.NewAmount) },
+		func(c subscriptions.PriceChange) ui.Node {
+			pct := c.PercentChange
+			if pct < 0 {
+				pct = -pct
+			}
+			delta := fmtMoney(money.New(c.Delta, base).Abs())
+			pctStr := fmt.Sprintf("%d%%", pct)
+			date := pr.FormatDate(c.ChangedAt)
+			key := "subs.priceDown"
+			if c.Increased() {
+				key = "subs.priceUp"
+			}
+			return Div(Class("row"),
+				Div(Class("row-main"),
+					Span(Class("row-desc"), c.Name),
+					Span(Class("row-meta"), uistate.T(key, delta, pctStr, date)),
+				),
+				Span(Class("budget-amount"), fmtMoney(money.New(c.NewAmount, base))),
+			)
+		},
+	)
+
 	return Div(
 		If(len(subs) > 0, Div(Class("stat-grid"),
 			stat(uistate.T("subs.monthlyBurden"), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base)), "neg"),
@@ -92,6 +120,10 @@ func Subscriptions() ui.Node {
 				}), uistate.T("subs.downloadCsv")),
 			)),
 		),
+		If(len(changes) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("subs.priceChangesTitle")),
+			Div(Class("rows"), changeRows),
+		)),
 	)
 }
 
