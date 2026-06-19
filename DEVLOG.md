@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: add two-device sync bridge coverage (7.3/7.10)
+
+- Added an in-process two-device bridge test that dials the real GoGRPCBridge twice, with one device watching
+  while the other mutates the workspace.
+- Covered stale LWW rejection across devices and tombstone propagation to the watcher, then verified the deleted
+  workspace is visible when listing with `IncludeDeleted`.
+- This closes the broader tombstone-propagation test gap while leaving browser offline flush and blob e2e work
+  tracked separately.
+
 ## 2026-06-19 - feat: switch client ai proxy to streaming rpc (7.7)
 
 - Updated the wasm backend AI transport to call `ChatStream` / `VisionStream` over the GoGRPCBridge tunnel

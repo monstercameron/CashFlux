@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Two-device sync bridge e2e (7.3/7.10).** Added integration coverage for two devices connected through
+  the real gRPC tunnel, proving stale LWW writes are rejected and delete tombstones propagate to watchers.
 - **AI streaming RPC surface (7.1/7.4).** Added `ChatStream` and `VisionStream` server-streaming RPCs over the
   gRPC tunnel, returning terminal completion chunks while preserving the existing unary AI calls.
 - **Proto codegen and drift check (7.0/7.1).** Added Buf-based generation for

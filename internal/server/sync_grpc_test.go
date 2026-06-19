@@ -195,6 +195,96 @@ func TestSyncServiceGRPCBridgeWatchWorkspaces(t *testing.T) {
 	}
 }
 
+func TestSyncServiceGRPCBridgeTwoDeviceLWWAndTombstone(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{AuthMode: "token", Token: "dev-token", AppOrigin: "*"}
+	bridge := httptest.NewServer(NewMux(cfg, store))
+	defer bridge.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	deviceA, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("device A dial: %v", err)
+	}
+	defer deviceA.Close()
+	deviceB, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("device B dial: %v", err)
+	}
+	defer deviceB.Close()
+
+	watch, err := deviceB.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodSyncWatchWorkspaces, backendrpc.JSONCallOptions()...)
+	if err != nil {
+		t.Fatalf("watch stream: %v", err)
+	}
+	if err := watch.SendMsg(&backendrpc.WatchWorkspacesRequest{IncludeDeleted: true}); err != nil {
+		t.Fatalf("watch send: %v", err)
+	}
+	if err := watch.CloseSend(); err != nil {
+		t.Fatalf("watch close send: %v", err)
+	}
+
+	base := time.Date(2026, time.June, 19, 17, 0, 0, 0, time.UTC)
+	var put backendrpc.PutWorkspaceResponse
+	if err := deviceA.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+		Workspace:       backendrpc.Workspace{ID: "w-two-device", Name: "Device A", DeviceID: "device-a"},
+		Dataset:         []byte(`{"schemaVersion":1,"from":"device-a"}`),
+		ClientUpdatedAt: base.Format(time.RFC3339Nano),
+	}, &put, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("device A put: %v", err)
+	}
+	if !put.Accepted {
+		t.Fatalf("device A put response = %+v", put)
+	}
+	var created backendrpc.WatchWorkspacesResponse
+	if err := watch.RecvMsg(&created); err != nil {
+		t.Fatalf("watch create recv: %v", err)
+	}
+	if created.Workspace.ID != "w-two-device" || created.Workspace.DeviceID != "device-a" || created.Workspace.Deleted {
+		t.Fatalf("watch create = %+v", created)
+	}
+
+	var stale backendrpc.PutWorkspaceResponse
+	if err := deviceB.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+		Workspace:       backendrpc.Workspace{ID: "w-two-device", Name: "Stale Device B", DeviceID: "device-b"},
+		Dataset:         []byte(`{"schemaVersion":1,"from":"device-b"}`),
+		ClientUpdatedAt: base.Add(-time.Minute).Format(time.RFC3339Nano),
+	}, &stale, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("device B stale put: %v", err)
+	}
+	if stale.Accepted || stale.Workspace.Name != "Device A" || string(stale.Dataset) != `{"schemaVersion":1,"from":"device-a"}` {
+		t.Fatalf("stale response = %+v dataset %q", stale, stale.Dataset)
+	}
+
+	var del backendrpc.DeleteWorkspaceResponse
+	if err := deviceA.Invoke(ctx, backendrpc.MethodSyncDeleteWorkspace, backendrpc.DeleteWorkspaceRequest{
+		ID:        "w-two-device",
+		UpdatedAt: base.Add(time.Minute).Format(time.RFC3339Nano),
+		DeviceID:  "device-a",
+	}, &del, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("device A delete: %v", err)
+	}
+	if !del.Deleted {
+		t.Fatalf("delete response = %+v", del)
+	}
+	var tombstone backendrpc.WatchWorkspacesResponse
+	if err := watch.RecvMsg(&tombstone); err != nil {
+		t.Fatalf("watch tombstone recv: %v", err)
+	}
+	if tombstone.Workspace.ID != "w-two-device" || !tombstone.Workspace.Deleted || tombstone.Workspace.DeviceID != "device-a" {
+		t.Fatalf("watch tombstone = %+v", tombstone)
+	}
+
+	var list backendrpc.ListWorkspacesResponse
+	if err := deviceB.Invoke(ctx, backendrpc.MethodSyncListWorkspaces, backendrpc.ListWorkspacesRequest{IncludeDeleted: true}, &list, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("device B list deleted: %v", err)
+	}
+	if len(list.Workspaces) != 1 || list.Workspaces[0].ID != "w-two-device" || !list.Workspaces[0].Deleted {
+		t.Fatalf("deleted list = %+v", list)
+	}
+}
+
 func TestSyncServiceGRPCBridgeRejectsOversizedSnapshot(t *testing.T) {
 	store := openTestStore(t)
 	cfg := Config{AuthMode: "token", Token: "dev-token", AppOrigin: "*"}

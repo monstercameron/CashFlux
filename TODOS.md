@@ -3983,8 +3983,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       return the new `{version, updatedAt}` (and current state when rejected so the client re-pulls).
 - [x] `WatchWorkspaces` server stream: in-proc per-user pub/sub notifies other devices of a change;
       heartbeat/keepalive; clean unsubscribe on disconnect.
-- [~] Tests: LWW accept/reject by timestamp, tombstone propagation, cross-user isolation, watch fan-out,
-      and oversized-payload rejection are covered. Remaining: broader e2e tombstone propagation.
+- [x] Tests: LWW accept/reject by timestamp, tombstone propagation, cross-user isolation, watch fan-out,
+      oversized-payload rejection, and a two-device bridge e2e for stale-write rejection plus tombstone
+      propagation are covered.
 
 ### 7.4 AIService (per-user encrypted BYO key) ★
 - [x] `SetKey`: validate, AES-GCM encrypt, store; never return the key.
@@ -4075,11 +4076,14 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 ### 7.10 Testing & phased rollout
 - [x] Unit: storage, LWW, encryption, rate-limit, blob hashing + refcount/GC.
       Done: repository, sync, AI, blob, usage, and retention tests cover these units.
-- [~] Integration: in-proc `grpc.Server` behind the bridge over a real WS; client↔server round-trips
-      now cover AI `SetKey`/`Chat` and SyncService workspace `Put`/`List`/`Get`/`Delete` unary calls.
-      Remaining: browser autosave push/pull e2e, AI stream, blob up/down.
-- [ ] e2e: two-device sync (LWW + tombstone), offline→reconnect flush, OAuth login, artifact blob
+- [~] Integration: in-proc `grpc.Server` behind the bridge over a real WS; client<->server round-trips
+      now cover AI `SetKey`/`Chat`/`ChatStream` and SyncService workspace `Put`/`List`/`Get`/`Delete` unary
+      calls plus watch streams. Remaining: browser autosave push/pull e2e and blob up/down.
+- [~] e2e: two-device sync (LWW + tombstone), offline->reconnect flush, OAuth login, artifact blob
       round-trip, AI proxy streaming with a real key.
+      Done: in-proc bridge e2e covers two-device stale LWW rejection plus tombstone propagation; AI proxy
+      streaming has bridge/client transport coverage. Remaining: offline->reconnect flush, OAuth login,
+      artifact blob round-trip, and real-key AI proxy smoke.
 - [x] Load/abuse: connection caps, oversized payloads, rate limits.
       Done: server tests cover gRPC stream caps, bridge connection-limit config, oversized sync/blob/AI payloads,
       storage quota exhaustion, and HTTP/user rate-limit configuration.
