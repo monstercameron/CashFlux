@@ -104,7 +104,7 @@ func Dashboard() ui.Node {
 			noticeAtom.Set(noticeAtom.Get().With(uistate.T("dashboard.reminderErr", err.Error()), true))
 			return
 		}
-		nav.Navigate("/todo")
+		nav.Navigate(uistate.RoutePath("/todo"))
 	})
 	dismissFreshness := ui.UseEvent(func() {
 		stale := freshness.StaleAccounts(accounts, app.FreshnessWindows(), time.Now())
@@ -519,7 +519,7 @@ func emptyAddCTA(props emptyAddProps) ui.Node {
 	path := props.Path
 	return Div(Class("empty text-dim text-[13px] flex flex-col items-start gap-2"),
 		Span(props.Message),
-		Button(Class("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(path) }), props.Label),
+		Button(Class("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath(path)) }), props.Label),
 	)
 }
 

@@ -320,7 +320,7 @@ func Accounts() ui.Node {
 		f := uistate.TxFilter{Account: accountID}.Normalize()
 		txFilter.Set(f)
 		uistate.PersistTxFilter(f)
-		nav.Navigate("/transactions")
+		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
 	windows := app.FreshnessWindows()

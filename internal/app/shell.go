@@ -140,7 +140,7 @@ func railHeader(label string) uic.Node {
 // Sidebar renders the left rail: brand header, primary navigation, the user's
 // custom "My pages", the System group, and a household card that opens settings.
 func Sidebar() uic.Node {
-	current := router.InspectCurrentRoute().Path
+	current := uistate.LogicalPath(router.InspectCurrentRoute().Path)
 	hidden := uistate.UseHiddenModules().Get()
 	cls := "rail w-60 shrink-0 border-r border-line flex flex-col"
 	if uistate.UseRailCollapsed().Get() {
@@ -294,7 +294,7 @@ func navItem(props navItemProps) uic.Node {
 		Title(props.Label), // native tooltip + accessible name, esp. when collapsed to icons
 		OnClick(func() {
 			if path != "" {
-				nav.Navigate(path)
+				nav.Navigate(uistate.RoutePath(path))
 			}
 		}),
 	}
@@ -363,8 +363,8 @@ func TopBar(props topBarProps) uic.Node {
 	nav := router.UseNavigate()
 	// Breadcrumb: Dashboard (clickable) › current screen. Off the dashboard the
 	// home crumb navigates back; on it, just the title shows.
-	onHome := func() { nav.Navigate("/") }
-	curPath := router.InspectCurrentRoute().Path
+	onHome := func() { nav.Navigate(uistate.RoutePath("/")) }
+	curPath := uistate.LogicalPath(router.InspectCurrentRoute().Path)
 	onDashboard := curPath == "/"
 	// The time-resolution control only makes sense where there's a period concept;
 	// on Members/Categories/Rules/etc. it does nothing, so hide it there (C4).

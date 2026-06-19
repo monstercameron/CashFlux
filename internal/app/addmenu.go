@@ -46,10 +46,10 @@ func AddMenu() uic.Node {
 		Div(Class("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(Class("add-menu"+hidden), Attr("role", "menu"),
 			item("addmenu.transaction", func() { quickAdd.Set(true) }),
-			item("addmenu.account", func() { nav.Navigate("/accounts") }),
-			item("addmenu.budget", func() { nav.Navigate("/budgets") }),
-			item("addmenu.goal", func() { nav.Navigate("/goals") }),
-			item("addmenu.document", func() { nav.Navigate("/documents") }),
+			item("addmenu.account", func() { nav.Navigate(uistate.RoutePath("/accounts")) }),
+			item("addmenu.budget", func() { nav.Navigate(uistate.RoutePath("/budgets")) }),
+			item("addmenu.goal", func() { nav.Navigate(uistate.RoutePath("/goals")) }),
+			item("addmenu.document", func() { nav.Navigate(uistate.RoutePath("/documents")) }),
 		),
 	)
 }

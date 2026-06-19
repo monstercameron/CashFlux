@@ -41,10 +41,16 @@ func Run() {
 	// so the first paint matches the user's choice instead of flashing defaults.
 	uistate.ApplyPrefs(uistate.LoadPrefs())
 
-	r := router.NewHistoryRouter(router.RouterOptions{DefaultRoute: "/"})
+	// Derive the URL sub-path the app is served under (e.g. "/CashFlux" on a
+	// GitHub Pages project site) from the <base href> index.html set, so routes
+	// register and navigate with that prefix (B30). At the server root the prefix
+	// is "" and every RoutePath call is a no-op.
+	uistate.InitRouteBase()
+
+	r := router.NewHistoryRouter(router.RouterOptions{DefaultRoute: uistate.RoutePath("/")})
 	for _, route := range screens.All() {
 		route := route // capture per iteration
-		r.Register(route.Path, func(router.Attrs) *router.Element {
+		r.Register(uistate.RoutePath(route.Path), func(router.Attrs) *router.Element {
 			return ui.CreateElement(Shell, ShellProps{
 				Title:    uistate.T(route.Title),
 				Subtitle: uistate.T(route.Subtitle),
@@ -55,7 +61,7 @@ func Run() {
 	// User-authored custom pages all ride one pattern route; the slug resolves the
 	// page from app state at render time, so new pages are reachable without
 	// re-registering routes (the router can't be mutated after mount).
-	r.Register("/p/:slug", func(attrs router.Attrs) *router.Element {
+	r.Register(uistate.RoutePath("/p/:slug"), func(attrs router.Attrs) *router.Element {
 		slug, _ := attrs["slug"].(string)
 		title := uistate.T("custompage.fallbackTitle")
 		if app := appstate.Default; app != nil {

@@ -319,7 +319,7 @@ func viewTitle(props viewTitleProps) uic.Node {
 		Type("button"),
 		Attr("title", uistate.T("widget.open")),
 		Attr("aria-label", uistate.T("widget.openNamed", props.Title)),
-		OnClick(func() { router.Navigate(route) }),
+		OnClick(func() { router.Navigate(uistate.RoutePath(route)) }),
 		props.Title,
 	)
 }

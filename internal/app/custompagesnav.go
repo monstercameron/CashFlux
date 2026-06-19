@@ -89,7 +89,7 @@ func CustomPagesNav() uic.Node {
 		if err := app.PutCustomPage(p); err != nil {
 			return
 		}
-		nav.Navigate("/p/" + p.Slug)
+		nav.Navigate(uistate.RoutePath("/p/" + p.Slug))
 	}
 
 	rename := func(p domain.CustomPage) {
@@ -103,8 +103,8 @@ func CustomPagesNav() uic.Node {
 			return
 		}
 		// The slug may have changed; if we're viewing this page, follow it.
-		if current == "/p/"+p.Slug || current != "/" {
-			nav.Navigate("/p/" + p.Slug)
+		if current == uistate.RoutePath("/p/"+p.Slug) || current != uistate.RoutePath("/") {
+			nav.Navigate(uistate.RoutePath("/p/" + p.Slug))
 		}
 		bump()
 	}
@@ -124,8 +124,8 @@ func CustomPagesNav() uic.Node {
 		if err := app.DeleteCustomPage(p.ID); err != nil {
 			return
 		}
-		if current == "/p/"+p.Slug {
-			nav.Navigate("/")
+		if current == uistate.RoutePath("/p/"+p.Slug) {
+			nav.Navigate(uistate.RoutePath("/"))
 		} else {
 			bump()
 		}
@@ -137,7 +137,7 @@ func CustomPagesNav() uic.Node {
 		slug := p.Slug
 		rows = append(rows, uic.CreateElement(customPageRow, customPageRowProps{
 			Page:        p,
-			Active:      current == "/p/"+slug,
+			Active:      current == uistate.RoutePath("/p/"+slug),
 			OnRename:    func() { rename(p) },
 			OnHide:      func() { toggleHide(p) },
 			OnDelete:    func() { del(p) },
@@ -204,7 +204,7 @@ func customPageRow(props customPageRowProps) uic.Node {
 	nav := router.UseNavigate()
 	open := uic.UseState(false)
 	p := props.Page
-	path := "/p/" + p.Slug
+	path := uistate.RoutePath("/p/" + p.Slug)
 
 	cls := "nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer min-w-0 flex-1"
 	if props.Active {

@@ -163,7 +163,7 @@ func Members() ui.Node {
 		f := uistate.TxFilter{Member: memberID}.Normalize()
 		txFilter.Set(f)
 		uistate.PersistTxFilter(f)
-		nav.Navigate("/transactions")
+		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
 	members := app.Members()

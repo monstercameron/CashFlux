@@ -83,7 +83,7 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		e.Call("preventDefault")
-		router.Navigate(nav[idx].Path)
+		router.Navigate(uistate.RoutePath(nav[idx].Path))
 		return nil
 	})
 	doc.Call("addEventListener", "keydown", onKeyDown)
@@ -228,7 +228,7 @@ func buildPaletteCommands() []paletteCmd {
 	add := func(items []railItem) {
 		for _, it := range items {
 			path := it.Path
-			cmds = append(cmds, paletteCmd{label: uistate.T(it.Key), run: func() { router.Navigate(path) }})
+			cmds = append(cmds, paletteCmd{label: uistate.T(it.Key), run: func() { router.Navigate(uistate.RoutePath(path)) }})
 		}
 	}
 	add(primaryNav())

@@ -278,7 +278,7 @@ func globalSettingsForm() uic.Node {
 	bump := func() { dataRev.Update(func(n int) int { return n + 1 }) }
 	nav := router.UseNavigate()
 	settingsAtom := uistate.UseSettings()
-	goManageMembers := func() { settingsAtom.Set(uistate.SettingsTarget{}); nav.Navigate("/members") }
+	goManageMembers := func() { settingsAtom.Set(uistate.SettingsTarget{}); nav.Navigate(uistate.RoutePath("/members")) }
 
 	curKey, curModel := "", ""
 	if a := appstate.Default; a != nil {
