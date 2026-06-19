@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: Reports savings-rate trend (B21)
+
+- Added pure `reports.SavingsRateSeries(txns, bounds, rates)`: the whole-percent savings rate per bucket
+  (reuses `IncomeExpenseSeries` + `PeriodFlow.SavingsRate`, so it matches the dashboard — 0 with no income,
+  negative when overspending). Table-tested incl. the +50% / −50% / no-income cases.
+- Wired a "Savings-rate trend" `ui.AreaChart` on the Reports screen over the same six-period `bounds` used
+  by the cash-flow/net-worth charts (ints → float64; the chart handles negatives). New
+  `reports.savingsTrend` key. Kept entirely in reports + reports_screen.go (parallel agent is in
+  app/server/theme). wasm build green, gofmt + go vet clean.
+
+## 2026-06-18 - feat: bound ai upstream retries
+
+- Added `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI_UPSTREAM_RETRIES` to cap OpenAI proxy calls.
+- AIService now wraps upstream calls with a deadline and retries transient transport, 429, and 5xx failures with bounded jittered exponential backoff.
+- Covered retry success, timeout mapping to `DeadlineExceeded`, validation of negative config, and retry backoff bounds in server tests.
+
 ## 2026-06-18 — feat: Reports largest-expenses report (B21)
 
 - Added pure `reports.LargestExpenses(txns, start, end, rates, n)`: the period's biggest individual

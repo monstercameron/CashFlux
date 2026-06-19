@@ -70,6 +70,13 @@ func Reports() ui.Node {
 		nw[i] = float64(m.Amount)
 	}
 
+	// Savings-rate trend: percent of income kept per period.
+	srInts, _ := reports.SavingsRateSeries(txns, bounds, rates)
+	srSeries := make([]float64, len(srInts))
+	for i, v := range srInts {
+		srSeries[i] = float64(v)
+	}
+
 	cats := app.Categories()
 	catName := make(map[string]string, len(cats))
 	for _, c := range cats {
@@ -184,6 +191,11 @@ func Reports() ui.Node {
 		If(len(nw) >= 2, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("dashboard.netWorthTrend")),
 			uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend")}),
+		)),
+		If(len(srSeries) >= 2, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("reports.savingsTrend")),
+			P(Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+			uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
 		)),
 	)
 }

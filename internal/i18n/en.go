@@ -770,6 +770,7 @@ var english = Catalog{
 	"reports.byCategory":             "Spending by category",
 	"reports.topPayees":              "Top payees",
 	"reports.biggestExpenses":        "Biggest expenses",
+	"reports.savingsTrend":           "Savings-rate trend",
 	"reports.noPayee":                "(no description)",
 	"reports.downloadCsv":            "Download CSV",
 	"reports.downloadCsvTitle":       "Download the spending-by-category breakdown as a CSV file",

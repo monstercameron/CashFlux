@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reports: Savings-rate trend (B21).** The Reports screen now charts your savings rate (percent of income
+  kept) over the last six periods, so you can see whether it's trending up. Backed by a pure, table-tested
+  `reports.SavingsRateSeries`.
+- **AI upstream timeout and retries.** The backend AI proxy now applies a configurable upstream OpenAI
+  deadline and bounded jittered retries for transient transport, 429, and 5xx failures.
 - **Reports: Biggest expenses (B21).** The Reports screen now lists the period's largest individual
   purchases (description, date, amount), backed by a new pure, table-tested `reports.LargestExpenses`.
 - **Reminders on open — notifications are live (B19).** When you open CashFlux it now surfaces a gentle
@@ -442,6 +447,13 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **Lock screen fades in instead of popping (§6.18).** Showing the passcode gate (on boot, manual lock, or
+  auto-lock) now plays a brief opacity + scale settle — the mirror of the unlock fade-out — so the gate appears
+  smoothly. Web Animations API, skipped under `prefers-reduced-motion`.
+- **List rows highlight on hover; progress bars grow into place (§6.16).** List rows now show a subtle
+  background highlight under the cursor (with a short fade) so the active row is obvious and lists are easier
+  to scan. Budget/allocate progress bars animate their width on load and update instead of snapping (gated
+  behind `prefers-reduced-motion`).
 - **Wrong-passcode shake on the lock screen (§6.18).** Entering an incorrect passcode now shakes the input
   field — the familiar "no" cue — in addition to the red message. Implemented with the Web Animations API (no
   stylesheet needed) and skipped under `prefers-reduced-motion`.
