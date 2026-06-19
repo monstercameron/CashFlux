@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: reconcile backend security checklist (7.8)
+
+- Added a `docs/BACKEND_SECURITY.md` coverage map so the top-level 7.8 checklist points at the detailed 7.14
+  controls instead of drifting as a duplicate list.
+- Marked strict per-user isolation and request-size/rate/bridge-abuse controls complete based on existing
+  repository/service isolation tests, blob/snapshot/AI caps, HTTP limits, and gRPC bridge caps.
+- Left AES-GCM key management and threat-model/TLS-process items partial where real follow-up remains:
+  automated key re-encryption, periodic threat-model review, and pre-launch pen-test.
+
 ## 2026-06-19 — feat: internal/quotes smart-quotes provider (B17.5, docs)
 
 - Doc for c4ef85c: pure `internal/quotes` — curated finance/motivation quotes + deterministic `OfDay` daily

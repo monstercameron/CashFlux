@@ -366,6 +366,13 @@ func TestBackendSecurityNotesDocumentProtectedRoutes(t *testing.T) {
 		"cashflux.v1.SyncService",
 		"cashflux.v1.AIService",
 		"auth interceptors",
+		"Security Coverage Map",
+		"AI keys are encrypted at rest with AES-GCM",
+		"Strict tenant isolation",
+		"Request-size and abuse controls",
+		"Gitleaks",
+		"govulncheck",
+		"gosec",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("backend security notes missing %q", want)

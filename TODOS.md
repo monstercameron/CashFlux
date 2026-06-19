@@ -4027,10 +4027,18 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       server — pulled it").
 
 ### 7.8 Security & privacy ★
-- [ ] AES-GCM key management (master-key source + rotation); AI keys encrypted at rest.
-- [ ] Strict per-user data isolation enforced in every query (with isolation tests).
-- [ ] Request-size limits (dataset + blob), rate limiting, the bridge's abuse controls enabled.
-- [ ] TLS everywhere; OAuth `state`/PKCE; never log secrets; threat-model pass; `govulncheck` + `gosec` in CI.
+- [~] AES-GCM key management (master-key source + rotation); AI keys encrypted at rest.
+      AI keys are encrypted at rest and master-key sourcing/maintenance-window rotation is documented; remaining:
+      automated re-encryption command.
+- [x] Strict per-user data isolation enforced in every query (with isolation tests).
+      Reconciled against §7.14: repository/service queries scope by authenticated user id, with cross-user
+      workspace/blob isolation coverage.
+- [x] Request-size limits (dataset + blob), rate limiting, the bridge's abuse controls enabled.
+      Reconciled against §7.14: dataset/blob/AI caps, HTTP in-flight/rate limits, per-user limits, and gRPC
+      connection/stream/upgrade caps are in place.
+- [~] TLS everywhere; OAuth `state`/PKCE; never log secrets; threat-model pass; `govulncheck` + `gosec` in CI.
+      TLS/wss, OAuth PKCE/state, log redaction, Gitleaks, govulncheck, and gosec are covered; remaining:
+      formal periodic threat-model and pre-launch pen-test pass.
 
 ### 7.9 Deploy & ops
 - [ ] Single binary + data dir; Dockerfile; config via env.
