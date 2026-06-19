@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Minimum-payment guidance on Planning (D9).** New pure, table-tested `payoff.MinimumViablePayment` (the
+  smallest monthly payment that ever clears a debt). The payoff calculator's "payment too low" message now
+  names the exact figure: "Pay at least $X a month to start clearing it."
+
+### Added
 - **No-spend days on Reports (B21).** New pure, table-tested `reports.NoSpendDays` counts the elapsed days in
   the period with zero spending (future days in the current period don't count), surfaced as a motivating
   "No-spend days" stat on the Reports grid.

@@ -19,6 +19,26 @@ type Result struct {
 	TotalPaid     int64 // principal + interest paid, in minor units
 }
 
+// MinimumViablePayment returns the smallest whole-minor-unit monthly payment that
+// will eventually clear the balance at aprPercent: one minor unit more than the
+// first month's interest. Because the balance only falls, the first month's
+// interest is the largest, so any payment above it reduces principal every month
+// and the debt clears. A non-positive balance returns 0 (nothing owed); a
+// non-positive APR returns 1 (any positive payment clears it).
+func MinimumViablePayment(balance int64, aprPercent float64) int64 {
+	if balance <= 0 {
+		return 0
+	}
+	if aprPercent <= 0 {
+		return 1
+	}
+	interest := int64(math.Round(float64(balance) * (aprPercent / 1200.0)))
+	if interest < 0 {
+		interest = 0
+	}
+	return interest + 1
+}
+
 // Project simulates paying down balance (minor units, a positive amount owed) at
 // aprPercent annual interest with a fixed payment each month (minor units).
 // Interest compounds monthly at apr/12 and is rounded to the nearest minor unit.

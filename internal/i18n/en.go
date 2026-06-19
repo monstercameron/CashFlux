@@ -372,6 +372,7 @@ var english = Catalog{
 	"planning.payoffHint":         "Enter a balance, APR, and monthly payment to see the payoff.",
 	"planning.invalidNumbers":     "Enter valid numbers for balance, APR, and payment.",
 	"planning.paymentTooLow":      "That payment won't cover the interest — the balance would never clear. Try a larger payment.",
+	"planning.paymentTooLowMin":   "That payment won't cover the interest. Pay at least %s a month to start clearing it.",
 	"planning.extraNote":          "Paying %s more each month clears it %d months sooner and saves %s in interest.",
 	"planning.debtStrategyTitle":  "Debt payoff strategy",
 	"planning.debtStrategyHint":   "Compares the snowball (smallest balance first) and avalanche (highest APR first) methods across your liability accounts, using their balances, rates, and minimum payments.",

@@ -214,7 +214,8 @@ func Planning() ui.Node {
 					extraNote,
 				)
 			} else {
-				resultBody = P(Class("err"), Attr("role", "alert"), uistate.T("planning.paymentTooLow"))
+				min := payoff.MinimumViablePayment(bal, apr)
+				resultBody = P(Class("err"), Attr("role", "alert"), uistate.T("planning.paymentTooLowMin", fmtMoney(money.New(min, base))))
 			}
 		}
 	}

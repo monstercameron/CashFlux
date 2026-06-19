@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: minimum-payment guidance on Planning (D9)
+
+- Added pure `payoff.MinimumViablePayment(balance, apr)` = first-month interest + 1 minor unit (the first
+  month's interest is the largest since the balance only falls, so anything above it reduces principal every
+  month). 0 for non-positive balance, 1 for non-positive APR. Test asserts the invariant against Project: the
+  returned figure clears the debt and one unit less does not.
+- Surfaced in the Planning payoff calculator: the "payment too low" branch now uses
+  `planning.paymentTooLowMin` to name the minimum ("Pay at least $X a month to start clearing it.") instead of
+  a generic message. Kept the old key.
+- Aside: confirmed backup-reminder wiring stays deferred — recording lastBackupAt lives in app/settings.go
+  (export action, line ~715), a hot shared file the parallel session owns, and the cadence needs a Settings
+  control there too. Not a surgical isolated change.
+- gofmt clean, payoff + i18n tests green, wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: no-spend days on Reports (B21)
 
 - Added pure `reports.NoSpendDays(txns, start, end, now)`: iterates the period's days and counts those with no
