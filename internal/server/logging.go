@@ -131,6 +131,9 @@ func requestLogMiddlewareSampled(logger *slog.Logger, metrics *Metrics, hotPathS
 			"status", rec.status,
 			"duration_ms", time.Since(start).Milliseconds(),
 		}
+		if traceID, ok := TraceIDFromContext(ctx); ok {
+			args = append(args, "trace_id", traceID)
+		}
 		if user, ok := AuthUserFromContext(ctx); ok {
 			args = append(args, "user_id", user.ID)
 		}
@@ -234,6 +237,9 @@ func logRPC(ctx context.Context, logger *slog.Logger, method, code string, elaps
 		"rpc", method,
 		"status", code,
 		"duration_ms", elapsed.Milliseconds(),
+	}
+	if traceID, ok := TraceIDFromContext(ctx); ok {
+		args = append(args, "trace_id", traceID)
 	}
 	if user, ok := AuthUserFromContext(ctx); ok {
 		args = append(args, "user_id", user.ID)

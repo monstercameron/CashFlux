@@ -4230,7 +4230,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 #### Tracing
 - [ ] OpenTelemetry tracing end-to-end (the GoGRPCBridge canonical path already integrates OTel spans);
       propagate trace context client→bridge→grpc→DB/upstream; export to an OTLP collector.
-- [ ] Correlate trace id ↔ request id ↔ log lines.
+- [x] Correlate trace id ↔ request id ↔ log lines.
+      HTTP and gRPC paths now extract W3C trace IDs and add `trace_id` beside `request_id` in structured logs.
 
 #### Health & dashboards
 - [x] `/livez` (process up) + `/readyz` (DB reachable, migrations applied, deps ok) distinct probes.

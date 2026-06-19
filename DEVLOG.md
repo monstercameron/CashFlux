@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: correlate backend trace logs
+
+- Extracted W3C `traceparent` trace IDs from HTTP headers and gRPC metadata.
+- Added `trace_id` to structured HTTP and gRPC request logs alongside `request_id`.
+- Covered HTTP and gRPC trace/request correlation in request-id and logging tests.
+
 ## 2026-06-19 - feat: sample backend hot path logs
 
 - Added configurable sampling for successful `/livez`, `/healthz`, `/readyz`, and `/metrics` logs via `CASHFLUX_SERVER_LOG_HOT_PATH_SAMPLE_RATE`.

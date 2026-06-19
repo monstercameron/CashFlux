@@ -64,10 +64,11 @@ func TestRequestLogMiddlewareWritesRequestFields(t *testing.T) {
 	})))
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	req.Header.Set(requestIDHeader, "http-1")
+	req.Header.Set(traceparentHeader, "00-11111111111111111111111111111111-2222222222222222-01")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	out := buf.String()
-	for _, want := range []string{`"request_id":"http-1"`, `"method":"GET"`, `"route":"/readyz"`, `"status":202`, `"workspace_id":"w-http"`, `"device_id":"d-http"`} {
+	for _, want := range []string{`"request_id":"http-1"`, `"trace_id":"11111111111111111111111111111111"`, `"method":"GET"`, `"route":"/readyz"`, `"status":202`, `"workspace_id":"w-http"`, `"device_id":"d-http"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("log missing %s in %s", want, out)
 		}
@@ -115,6 +116,7 @@ func TestLoggingUnaryInterceptorWritesRPCFields(t *testing.T) {
 	metrics := NewMetrics()
 	ctx := ContextWithAuthUser(ContextWithRequestID(context.Background(), "rpc-1"), AuthUser{ID: "u1"})
 	ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("x-request-id", "rpc-1"))
+	ctx = ContextWithTraceID(ctx, "33333333333333333333333333333333")
 	interceptor := LoggingUnaryInterceptor(logger, metrics)
 	if _, err := interceptor(ctx, "req", &grpc.UnaryServerInfo{FullMethod: "/cashflux.v1.SyncService/ListWorkspaces"}, func(ctx context.Context, req any) (any, error) {
 		SetLogScope(ctx, LogScope{WorkspaceID: "w1", DeviceID: "browser-a"})
@@ -123,7 +125,7 @@ func TestLoggingUnaryInterceptorWritesRPCFields(t *testing.T) {
 		t.Fatalf("interceptor: %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{`"request_id":"rpc-1"`, `"rpc":"/cashflux.v1.SyncService/ListWorkspaces"`, `"status":"OK"`, `"user_id":"u1"`, `"workspace_id":"w1"`, `"device_id":"browser-a"`} {
+	for _, want := range []string{`"request_id":"rpc-1"`, `"trace_id":"33333333333333333333333333333333"`, `"rpc":"/cashflux.v1.SyncService/ListWorkspaces"`, `"status":"OK"`, `"user_id":"u1"`, `"workspace_id":"w1"`, `"device_id":"browser-a"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("log missing %s in %s", want, out)
 		}
