@@ -1003,7 +1003,7 @@ amounts, paid/unpaid status, and a **month calendar** view.
 ### B23. Receipt / document attachments linked to transactions — SPEC (from C38, 2026-06-18)
 **Want:** attach a receipt/document to a specific transaction (Artifacts stores images, but nothing links
 them to a txn).
-- [ ] **Model:** `Attachments []AttachmentRef` (or reuse `SourceDocID`) on `Transaction` → stored
+- [x] **Model:** `Attachments []AttachmentRef` (or reuse `SourceDocID`) on `Transaction` → stored
       Artifacts; store CRUD + dataset round-trip + export/import.
 - [ ] **UI:** from a transaction row/edit, attach an existing artifact or upload new; paperclip indicator;
       view/preview from the ledger; Documents/Artifacts import can auto-link.

@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add transaction attachment references (B23)
+
+- Added `domain.AttachmentRef` and `Transaction.Attachments` so a ledger row can link to one or more
+  Artifact-backed receipts, statements, or imported source files without embedding bytes in the transaction.
+- Extended dataset export/import and SQLite transaction CRUD tests to prove attachment references persist.
+- Marked the B23 model checklist complete; the transaction-row attach/preview UI remains open.
+
 ## 2026-06-19 - docs: add report export design note (B21)
 
 - Added `docs/REPORT_EXPORTS.md` for the D3/shareable report export policy: visual exports should embed

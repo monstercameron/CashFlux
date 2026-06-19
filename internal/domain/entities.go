@@ -66,19 +66,31 @@ type Category struct {
 // negative Amount is an expense. When TransferAccountID is set, the transaction
 // is a transfer leg and is excluded from income/expense totals.
 type Transaction struct {
-	ID                string         `json:"id"`
-	AccountID         string         `json:"accountId"`
-	Date              time.Time      `json:"date"`
-	Payee             string         `json:"payee,omitempty"`
-	Desc              string         `json:"desc"`
-	CategoryID        string         `json:"categoryId,omitempty"`
-	Amount            money.Money    `json:"amount"`
-	TransferAccountID string         `json:"transferAccountId,omitempty"`
-	Cleared           bool           `json:"cleared,omitempty"`
-	Tags              []string       `json:"tags,omitempty"`
-	MemberID          string         `json:"memberId,omitempty"`
-	SourceDocID       string         `json:"sourceDocId,omitempty"`
-	Custom            map[string]any `json:"custom,omitempty"`
+	ID                string          `json:"id"`
+	AccountID         string          `json:"accountId"`
+	Date              time.Time       `json:"date"`
+	Payee             string          `json:"payee,omitempty"`
+	Desc              string          `json:"desc"`
+	CategoryID        string          `json:"categoryId,omitempty"`
+	Amount            money.Money     `json:"amount"`
+	TransferAccountID string          `json:"transferAccountId,omitempty"`
+	Cleared           bool            `json:"cleared,omitempty"`
+	Tags              []string        `json:"tags,omitempty"`
+	MemberID          string          `json:"memberId,omitempty"`
+	SourceDocID       string          `json:"sourceDocId,omitempty"`
+	Attachments       []AttachmentRef `json:"attachments,omitempty"`
+	Custom            map[string]any  `json:"custom,omitempty"`
+}
+
+// AttachmentRef links a transaction to an Artifact-backed receipt, document, or
+// imported source. ArtifactID points at domain.Artifact.ID; Kind/MIME are cached
+// display hints so transaction rows can show a paperclip/preview without loading
+// the full artifact bytes.
+type AttachmentRef struct {
+	ArtifactID string `json:"artifactId"`
+	Name       string `json:"name,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	MIME       string `json:"mime,omitempty"`
 }
 
 // Formula is a saved sandboxed-formula calculation the user named to reuse — a

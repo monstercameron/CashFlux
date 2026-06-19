@@ -265,6 +265,33 @@ func TestPutRequiresID(t *testing.T) {
 	}
 }
 
+func TestTransactionAttachmentsCRUD(t *testing.T) {
+	s := newStore(t)
+	d, _ := dateutil.ParseDate("2026-06-03")
+	tx := domain.Transaction{
+		ID:        "t1",
+		AccountID: "a1",
+		Date:      d,
+		Amount:    money.New(-1299, "USD"),
+		Attachments: []domain.AttachmentRef{{
+			ArtifactID: "art-receipt",
+			Name:       "receipt.png",
+			Kind:       "image",
+			MIME:       "image/png",
+		}},
+	}
+	if err := s.PutTransaction(tx); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+	got, ok, err := s.GetTransaction("t1")
+	if err != nil || !ok {
+		t.Fatalf("GetTransaction: ok=%v err=%v", ok, err)
+	}
+	if len(got.Attachments) != 1 || got.Attachments[0].ArtifactID != "art-receipt" || got.Attachments[0].MIME != "image/png" {
+		t.Fatalf("attachments round-trip wrong: %+v", got.Attachments)
+	}
+}
+
 func TestTransactionQueries(t *testing.T) {
 	s := newStore(t)
 	usd := func(n int64) money.Money { return money.New(n, "USD") }

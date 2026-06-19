@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Transaction attachment references (B23).** Transactions now carry persisted `AttachmentRef` links to
+  Artifact-backed receipts/documents, with SQLite CRUD and dataset export/import round-trip coverage.
 - **Report export design note (B21).** Added `docs/REPORT_EXPORTS.md` to pin the shareable-report policy:
   visual exports embed already-rendered static SVG snapshots instead of live D3, CSV/JSON export typed data,
   and D3 7.9.0 stays service-worker cached for the app runtime.

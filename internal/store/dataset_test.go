@@ -23,12 +23,15 @@ func sampleDataset() Dataset {
 			OpeningBalance: money.New(100000, "USD"), BalanceAsOf: asOf,
 			Custom: map[string]any{"nickname": "main"},
 		}},
-		Categories:   []domain.Category{{ID: "c1", Name: "Food", Kind: domain.KindExpense}},
-		Transactions: []domain.Transaction{{ID: "t1", AccountID: "a1", Date: asOf, Desc: "Groceries", CategoryID: "c1", Amount: money.New(-5000, "USD")}},
-		Budgets:      []domain.Budget{{ID: "b1", Name: "Food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: "c1", Period: domain.PeriodMonthly, Limit: money.New(50000, "USD")}},
-		Goals:        []domain.Goal{{ID: "g1", Name: "Trip", Scope: domain.ScopeIndividual, OwnerID: "m1", TargetAmount: money.New(200000, "USD"), CurrentAmount: money.New(50000, "USD"), TargetDate: asOf}},
-		Tasks:        []domain.Task{{ID: "k1", Title: "Pay rent", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Source: domain.SourceManual}},
-		Rules:        []rules.Rule{{ID: "r1", Match: "coffee", SetCategoryID: "c1", SetTags: []string{"treats"}}},
+		Categories: []domain.Category{{ID: "c1", Name: "Food", Kind: domain.KindExpense}},
+		Transactions: []domain.Transaction{{
+			ID: "t1", AccountID: "a1", Date: asOf, Desc: "Groceries", CategoryID: "c1", Amount: money.New(-5000, "USD"),
+			Attachments: []domain.AttachmentRef{{ArtifactID: "art1", Name: "Receipt", Kind: "image", MIME: "image/png"}},
+		}},
+		Budgets: []domain.Budget{{ID: "b1", Name: "Food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: "c1", Period: domain.PeriodMonthly, Limit: money.New(50000, "USD")}},
+		Goals:   []domain.Goal{{ID: "g1", Name: "Trip", Scope: domain.ScopeIndividual, OwnerID: "m1", TargetAmount: money.New(200000, "USD"), CurrentAmount: money.New(50000, "USD"), TargetDate: asOf}},
+		Tasks:   []domain.Task{{ID: "k1", Title: "Pay rent", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Source: domain.SourceManual}},
+		Rules:   []rules.Rule{{ID: "r1", Match: "coffee", SetCategoryID: "c1", SetTags: []string{"treats"}}},
 		Documents: []domain.Document{{
 			ID: "d1", Filename: "june.csv", Kind: domain.DocCSV, UploadedAt: asOf, AccountID: "a1",
 			Status: domain.DocImported, Extracted: []domain.DocumentRow{{Date: "2026-06-01", Description: "Coffee", Amount: "-4.50", Category: "Food"}},
@@ -118,6 +121,11 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if imported.Settings.BaseCurrency != "USD" || imported.Settings.FXRates["EUR"] != 1.1 {
 		t.Errorf("settings lost: %+v", imported.Settings)
+	}
+	if len(imported.Transactions) != 1 || len(imported.Transactions[0].Attachments) != 1 ||
+		imported.Transactions[0].Attachments[0].ArtifactID != "art1" ||
+		imported.Transactions[0].Attachments[0].MIME != "image/png" {
+		t.Errorf("transaction attachments lost: %+v", imported.Transactions)
 	}
 	if len(imported.Rules) != 1 || imported.Rules[0].Match != "coffee" || len(imported.Rules[0].SetTags) != 1 {
 		t.Errorf("rules lost: %+v", imported.Rules)
