@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Transactions list is paginated (C39).** Long ledgers now render the first 50 filtered rows with a
+  "Show more (N hidden)" button that reveals the next batch, keeping the screen responsive instead of
+  building thousands of rows at once.
+
 ### Fixed
 - **Allocate weight inputs were unlabeled (C6).** The five criterion-weight fields showed as bare "1" boxes
   (label only on hover/placeholder). Each now has a visible caption (Returns / Stability / Liquidity / Debt
@@ -19,6 +24,8 @@ and every commit updates this file under `Unreleased`.
   under any view, and past-window navigation still works.
 
 ### Added
+- **Backend error model.** Added `docs/BACKEND_ERRORS.md` documenting gRPC code mappings, HTTP status
+  equivalents, and the in-band `accepted=false` LWW stale-write response.
 - **Smart-quotes provider (B17.5).** New pure, table-tested `internal/quotes`: a curated set of
   finance/motivation quotes with a deterministic once-per-day rotation (`OfDay`), ready for the lock screen's
   optional smart-quotes display.

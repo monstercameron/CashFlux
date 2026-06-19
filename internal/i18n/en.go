@@ -709,6 +709,7 @@ var english = Catalog{
 	"transactions.empty":               "No transactions yet.",
 	"transactions.addFirst":            "Add your first transaction",
 	"transactions.noMatch":             "No matching transactions.",
+	"transactions.showMore":            "Show more (%d hidden)",
 	"transactions.listTitle":           "All transactions",
 	"transactions.searchPlaceholder":   "Search description or tag",
 	"transactions.member":              "Member",

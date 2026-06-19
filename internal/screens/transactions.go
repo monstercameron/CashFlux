@@ -22,6 +22,10 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// txnPageSize is how many filtered transactions render per page before a
+// "Show more" reveals the next batch (C39 — keeps long ledgers responsive).
+const txnPageSize = 50
+
 // Transactions is the global ledger: add income/expense, list newest first, delete.
 func Transactions() ui.Node {
 	app := appstate.Default
@@ -60,6 +64,7 @@ func Transactions() ui.Node {
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	customVals := ui.UseState(map[string]string{})
 	selected := ui.UseState(map[string]bool{})
+	visN := ui.UseState(txnPageSize) // how many filtered rows to render (paginated, C39)
 	bulkCat := ui.UseState("")
 	errMsg := ui.UseState("")
 	noticeAtom := uistate.UseNotice()
@@ -456,7 +461,15 @@ func Transactions() ui.Node {
 	case len(shown) == 0:
 		listBody = P(Class("empty"), uistate.T("transactions.noMatch"))
 	default:
-		rows := MapKeyed(shown,
+		// Paginate: render only the first visN rows so a long ledger stays fast,
+		// with a "Show more" button to reveal the next page (C39).
+		page := shown
+		hidden := 0
+		if n := visN.Get(); len(shown) > n {
+			page = shown[:n]
+			hidden = len(shown) - n
+		}
+		rows := MapKeyed(page,
 			func(t domain.Transaction) any { return t.ID },
 			func(t domain.Transaction) ui.Node {
 				acc := accByID[t.AccountID]
@@ -467,7 +480,13 @@ func Transactions() ui.Node {
 				})
 			},
 		)
-		listBody = Div(Class("rows"), rows)
+		listBody = Div(
+			Div(Class("rows"), rows),
+			If(hidden > 0, Div(Class("flex justify-center py-1"),
+				Button(Class("btn"), Type("button"), OnClick(func() { visN.Set(visN.Get() + txnPageSize) }),
+					uistate.T("transactions.showMore", hidden)),
+			)),
+		)
 	}
 
 	filterAccOptions := []ui.Node{Option(Value(""), SelectedIf(f.Account == ""), uistate.T("transactions.allAccounts"))}

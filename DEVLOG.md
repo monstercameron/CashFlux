@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: paginate Transactions list (C39)
+
+- Long ledgers built every row at once. Added a `visN` state (default `txnPageSize` = 50); the default render
+  branch slices `shown[:visN]` and appends a "Show more (N hidden)" button that bumps visN by a page. Inline
+  `OnClick` is a prop (not a hook), so it's safe in the conditional branch — same pattern the CSV buttons use.
+  Added the transactions.showMore key. Verified C8/C17/C2 were already addressed; C39 was genuinely open.
+- gofmt clean, i18n tests + wasm build green.
+
+## 2026-06-19 - docs: add backend error model (7.1)
+
+- Added `docs/BACKEND_ERRORS.md` to pin backend gRPC code mappings for auth, validation, preconditions, quota,
+  upstream, deadline, and cancellation failures.
+- Documented the intentional LWW exception: stale non-forced `PutWorkspace` returns OK with `accepted=false`
+  plus current state instead of a gRPC error, preserving the client recovery path.
+- Added deploy coverage and marked the 7.1 error-model TODO complete with that nuance.
+
 ## 2026-06-19 — fix: label Allocate weight inputs (C6)
 
 - The five Allocate criterion weights had only Title (hover) + Placeholder (hidden once a value like "1" is
