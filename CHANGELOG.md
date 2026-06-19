@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   with deploy coverage for `go.mod` Go 1.26.0 and the `golang:1.26-alpine` server build image.
 
 ### Changed
+- **Backend deploy/ops checklist reconciliation.** Documented the single-binary/data-dir deployment surface and
+  reconciled the 7.9 deploy checklist against existing backup, migration, logging, metrics, and CI coverage.
 - **Backend security checklist reconciliation.** Added a `docs/BACKEND_SECURITY.md` coverage map tying the
   top-level 7.8 privacy/security TODOs to the detailed 7.14 controls, and marked isolation plus abuse limits done.
 - **Self-host gRPC proxy tuning.** The Caddy self-host config now pins upstream keepalive and long stream

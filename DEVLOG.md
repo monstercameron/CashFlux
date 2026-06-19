@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: reconcile backend deploy ops (7.9)
+
+- Added a self-hosting "Deployment Surface" note that spells out the single `cashflux-server` binary, data-dir
+  ownership, env-file configuration, Caddy TLS pairing, and persistent `cashflux-data` volume.
+- Marked the 7.9 single-binary/data-dir and backup/restore items complete against existing Dockerfile,
+  Compose, backup command, restore docs, RPO/RTO notes, and backup tests.
+- Left deploy/ops observability and CI items partial where real work remains: full OpenTelemetry trace export,
+  an explicit server binary CI build, and proto drift once code generation is pinned.
+
 ## 2026-06-19 - docs: reconcile backend security checklist (7.8)
 
 - Added a `docs/BACKEND_SECURITY.md` coverage map so the top-level 7.8 checklist points at the detailed 7.14
@@ -12,12 +21,12 @@ problems and fixes, and what's next.
 - Left AES-GCM key management and threat-model/TLS-process items partial where real follow-up remains:
   automated key re-encryption, periodic threat-model review, and pre-launch pen-test.
 
-## 2026-06-19 — feat: internal/quotes smart-quotes provider (B17.5, docs)
+## 2026-06-19 — revert: remove internal/quotes (duplicate of internal/lockquotes)
 
-- Doc for c4ef85c: pure `internal/quotes` — curated finance/motivation quotes + deterministic `OfDay` daily
-  rotation (UTC epoch-day modulo, handles pre-epoch/negative indices), `All` (defensive copy), `Count`. No
-  syscall/js, no randomness. Peripheral to the parallel session's B17 security core, so safe to build solo;
-  the lock screen can wire it when that lands.
+- `internal/quotes` (c4ef85c) duplicated the pre-existing `internal/lockquotes`, which the parallel session
+  already wired into the lock screen (`applockgate.go` → `lockquotes.ForIndex`). Removed the redundant package
+  and its changelog/devlog entries. Fourth time a "new" package collided with existing/in-flight work
+  (insights, rulesuggest, quotes) — confirming the solo-accessible scope is built out; stop minting packages.
 
 ## 2026-06-19 - deploy: tune self-host gRPC websocket proxy
 
