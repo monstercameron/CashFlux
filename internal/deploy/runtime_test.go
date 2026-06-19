@@ -452,6 +452,7 @@ func TestBackendErrorModelDocumentsStatusCodesAndLWWRejection(t *testing.T) {
 		"RESOURCE_EXHAUSTED",
 		"RATE_LIMITED",
 		"UPSTREAM_UNAVAILABLE",
+		"SERVER_UNAVAILABLE",
 		"Migration Note",
 	} {
 		if !strings.Contains(doc, want) {

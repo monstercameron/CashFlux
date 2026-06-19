@@ -21,6 +21,7 @@ const (
 	ErrorReasonResourceExhausted   ErrorReason = "RESOURCE_EXHAUSTED"
 	ErrorReasonRateLimited         ErrorReason = "RATE_LIMITED"
 	ErrorReasonUpstreamUnavailable ErrorReason = "UPSTREAM_UNAVAILABLE"
+	ErrorReasonServerUnavailable   ErrorReason = "SERVER_UNAVAILABLE"
 	ErrorReasonDeadlineExceeded    ErrorReason = "DEADLINE_EXCEEDED"
 	ErrorReasonCanceled            ErrorReason = "CANCELED"
 	ErrorReasonInternal            ErrorReason = "INTERNAL"
@@ -56,6 +57,7 @@ var BackendErrorTaxonomy = []ErrorTaxonomy{
 	{Reason: ErrorReasonResourceExhausted, GRPC: codes.ResourceExhausted, HTTP: http.StatusInsufficientStorage},
 	{Reason: ErrorReasonRateLimited, GRPC: codes.ResourceExhausted, HTTP: http.StatusTooManyRequests},
 	{Reason: ErrorReasonUpstreamUnavailable, GRPC: codes.Unavailable, HTTP: http.StatusBadGateway},
+	{Reason: ErrorReasonServerUnavailable, GRPC: codes.Unavailable, HTTP: http.StatusServiceUnavailable},
 	{Reason: ErrorReasonDeadlineExceeded, GRPC: codes.DeadlineExceeded, HTTP: http.StatusGatewayTimeout},
 	{Reason: ErrorReasonCanceled, GRPC: codes.Canceled, HTTP: 499},
 	{Reason: ErrorReasonInternal, GRPC: codes.Internal, HTTP: http.StatusInternalServerError},
@@ -80,7 +82,5 @@ func writeErrorJSON(w http.ResponseWriter, reason ErrorReason, message string) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(row.HTTP)
-	if err := json.NewEncoder(w).Encode(ErrorResponse{Error: ErrorDetail{Reason: reason, Message: message}}); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-	}
+	_ = json.NewEncoder(w).Encode(ErrorResponse{Error: ErrorDetail{Reason: reason, Message: message}})
 }

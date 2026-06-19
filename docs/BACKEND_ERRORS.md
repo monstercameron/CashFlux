@@ -20,6 +20,7 @@ The Go source of truth is `internal/server.BackendErrorTaxonomy`.
 | `RESOURCE_EXHAUSTED` | `ResourceExhausted` | `507` | Storage, dataset, request-size, or stream quota is exceeded. |
 | `RATE_LIMITED` | `ResourceExhausted` | `429` | Per-user or per-IP request rate limit is exceeded. |
 | `UPSTREAM_UNAVAILABLE` | `Unavailable` | `502` | OpenAI or another upstream dependency failed transiently. |
+| `SERVER_UNAVAILABLE` | `Unavailable` | `503` | Readiness, concurrency, or temporary server availability failure. |
 | `DEADLINE_EXCEEDED` | `DeadlineExceeded` | `504` | Upstream or server deadline expired. |
 | `CANCELED` | `Canceled` | `499` | Client canceled the request. |
 | `INTERNAL` | `Internal` | `500` | Unexpected server failure; response must not leak internals. |
@@ -54,13 +55,12 @@ storage quota, and `503` for unavailable dependencies/readiness.
 
 ## Migration Note
 
-HTTP account, admin support, blob, audit, metrics, OAuth/session, and CORS preflight errors now return JSON
-bodies shaped like:
+HTTP account, admin support, blob, audit, metrics, OAuth/session, readiness, rate-limit, concurrency, and CORS
+preflight errors now return JSON bodies shaped like:
 
 ```json
 {"error":{"reason":"REQUEST_INVALID","message":"invalid day"}}
 ```
 
-Remaining plain-text HTTP error bodies are being migrated to JSON details using the stable reasons above. Until
-that migration is complete, handlers must still choose the mapped HTTP status and avoid leaking secrets, tokens,
-datasets, blob bytes, or internal stack details.
+Production HTTP handlers use JSON details with stable reasons. Handler messages must still avoid leaking secrets,
+tokens, datasets, blob bytes, or internal stack details.

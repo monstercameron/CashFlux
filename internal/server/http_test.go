@@ -737,6 +737,7 @@ func TestMaxInFlightMiddlewareRejectsWhenBusy(t *testing.T) {
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("busy status = %d, want 503", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonServerUnavailable)
 }
 
 func TestRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
@@ -761,6 +762,7 @@ func TestRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("limited status = %d, want 429", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonRateLimited)
 	if got := rr.Header().Get("Retry-After"); got != "60" {
 		t.Fatalf("retry-after = %q, want 60", got)
 	}
@@ -794,6 +796,7 @@ func TestRateLimitMiddlewareHonorsForwardedClient(t *testing.T) {
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("forwarded client status = %d, want 429", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonRateLimited)
 }
 
 func TestUserRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
@@ -830,6 +833,7 @@ func TestUserRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("limited user status = %d, want 429", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonRateLimited)
 	if got := rr.Header().Get("Retry-After"); got != "60" {
 		t.Fatalf("retry-after = %q, want 60", got)
 	}
@@ -1250,6 +1254,7 @@ func TestReadyEndpointRequiresStore(t *testing.T) {
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("ready without store status = %d, want 503", rr.Code)
 	}
+	assertHTTPErrorReason(t, rr, ErrorReasonServerUnavailable)
 }
 
 func TestLegacyAIHTTPEndpointsAreNotMounted(t *testing.T) {

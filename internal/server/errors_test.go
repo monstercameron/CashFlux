@@ -21,6 +21,7 @@ func TestBackendErrorTaxonomyStableMappings(t *testing.T) {
 		ErrorReasonResourceExhausted:   {Reason: ErrorReasonResourceExhausted, GRPC: codes.ResourceExhausted, HTTP: http.StatusInsufficientStorage},
 		ErrorReasonRateLimited:         {Reason: ErrorReasonRateLimited, GRPC: codes.ResourceExhausted, HTTP: http.StatusTooManyRequests},
 		ErrorReasonUpstreamUnavailable: {Reason: ErrorReasonUpstreamUnavailable, GRPC: codes.Unavailable, HTTP: http.StatusBadGateway},
+		ErrorReasonServerUnavailable:   {Reason: ErrorReasonServerUnavailable, GRPC: codes.Unavailable, HTTP: http.StatusServiceUnavailable},
 		ErrorReasonDeadlineExceeded:    {Reason: ErrorReasonDeadlineExceeded, GRPC: codes.DeadlineExceeded, HTTP: http.StatusGatewayTimeout},
 		ErrorReasonCanceled:            {Reason: ErrorReasonCanceled, GRPC: codes.Canceled, HTTP: 499},
 		ErrorReasonInternal:            {Reason: ErrorReasonInternal, GRPC: codes.Internal, HTTP: http.StatusInternalServerError},

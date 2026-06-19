@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: complete backend json error migration (7.19)
+
+- Added `SERVER_UNAVAILABLE` for readiness/concurrency failures and migrated the remaining general HTTP paths.
+- Converted readiness, version CORS, blob preflight, max-in-flight, rate-limit, and JSON encode fallback errors
+  to the shared JSON taxonomy.
+- Added reason assertions for readiness, max-in-flight, per-IP rate-limit, and per-user rate-limit failures.
+- Marked the 7.19 error-taxonomy TODO complete after production `http.Error` calls were eliminated.
+
 ## 2026-06-19 - feat: return json errors for oauth (7.19)
 
 - Migrated OAuth start/callback plus refresh/logout failures to stable JSON error reasons.

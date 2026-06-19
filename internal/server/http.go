@@ -101,7 +101,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
 		if err := store.Ready(); err != nil {
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			writeErrorJSON(w, ErrorReasonServerUnavailable, "store is not ready")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -118,7 +118,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
-			http.Error(w, "origin not allowed", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
 		writeJSON(w, VersionResponse{
@@ -138,7 +138,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/blobs/{hash}", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
-			http.Error(w, "origin not allowed", http.StatusForbidden)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -230,7 +230,7 @@ func maxInFlightMiddleware(limit int, next http.Handler) http.Handler {
 			defer func() { <-sem }()
 			next.ServeHTTP(w, r)
 		default:
-			http.Error(w, "server is busy", http.StatusServiceUnavailable)
+			writeErrorJSON(w, ErrorReasonServerUnavailable, "server is busy")
 		}
 	})
 }
@@ -270,7 +270,7 @@ func rateLimitMiddleware(limit int, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.allow(clientIP(r), time.Now()) {
 			w.Header().Set("Retry-After", "60")
-			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			writeErrorJSON(w, ErrorReasonRateLimited, "rate limit exceeded")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -286,7 +286,7 @@ func userRateLimitMiddleware(limit int, cfg Config, next http.Handler) http.Hand
 		user, ok := httpBearerUser(r, cfg)
 		if ok && !limiter.allow(user.ID, time.Now()) {
 			w.Header().Set("Retry-After", "60")
-			http.Error(w, "user rate limit exceeded", http.StatusTooManyRequests)
+			writeErrorJSON(w, ErrorReasonRateLimited, "user rate limit exceeded")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -335,7 +335,7 @@ func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorJSON(w, ErrorReasonInternal, "json encode failed")
 	}
 }
 
