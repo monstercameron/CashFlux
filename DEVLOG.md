@@ -15,6 +15,15 @@ problems and fixes, and what's next.
   export/import), which are otherwise robust. Remaining backlog needs the browser, a product decision, or is
   the in-flight backend work.
 
+## 2026-06-19 - feat: add stripe subscription webhooks (7.11)
+
+- Added `POST /v1/billing/stripe/webhook` with Stripe `v1` HMAC signature verification via
+  `CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET`.
+- Handled `checkout.session.completed`, `customer.subscription.updated/deleted`, and `invoice.payment_failed`
+  by upserting the existing `subscriptions` table.
+- Added webhook tests for signature rejection, subscription state upsert, and payment-failed past-due updates.
+- Marked the webhook TODO complete; Checkout/customer-portal session creation remains a separate billing atom.
+
 ## 2026-06-19 - feat: add backend storage fair-use warnings (7.11)
 
 - Added `CASHFLUX_SERVER_STORAGE_WARN_BYTES` as a soft warning line before the hard per-user blob cap.

@@ -33,6 +33,7 @@ type Config struct {
 	Token                             string
 	TokenSHA256                       string
 	GeneratedToken                    bool
+	StripeWebhookSecret               string
 	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
 	AIProxyDisabled                   bool
@@ -93,6 +94,7 @@ func FromEnv() (Config, error) {
 	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))
 	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
 	cfg.TokenSHA256 = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN_SHA256"))
+	cfg.StripeWebhookSecret = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET"))
 	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
 	cfg.AIProxyDisabled = !envBool("CASHFLUX_SERVER_AI_PROXY_ENABLED", true)

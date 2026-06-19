@@ -76,6 +76,7 @@ func TestSelfHostEnvTemplateDocumentsServerLimits(t *testing.T) {
 		"CASHFLUX_SERVER_HTTP_MAX_IN_FLIGHT=256",
 		"CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE=0",
 		"CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE=0",
+		"CASHFLUX_SERVER_STORAGE_WARN_BYTES=0",
 		"CASHFLUX_SERVER_STORAGE_MAX_BYTES=0",
 		"CASHFLUX_SERVER_GRPC_MAX_ACTIVE_CONNECTIONS=128",
 		"CASHFLUX_SERVER_GRPC_MAX_CONNECTIONS_PER_CLIENT=8",
@@ -102,6 +103,9 @@ func TestSelfHostEnvTemplateDoesNotShipDefaultMasterKey(t *testing.T) {
 	}
 	if !strings.Contains(env, "CASHFLUX_SERVER_MASTER_KEY=replace-with-32-byte-secret-from-secret-manager") {
 		t.Fatal("env template does not direct operators to provide a secret-managed master key")
+	}
+	if !strings.Contains(env, "CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET=") {
+		t.Fatal("env template missing stripe webhook secret placeholder")
 	}
 }
 

@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1673,9 +1675,102 @@ func TestBlobEndpointCORS(t *testing.T) {
 	}
 }
 
+func TestStripeWebhookUpsertsSubscriptionState(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 14, 30, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Billing: true, StripeWebhookSecret: "whsec_test"}
+	h := NewMux(cfg, store)
+	payload := []byte(`{
+		"type":"customer.subscription.updated",
+		"data":{"object":{
+			"id":"sub_123",
+			"customer":"cus_123",
+			"status":"trialing",
+			"current_period_end":1781820000,
+			"trial_end":1781215200,
+			"metadata":{"user_id":"u1","plan":"personal_annual"}
+		}}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/stripe/webhook", bytes.NewReader(payload))
+	req.Header.Set(stripeSignatureHeader, testStripeSignature(t, payload, cfg.StripeWebhookSecret, time.Now().UTC()))
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("webhook status = %d body %q", rr.Code, rr.Body.String())
+	}
+	got, ok, err := store.GetSubscription("u1")
+	if err != nil || !ok {
+		t.Fatalf("GetSubscription = %+v/%v/%v", got, ok, err)
+	}
+	if got.StripeCustomer != "cus_123" || got.StripeSubscription != "sub_123" ||
+		got.Status != "trialing" || got.Plan != "personal_annual" ||
+		got.CurrentPeriodEnd.IsZero() || got.TrialEnd.IsZero() {
+		t.Fatalf("subscription = %+v", got)
+	}
+}
+
+func TestStripeWebhookRejectsInvalidSignature(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{AuthMode: "token", Billing: true, StripeWebhookSecret: "whsec_test"}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/stripe/webhook", strings.NewReader(`{"type":"customer.subscription.updated"}`))
+	req.Header.Set(stripeSignatureHeader, "t=1781820000,v1=bad")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("invalid signature status = %d body %q", rr.Code, rr.Body.String())
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonPermissionDenied)
+}
+
+func TestStripeWebhookPaymentFailedMarksPastDue(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 14, 40, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := store.PutSubscription(Subscription{
+		UserID:             "u1",
+		StripeCustomer:     "cus_123",
+		StripeSubscription: "sub_123",
+		Status:             "active",
+		Plan:               "personal_annual",
+		CurrentPeriodEnd:   now.Add(24 * time.Hour),
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatalf("PutSubscription: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Billing: true, StripeWebhookSecret: "whsec_test"}
+	h := NewMux(cfg, store)
+	payload := []byte(`{"type":"invoice.payment_failed","data":{"object":{"customer":"cus_123","subscription":"sub_123"}}}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/stripe/webhook", bytes.NewReader(payload))
+	req.Header.Set(stripeSignatureHeader, testStripeSignature(t, payload, cfg.StripeWebhookSecret, time.Now().UTC()))
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("payment failed status = %d body %q", rr.Code, rr.Body.String())
+	}
+	got, ok, err := store.GetSubscription("u1")
+	if err != nil || !ok || got.Status != "past_due" || got.Plan != "personal_annual" {
+		t.Fatalf("subscription after payment failed = %+v/%v/%v", got, ok, err)
+	}
+}
+
 func blobHash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func testStripeSignature(t *testing.T, payload []byte, secret string, ts time.Time) string {
+	t.Helper()
+	timestamp := strconv.FormatInt(ts.Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(timestamp + "."))
+	_, _ = mac.Write(payload)
+	return "t=" + timestamp + ",v1=" + hex.EncodeToString(mac.Sum(nil))
 }
 
 func testIDToken(t *testing.T, claims map[string]any) string {

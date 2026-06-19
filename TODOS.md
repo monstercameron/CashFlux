@@ -4087,8 +4087,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 #### Server (billing + entitlements)
 - [ ] Stripe integration: products/prices (annual + monthly), Checkout session creation, customer portal session.
-- [ ] Stripe **webhook** handler (checkout.completed, subscription.updated/deleted, invoice.payment_failed)
+- [x] Stripe **webhook** handler (checkout.completed, subscription.updated/deleted, invoice.payment_failed)
       → update `subscriptions` table; idempotent; signature-verified.
+      Done: `POST /v1/billing/stripe/webhook` verifies Stripe signatures and upserts subscription state for
+      checkout, subscription update/delete, and payment-failed events.
 - [x] `subscriptions(user_id, stripe_customer, stripe_sub, status, plan, current_period_end, trial_end)`.
       Done: schema v4 adds the table with unique Stripe customer/subscription ids and repository upsert/lookup
       coverage for current subscription state.

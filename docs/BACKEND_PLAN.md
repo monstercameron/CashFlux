@@ -69,6 +69,8 @@ CashFlux uses one user-facing backend base URL in Settings. The client derives t
 
 - **HTTP JSON/blob routes:** use the configured base URL directly, e.g. `http://127.0.0.1:8081/v1/version`
   and `/v1/blobs/{hash}`. OAuth and blob bytes stay on HTTP; AI and sync do not.
+- **Stripe webhooks:** `POST /v1/billing/stripe/webhook` verifies Stripe signatures with
+  `CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET` before updating subscription state.
 - **gRPC bridge routes:** convert the same base URL to a websocket `/grpc` target (`http` → `ws`, `https` →
   `wss`) and dial it with GoGRPCBridge `BuildTunnelConn`.
 
