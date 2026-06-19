@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: net-worth breakdown on Reports (B21)
+
+- Added a "Net worth" stat card (assets / liabilities / net, toned pos/neg/accent) to the Reports screen above
+  the net-worth trend chart, using `ledger.NetWorth(accounts, txns, rates)` (already tested). Shown when there
+  are any accounts. UI-only — no new pure logic or i18n keys (reused dashboard.netWorth, accounts.assets,
+  dashboard.liabilities). gofmt clean, wasm build green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: goal on-track / pace check (D12)
 
 - Added pure `goals.OnTrack(goal, monthly, from) (onTrack, known, err)` plus `OnTrack`/`PaceKnown` fields on

@@ -84,6 +84,8 @@ func Reports() ui.Node {
 	for i, m := range nwSeries {
 		nw[i] = float64(m.Amount)
 	}
+	// Net-worth composition (assets vs liabilities) as of now, for a breakdown card.
+	nwNet, nwAssets, nwLiab, _ := ledger.NetWorth(accounts, txns, rates)
 
 	// Savings-rate trend: percent of income kept per period.
 	srInts, _ := reports.SavingsRateSeries(txns, bounds, rates)
@@ -296,6 +298,14 @@ func Reports() ui.Node {
 			H2(Class("card-title"), uistate.T("dashboard.cashFlow")),
 			P(Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
 			uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow")}),
+		)),
+		If(len(accounts) > 0, Section(Class("card"),
+			H2(Class("card-title"), uistate.T("dashboard.netWorth")),
+			Div(Class("stat-grid"),
+				stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
+				stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
+				stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
+			),
 		)),
 		If(len(nw) >= 2, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("dashboard.netWorthTrend")),

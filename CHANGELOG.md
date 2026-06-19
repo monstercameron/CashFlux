@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Net-worth breakdown on Reports (B21).** The Reports screen now shows a "Net worth" card with assets,
+  liabilities, and net totals (as of now) above the existing net-worth trend chart, so you see the composition
+  and not just the line. Backed by the existing `ledger.NetWorth`.
+
+### Added
 - **Goal on-track / pace check (D12).** New pure, table-tested `goals.OnTrack` (and `OnTrack`/`PaceKnown`
   fields on `goals.Status`): at an assumed monthly contribution, reports whether a dated goal is projected to
   be met on or before its target date — the "am I on schedule?" complement to `MonthlyNeeded`. An
