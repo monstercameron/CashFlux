@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Ad-hoc Unicode chrome glyphs replaced with real icons (C46).** The shared controls and chrome now use
+  typed `ui.Icon`s instead of `▾ ‹ › ✕ ⋯ ⚙`: the period stepper (chevron-left/right), the FlipPanel close (x),
+  the dashboard widget gear (settings, plus its width-balancing spacer), the workspace switcher (chevron-down),
+  and the "My pages" row menu (more-horizontal) — so the whole app reads from one consistent glyph family.
 - **Server-advertised auth controls (7.12).** Settings now adapts backend auth controls from `/v1/version`,
   showing the printed-token field for token-mode self-hosting and only the advertised OAuth provider buttons
   for OAuth servers.

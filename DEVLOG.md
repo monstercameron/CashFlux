@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: replace ad-hoc Unicode chrome glyphs with real icons (C46)
+
+- Continued the C46 iconography pass through the chrome/control layer. Swapped every ad-hoc Unicode glyph for a
+  typed `ui.Icon`: the shared `internal/ui` components (period stepper ‹ › → chevrons, FlipPanel ✕ → x, widget
+  gear ⚙ → settings, including the hidden width-balancing spacer so the header stays centered) — which lands
+  app-wide — plus the workspace switcher ▾ → chevron-down and the "My pages" row ⋯ → more-horizontal.
+- Process note: two of these commits accidentally swept the parallel session's pre-staged files into my commit
+  (the shared `.git` index — plain `git add; git commit` commits the whole index, not just my paths). Main still
+  builds + tests green (their staged state was consistent); damage is misattribution only, not breakage. Corrected
+  going forward to commit by pathspec (`git commit -F msg -- <paths>`), per the known parallel-tree hazard.
+- Stopping the icon effort at this milestone (registry + quick-add + all chrome/control glyphs). Remaining C46
+  placements (KPI tile icons, status/semantic glyphs, row actions, AI sparkle family, empty-state illustrations,
+  per-row ✕) and the B14 chart migration to D3 are the next slice — they need an in-browser visual pass.
+
 ## 2026-06-19 - feat: adapt backend auth controls (7.12)
 
 - Added a small pure backend-auth discovery helper that normalizes `/v1/version` auth modes and OAuth provider lists.
