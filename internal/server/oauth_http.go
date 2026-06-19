@@ -78,6 +78,10 @@ type oauthSessionResponse struct {
 	UserID      string `json:"userId"`
 }
 
+type oauthSessionsResponse struct {
+	Sessions []RefreshSessionFamily `json:"sessions"`
+}
+
 func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		providerName := strings.TrimSpace(r.PathValue("provider"))
@@ -203,6 +207,78 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 	}
 }
 
+func handleOAuthListSessions(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+			return
+		}
+		user, ok := httpBearerUser(r, cfg)
+		if !ok {
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "access token is missing or invalid")
+			return
+		}
+		if store == nil {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
+			return
+		}
+		now := time.Now().UTC()
+		sessions, err := store.ListRefreshSessionFamilies(user.ID, now)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "session list failed")
+			return
+		}
+		currentFamily := currentRefreshFamily(r, cfg, user.ID, now)
+		for i := range sessions {
+			sessions[i].Current = sessions[i].FamilyID == currentFamily
+		}
+		writeJSON(w, oauthSessionsResponse{Sessions: sessions})
+	}
+}
+
+func handleOAuthRevokeSession(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+			return
+		}
+		if !validCSRF(r) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "csrf token is invalid")
+			return
+		}
+		user, ok := httpBearerUser(r, cfg)
+		if !ok {
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "access token is missing or invalid")
+			return
+		}
+		if store == nil {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
+			return
+		}
+		familyID := strings.TrimSpace(r.PathValue("family"))
+		if familyID == "" {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "session family is required")
+			return
+		}
+		now := time.Now().UTC()
+		revoked, err := store.RevokeRefreshSessionFamilyForUser(user.ID, familyID, now)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "session revoke failed")
+			return
+		}
+		if !revoked {
+			writeErrorJSON(w, ErrorReasonNotFound, "session not found")
+			return
+		}
+		auditFromRequest(r, store, user, "auth.session.revoke", "session_family", familyID)
+		if currentRefreshFamily(r, cfg, user.ID, now) == familyID {
+			setRefreshCookie(w, "", requestIsSecure(r), time.Unix(0, 0))
+			setExpiredCSRFCookie(w, requestIsSecure(r))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func handleOAuthLogout(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
@@ -257,6 +333,18 @@ func handleOAuthLogoutAll(cfg Config, store *Store) http.HandlerFunc {
 		setExpiredCSRFCookie(w, requestIsSecure(r))
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func currentRefreshFamily(r *http.Request, cfg Config, userID string, now time.Time) string {
+	cookie, err := r.Cookie(sessionRefreshCookie)
+	if err != nil {
+		return ""
+	}
+	claims, ok := verifySessionClaims(cfg, cookie.Value, "refresh", now)
+	if !ok || claims.Sub != userID {
+		return ""
+	}
+	return strings.TrimSpace(claims.Family)
 }
 
 func oauthAuthURL(provider string, cfg OAuthProviderConfig) string {

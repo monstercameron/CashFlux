@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add session family revoke endpoints (7.14)
+
+- Added a store-level active refresh-session family list and a user-scoped family revoke method.
+- Exposed `GET /v1/auth/sessions` and `DELETE /v1/auth/sessions/{family}` over the OAuth HTTP surface; revoke
+  requires bearer auth plus CSRF and audits `auth.session.revoke`.
+- Covered active-family listing, current-family marking, cross-user revoke hiding, and revoked refresh-token
+  denial in focused tests.
+
 ## 2026-06-19 - fix: unlink subscriptions on account delete (7.17)
 
 - Added the current subscription row to the self-serve account export bundle so billing identifiers/status are

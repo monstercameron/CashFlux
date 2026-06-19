@@ -9,6 +9,8 @@ Protected HTTP data routes:
 - `/v1/admin/usage`
 - `/v1/account/export`
 - `/v1/account` with `DELETE`
+- `/v1/auth/sessions`
+- `/v1/auth/sessions/{family}` with `DELETE`
 - `/v1/blobs/{hash}` with `GET`, `HEAD`, and `PUT`
 
 Protected gRPC services:
@@ -44,7 +46,10 @@ section 7.14:
 - The read-only `/v1/admin/usage` support view ignores caller-supplied user ids and returns only the
   authenticated user's daily request/token counters.
 - Self-serve account export and delete-account routes are authenticated and scoped to the caller. Export omits
-  decrypted AI secrets and blob bytes; deletion cascades relational rows and sweeps unreferenced blobs.
+  decrypted AI secrets and blob bytes; deletion explicitly unlinks subscriptions, cascades relational rows, and
+  sweeps unreferenced blobs.
+- Session management routes are authenticated and scoped to the caller. Session-family revoke requires CSRF,
+  hides other users' families as not found, and appends an audit event.
 - Repository SQL injection coverage includes a source guard that rejects dynamic SQL formatting/builders and pins
   parameterized user/workspace predicates.
 - Request-size and abuse controls are enabled across the backend: dataset caps, blob size/storage caps, AI request

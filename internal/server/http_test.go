@@ -523,6 +523,7 @@ func TestHTTPDataRoutesRequireAuthentication(t *testing.T) {
 		{method: http.MethodHead, path: "/v1/blobs/" + hash + "?workspaceId=w1"},
 		{method: http.MethodGet, path: "/v1/account/export"},
 		{method: http.MethodDelete, path: "/v1/account"},
+		{method: http.MethodGet, path: "/v1/auth/sessions"},
 	} {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
@@ -1295,6 +1296,119 @@ func TestOAuthLogoutAllRevokesEveryUserRefreshSession(t *testing.T) {
 	if !sawLogoutAll {
 		t.Fatalf("audit events = %+v", events)
 	}
+}
+
+func TestOAuthSessionListAndRevokeFamily(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Now().UTC()
+	cfg := Config{
+		AuthMode:  "oauth",
+		AppOrigin: "http://127.0.0.1:8080",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+	}
+	for _, user := range []User{
+		{ID: "github:42", Provider: "github", Subject: "42", CreatedAt: now},
+		{ID: "github:99", Provider: "github", Subject: "99", CreatedAt: now},
+	} {
+		if err := store.UpsertUser(user); err != nil {
+			t.Fatalf("UpsertUser %+v: %v", user, err)
+		}
+	}
+	access, refresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "")
+	if err != nil {
+		t.Fatalf("issue first session: %v", err)
+	}
+	_, otherRefresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "")
+	if err != nil {
+		t.Fatalf("issue second session: %v", err)
+	}
+	otherAccess, _, err := issueStoredSessionPair(cfg, store, "github:99", now, "")
+	if err != nil {
+		t.Fatalf("issue other user session: %v", err)
+	}
+	claims, ok := verifySessionClaims(cfg, otherRefresh, "refresh", now)
+	if !ok {
+		t.Fatal("second refresh token did not verify")
+	}
+	otherFamily := claims.Family
+	csrfRR := httptest.NewRecorder()
+	csrf, err := setCSRFCookie(csrfRR, false, now.Add(sessionRefreshTTL))
+	if err != nil {
+		t.Fatalf("set csrf: %v", err)
+	}
+	var csrfCookie *http.Cookie
+	for _, cookie := range csrfRR.Result().Cookies() {
+		if cookie.Name == sessionCSRFCookie {
+			csrfCookie = cookie
+		}
+	}
+	if csrfCookie == nil {
+		t.Fatal("csrf cookie missing")
+	}
+
+	h := NewMux(cfg, store)
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/auth/sessions", nil)
+	listReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	listReq.Header.Set("Authorization", "Bearer "+access)
+	listReq.AddCookie(&http.Cookie{Name: sessionRefreshCookie, Value: refresh})
+	listRR := httptest.NewRecorder()
+	h.ServeHTTP(listRR, listReq)
+	if listRR.Code != http.StatusOK {
+		t.Fatalf("list sessions status = %d body %q", listRR.Code, listRR.Body.String())
+	}
+	var listed oauthSessionsResponse
+	if err := json.Unmarshal(listRR.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode sessions: %v", err)
+	}
+	if len(listed.Sessions) != 2 {
+		t.Fatalf("sessions = %+v", listed.Sessions)
+	}
+	var sawCurrent, sawOther bool
+	for _, session := range listed.Sessions {
+		if session.Current {
+			sawCurrent = true
+		}
+		if session.FamilyID == otherFamily {
+			sawOther = true
+		}
+	}
+	if !sawCurrent || !sawOther {
+		t.Fatalf("session list current/other = current %v other %v body %+v", sawCurrent, sawOther, listed.Sessions)
+	}
+
+	crossReq := httptest.NewRequest(http.MethodDelete, "/v1/auth/sessions/"+otherFamily, nil)
+	crossReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	crossReq.Header.Set("Authorization", "Bearer "+otherAccess)
+	crossReq.Header.Set(sessionCSRFHeader, csrf)
+	crossReq.AddCookie(csrfCookie)
+	crossRR := httptest.NewRecorder()
+	h.ServeHTTP(crossRR, crossReq)
+	if crossRR.Code != http.StatusNotFound {
+		t.Fatalf("cross-user revoke status = %d body %q", crossRR.Code, crossRR.Body.String())
+	}
+
+	revokeReq := httptest.NewRequest(http.MethodDelete, "/v1/auth/sessions/"+otherFamily, nil)
+	revokeReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	revokeReq.Header.Set("Authorization", "Bearer "+access)
+	revokeReq.Header.Set(sessionCSRFHeader, csrf)
+	revokeReq.AddCookie(csrfCookie)
+	revokeRR := httptest.NewRecorder()
+	h.ServeHTTP(revokeRR, revokeReq)
+	if revokeRR.Code != http.StatusNoContent {
+		t.Fatalf("revoke status = %d body %q", revokeRR.Code, revokeRR.Body.String())
+	}
+
+	refreshReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
+	refreshReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	refreshReq.Header.Set(sessionCSRFHeader, csrf)
+	refreshReq.AddCookie(csrfCookie)
+	refreshReq.AddCookie(&http.Cookie{Name: sessionRefreshCookie, Value: otherRefresh})
+	refreshRR := httptest.NewRecorder()
+	h.ServeHTTP(refreshRR, refreshReq)
+	if refreshRR.Code != http.StatusUnauthorized {
+		t.Fatalf("refresh after session revoke status = %d body %q", refreshRR.Code, refreshRR.Body.String())
+	}
+	assertHTTPErrorReason(t, refreshRR, ErrorReasonUnauthenticated)
 }
 
 func TestOAuthCallbackValidatesGoogleIDTokenClaims(t *testing.T) {

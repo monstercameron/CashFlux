@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Device/session revocation endpoints (7.14).** Added `GET /v1/auth/sessions` and
+  `DELETE /v1/auth/sessions/{family}` for user-scoped session-family listing and revoke, with CSRF on revoke.
 - **Account export includes billing state (7.17).** Self-serve account export now includes the caller's current
   Stripe subscription identifiers/status without exposing any other user's billing rows.
 - **Billing idempotency keys (7.16).** Stripe Checkout and customer-portal session endpoints now persist

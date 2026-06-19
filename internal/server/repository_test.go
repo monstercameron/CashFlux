@@ -216,6 +216,55 @@ func TestStoreRevokesAllRefreshSessionsForUser(t *testing.T) {
 	}
 }
 
+func TestStoreListsAndRevokesRefreshSessionFamiliesForUser(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 16, 15, 0, 0, time.UTC)
+	for _, user := range []User{
+		{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now},
+		{ID: "u2", Provider: "github", Subject: "bob", CreatedAt: now},
+	} {
+		if err := s.UpsertUser(user); err != nil {
+			t.Fatalf("UpsertUser %+v: %v", user, err)
+		}
+	}
+	for _, session := range []RefreshSession{
+		{JTI: "jti-u1-old", FamilyID: "family-u1-old", UserID: "u1", TokenHash: "hash-u1-old", ExpiresAt: now.Add(-time.Minute)},
+		{JTI: "jti-u1-a1", FamilyID: "family-u1-a", UserID: "u1", TokenHash: "hash-u1-a1", ExpiresAt: now.Add(time.Hour)},
+		{JTI: "jti-u1-a2", FamilyID: "family-u1-a", UserID: "u1", TokenHash: "hash-u1-a2", ExpiresAt: now.Add(2 * time.Hour)},
+		{JTI: "jti-u1-b", FamilyID: "family-u1-b", UserID: "u1", TokenHash: "hash-u1-b", ExpiresAt: now.Add(30 * time.Minute)},
+		{JTI: "jti-u2", FamilyID: "family-u2", UserID: "u2", TokenHash: "hash-u2", ExpiresAt: now.Add(3 * time.Hour)},
+	} {
+		if err := s.PutRefreshSession(session); err != nil {
+			t.Fatalf("PutRefreshSession %+v: %v", session, err)
+		}
+	}
+	families, err := s.ListRefreshSessionFamilies("u1", now)
+	if err != nil {
+		t.Fatalf("ListRefreshSessionFamilies: %v", err)
+	}
+	if len(families) != 2 || families[0].FamilyID != "family-u1-a" || families[1].FamilyID != "family-u1-b" {
+		t.Fatalf("families = %+v", families)
+	}
+	if !families[0].ExpiresAt.Equal(now.Add(2 * time.Hour)) {
+		t.Fatalf("family expiry = %v", families[0].ExpiresAt)
+	}
+	revoked, err := s.RevokeRefreshSessionFamilyForUser("u2", "family-u1-a", now.Add(time.Second))
+	if err != nil || revoked {
+		t.Fatalf("cross-user revoke = %v/%v, want false nil", revoked, err)
+	}
+	revoked, err = s.RevokeRefreshSessionFamilyForUser("u1", "family-u1-a", now.Add(time.Second))
+	if err != nil || !revoked {
+		t.Fatalf("user revoke = %v/%v, want true nil", revoked, err)
+	}
+	families, err = s.ListRefreshSessionFamilies("u1", now.Add(2*time.Second))
+	if err != nil {
+		t.Fatalf("ListRefreshSessionFamilies after revoke: %v", err)
+	}
+	if len(families) != 1 || families[0].FamilyID != "family-u1-b" {
+		t.Fatalf("families after revoke = %+v", families)
+	}
+}
+
 func TestStoreRecordsDBMetrics(t *testing.T) {
 	s := openTestStore(t)
 	metrics := NewMetrics()

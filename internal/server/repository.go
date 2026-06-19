@@ -220,6 +220,12 @@ type RefreshSession struct {
 	RevokedAt time.Time
 }
 
+type RefreshSessionFamily struct {
+	FamilyID  string    `json:"familyId"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	Current   bool      `json:"current,omitempty"`
+}
+
 type IdempotencyResult struct {
 	UserID       string
 	Route        string
@@ -333,6 +339,25 @@ func (s *Store) RevokeRefreshSessionFamily(familyID string, now time.Time) error
 	return nil
 }
 
+func (s *Store) RevokeRefreshSessionFamilyForUser(userID, familyID string, now time.Time) (bool, error) {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(familyID) == "" {
+		return false, fmt.Errorf("server store: refresh user and family are required")
+	}
+	defer s.observeDB("RevokeRefreshSessionFamilyForUser", time.Now())
+	result, err := s.db.Exec(`
+UPDATE refresh_tokens SET revoked_at = ?
+WHERE user_id = ? AND family_id = ? AND revoked_at = ''`,
+		formatTime(now.UTC()), strings.TrimSpace(userID), strings.TrimSpace(familyID))
+	if err != nil {
+		return false, fmt.Errorf("server store: revoke refresh family for user: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("server store: revoke refresh family rows: %w", err)
+	}
+	return affected > 0, nil
+}
+
 func (s *Store) RevokeRefreshSessionsForUser(userID string, now time.Time) error {
 	if strings.TrimSpace(userID) == "" {
 		return fmt.Errorf("server store: refresh user is required")
@@ -342,6 +367,41 @@ func (s *Store) RevokeRefreshSessionsForUser(userID string, now time.Time) error
 		return fmt.Errorf("server store: revoke refresh sessions for user: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) ListRefreshSessionFamilies(userID string, now time.Time) ([]RefreshSessionFamily, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, fmt.Errorf("server store: refresh user is required")
+	}
+	defer s.observeDB("ListRefreshSessionFamilies", time.Now())
+	rows, err := s.db.Query(`
+SELECT family_id, MAX(expires_at)
+FROM refresh_tokens
+WHERE user_id = ? AND revoked_at = '' AND expires_at > ?
+GROUP BY family_id
+ORDER BY MAX(expires_at) DESC`,
+		strings.TrimSpace(userID), formatTime(now.UTC()))
+	if err != nil {
+		return nil, fmt.Errorf("server store: list refresh session families: %w", err)
+	}
+	defer rows.Close()
+	var out []RefreshSessionFamily
+	for rows.Next() {
+		var family RefreshSessionFamily
+		var expiresAt string
+		if err := rows.Scan(&family.FamilyID, &expiresAt); err != nil {
+			return nil, fmt.Errorf("server store: scan refresh session family: %w", err)
+		}
+		family.ExpiresAt, err = parseTime(expiresAt)
+		if err != nil {
+			return nil, fmt.Errorf("server store: parse refresh session family expiry: %w", err)
+		}
+		out = append(out, family)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: list refresh session family rows: %w", err)
+	}
+	return out, nil
 }
 
 // AppendAuditEvent stores a security-relevant event and links it to the previous

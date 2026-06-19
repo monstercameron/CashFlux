@@ -4235,9 +4235,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       refresh reuse detection → revoke session family.
       SQLite-backed refresh-token `jti`/family rows now store hashes only; refresh consumes+rotates the
       token and reuse revokes the family.
-- [~] Session revocation (logout, device revoke, "sign out everywhere"); token `jti` denylist or version.
+- [x] Session revocation (logout, device revoke, "sign out everywhere"); token `jti` denylist or version.
       Logout now revokes the presented refresh-token family; `POST /v1/auth/logout-all` revokes every refresh
-      session for the authenticated OAuth user and audits the action. Remaining: device revoke.
+      session for the authenticated OAuth user and audits the action. `GET /v1/auth/sessions` lists active
+      session families and `DELETE /v1/auth/sessions/{family}` revokes one user-scoped family with CSRF.
 - [x] OAuth: PKCE + `state` (CSRF), nonce, redirect-URI allow-list, validate `iss`/`aud`.
       Google callbacks now require an ID token and validate issuer, audience, nonce, expiry, and issued-at
       before issuing sessions. Redirect URLs are now constrained to `/v1/auth/{provider}/callback`; OAuth state
