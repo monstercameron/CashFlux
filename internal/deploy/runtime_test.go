@@ -563,3 +563,25 @@ func TestSelfHostingDocumentsSingleBinaryDataDirAndBackups(t *testing.T) {
 		}
 	}
 }
+
+func TestCIIncludesServerBuildAndSecurityScans(t *testing.T) {
+	data, err := os.ReadFile("../../.github/workflows/ci.yml")
+	if err != nil {
+		t.Fatalf("read ci workflow: %v", err)
+	}
+	workflow := string(data)
+	for _, want := range []string{
+		"go vet ./...",
+		"govulncheck",
+		"gosec",
+		"gitleaks",
+		"go test ./...",
+		"go build ./cmd/cashflux-server",
+		"GOOS: js",
+		"GOARCH: wasm",
+	} {
+		if !strings.Contains(workflow, want) {
+			t.Fatalf("ci workflow missing %q", want)
+		}
+	}
+}

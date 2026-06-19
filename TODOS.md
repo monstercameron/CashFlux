@@ -4053,8 +4053,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       Done: boot migrations/reject-newer schema, structured slog, Prometheus metrics, request/trace ids, and
       per-user sync/AI/blob usage counters. Remaining: full OpenTelemetry trace export.
 - [~] CI: build server, run server tests, proto-drift check, lint + vuln scan.
-      Done: Go tests, wasm build, vet, govulncheck, gosec, and gitleaks. Remaining: explicit server binary build
-      job and proto-drift check once codegen is pinned.
+      Done: Go tests, explicit server build, wasm build, vet, govulncheck, gosec, and gitleaks. Remaining:
+      proto-drift check once codegen is pinned.
 
 ### 7.10 Testing & phased rollout
 - [ ] Unit: storage, LWW, encryption, rate-limit, blob hashing + refcount/GC.

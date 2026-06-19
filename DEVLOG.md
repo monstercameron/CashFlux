@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - ci: build backend server in workflow
+
+- Added an explicit `go build ./cmd/cashflux-server` step to `.github/workflows/ci.yml` so backend binary
+  compilation is checked separately from the wasm app build.
+- Extended deploy/runtime coverage to assert CI still runs vet, govulncheck, gosec, gitleaks, native tests,
+  server build, and wasm build.
+- Updated the 7.9 CI TODO: only proto drift remains open until code generation is pinned.
+
 ## 2026-06-19 - docs: reconcile backend deploy ops (7.9)
 
 - Added a self-hosting "Deployment Surface" note that spells out the single `cashflux-server` binary, data-dir

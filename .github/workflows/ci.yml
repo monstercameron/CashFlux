@@ -33,6 +33,9 @@ jobs:
       - name: Test (pure logic packages — js/wasm view packages are build-tagged out)
         run: go test ./...
 
+      - name: Build server
+        run: go build ./cmd/cashflux-server
+
       - name: Build WebAssembly
         env:
           GOOS: js

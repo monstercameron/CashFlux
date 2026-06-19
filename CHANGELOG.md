@@ -16,6 +16,8 @@ and every commit updates this file under `Unreleased`.
   with deploy coverage for `go.mod` Go 1.26.0 and the `golang:1.26-alpine` server build image.
 
 ### Changed
+- **Backend CI server build.** CI now explicitly builds `./cmd/cashflux-server` alongside native tests,
+  WebAssembly build, vet, govulncheck, gosec, and gitleaks.
 - **Backend deploy/ops checklist reconciliation.** Documented the single-binary/data-dir deployment surface and
   reconciled the 7.9 deploy checklist against existing backup, migration, logging, metrics, and CI coverage,
   with deploy tests covering the self-host surface.
