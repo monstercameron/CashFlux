@@ -9,6 +9,7 @@ package notifyfeed
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/notify"
@@ -39,6 +40,42 @@ func StaleBalanceCandidates(
 			Title:         title,
 			Body:          body,
 			Severity:      notify.SeverityWarning,
+		})
+	}
+	return out
+}
+
+// BudgetCandidates produces a notify.Candidate for each budget that is near or
+// over its limit (per the given budgeting statuses), deduped per budget + state
+// per month — so a budget that goes from near to over fires a fresh, higher-
+// severity alert rather than being silenced by the earlier "near" one. text
+// renders the localized title and body from the budget name and whether it's
+// over (vs merely near). Candidates are tagged with ruleID.
+func BudgetCandidates(
+	ruleID string,
+	statuses []budgeting.Status,
+	now time.Time,
+	text func(name string, over bool) (title, body string),
+) []notify.Candidate {
+	var out []notify.Candidate
+	for _, s := range statuses {
+		if s.State != budgeting.StateNear && s.State != budgeting.StateOver {
+			continue
+		}
+		over := s.State == budgeting.StateOver
+		sev := notify.SeverityWarning
+		if over {
+			sev = notify.SeverityCritical
+		}
+		title, body := text(s.Budget.Name, over)
+		out = append(out, notify.Candidate{
+			RuleID:        ruleID,
+			Event:         notify.EventBudgetThreshold,
+			OccurrenceKey: s.Budget.ID + ":" + string(s.State) + "@" + notify.MonthKey(now),
+			At:            now,
+			Title:         title,
+			Body:          body,
+			Severity:      sev,
 		})
 	}
 	return out

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/notify"
@@ -48,6 +49,44 @@ func TestStaleBalanceCandidates(t *testing.T) {
 	}
 	if c.Body != "400 days since the last update" {
 		t.Errorf("Body = %q", c.Body)
+	}
+}
+
+func TestBudgetCandidates(t *testing.T) {
+	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
+	statuses := []budgeting.Status{
+		{Budget: domain.Budget{ID: "food", Name: "Food"}, State: budgeting.StateOver},
+		{Budget: domain.Budget{ID: "fun", Name: "Fun"}, State: budgeting.StateNear},
+		{Budget: domain.Budget{ID: "rent", Name: "Rent"}, State: budgeting.StateOK}, // OK → no candidate
+	}
+	text := func(name string, over bool) (string, string) {
+		if over {
+			return name + " over budget", "over"
+		}
+		return name + " near budget", "near"
+	}
+
+	got := BudgetCandidates("rule-budget", statuses, now, text)
+	if len(got) != 2 {
+		t.Fatalf("got %d candidates, want 2 (over + near): %+v", len(got), got)
+	}
+	by := map[string]notify.Candidate{}
+	for _, c := range got {
+		by[c.Title] = c
+	}
+	over := by["Food over budget"]
+	if over.Event != notify.EventBudgetThreshold || over.Severity != notify.SeverityCritical {
+		t.Errorf("over candidate = %+v, want budget-threshold + critical", over)
+	}
+	if over.OccurrenceKey != "food:over@"+notify.MonthKey(now) {
+		t.Errorf("over key = %q", over.OccurrenceKey)
+	}
+	near := by["Fun near budget"]
+	if near.Severity != notify.SeverityWarning {
+		t.Errorf("near candidate severity = %v, want warning", near.Severity)
+	}
+	if near.OccurrenceKey != "fun:near@"+notify.MonthKey(now) {
+		t.Errorf("near key = %q", near.OccurrenceKey)
 	}
 }
 

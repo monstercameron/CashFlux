@@ -10,7 +10,10 @@ and every commit updates this file under `Unreleased`.
 - **Notifications: first event evaluator (B19, internal).** New pure `internal/notifyfeed` package bridges
   domain data to notification candidates. Its first generator, `StaleBalanceCandidates`, turns
   freshness's stale-account detection into weekly de-duped notify candidates — the first concrete event
-  the catch-up engine can surface. Table-tested; keeps `notify` itself free of domain dependencies.
+  the catch-up engine can surface. Table-tested; keeps `notify` itself free of domain dependencies. A
+  second generator, `BudgetCandidates`, turns budgets that are near or over their limit into candidates
+  (over = critical), deduped per budget + state per month so a budget crossing from near to over still
+  fires a fresh alert.
 - **Bills: Download CSV (B22).** A "Download CSV" button on the Bills screen exports your upcoming bills
   (name, due date, days until, amount) as a CSV. Backed by a pure, table-tested `bills.CSV`.
 - **Subscriptions: Download CSV (B25).** A "Download CSV" button on the Subscriptions screen exports your

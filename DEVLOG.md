@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: notifyfeed — budget-threshold event evaluator (B19, step 4)
+
+- Added `notifyfeed.BudgetCandidates(ruleID, statuses, now, text)`: maps `budgeting.Status` values whose
+  `State` is Near or Over into `notify.Candidate`s (Over → critical, Near → warning). Keyed
+  `<budgetID>:<state>@<month>` so near and over are *distinct* occurrences — a budget that worsens from
+  near to over fires a new, higher-severity alert that same month instead of being silenced by the prior
+  near. Title/body via the `text(name, over)` callback (UI keeps i18n). Decision-light: "near/over" is
+  exactly budgeting's existing classification, no new thresholds.
+- Takes pre-computed statuses (not budgets+txns) so notifyfeed needn't pull the whole ledger — the caller
+  already has them. Table tests cover over/near/OK filtering, severities, and the per-state month keys.
+  `go vet` clean. Two event generators now feed `notify.CatchUp` (stale-balance, budget-threshold).
+
 ## 2026-06-18 — feat: notifyfeed — stale-balance event evaluator (B19, step 3)
 
 - New pure `internal/notifyfeed` (imports notify + domain + freshness; notify stays domain-free).
