@@ -124,6 +124,20 @@ func main() {
 		logger.Warn("generated self-host access token", "token", token)
 		logger.Warn("persist generated token", "hint", "set CASHFLUX_SERVER_TOKEN_SHA256 to the sha256 of this token, or CASHFLUX_SERVER_TOKEN for local development, to keep it stable across restarts")
 	}
+	traceCtx, traceCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	traceShutdown, err := server.ConfigureTracing(traceCtx, cfg)
+	traceCancel()
+	if err != nil {
+		logger.Error("configure tracing failed", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := traceShutdown(ctx); err != nil {
+			logger.Debug("tracing shutdown failed", "error", err)
+		}
+	}()
 	store, err := server.OpenStore(filepath.Join(cfg.DataDir, "cashflux-server.db"))
 	if err != nil {
 		logger.Error("open store failed", "error", err)

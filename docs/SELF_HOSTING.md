@@ -196,6 +196,9 @@ AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI
 
 Blob disk reads and writes use `CASHFLUX_SERVER_BLOB_IO_TIMEOUT` so request cancellation and slow storage do not hang blob endpoints indefinitely. The default is 10 seconds.
 
+Set `CASHFLUX_SERVER_OTLP_ENDPOINT` or standard `OTEL_EXPORTER_OTLP_ENDPOINT` to an OTLP/HTTP collector URL to
+export OpenTelemetry traces from the server process. Leave it unset for the default no-op local/self-host setup.
+
 Set `CASHFLUX_SERVER_STORAGE_WARN_BYTES` to emit `X-CashFlux-Storage-Warning` when a new distinct blob crosses
 the per-user warning line. Set `CASHFLUX_SERVER_STORAGE_MAX_BYTES` to enforce a per-user fair-use cap for blob
 storage. The default `0` is unlimited for self-hosting; when set, blob uploads that would exceed the user's

@@ -73,6 +73,7 @@ type Config struct {
 	AuditRetentionDays                int
 	SnapshotHistoryRetentionDays      int
 	BackupRetentionDays               int
+	OTLPEndpoint                      string
 	LogFormat                         string
 	LogLevel                          string
 	LogHotPathSampleRate              int
@@ -141,6 +142,7 @@ func FromEnv() (Config, error) {
 	cfg.AuditRetentionDays = int(envInt64("CASHFLUX_SERVER_AUDIT_RETENTION_DAYS", 365))
 	cfg.SnapshotHistoryRetentionDays = int(envInt64("CASHFLUX_SERVER_SNAPSHOT_HISTORY_RETENTION_DAYS", 180))
 	cfg.BackupRetentionDays = int(envInt64("CASHFLUX_SERVER_BACKUP_RETENTION_DAYS", 30))
+	cfg.OTLPEndpoint = strings.TrimSpace(envOr("CASHFLUX_SERVER_OTLP_ENDPOINT", os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")))
 	cfg.LogFormat = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_FORMAT", "text"))
 	cfg.LogLevel = strings.ToLower(envOr("CASHFLUX_SERVER_LOG_LEVEL", "info"))
 	cfg.LogHotPathSampleRate = int(envInt64("CASHFLUX_SERVER_LOG_HOT_PATH_SAMPLE_RATE", 100))

@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **OTLP trace export (7.15).** The server now installs an OpenTelemetry SDK tracer provider when
+  `CASHFLUX_SERVER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` is configured, exporting spans over OTLP/HTTP.
 - **Device/session revocation endpoints (7.14).** Added `GET /v1/auth/sessions` and
   `DELETE /v1/auth/sessions/{family}` for user-scoped session-family listing and revoke, with CSRF on revoke.
 - **Account export includes billing state (7.17).** Self-serve account export now includes the caller's current

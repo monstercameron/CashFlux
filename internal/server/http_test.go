@@ -198,6 +198,25 @@ func TestFromEnvLoadsHTTPLimits(t *testing.T) {
 	}
 }
 
+func TestFromEnvLoadsOTLPEndpoint(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4318")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv standard otlp: %v", err)
+	}
+	if cfg.OTLPEndpoint != "http://collector:4318" {
+		t.Fatalf("standard otlp endpoint = %q", cfg.OTLPEndpoint)
+	}
+	t.Setenv("CASHFLUX_SERVER_OTLP_ENDPOINT", "http://cashflux-collector:4318")
+	cfg, err = FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv cashflux otlp: %v", err)
+	}
+	if cfg.OTLPEndpoint != "http://cashflux-collector:4318" {
+		t.Fatalf("cashflux otlp endpoint = %q", cfg.OTLPEndpoint)
+	}
+}
+
 func TestFromEnvLoadsAIProxyFlag(t *testing.T) {
 	t.Setenv("CASHFLUX_SERVER_AI_PROXY_ENABLED", "false")
 	cfg, err := FromEnv()

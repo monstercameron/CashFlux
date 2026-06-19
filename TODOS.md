@@ -4058,9 +4058,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] Backups: WAL-checkpoint the SQLite file + copy the blobs dir; documented restore runbook.
       Done: `cashflux-server backup`, systemd timer examples, restore rehearsal notes, RPO/RTO docs, and
       backup/restore tests are in place.
-- [~] Migrations run on boot; structured logs + OpenTelemetry (the bridge supports it); basic per-user usage metrics.
+- [x] Migrations run on boot; structured logs + OpenTelemetry (the bridge supports it); basic per-user usage metrics.
       Done: boot migrations/reject-newer schema, structured slog, Prometheus metrics, request/trace ids, and
-      per-user sync/AI/blob usage counters. Remaining: full OpenTelemetry trace export.
+      per-user sync/AI/blob usage counters, plus configurable OTLP/HTTP trace export.
 - [~] CI: build server, run server tests, proto-drift check, lint + vuln scan.
       Done: Go tests, explicit server build, wasm build, vet, govulncheck, gosec, and gitleaks. Remaining:
       proto-drift check once codegen is pinned.
@@ -4340,7 +4340,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] `/metrics` endpoint (auth-gated or internal-only).
 
 #### Tracing
-- [ ] OpenTelemetry tracing end-to-end (the GoGRPCBridge canonical path already integrates OTel spans);
+- [x] OpenTelemetry tracing end-to-end (the GoGRPCBridge canonical path already integrates OTel spans);
+      Done: HTTP/gRPC trace context is extracted into request scope and logs, and the server installs an
+      OpenTelemetry SDK tracer provider with OTLP/HTTP export when `CASHFLUX_SERVER_OTLP_ENDPOINT` or
+      `OTEL_EXPORTER_OTLP_ENDPOINT` is configured.
       propagate trace context client→bridge→grpc→DB/upstream; export to an OTLP collector.
 - [x] Correlate trace id ↔ request id ↔ log lines.
       HTTP and gRPC paths now extract W3C trace IDs and add `trace_id` beside `request_id` in structured logs.

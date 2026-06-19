@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add otlp trace export (7.15)
+
+- Added `server.ConfigureTracing`, which installs an OpenTelemetry SDK tracer provider with an OTLP/HTTP batch
+  exporter when an endpoint is configured.
+- The server process reads `CASHFLUX_SERVER_OTLP_ENDPOINT` or the standard `OTEL_EXPORTER_OTLP_ENDPOINT` and
+  shuts the tracer provider down during process cleanup.
+- Covered config parsing and end-to-end export with a local `httptest` collector that receives flushed spans.
+
 ## 2026-06-19 - fix: reject unverified oauth emails (7.20)
 
 - Added provider-aware email verification checks after OAuth userinfo fetch: Google `email_verified:false` and

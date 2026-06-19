@@ -8,6 +8,13 @@ The self-host Compose stack uses Docker's `local` log driver with 10 files of 10
 
 Use `CASHFLUX_SERVER_LOG_FORMAT=json` in production so collectors can parse fields without scraping text. Search incidents by `request_id`, `trace_id`, `user_id`, `workspace_id`, route/RPC, status, and `cause`.
 
+## Traces
+
+Set `CASHFLUX_SERVER_OTLP_ENDPOINT` to an OTLP/HTTP collector URL, for example
+`http://otel-collector:4318`, to enable OpenTelemetry trace export. If the CashFlux-specific variable is unset,
+the server falls back to the standard `OTEL_EXPORTER_OTLP_ENDPOINT`. The exported resource uses
+`service.name=cashflux-server`; request and RPC logs continue to carry `trace_id` for correlation.
+
 ## Service-Level Objectives
 
 - Availability: 99.9% monthly successful health and request handling.
