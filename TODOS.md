@@ -4236,11 +4236,12 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       SQLite-backed refresh-token `jti`/family rows now store hashes only; refresh consumes+rotates the
       token and reuse revokes the family.
 - [~] Session revocation (logout, device revoke, "sign out everywhere"); token `jti` denylist or version.
-      Logout now revokes the presented refresh-token family. Remaining: device revoke and sign out everywhere.
+      Logout now revokes the presented refresh-token family; `POST /v1/auth/logout-all` revokes every refresh
+      session for the authenticated OAuth user and audits the action. Remaining: device revoke.
 - [x] OAuth: PKCE + `state` (CSRF), nonce, redirect-URI allow-list, validate `iss`/`aud`.
-      Google callbacks now require an ID token and validate issuer, audience, and nonce before issuing sessions.
-      Redirect URLs are now constrained to `/v1/auth/{provider}/callback`; OAuth state cookies now bind
-      nonce values and Google auth requests send them.
+      Google callbacks now require an ID token and validate issuer, audience, nonce, expiry, and issued-at
+      before issuing sessions. Redirect URLs are now constrained to `/v1/auth/{provider}/callback`; OAuth state
+      cookies now bind nonce values and Google auth requests send them.
 - [x] Self-host token mode: high-entropy generated token, SHA-256 config storage, constant-time compare, and
       `cashflux-server rotate-token` are done.
 

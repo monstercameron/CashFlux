@@ -144,6 +144,8 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.Handle("POST /v1/auth/refresh", authLimiter(handleOAuthRefresh(cfg, store)))
 	mux.HandleFunc("OPTIONS /v1/auth/logout", handleCORSPreflight(cfg))
 	mux.Handle("POST /v1/auth/logout", authLimiter(handleOAuthLogout(cfg, store)))
+	mux.HandleFunc("OPTIONS /v1/auth/logout-all", handleCORSPreflight(cfg))
+	mux.Handle("POST /v1/auth/logout-all", authLimiter(handleOAuthLogoutAll(cfg, store)))
 	mux.Handle("/grpc", NewGRPCBridgeHandler(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/blobs/{hash}", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {

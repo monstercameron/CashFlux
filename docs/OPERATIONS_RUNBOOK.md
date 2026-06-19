@@ -95,6 +95,8 @@ The master key encrypts stored AI keys. A full re-encryption command is not avai
 
 - Token mode: rotate the access token.
 - OAuth mode single user/session: use `/v1/auth/logout` from the affected browser when available.
+- OAuth mode all sessions for one user: use authenticated `POST /v1/auth/logout-all` from the user's browser
+  to revoke every stored refresh session for that account and clear the current cookies.
 - OAuth mode broad incident: rotate OAuth client secrets, restart the backend, and clear refresh-token cookies by forcing users through login again.
 
 Record actor, reason, time, and affected user/session ids in the incident or support issue. Check `/v1/audit` for related login, refresh, logout, and key-write events.

@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Sign out everywhere endpoint (7.14).** Added `POST /v1/auth/logout-all` to revoke every refresh session
+  for the authenticated OAuth user while clearing the current browser cookies and auditing the action.
 - **SOC 2 readiness checklist (7.16).** Added a backend readiness checklist covering access control, change
   management, monitoring/availability, vendor management, and incident response.
 - **Server migration dry-run (7.16).** Added `cashflux-server migrate-check`, which migrates a temporary

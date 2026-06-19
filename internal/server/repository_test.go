@@ -177,6 +177,45 @@ func TestStoreRefreshSessionConsumeAndRevokeFamily(t *testing.T) {
 	}
 }
 
+func TestStoreRevokesAllRefreshSessionsForUser(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 15, 45, 0, 0, time.UTC)
+	for _, user := range []User{
+		{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now},
+		{ID: "u2", Provider: "github", Subject: "bob", CreatedAt: now},
+	} {
+		if err := s.UpsertUser(user); err != nil {
+			t.Fatalf("UpsertUser %+v: %v", user, err)
+		}
+	}
+	for _, session := range []RefreshSession{
+		{JTI: "jti-u1-a", FamilyID: "family-u1-a", UserID: "u1", TokenHash: "hash-u1-a", ExpiresAt: now.Add(time.Hour)},
+		{JTI: "jti-u1-b", FamilyID: "family-u1-b", UserID: "u1", TokenHash: "hash-u1-b", ExpiresAt: now.Add(time.Hour)},
+		{JTI: "jti-u2", FamilyID: "family-u2", UserID: "u2", TokenHash: "hash-u2", ExpiresAt: now.Add(time.Hour)},
+	} {
+		if err := s.PutRefreshSession(session); err != nil {
+			t.Fatalf("PutRefreshSession %+v: %v", session, err)
+		}
+	}
+	if err := s.RevokeRefreshSessionsForUser("u1", now.Add(time.Second)); err != nil {
+		t.Fatalf("RevokeRefreshSessionsForUser: %v", err)
+	}
+	for _, tc := range []struct {
+		jti  string
+		hash string
+		ok   bool
+	}{
+		{jti: "jti-u1-a", hash: "hash-u1-a", ok: false},
+		{jti: "jti-u1-b", hash: "hash-u1-b", ok: false},
+		{jti: "jti-u2", hash: "hash-u2", ok: true},
+	} {
+		got, ok, err := s.ConsumeRefreshSession(tc.jti, tc.hash, now.Add(2*time.Second))
+		if err != nil || ok != tc.ok {
+			t.Fatalf("ConsumeRefreshSession %s = %+v/%v/%v, want ok %v", tc.jti, got, ok, err, tc.ok)
+		}
+	}
+}
+
 func TestStoreRecordsDBMetrics(t *testing.T) {
 	s := openTestStore(t)
 	metrics := NewMetrics()

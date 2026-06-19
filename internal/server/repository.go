@@ -265,6 +265,17 @@ func (s *Store) RevokeRefreshSessionFamily(familyID string, now time.Time) error
 	return nil
 }
 
+func (s *Store) RevokeRefreshSessionsForUser(userID string, now time.Time) error {
+	if strings.TrimSpace(userID) == "" {
+		return fmt.Errorf("server store: refresh user is required")
+	}
+	defer s.observeDB("RevokeRefreshSessionsForUser", time.Now())
+	if _, err := s.db.Exec(`UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at = ''`, formatTime(now.UTC()), userID); err != nil {
+		return fmt.Errorf("server store: revoke refresh sessions for user: %w", err)
+	}
+	return nil
+}
+
 // AppendAuditEvent stores a security-relevant event and links it to the previous
 // event hash. Payloads intentionally carry ids and metadata, never secrets.
 func (s *Store) AppendAuditEvent(event AuditEvent) (AuditEvent, error) {

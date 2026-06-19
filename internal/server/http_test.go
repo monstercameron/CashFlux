@@ -1194,6 +1194,78 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	}
 }
 
+func TestOAuthLogoutAllRevokesEveryUserRefreshSession(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Now().UTC()
+	cfg := Config{
+		AuthMode:  "oauth",
+		AppOrigin: "http://127.0.0.1:8080",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+	}
+	if err := store.UpsertUser(User{ID: "github:42", Provider: "github", Subject: "42", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	access, _, err := issueStoredSessionPair(cfg, store, "github:42", now, "")
+	if err != nil {
+		t.Fatalf("issue first session: %v", err)
+	}
+	_, otherRefresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "")
+	if err != nil {
+		t.Fatalf("issue second session: %v", err)
+	}
+	csrfRR := httptest.NewRecorder()
+	csrf, err := setCSRFCookie(csrfRR, false, now.Add(sessionRefreshTTL))
+	if err != nil {
+		t.Fatalf("set csrf: %v", err)
+	}
+	var csrfCookie *http.Cookie
+	for _, cookie := range csrfRR.Result().Cookies() {
+		if cookie.Name == sessionCSRFCookie {
+			csrfCookie = cookie
+		}
+	}
+	if csrfCookie == nil {
+		t.Fatal("csrf cookie missing")
+	}
+
+	h := NewMux(cfg, store)
+	logoutReq := httptest.NewRequest(http.MethodPost, "/v1/auth/logout-all", nil)
+	logoutReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	logoutReq.Header.Set("Authorization", "Bearer "+access)
+	logoutReq.Header.Set(sessionCSRFHeader, csrf)
+	logoutReq.AddCookie(csrfCookie)
+	logoutRR := httptest.NewRecorder()
+	h.ServeHTTP(logoutRR, logoutReq)
+	if logoutRR.Code != http.StatusNoContent {
+		t.Fatalf("logout-all status = %d body %q", logoutRR.Code, logoutRR.Body.String())
+	}
+
+	refreshReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
+	refreshReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	refreshReq.Header.Set(sessionCSRFHeader, csrf)
+	refreshReq.AddCookie(csrfCookie)
+	refreshReq.AddCookie(&http.Cookie{Name: sessionRefreshCookie, Value: otherRefresh})
+	refreshRR := httptest.NewRecorder()
+	h.ServeHTTP(refreshRR, refreshReq)
+	if refreshRR.Code != http.StatusUnauthorized {
+		t.Fatalf("refresh after logout-all status = %d body %q", refreshRR.Code, refreshRR.Body.String())
+	}
+	assertHTTPErrorReason(t, refreshRR, ErrorReasonUnauthenticated)
+	events, err := store.ListAuditEvents(0, 10)
+	if err != nil {
+		t.Fatalf("ListAuditEvents: %v", err)
+	}
+	var sawLogoutAll bool
+	for _, event := range events {
+		if event.Action == "auth.logout_all" && event.ActorID == "github:42" {
+			sawLogoutAll = true
+		}
+	}
+	if !sawLogoutAll {
+		t.Fatalf("audit events = %+v", events)
+	}
+}
+
 func TestOAuthCallbackValidatesGoogleIDTokenClaims(t *testing.T) {
 	store := openTestStore(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add sign out everywhere endpoint (7.14)
+
+- Added `POST /v1/auth/logout-all` for OAuth mode. The handler requires the bearer access token plus CSRF,
+  revokes every refresh-token row for that user, clears the current cookies, and writes an audit event.
+- Added a store helper for user-wide refresh-session revocation while preserving other users' sessions.
+- Covered the route by issuing two sessions for one user, revoking all, then verifying the second refresh token
+  can no longer rotate.
+
 ## 2026-06-19 - fix: validate oauth id-token time claims (7.20)
 
 - Tightened Google OAuth callback verification to require an ID-token expiry claim and reject expired tokens.

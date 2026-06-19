@@ -228,6 +228,37 @@ func handleOAuthLogout(cfg Config, store *Store) http.HandlerFunc {
 	}
 }
 
+func handleOAuthLogoutAll(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+			return
+		}
+		if !validCSRF(r) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "csrf token is invalid")
+			return
+		}
+		user, ok := httpBearerUser(r, cfg)
+		if !ok {
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "access token is missing or invalid")
+			return
+		}
+		if store == nil {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
+			return
+		}
+		now := time.Now().UTC()
+		if err := store.RevokeRefreshSessionsForUser(user.ID, now); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "session revoke failed")
+			return
+		}
+		auditFromRequest(r, store, user, "auth.logout_all", "user", user.ID)
+		setRefreshCookie(w, "", requestIsSecure(r), time.Unix(0, 0))
+		setExpiredCSRFCookie(w, requestIsSecure(r))
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func oauthAuthURL(provider string, cfg OAuthProviderConfig) string {
 	if strings.TrimSpace(cfg.AuthURL) != "" {
 		return strings.TrimSpace(cfg.AuthURL)
