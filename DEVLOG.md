@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: add blob bridge round-trip coverage (7.10)
+
+- Added a focused integration test that creates a workspace over the GoGRPCBridge tunnel, then uploads and
+  downloads a content-addressed blob over the HTTP endpoints on the same server.
+- The test covers PUT, HEAD, GET, bearer auth, workspace linkage, ETag headers, and byte-for-byte retrieval.
+- This closes the backend blob up/down integration gap; client artifact extraction remains tracked separately.
+
 ## 2026-06-19 - test: add two-device sync bridge coverage (7.3/7.10)
 
 - Added an in-process two-device bridge test that dials the real GoGRPCBridge twice, with one device watching

@@ -4078,7 +4078,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       Done: repository, sync, AI, blob, usage, and retention tests cover these units.
 - [~] Integration: in-proc `grpc.Server` behind the bridge over a real WS; client<->server round-trips
       now cover AI `SetKey`/`Chat`/`ChatStream` and SyncService workspace `Put`/`List`/`Get`/`Delete` unary
-      calls plus watch streams. Remaining: browser autosave push/pull e2e and blob up/down.
+      calls plus watch streams, with HTTP blob PUT/HEAD/GET verified against a workspace created through the
+      bridge. Remaining: browser autosave push/pull e2e.
 - [~] e2e: two-device sync (LWW + tombstone), offline->reconnect flush, OAuth login, artifact blob
       round-trip, AI proxy streaming with a real key.
       Done: in-proc bridge e2e covers two-device stale LWW rejection plus tombstone propagation; AI proxy

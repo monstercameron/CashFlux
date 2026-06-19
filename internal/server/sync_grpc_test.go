@@ -1,7 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -282,6 +287,91 @@ func TestSyncServiceGRPCBridgeTwoDeviceLWWAndTombstone(t *testing.T) {
 	}
 	if len(list.Workspaces) != 1 || list.Workspaces[0].ID != "w-two-device" || !list.Workspaces[0].Deleted {
 		t.Fatalf("deleted list = %+v", list)
+	}
+}
+
+func TestSyncServiceGRPCBridgeBlobRoundTrip(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{
+		AuthMode:     "token",
+		Token:        "dev-token",
+		AppOrigin:    "*",
+		DataDir:      t.TempDir(),
+		BlobMaxBytes: 1024,
+	}
+	bridge := httptest.NewServer(NewMux(cfg, store))
+	defer bridge.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	var put backendrpc.PutWorkspaceResponse
+	if err := conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+		Workspace:       backendrpc.Workspace{ID: "w-blob-bridge", Name: "Blob Bridge", DeviceID: "device-a"},
+		Dataset:         []byte(`{"schemaVersion":1,"artifacts":[]}`),
+		ClientUpdatedAt: time.Date(2026, time.June, 19, 17, 30, 0, 0, time.UTC).Format(time.RFC3339Nano),
+	}, &put, backendrpc.JSONCallOptions()...); err != nil {
+		t.Fatalf("PutWorkspace invoke: %v", err)
+	}
+	if !put.Accepted {
+		t.Fatalf("PutWorkspace response = %+v", put)
+	}
+
+	data := []byte("receipt over bridge")
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	blobURL := bridge.URL + "/v1/blobs/" + hash + "?workspaceId=w-blob-bridge"
+
+	putReq, err := http.NewRequestWithContext(ctx, http.MethodPut, blobURL, bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("build blob PUT: %v", err)
+	}
+	putReq.Header.Set("Authorization", "Bearer dev-token")
+	putReq.Header.Set("Content-Type", "text/plain")
+	putResp, err := http.DefaultClient.Do(putReq)
+	if err != nil {
+		t.Fatalf("blob PUT: %v", err)
+	}
+	_ = putResp.Body.Close()
+	if putResp.StatusCode != http.StatusOK {
+		t.Fatalf("blob PUT status = %d", putResp.StatusCode)
+	}
+
+	headReq, err := http.NewRequestWithContext(ctx, http.MethodHead, blobURL, nil)
+	if err != nil {
+		t.Fatalf("build blob HEAD: %v", err)
+	}
+	headReq.Header.Set("Authorization", "Bearer dev-token")
+	headResp, err := http.DefaultClient.Do(headReq)
+	if err != nil {
+		t.Fatalf("blob HEAD: %v", err)
+	}
+	_ = headResp.Body.Close()
+	if headResp.StatusCode != http.StatusOK || headResp.Header.Get("ETag") != `"`+hash+`"` {
+		t.Fatalf("blob HEAD status/etag = %d/%q", headResp.StatusCode, headResp.Header.Get("ETag"))
+	}
+
+	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, blobURL, nil)
+	if err != nil {
+		t.Fatalf("build blob GET: %v", err)
+	}
+	getReq.Header.Set("Authorization", "Bearer dev-token")
+	getResp, err := http.DefaultClient.Do(getReq)
+	if err != nil {
+		t.Fatalf("blob GET: %v", err)
+	}
+	got, err := io.ReadAll(getResp.Body)
+	_ = getResp.Body.Close()
+	if err != nil {
+		t.Fatalf("blob GET read: %v", err)
+	}
+	if getResp.StatusCode != http.StatusOK || !bytes.Equal(got, data) {
+		t.Fatalf("blob GET status/body = %d/%q, want 200/%q", getResp.StatusCode, got, data)
 	}
 }
 

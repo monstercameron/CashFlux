@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Blob bridge round-trip coverage (7.10).** Added an integration test that creates a workspace through the
+  gRPC tunnel and verifies authenticated HTTP blob PUT, HEAD, and GET on the same backend server.
 - **Two-device sync bridge e2e (7.3/7.10).** Added integration coverage for two devices connected through
   the real gRPC tunnel, proving stale LWW writes are rejected and delete tombstones propagate to watchers.
 - **AI streaming RPC surface (7.1/7.4).** Added `ChatStream` and `VisionStream` server-streaming RPCs over the
