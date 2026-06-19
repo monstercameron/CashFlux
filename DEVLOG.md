@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: internal/quotes smart-quotes provider (B17.5, docs)
+
+- Doc for c4ef85c: pure `internal/quotes` — curated finance/motivation quotes + deterministic `OfDay` daily
+  rotation (UTC epoch-day modulo, handles pre-epoch/negative indices), `All` (defensive copy), `Count`. No
+  syscall/js, no randomness. Peripheral to the parallel session's B17 security core, so safe to build solo;
+  the lock screen can wire it when that lands.
+
 ## 2026-06-19 - deploy: tune self-host gRPC websocket proxy
 
 - Updated `deploy/Caddyfile.selfhost` so the TLS-terminating self-host proxy keeps upstream connections alive

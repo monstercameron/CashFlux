@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Smart-quotes provider (B17.5).** New pure, table-tested `internal/quotes`: a curated set of
+  finance/motivation quotes with a deterministic once-per-day rotation (`OfDay`), ready for the lock screen's
+  optional smart-quotes display.
 - **Backend proto contract (7.1).** Added `proto/cashflux/v1/cashflux.proto` plus contract-policy docs and
   tests covering SyncService/AIService methods, opaque dataset bytes, and blob references.
 - **Backend toolchain pin reconciliation (7.0).** Locked the server/client backend toolchain expectation
