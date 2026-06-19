@@ -405,6 +405,9 @@ and every commit updates this file under `Unreleased`.
   and the choice persisted. This completes the C24 auto-layout feature.
 
 ### Changed
+- **The dashboard "Upcoming bills" widget now shares the Bills screen's logic (B22).** It derives its
+  bills from the same `bills.Upcoming`, so the widget and the screen always show the same due dates
+  (including correct month-end clamping) instead of two slightly different calculations.
 - **AI proxy is gRPC-only.** Retired the legacy `/v1/ai/key`, `/v1/ai/chat`, and `/v1/ai/vision`
   HTTP routes so key upload, model listing, chat, and vision all use authenticated AIService RPCs
   over the GoGRPCBridge `/grpc` tunnel. The HTTP mux now has regression coverage that keeps those

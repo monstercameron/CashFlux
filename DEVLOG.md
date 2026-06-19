@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — refactor: dashboard bills widget reuses bills.Upcoming (B22)
+
+- The dashboard "Upcoming bills" widget had its own inline liability→bill derivation (a local struct +
+  `dateutil.NextMonthlyDue` + manual sort/top-4). Replaced it with `bills.Upcoming(app.Accounts(), now)`
+  so the widget and the Bills screen agree exactly, and the widget picks up the pure core's month-end
+  clamping (`dateutil.NextMonthlyDue` didn't clamp). Mapped `Bill.DaysUntil <= 7` to the warn tone and
+  `Bill.Amount.Neg()` to the red figure (unchanged rendering). Dropped the now-unused `sort` import.
+- Net: less duplicated logic, one source of truth for "what bills are coming up." wasm build green, gofmt
+  clean; full native suite was green this iteration too.
+
 ## 2026-06-18 — feat: split / settle-up pure core (B24, step 1)
 
 - New pure `internal/split` (no syscall/js, table-tested): `Equal(total, members)` even split with exact

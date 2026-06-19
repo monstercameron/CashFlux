@@ -4,11 +4,11 @@ package screens
 
 import (
 	"fmt"
-	"sort"
 	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
@@ -199,37 +199,27 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismi
 func upcomingBillsWidget(app *appstate.App) ui.Node {
 	now := time.Now()
 	pr := uistate.UsePrefs().Get()
-	type bill struct {
-		name   string
-		due    time.Time
-		amount money.Money
-	}
-	var bills []bill
-	for _, a := range app.Accounts() {
-		if a.Archived || a.Class != domain.ClassLiability || a.MinPayment.Amount <= 0 || a.DueDayOfMonth <= 0 {
-			continue
-		}
-		bills = append(bills, bill{name: a.Name, due: dateutil.NextMonthlyDue(now, a.DueDayOfMonth), amount: a.MinPayment})
-	}
-	sort.Slice(bills, func(i, j int) bool { return bills[i].due.Before(bills[j].due) })
+	// Share the exact bill-derivation the Bills screen uses (B22), so the widget
+	// and the screen always agree (incl. month-end due-date clamping).
+	upcoming := bills.Upcoming(app.Accounts(), now)
 
 	var body ui.Node
-	if len(bills) == 0 {
+	if len(upcoming) == 0 {
 		body = P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noUpcomingBills"))
 	} else {
-		if len(bills) > 4 {
-			bills = bills[:4]
+		if len(upcoming) > 4 {
+			upcoming = upcoming[:4]
 		}
-		rows := make([]ui.Node, 0, len(bills))
-		for _, b := range bills {
+		rows := make([]ui.Node, 0, len(upcoming))
+		for _, b := range upcoming {
 			dueTone := "text-faint"
-			if dateutil.DaysBetween(now, b.due) <= 7 {
+			if b.DaysUntil <= 7 {
 				dueTone = "text-warn"
 			}
 			rows = append(rows, Div(Class("flex justify-between"),
-				Span(b.name),
-				Span(Class(dueTone), pr.FormatDate(b.due)),
-				Span(Class("font-display fig text-down w-24 text-right"), fmtMoney(b.amount.Neg())),
+				Span(b.Name),
+				Span(Class(dueTone), pr.FormatDate(b.DueDate)),
+				Span(Class("font-display fig text-down w-24 text-right"), fmtMoney(b.Amount.Neg())),
 			))
 		}
 		body = Div(Class("text-[13px] space-y-2.5"), rows)
