@@ -4293,7 +4293,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       machine-readable error details; no internal leakage in messages.
 - [x] Config via env/secret manager with validation on boot; **feature flags** (billing on/off, AI proxy
       on/off, self-host mode) so deployments differ safely.
-- [ ] Runbooks (deploy, rollback, restore, rotate keys, revoke sessions, handle past-due); on-call docs.
+- [x] Runbooks (deploy, rollback, restore, rotate keys, revoke sessions, handle past-due); on-call docs.
+      Done: `docs/OPERATIONS_RUNBOOK.md` covers deploy, rollback, restore, token/master-key rotation,
+      session revocation, past-due handling, and routine checks; deploy tests pin the required sections.
 - [ ] Admin tooling (read-only support views; usage lookups) — built on the same isolation guarantees.
 
 ### 7.20 Anti-abuse & fraud

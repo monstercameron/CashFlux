@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add backend operations runbook
+
+- Added `docs/OPERATIONS_RUNBOOK.md` covering deploy, rollback, restore, token rotation, master-key rotation, session revocation, past-due billing, and routine operational checks.
+- Linked operators from the self-hosting guide to the operations, observability, and incident runbooks.
+- Added deploy tests that assert the required runbook procedures and key commands remain documented.
+
 ## 2026-06-19 - feat: add backend retention pruning
 
 - Added retention config windows for audit rows, snapshot history, and local backup directories, defaulting to 365/180/30 days.

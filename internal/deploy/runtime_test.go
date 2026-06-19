@@ -229,3 +229,27 @@ func TestIncidentResponseRunbookDefinesStatusAndComms(t *testing.T) {
 		}
 	}
 }
+
+func TestOperationsRunbookDefinesRequiredProcedures(t *testing.T) {
+	data, err := os.ReadFile("../../docs/OPERATIONS_RUNBOOK.md")
+	if err != nil {
+		t.Fatalf("read operations runbook: %v", err)
+	}
+	runbook := string(data)
+	for _, want := range []string{
+		"## Deploy",
+		"## Rollback",
+		"## Restore",
+		"## Rotate Access Token",
+		"## Rotate Master Key",
+		"## Revoke Sessions",
+		"## Past-Due Billing",
+		"cashflux-server backup",
+		"cashflux-server rotate-token",
+		"/v1/audit",
+	} {
+		if !strings.Contains(runbook, want) {
+			t.Fatalf("operations runbook missing %q", want)
+		}
+	}
+}
