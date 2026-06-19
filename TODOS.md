@@ -4436,8 +4436,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] Signup/login abuse controls (rate limit, optional CAPTCHA on bursts, email/OAuth verification).
       OAuth/session routes now have a dedicated per-IP `CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE` cap with
       JSON `RATE_LIMITED` errors. Remaining: optional CAPTCHA-on-burst policy and email/OAuth verification review.
-- [ ] **Referral-fraud guards** (DO referral path): detect self-referral/farming; honest disclosure;
+- [x] **Referral-fraud guards** (DO referral path): detect self-referral/farming; honest disclosure;
       don't tie product behavior to referral outcomes.
+      Done: `docs/CLOUD_BUSINESS_PLAN.md` now treats referral attribution as accounting-only metadata,
+      lists self-referral/farming signals, keeps suspicious referrals out of COGS modeling without changing
+      product behavior, and preserves the non-referral self-host path; deploy docs test the guardrails.
 - [x] Trial abuse limits (one trial per account/identity); payment-fraud handling via Stripe Radar.
       Done: Checkout refuses accounts with a prior trial or current active/trialing/past-due subscription, and
       payment-fraud handling remains in Stripe Checkout/Radar with no card data touching CashFlux.

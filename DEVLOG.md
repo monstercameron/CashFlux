@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: add referral-fraud guardrails (7.20)
+
+- Added referral-fraud guardrails to the Cloud business plan for the DigitalOcean self-host referral path.
+- Defined referral attribution as accounting-only metadata that must not unlock features, discounts, quota,
+  support priority, trial extensions, or deployment behavior.
+- Listed self-referral/farming signals and pinned the non-referral self-host path with a deploy doc test.
+
 ## 2026-06-19 - docs: add production data access logging policy (7.16)
 
 - Added a backend security policy that says production operators should use metadata endpoints before reading

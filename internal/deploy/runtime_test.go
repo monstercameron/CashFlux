@@ -414,6 +414,29 @@ func TestSOC2ReadinessChecklistCoversCoreControls(t *testing.T) {
 	}
 }
 
+func TestCloudBusinessPlanDocumentsReferralFraudGuards(t *testing.T) {
+	data, err := os.ReadFile("../../docs/CLOUD_BUSINESS_PLAN.md")
+	if err != nil {
+		t.Fatalf("read cloud business plan: %v", err)
+	}
+	doc := string(data)
+	for _, want := range []string{
+		"Referral-fraud guardrails",
+		"accounting metadata only",
+		"must never unlock product features",
+		"self-referral/farming",
+		"same CashFlux account",
+		"same billing",
+		"same OAuth identity",
+		"user experience",
+		"non-referral self-host path",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("cloud business plan missing %q", want)
+		}
+	}
+}
+
 func TestScaleLimitsDocumentSQLiteCeilingAndMigrationPath(t *testing.T) {
 	data, err := os.ReadFile("../../docs/SCALE_LIMITS.md")
 	if err != nil {

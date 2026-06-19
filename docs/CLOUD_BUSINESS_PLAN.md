@@ -158,3 +158,13 @@ compromising the open, no-dark-patterns promise.
 - Keep an unconditional **plain self-host path** (any host, your own account, no referral) — the free
   promise stays absolute.
 - Marketplace 1-Click may carry separate partner economics — check if/when going that route.
+
+### Referral-fraud guardrails
+- Treat referral attribution as accounting metadata only. It must never unlock product features, support priority,
+  discounts, trial extensions, sync quota, AI quota, or deployment behavior.
+- Detect obvious self-referral/farming before counting referral economics: same CashFlux account, same billing
+  contact, repeated same-card/customer evidence from Stripe, repeated same OAuth identity, or bursty signups from
+  the same operator-controlled campaign source.
+- If a referral looks suspicious, exclude it from internal COGS/revenue modeling and keep the user experience
+  unchanged; do not punish app access based on referral outcome.
+- Keep the non-referral self-host path equally visible so the referral link remains optional and disclosed.
