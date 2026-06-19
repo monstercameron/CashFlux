@@ -19,6 +19,8 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **Nested routing no longer duplicates the app shell (B3).** The root route is now the single layout route
+  that renders `Shell` once and places child screens through `router.GetOutlet()`.
 - **Stripe deleted webhooks could preserve an active status.** `customer.subscription.deleted` now forces
   stored subscription state to `canceled` even if the event object carries a stale status value.
 - **Deleting a member left their transactions dangling.** The Members screen decided whether to reassign

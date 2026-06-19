@@ -48,14 +48,26 @@ func Run() {
 	uistate.InitRouteBase()
 
 	r := router.NewHistoryRouter(router.RouterOptions{DefaultRoute: uistate.RoutePath("/")})
+	home := screens.All()[0]
+	r.Register(uistate.RoutePath("/"), func(router.Attrs) *router.Element {
+		view := home.View
+		if outlet := router.GetOutlet(); outlet != nil {
+			view = func() ui.Node { return outlet }
+		}
+		title, subtitle := shellLabelsForCurrentRoute(home.Title, home.Subtitle)
+		return ui.CreateElement(Shell, ShellProps{
+			Title:    title,
+			Subtitle: subtitle,
+			View:     view,
+		})
+	}, router.Options{Layout: true})
 	for _, route := range screens.All() {
+		if route.Path == "/" {
+			continue
+		}
 		route := route // capture per iteration
 		r.Register(uistate.RoutePath(route.Path), func(router.Attrs) *router.Element {
-			return ui.CreateElement(Shell, ShellProps{
-				Title:    uistate.T(route.Title),
-				Subtitle: uistate.T(route.Subtitle),
-				View:     route.View,
-			})
+			return route.View()
 		})
 	}
 	// User-authored custom pages all ride one pattern route; the slug resolves the
@@ -63,22 +75,12 @@ func Run() {
 	// re-registering routes (the router can't be mutated after mount).
 	r.Register(uistate.RoutePath("/p/:slug"), func(attrs router.Attrs) *router.Element {
 		slug, _ := attrs["slug"].(string)
-		title := uistate.T("custompage.fallbackTitle")
-		if app := appstate.Default; app != nil {
-			if p, ok := pages.BySlug(app.CustomPages(), slug); ok {
-				title = p.Name
-			}
-		}
-		return ui.CreateElement(Shell, ShellProps{
-			Title: title,
-			View:  func() ui.Node { return screens.CustomPage(slug) },
-		})
+		return screens.CustomPage(slug)
 	})
 
 	// Unknown paths fall back to the dashboard.
 	r.Register("*", func(router.Attrs) *router.Element {
-		home := screens.All()[0]
-		return ui.CreateElement(Shell, ShellProps{Title: uistate.T(home.Title), Subtitle: uistate.T(home.Subtitle), View: home.View})
+		return home.View()
 	})
 
 	r.Mount("#app")
@@ -103,4 +105,30 @@ func Run() {
 	runNotifyCatchUp()
 
 	utils.WaitForever()
+}
+
+func shellLabelsForCurrentRoute(fallbackTitle, fallbackSubtitle string) (string, string) {
+	current := uistate.LogicalPath(router.InspectCurrentRoute().Path)
+	for _, route := range screens.All() {
+		if route.Path == current {
+			return uistate.T(route.Title), uistate.T(route.Subtitle)
+		}
+	}
+	if slug, ok := customPageSlug(current); ok {
+		if app := appstate.Default; app != nil {
+			if p, ok := pages.BySlug(app.CustomPages(), slug); ok {
+				return p.Name, ""
+			}
+		}
+		return uistate.T("custompage.fallbackTitle"), ""
+	}
+	return uistate.T(fallbackTitle), uistate.T(fallbackSubtitle)
+}
+
+func customPageSlug(path string) (string, bool) {
+	const prefix = "/p/"
+	if len(path) <= len(prefix) || path[:len(prefix)] != prefix {
+		return "", false
+	}
+	return path[len(prefix):], true
 }

@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: render a single app shell for child routes (B3)
+
+- Marked `/` as the framework layout route and made it the only place that renders the `Shell` chrome.
+- Registered normal screens and custom pages as child content routes, so `/accounts`, `/transactions`, and other
+  non-root paths fill `router.GetOutlet()` instead of stacking a second Shell.
+- Kept the dashboard as the root layout's fallback content when there is no child outlet.
+
 ## 2026-06-19 - feat: pin self-host tls policy (7.14)
 
 - Added an explicit TLS 1.2/1.3 policy and modern AEAD cipher suites to `deploy/Caddyfile.selfhost`.

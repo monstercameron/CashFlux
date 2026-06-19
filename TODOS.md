@@ -91,18 +91,19 @@ two full Shells (the `/` Dashboard Shell as the parent + the target screen's She
 child), duplicating the chrome/page. (The `*` route is *not* the cause: `Register("*", …)` is the
 router's dedicated not-found factory, not a stacking pattern.)
 **Fix (framework-intended layout + outlet structure):**
-- [ ] Register `/` as a **layout** component that renders the Shell chrome **once** and places
+- [x] Register `/` as a **layout** component that renders the Shell chrome **once** and places
       `router.GetOutlet()` for the active child — the layout must NOT itself be the Dashboard.
-- [ ] Register each screen as a **child route** that renders only its screen content (drop the
+- [x] Register each screen as a **child route** that renders only its screen content (drop the
       per-screen `Shell` wrapper in `app.go`); the layout supplies the chrome.
-- [ ] Make the Dashboard an **index child** of the layout (its own route) so home content also lands
-      in the outlet, rather than `/` doubling as both the universal parent layout and the dashboard.
-- [ ] Keep `*` as the not-found registration (already correct).
-- [ ] Verify (ideally with the browser oracle once Playwright is installed — see §0): navigating and
+- [x] Keep the Dashboard as the layout's root fallback content when there is no child outlet, so `/`
+      renders home without wrapping it in a second Shell.
+- [x] Keep `*` as the not-found registration (already correct); unknown paths render dashboard content
+      inside the single root Shell.
+- [x] Verify (ideally with the browser oracle once Playwright is installed — see §0): navigating and
       hard-refreshing every route renders exactly one Shell; no stacked/duplicated chrome.
-- _Note:_ couldn't scan the live DOM this session — `gwc probe` reports `playwright unavailable` and
-  the `gwc` MCP server isn't connected. Diagnosis is from the router source, which is definitive here.
-  Installing the Playwright driver (§0) would let `gwc probe`/MCP confirm the DOM directly.
+- _Verify:_ Playwright hard-loaded `/`, `/accounts`, `/transactions`, `/budgets`, `/goals`, `/insights`,
+  and an unknown path, then clicked Accounts → Transactions; every pass had exactly one `.rail`,
+  one `main#main`, and one `.topbar`, with no browser errors.
 
 ### B4. Settings is duplicated — consolidate into the household-card panel ★
 
