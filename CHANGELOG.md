@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend OAuth ID-token claim validation.** Google OAuth callbacks now require an ID token and validate issuer, audience, and nonce claims before issuing a CashFlux session.
 - **Secrets scanning CI.** CI now runs gitleaks with a scoped fixture allowlist to catch committed secrets.
 - **Security disclosure policy.** Added `SECURITY.md` and a web-served `.well-known/security.txt` for coordinated vulnerability reports.
 - **Dependency update automation.** Dependabot now watches Go modules and GitHub Actions weekly with grouped PRs.

@@ -4150,9 +4150,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Short-lived access tokens (JWT, ~15m) + rotating refresh tokens (httpOnly, Secure, SameSite);
       refresh reuse detection → revoke session family.
 - [ ] Session revocation (logout, device revoke, "sign out everywhere"); token `jti` denylist or version.
-- [~] OAuth: PKCE + `state` (CSRF), nonce, redirect-URI allow-list, validate `iss`/`aud`.
+- [x] OAuth: PKCE + `state` (CSRF), nonce, redirect-URI allow-list, validate `iss`/`aud`.
+      Google callbacks now require an ID token and validate issuer, audience, and nonce before issuing sessions.
       Redirect URLs are now constrained to `/v1/auth/{provider}/callback`; OAuth state cookies now bind
-      nonce values and Google auth requests send them. Remaining: provider `iss`/`aud` validation.
+      nonce values and Google auth requests send them.
 - [x] Self-host token mode: high-entropy generated token, SHA-256 config storage, constant-time compare, and
       `cashflux-server rotate-token` are done.
 

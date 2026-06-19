@@ -96,7 +96,7 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, "oauth state cookie is missing", http.StatusBadRequest)
 			return
 		}
-		cookieState, verifier, _, ok := parseOAuthStateCookie(cookie.Value)
+		cookieState, verifier, nonce, ok := parseOAuthStateCookie(cookie.Value)
 		if !ok || cookieState != state {
 			http.Error(w, "oauth state mismatch", http.StatusBadRequest)
 			return
@@ -106,7 +106,11 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
-		user, err := fetchOAuthUser(r, providerName, provider, token)
+		if err := validateOAuthIDToken(providerName, provider, token.IDToken, nonce); err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		user, err := fetchOAuthUser(r, providerName, provider, token.AccessToken)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -268,10 +272,15 @@ func parseOAuthStateCookie(value string) (string, string, string, bool) {
 	return state, verifier, nonce, ok && state != "" && verifier != "" && nonce != ""
 }
 
-func exchangeOAuthCode(r *http.Request, providerName string, provider OAuthProviderConfig, code, verifier string) (string, error) {
+type oauthToken struct {
+	AccessToken string
+	IDToken     string
+}
+
+func exchangeOAuthCode(r *http.Request, providerName string, provider OAuthProviderConfig, code, verifier string) (oauthToken, error) {
 	endpoint := oauthTokenURL(providerName, provider)
 	if endpoint == "" {
-		return "", fmt.Errorf("oauth provider is not supported")
+		return oauthToken{}, fmt.Errorf("oauth provider is not supported")
 	}
 	form := url.Values{}
 	form.Set("client_id", provider.ClientID)
@@ -282,34 +291,96 @@ func exchangeOAuthCode(r *http.Request, providerName string, provider OAuthProvi
 	form.Set("redirect_uri", provider.RedirectURL)
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", fmt.Errorf("build oauth token request: %w", err)
+		return oauthToken{}, fmt.Errorf("build oauth token request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("oauth token exchange failed: %w", err)
+		return oauthToken{}, fmt.Errorf("oauth token exchange failed: %w", err)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("oauth token exchange failed with status %d", resp.StatusCode)
+		return oauthToken{}, fmt.Errorf("oauth token exchange failed with status %d", resp.StatusCode)
 	}
 	var body struct {
 		AccessToken string `json:"access_token"`
+		IDToken     string `json:"id_token"`
 		TokenType   string `json:"token_type"`
 		Error       string `json:"error"`
 	}
 	if err := json.Unmarshal(data, &body); err != nil {
-		return "", fmt.Errorf("parse oauth token response: %w", err)
+		return oauthToken{}, fmt.Errorf("parse oauth token response: %w", err)
 	}
 	if body.Error != "" {
-		return "", fmt.Errorf("oauth token exchange failed: %s", body.Error)
+		return oauthToken{}, fmt.Errorf("oauth token exchange failed: %s", body.Error)
 	}
 	if strings.TrimSpace(body.AccessToken) == "" {
-		return "", fmt.Errorf("oauth token response missing access token")
+		return oauthToken{}, fmt.Errorf("oauth token response missing access token")
 	}
-	return body.AccessToken, nil
+	return oauthToken{AccessToken: strings.TrimSpace(body.AccessToken), IDToken: strings.TrimSpace(body.IDToken)}, nil
+}
+
+func validateOAuthIDToken(providerName string, provider OAuthProviderConfig, rawIDToken, nonce string) error {
+	rawIDToken = strings.TrimSpace(rawIDToken)
+	if rawIDToken == "" {
+		if providerName == "google" {
+			return fmt.Errorf("oauth id token is required")
+		}
+		return nil
+	}
+	parts := strings.Split(rawIDToken, ".")
+	if len(parts) != 3 {
+		return fmt.Errorf("oauth id token is malformed")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return fmt.Errorf("oauth id token payload is malformed")
+	}
+	var claims struct {
+		Issuer   string `json:"iss"`
+		Audience any    `json:"aud"`
+		Nonce    string `json:"nonce"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return fmt.Errorf("parse oauth id token claims: %w", err)
+	}
+	if !validOAuthIssuer(providerName, claims.Issuer) {
+		return fmt.Errorf("oauth id token issuer is invalid")
+	}
+	if !oauthAudienceContains(claims.Audience, provider.ClientID) {
+		return fmt.Errorf("oauth id token audience is invalid")
+	}
+	if providerName == "google" && strings.TrimSpace(claims.Nonce) != nonce {
+		return fmt.Errorf("oauth id token nonce is invalid")
+	}
+	return nil
+}
+
+func validOAuthIssuer(providerName, issuer string) bool {
+	issuer = strings.TrimSpace(issuer)
+	switch providerName {
+	case "google":
+		return issuer == "https://accounts.google.com" || issuer == "accounts.google.com"
+	default:
+		return issuer != ""
+	}
+}
+
+func oauthAudienceContains(raw any, clientID string) bool {
+	clientID = strings.TrimSpace(clientID)
+	switch aud := raw.(type) {
+	case string:
+		return strings.TrimSpace(aud) == clientID
+	case []any:
+		for _, v := range aud {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) == clientID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func fetchOAuthUser(r *http.Request, providerName string, provider OAuthProviderConfig, token string) (User, error) {

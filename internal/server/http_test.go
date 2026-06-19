@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -667,6 +668,138 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	}
 }
 
+func TestOAuthCallbackValidatesGoogleIDTokenClaims(t *testing.T) {
+	store := openTestStore(t)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			idToken := testIDToken(t, map[string]any{
+				"iss":   "https://accounts.google.com",
+				"aud":   "google-id",
+				"nonce": "nonce-123",
+			})
+			_, _ = w.Write([]byte(`{"access_token":"provider-token","id_token":` + strconvQuote(idToken) + `}`))
+		case "/user":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"sub":"user-123","email":"alice@example.com"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer provider.Close()
+
+	cfg := Config{
+		AuthMode:  "oauth",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+		OAuthProviders: map[string]OAuthProviderConfig{
+			"google": {
+				ClientID:     "google-id",
+				ClientSecret: "google-secret",
+				RedirectURL:  "http://127.0.0.1:8081/v1/auth/google/callback",
+				TokenURL:     provider.URL + "/token",
+				UserURL:      provider.URL + "/user",
+			},
+		},
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google/callback?code=oauth-code&state=state-123", nil)
+	req.AddCookie(&http.Cookie{Name: oauthStateCookie, Value: "state-123.verifier-123.nonce-123"})
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("callback status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var body oauthSessionResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode callback: %v", err)
+	}
+	if body.UserID != "google:user-123" {
+		t.Fatalf("callback body = %+v", body)
+	}
+}
+
+func TestOAuthCallbackRejectsGoogleIDTokenAudience(t *testing.T) {
+	store := openTestStore(t)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			idToken := testIDToken(t, map[string]any{
+				"iss":   "https://accounts.google.com",
+				"aud":   "other-client",
+				"nonce": "nonce-123",
+			})
+			_, _ = w.Write([]byte(`{"access_token":"provider-token","id_token":` + strconvQuote(idToken) + `}`))
+		case "/user":
+			t.Fatal("userinfo should not be fetched after invalid id token")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer provider.Close()
+
+	cfg := Config{
+		AuthMode:  "oauth",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+		OAuthProviders: map[string]OAuthProviderConfig{
+			"google": {
+				ClientID:     "google-id",
+				ClientSecret: "google-secret",
+				RedirectURL:  "http://127.0.0.1:8081/v1/auth/google/callback",
+				TokenURL:     provider.URL + "/token",
+				UserURL:      provider.URL + "/user",
+			},
+		},
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google/callback?code=oauth-code&state=state-123", nil)
+	req.AddCookie(&http.Cookie{Name: oauthStateCookie, Value: "state-123.verifier-123.nonce-123"})
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "audience") {
+		t.Fatalf("callback status/body = %d/%q, want bad audience", rr.Code, rr.Body.String())
+	}
+}
+
+func TestOAuthCallbackRequiresGoogleIDToken(t *testing.T) {
+	store := openTestStore(t)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"provider-token"}`))
+		case "/user":
+			t.Fatal("userinfo should not be fetched without an id token")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer provider.Close()
+
+	cfg := Config{
+		AuthMode:  "oauth",
+		MasterKey: "0123456789abcdef0123456789abcdef",
+		OAuthProviders: map[string]OAuthProviderConfig{
+			"google": {
+				ClientID:     "google-id",
+				ClientSecret: "google-secret",
+				RedirectURL:  "http://127.0.0.1:8081/v1/auth/google/callback",
+				TokenURL:     provider.URL + "/token",
+				UserURL:      provider.URL + "/user",
+			},
+		},
+	}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google/callback?code=oauth-code&state=state-123", nil)
+	req.AddCookie(&http.Cookie{Name: oauthStateCookie, Value: "state-123.verifier-123.nonce-123"})
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "required") {
+		t.Fatalf("callback status/body = %d/%q, want missing id token", rr.Code, rr.Body.String())
+	}
+}
+
 func TestReadyEndpointRequiresStore(t *testing.T) {
 	h := NewMux(Config{AuthMode: "token"})
 	req := httptest.NewRequest(http.MethodGet, "/livez", nil)
@@ -946,4 +1079,22 @@ func TestBlobEndpointCORS(t *testing.T) {
 func blobHash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func testIDToken(t *testing.T, claims map[string]any) string {
+	t.Helper()
+	header, err := json.Marshal(map[string]string{"alg": "none"})
+	if err != nil {
+		t.Fatalf("marshal id token header: %v", err)
+	}
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("marshal id token claims: %v", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload) + ".signature"
+}
+
+func strconvQuote(value string) string {
+	data, _ := json.Marshal(value)
+	return string(data)
 }

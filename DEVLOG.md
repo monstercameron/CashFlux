@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: validate backend oauth id tokens
+
+- Made OAuth token exchange retain provider ID tokens in addition to access tokens.
+- Required Google callbacks to include an ID token and validate `iss`, `aud`, and nonce before userinfo fetch/session issue.
+- Added callback tests for valid Google claims, bad audience rejection, and missing ID-token rejection.
+
 ## 2026-06-19 - feat: add backend secrets scanning
 
 - Added gitleaks to the main CI workflow.
