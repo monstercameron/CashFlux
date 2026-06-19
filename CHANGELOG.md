@@ -637,6 +637,10 @@ and every commit updates this file under `Unreleased`.
   removed.
 
 ### Fixed
+- **Keyboard focus ring restored on the passcode and command-palette inputs (§6.18).** These raw-DOM inputs set
+  `outline:none` inline, which beats the global `:focus-visible` rule and left keyboard users with no visible
+  focus indicator on the lock screen and command palette. Dropped the inline `outline:none` from all three
+  (passcode, passcode-setup, palette search) so the accent focus ring shows again.
 - **Switching the time period no longer drifts the view backward in time (C41).** Changing Week / Month /
   Quarter in the top bar now re-anchors to the period that contains today (this week/month/quarter),
   instead of re-snapping the old window's start — which used to land you on, e.g., June's *first* week or

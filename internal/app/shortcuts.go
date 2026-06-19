@@ -357,7 +357,7 @@ func buildCommandPalette(doc js.Value) {
 	inp.Set("type", "text")
 	inp.Call("setAttribute", "placeholder", uistate.T("cmd.search"))
 	inp.Call("setAttribute", "aria-label", uistate.T("cmd.search"))
-	inp.Get("style").Set("cssText", "width:100%;box-sizing:border-box;padding:0.8rem 1rem;background:transparent;border:0;border-bottom:1px solid var(--border,#2a2a2c);color:inherit;font:inherit;font-size:1rem;outline:none;")
+	inp.Get("style").Set("cssText", "width:100%;box-sizing:border-box;padding:0.8rem 1rem;background:transparent;border:0;border-bottom:1px solid var(--border,#2a2a2c);color:inherit;font:inherit;font-size:1rem;")
 	card.Call("appendChild", inp)
 
 	list := doc.Call("createElement", "div")

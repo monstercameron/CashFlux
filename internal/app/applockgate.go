@@ -111,7 +111,7 @@ func buildAppLockGate(doc js.Value) {
 	inp.Set("type", "password")
 	inp.Call("setAttribute", "inputmode", "numeric")
 	inp.Call("setAttribute", "aria-label", "Passcode")
-	inp.Get("style").Set("cssText", "width:100%;box-sizing:border-box;padding:0.6rem 0.8rem;text-align:center;font-size:1.1rem;letter-spacing:0.2em;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#2a2a2c);border-radius:8px;color:inherit;outline:none;")
+	inp.Get("style").Set("cssText", "width:100%;box-sizing:border-box;padding:0.6rem 0.8rem;text-align:center;font-size:1.1rem;letter-spacing:0.2em;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#2a2a2c);border-radius:8px;color:inherit;")
 	card.Call("appendChild", inp)
 
 	btn := doc.Call("createElement", "button")
@@ -328,7 +328,7 @@ func buildAppLockSetup(doc js.Value) {
 	ov.Set("id", appLockSetupID)
 	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:1001;display:grid;place-items:center;background:rgba(0,0,0,0.6);")
 
-	const inputStyle = "width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#2a2a2c);border-radius:8px;color:inherit;font:inherit;outline:none;"
+	const inputStyle = "width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#2a2a2c);border-radius:8px;color:inherit;font:inherit;"
 	card := doc.Call("createElement", "div")
 	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.7rem;width:min(90vw,340px);padding:1.2rem;background:var(--bg-elev,#1a1a1d);color:var(--text,#f4f4f5);border:1px solid var(--border,#2a2a2c);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,0.5);")
 	card.Set("innerHTML",
