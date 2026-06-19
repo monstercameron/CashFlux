@@ -281,6 +281,17 @@ func Transactions() ui.Node {
 		selected.Set(nm)
 	}
 	clearSelection := ui.UseEvent(Prevent(func() { selected.Set(map[string]bool{}) }))
+	// Select the extra copies in each duplicate group (all but the first), so the
+	// existing bulk-delete can clean them up in one go.
+	selectDuplicates := ui.UseEvent(Prevent(func() {
+		nm := map[string]bool{}
+		for _, g := range dedupe.FindDuplicates(app.Transactions()) {
+			for _, dupID := range g.IDs[1:] {
+				nm[dupID] = true
+			}
+		}
+		selected.Set(nm)
+	}))
 	bulkDelete := ui.UseEvent(Prevent(func() {
 		for id := range selected.Get() {
 			deleteTxn(id)
@@ -513,7 +524,10 @@ func Transactions() ui.Node {
 			// Screen-reader live region announcing the match count as filters change
 			// (stays mounted across renders, so the zero-results case is announced too).
 			P(Class("sr-only"), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus)),
-			If(dupCount > 0, P(Class("muted"), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate")))),
+			If(dupCount > 0, Div(Class("flex flex-wrap items-center gap-2"), Style(map[string]string{"margin-bottom": "0.6rem"}),
+				Span(Class("muted"), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate"))),
+				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.selectDuplicatesTitle")), OnClick(selectDuplicates), uistate.T("transactions.selectDuplicates")),
+			)),
 			listBody,
 		),
 	)

@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **One-click duplicate cleanup (imports).** The Transactions duplicate notice now has a "Select duplicates"
+  button that selects the extra copy in each duplicate group (keeping one), so the existing bulk-delete can
+  remove them in a single step.
+
+### Added
 - **Duplicate-transaction heads-up (C39/imports).** New pure, table-tested `internal/dedupe` package finds
   likely double entries (same date, signed amount, and description; transfers excluded) and the Transactions
   screen now shows a "Heads up: N possible duplicates" notice so accidental re-imports are easy to spot and

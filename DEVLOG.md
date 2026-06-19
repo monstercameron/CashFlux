@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: one-click duplicate cleanup (imports)
+
+- Made the duplicate-transaction notice actionable: added a `selectDuplicates` UseEvent that builds a selection
+  map of each group's extras (`g.IDs[1:]`, keeping the first) and sets the existing `selected` state, so the
+  bulk-action bar's delete handles removal — no new delete plumbing needed. The notice is now a flex row with a
+  "Select duplicates" button. Added transactions.selectDuplicates/Title keys.
+- gofmt -w re-aligned the i18n catalog column after the long new key (whitespace only). i18n tests + wasm build
+  green. Restored docs from HEAD first.
+
 ## 2026-06-19 — feat: duplicate-transaction heads-up (imports)
 
 - New pure `internal/dedupe` package: `FindDuplicates` groups non-transfer transactions sharing the same
