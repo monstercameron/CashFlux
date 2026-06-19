@@ -14,8 +14,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -399,9 +401,9 @@ func GoalRow(props goalRowProps) ui.Node {
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), g.Name),
 			Span(Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
-			Button(Class("btn"), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uistate.T("goals.contribute")),
-			Button(Class("btn"), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
-			Button(Class("btn-del"), Type("button"), Title(uistate.T("goals.deleteTitle")), OnClick(del), "✕"),
+			Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, Class("w-4 h-4 shrink-0")), Span(uistate.T("goals.contribute"))),
+			Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+			Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 		),
 		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", pct)))),
 		Span(Class("budget-sub"), sub),
