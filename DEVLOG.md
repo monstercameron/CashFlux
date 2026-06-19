@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 — feat: notifyfeed — stale-balance event evaluator (B19, step 3)
+
+- New pure `internal/notifyfeed` (imports notify + domain + freshness; notify stays domain-free).
+  `StaleBalanceCandidates(ruleID, accounts, windows, now, text)` runs `freshness.StaleAccounts` and emits
+  a `notify.Candidate` per stale account, keyed `<accountID>@<ISO-week>` so it nudges at most weekly
+  (idempotent across opens via the delivered log), severity warning, At=now. Title/body come from a `text`
+  callback so the strings stay localizable in the UI layer (same decoupling as the report narrative/CSV).
+- Chose stale-balance as the first concrete event because it's decision-light: "stale" is exactly
+  freshness's existing rule, so no new thresholds to invent. Table tests cover the stale/fresh/archived
+  split, the candidate fields, and the weekly occurrence key. `go vet` clean.
+- This is the first generator feeding `notify.CatchUp`; budget-threshold and bill-due generators + the
+  wasm wiring (lastSeenAt persistence, in-app center) follow once the broader Phase-A event scope is set.
+
 ## 2026-06-18 — feat: Bills CSV export (B22)
 
 - Added pure `bills.CSV(bills, amount)` (encoding/csv): header + name, due date (ISO), days until, amount.
