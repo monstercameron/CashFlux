@@ -44,9 +44,11 @@ func TestAIServiceChatUsesEncryptedKeyAndRecordsUsage(t *testing.T) {
 	}))
 	defer upstream.Close()
 
+	metrics := NewMetrics()
 	svc := NewAIService(store, AIServiceConfig{
 		MasterKey: master,
 		BaseURL:   upstream.URL,
+		Metrics:   metrics,
 		Now:       func() time.Time { return time.Date(2026, time.June, 18, 18, 20, 0, 0, time.UTC) },
 	})
 	got, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
@@ -63,6 +65,14 @@ func TestAIServiceChatUsesEncryptedKeyAndRecordsUsage(t *testing.T) {
 	usage, ok, err := store.GetUsage("u1", time.Date(2026, time.June, 18, 0, 0, 0, 0, time.UTC))
 	if err != nil || !ok || usage.Requests != 1 || usage.Tokens != 5 {
 		t.Fatalf("usage = %+v/%v/%v", usage, ok, err)
+	}
+	var metricsOut strings.Builder
+	metrics.WritePrometheus(&metricsOut)
+	if !strings.Contains(metricsOut.String(), "cashflux_ai_proxy_requests_total 1") {
+		t.Fatalf("missing ai request metric in:\n%s", metricsOut.String())
+	}
+	if !strings.Contains(metricsOut.String(), "cashflux_ai_proxy_tokens_total 5") {
+		t.Fatalf("missing ai token metric in:\n%s", metricsOut.String())
 	}
 }
 

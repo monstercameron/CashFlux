@@ -18,6 +18,8 @@ type Metrics struct {
 	streamDurations      map[metricKey]metricValue
 	blobStoredBytes      int64
 	blobTransferredBytes int64
+	aiProxyRequests      int64
+	aiProxyTokens        int64
 }
 
 type metricKey struct {
@@ -97,6 +99,18 @@ func (m *Metrics) ObserveBlobTransferred(bytes int64) {
 	m.blobTransferredBytes += bytes
 }
 
+func (m *Metrics) ObserveAIProxy(tokens int64) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.aiProxyRequests++
+	if tokens > 0 {
+		m.aiProxyTokens += tokens
+	}
+}
+
 func (m *Metrics) observe(dst map[metricKey]metricValue, key metricKey, elapsed time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -110,7 +124,7 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	if m == nil {
 		m = NewMetrics()
 	}
-	httpRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes := m.snapshot()
+	httpRows, grpcRows, activeStreams, streamRows, blobStoredBytes, blobTransferredBytes, aiProxyRequests, aiProxyTokens := m.snapshot()
 	_, _ = io.WriteString(w, "# HELP cashflux_server_up Server process health.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_server_up gauge\n")
 	_, _ = io.WriteString(w, "cashflux_server_up 1\n")
@@ -148,6 +162,12 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	_, _ = io.WriteString(w, "# HELP cashflux_blob_transferred_bytes_total Blob bytes served by the backend.\n")
 	_, _ = io.WriteString(w, "# TYPE cashflux_blob_transferred_bytes_total counter\n")
 	_, _ = fmt.Fprintf(w, "cashflux_blob_transferred_bytes_total %d\n", blobTransferredBytes)
+	_, _ = io.WriteString(w, "# HELP cashflux_ai_proxy_requests_total AI proxy completions served by the backend.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_ai_proxy_requests_total counter\n")
+	_, _ = fmt.Fprintf(w, "cashflux_ai_proxy_requests_total %d\n", aiProxyRequests)
+	_, _ = io.WriteString(w, "# HELP cashflux_ai_proxy_tokens_total AI proxy tokens reported by upstream responses.\n")
+	_, _ = io.WriteString(w, "# TYPE cashflux_ai_proxy_tokens_total counter\n")
+	_, _ = fmt.Fprintf(w, "cashflux_ai_proxy_tokens_total %d\n", aiProxyTokens)
 }
 
 type metricRow struct {
@@ -155,13 +175,13 @@ type metricRow struct {
 	Value metricValue
 }
 
-func (m *Metrics) snapshot() ([]metricRow, []metricRow, int64, []metricRow, int64, int64) {
+func (m *Metrics) snapshot() ([]metricRow, []metricRow, int64, []metricRow, int64, int64, int64, int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	httpRows := metricRows(m.http)
 	grpcRows := metricRows(m.grpc)
 	streamRows := metricRows(m.streamDurations)
-	return httpRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes
+	return httpRows, grpcRows, m.streamsActive, streamRows, m.blobStoredBytes, m.blobTransferredBytes, m.aiProxyRequests, m.aiProxyTokens
 }
 
 func metricRows(src map[metricKey]metricValue) []metricRow {

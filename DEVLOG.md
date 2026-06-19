@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: expose backend ai metrics
+
+- Added AI proxy request and token counters to the backend metrics collector.
+- Recorded successful Chat/Vision upstream completions after usage is persisted.
+- Extended the encrypted-key chat test to assert the Prometheus AI metrics output.
+
 ## 2026-06-19 - feat: expose backend blob metrics
 
 - Added blob stored/served byte counters to the backend metrics collector.

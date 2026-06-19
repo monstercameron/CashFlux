@@ -38,6 +38,7 @@ type AIService struct {
 	requestMaxBytes int64
 	requestsPerDay  int64
 	tokensPerDay    int64
+	metrics         *Metrics
 	now             func() time.Time
 }
 
@@ -52,6 +53,7 @@ type AIServiceConfig struct {
 	RequestMaxBytes int64
 	RequestsPerDay  int64
 	TokensPerDay    int64
+	Metrics         *Metrics
 	Now             func() time.Time
 }
 
@@ -108,6 +110,7 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 		requestMaxBytes: cfg.RequestMaxBytes,
 		requestsPerDay:  cfg.RequestsPerDay,
 		tokensPerDay:    cfg.TokensPerDay,
+		metrics:         cfg.Metrics,
 		now:             now,
 	}
 }
@@ -229,6 +232,7 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	if _, err := s.store.AddUsage(user.ID, s.now(), 1, int64(usage.TotalTokens)); err != nil {
 		return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
 	}
+	s.metrics.ObserveAIProxy(int64(usage.TotalTokens))
 	return AICompletion{Content: content, Usage: usage}, nil
 }
 
