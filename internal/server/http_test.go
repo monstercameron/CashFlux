@@ -1747,6 +1747,20 @@ func TestStripeWebhookRejectsInvalidSignature(t *testing.T) {
 	assertHTTPErrorReason(t, rr, ErrorReasonPermissionDenied)
 }
 
+func TestStripeWebhookRejectsOversizedBody(t *testing.T) {
+	store := openTestStore(t)
+	cfg := Config{AuthMode: "token", Billing: true, StripeWebhookSecret: "whsec_test"}
+	h := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/stripe/webhook", strings.NewReader(strings.Repeat("x", (1<<20)+1)))
+	req.Header.Set(stripeSignatureHeader, "t=1781820000,v1=bad")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized webhook status = %d body %q", rr.Code, rr.Body.String())
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonPayloadTooLarge)
+}
+
 func TestStripeWebhookPaymentFailedMarksPastDue(t *testing.T) {
 	store := openTestStore(t)
 	now := time.Date(2026, time.June, 19, 14, 40, 0, 0, time.UTC)

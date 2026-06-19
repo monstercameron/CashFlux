@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: reject oversized stripe webhook bodies (7.14)
+
+- Swapped the webhook raw-body read from truncating `io.LimitReader` to `http.MaxBytesReader`.
+- Oversized webhook requests now return the stable `REQUEST_TOO_LARGE` error before signature validation.
+- Added regression coverage for the 1 MiB cap alongside the existing invalid-signature webhook test.
+
 ## 2026-06-19 - fix: reject invalid billing checkout json (7.14)
 
 - Replaced the checkout handler's best-effort JSON decode with a strict optional-body decoder.

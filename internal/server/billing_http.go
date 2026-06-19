@@ -271,8 +271,13 @@ func handleStripeWebhook(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "stripe webhook secret is not configured")
 			return
 		}
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				writeErrorJSON(w, ErrorReasonPayloadTooLarge, "webhook body is too large")
+				return
+			}
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "webhook body is invalid")
 			return
 		}

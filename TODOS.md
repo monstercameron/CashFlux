@@ -4260,7 +4260,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       content-type checks; reject malformed protobuf/JSON early.
       Sync workspace ids/names/colors/device ids are length-bounded before storage; GetWorkspace now also
       trims and bounds lookup ids before querying. Billing checkout JSON is now capped at 64 KiB and rejects
-      malformed bodies, unknown fields, and trailing JSON before any Stripe call. Remaining: malformed
+      malformed bodies, unknown fields, and trailing JSON before any Stripe call; Stripe webhook bodies now
+      fail with an explicit 413 before signature validation when they exceed 1 MiB. Remaining: malformed
       protobuf/JSON audit and broader request-shape rejection tests.
 - [x] Blob upload: verify bytes hash to the claimed `:hash`; cap size; sniff/allow-list MIME; never
       execute or serve as HTML (force download / safe content-type).
