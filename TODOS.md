@@ -3979,9 +3979,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [~] OAuth: `GET /v1/auth/:provider` redirects with PKCE + `state`. Remaining: callback code exchange
       -> upsert `users` -> issue session (short-lived JWT access + httpOnly refresh cookie); `refresh` + `logout`.
 - [x] Provider config (Google, GitHub) per environment (client id/secret, redirect URIs).
-- [~] Blobs: `PUT /v1/blobs/:hash` (verify the bytes hash to `:hash`, size cap, store if absent),
+- [x] Blobs: `PUT /v1/blobs/:hash` (verify the bytes hash to `:hash`, size cap, store if absent),
       `GET /v1/blobs/:hash` (immutable / long cache headers), `HEAD` for existence; auth + refcount on link.
-      Raw authenticated PUT/GET/HEAD is done; remaining: link blob hashes to workspaces from the sync/artifact flow.
+      Raw authenticated PUT/GET/HEAD is done; blob hashes are linked to owned workspaces and checked before reads.
 - [x] WS origin policy / CORS aligned to the SPA origin.
 - [x] Document the handshake: HTTP-issued token → carried as gRPC metadata on every RPC.
 
@@ -4143,7 +4143,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 
 #### AuthN / AuthZ
 - [ ] Per-request auth on **every** RPC + HTTP route (deny-by-default; no unauthenticated data path). ★
-- [ ] Strict per-user **tenant isolation** enforced at the query layer (every query filters by `user_id`);
+- [x] Strict per-user **tenant isolation** enforced at the query layer (every query filters by `user_id`);
       add isolation tests that try to read another user's workspace/blob and must fail. ★
 - [ ] Short-lived access tokens (JWT, ~15m) + rotating refresh tokens (httpOnly, Secure, SameSite);
       refresh reuse detection → revoke session family.

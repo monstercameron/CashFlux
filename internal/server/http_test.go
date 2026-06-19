@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConfigValidate(t *testing.T) {
@@ -304,6 +305,12 @@ func TestGRPCTokenValidatorMatchesHTTPBearerUser(t *testing.T) {
 
 func TestBlobEndpointsPutGetHead(t *testing.T) {
 	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 18, 23, 30, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutWorkspace(Workspace{ID: "w1", UserID: user.ID, Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
 	data := []byte("receipt bytes")
 	hash := blobHash(data)
 	cfg := Config{
@@ -314,7 +321,7 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 	}
 	h := NewMux(cfg, store)
 
-	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash, bytes.NewReader(data))
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash+"?workspaceId=w1", bytes.NewReader(data))
 	req.Header.Set("Authorization", "Bearer dev-token")
 	req.Header.Set("Content-Type", "image/png")
 	rr := httptest.NewRecorder()
@@ -330,7 +337,7 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 		t.Fatalf("blob response = %+v", body)
 	}
 
-	req = httptest.NewRequest(http.MethodHead, "/v1/blobs/"+hash, nil)
+	req = httptest.NewRequest(http.MethodHead, "/v1/blobs/"+hash+"?workspaceId=w1", nil)
 	req.Header.Set("Authorization", "Bearer dev-token")
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -344,7 +351,7 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 		t.Fatalf("head body length = %d, want 0", rr.Body.Len())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/blobs/"+hash, nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/blobs/"+hash+"?workspaceId=w1", nil)
 	req.Header.Set("Authorization", "Bearer dev-token")
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -358,18 +365,24 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 
 func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 18, 23, 35, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutWorkspace(Workspace{ID: "w1", UserID: user.ID, Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
 	cfg := Config{AuthMode: "token", Token: "dev-token", DataDir: t.TempDir(), BlobMaxBytes: 4}
 	h := NewMux(cfg, store)
 	hash := blobHash([]byte("abc"))
 
-	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash, bytes.NewReader([]byte("abc")))
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash+"?workspaceId=w1", bytes.NewReader([]byte("abc")))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("missing auth status = %d", rr.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash, bytes.NewReader([]byte("wrong")))
+	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash+"?workspaceId=w1", bytes.NewReader([]byte("wrong")))
 	req.Header.Set("Authorization", "Bearer dev-token")
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -377,7 +390,7 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 		t.Fatalf("oversize status = %d", rr.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash, bytes.NewReader([]byte("abd")))
+	req = httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash+"?workspaceId=w1", bytes.NewReader([]byte("abd")))
 	req.Header.Set("Authorization", "Bearer dev-token")
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -385,12 +398,47 @@ func TestBlobEndpointsRejectBadAuthHashAndOversize(t *testing.T) {
 		t.Fatalf("hash mismatch status = %d", rr.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/blobs/not-a-hash", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/blobs/not-a-hash?workspaceId=w1", nil)
 	req.Header.Set("Authorization", "Bearer dev-token")
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("bad hash status = %d", rr.Code)
+	}
+}
+
+func TestBlobEndpointsRequireOwnedWorkspaceLink(t *testing.T) {
+	store := openTestStore(t)
+	u1 := authUserFromToken("dev-token")
+	u2 := authUserFromToken("other-token")
+	now := time.Date(2026, time.June, 18, 23, 40, 0, 0, time.UTC)
+	seedSyncUser(t, store, u1.ID, now)
+	seedSyncUser(t, store, u2.ID, now)
+	if err := store.PutWorkspace(Workspace{ID: "w1", UserID: u1.ID, Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace u1: %v", err)
+	}
+	if err := store.PutWorkspace(Workspace{ID: "w2", UserID: u2.ID, Name: "Other", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace u2: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Token: "dev-token", DataDir: t.TempDir(), BlobMaxBytes: 1024}
+	h := NewMux(cfg, store)
+	data := []byte("private receipt")
+	hash := blobHash(data)
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+hash+"?workspaceId=w1", bytes.NewReader(data))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("put own blob status = %d body %q", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/blobs/"+hash+"?workspaceId=w2", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("get other workspace blob status = %d, want 404", rr.Code)
 	}
 }
 

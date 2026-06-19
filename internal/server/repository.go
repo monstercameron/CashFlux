@@ -352,6 +352,26 @@ func (s *Store) LinkWorkspaceBlob(workspaceID, hash string) error {
 	return nil
 }
 
+// UserWorkspaceBlob reports whether a user's workspace is linked to a blob.
+func (s *Store) UserWorkspaceBlob(userID, workspaceID, hash string) (bool, error) {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(hash) == "" {
+		return false, fmt.Errorf("server store: user id, workspace id, and blob hash are required")
+	}
+	var got string
+	err := s.db.QueryRow(`
+SELECT wb.hash
+FROM workspace_blobs wb
+JOIN workspaces w ON w.id = wb.workspace_id
+WHERE w.user_id = ? AND wb.workspace_id = ? AND wb.hash = ?`, userID, workspaceID, hash).Scan(&got)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("server store: user workspace blob: %w", err)
+	}
+	return true, nil
+}
+
 // WorkspaceBlobs returns blob metadata linked to a workspace.
 func (s *Store) WorkspaceBlobs(workspaceID string) ([]Blob, error) {
 	rows, err := s.db.Query(`

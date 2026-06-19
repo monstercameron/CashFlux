@@ -185,6 +185,20 @@ func TestBlobStoreContentAddressingLinksAndGC(t *testing.T) {
 	if err := s.LinkWorkspaceBlob("w1", blob.Hash); err != nil {
 		t.Fatalf("LinkWorkspaceBlob: %v", err)
 	}
+	linkedToUser, err := s.UserWorkspaceBlob("u1", "w1", blob.Hash)
+	if err != nil {
+		t.Fatalf("UserWorkspaceBlob own: %v", err)
+	}
+	if !linkedToUser {
+		t.Fatal("UserWorkspaceBlob own = false, want true")
+	}
+	linkedToOther, err := s.UserWorkspaceBlob("u2", "w1", blob.Hash)
+	if err != nil {
+		t.Fatalf("UserWorkspaceBlob other user: %v", err)
+	}
+	if linkedToOther {
+		t.Fatal("UserWorkspaceBlob other user = true, want false")
+	}
 	linked, err := s.WorkspaceBlobs("w1")
 	if err != nil {
 		t.Fatalf("WorkspaceBlobs: %v", err)

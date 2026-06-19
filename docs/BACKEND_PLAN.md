@@ -85,10 +85,10 @@ metadata slots.
 Keeps the synced snapshot small even with images/datasets.
 - Client computes `sha256` of artifact bytes; the dataset stores
   `{id, hash, mime, size, name}` only (no `Bytes`).
-- `PUT  /v1/blobs/:hash` (idempotent; skips if hash exists) → verifies the bytes hash to `:hash`, enforces
-  `CASHFLUX_SERVER_BLOB_MAX_BYTES`, and stores by hash.
-- `GET  /v1/blobs/:hash` → bytes (cacheable, immutable).
-- `HEAD /v1/blobs/:hash` → existence and metadata.
+- `PUT  /v1/blobs/:hash?workspaceId=:id` (idempotent; skips if hash exists) → verifies the bytes hash
+  to `:hash`, enforces `CASHFLUX_SERVER_BLOB_MAX_BYTES`, stores by hash, and links it to an owned workspace.
+- `GET  /v1/blobs/:hash?workspaceId=:id` → bytes (cacheable, immutable) only when that workspace links the blob.
+- `HEAD /v1/blobs/:hash?workspaceId=:id` → existence and metadata only when that workspace links the blob.
 - Sync transfers only the small dataset; blobs upload on save and download on demand,
   deduped by hash across workspaces. Refcount via `workspace_blobs`; GC unreferenced.
 

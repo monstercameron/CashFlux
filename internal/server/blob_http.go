@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+const blobWorkspaceHeader = "X-CashFlux-Workspace-ID"
+
 type BlobResponse struct {
 	Hash string `json:"hash"`
 	Size int64  `json:"size"`
@@ -18,12 +20,17 @@ type BlobResponse struct {
 
 func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := authorizedBlobRequest(w, r, cfg, store); !ok {
+		user, ok := authorizedBlobRequest(w, r, cfg, store)
+		if !ok {
 			return
 		}
 		hash := r.PathValue("hash")
 		if !validBlobHash(hash) {
 			http.Error(w, "invalid blob hash", http.StatusBadRequest)
+			return
+		}
+		workspaceID, ok := authorizedBlobWorkspace(w, r, store, user, hash, false)
+		if !ok {
 			return
 		}
 		reader := r.Body
@@ -49,13 +56,21 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		if err := store.LinkWorkspaceBlob(workspaceID, blob.Hash); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		writeJSON(w, BlobResponse{Hash: blob.Hash, Size: blob.Size, Mime: blob.Mime})
 	}
 }
 
 func handleGetBlob(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := authorizedBlobRequest(w, r, cfg, store); !ok {
+		user, ok := authorizedBlobRequest(w, r, cfg, store)
+		if !ok {
+			return
+		}
+		if _, ok := authorizedBlobWorkspace(w, r, store, user, r.PathValue("hash"), true); !ok {
 			return
 		}
 		blob, data, ok := readHTTPBlob(w, r, cfg, store)
@@ -70,7 +85,11 @@ func handleGetBlob(cfg Config, store *Store) http.HandlerFunc {
 
 func handleHeadBlob(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := authorizedBlobRequest(w, r, cfg, store); !ok {
+		user, ok := authorizedBlobRequest(w, r, cfg, store)
+		if !ok {
+			return
+		}
+		if _, ok := authorizedBlobWorkspace(w, r, store, user, r.PathValue("hash"), true); !ok {
 			return
 		}
 		blob, _, ok := readHTTPBlob(w, r, cfg, store)
@@ -98,6 +117,41 @@ func authorizedBlobRequest(w http.ResponseWriter, r *http.Request, cfg Config, s
 	}
 	SetLogScope(r.Context(), LogScope{UserID: user.ID})
 	return user, true
+}
+
+func authorizedBlobWorkspace(w http.ResponseWriter, r *http.Request, store *Store, user AuthUser, hash string, requireLink bool) (string, bool) {
+	workspaceID := strings.TrimSpace(r.URL.Query().Get("workspaceId"))
+	if workspaceID == "" {
+		workspaceID = strings.TrimSpace(r.Header.Get(blobWorkspaceHeader))
+	}
+	if workspaceID == "" {
+		http.Error(w, "workspace id is required", http.StatusBadRequest)
+		return "", false
+	}
+	if !validBlobHash(hash) {
+		http.Error(w, "invalid blob hash", http.StatusBadRequest)
+		return "", false
+	}
+	SetLogScope(r.Context(), LogScope{WorkspaceID: workspaceID})
+	if _, ok, err := store.GetWorkspace(user.ID, workspaceID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return "", false
+	} else if !ok {
+		http.Error(w, "workspace not found", http.StatusNotFound)
+		return "", false
+	}
+	if requireLink {
+		linked, err := store.UserWorkspaceBlob(user.ID, workspaceID, hash)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return "", false
+		}
+		if !linked {
+			http.Error(w, "blob not found", http.StatusNotFound)
+			return "", false
+		}
+	}
+	return workspaceID, true
 }
 
 func readHTTPBlob(w http.ResponseWriter, r *http.Request, cfg Config, store *Store) (Blob, []byte, bool) {

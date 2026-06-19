@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: scope backend blobs to workspaces
+
+- Required blob PUT/GET/HEAD requests to include an owned workspace via `workspaceId` or `X-CashFlux-Workspace-ID`.
+- Linked uploaded blob hashes to the workspace and checked that link before serving blob bytes or metadata.
+- Added repository and HTTP tests proving owned blob access works and cross-user workspace/blob access returns not found.
+
 ## 2026-06-18 - feat: tune backend sqlite connection
 
 - Set the backend SQLite pool to one open/idle connection so writes stay serialized around SQLite's single-writer model.
