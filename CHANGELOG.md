@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Duplicate-transaction heads-up (C39/imports).** New pure, table-tested `internal/dedupe` package finds
+  likely double entries (same date, signed amount, and description; transfers excluded) and the Transactions
+  screen now shows a "Heads up: N possible duplicates" notice so accidental re-imports are easy to spot and
+  clean up.
+
+### Added
 - **Spending anomaly heads-up (B21).** New pure, table-tested `reports.SpendingAnomalies` flags categories
   whose current-month spend runs well above their trailing monthly average (more robust than a single
   prior-period delta, with an absolute floor to skip noise). The Reports screen shows a "Heads up" card —

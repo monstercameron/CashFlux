@@ -95,6 +95,7 @@ var english = Catalog{
 	"split.noMembers":        "Add household members first, then you can split an expense between them.",
 	"split.settleUp":         "Settle up",
 	"split.owes":             "%s owes %s",
+	"transactions.dupNotice": "Heads up: %s — same date, amount, and description. Check for double entries.",
 	"split.byWeight":         "Split by weight (shares or income)",
 	"split.weight":           "Weight",
 	"split.downloadCsv":      "Download CSV",

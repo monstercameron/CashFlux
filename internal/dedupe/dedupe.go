@@ -1,0 +1,80 @@
+// Package dedupe finds likely-duplicate transactions — the same charge imported
+// or entered twice, a common mess after a CSV import. It is a pure read over the
+// transactions (no store, no syscall/js) and is unit-tested on native Go; the UI
+// surfaces the groups it returns.
+package dedupe
+
+import (
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/domain"
+)
+
+// Group is a set of transaction IDs that look like duplicates of one another —
+// same calendar date, same signed amount and currency, and the same normalized
+// description.
+type Group struct {
+	Date        string // the shared calendar date (YYYY-MM-DD)
+	Description string // the shared (original-cased) description
+	Amount      int64  // the shared signed amount, minor units
+	Currency    string
+	IDs         []string // the duplicate transactions' ids (2 or more), sorted
+}
+
+// FindDuplicates groups transactions that share the same calendar date, signed
+// amount + currency, and case-insensitively-trimmed description — the signature
+// of an accidental double entry. Transfers are excluded (their paired legs are
+// not duplicates). Only groups of two or more are returned, ordered by date then
+// description for a stable display; the ids within each group are sorted.
+func FindDuplicates(txns []domain.Transaction) []Group {
+	type bucket struct {
+		date, desc, cur string
+		amount          int64
+		ids             []string
+	}
+	buckets := map[string]*bucket{}
+	for _, t := range txns {
+		if t.IsTransfer() {
+			continue
+		}
+		day := t.Date.Format("2006-01-02")
+		norm := strings.ToLower(strings.TrimSpace(t.Desc))
+		key := day + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + t.Amount.Currency + "|" + norm
+		b := buckets[key]
+		if b == nil {
+			b = &bucket{date: day, desc: strings.TrimSpace(t.Desc), cur: t.Amount.Currency, amount: t.Amount.Amount}
+			buckets[key] = b
+		}
+		b.ids = append(b.ids, t.ID)
+	}
+
+	var out []Group
+	for _, b := range buckets {
+		if len(b.ids) < 2 {
+			continue
+		}
+		ids := append([]string(nil), b.ids...)
+		sort.Strings(ids)
+		out = append(out, Group{Date: b.date, Description: b.desc, Amount: b.amount, Currency: b.cur, IDs: ids})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Date != out[j].Date {
+			return out[i].Date > out[j].Date // newest first
+		}
+		return out[i].Description < out[j].Description
+	})
+	return out
+}
+
+// Count returns how many transactions across all groups are duplicates beyond the
+// first in each group — i.e. how many entries you could remove. It's the headline
+// "N possible duplicates" figure.
+func Count(groups []Group) int {
+	n := 0
+	for _, g := range groups {
+		n += len(g.IDs) - 1
+	}
+	return n
+}

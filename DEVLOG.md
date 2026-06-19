@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: duplicate-transaction heads-up (imports)
+
+- New pure `internal/dedupe` package: `FindDuplicates` groups non-transfer transactions sharing the same
+  calendar date, signed amount+currency, and case-insensitively-trimmed description (the signature of an
+  accidental double entry); `Count` returns removable extras (sum of group size − 1). Exact amount match only
+  (a 1-cent difference isn't a dup); transfers excluded (paired legs aren't duplicates).
+- Surfaced a "Heads up: N possible duplicates" muted notice above the Transactions list (computed from the
+  full ledger, not the filtered view, so a filter can't hide dupes). Added the transactions.dupNotice key.
+- Table tests: normalized-desc match, date/amount discrimination, transfer exclusion, triples (3→2 removable),
+  and none. gofmt clean, dedupe + i18n tests green, wasm build green. Restored docs from HEAD first.
+- A one-click "merge/remove duplicates" review action is a sensible follow-up (needs delete wiring in the list).
+
 ## 2026-06-19 — feat: spending anomaly heads-up (B21)
 
 - Added pure `reports.SpendingAnomalies(txns, now, months, overPct, minMinor, rates)`: per category, compares

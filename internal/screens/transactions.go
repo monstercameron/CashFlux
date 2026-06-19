@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -407,6 +408,9 @@ func Transactions() ui.Node {
 	txns := app.Transactions()
 	shown := txnfilter.Apply(txns, f)
 
+	// Heads-up for likely double entries (same date, amount, and description).
+	dupCount := dedupe.Count(dedupe.FindDuplicates(txns))
+
 	// Summary of the shown set: count + net total converted to the base currency.
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -509,6 +513,7 @@ func Transactions() ui.Node {
 			// Screen-reader live region announcing the match count as filters change
 			// (stays mounted across renders, so the zero-results case is announced too).
 			P(Class("sr-only"), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus)),
+			If(dupCount > 0, P(Class("muted"), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate")))),
 			listBody,
 		),
 	)
