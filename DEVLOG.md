@@ -3,6 +3,32 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: serve the SPA under a URL sub-path on GitHub Pages (B30)
+
+- The user reported in-app nav drops the `/CashFlux/` base on the Pages site. Root cause confirmed against the
+  framework router source: `RouterOptions` has no basename — the history router reads the raw `location.pathname`
+  for matching and pushes absolute paths on Navigate, so under `/CashFlux/` no route matched and Navigate
+  stripped the base back to the origin root. (Assets already resolve via index.html's computed `<base href>`.)
+- Chose the app-side base-prefix approach (B30 option B) over a framework change. Pure, table-tested
+  `internal/routebase`: `Normalize` (derive prefix from `<base href>`), `Join` (prefix a route; leaves `*` and
+  the empty-base local case alone), `Strip` (raw pathname → logical route). The wasm `uistate` reads the live
+  `<base href>` at boot — using the same source as the assets, so they can't disagree — and exposes
+  `RoutePath`/`LogicalPath`.
+- Wired registration + `DefaultRoute` + `/p/:slug` and every Navigate site (addmenu, custom pages, shortcuts,
+  command palette, settings, rail, breadcrumb, dashboard CTAs, account/member views, widget drill-in) through
+  `RoutePath`; current-path comparisons read `LogicalPath`. The wildcard stays unprefixed.
+- Key safety property: at the server root the prefix is `""`, making both helpers strict no-ops, so local dev /
+  custom domains / native tests are provably unchanged. Verified via the wasm build + `routebase` identity and
+  Join/Strip round-trip tests. The actual `/CashFlux/` subpath behavior still needs an in-browser check on the
+  deployed site (no Playwright locally). Committed bottom-up: pure package first, then the wiring.
+
+## 2026-06-19 - test: verify deep-link refresh online and offline (B1)
+
+- Used the local static SPA fallback server plus Playwright to hard-load `/`, `/accounts`, `/transactions`,
+  `/budgets`, `/goals`, and an unknown route.
+- Repeated the same route matrix after service-worker activation with the browser context offline.
+- Confirmed each route rendered the expected screen title with one Shell and no browser errors.
+
 ## 2026-06-19 - fix: render a single app shell for child routes (B3)
 
 - Marked `/` as the framework layout route and made it the only place that renders the `Shell` chrome.

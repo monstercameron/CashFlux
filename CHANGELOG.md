@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Serve the SPA under a URL sub-path (B30).** The app now routes correctly when hosted under a sub-path
+  (e.g. a GitHub Pages project site at `/CashFlux/`). A new pure, table-tested `internal/routebase` package
+  derives the prefix from the document `<base href>`; a thin wasm layer (`uistate.RoutePath`/`LogicalPath`)
+  prefixes every route registration, `DefaultRoute`, the `/p/:slug` pattern, and all navigation, while
+  active-link/breadcrumb/period comparisons read the stripped logical path. At the server root the prefix is
+  empty, so local dev, custom domains, and native tests are unaffected (the wildcard `*` is never prefixed).
+
 ### Changed
 - **Self-host TLS policy (7.14).** The bundled Caddy config now pins TLS 1.2/1.3 with modern AEAD cipher suites
   while preserving long-lived `/grpc` websocket streams.
@@ -19,6 +27,8 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **Deep-link refresh verification (B1).** Hard-refreshing clean SPA routes now has browser coverage online
+  and offline after service-worker activation.
 - **Nested routing no longer duplicates the app shell (B3).** The root route is now the single layout route
   that renders `Shell` once and places child screens through `router.GetOutlet()`.
 - **Stripe deleted webhooks could preserve an active status.** `customer.subscription.deleted` now forces
