@@ -4041,12 +4041,20 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       formal periodic threat-model and pre-launch pen-test pass.
 
 ### 7.9 Deploy & ops
-- [ ] Single binary + data dir; Dockerfile; config via env.
+- [x] Single binary + data dir; Dockerfile; config via env.
+      Done: `Dockerfile.server` builds `cashflux-server`, Compose mounts `cashflux-data:/data`, and env-file
+      configuration is documented in `docs/SELF_HOSTING.md`.
 - [x] TLS (Caddy / managed) + `wss`; reverse-proxy WS keepalive/timeouts tuned.
       Done in `deploy/Caddyfile.selfhost` and `docs/SELF_HOSTING.md`.
-- [ ] Backups: WAL-checkpoint the SQLite file + copy the blobs dir; documented restore runbook.
-- [ ] Migrations run on boot; structured logs + OpenTelemetry (the bridge supports it); basic per-user usage metrics.
-- [ ] CI: build server, run server tests, proto-drift check, lint + vuln scan.
+- [x] Backups: WAL-checkpoint the SQLite file + copy the blobs dir; documented restore runbook.
+      Done: `cashflux-server backup`, systemd timer examples, restore rehearsal notes, RPO/RTO docs, and
+      backup/restore tests are in place.
+- [~] Migrations run on boot; structured logs + OpenTelemetry (the bridge supports it); basic per-user usage metrics.
+      Done: boot migrations/reject-newer schema, structured slog, Prometheus metrics, request/trace ids, and
+      per-user sync/AI/blob usage counters. Remaining: full OpenTelemetry trace export.
+- [~] CI: build server, run server tests, proto-drift check, lint + vuln scan.
+      Done: Go tests, wasm build, vet, govulncheck, gosec, and gitleaks. Remaining: explicit server binary build
+      job and proto-drift check once codegen is pinned.
 
 ### 7.10 Testing & phased rollout
 - [ ] Unit: storage, LWW, encryption, rate-limit, blob hashing + refcount/GC.

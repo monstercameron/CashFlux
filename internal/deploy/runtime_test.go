@@ -520,3 +520,46 @@ func TestSelfHostCaddyKeepsGRPCWebsocketStreamsAlive(t *testing.T) {
 		}
 	}
 }
+
+func TestSelfHostingDocumentsSingleBinaryDataDirAndBackups(t *testing.T) {
+	doc, err := os.ReadFile("../../docs/SELF_HOSTING.md")
+	if err != nil {
+		t.Fatalf("read self-hosting doc: %v", err)
+	}
+	text := string(doc)
+	for _, want := range []string{
+		"one `cashflux-server` binary",
+		"CASHFLUX_SERVER_DATA_DIR",
+		"cashflux-data",
+		"cashflux-server backup",
+		"checkpoints SQLite WAL",
+		"copies `cashflux-server.db` and `blobs/`",
+		"RPO is the last successful scheduled backup",
+		"Migrations run on server startup",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("self-hosting doc missing %q", want)
+		}
+	}
+
+	dockerfile, err := os.ReadFile("../../Dockerfile.server")
+	if err != nil {
+		t.Fatalf("read Dockerfile.server: %v", err)
+	}
+	if !strings.Contains(string(dockerfile), "ENTRYPOINT [\"cashflux-server\"]") {
+		t.Fatal("server Dockerfile does not ship the cashflux-server entrypoint")
+	}
+	compose, err := os.ReadFile("../../docker-compose.selfhost.yml")
+	if err != nil {
+		t.Fatalf("read self-host compose: %v", err)
+	}
+	for _, want := range []string{
+		"env_file:",
+		"cashflux-data:/data",
+		"caddy:",
+	} {
+		if !strings.Contains(string(compose), want) {
+			t.Fatalf("self-host compose missing %q", want)
+		}
+	}
+}

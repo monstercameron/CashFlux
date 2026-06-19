@@ -9,6 +9,8 @@ problems and fixes, and what's next.
   ownership, env-file configuration, Caddy TLS pairing, and persistent `cashflux-data` volume.
 - Marked the 7.9 single-binary/data-dir and backup/restore items complete against existing Dockerfile,
   Compose, backup command, restore docs, RPO/RTO notes, and backup tests.
+- Added deploy tests that pin the self-hosting deployment surface, backup/restore docs, Docker entrypoint,
+  env-file Compose wiring, and persistent `cashflux-data` volume.
 - Left deploy/ops observability and CI items partial where real work remains: full OpenTelemetry trace export,
   an explicit server binary CI build, and proto drift once code generation is pinned.
 

@@ -39,6 +39,14 @@ CashFlux can run with an optional backend for sync and AI proxying. The web app 
 
 The gRPC tunnel is exposed at `wss://<domain>/grpc` through Caddy. The client derives that tunnel URL from the HTTPS server URL.
 
+## Deployment Surface
+
+The backend ships as one `cashflux-server` binary with a configured data directory. The container image builds
+that binary from `cmd/cashflux-server`, stores SQLite/blobs/backups under `CASHFLUX_SERVER_DATA_DIR`, and reads
+runtime configuration from environment variables. The self-host Compose stack pairs the server with Caddy for
+automatic TLS and mounts a single persistent `cashflux-data` volume for the database, blob store, and generated
+backup directories.
+
 ## Local HTTP Development
 
 For local development without TLS, run the server directly:
