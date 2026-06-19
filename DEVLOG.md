@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 — feat: debt payoff strategy comparison on Planning (D9)
+
+- Surfaced `payoff.BuildPlan` on the Planning screen. Builds `[]payoff.Debt` from non-archived liability
+  accounts with a positive owed balance (`ledger.Balance(a, txns).Abs()`), pulling `InterestRateAPR` and
+  `MinPayment` straight off the account. An "extra per month" input feeds both BuildPlan(Snowball) and
+  BuildPlan(Avalanche); the card shows each method's months + total interest, the avalanche payoff order, and
+  the interest avalanche saves vs snowball.
+- Empty state when there are no qualifying liabilities; an alert when neither plan is viable (minimums can't
+  outpace interest). Added the planning.debtStrategy*/snowball/avalanche/strategy* i18n keys.
+- Restored CHANGELOG/DEVLOG from HEAD first (re-truncated to 0). gofmt clean, i18n tests + wasm build green.
+
 ## 2026-06-19 — feat: debt snowball / avalanche planner (D9)
 
 - Added pure `payoff.BuildPlan(debts, extra, strategy)` alongside the existing single-debt `Project`. Models

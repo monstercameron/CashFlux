@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Debt payoff strategy comparison on Planning (D9).** The Planning screen now compares the snowball and
+  avalanche methods across your liability accounts (pulling each one's balance, APR, and minimum payment),
+  with an optional "extra per month" input. It shows months-to-clear and total interest for each method, the
+  avalanche payoff order, and how much interest avalanche saves — built on the pure `payoff.BuildPlan`.
+
+### Added
 - **Debt snowball / avalanche planner (D9).** New pure, table-tested `payoff.BuildPlan`: simulates clearing
   several debts together with the classic debt-snowball method — pay every minimum, then throw all remaining
   firepower (extra plus minimums freed by cleared debts) at one focus debt chosen by strategy (`Snowball` =

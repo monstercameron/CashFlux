@@ -48,6 +48,8 @@ func Planning() ui.Node {
 	onExtra := ui.UseEvent(func(v string) { extraStr.Set(v) })
 	trimStr := ui.UseState("")
 	onTrim := ui.UseEvent(func(v string) { trimStr.Set(v) })
+	dsExtra := ui.UseState("")
+	onDsExtra := ui.UseEvent(func(v string) { dsExtra.Set(v) })
 
 	// Recurring cash-flow management.
 	rev := ui.UseState(0)
@@ -360,10 +362,72 @@ func Planning() ui.Node {
 		)
 	}
 
+	// Debt strategy (D9): compare snowball vs avalanche across the household's
+	// liability accounts, using their balances, rates, and minimum payments.
+	debtCard := Fragment()
+	if app != nil {
+		txns := app.Transactions()
+		var debts []payoff.Debt
+		for _, a := range app.Accounts() {
+			if a.Archived || a.Class != domain.ClassLiability {
+				continue
+			}
+			bal, err := ledger.Balance(a, txns)
+			if err != nil {
+				continue
+			}
+			owed := bal.Abs().Amount
+			if owed <= 0 {
+				continue
+			}
+			debts = append(debts, payoff.Debt{Name: a.Name, Balance: owed, AprPercent: a.InterestRateAPR, MinPayment: a.MinPayment.Abs().Amount})
+		}
+
+		var body ui.Node
+		switch {
+		case len(debts) == 0:
+			body = P(Class("empty"), uistate.T("planning.debtStrategyEmpty"))
+		default:
+			extra, _ := money.ParseMinor(strings.TrimSpace(dsExtra.Get()), currency.Decimals(base))
+			if extra < 0 {
+				extra = 0
+			}
+			snow, okS := payoff.BuildPlan(debts, extra, payoff.Snowball)
+			aval, okA := payoff.BuildPlan(debts, extra, payoff.Avalanche)
+			if !okS || !okA {
+				body = P(Class("err"), Attr("role", "alert"), uistate.T("planning.strategyNotViable"))
+			} else {
+				rec := Fragment()
+				if saved := snow.TotalInterest - aval.TotalInterest; saved > 0 {
+					rec = P(Class("muted"), uistate.T("planning.strategyRecommend", fmtMoney(money.New(saved, base))))
+				}
+				body = Div(
+					Div(Class("stat-grid"),
+						stat(uistate.T("planning.snowball"), uistate.T("planning.strategyMonths", snow.Months), ""),
+						stat(uistate.T("planning.avalanche"), uistate.T("planning.strategyMonths", aval.Months), ""),
+					),
+					P(Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.snowball"), fmtMoney(money.New(snow.TotalInterest, base)))),
+					P(Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.avalanche"), fmtMoney(money.New(aval.TotalInterest, base)))),
+					P(Class("muted"), uistate.T("planning.strategyOrder", strings.Join(aval.Order, " → "))),
+					rec,
+				)
+			}
+		}
+		debtCard = Section(Class("card"),
+			H2(Class("card-title"), uistate.T("planning.debtStrategyTitle")),
+			P(Class("muted"), uistate.T("planning.debtStrategyHint")),
+			Form(Class("form-grid"),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.debtStrategyExtra", base)), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra)),
+			),
+			body,
+		)
+	}
+
 	return Div(
 		forecastCard,
 		recurringCard,
 		plansCard,
+		debtCard,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("planning.payoffTitle")),
 			P(Class("muted"), uistate.T("planning.payoffDesc")),
