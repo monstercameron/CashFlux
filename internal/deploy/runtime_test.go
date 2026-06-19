@@ -107,6 +107,29 @@ func TestServerDockerfileRunsAsNonRoot(t *testing.T) {
 	}
 }
 
+func TestServerReleaseHelperDefinesSupplyChainArtifacts(t *testing.T) {
+	data, err := os.ReadFile("../../deploy/release-server.example.sh")
+	if err != nil {
+		t.Fatalf("read release helper: %v", err)
+	}
+	helper := string(data)
+	for _, want := range []string{
+		"CGO_ENABLED=0 go build",
+		"-trimpath",
+		"-buildvcs=true",
+		"-buildid=",
+		"sha256sum",
+		"cyclonedx-gomod",
+		"cosign sign-blob",
+		".cdx.json",
+		".sig",
+	} {
+		if !strings.Contains(helper, want) {
+			t.Fatalf("release helper missing %q", want)
+		}
+	}
+}
+
 func TestObservabilityArtifactsDefineSLOAlerts(t *testing.T) {
 	rules, err := os.ReadFile("../../deploy/prometheus-rules.yml")
 	if err != nil {

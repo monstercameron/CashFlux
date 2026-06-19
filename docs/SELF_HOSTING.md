@@ -135,6 +135,17 @@ The self-host Compose file also sets explicit runtime ceilings. The server is ca
 
 If you add a volume or sidecar, keep writable paths explicit and prefer read-only mounts. Do not add broad capabilities or privileged mode for normal operation.
 
+## Release Artifacts
+
+Use `deploy/release-server.example.sh` as the starting point for backend releases. It builds the server with
+deterministic Go flags (`CGO_ENABLED=0`, `-trimpath`, VCS stamping, and an empty Go build id), writes
+`SHA256SUMS`, generates a CycloneDX JSON SBOM for `cmd/cashflux-server`, and signs both the binary and SBOM
+with `cosign sign-blob`.
+
+Keep the Go toolchain version, `GOOS`, `GOARCH`, source checkout, and dependency cache fixed when comparing
+reproducible builds. Publish the checksum, `.cdx.json` SBOM, and `.sig` files beside the binary or container
+image digest.
+
 ## Reliability Knobs
 
 AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI_UPSTREAM_RETRIES` to keep upstream OpenAI failures bounded. The defaults are a 45 second deadline and two retries for transient `429`/`5xx` responses or transport errors.

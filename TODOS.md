@@ -4197,7 +4197,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] CI: `govulncheck`, `gosec` (high sev blocking), `go vet`, dependency pinning + Dependabot/renovate.
       `go vet`, `govulncheck`, and high-severity/medium-confidence `gosec` now run in CI; Dependabot
       watches Go modules and GitHub Actions weekly.
-- [ ] Reproducible builds; SBOM (e.g. `cyclonedx`); sign release artifacts/images (cosign).
+- [~] Reproducible builds; SBOM (e.g. `cyclonedx`); sign release artifacts/images (cosign).
+      `deploy/release-server.example.sh` now builds the server with deterministic Go flags, writes
+      checksums, generates a CycloneDX SBOM, and signs binary/SBOM blobs with cosign. Remaining: CI release
+      automation and signed container images.
 - [x] `SECURITY.md` + `security.txt` + a coordinated vuln-disclosure process.
 - [~] Periodic threat-model review; pre-launch pen-test pass; secrets scanning (gitleaks) in CI.
       Gitleaks now runs in CI; remaining: periodic threat-model review and pre-launch pen-test pass.

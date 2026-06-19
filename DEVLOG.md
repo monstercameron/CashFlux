@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: add server release supply-chain helper
+
+- Added `deploy/release-server.example.sh`, an operator-facing backend release helper that builds
+  `cmd/cashflux-server` with deterministic Go flags (`CGO_ENABLED=0`, `-trimpath`, VCS stamping, empty
+  build id), writes `SHA256SUMS`, generates a CycloneDX JSON SBOM, and signs both binary and SBOM with
+  `cosign sign-blob`.
+- Documented the release artifacts in the self-hosting runbook so checksum, SBOM, and signature files are
+  published together and reproducible-build comparisons keep toolchain/target/source inputs fixed.
+- Added deploy tests that pin the helper to the deterministic build flags, checksum generation, SBOM command,
+  and signing command.
+
 ## 2026-06-19 - feat: bound sync lookup workspace ids
 
 - Found one input-bound gap left in sync: `PutWorkspace` and `Delete` enforced the workspace id length cap,
