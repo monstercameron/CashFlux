@@ -3,7 +3,10 @@
 package backendrpc
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
@@ -139,7 +142,16 @@ type JSONCodec struct{}
 
 func (JSONCodec) Marshal(v any) ([]byte, error) { return json.Marshal(v) }
 func (JSONCodec) Unmarshal(data []byte, v any) error {
-	return json.Unmarshal(data, v)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		return fmt.Errorf("backendrpc: JSON message must contain a single object")
+	}
+	return nil
 }
 func (JSONCodec) Name() string { return "json" }
 

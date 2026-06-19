@@ -58,3 +58,28 @@ func TestProtoContractKeepsDatasetOpaque(t *testing.T) {
 		}
 	}
 }
+
+func TestJSONCodecRejectsUnknownAndTrailingFields(t *testing.T) {
+	codec := JSONCodec{}
+	var req GetWorkspaceRequest
+	if err := codec.Unmarshal([]byte(`{"id":"w1"}`), &req); err != nil {
+		t.Fatalf("valid JSON decode: %v", err)
+	}
+	if req.ID != "w1" {
+		t.Fatalf("decoded request = %+v", req)
+	}
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "unknown field", raw: `{"id":"w1","extra":true}`},
+		{name: "trailing object", raw: `{"id":"w1"} {"id":"w2"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got GetWorkspaceRequest
+			if err := codec.Unmarshal([]byte(tc.raw), &got); err == nil {
+				t.Fatalf("Unmarshal(%s) succeeded, want error", tc.raw)
+			}
+		})
+	}
+}

@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: reject loose grpc json payloads (7.14)
+
+- Tightened the browser/server JSON codec used by the gRPC bridge to reject unknown fields.
+- Added a second-decode check so concatenated/trailing JSON payloads fail instead of being partially accepted.
+- Covered the codec directly and re-ran the sync/AI bridge tests that use it in-process.
+
 ## 2026-06-19 - feat: add sign out everywhere endpoint (7.14)
 
 - Added `POST /v1/auth/logout-all` for OAuth mode. The handler requires the bearer access token plus CSRF,

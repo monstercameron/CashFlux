@@ -4265,7 +4265,8 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       call; Stripe webhook bodies now fail with an explicit 413 before signature validation when they exceed
       1 MiB. AI chat/vision/key-upload RPCs now reject bad roles, empty/oversized content, too many messages,
       malformed schemas, invalid temperatures, and oversized keys before key lookup/storage or upstream calls.
-      Remaining: malformed protobuf/JSON audit and broader request-shape rejection tests.
+      The gRPC bridge JSON codec now rejects unknown fields and trailing JSON payloads before handler dispatch.
+      Remaining: malformed protobuf/codegen audit and broader request-shape rejection tests.
 - [x] Blob upload: verify bytes hash to the claimed `:hash`; cap size; sniff/allow-list MIME; never
       execute or serve as HTML (force download / safe content-type).
 - [~] Encryption at rest for secrets (AI keys) via AES-GCM; **master key from a secret manager / KMS**,

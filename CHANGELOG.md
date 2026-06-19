@@ -45,6 +45,8 @@ and every commit updates this file under `Unreleased`.
   building thousands of rows at once.
 
 ### Fixed
+- **gRPC JSON tunnel strictness (7.14).** The browser/server JSON codec now rejects unknown fields and trailing
+  JSON payloads before dispatching RPC handlers.
 - **Server migrations are tested idempotent (7.16).** Reopening an already migrated SQLite store now has
   coverage for schema stability, single metadata row, and preserved user data.
 - **Billing checkout content type validation (7.14).** Checkout requests with an explicit non-JSON
