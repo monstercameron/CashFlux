@@ -570,12 +570,17 @@ func fetchOAuthUser(r *http.Request, providerName string, provider OAuthProvider
 		return User{}, fmt.Errorf("oauth user fetch failed with status %d", resp.StatusCode)
 	}
 	var profile struct {
-		ID    any    `json:"id"`
-		Sub   string `json:"sub"`
-		Email string `json:"email"`
+		ID            any    `json:"id"`
+		Sub           string `json:"sub"`
+		Email         string `json:"email"`
+		EmailVerified *bool  `json:"email_verified"`
+		Verified      *bool  `json:"verified"`
 	}
 	if err := json.Unmarshal(data, &profile); err != nil {
 		return User{}, fmt.Errorf("parse oauth user response: %w", err)
+	}
+	if err := validateOAuthEmailVerification(providerName, profile.Email, profile.EmailVerified, profile.Verified); err != nil {
+		return User{}, err
 	}
 	subject := strings.TrimSpace(profile.Sub)
 	if subject == "" {
@@ -591,6 +596,23 @@ func fetchOAuthUser(r *http.Request, providerName string, provider OAuthProvider
 		Email:     strings.TrimSpace(profile.Email),
 		CreatedAt: time.Now().UTC(),
 	}, nil
+}
+
+func validateOAuthEmailVerification(providerName, email string, emailVerified, verified *bool) error {
+	if strings.TrimSpace(email) == "" {
+		return nil
+	}
+	switch providerName {
+	case "google":
+		if emailVerified != nil && !*emailVerified {
+			return fmt.Errorf("oauth user email is not verified")
+		}
+	case "github":
+		if verified != nil && !*verified {
+			return fmt.Errorf("oauth user email is not verified")
+		}
+	}
+	return nil
 }
 
 func issueSessionPair(cfg Config, userID string, now time.Time) (string, string, error) {

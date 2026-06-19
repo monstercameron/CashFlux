@@ -50,6 +50,8 @@ section 7.14:
   sweeps unreferenced blobs.
 - Session management routes are authenticated and scoped to the caller. Session-family revoke requires CSRF,
   hides other users' families as not found, and appends an audit event.
+- OAuth profile handling rejects explicit unverified-email claims from supported providers before account upsert
+  and session issuance.
 - Repository SQL injection coverage includes a source guard that rejects dynamic SQL formatting/builders and pins
   parameterized user/workspace predicates.
 - Request-size and abuse controls are enabled across the backend: dataset caps, blob size/storage caps, AI request

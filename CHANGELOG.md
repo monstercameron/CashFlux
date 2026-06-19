@@ -33,6 +33,8 @@ and every commit updates this file under `Unreleased`.
   empty, so local dev, custom domains, and native tests are unaffected (the wildcard `*` is never prefixed).
 
 ### Changed
+- **OAuth email verification (7.20).** OAuth callbacks now reject provider profiles that explicitly report an
+  unverified Google/GitHub email claim before account upsert or session issuance.
 - **Account deletion unlinks billing state (7.17).** `DELETE /v1/account` now explicitly removes the caller's
   stored subscription row inside the account-delete transaction before purging the user and sweeping blobs.
 - **OAuth ID-token verification (7.20).** Google OAuth callbacks now reject missing or expired ID-token expiry

@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - fix: reject unverified oauth emails (7.20)
+
+- Added provider-aware email verification checks after OAuth userinfo fetch: Google `email_verified:false` and
+  GitHub-style `verified:false` are rejected before account upsert/session issuance.
+- Kept missing verification flags permissive so providers or test doubles that omit the field do not break.
+- Covered the Google callback path with an unverified-email regression test.
+
 ## 2026-06-19 - feat: add session family revoke endpoints (7.14)
 
 - Added a store-level active refresh-session family list and a user-scoped family revoke method.
