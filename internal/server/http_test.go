@@ -405,19 +405,37 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 		t.Fatalf("stored oauth user = %v/%v", ok, err)
 	}
 	var refreshCookie *http.Cookie
+	var csrfCookie *http.Cookie
 	for _, cookie := range rr.Result().Cookies() {
 		if cookie.Name == sessionRefreshCookie {
 			refreshCookie = cookie
 		}
+		if cookie.Name == sessionCSRFCookie {
+			csrfCookie = cookie
+		}
 	}
 	if refreshCookie == nil || !refreshCookie.HttpOnly || refreshCookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("refresh cookie = %+v", refreshCookie)
+	}
+	if csrfCookie == nil || csrfCookie.HttpOnly || csrfCookie.SameSite != http.SameSiteStrictMode {
+		t.Fatalf("csrf cookie = %+v", csrfCookie)
 	}
 
 	refreshReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
 	refreshReq.Header.Set("Origin", "http://127.0.0.1:8080")
 	refreshReq.AddCookie(refreshCookie)
 	refreshRR := httptest.NewRecorder()
+	h.ServeHTTP(refreshRR, refreshReq)
+	if refreshRR.Code != http.StatusForbidden {
+		t.Fatalf("refresh without csrf status = %d, want 403", refreshRR.Code)
+	}
+
+	refreshReq = httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
+	refreshReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	refreshReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
+	refreshReq.AddCookie(refreshCookie)
+	refreshReq.AddCookie(csrfCookie)
+	refreshRR = httptest.NewRecorder()
 	h.ServeHTTP(refreshRR, refreshReq)
 	if refreshRR.Code != http.StatusOK {
 		t.Fatalf("refresh status = %d body %q", refreshRR.Code, refreshRR.Body.String())
@@ -429,9 +447,19 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	if refreshed.AccessToken == "" || refreshed.UserID != "github:42" {
 		t.Fatalf("refresh body = %+v", refreshed)
 	}
+	for _, cookie := range refreshRR.Result().Cookies() {
+		if cookie.Name == sessionRefreshCookie {
+			refreshCookie = cookie
+		}
+		if cookie.Name == sessionCSRFCookie {
+			csrfCookie = cookie
+		}
+	}
 
 	logoutReq := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
 	logoutReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	logoutReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
+	logoutReq.AddCookie(csrfCookie)
 	logoutRR := httptest.NewRecorder()
 	h.ServeHTTP(logoutRR, logoutReq)
 	if logoutRR.Code != http.StatusNoContent {

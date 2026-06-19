@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Backend OAuth CSRF protection.** Cookie-auth refresh and logout endpoints now require a double-submit CSRF token.
 - **Backend blob MIME hardening.** Blob uploads now reject executable web content types, sniff uploaded bytes, and force downloaded blobs to be attachments.
 - **Backend OAuth callback sessions.** OAuth callbacks now exchange provider codes with PKCE, upsert users, issue signed short-lived access tokens, and rotate httpOnly refresh cookies through refresh/logout endpoints.
 - **Backend queue depth metrics.** `/metrics` now reports the buffered workspace watch queue depth.

@@ -118,7 +118,14 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 		}
 		clearOAuthStateCookie(w, providerName, requestIsSecure(r))
 		setRefreshCookie(w, refresh, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
-		writeJSON(w, oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: user.ID})
+		csrf, err := setCSRFCookie(w, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp := oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: user.ID}
+		w.Header().Set(sessionCSRFHeader, csrf)
+		writeJSON(w, resp)
 	}
 }
 
@@ -126,6 +133,10 @@ func handleOAuthRefresh(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+		if !validCSRF(r) {
+			http.Error(w, "csrf token is invalid", http.StatusForbidden)
 			return
 		}
 		cookie, err := r.Cookie(sessionRefreshCookie)
@@ -144,6 +155,12 @@ func handleOAuthRefresh(cfg Config) http.HandlerFunc {
 			return
 		}
 		setRefreshCookie(w, refresh, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
+		csrf, err := setCSRFCookie(w, requestIsSecure(r), time.Now().Add(sessionRefreshTTL))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set(sessionCSRFHeader, csrf)
 		writeJSON(w, oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: userID})
 	}
 }
@@ -154,7 +171,12 @@ func handleOAuthLogout(cfg Config) http.HandlerFunc {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
 			return
 		}
+		if !validCSRF(r) {
+			http.Error(w, "csrf token is invalid", http.StatusForbidden)
+			return
+		}
 		setRefreshCookie(w, "", requestIsSecure(r), time.Unix(0, 0))
+		setExpiredCSRFCookie(w, requestIsSecure(r))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -344,6 +366,42 @@ func setRefreshCookie(w http.ResponseWriter, token string, secure bool, expires 
 		SameSite: http.SameSiteLaxMode,
 		Expires:  expires,
 	})
+}
+
+func setCSRFCookie(w http.ResponseWriter, secure bool, expires time.Time) (string, error) {
+	token, err := randomURLToken(32)
+	if err != nil {
+		return "", fmt.Errorf("server session: generate csrf token: %w", err)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCSRFCookie,
+		Value:    token,
+		Path:     "/v1/auth",
+		HttpOnly: false,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+		Expires:  expires,
+	})
+	return token, nil
+}
+
+func setExpiredCSRFCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCSRFCookie,
+		Value:    "",
+		Path:     "/v1/auth",
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+		Expires:  time.Unix(0, 0),
+	})
+}
+
+func validCSRF(r *http.Request) bool {
+	cookie, err := r.Cookie(sessionCSRFCookie)
+	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+		return false
+	}
+	return strings.TrimSpace(r.Header.Get(sessionCSRFHeader)) == cookie.Value
 }
 
 func clearOAuthStateCookie(w http.ResponseWriter, providerName string, secure bool) {

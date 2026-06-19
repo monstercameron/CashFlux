@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: protect backend oauth csrf
+
+- Added a double-submit CSRF cookie/header for cookie-auth refresh and logout endpoints.
+- Rotated the CSRF token with refresh cookies and cleared it on logout.
+- Extended OAuth HTTP tests for missing-token rejection and matching-token success.
+
 ## 2026-06-19 - feat: harden backend blob mime
 
 - Added blob MIME normalization and byte sniffing before storing uploaded artifacts.

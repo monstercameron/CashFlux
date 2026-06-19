@@ -4156,7 +4156,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] TLS-only (HSTS, modern ciphers); `wss` for the bridge; redirect HTTP→HTTPS.
 - [x] Security headers: HSTS, X-Content-Type-Options, Referrer-Policy, COOP/COEP, frame-ancestors/CSP
       on any served HTML; lock CORS + WS `WithOriginCheck` to the SPA origin allow-list.
-- [ ] CSRF protection on cookie-authed HTTP endpoints (OAuth callback, refresh); SameSite + token.
+- [x] CSRF protection on cookie-authed HTTP endpoints (OAuth callback, refresh); SameSite + token.
 
 #### Input / data
 - [ ] Validate + bound every input: request-size caps (dataset, blob, RPC message), field limits,

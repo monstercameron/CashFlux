@@ -12,6 +12,8 @@ import (
 
 const (
 	sessionRefreshCookie = "cashflux_refresh"
+	sessionCSRFCookie    = "cashflux_csrf"
+	sessionCSRFHeader    = "X-CashFlux-CSRF"
 	sessionAccessTTL     = 15 * time.Minute
 	sessionRefreshTTL    = 30 * 24 * time.Hour
 )
