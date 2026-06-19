@@ -3,6 +3,12 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-18 - feat: add backend metrics endpoint
+
+- Added `GET /metrics` behind the existing bearer-token auth path.
+- Returned Prometheus text exposition for a basic `cashflux_server_up` gauge as the initial metrics surface.
+- Added HTTP tests for unauthorized access, content type, and metric output.
+
 ## 2026-06-18 - feat: add workspace sync etags
 
 - Added `etag` and `ifNoneMatch` fields to the backend sync RPC contract.

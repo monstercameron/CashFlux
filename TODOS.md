@@ -4206,7 +4206,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       connections, stream durations, sync push/pull counts + conflict/LWW rejects, blob bytes
       stored/transferred, AI proxy tokens/requests per user, DB query latency, queue depths.
 - [ ] Business metrics (privacy-respecting): signups, trials, conversions, MRR (from billing webhooks).
-- [ ] `/metrics` endpoint (auth-gated or internal-only).
+- [x] `/metrics` endpoint (auth-gated or internal-only).
 
 #### Tracing
 - [ ] OpenTelemetry tracing end-to-end (the GoGRPCBridge canonical path already integrates OTel spans);

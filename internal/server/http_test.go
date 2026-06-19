@@ -202,6 +202,30 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestMetricsEndpointRequiresAuth(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token"}, openTestStore(t))
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated metrics status = %d, want 401", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "text/plain; version=0.0.4" {
+		t.Fatalf("metrics content-type = %q", got)
+	}
+	if !strings.Contains(rr.Body.String(), "cashflux_server_up 1") {
+		t.Fatalf("metrics body = %q", rr.Body.String())
+	}
+}
+
 func TestMaxInFlightMiddlewareRejectsWhenBusy(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})

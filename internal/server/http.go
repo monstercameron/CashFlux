@@ -37,6 +37,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /metrics", handleMetrics(cfg))
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
@@ -73,6 +74,19 @@ func handleCORSPreflight(cfg Config) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleMetrics(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := httpBearerUser(r, cfg); !ok {
+			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte("# HELP cashflux_server_up Server process health.\n"))
+		_, _ = w.Write([]byte("# TYPE cashflux_server_up gauge\n"))
+		_, _ = w.Write([]byte("cashflux_server_up 1\n"))
 	}
 }
 
