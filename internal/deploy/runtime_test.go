@@ -423,3 +423,26 @@ func TestInvestmentsScopeDocumentsBalanceOnlyDecision(t *testing.T) {
 		}
 	}
 }
+
+func TestBackendToolchainPinnedForServerAndWASM(t *testing.T) {
+	goMod, err := os.ReadFile("../../go.mod")
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+	if !strings.Contains(string(goMod), "\ngo 1.26.0\n") {
+		t.Fatal("go.mod does not pin Go 1.26.0")
+	}
+
+	dockerfile, err := os.ReadFile("../../Dockerfile.server")
+	if err != nil {
+		t.Fatalf("read Dockerfile.server: %v", err)
+	}
+	for _, want := range []string{
+		"FROM golang:1.26-alpine AS build",
+		"go build -trimpath -ldflags=\"-s -w\" -o /out/cashflux-server ./cmd/cashflux-server",
+	} {
+		if !strings.Contains(string(dockerfile), want) {
+			t.Fatalf("Dockerfile.server missing %q", want)
+		}
+	}
+}

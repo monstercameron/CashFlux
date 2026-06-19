@@ -3931,7 +3931,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       `golang.org/x/oauth2`, `ncruces/go-sqlite3` (already used client-side).
 - [ ] protoc + `protoc-gen-go` + `protoc-gen-go-grpc` (or `buf`); add a codegen step (Makefile / `gwc`-style)
       and a CI **proto-drift check** (generated code matches `.proto`).
-- [ ] Pin server Go toolchain (1.26) and confirm the client gRPC code builds for `js/wasm`.
+- [x] Pin server Go toolchain (1.26) and confirm the client gRPC code builds for `js/wasm`.
+      Done: `go.mod` pins Go 1.26.0, `Dockerfile.server` builds from `golang:1.26-alpine`, and the
+      server + `GOOS=js GOARCH=wasm` client builds are part of this atom's verification.
 
 ### 7.1 Proto contracts (shared client+server) ★
 - [ ] `proto/` package + gen output dir; versioning policy (no breaking changes; reserve removed fields).

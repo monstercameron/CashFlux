@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - docs: reconcile backend toolchain pin (7.0)
+
+- Reconciled the backend 7.0 toolchain TODO against the current repo: `go.mod` pins Go 1.26.0 and
+  `Dockerfile.server` builds the backend binary from `golang:1.26-alpine`.
+- Added deploy coverage so future edits cannot silently drift the server image or release build command away
+  from the pinned Go 1.26 path.
+- Verification for this atom includes native deploy tests, full Go tests, the server build, and the
+  `GOOS=js GOARCH=wasm` client build to confirm the gRPC client code still compiles for the browser.
+
 ## 2026-06-19 — feat: ledger.LiquidBalance + runway de-dup (docs)
 
 - Catch-up doc for 483c388 (pure `ledger.LiquidBalance` — spendable cash across non-archived cash-type
