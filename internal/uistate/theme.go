@@ -70,6 +70,20 @@ func ApplyTheme(t theme.Theme) {
 		density = string(theme.Comfortable)
 	}
 	root.Call("setAttribute", "data-density", density)
+
+	// The theme also owns the shell skin (C69). The hand-written
+	// [data-theme="light"] stylesheet override re-skins the rail / header / bento,
+	// but it only fires off the data-theme attribute — which the engine never set,
+	// so a light preset (Paper) painted light cards inside a still-dark shell.
+	// Derive data-theme from the theme's own luminance so any light theme lights the
+	// shell. Boot applies the theme after prefs (app.go), making this the
+	// authoritative writer, and the migrated default theme matches the prefs value
+	// so nothing flips for existing dark/light users.
+	shell := "dark"
+	if t.IsLight() {
+		shell = "light"
+	}
+	root.Call("setAttribute", "data-theme", shell)
 }
 
 // resolvePrefsTheme collapses the "system" theme preference to a concrete
