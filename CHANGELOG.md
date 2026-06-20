@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Staged workflow actions can be removed before saving (C65).** The action builder only ever added actions — a
+  mistaken one meant starting the whole workflow over. Each staged action row now has a remove button. Covered by a
+  new `workflows_staged_remove_check` e2e.
 - **Live match-count preview when authoring a rule (C64).** As you type a rule's match phrase, the add form now
   shows "Matches N transactions" against your existing history, so you can trust a rule before saving it (rules
   already showed per-rule counts; this brings the same signal to authoring). Covered by a new

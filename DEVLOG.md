@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: remove staged workflow actions before saving (C65)
+
+- C65 item 2. The workflow action builder only appended; the staged list was plain text with no remove, so a
+  mistaken action forced restarting. Added removeAction(i) (drops index i from the local actions state) and a
+  stagedActionRow component (label + a ✕ remove button) — its own component so the per-row OnClick hook sits at a
+  stable position (the staged list is variable-length, framework loop-hook gotcha). aria-label literal (en.go
+  parallel-dirty).
+- Chose this over C65's "top gap" inline workflow edit (a larger panel/form) and over the trivial H3→H2 heading
+  fix — staged-remove is the most self-contained concrete win.
+- New workflows_staged_remove_check.mjs: stages a create-task action, asserts its row has a remove button, removes
+  it, asserts the row is gone. PASS. App wasm builds clean; gofmt clean. Committed via git commit -- <paths>;
+  sw.js parallel-dirty, left out; TODOS.md untouched.
+- C65 remaining: inline edit, staged reorder, condition formula help/validation, H3→H2 headings, labels, history
+  paging. Next: C66 (Artifacts) — the final C-series ticket.
+
 ## 2026-06-20 - feat: live match-count preview when authoring a rule (C64)
 
 - C64 item 2. Per-rule match counts already existed (Rule.MatchCount); the gap was authoring feedback. Moved the

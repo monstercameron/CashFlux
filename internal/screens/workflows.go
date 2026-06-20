@@ -105,6 +105,17 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		draftCat.Set("")
 		msg.Set("")
 	}
+	// Drop a staged action before saving, so a mistaken one doesn't force starting
+	// the whole workflow over (C65).
+	removeAction := func(i int) {
+		cur := actions.Get()
+		if i < 0 || i >= len(cur) {
+			return
+		}
+		next := append([]workflow.Action(nil), cur[:i]...)
+		next = append(next, cur[i+1:]...)
+		actions.Set(next)
+	}
 	save := func() {
 		app := appstate.Default
 		// Fold in a still-pending action the user typed but didn't click "Add
@@ -158,10 +169,9 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 	// Rendered list of staged actions.
 	var staged []ui.Node
 	for i, a := range actions.Get() {
-		staged = append(staged, Div(Class("row"),
-			Span(Class("row-desc"), actionLabel(a)),
-		))
-		_ = i
+		staged = append(staged, ui.CreateElement(stagedActionRow, stagedActionRowProps{
+			Label: actionLabel(a), Index: i, OnRemove: removeAction,
+		}))
 	}
 
 	return Section(Class("card"),
@@ -354,4 +364,22 @@ func conditionSuffix(cond string) string {
 		return ""
 	}
 	return " · if " + cond
+}
+
+type stagedActionRowProps struct {
+	Label    string
+	Index    int
+	OnRemove func(int)
+}
+
+// stagedActionRow renders one staged (not-yet-saved) workflow action with a remove
+// button, so a mistaken action can be dropped before saving (C65). It is its own
+// component so the remove button's OnClick hook sits at a stable render position —
+// the staged list is variable-length (the framework loop-hook gotcha).
+func stagedActionRow(props stagedActionRowProps) ui.Node {
+	return Div(Class("row"),
+		Span(Class("row-desc"), props.Label),
+		Button(Class("btn-del"), Type("button"), Attr("aria-label", "Remove action"), Title("Remove action"),
+			OnClick(func() { props.OnRemove(props.Index) }), "✕"),
+	)
 }
