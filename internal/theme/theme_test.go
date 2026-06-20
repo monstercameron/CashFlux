@@ -74,6 +74,33 @@ func TestValidateNonColorTokens(t *testing.T) {
 	}
 }
 
+func TestIconStroke(t *testing.T) {
+	if Default().IconStroke != 1.6 {
+		t.Errorf("Default IconStroke = %g, want 1.6", Default().IconStroke)
+	}
+	// Out-of-range stroke is flagged.
+	thin := Default()
+	thin.IconStroke = 0.5
+	if !hasField(thin.Validate(), "iconStroke") {
+		t.Error("a too-thin icon stroke should be an issue")
+	}
+	thick := Default()
+	thick.IconStroke = 4
+	if !hasField(thick.Validate(), "iconStroke") {
+		t.Error("a too-thick icon stroke should be an issue")
+	}
+	// CSSVars emits the token; Merge respects a non-zero override and ignores zero.
+	if got := Default().CSSVars()["--icon-stroke"]; got != "1.6" {
+		t.Errorf("--icon-stroke = %q, want 1.6", got)
+	}
+	if m := Default().Merge(Theme{IconStroke: 2.2}); m.IconStroke != 2.2 {
+		t.Errorf("Merge IconStroke = %g, want override 2.2", m.IconStroke)
+	}
+	if m := Default().Merge(Theme{Accent: "#abc"}); m.IconStroke != 1.6 {
+		t.Errorf("Merge with zero IconStroke = %g, want base 1.6", m.IconStroke)
+	}
+}
+
 func TestCSSVars(t *testing.T) {
 	vars := Default().CSSVars()
 	checks := map[string]string{

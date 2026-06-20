@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: pure icon-stroke token (B13 icon style, bottom-up)
+
+- Started B13's "icon pack" as a feasible, offline icon STYLE: a selectable line weight. Pure layer first —
+  added `IconStroke float64` to theme.Theme (default 1.6, the current weight), threaded through Default, all
+  presets, and the FromPrefs dark/light bases, with a Validate bound (1.0–3.0), a `--icon-stroke` CSSVar, and
+  Merge (0 = unset). FromJSON inherits 1.6 for older theme files. Table tests cover default, the bound, the
+  CSSVar, and Merge override/keep.
+- Confirmed no ui.Icon call site passes its own Style, so the renderer can drive stroke-width via an inline
+  style `var(--icon-stroke, 1.6)` (SVG presentation attributes don't accept var(); inline style does and beats
+  the attribute) — that wiring + the editor weight control come next. No rendered change yet → no sw bump.
+
 ## 2026-06-19 - refactor: unify density/scale into the theme engine (B20)
 
 - Diagnosed the duplication: density CSS keys off `[data-density]`, which only ApplyPrefs set — so the theme

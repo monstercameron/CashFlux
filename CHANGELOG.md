@@ -21,6 +21,9 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Icon stroke weight token (B13/B20).** New pure `theme.IconStroke` (SVG line thickness, default 1.6)
+  carried through `Default`/presets/migration, validated (1.0–3.0), merged, and emitted as the `--icon-stroke`
+  CSS var. Table-tested foundation for a selectable icon weight; the renderer wiring and editor control follow.
 - **Dashboard banner (B20).** The theme editor gains a "Dashboard banner" section: pick a built-in gradient
   (Aurora / Sunrise / Forest / Slate) or upload your own image (PNG/JPEG/WebP/GIF, ≤2 MB), with a one-click
   remove. The chosen banner shows as a decorative full-width band above the dashboard bento grid, stored in its

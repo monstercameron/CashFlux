@@ -24,6 +24,7 @@ func darkBase() Theme {
 		FontDisplay: "Fraunces",
 		Scale:       1.0,
 		Density:     Comfortable,
+		IconStroke:  1.6,
 	}
 }
 
@@ -43,6 +44,7 @@ func lightBase() Theme {
 		FontDisplay: "Fraunces",
 		Scale:       1.0,
 		Density:     Comfortable,
+		IconStroke:  1.6,
 	}
 }
 

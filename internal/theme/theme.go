@@ -54,6 +54,7 @@ type Theme struct {
 	FontDisplay string  `json:"fontDisplay"` // display/heading font family
 	Scale       float64 `json:"scale"`       // font-size scale multiplier
 	Density     Density `json:"density"`
+	IconStroke  float64 `json:"iconStroke"` // icon line thickness (SVG stroke-width), ~1.0–3.0
 }
 
 // Default returns CashFlux's built-in dark theme — the baseline every custom
@@ -74,6 +75,7 @@ func Default() Theme {
 		FontDisplay: "Fraunces",
 		Scale:       1.0,
 		Density:     Comfortable,
+		IconStroke:  1.6,
 	}
 }
 
@@ -95,6 +97,7 @@ var presets = map[string]Theme{
 		FontDisplay: "Fraunces",
 		Scale:       1.0,
 		Density:     Comfortable,
+		IconStroke:  1.6,
 	},
 	"Forest": {
 		Name:        "Forest",
@@ -111,6 +114,7 @@ var presets = map[string]Theme{
 		FontDisplay: "Fraunces",
 		Scale:       1.0,
 		Density:     Comfortable,
+		IconStroke:  1.6,
 	},
 }
 
@@ -212,6 +216,9 @@ func (t Theme) nonColorIssues() []Issue {
 	if t.Scale < 0.70 || t.Scale > 2.0 {
 		issues = append(issues, Issue{Field: "scale", Message: "must be between 0.70 and 2.0"})
 	}
+	if t.IconStroke < 1.0 || t.IconStroke > 3.0 {
+		issues = append(issues, Issue{Field: "iconStroke", Message: "must be between 1.0 and 3.0"})
+	}
 	if !t.Density.Valid() {
 		issues = append(issues, Issue{Field: "density", Message: "must be comfortable or compact"})
 	}
@@ -246,6 +253,7 @@ func (t Theme) CSSVars() map[string]string {
 		"--font-display": t.FontDisplay,
 		"--ui-scale":     fmt.Sprintf("%g", t.Scale),
 		"--density":      string(t.Density),
+		"--icon-stroke":  fmt.Sprintf("%g", t.IconStroke),
 	}
 }
 
@@ -278,6 +286,9 @@ func (t Theme) Merge(override Theme) Theme {
 	}
 	if override.Density != "" {
 		out.Density = override.Density
+	}
+	if override.IconStroke != 0 {
+		out.IconStroke = override.IconStroke
 	}
 	return out
 }
