@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Budget row sub-lines no longer glue together (L1).** A budget row stacks several status lines — the
+  status (`Monthly · On track · 79% · $61.00 left`), the pace heads-up, the rollover carry, and the envelope
+  balance — but `.budget-sub` was inline, so adjacent lines ran into each other (`…$61.00 leftAt this pace…`).
+  `.budget-sub` is now block-level with a little top margin, so each line sits on its own row. Screenshot-confirmed.
 - **CSV import of the documented shape actually imports (C27 follow-up).** Pasting the importer's own documented
   `date,payee,amount,account` format reported "Imported 0 transactions" because the payee column filled
   `Transaction.Payee` while the ledger requires a description — every row failed validation silently. The CSV

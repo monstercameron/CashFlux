@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: L1 budget row sub-lines glued together
+
+- The independent UI defect from L1: budget rows render the status line, the pace heads-up, the rollover-carry
+  line, and the envelope line as adjacent `Span.budget-sub`s, but `.budget-sub` was inline — so they read as
+  "…$61.00 leftAt this pace, projected to go over…". Made `.budget-sub` block-level (display:block + a small
+  margin-top) in web/index.html, so each sub-line sits on its own row. Bumped sw cache v193->v194.
+- Screenshot-confirmed via a new one-off check (e2e/budget_shot.mjs, like theme_shot.mjs): each Dining/Groceries/
+  Shopping/etc. row now shows "Monthly · On track · 79% · $61.00 left" and "At this pace, projected to go over
+  by $71.31" on separate lines; no console errors.
+
 ## 2026-06-20 - feat: L1 inter-budget transfer logic (pure, bottom-up)
 
 - User: "when you are done with the table start the l-series todos." Started L1 ("The Sunday Budget Reset"),
