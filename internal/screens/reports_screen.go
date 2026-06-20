@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -171,15 +172,15 @@ func Reports() ui.Node {
 		delta := Fragment()
 		if r.HasDelta && r.Amount != r.Prior {
 			// Spending up is red (worse), down is green (better).
-			tone, arrow := "text-down", "▲"
+			tone, arrow := "text-down", icon.ArrowUp
 			if r.DeltaPct < 0 {
-				tone, arrow = "text-up", "▼"
+				tone, arrow = "text-up", icon.ArrowDown
 			}
 			pct := r.DeltaPct
 			if pct < 0 {
 				pct = -pct
 			}
-			delta = Span(Class("row-meta "+tone), fmt.Sprintf("%s %d%%", arrow, pct))
+			delta = Span(Class("row-meta inline-flex items-center gap-1 "+tone), uiw.Icon(arrow, Class("w-3.5 h-3.5 shrink-0")), Text(fmt.Sprintf("%d%%", pct)))
 		}
 		rowNodes = append(rowNodes, Div(Class("row"),
 			Div(Class("row-main"), Span(Class("row-desc"), nameOf(r.CategoryID))),

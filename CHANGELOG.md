@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Reports change-% arrows use colored icons (C46).** The ▲/▼ delta markers on report rows are now
+  arrow-up/arrow-down glyphs that inherit the up/down tone color.
 - **Insights anomaly arrows use colored icons (C46).** The bare ↑/↓ direction markers on each spending
   highlight are now arrow-up/arrow-down glyphs that inherit the row's up/down tone color via currentColor.
 - **Dashboard KPI tiles have leading header icons (C46).** Each tile header now leads with a glyph keyed off
