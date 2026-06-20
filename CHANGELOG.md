@@ -23,9 +23,11 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - **E2E stories (B16).** Scripted user-journey tests, now that Playwright + Chromium are installed — each
   asserts the standard path end-to-end (UX + data correctness + persistence across reload): **add a
-  transaction** (logs an expense, sees it in the ledger with its amount, autosaved) and **add an account**
+  transaction** (logs an expense, sees it in the ledger with its amount, autosaved), **add an account**
   (adds an asset with an opening balance, sees it listed and the net-worth summary rise by exactly that
-  balance). The start of B16's "every feature, provably flawless" story suite (`e2e/story_*.test.mjs`).
+  balance), and **create a budget** (adds a Weekly budget, sees it listed with its limit, and confirms the
+  saved budget carries the chosen period). The start of B16's "every feature, provably flawless" story suite
+  (`e2e/story_*.test.mjs`).
 - **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
   settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
   that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and

@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: B16 story — create a budget + pick its period
+
+- Third B16 story (e2e/story_add_budget.test.mjs): create a Weekly budget via the Budgets add form (add()
+  only requires a positive limit; name optional, category/owner/period default), asserting it lists with its
+  name + limit, the saved budget carries period "weekly", and it survives reload. Picked the period select
+  robustly with `select:has(option[value="weekly"])` (no reliance on the i18n aria-label), and verified the
+  period via a recursive walk of the persisted dataset JSON for the object with our name — structure-agnostic.
+- Test-only, no sw bump. Next: goal create + contribute, then settings export→import round-trip.
+
 ## 2026-06-19 - test: B16 story — add an account (net-worth correctness)
 
 - Second B16 story (e2e/story_add_account.test.mjs): add an asset account with a $5000 opening balance via the
