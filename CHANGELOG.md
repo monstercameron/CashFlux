@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Settle-up Mermaid generator (C70).** `internal/mermaid.FromSettleUp` renders a split settle-up plan as a
+  who-owes-whom digraph (debtor→creditor edges labelled with the amount), taking name/amount formatter closures so
+  the package stays currency-free. Pure + table-tested; third of the C70 generators.
 - **Category-tree Mermaid generator (C70).** `internal/mermaid.FromCategories` renders a category hierarchy as a
   left-to-right graph (parent→child edges), with generated node ids so unsafe category IDs can't break the syntax
   and orphan parent references don't produce dangling edges. Pure + table-tested; second of the C70 generators.

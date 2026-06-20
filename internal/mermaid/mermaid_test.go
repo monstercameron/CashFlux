@@ -1,10 +1,12 @@
 package mermaid
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/split"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
@@ -101,5 +103,26 @@ func TestFromCategories(t *testing.T) {
 	// The orphan's missing parent must NOT produce a dangling edge.
 	if strings.Contains(src, "--> c3") {
 		t.Errorf("orphan child with an unknown parent should have no edge:\n%s", src)
+	}
+}
+
+func TestFromSettleUp(t *testing.T) {
+	names := map[string]string{"a": "Alex", "b": "Bo", "c": "Cy"}
+	name := func(id string) string { return names[id] }
+	amount := func(v int64) string { return "$" + strconv.FormatInt(v/100, 10) }
+	transfers := []split.Transfer{
+		{From: "a", To: "c", Amount: 3000}, // Alex owes Cy $30
+		{From: "b", To: "c", Amount: 1000}, // Bo owes Cy $10
+	}
+	src := FromSettleUp(transfers, name, amount)
+	for _, want := range []string{
+		"flowchart LR\n",
+		`m0("Alex")`, `m1("Cy")`, `m2("Bo")`, // nodes created in first-seen order
+		`m0 -->|"$30"| m1`, // Alex → Cy labelled $30
+		`m2 -->|"$10"| m1`, // Bo → Cy labelled $10
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("settle-up digraph missing %q in:\n%s", want, src)
+		}
 	}
 }

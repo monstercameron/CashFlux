@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/split"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
@@ -162,6 +163,41 @@ func FromCategories(cats []domain.Category) string {
 		if parent, ok := idToNode[c.ParentID]; ok {
 			f.Edge(parent, "c"+strconv.Itoa(i), "")
 		}
+	}
+	return f.String()
+}
+
+// FromSettleUp renders a split settle-up plan as a who-owes-whom digraph: each
+// person is a node and each transfer is a debtor→creditor edge labelled with the
+// amount. name resolves a member id to a display name; amount formats the minor-unit
+// amount (callers pass their money formatter, so this package stays currency-free).
+// Node ids are generated per person so member ids never break the syntax.
+func FromSettleUp(transfers []split.Transfer, name func(string) string, amount func(int64) string) string {
+	f := NewFlowchart("LR")
+	nodeOf := make(map[string]string)
+	next := 0
+	node := func(id string) string {
+		if n, ok := nodeOf[id]; ok {
+			return n
+		}
+		n := "m" + strconv.Itoa(next)
+		next++
+		nodeOf[id] = n
+		label := id
+		if name != nil {
+			if nm := name(id); nm != "" {
+				label = nm
+			}
+		}
+		f.Node(n, label, ShapeRound)
+		return n
+	}
+	for _, tr := range transfers {
+		lbl := ""
+		if amount != nil {
+			lbl = amount(tr.Amount)
+		}
+		f.Edge(node(tr.From), node(tr.To), lbl)
 	}
 	return f.String()
 }

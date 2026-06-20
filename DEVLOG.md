@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: settle-up Mermaid generator (C70 follow-on)
+
+- Third C70 generator. mermaid.FromSettleUp(transfers, name, amount): a flowchart LR where each person is a round
+  node and each split.Transfer is a debtor(From)→creditor(To) edge labelled with the amount. Takes name(id) and
+  amount(int64) closures so internal/mermaid stays currency-free (the screen passes its fmtMoney); per-person node
+  ids generated (m0,m1,…) so member ids can't break syntax; labels escaped.
+- TestFromSettleUp (native): two transfers to one creditor → asserts round nodes in first-seen order and both
+  labelled debtor→creditor edges. go test ./internal/mermaid green; vet clean; app wasm builds; gofmt clean.
+  Imports internal/split (pure). Committed via git commit -- <paths>; TODOS.md untouched.
+- C70 generators so far: workflow flowchart, category tree, settle-up digraph. Remaining: sankey money-flow; then
+  the ui.Mermaid renderer + local shim. Next iteration: another uncontested slice.
+
 ## 2026-06-20 - fix: C69 immediate Paper unblock — light themes light the shell
 
 - Switched to the C-series at the user's request (L-series cleared), starting with C69. Verified first that no
