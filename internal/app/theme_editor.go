@@ -22,6 +22,7 @@ import (
 // than going through the shared i18n bundle, to keep this new panel decoupled.
 func themeEditor() uic.Node {
 	cur := uic.UseState(uistate.LoadTheme())
+	importMsg := uic.UseState("")
 	t := cur.Get()
 
 	apply := func(next theme.Theme) {
@@ -157,8 +158,28 @@ func themeEditor() uic.Node {
 		validationNode,
 
 		Div(Class("flex flex-wrap gap-2 py-1 mt-2"),
-			dataBtn("Reset to default", false, func() { apply(uistate.DefaultTheme()) }),
+			dataBtn("Export theme", false, func() {
+				if b, err := t.ToJSON(); err == nil {
+					downloadBytes("cashflux-theme.json", "application/json", b)
+				}
+			}),
+			dataBtn("Import theme", false, func() {
+				pickFile(".json", func(data []byte) {
+					next, err := theme.FromJSON(data)
+					if err != nil {
+						importMsg.Set("That file isn't a valid theme.")
+						return
+					}
+					importMsg.Set("")
+					apply(next)
+				})
+			}),
+			dataBtn("Reset to default", false, func() {
+				importMsg.Set("")
+				apply(uistate.DefaultTheme())
+			}),
 		),
+		If(importMsg.Get() != "", P(Class("text-xs mt-1"), Style(map[string]string{"color": "#d8716f"}), importMsg.Get())),
 	)
 }
 

@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Shareable theme import/export (B20).** The theme editor can now export the active theme to a
+  `cashflux-theme.json` file and import one back, so themes are portable between devices and people. Import
+  validates the file and shows a friendly inline message if it isn't a valid theme.
 - **Theme editor in Settings → Appearance (B20).** A new live theme editor lets you start from a built-in
   preset (Forest / Midnight / Paper), then fine-tune every design token — the eight surface/text/accent/
   semantic colors via native color pickers, corner radius, text-size scale, the interface and heading fonts

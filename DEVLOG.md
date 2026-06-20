@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: theme import/export (B20)
+
+- Rounded out the editor with shareable themes: Export writes the active theme via the pure `Theme.ToJSON`
+  through the existing downloadBytes helper; Import picks a `.json` via pickFile, parses with `theme.FromJSON`
+  (which fills missing fields from Default so partial/older files still load), and applies it. A local
+  importMsg state shows a friendly inline error when the file isn't a valid theme. Reused the dataBtn button
+  component and the JSON round-trip already unit-tested in internal/theme. Bumped sw cache v182→v183.
+- Next (the user's explicit ask): artifact uploads — custom font-file upload (@font-face from a size-capped
+  stored asset) and header/banner images, then the unify of the legacy density/scale controls, then icon packs.
+
 ## 2026-06-19 - feat: live theme editor in Settings → Appearance (B20)
 
 - Third B20 rung (UI): `internal/app/theme_editor.go` — a self-contained `themeEditor` component mounted with
