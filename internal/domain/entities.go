@@ -41,6 +41,7 @@ type Account struct {
 	MinPayment      money.Money `json:"minPayment,omitempty"`
 	DueDayOfMonth   int         `json:"dueDayOfMonth,omitempty"`
 	Lender          string      `json:"lender,omitempty"`
+	IncludeInPayoff *bool       `json:"includeInPayoff,omitempty"` // nil = default (every liability but a mortgage)
 
 	// Allocation-engine attributes (asset-side).
 	ExpectedReturnAPR float64   `json:"expectedReturnApr,omitempty"`

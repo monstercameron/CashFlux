@@ -59,6 +59,13 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Exclude a debt (the mortgage by default) from the payoff plan (L5).** Real debt-crusher plans target
+  revolving/consumer debt, so a 30-year mortgage no longer dominates the timeline: each liability with a balance
+  now has an **"include in payoff plan"** toggle in the debt-strategy card, and a **mortgage is excluded by
+  default** (any liability can be toggled either way; the choice persists). Backed by an additive
+  `domain.Account.IncludeInPayoff *bool` (nil = default-exclude mortgages, set = explicit) + an
+  `IncludedInPayoff()` helper, table-tested, with a store round-trip test and a Playwright story (toggle a debt
+  out → it leaves the payoff order and the flag survives reload).
 - **Debt strategy suggests a starting extra so the comparison is meaningful (L5).** At $0 extra, snowball and
   avalanche are identical, so the strategy card now prompts "At $0 extra the strategies tie" with a one-tap
   **"Try $X/mo"** button (a quarter of the total minimum payments, or 1% of balance when minimums are unknown —

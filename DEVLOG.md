@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L5 exclude debts (mortgage by default) from the payoff plan
+
+- L5 gap 3: including the mortgage makes the plan ~170 months and dominates it. Added an additive
+  domain.Account.IncludeInPayoff *bool (json omitempty; nil = default) + a new domain/account_payoff.go helper
+  IncludedInPayoff() = explicit choice if set, else every liability EXCEPT a mortgage (TypeMortgage). The *bool
+  cleanly distinguishes "default" from "explicitly false" (which a plain bool can't). Table-tested (domain) +
+  store round-trip test (the non-nil false pointer survives export/import, not dropped by omitempty).
+- planning.go: the debt loop collects all liabilities-with-balance (payoffLiabs) and only feeds IncludedInPayoff
+  ones to BuildPlan; a per-liability ToggleRow list ("Include in payoff plan (a mortgage is excluded by
+  default)") toggles each account's flag via app.PutAccount + rev bump. ToggleRow is its own component so the
+  per-row hook is safe in the loop. Bumped sw v203->v204.
+- E2E (story_payoff_exclude.test.mjs): "Auto Loan" is in the order + toggled on by default; toggling it off drops
+  it from the payoff order, persists includeInPayoff=false, and survives reload. Screenshot shows Mortgage OFF by
+  default, Auto Loan OFF, Credit Card ON, plan recomputed to "Credit Card (Aug 2026), 3 months" (and the page
+  renders clean - splash fix holding). Full suite 37/0 green; go test ./internal/domain ./internal/store green.
+- Next L5 gaps: payoff timeline chart (gap4) + progress tracking vs a stored baseline (gap5).
+
 ## 2026-06-20 - fix: L12 boot splash fully dismisses (clears L1/L2/L3/L6/L11)
 
 - Last tick's screenshot confirmed the lingering-splash bug visibly (translucent #boot over /planning), so I

@@ -370,6 +370,7 @@ func Planning() ui.Node {
 	if app != nil {
 		txns := app.Transactions()
 		var debts []payoff.Debt
+		var payoffLiabs []domain.Account // liabilities with a balance, for the include toggles
 		for _, a := range app.Accounts() {
 			if a.Archived || a.Class != domain.ClassLiability {
 				continue
@@ -382,7 +383,31 @@ func Planning() ui.Node {
 			if owed <= 0 {
 				continue
 			}
+			payoffLiabs = append(payoffLiabs, a)
+			if !a.IncludedInPayoff() { // mortgage is excluded by default (L5)
+				continue
+			}
 			debts = append(debts, payoff.Debt{Name: a.Name, Balance: owed, AprPercent: a.InterestRateAPR, MinPayment: a.MinPayment.Abs().Amount})
+		}
+
+		// Per-liability include/exclude toggles (each ToggleRow is its own component,
+		// so the per-row hook is safe inside this loop).
+		var includeToggles []ui.Node
+		for _, a := range payoffLiabs {
+			acc := a
+			includeToggles = append(includeToggles, uiw.ToggleRow(uiw.ToggleRowProps{
+				Label: acc.Name,
+				On:    acc.IncludedInPayoff(),
+				OnChange: func(on bool) {
+					next := acc
+					v := on
+					next.IncludeInPayoff = &v
+					if err := app.PutAccount(next); err != nil {
+						return
+					}
+					rev.Set(rev.Get() + 1)
+				},
+			}))
 		}
 
 		var body ui.Node
@@ -451,6 +476,10 @@ func Planning() ui.Node {
 				),
 			),
 			body,
+			If(len(includeToggles) > 0, Div(Style(map[string]string{"margin-top": "0.6rem"}),
+				P(Class("budget-sub"), "Include in payoff plan (a mortgage is excluded by default):"),
+				Div(includeToggles),
+			)),
 		)
 	}
 
