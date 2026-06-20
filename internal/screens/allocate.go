@@ -285,7 +285,7 @@ func Allocate() ui.Node {
 	settings := app.Settings()
 	aiKey := settings.OpenAIKey
 	pr := uistate.UsePrefs().Get().Normalize()
-	useBackendAI := strings.TrimSpace(pr.ServerURL) != "" && strings.TrimSpace(pr.ServerToken) != ""
+	useBackendAI := pr.BackendActive()
 	aiModel := settings.OpenAIModel
 	if aiModel == "" {
 		aiModel = "gpt-4o-mini"

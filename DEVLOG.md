@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: clear backend on/off switch in Settings (user-reported)
+
+- User hit a websocket connection error on load ("WASM: WebSocket error during connection setup … online,
+  visibility=visible") and asked for a clear way to disable the backend in the Settings modal. Root cause: backend
+  was implicitly "on" whenever a server URL+token existed, and `startBackendSync` (called at boot from app.go)
+  auto-dials + registers visibility/focus/online listeners that re-dial — with no off switch.
+- Added an inverted, default-on `BackendDisabled` pref (omitempty bool → missing = enabled, so existing prefs are
+  unaffected) plus a central `prefs.BackendActive()` predicate (`!disabled && url!="" && token!=""`). Replaced the
+  four `ServerURL==""||ServerToken==""` guards in sync_client.go and the three `useBackendAI` computations
+  (allocate/documents/insights) with it, and added an early return in `startBackendSync` so OFF wires up nothing.
+  Settings now leads the backend section with a "Connect to a backend" ToggleRow; off hides the mode/URL/token
+  inputs and shows a "stays fully local" note.
+- This is the parallel session's subsystem (C81/C89 AI transport), but settings.go/prefs.go/sync_client.go were all
+  clean (they're on internal/aiprovider + internal/server). Kept it additive and central to minimise collision.
+  Gate: prefs test PASS; app/screens/prefs wasm build + vet clean (internal/server is theirs and doesn't build for
+  wasm — excluded, it's not in the app's import graph). New `settings_backend_toggle_check` e2e PASS (toggle hides
+  fields + persists backendDisabled, round-trips on/off); documents-CSV + insights-keyhint still PASS. Committed by
+  pathspec; TODOS.md untouched.
+
 ## 2026-06-20 - feat: C89 phase 2 — Insights agent read-tools (pure)
 
 - Continued the insights/AI objective. C89 p2: read tools on the C82 agent.Registry, built PURE in a new package

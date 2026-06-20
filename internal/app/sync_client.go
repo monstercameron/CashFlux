@@ -55,6 +55,12 @@ type syncStatus struct {
 var syncPushMu sync.Mutex
 
 func startBackendSync() {
+	// Don't wire up auto-sync (or its visibility/focus/online listeners) when the
+	// backend is off or unconfigured — otherwise the app dials a websocket on load
+	// and surfaces connection errors the user can't act on (C81 follow-up).
+	if !uistate.LoadPrefs().Normalize().BackendActive() {
+		return
+	}
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
 	startBackendWatch()
@@ -75,7 +81,7 @@ func startBackendSync() {
 
 func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 	pr := uistate.LoadPrefs().Normalize()
-	if strings.TrimSpace(pr.ServerURL) == "" || strings.TrimSpace(pr.ServerToken) == "" {
+	if !pr.BackendActive() {
 		return
 	}
 	r := loadRegistry()
@@ -108,7 +114,7 @@ func requestBackendSyncNow() {
 
 func flushBackendSyncQueue() {
 	pr := uistate.LoadPrefs().Normalize()
-	if strings.TrimSpace(pr.ServerURL) == "" || strings.TrimSpace(pr.ServerToken) == "" {
+	if !pr.BackendActive() {
 		return
 	}
 	go func() {
@@ -173,7 +179,7 @@ func flushBackendSyncQueue() {
 
 func startBackendWatch() {
 	pr := uistate.LoadPrefs().Normalize()
-	if strings.TrimSpace(pr.ServerURL) == "" || strings.TrimSpace(pr.ServerToken) == "" {
+	if !pr.BackendActive() {
 		return
 	}
 	go func() {
@@ -223,7 +229,7 @@ func readBackendWatch(stream grpc.ClientStream) {
 
 func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 	pr := uistate.LoadPrefs().Normalize()
-	if strings.TrimSpace(pr.ServerURL) == "" || strings.TrimSpace(pr.ServerToken) == "" {
+	if !pr.BackendActive() {
 		return
 	}
 	r := loadRegistry()

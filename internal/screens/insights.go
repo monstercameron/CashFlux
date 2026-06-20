@@ -35,7 +35,7 @@ func Insights() ui.Node {
 	settings := app.Settings()
 	key := settings.OpenAIKey
 	pr := uistate.UsePrefs().Get().Normalize()
-	useBackendAI := strings.TrimSpace(pr.ServerURL) != "" && strings.TrimSpace(pr.ServerToken) != ""
+	useBackendAI := pr.BackendActive()
 	model := settings.OpenAIModel
 	if model == "" {
 		model = "gpt-4o-mini"

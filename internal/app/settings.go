@@ -403,6 +403,19 @@ func globalSettingsForm() uic.Node {
 	serverMode := uic.UseState(string(pr.ServerMode))
 	serverURL := uic.UseState(pr.ServerURL)
 	serverToken := uic.UseState(pr.ServerToken)
+	// backendOn drives the clear "connect to a backend" switch. It's the inverse of
+	// the persisted BackendDisabled flag, so off cleanly stops every sync/AI-proxy
+	// connection even with a URL/token saved.
+	backendOn := uic.UseState(!pr.BackendDisabled)
+	onBackendToggle := func(v bool) {
+		backendOn.Set(v)
+		p := prefsAtom.Get()
+		p.BackendDisabled = !v
+		savePrefs(p)
+		if v {
+			requestBackendSyncNow()
+		}
+	}
 	initialAuth := backendauth.Discovery{AuthMode: backendauth.ModeToken}
 	if pr.ServerMode == prefs.ServerCloud {
 		initialAuth = backendauth.Discovery{AuthMode: backendauth.ModeOAuth, AuthProviders: []string{"google", "github"}}
@@ -594,17 +607,24 @@ func globalSettingsForm() uic.Node {
 		}}),
 		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.rememberKeyNote")),
 		Div(Class("set-label"), uistate.T("settings.backendTitle")),
-		ui.Segmented(ui.SegmentedProps{
-			Label: uistate.T("settings.serverMode"),
-			Options: []ui.SegOption{
-				{Value: string(prefs.ServerCloud), Label: uistate.T("settings.serverModeCloud")},
-				{Value: string(prefs.ServerSelfHosted), Label: uistate.T("settings.serverModeSelf")},
-			},
-			Selected: serverMode.Get(),
-			OnSelect: onServerMode,
-		}),
-		Input(Class("set-input mt-[0.45rem]"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
-		If(showTokenAuth, Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken))),
+		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
+		// keeps the app fully local even with a server saved, so an unreachable
+		// backend never throws websocket errors the user can't dismiss.
+		ui.ToggleRow(ui.ToggleRowProps{Label: "Connect to a backend (sync + AI proxy)", On: backendOn.Get(), OnChange: onBackendToggle}),
+		If(!backendOn.Get(), P(Class("text-faint text-[12px] mt-1"), "Backend off — the app stays fully local; no sync or proxy connections are made.")),
+		If(backendOn.Get(), Fragment(
+			ui.Segmented(ui.SegmentedProps{
+				Label: uistate.T("settings.serverMode"),
+				Options: []ui.SegOption{
+					{Value: string(prefs.ServerCloud), Label: uistate.T("settings.serverModeCloud")},
+					{Value: string(prefs.ServerSelfHosted), Label: uistate.T("settings.serverModeSelf")},
+				},
+				Selected: serverMode.Get(),
+				OnSelect: onServerMode,
+			}),
+			Input(Class("set-input mt-[0.45rem]"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
+			If(showTokenAuth, Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken))),
+		)),
 		If(cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.backendNote"))),
 		If(!cloudSelected, P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.selfHostedNote"))),
 		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.authMode", authDiscovery.AuthMode)),

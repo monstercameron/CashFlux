@@ -4,7 +4,10 @@
 // only handles localStorage persistence and the settings UI.
 package prefs
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // WeekStart is the first day of the week for calendars and weekly periods.
 type WeekStart string
@@ -81,6 +84,21 @@ type Prefs struct {
 	ServerURL     string     `json:"serverUrl,omitempty"`
 	ServerToken   string     `json:"serverToken,omitempty"`
 	ServerCSRF    string     `json:"serverCsrf,omitempty"`
+	// BackendDisabled turns off all backend connections (sync + AI proxy) even when
+	// a server URL and token are configured. It is inverted (default false = on) so
+	// existing prefs keep working; the user flips it from the Settings modal to stop
+	// the app dialing the backend (e.g. when the websocket is unreachable).
+	BackendDisabled bool `json:"backendDisabled,omitempty"`
+}
+
+// BackendActive reports whether the app should talk to the backend: a server URL
+// and token are configured AND the user hasn't switched the backend off. Every
+// sync and AI-proxy path gates on this, so toggling BackendDisabled cleanly stops
+// all backend connection attempts.
+func (p Prefs) BackendActive() bool {
+	return !p.BackendDisabled &&
+		strings.TrimSpace(p.ServerURL) != "" &&
+		strings.TrimSpace(p.ServerToken) != ""
 }
 
 // Default returns the out-of-the-box preferences (Sunday week start, ISO dates,

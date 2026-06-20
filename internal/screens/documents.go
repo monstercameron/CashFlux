@@ -128,7 +128,7 @@ func Documents() ui.Node {
 
 	settings := app.Settings()
 	pr := uistate.UsePrefs().Get().Normalize()
-	useBackendAI := strings.TrimSpace(pr.ServerURL) != "" && strings.TrimSpace(pr.ServerToken) != ""
+	useBackendAI := pr.BackendActive()
 	aiModel := settings.OpenAIModel
 	if aiModel == "" || aiModel == "gpt-4o-mini" {
 		aiModel = "gpt-4o" // vision needs a vision-capable model

@@ -13,6 +13,12 @@ and every commit updates this file under `Unreleased`.
   Covered by a new `categories_nesting_check` e2e.
 
 ### Added
+- **Clear backend on/off switch in Settings (C81 follow-up).** The Settings modal now leads the backend section
+  with a "Connect to a backend (sync + AI proxy)" toggle. Turning it off keeps the app fully local even with a
+  server URL/token saved — no sync loop, no visibility/online listeners, no AI-proxy dialing — so an unreachable
+  backend can't surface websocket connection errors the user can't dismiss. Backed by a new (inverted, default-on)
+  `BackendDisabled` pref and a central `prefs.BackendActive()` predicate that every sync and AI-proxy path now
+  gates on. Covered by a new `settings_backend_toggle_check` e2e.
 - **Insights agent read-tools (C89 phase 2, logic).** New pure, table-tested `internal/aitools` registers the
   Insights agent's read tools on the C82 `agent.Registry`: `query_transactions` (reuses `txnfilter.MultiCriteria`
   to answer "how much on groceries?"), `account_balances`, and `affordability` (reuses `afford.CanAfford` for real
