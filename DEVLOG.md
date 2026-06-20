@@ -56,6 +56,24 @@ problems and fixes, and what's next.
   renders clean - splash fix holding). Full suite 37/0 green; go test ./internal/domain ./internal/store green.
 - Next L5 gaps: payoff timeline chart (gap4) + progress tracking vs a stored baseline (gap5).
 
+## 2026-06-20 - fix: L6 wiped store stays empty (no sample re-seed)
+
+- L6 core bug: hydrateDataset (persist.go) re-seeded the sample whenever the dataset key was empty/missing, so a
+  wipe (or externally-cleared store) brought the stranger's household back on reload — a clean slate was
+  unreachable. (The L6 splash 4th-repro is already fixed by L12.)
+- Fix: extracted the boot decision into a pure, native-testable decideHydrate(datasetRaw, seededBefore) ->
+  {hydrateImport | hydrateSeed | hydrateEmpty} in a NEW non-js-tagged internal/app/hydrate.go (persist.go is
+  js/wasm-only, so this is the only way to unit-test it natively). Added a cashflux:seeded localStorage flag:
+  persist.go reads it, calls decideHydrate, seeds ONLY on a true first run (no flag), imports a saved dataset,
+  or stays empty when an empty dataset follows a prior seed; it sets the flag after seed/import. Table-tested
+  (hydrate_test.go, native). The in-app Settings "Wipe" already empties the store (autosave then persists an
+  empty dataset), so that path was fine; this fixes the empty/missing-key path.
+- E2E (story_first_run_no_reseed.test.mjs): first run seeds + sets the flag; remove the dataset key (keep flag) +
+  reload -> stays empty (no re-seed); remove the dataset key AND the flag + reload -> re-seeds (genuine fresh
+  install). go test ./internal/app green (native); wasm green; full suite 40/0 green (one story flaked on the
+  first run - passed standalone + on re-run, unrelated). Bumped sw v206->v207. This unblocks the deferred L2
+  sample-seeding + the L6 onboarding UX gaps (first-run banner, empty-state CTAs, sample-as-choice), which remain.
+
 ## 2026-06-20 - fix: L12 boot splash fully dismisses (clears L1/L2/L3/L6/L11)
 
 - Last tick's screenshot confirmed the lingering-splash bug visibly (translucent #boot over /planning), so I

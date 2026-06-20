@@ -15,6 +15,11 @@ import (
 // dataset). The OpenAI key is redacted before saving — it stays session-only.
 const datasetStoreKey = "cashflux:dataset"
 
+// seededFlagKey records that the sample has been seeded at least once, so a later
+// wipe (empty dataset) is treated as an intentional clean slate rather than a
+// first run that re-seeds the stranger's household (L6).
+const seededFlagKey = "cashflux:seeded"
+
 // suspendAutosave halts the dataset autosave. A workspace switch rewrites the
 // localStorage keys then reloads; without this the dying page's pagehide/ticker
 // save would write the *old* in-memory dataset back over the swapped-in one.
@@ -30,19 +35,35 @@ func hydrateDataset() {
 	if app == nil {
 		return
 	}
-	v := js.Global().Get("localStorage").Call("getItem", datasetStoreKey)
-	if v.IsNull() || v.IsUndefined() || v.String() == "" {
+	ls := js.Global().Get("localStorage")
+	raw := ""
+	if v := ls.Call("getItem", datasetStoreKey); !v.IsNull() && !v.IsUndefined() {
+		raw = v.String()
+	}
+	seededBefore := false
+	if f := ls.Call("getItem", seededFlagKey); !f.IsNull() && !f.IsUndefined() && f.String() != "" {
+		seededBefore = true
+	}
+	markSeeded := func() { ls.Call("setItem", seededFlagKey, "1") }
+
+	switch decideHydrate(raw, seededBefore) {
+	case hydrateImport:
+		hadLocalDataset = true
+		if err := app.ImportJSON([]byte(raw)); err != nil {
+			app.Log().Error("dataset hydrate failed; seeding sample", "err", err)
+			hadLocalDataset = false
+			_ = app.LoadSample()
+		}
+		markSeeded()
+	case hydrateSeed:
 		hadLocalDataset = false
 		if err := app.LoadSample(); err != nil {
 			app.Log().Error("seed sample failed", "err", err)
 		}
-		return
-	}
-	hadLocalDataset = true
-	if err := app.ImportJSON([]byte(v.String())); err != nil {
-		app.Log().Error("dataset hydrate failed; seeding sample", "err", err)
+		markSeeded()
+	case hydrateEmpty:
+		// Set up before, intentionally empty — preserve the clean slate (L6).
 		hadLocalDataset = false
-		_ = app.LoadSample()
 	}
 }
 

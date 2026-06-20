@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **A wiped store stays empty instead of re-seeding the sample household (L6).** Boot used to re-seed the sample
+  whenever the dataset key was empty/missing, so wiping your data (or any genuinely empty store) brought a
+  stranger's finances back on the next reload — a clean slate was unreachable. Boot now records a `cashflux:seeded`
+  flag and only seeds the sample on a **true first run** (never seeded); once seeded, an empty dataset is treated
+  as an intentional clean slate and preserved. The decision is a pure, natively-tested `decideHydrate`
+  (first-run → seed, saved dataset → import, empty-after-seed → stay empty), and an e2e proves wipe→reload stays
+  empty while a genuine first run still seeds.
 - **The boot splash fully dismisses instead of lingering over the app (L12 root-cause; clears L1/L2/L3/L6/L11).**
   The "Getting your money in order…" splash (`#boot`, a full-viewport `position:fixed; z-index:10` overlay) was
   only faded out via a CSS opacity transition once the app rendered — so a slow or interrupted transition could
