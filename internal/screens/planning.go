@@ -403,6 +403,12 @@ func Planning() ui.Node {
 				if saved := snow.TotalInterest - aval.TotalInterest; saved > 0 {
 					rec = P(Class("muted"), uistate.T("planning.strategyRecommend", fmtMoney(money.New(saved, base))))
 				}
+				// When the two strategies are truly identical (typically at $0 extra,
+				// or a single debt) the side-by-side is meaningless — explain why (L5).
+				explain := Fragment()
+				if snow.Months == aval.Months && snow.TotalInterest == aval.TotalInterest {
+					explain = P(Class("budget-sub"), "Snowball and avalanche match here — add an extra monthly amount above to see them diverge.")
+				}
 				// A calendar debt-free date reads better than a bare month count
 				// (L5), plus a "cleared by <month>" beside each debt in the order.
 				now := time.Now()
@@ -426,6 +432,7 @@ func Planning() ui.Node {
 					P(Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.avalanche"), fmtMoney(money.New(aval.TotalInterest, base)))),
 					P(Class("muted"), "Payoff order: "+strings.Join(orderParts, " → ")),
 					rec,
+					explain,
 				)
 			}
 		}
@@ -434,6 +441,14 @@ func Planning() ui.Node {
 			P(Class("muted"), uistate.T("planning.debtStrategyHint")),
 			Form(Class("form-grid"),
 				Input(Class("field"), Type("number"), Attr("aria-label", "Extra monthly payment"), Placeholder(uistate.T("planning.debtStrategyExtra", base)), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra)),
+			),
+			If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 0 && payoff.SuggestedExtra(debts) > 0,
+				Div(Class("flex items-center gap-2 mt-2"),
+					Span(Class("muted"), "At $0 extra the strategies tie."),
+					Button(Class("btn"), Type("button"), Title("Fill a sensible extra to compare snowball vs avalanche"),
+						OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
+						"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo"),
+				),
 			),
 			body,
 		)

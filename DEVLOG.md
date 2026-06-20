@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L5 suggest a starting extra + explain strategy ties
+
+- L5 gap 2: snowball vs avalanche is useless at $0 extra (identical). Added pure payoff.SuggestedExtra(debts) ->
+  a quarter of total minimum payments, or 1% of balance when minimums are unknown, with a 1-minor-unit floor
+  (table-tested: quarter-of-minimums, 1%-fallback, floor, no-debts, cleared-debts-ignored).
+- UI (planning.go): when the extra is empty, the card shows "At $0 extra the strategies tie." + a one-tap
+  "Try $X/mo" button that fills SuggestedExtra (formatted to the base currency, like the budgets suggest button);
+  and in the viable plan, when snow.Months==aval.Months AND snow.TotalInterest==aval.TotalInterest, an explain
+  line "Snowball and avalanche match here - add an extra monthly amount above to see them diverge." Inline
+  English; bumped sw v201->v202.
+- E2E (story_payoff_suggest.test.mjs): at $0 the "Try $X/mo" button is present; tapping it fills a positive extra
+  ($601.25 for the sample) and a Debt-free date appears. Full suite 35/0 green; go test ./internal/payoff green;
+  wasm green.
+- NOTE: the payoff-suggest screenshot caught the lingering load splash ("Getting your money in order...")
+  overlaying /planning - another reproduction of the L1/L2/L3/L6/L11 splash-dismiss bug (root-cause is L12,
+  deferred). The e2e still passed (button clicked behind it). Reinforces fixing the splash once in L12.
+- Next L5 gaps: a per-account "exclude from payoff" flag (mortgage), a payoff timeline chart, progress tracking.
+
 ## 2026-06-20 - feat: L5 debt-free calendar date on the payoff plan
 
 - Deferred L4 gap 3 (FX-rate staleness): it entangles with the parallel-session-flagged settings.go (stamping

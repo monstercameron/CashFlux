@@ -52,6 +52,12 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Debt strategy suggests a starting extra so the comparison is meaningful (L5).** At $0 extra, snowball and
+  avalanche are identical, so the strategy card now prompts "At $0 extra the strategies tie" with a one-tap
+  **"Try $X/mo"** button (a quarter of the total minimum payments, or 1% of balance when minimums are unknown —
+  pure `payoff.SuggestedExtra`, table-tested) that fills a sensible amount; and when the two strategies are truly
+  identical it explains why ("Snowball and avalanche match here — add an extra monthly amount above to see them
+  diverge"). Covered by a Playwright story.
 - **Debt payoff shows a calendar debt-free date, not just a month count (L5).** The debt-strategy card now reads
   "Debt-free by Nov 2035 (snowball) · … (avalanche)" beside the month totals, and the payoff order dates each
   debt as it clears ("Auto Loan (Aug 2027) → Credit Card (Jan 2028)"). Backed by a pure `payoff.DebtFreeMonth`
