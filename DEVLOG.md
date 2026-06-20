@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L13 forward daily cash-flow projection + overdraft warning (pure logic)
+
+- L13 headline: a paycheck-to-paycheck safety net that projects the forward daily balance and warns before an
+  account dips below zero. New pure internal/cashflow: DailyBalances(startBal, events []Event{Day, Amount,
+  Label}, days, buffer) -> Projection{Daily []DailyBalance, MinBalance+MinDay, BreachDay (first day < buffer,
+  -1 else), BreachShortfall}. Events apply end-of-day on their day offset (0=today); buffer 0 = overdraft, a
+  positive buffer warns earlier; out-of-horizon events ignored; single-account (the caller runs it per spending
+  account).
+- Table-tested: rent-before-payday overdrafts day 1 (-$1,300) then recovers at payday; bill crossing a $500
+  buffer; never-breach; same-day netting; out-of-horizon ignored; empty horizon; starting overdrawn breaches
+  day 0. go test ./internal/cashflow green; committed+pushed atomically (pure, immune to the wasm race).
+- Continued the pure-logic-under-contention strategy (the other session is churning C49/C50/B2 + the shared
+  wasm). Next: the Bills/Dashboard "Cash-flow runway" card (daily line + red danger-day marker + plain-English
+  warning) and the suggested-action nudge - wasm UI, done atomically later. Bills are derived from liability
+  accounts, so the DailyBalances events get built from upcoming bill due dates + recurring income.
+
 ## 2026-06-20 - feat: L9 full-backup envelope (pure logic)
 
 - L9 gap: "Export JSON" only serializes the active workspace's dataset, silently leaving behind other

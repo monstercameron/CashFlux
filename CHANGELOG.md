@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Click a budget to see its transactions (C50).** A budget's title is now a button that opens Transactions
+  filtered to that budget's category — the natural "why am I over?" drill-down, mirroring Accounts→Transactions and
+  the dashboard tile-click (C30). It reuses the persisted `txfilter` so the filter sticks, and is only clickable
+  when the budget has a category. Covered by a new `budgets_drill_check` e2e.
+
 ### Fixed
 - **Budget add and inline-edit forms now have persistent visible labels (C50).** Both budget forms were
   placeholder-only (name, limit, and the Category / Owner / Period selects), so labels vanished on input — the same
@@ -53,6 +59,11 @@ and every commit updates this file under `Unreleased`.
   full suite green.
 
 ### Added
+- **Forward daily cash-flow projection + overdraft warning (L13, logic).** New pure, table-tested
+  `internal/cashflow` package: `DailyBalances(startBal, events, days, buffer)` projects an account's running
+  balance day by day from upcoming bills + paychecks and returns the daily series, the lowest balance and when
+  it hits, and the **first day the balance dips below the buffer** (overdraft when buffer is 0) with the
+  shortfall — the safety net for living paycheck-to-paycheck ("Checking dips to -$240 on Jul 2").
 - **Full-backup envelope for lossless migration (L9, logic).** New pure, table-tested `backup.Envelope` (with
   `MarshalEnvelope`/`UnmarshalEnvelope`/`IsEnvelope`): a versioned "back up everything" container holding every
   workspace's dataset, the workspace registry, and the device-local appearance keys (theme/fonts/banner/prefs) —
