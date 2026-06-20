@@ -41,6 +41,13 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Split screen "Settle up" panel — who owes whom across every saved split (L2).** The Split calculator can now
+  **Save split** (with an optional "what was it for?" note), recording it as a shared expense. A new **Settle up**
+  card then shows the running balance across every saved split — each member's net ("is owed $X" / "owes $X") —
+  plus the **simplest way to square up** (the minimal set of "X pays Y $Z" payments) with a per-payment **Record
+  settlement** button. Recording a payment re-balances the ledger immediately (and reads "All settled up" once
+  everyone is even); it all persists across reloads. Covered by a new Playwright story (three expenses with
+  different payers net to a single Lee→Priya payment; recording it squares everyone up and survives reload).
 - **App state for the settle-up ledger (L2).** `appstate` gains `SharedExpenses()`/`Settlements()` accessors,
   validated `PutSharedExpense`/`RecordSettlement` write actions (and their deletes), and a `SettleUp(currency)`
   helper that builds the pure `settle` inputs from the persisted records and returns each member's net balance

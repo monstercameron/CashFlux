@@ -5,10 +5,12 @@ package screens
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/split"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -34,11 +36,16 @@ func Split() ui.Node {
 	members := app.Members()
 
 	amountS := ui.UseState("")
+	descS := ui.UseState("")
 	selected := ui.UseState(map[string]bool{})
 	payerS := ui.UseState("")
 	weighted := ui.UseState(false)
 	weights := ui.UseState(map[string]string{})
+	errS := ui.UseState("")
+	rev := ui.UseState(0) // bumped after save/record so the settle-up ledger re-reads
+	bump := func() { rev.Set(rev.Get() + 1) }
 	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
+	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	onPayer := ui.UseEvent(func(e ui.Event) { payerS.Set(e.GetValue()) })
 	toggle := func(id string) {
 		cur := selected.Get()
@@ -94,6 +101,44 @@ func Split() ui.Node {
 		nameByID[m.ID] = m.Name
 	}
 
+	// saveSplit records the current forward split as a persisted SharedExpense so it
+	// joins the running settle-up ledger below.
+	saveSplit := func() {
+		if amt <= 0 || payerS.Get() == "" || len(ids) == 0 {
+			errS.Set("Enter an amount, pick who paid, and who's sharing.")
+			return
+		}
+		shares := make([]domain.SharedExpenseShare, 0, len(ids))
+		for _, mid := range ids {
+			shares = append(shares, domain.SharedExpenseShare{MemberID: mid, Amount: money.New(shareByID[mid], base)})
+		}
+		e := domain.SharedExpense{ID: id.New(), Desc: strings.TrimSpace(descS.Get()), Date: time.Now(), PayerID: payerS.Get(), Shares: shares}
+		if err := app.PutSharedExpense(e); err != nil {
+			errS.Set(err.Error())
+			return
+		}
+		amountS.Set("")
+		descS.Set("")
+		selected.Set(map[string]bool{})
+		payerS.Set("")
+		errS.Set("")
+		bump()
+	}
+
+	// recordSettlement marks a suggested transfer as paid, persisting a Settlement
+	// so the ledger re-balances.
+	recordSettlement := func(from, to string, amount money.Money) {
+		if err := app.RecordSettlement(domain.Settlement{ID: id.New(), FromID: from, ToID: to, Amount: amount, Date: time.Now()}); err != nil {
+			errS.Set(err.Error())
+			return
+		}
+		errS.Set("")
+		bump()
+	}
+
+	// The persisted settle-up ledger across every saved shared expense.
+	net, ledger := app.SettleUp(base)
+
 	memberRows := MapKeyed(members,
 		func(m domain.Member) any { return m.ID },
 		func(m domain.Member) ui.Node {
@@ -118,16 +163,42 @@ func Split() ui.Node {
 	var owes []ui.Node
 	var transfers []split.Transfer
 	if payer := payerS.Get(); payer != "" && amt > 0 {
-		for _, id := range ids {
-			if id == payer {
+		for _, mid := range ids {
+			if mid == payer {
 				continue
 			}
 			owes = append(owes, Div(Class("row"),
-				Span(Class("row-desc"), uistate.T("split.owes", nameByID[id], nameByID[payer])),
-				Span(Class("budget-amount"), fmtMoney(money.New(shareByID[id], base))),
+				Span(Class("row-desc"), uistate.T("split.owes", nameByID[mid], nameByID[payer])),
+				Span(Class("budget-amount"), fmtMoney(money.New(shareByID[mid], base))),
 			))
-			transfers = append(transfers, split.Transfer{From: id, To: payer, Amount: shareByID[id]})
+			transfers = append(transfers, split.Transfer{From: mid, To: payer, Amount: shareByID[mid]})
 		}
+	}
+
+	// The persisted ledger: each member's running net, then the minimal payments.
+	var netRows []ui.Node
+	for _, m := range members {
+		bal := net[m.ID]
+		if bal.IsZero() {
+			continue
+		}
+		label := m.Name + " is owed " + fmtMoney(bal)
+		amtCls := "budget-amount"
+		if bal.IsNegative() {
+			label = m.Name + " owes " + fmtMoney(bal.Neg())
+			amtCls = "budget-amount text-down"
+		}
+		netRows = append(netRows, Div(Class("row"),
+			Span(Class("row-desc"), label),
+			Span(Class(amtCls), fmtMoney(bal.Abs())),
+		))
+	}
+	var ledgerRows []ui.Node
+	for _, tr := range ledger {
+		ledgerRows = append(ledgerRows, ui.CreateElement(settleTransferRow, settleTransferRowProps{
+			From: tr.From, To: tr.To, FromName: nameByID[tr.From], ToName: nameByID[tr.To],
+			Amount: fmtMoney(tr.Amount), AmountRaw: tr.Amount, OnRecord: recordSettlement,
+		}))
 	}
 
 	var memberBody ui.Node
@@ -143,9 +214,11 @@ func Split() ui.Node {
 			P(Class("muted"), uistate.T("split.hint")),
 			Div(Class("form-grid"),
 				Input(Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
+				Input(Class("field"), Type("text"), Attr("aria-label", "What was it for? (optional)"), Placeholder("What was it for? (optional)"), Value(descS.Get()), OnInput(onDesc)),
 				Select(Class("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
 			),
 			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),
+			errText("split-err", errS.Get()),
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("split.members")),
@@ -155,6 +228,7 @@ func Split() ui.Node {
 			H2(Class("card-title"), uistate.T("split.settleUp")),
 			Div(Class("rows"), owes),
 			Div(Class("flex flex-wrap gap-2 py-1"),
+				Button(Class("btn btn-primary"), Type("button"), Title("Save this split to the settle-up ledger below"), OnClick(saveSplit), "Save split"),
 				Button(Class("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
 					nm := func(id string) string { return nameByID[id] }
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
@@ -162,6 +236,36 @@ func Split() ui.Node {
 				}), uistate.T("split.downloadCsv")),
 			),
 		)),
+		If(len(net) > 0, Section(Class("card"),
+			H2(Class("card-title"), "Settle up"),
+			P(Class("muted"), "Running balance across every saved split."),
+			Div(Class("rows"), netRows),
+			If(len(netRows) > 0 && len(ledgerRows) > 0, Div(
+				P(Class("budget-sub"), "Simplest way to square up:"),
+				Div(Class("rows"), ledgerRows),
+			)),
+			If(len(netRows) == 0, P(Class("muted"), "All settled up — nobody owes anybody.")),
+		)),
+	)
+}
+
+type settleTransferRowProps struct {
+	From, To         string // member IDs
+	FromName, ToName string
+	Amount           string      // pre-formatted
+	AmountRaw        money.Money // for recording the settlement
+	OnRecord         func(from, to string, amount money.Money)
+}
+
+// settleTransferRow renders one suggested "X pays Y $Z" payment with a button to
+// record it as settled. Own component (per the no-hooks-in-loops rule) so the
+// ledger can list many rows safely.
+func settleTransferRow(props settleTransferRowProps) ui.Node {
+	onRec := ui.UseEvent(Prevent(func() { props.OnRecord(props.From, props.To, props.AmountRaw) }))
+	return Div(Class("row"),
+		Span(Class("row-desc"), props.FromName+" pays "+props.ToName),
+		Span(Class("budget-amount"), props.Amount),
+		Button(Class("btn"), Type("button"), Title("Record this payment as settled"), OnClick(onRec), "Record settlement"),
 	)
 }
 

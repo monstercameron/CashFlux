@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L2 Split "Settle up" panel (UI + e2e)
+
+- L2 step 4 (UI). split_screen.go: after the forward split, a "Save split" button writes the current split as a
+  domain.SharedExpense (payer + per-member shares + optional desc); a new "Settle up" card renders the running
+  ledger from app.SettleUp(base) — per-member net ("is owed"/"owes", negative tinted text-down), the minimal
+  "X pays Y $Z" payments, and a per-row "Record settlement" that persists a Settlement and re-balances. The
+  payment rows are their own settleTransferRow component (no-hooks-in-loops rule); a rev UseState bump forces the
+  ledger to re-read after a save/record. Reused existing classes (card/rows/row/budget-amount/text-down/err) so
+  no CSS change; bumped sw v195->v196. Panel gate is len(net)>0 (net keeps zeroed members), so once everyone
+  settles it still shows "All settled up". Inline English (avoided the shared en.go).
+- E2E (story_settle_up.test.mjs): add Priya/Sam/Lee, save 3 splits paid by each ($90/$60/$30, even 3-way) which
+  net to a single Lee->Priya $30; assert the ledger text (Priya owed $30, Lee owes $30, Sam absent, "Lee pays
+  Priya"), record it, assert "All settled up" + the payment gone, and reload-assert 3 expenses + 1 settlement.
+  Used the waitForDataset poll (not fixed sleeps) so it's not autosave-flaky. Screenshot-verified (settle-up.png).
+  Full suite 31/0 green.
+- Deferred: seeding 2-3 sample members + shared expenses out of the box — that changes the seeded dataset and
+  would break several existing e2e assertions (story_settings_roundtrip "89 entities", the "1 member" footer),
+  so it needs a careful lockstep update; logged for a later commit. L2 core ritual now works end to end.
+
 ## 2026-06-20 - feat: L2 app state for the settle-up ledger
 
 - L2 step 3 (state). New internal/appstate/settle.go: SharedExpenses()/Settlements() accessors, validated
