@@ -1,0 +1,53 @@
+name: 🐛 Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! The [live demo](https://monstercameron.github.io/CashFlux/) +
+        **Settings → "Load sample"** makes most bugs easy to reproduce.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to '...'
+        2. Click '...'
+        3. See '...'
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Screen / area
+      placeholder: e.g. Transactions, Dashboard, Reports
+  - type: dropdown
+    id: env
+    attributes:
+      label: Where did you see it?
+      options:
+        - Live demo (GitHub Pages)
+        - Local dev build
+        - Installed PWA
+        - Self-hosted
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / OS
+      placeholder: e.g. Chrome 126 / Windows 11
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors (if any)
+      description: Open DevTools → Console and paste anything relevant (remove anything sensitive).
+      render: text

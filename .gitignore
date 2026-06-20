@@ -19,6 +19,11 @@
 /e2e/serve-bin
 /e2e/serve-bin.exe
 
+# Local runtime data & scratch (never commit): the self-host backend's SQLite
+# database (+ WAL/SHM) and temporary logs/scratch files written during dev.
+/data/
+/.tmp/
+
 # Local env / editor
 .env
 .env.*

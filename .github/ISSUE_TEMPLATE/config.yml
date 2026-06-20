@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: ▶ Try the live demo
+    url: https://monstercameron.github.io/CashFlux/
+    about: Reproduce or explore before filing — use Settings → "Load sample" for realistic data.
+  - name: 📋 Roadmap / backlog
+    url: https://github.com/monstercameron/CashFlux/blob/main/TODOS.md
+    about: Check whether your idea or bug is already tracked, and pile on with context.
+  - name: 🔒 Report a security issue
+    url: https://github.com/monstercameron/CashFlux/security/advisories/new
+    about: Please report vulnerabilities privately — do not open a public issue.
