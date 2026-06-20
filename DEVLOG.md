@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: "Restore from a backup file" — L9 import half
+
+- Completed L9 with the restore inverse. internal/app/backupall.go: restoreFromBackup (pickFile → UnmarshalEnvelope
+  → confirmAction → applyBackup → reloadPage) + applyBackup, which writes registry + appearance (clearing omitted
+  keys so it replaces, not merges) + each dataset by registry order (active → canonical, rest → blobs). Suspends
+  autosave first so the dying page can't clobber the restore. One palette command + 3 i18n keys. All same-package
+  workspace helpers — no protected files touched.
+- e2e snag + fix: backup-then-restore in one page failed because the backup DOWNLOAD tears down the wasm runtime
+  (the same "Go program has already exited" artifact) — the second Ctrl+K hit a dead handler. Fixed by reloading
+  the page between the download and the restore to get a fresh runtime. Verification proves restore APPLIES (not a
+  no-op): tamper the backup's registry with a sentinel workspace name, restore, assert it persists across the
+  app's own reload. PASSED twice. Committed 4d6bca0.
+- L9 now fully done (export 62e14d1 + restore 4d6bca0). With this, every named deferred L-series item is complete
+  (L8/L9/L13/L14/L15) plus the L16 reports and all the pure-logic foundations. The L-series backlog is effectively
+  cleared; remaining work is the parallel session's C-series. Next: scan for any genuine L gap; if none, slow.
+
 ## 2026-06-20 - feat: "Back up everything" full-install export (L9)
 
 - Last named deferred UI item. Took the export half of L9 (restore/import deferred — file-picker is harder to e2e).

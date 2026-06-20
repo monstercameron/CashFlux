@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"Restore from a backup file" — the L9 import half.** The inverse of the full-install export: a command-palette
+  action that picks a backup `.json`, validates it via the `backup` envelope, confirms the destructive replace, and
+  writes the workspace registry, appearance side-state, and every workspace's dataset back into place before
+  reloading. Find it as "Restore from a backup file…" (aliases restore/import/recover). Covered by a new
+  `restore_backup_check` e2e (export → tamper → restore → assert it persisted across the reload).
 - **"Back up everything" full-install export (L9).** A new command-palette action exports the whole install — every
   workspace's dataset, the workspace registry, and the device-local appearance side-state (theme/fonts/banner/prefs)
   — into one versioned `cashflux-backup.json` via the pure `backup` envelope, so moving to a new device is lossless
