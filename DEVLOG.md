@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C83 multi-select filter model (pure, additive)
+
+- Moved to C83 (txnfilter area clean + un-taken; other agent on workflows.go). The ticket frames the "real work" as
+  flipping Criteria.Account/Category/Member from string→[]string — but those fields are consumed by the CONTENDED
+  transactions.go + uistate/txfilter.go, so mutating them there would break the build in files I can't touch.
+- So built it ADDITIVELY: a NEW MultiCriteria type (new file multi.go) leaving Criteria untouched. Matches = OR
+  within a dimension / AND across; Tags is a new dimension matching on shared tags; empty dimension = unconstrained.
+  Included the toolbar ops: Normalize (dedup+sort; slices need it), Equal (explicit, slices aren't ==),
+  Add/Without(field,value)/Toggle for per-value chips, ActiveValues, IsEmpty. New FieldTags constant.
+- 6 test funcs (OR/AND across 4 dims, tag intersection, order-preserving Filter, Normalize, Equal, Add/Toggle/
+  Without, ActiveValues). Two quick Go gotchas fixed: composite literal in an `if` needs parens; my tx() helper
+  arity. go test green. Committed bafbee9. The screen wiring (checkbox lists in the filter popover, string-or-array
+  tolerant JSON migration) is the contended transactions.go/txfilter.go step — deferred.
+- Next non-contended C slice: C81 AI provider abstraction as a NEW package, or another pure gap. Check un-taken first.
+
 ## 2026-06-20 - feat: C69 step 2 — derived shell tokens (pure)
 
 - Continued C69 (verified the theme area was clean + the last theme commits were mine; the other agent was on

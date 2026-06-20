@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Mermaid diagrams now render in the app (C70).** A new `uiw.Mermaid` component (mirroring `uiw.Chart`) renders
+  generated Mermaid source to inline SVG via a vendored-locally `web/mermaid.min.js` (no CDN, C44) + a `web/mermaid.js`
+  shim initialised with `securityLevel:'strict'` (no click-JS / raw-HTML labels, C45/C70). Wired the first case: the
+  **Workflows screen shows a flowchart of each workflow** (trigger → condition → actions). Covered by a new
+  `mermaid_render_check` e2e that asserts real `<svg>` output.
+- **Multi-select transaction filter model (C83, logic).** New pure, table-tested `txnfilter.MultiCriteria` matches
+  transactions with the standard mental model — OR within a dimension, AND across — over Accounts/Categories/Members
+  and a new Tags dimension (a transaction matches Tags when it shares any selected tag; an empty dimension is
+  unconstrained). It carries the operations the toolbar needs: `Normalize` (dedup+sort), `Equal` (explicit, since
+  slices aren't comparable), `Add`/`Without(field, value)`/`Toggle` for per-value chips, and `ActiveValues`. Added
+  additively (the single-value `Criteria` is unchanged); the Transactions-screen wiring is a later step.
 - **Derived shell tokens in the theme engine (C69, logic).** The theme now emits the CSS tokens the shell needs but
   the engine never produced — `--bg-elev` (elevated surface), `--text-faint`, `--accent-dim`, `--warn`, and a
   `--danger` alias of the down color — derived from the theme's own tokens via a new pure `mixHex` blend, so any
