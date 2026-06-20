@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — member reassign-on-delete (no orphan)
+
+- Tenth journey story (e2e/story_member_reassign.test.mjs): mirror of the category one for members. Add a
+  member (#member-add), give them an account (owner select aria-label "Owner"), delete the member — which
+  opens the reassign panel because they own an entity — confirm with the default target (the household /
+  "group"), and assert the member is gone and the account's ownerId moved to the target (not the deleted
+  member). Scoped the member row to one that contains the Delete-member button (the screen also renders an
+  owner list with the same names + .row class). Passed first try. Suite now 19 green. Test-only, no sw bump.
+- Next: wire run-stories.ps1 into CI, or add more journeys (members set-default, sub-category rollup,
+  duplicate/transfer transaction, archive/restore account).
+
 ## 2026-06-20 - test: B16 story — category reassign-on-delete (no orphan)
 
 - Ninth, and trickiest, journey story (e2e/story_category_reassign.test.mjs): add a category (#cat-add), assign
