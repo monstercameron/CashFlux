@@ -37,12 +37,14 @@ and every commit updates this file under `Unreleased`.
   category choosing a reassignment target, and confirms the transaction moves to the target with no orphan),
   **member reassign-on-delete** (gives a member an account, deletes the member choosing a new owner, and
   confirms the account is reassigned with no orphan), and **transfer excluded from totals** (transfers between
-  two accounts and confirms the paired legs are created while the Income/Spending KPIs stay unchanged).
+  two accounts and confirms the paired legs are created while the Income/Spending KPIs stay unchanged), and
+  **account archive + restore** (archives an account via its row menu and restores it, confirming the archived
+  flag round-trips).
   The
   start of B16's "every feature, provably flawless" story suite (`e2e/story_*.test.mjs`). The whole suite —
   every story plus the feature checks (theme/fonts/banner/icon-weight/density-unify/per-widget-color) — now
   runs as one command, `e2e/run-stories.ps1` (builds the wasm once, serves it, runs each `.mjs` in a fresh
-  browser, exits non-zero on any failure): currently **20 green**.
+  browser, exits non-zero on any failure): currently **21 green**.
 - **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
   settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
   that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and

@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — account archive + restore
+
+- Twelfth journey story (e2e/story_account_archive.test.mjs): add an account, open its row's More-actions menu
+  (button[aria-label="More actions"]) and click "Archive account", assert dataset account.archived === true,
+  then open the menu again and click "Restore account", assert archived is falsy again. A small rowMenuAction
+  helper opens the menu and clicks the titled item. Suite now 21 green. Test-only, no sw bump.
+- Next: sub-category rollup, or the cross-platform Node CI runner (e2e/run-stories.mjs).
+
 ## 2026-06-20 - test: B16 story — transfer excluded from totals
 
 - Eleventh journey story (e2e/story_txn_transfer.test.mjs), a correctness gem: add two same-currency accounts
