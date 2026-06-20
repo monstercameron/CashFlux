@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — documents CSV import (+ a real finding)
+
+- Twentieth journey story (e2e/story_documents_csv.test.mjs): on /documents, read a real (comma-free) account
+  name from the dataset, paste a one-row CSV into the importer textarea, submit, and assert the described
+  transaction is created in that account and persisted. With this, B16 journey coverage spans every screen
+  (20 journeys + 9 feature checks = 29 green).
+- FINDING worth a follow-up (not fixed here — it's an app-behavior/spec decision in internal/store/csv.go +
+  the documents placeholder, and store is shared/parallel-session territory): the importer's OWN placeholder
+  documents the shape `date,payee,amount,account`, but importing that shape yields "Imported 0 transactions"
+  because store.TransactionsFromCSV maps the `payee` column to Transaction.Payee while ValidateTransaction
+  REQUIRES Desc — so a payee-only row is silently rejected. The story therefore uses a `desc` column (which
+  imports fine). Suggested fix: fall back Desc = Payee when Desc is empty in TransactionsFromCSV (or change the
+  placeholder to `desc`). Test-only, no sw bump.
+
 ## 2026-06-20 - test: B16 story — customize formula (evaluate + save)
 
 - Nineteenth journey story (e2e/story_customize_formula.test.mjs): on /customize (the sandboxed formula
