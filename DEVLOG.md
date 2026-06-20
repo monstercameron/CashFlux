@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — category reassign-on-delete (no orphan)
+
+- Ninth, and trickiest, journey story (e2e/story_category_reassign.test.mjs): add a category (#cat-add), assign
+  a transaction to it (txn add-form category select aria-label "Category"), then delete the category — which,
+  because it's in use, opens the reassign panel — pick a target, and click "Move and delete". Asserts the
+  category is gone and the transaction's categoryId moved to the CHOSEN target (captured from the select's
+  value), is not the deleted id, and points to a live category — i.e. no orphan.
+- Cross-screen flow done via rail clicks (nav a[title="..."]) to keep the in-memory store between
+  /categories and /transactions (no reload/re-hydrate mid-flow); only the assertions read the persisted dataset
+  (top-level data.categories/data.transactions arrays), polled. Passed first try. Suite now 18 green.
+  Test-only, no sw bump.
+- Next: members reassign-on-delete, or wire run-stories.ps1 into CI (.github/workflows).
+
 ## 2026-06-19 - test: B16 story — to-do complete-toggle
 
 - Eighth journey story (e2e/story_todo_toggle.test.mjs): add a task via #task-add, mark it complete via the
