@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom-font upload logic (B20).** New pure `theme.FontAsset` (family + MIME + data URL) with
+  `FontFaceCSS` (renders an `@font-face` rule with a `format()` hint and `font-display: swap`),
+  `ValidateFontUpload` (accepts WOFF2/WOFF/TTF/OTF up to a 1 MiB cap, rejects other formats / empty /
+  oversize), and `FontMIMEForName` (recovers a MIME type from the file extension when the browser reports
+  none). Table-tested foundation for letting users bring their own font; the upload UI and live `@font-face`
+  injection follow.
 - **Shareable theme import/export (B20).** The theme editor can now export the active theme to a
   `cashflux-theme.json` file and import one back, so themes are portable between devices and people. Import
   validates the file and shows a friendly inline message if it isn't a valid theme.

@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: pure custom-font upload logic (B20, bottom-up)
+
+- Started the user's "artifact uploads for fonts/icons/images" ask, SDLC-first: pure tested logic before any
+  UI. New `internal/theme/font.go` — `FontAsset{Family,MIME,DataURL}`, `FontFaceCSS` (an @font-face rule with
+  the right `format()` hint + `font-display: swap`), `ValidateFontUpload` (WOFF2/WOFF/TTF/OTF, ≤1 MiB), and
+  `FontMIMEForName` (extension→MIME fallback, since browsers often report no type for .ttf/.otf).
+- Storage decision: the font bytes will live in a SEPARATE durable slot (e.g. `cashflux:fonts`), NOT embedded
+  in the Theme JSON. The theme only references the family name. Rationale: PersistTheme runs on every editor
+  keystroke; embedding a ~1 MB data URL there would re-serialize the whole font each time. Keeping it separate
+  keeps theme writes cheap and survives the size cap (base64 inflates ~33%, localStorage ~5 MB). Also: I read
+  the user's "artifact" as "uploaded asset" generically — storing fonts/images with appearance (localStorage),
+  NOT as domain.Artifact in the SQLite dataset (which is financial data that gets exported/synced).
+- Reuse `artifacts.DataURL`/`HumanSize` (pure) in the wasm layer next. No rendered change yet, so no sw bump.
+- Next: wasm font store (LoadFonts/PersistFont) + ApplyTheme injects the @font-face + the editor's upload
+  button adds the family to the font picker. Then header/banner images, the density/scale unify, icon packs.
+
 ## 2026-06-19 - feat: theme import/export (B20)
 
 - Rounded out the editor with shareable themes: Export writes the active theme via the pure `Theme.ToJSON`
