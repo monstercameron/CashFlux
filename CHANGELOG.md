@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Theme editor in Settings → Appearance (B20).** A new live theme editor lets you start from a built-in
+  preset (Forest / Midnight / Paper), then fine-tune every design token — the eight surface/text/accent/
+  semantic colors via native color pickers, corner radius, text-size scale, the interface and heading fonts
+  (curated list), and density. Every change applies and persists instantly, with a live contrast check that
+  warns if any text would be hard to read, plus a one-click "Reset to default" that restores the theme
+  migrated from your display preferences. Verified in-browser via Playwright (renders, live-applies, no
+  console errors).
 - **Theme tokens drive the live UI (B20).** New wasm `uistate.ApplyTheme/LoadTheme/PersistTheme` bridge the
   pure `theme` engine to the document: `ApplyTheme` writes a theme's design tokens onto `:root` as CSS custom
   properties (surfaces, border, text, accent, radius, fonts, scale, plus a `--bg` alias), `LoadTheme` returns

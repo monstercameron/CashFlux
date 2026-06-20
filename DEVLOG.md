@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: live theme editor in Settings → Appearance (B20)
+
+- Third B20 rung (UI): `internal/app/theme_editor.go` — a self-contained `themeEditor` component mounted with
+  one line in the appearance section of the (shared) settings.go. Presets, eight native color pickers, radius
+  + text-size number inputs, curated UI/heading font selects, a density segmented control, a live
+  `theme.Validate()` contrast warning, and Reset-to-default (`uistate.DefaultTheme()`, added alongside). Every
+  edit calls ApplyTheme+PersistTheme immediately, so the app itself is the preview.
+- Framework care: each preset button and color field is its own component (themePresetBtn/themeColorField) so
+  their On* hooks stay stable despite rendering in a loop (the documented gotcha). Slices of nodes pass as a
+  single child arg (the scaleOptions idiom); fontOptions returns []uic.Node, not a Fragment (can't spread
+  []Node into Fragment's ...any).
+- Kept English strings inline rather than threading new keys through the shared i18n en.go (parallel session
+  territory) — a deliberate decoupling, can be migrated to i18n later.
+- Verified in a real browser: a new Playwright one-off (e2e/theme_shot.mjs) opens Settings via the household
+  button, waits for `.theme-editor`, screenshots it and clicks a preset — renders clean, live-applies, zero
+  page errors. PNGs gitignored.
+- Known follow-up (the "unify" debt): the editor's density + text-size now duplicate the legacy prefs controls
+  sitting just above them. Subsuming those into the engine (and removing the old controls) is the next rung;
+  kept separate to stay one-feature-per-commit. Then: theme JSON import/export, font-file + header-image
+  artifact uploads, icon packs. Bumped sw cache v181→v182.
+
 ## 2026-06-19 - feat: state bridge wires the theme engine to the DOM (B20)
 
 - Second B20 rung: `internal/uistate/theme.go` (js+wasm) — `ApplyTheme` sets a theme's `CSSVars()` on the

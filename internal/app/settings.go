@@ -649,6 +649,7 @@ func globalSettingsForm() uic.Node {
 			Span(uistate.T("settings.displayScale")),
 			Select(Class("set-input"), Attr("aria-label", uistate.T("settings.displayScale")), Title(uistate.T("settings.displayScale")), OnChange(onScale), scaleOptions(pr.Scale)),
 		),
+		uic.CreateElement(themeEditor),
 		Div(Class("set-label"), uistate.T("settings.preferences")),
 		Div(Class("toggle-row"),
 			Span(uistate.T("settings.weekStart")),

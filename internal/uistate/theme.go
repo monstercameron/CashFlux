@@ -23,6 +23,13 @@ func LoadTheme() theme.Theme {
 			return t
 		}
 	}
+	return DefaultTheme()
+}
+
+// DefaultTheme returns the theme migrated from the current display preferences,
+// ignoring any saved custom theme — the target of the editor's "reset to
+// default". A "system" preference is resolved to a concrete light/dark palette.
+func DefaultTheme() theme.Theme {
 	p := loadPrefs()
 	p.Theme = resolvePrefsTheme(p.Theme)
 	return theme.FromPrefs(p)

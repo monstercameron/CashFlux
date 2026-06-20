@@ -14,6 +14,7 @@
 
 # UI/UX review captures (screenshots + rendered text from gwc/Playwright runs)
 /.review-screenshots/
+/e2e/*.png
 
 # Local env / editor
 .env
