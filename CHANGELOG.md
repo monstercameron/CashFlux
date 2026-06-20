@@ -44,6 +44,12 @@ and every commit updates this file under `Unreleased`.
   guarded by table tests in `internal/store`.
 
 ### Changed
+- **Radiogroups use roving tabindex for proper keyboard navigation (L7, a11y).** The Segmented control
+  (Week/Month/Quarter, etc.) and the accent SwatchPicker followed the ARIA `radiogroup` role but made *every*
+  option a Tab stop. They now use a roving tabindex — exactly one Tab stop (the checked option, or the first when
+  none is checked) with the rest `tabindex=-1` — and arrow keys move selection (which follows focus) within the
+  group; the SwatchPicker gained the arrow-key navigation it was missing. Locked in by a new `roving_tabindex_check`
+  e2e (one Tab stop per radiogroup, and the checked option is that stop) across the period control + Settings.
 - **Transactions ledger is now a sortable table (C47).** The flat row list is replaced by a semantic `<table>`
   with aligned columns (select · Date · Description · Category · Account · Tags · Amount · Cleared · Actions),
   right-aligned tabular amounts, and **click-to-sort column headers** (real buttons that sort by Date/

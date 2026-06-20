@@ -34,6 +34,19 @@ func segmented(props SegmentedProps) uic.Node {
 	options := props.Options
 	selected := props.Selected
 	onSelect := props.OnSelect
+	// Roving tabindex (ARIA radiogroup): exactly one option is a Tab stop — the
+	// checked one, or the first when none is checked — and arrows move between them.
+	anySelected := false
+	firstVal := ""
+	if len(options) > 0 {
+		firstVal = options[0].Value
+	}
+	for _, o := range options {
+		if o.Value == selected {
+			anySelected = true
+			break
+		}
+	}
 	move := func(delta int) {
 		if onSelect == nil || len(options) == 0 {
 			return
@@ -69,6 +82,7 @@ func segmented(props SegmentedProps) uic.Node {
 					Value:    o.Value,
 					Label:    o.Label,
 					Active:   o.Value == selected,
+					TabStop:  o.Value == selected || (!anySelected && o.Value == firstVal),
 					OnSelect: onSelect,
 				})
 			},
@@ -81,6 +95,7 @@ type segButtonProps struct {
 	Value    string
 	Label    string
 	Active   bool
+	TabStop  bool // the single roving Tab stop in the radiogroup
 	OnSelect func(value string)
 }
 
@@ -96,11 +111,16 @@ func segButton(props segButtonProps) uic.Node {
 	if props.Active {
 		checked = "true"
 	}
+	tabidx := "-1"
+	if props.TabStop {
+		tabidx = "0"
+	}
 	return Button(
 		Class(cls),
 		Type("button"),
 		Attr("role", "radio"),
 		Attr("aria-checked", checked),
+		Attr("tabindex", tabidx),
 		OnClick(func() {
 			if onSelect != nil {
 				onSelect(value)
@@ -218,6 +238,7 @@ func toggleRow(props ToggleRowProps) uic.Node {
 type SwatchProps struct {
 	Color    string
 	Selected bool
+	TabStop  bool // the single roving Tab stop in the swatch radiogroup
 	OnSelect func()
 }
 
@@ -239,12 +260,16 @@ func swatch(props SwatchProps) uic.Node {
 			onSelect()
 		}
 	}
+	tabidx := "-1"
+	if props.TabStop {
+		tabidx = "0" // roving tabindex: one Tab stop, arrows move within the group
+	}
 	return Div(
 		Class(cls),
 		Attr("role", "radio"),
 		Attr("aria-checked", checked),
 		Attr("aria-label", props.Color),
-		Attr("tabindex", "0"), // focusable: a div needs this to be keyboard-reachable
+		Attr("tabindex", tabidx),
 		Style(map[string]string{"background": props.Color}),
 		OnClick(selectFn),
 		// Space/Enter pick the color (PreventDefault on Space stops page scroll).
@@ -272,14 +297,52 @@ func SwatchPicker(props SwatchPickerProps) uic.Node {
 
 func swatchPicker(props SwatchPickerProps) uic.Node {
 	onSelect := props.OnSelect
+	colors := props.Colors
+	// Roving tabindex + arrow-key navigation (ARIA radiogroup): one Tab stop, and
+	// Left/Up/Right/Down move selection (which follows focus) between swatches.
+	anySelected := false
+	firstColor := ""
+	if len(colors) > 0 {
+		firstColor = colors[0]
+	}
+	for _, c := range colors {
+		if c == props.Selected {
+			anySelected = true
+			break
+		}
+	}
+	move := func(delta int) {
+		if onSelect == nil || len(colors) == 0 {
+			return
+		}
+		i := 0
+		for idx, c := range colors {
+			if c == props.Selected {
+				i = idx
+				break
+			}
+		}
+		onSelect(colors[(i+delta+len(colors))%len(colors)])
+	}
 	return Div(Class("flex gap-2 items-center"), Attr("role", "radiogroup"), Attr("aria-label", uistate.T("a11y.accentColor")),
-		MapKeyed(props.Colors,
+		OnKeyDown(func(e uic.KeyboardEvent) {
+			switch e.GetKey() {
+			case "ArrowLeft", "ArrowUp":
+				e.PreventDefault()
+				move(-1)
+			case "ArrowRight", "ArrowDown":
+				e.PreventDefault()
+				move(1)
+			}
+		}),
+		MapKeyed(colors,
 			func(c string) any { return c },
 			func(c string) uic.Node {
 				color := c
 				return uic.CreateElement(swatch, SwatchProps{
 					Color:    color,
 					Selected: color == props.Selected,
+					TabStop:  color == props.Selected || (!anySelected && color == firstColor),
 					OnSelect: func() {
 						if onSelect != nil {
 							onSelect(color)

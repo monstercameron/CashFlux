@@ -56,6 +56,21 @@ problems and fixes, and what's next.
   renders clean - splash fix holding). Full suite 37/0 green; go test ./internal/domain ./internal/store green.
 - Next L5 gaps: payoff timeline chart (gap4) + progress tracking vs a stored baseline (gap5).
 
+## 2026-06-20 - feat: L7 roving tabindex for radiogroups (a11y)
+
+- L7 a11y gap 1. Segmented + SwatchPicker had role=radiogroup but every option was a Tab stop; the ARIA radio
+  pattern wants ONE Tab stop (the checked option) with arrows moving within. Applied roving tabindex in
+  internal/ui/controls.go: segButton/swatch take a TabStop prop; the parent (segmented/swatchPicker) computes it
+  = checked, or the first option when none is checked (so the group is never Tab-unreachable). swatchPicker also
+  gained Left/Up/Right/Down arrow navigation (selection follows focus) - without it, roving tabindex would have
+  made non-selected swatches keyboard-unreachable. Pure view-layer; bumped sw v207->v208.
+- New gate e2e/roving_tabindex_check.mjs: scans every [role=radiogroup], asserts exactly one [role=radio] with
+  tabindex=0 and that the aria-checked radio IS that Tab stop, across /transactions (the period Segmented) +
+  Settings (8 groups: swatch pickers + segmented controls). Full suite 41/0 green; wasm green.
+- Next L7: promote the broader runtime a11y sweep to a committed gate (landmarks nav[aria-label]+main, zero
+  focusable controls without an accessible name, zero unlabeled form fields, focus ring on first Tab) across
+  /transactions, /accounts, Settings.
+
 ## 2026-06-20 - fix: L6 wiped store stays empty (no sample re-seed)
 
 - L6 core bug: hydrateDataset (persist.go) re-seeded the sample whenever the dataset key was empty/missing, so a
