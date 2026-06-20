@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C88 Gravatar URLs (pure) + non-contended backlog stock-take
+
+- Took C88's pure Gravatar half (internal/gravatar free + un-taken; other agent on bills_screen.go). Tiny complete
+  package: Hash (MD5 of trimmed/lowercased email) + URL (identicon fallback, size clamp 1..2048, default 80).
+  crypto/md5 is fine under js/wasm. Tested against the canonical Gravatar doc vector (0bc83cb5…1346). Committed 43c0e64.
+- STOCK-TAKE: the non-contended pure-logic C backlog is now effectively exhausted. Seven pure foundations landed
+  this stretch — C69 tokens, C83 filter, C81-p1 providers, C82 agent, C78-p1 history, C74 statement, C88 gravatar —
+  and every REMAINING open C-step is either a UI/wiring step or a phase-2+ that lives in the contended shared files
+  (index.html/transactions.go/internal/ai/settings.go/appstate/documents.go/members.go) the other agent co-edits.
+- Slowing the loop to 1200s and surfacing to the user: the productive next move is to coordinate on a specific
+  contended file (or pause), rather than keep spinning. Will keep a long heartbeat in case new non-contended work frees up.
+
 ## 2026-06-20 - feat: urgency tone on upcoming bills (C57 item 3)
 
 - C57 item 3. BillRow's "due …" meta now carries a tone via a new billUrgencyTone(daysUntil): text-down when n<=0
