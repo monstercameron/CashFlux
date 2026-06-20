@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Members show a colored initial avatar (C62).** Each member row now leads with a small disc carrying the
+  member's first initial, tinted with their chosen color — more scannable and personable than the bare swatch.
+  Decorative (the name still follows as text), so it's `aria-hidden`. Covered by a new `members_avatar_check` e2e.
+
 ### Fixed
 - **Customize formats numbers instead of raw floats (C61).** The formula result and the available-variables
   reference printed raw floats (net worth as `354070`), jarring against the app's money formatting. They now

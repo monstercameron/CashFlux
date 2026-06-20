@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: colored initial avatars for members (C62)
+
+- C62 item 4 (the "god-tier" delight; self-contained, no i18n/CSS-file). Replaced the bare color swatch in each
+  member row with memberAvatar(name, color): a 1.5rem disc, member color background, white uppercased first
+  initial centered (rune-safe; "?" when blank; falls back to --border when no color). aria-hidden since the name
+  follows as text. Inline-styled (index.html parallel-dirty).
+- New members_avatar_check.mjs: on /members asserts the first .member-avatar shows a single uppercase initial and
+  computes to a round, background-tinted disc (got "M" on rgb(74,222,128)). PASS. App wasm builds clean; gofmt
+  clean. Committed via git commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C62 remaining: name visible label + reassign-select label/focus-on-open, icon-only rows on narrow widths. Next:
+  C63 (Categories) — note it flags a reassign-kind correctness bug worth prioritising.
+
 ## 2026-06-20 - feat: thousands-group Customize results + variables (C61)
 
 - C61 item 2 (the C2-parallel formatting win; pure, no i18n/CSS). The formula result (formatFormulaValue) and the

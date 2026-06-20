@@ -250,6 +250,30 @@ func Members() ui.Node {
 	)
 }
 
+// memberAvatar is a small colored initial avatar (the member's first letter on a
+// disc tinted with their color), for scannability and a touch of personality (C62).
+// Decorative — the member name follows as text — so it's aria-hidden. Inline-styled
+// to avoid a stylesheet dependency; falls back to the border color when no color set.
+func memberAvatar(name, color string) ui.Node {
+	initial := "?"
+	if t := strings.TrimSpace(name); t != "" {
+		initial = strings.ToUpper(string([]rune(t)[0]))
+	}
+	bg := color
+	if strings.TrimSpace(bg) == "" {
+		bg = "var(--border)"
+	}
+	return Span(Class("member-avatar"), Attr("aria-hidden", "true"),
+		Style(map[string]string{
+			"display": "inline-flex", "align-items": "center", "justify-content": "center",
+			"width": "1.5rem", "height": "1.5rem", "border-radius": "50%",
+			"background": bg, "color": "#fff", "font-size": "0.7rem", "font-weight": "700",
+			"margin-right": "0.5rem", "vertical-align": "middle", "flex-shrink": "0",
+		}),
+		initial,
+	)
+}
+
 type memberRowProps struct {
 	Member       domain.Member
 	OnDelete     func(string)
@@ -316,7 +340,7 @@ func MemberRow(props memberRowProps) ui.Node {
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"),
-				Span(Class("swatch"), Style(map[string]string{"background": color, "display": "inline-block", "margin-right": "0.5rem", "vertical-align": "middle"})),
+				memberAvatar(m.Name, color),
 				m.Name,
 			),
 			Span(Class("row-meta"), meta),
