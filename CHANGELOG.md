@@ -62,6 +62,11 @@ and every commit updates this file under `Unreleased`.
   look-alike-prefix safety).
 
 ### Fixed
+- **Most icons rendered blank (the whole C46 pass was invisible).** `ui.Icon` drew shapes from a hardcoded
+  switch that only covered ~16 of the curated glyphs, so every newly added icon — all the row-action, AI,
+  KPI-tile, status, and even the Reports/Subscriptions/Bills/Split rail icons — rendered as an empty SVG.
+  `iconBody` now renders each icon from `internal/icon`'s canonical `Inner()` markup (the single source for the
+  whole set) by parsing its path/circle/rect elements, so every `icon.Name` paints — verified with screenshots.
 - **Active rail highlight (and breadcrumb) didn't follow navigation.** The Sidebar/TopBar derived the current
   screen from a non-reactive `router.InspectCurrentRoute()` snapshot and, taking no props, were memoized — so
   the highlight froze on the first screen ("the menu item doesn't move"). Each route's logical path is now
