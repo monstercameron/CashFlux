@@ -45,6 +45,13 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Transaction category-split model (L3).** `domain.Transaction` gains an additive `Splits []CategorySplit`
+  (`omitempty`) so a single bank charge can carry a per-category breakdown — a grocery receipt counts once
+  against the account yet reports produce/dairy/household spend separately. Pure helpers `SplitsTotal`,
+  `SplitsReconcile` (splits must sum to the amount to the minor unit; an unsplit transaction reconciles
+  trivially), and `Transaction.HasSplits()`/`SplitsReconcile()`. The field rides the existing transactions JSON,
+  so it survives a store export/import round-trip with no schema change. Table-tested (including discount lines)
+  plus a store round-trip test.
 - **Receipt-mode logic — one charge split across categories (L3, bottom-up start).** `internal/extract` gains a
   `Receipt` (a single total plus categorized `ReceiptLine` splits) distinct from a statement: a statement is many
   charges → many transactions, a receipt is one charge → one transaction split across categories (so importing a

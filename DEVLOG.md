@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L3 transaction category-split model
+
+- L3 step 1 (model). domain.Transaction now has an additive `Splits []CategorySplit` (json omitempty), so a
+  single charge can carry a per-category breakdown without becoming N transactions. CategorySplit{CategoryID,
+  Amount} + pure helpers SplitsTotal, SplitsReconcile (sum to amount to the minor unit; no-splits reconciles
+  trivially), and Transaction.HasSplits()/SplitsReconcile(). Type + helpers live in a new
+  domain/category_split.go; the only edit to the shared entities.go was the one omitempty field (checked clean
+  first; keyed struct literals across the codebase so adding a field is safe).
+- Because Splits rides the existing transactions JSON blob, persistence needed NO store change. Verified with a
+  store round-trip test (PutTransaction -> Snapshot -> Export -> Import keeps 3 splits, still reconciling) plus
+  domain table tests (reconcile, discount line, short, no-splits). go test ./internal/domain ./internal/store
+  green; wasm build green (the struct change ripples to the UI layer but all literals are keyed). No sw bump (no
+  rendered change yet; no UI consumer).
+- Next L3: appstate ImportReceipt action (build ONE transaction with splits from an extract.Receipt, mapping
+  each line's free-text category to a real category + running Rules), then the documents.go Receipt-vs-Statement
+  toggle with a reconcile-gated split table, then e2e.
+
 ## 2026-06-20 - feat: L3 receipt-mode logic (pure, bottom-up)
 
 - L3 core gap: vision extraction yields N independent rows, so importing a grocery receipt creates many

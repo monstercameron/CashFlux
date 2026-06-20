@@ -73,6 +73,7 @@ type Transaction struct {
 	Desc              string          `json:"desc"`
 	CategoryID        string          `json:"categoryId,omitempty"`
 	Amount            money.Money     `json:"amount"`
+	Splits            []CategorySplit `json:"splits,omitempty"`
 	TransferAccountID string          `json:"transferAccountId,omitempty"`
 	Cleared           bool            `json:"cleared,omitempty"`
 	Tags              []string        `json:"tags,omitempty"`
