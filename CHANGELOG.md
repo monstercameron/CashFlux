@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Bounded Insights-agent context builder (C89 phase 1, logic).** New pure, table-tested `internal/aicontext`
+  assembles a richer, privacy-tiered financial snapshot for the model's system prompt — net worth, period income/
+  expense, accounts, budgets, goals, top categories/payees, recent transactions, and **every enabled Formula
+  evaluated to its current value** — replacing the 4-aggregate `ai.FinancialContext`. Tiers (aggregates → +formulas
+  → +breakdowns → +recent txns) gate what's shared and top-N/recent-N cap the lists, so it injects a summary, not
+  the raw ledger. Independently fixes the C59 "Q&A context too thin" gap; the tools/UI phases come next.
 - **Category rows show a usage count that drills into Transactions (C63).** Each category row now displays how
   many transactions are filed under it (e.g. "25 transactions"); clicking the badge navigates to Transactions
   pre-filtered to that category, matching the Accounts/Members drill pattern. Categories with no transactions show

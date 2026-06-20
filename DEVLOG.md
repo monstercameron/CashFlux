@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C89 phase 1 — Insights-agent context builder (pure)
+
+- User added C89 ("Insights as an agent") and redirected me to it, then asked to complete ALL insights/AI todos —
+  contended files (insights.go/internal/ai) now authorized. Started with C89 phase 1, the pure, independently-
+  valuable slice that also fixes C59's thin-context gap.
+- New internal/aicontext: Build(Inputs, Opts) → bounded, privacy-tiered Context; Context.Prompt() renders a compact
+  Markdown block for the system prompt. Kept PURE by taking pre-formatted strings (caller does appstate/money
+  formatting) — no appstate/money import, mirroring the history.Snapshot decoupling. Tiers gate sections (the opt-in
+  privacy shift from B17/C45), TopN/RecentN cap lists (inject a summary, not the ledger), and it carries the user's
+  evaluated Formula KPIs (their explicit ask). 4 test funcs (tier gating, caps+defaults, prompt rendering, dash).
+  Committed e4ac1af. (One snag: an inline here-string commit msg with quotes/arrows mangled `-m` arg parsing →
+  switched back to the reliable -F .tmp/msg.txt.)
+- NEW OBJECTIVE: complete every insights/AI todo. Inventory — C89 (p2 read-tools/p3 write-tools/p4 UI), C59
+  (separate Explain/Q&A slots, richer Q&A context [aicontext lands this], streaming, pinned-row truncation), C81
+  (p2 transport+settings/p3 anthropic/p4 settings UI/p5 cap-gating/p6 proxy), C82 (appstate tool binding/UI), L8
+  (insights starter chips + affordability hook), polish (thinking skeleton, insight-dot size). Many need contended
+  files; will take them atomically, checking the other agent isn't mid-file (they're active in insights.go/C59).
+
 ## 2026-06-20 - feat: category per-row usage count + drill-down (C63)
 
 - The last open C63 item: category rows didn't show how many transactions used them (the count only surfaced on
