@@ -80,9 +80,14 @@ func Documents() ui.Node {
 	aiErr := ui.UseState("")
 	draft := ui.UseState([]extract.Row{})
 	importAcct := ui.UseState(defaultAcc)
+	receiptMode := ui.UseState(false)  // import the draft as ONE split transaction
+	receiptTotal := ui.UseState("")    // the receipt's single total (defaults to the line sum)
+	receiptMerchant := ui.UseState("") // optional store name
 
 	onCsv := ui.UseEvent(func(v string) { csvText.Set(v) })
 	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
+	onReceiptTotal := ui.UseEvent(func(v string) { receiptTotal.Set(v) })
+	onReceiptMerchant := ui.UseEvent(func(v string) { receiptMerchant.Set(v) })
 
 	// recordDocument saves a best-effort audit record of an import (logged by
 	// appstate on failure). Declared before the import handlers that call it.
@@ -182,6 +187,31 @@ func Documents() ui.Node {
 		rev.Set(rev.Get() + 1)
 	}))
 
+	// importReceipt imports the reviewed lines as ONE transaction split across
+	// categories (receipt mode), instead of N standalone transactions.
+	importReceipt := ui.UseEvent(Prevent(func() {
+		rows := draft.Get()
+		lines := make([]extract.ReceiptLine, 0, len(rows))
+		for _, r := range rows {
+			lines = append(lines, extract.ReceiptLine{Description: r.Description, Category: r.Category, Amount: absAmount(r.Amount)})
+		}
+		rec := extract.Receipt{Merchant: strings.TrimSpace(receiptMerchant.Get()), Total: absAmount(receiptTotal.Get()), Lines: lines}
+		tx, err := app.ImportReceipt(rec, importAcct.Get(), time.Now())
+		if err != nil {
+			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
+			return
+		}
+		recordDocument(domain.DocImage, importAcct.Get(), rows)
+		draft.Set([]extract.Row{})
+		imageURL.Set("")
+		receiptTotal.Set("")
+		receiptMerchant.Set("")
+		receiptMode.Set(false)
+		aiErr.Set("")
+		msg.Set("Imported the receipt as one transaction split across " + plural(len(tx.Splits), "category") + ".")
+		rev.Set(rev.Get() + 1)
+	}))
+
 	removeDraft := func(i int) {
 		cur := draft.Get()
 		if i < 0 || i >= len(cur) {
@@ -227,14 +257,82 @@ func Documents() ui.Node {
 		for _, a := range accounts {
 			acctOptions = append(acctOptions, Option(Value(a.ID), SelectedIf(importAcct.Get() == a.ID), a.Name))
 		}
+
+		// Receipt mode imports the lines as ONE transaction split across categories
+		// (so a grocery receipt counts once against the card charge). The receipt
+		// math runs in the base currency, matching appstate.ImportReceipt.
+		recCur := app.Settings().BaseCurrency
+		if recCur == "" {
+			recCur = "USD"
+		}
+		recDec := currency.Decimals(recCur)
+		toggle := uiw.ToggleRow(uiw.ToggleRowProps{
+			Label: "Import as one receipt (split across categories)",
+			On:    receiptMode.Get(),
+			OnChange: func(on bool) {
+				if on && strings.TrimSpace(receiptTotal.Get()) == "" {
+					var sum int64
+					for _, r := range rows {
+						if m, err := money.ParseMinor(absAmount(r.Amount), recDec); err == nil {
+							sum += m
+						}
+					}
+					receiptTotal.Set(money.FormatMinor(sum, recDec))
+				}
+				receiptMode.Set(on)
+			},
+		})
+
+		var footer ui.Node
+		if receiptMode.Get() {
+			recLines := make([]extract.ReceiptLine, 0, len(rows))
+			for _, r := range rows {
+				recLines = append(recLines, extract.ReceiptLine{Description: r.Description, Category: r.Category, Amount: absAmount(r.Amount)})
+			}
+			resid, residErr := (extract.Receipt{Total: absAmount(receiptTotal.Get()), Lines: recLines}).Residual(recDec)
+			reconciled := residErr == nil && resid == 0
+			var remainderLine ui.Node
+			switch {
+			case reconciled:
+				remainderLine = P(Class("muted"), "Lines add up to the total — ready to import as one transaction.")
+			case residErr != nil:
+				remainderLine = P(Class("err"), Attr("role", "alert"), "Check the amounts — one couldn't be read as a number.")
+			default:
+				off := resid
+				if off < 0 {
+					off = -off
+				}
+				remainderLine = P(Class("err"), Attr("role", "alert"), "Lines are off from the total by "+fmtMoney(money.New(off, recCur))+" — adjust the lines or the total to import.")
+			}
+			importBtn := []any{Class("btn btn-primary"), Type("submit")}
+			if !reconciled {
+				importBtn = append(importBtn, Attr("disabled", "disabled"))
+			}
+			importBtn = append(importBtn, "Import receipt")
+			footer = Div(
+				Div(Class("form-grid"),
+					Input(Class("field"), Type("text"), Attr("aria-label", "Store name (optional)"), Placeholder("Store name (optional)"), Value(receiptMerchant.Get()), OnInput(onReceiptMerchant)),
+					Input(Class("field"), Type("text"), Attr("aria-label", "Receipt total"), Placeholder("Receipt total"), Value(receiptTotal.Get()), OnInput(onReceiptTotal)),
+				),
+				remainderLine,
+				Form(Class("form-grid"), OnSubmit(importReceipt),
+					Select(Class("field"), OnChange(onAcct), acctOptions),
+					Button(importBtn...),
+				),
+			)
+		} else {
+			footer = Form(Class("form-grid"), OnSubmit(importDraft),
+				Select(Class("field"), OnChange(onAcct), acctOptions),
+				Button(Class("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
+			)
+		}
+
 		draftBody = Section(Class("card"),
 			H2(Class("card-title"), uistate.T("documents.reviewTitle", plural(len(rows), "transaction"))),
 			P(Class("muted"), uistate.T("documents.reviewDesc")),
+			toggle,
 			Div(Class("rows"), items),
-			Form(Class("form-grid"), OnSubmit(importDraft),
-				Select(Class("field"), OnChange(onAcct), acctOptions),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
-			),
+			footer,
 		)
 	}
 
@@ -474,6 +572,15 @@ func toDocumentRows(rows []extract.Row) []domain.DocumentRow {
 		out[i] = domain.DocumentRow{Date: r.Date, Description: r.Description, Amount: r.Amount, Category: r.Category}
 	}
 	return out
+}
+
+// absAmount returns the magnitude of an extracted amount string (dropping a
+// currency symbol and any sign), so receipt lines and total are positive figures
+// the receipt math can sum; ImportReceipt re-applies the expense sign.
+func absAmount(s string) string {
+	s = strings.ReplaceAll(strings.TrimSpace(s), "$", "")
+	s = strings.TrimPrefix(s, "-")
+	return strings.TrimSpace(s)
 }
 
 // pickImageDataURL opens a file picker for images and calls onData with the

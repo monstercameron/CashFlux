@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L3 documents Receipt-vs-Statement import UI
+
+- L3 UI. documents.go: after the AI image read populates the draft, a "Import as one receipt (split across
+  categories)" ToggleRow switches the review into receipt mode. Added states receiptMode/receiptTotal/
+  receiptMerchant; turning the toggle on defaults the total to the sum of the lines' magnitudes. In receipt mode
+  the footer shows a store-name + receipt-total input, a live remainder (built from the current lines + total via
+  extract.Receipt.Residual in the base currency), and an Import button DISABLED until residual==0 ("Lines are off
+  from the total by $X"). Import calls appstate.ImportReceipt(receipt, account, now) -> one split transaction.
+  Statement mode keeps the existing N-transactions importDraft path. absAmount() strips $/sign so the vision
+  amounts (negative) become positive figures the receipt math sums; ImportReceipt re-applies the expense sign.
+  Inline English; bumped sw v197->v198.
+- gofmt clean; wasm build green; full e2e suite 31/0 green (the receipt UI only renders after an AI draft, so it
+  doesn't touch the existing CSV/documents stories).
+- DEFERRED (noted): a dedicated receipt-flow e2e + screenshot needs (a) the image picker attached to the DOM
+  (it's currently created off-DOM so Playwright can't setInputFiles) and (b) a mocked vision response (page.route
+  the OpenAI endpoint) to populate the draft without a key. That's a focused test-harness build; the receipt
+  IMPORT logic (extract.Receipt, splits, ImportReceipt, category mapping) is already fully unit-tested, and the
+  UI is a thin shell over it. Logged for a later tick.
+
 ## 2026-06-20 - feat: L3 ImportReceipt + category mapping/rules (state)
 
 - L3 steps 2+4 (state + category resolution). appstate.ImportReceipt(receipt, accountID, date): validates the

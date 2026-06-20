@@ -45,6 +45,14 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Receipt vs Statement import toggle on the Documents review (L3).** After reading an image with AI, the
+  review now offers **"Import as one receipt (split across categories)"**. In receipt mode the extracted lines
+  become the category splits of a single transaction: enter the store name + receipt total (pre-filled to the
+  line sum), and a live remainder shows whether the lines add up — **Import is disabled until they reconcile to
+  the total**, then imports one split transaction via `appstate.ImportReceipt` (mapping each line's category +
+  applying rules). Statement mode keeps the existing many-transactions path. (The dedicated receipt-flow e2e +
+  screenshot is deferred behind an image-picker DOM refactor + mocked vision response; the import logic itself is
+  fully unit-tested.)
 - **Import a receipt as one split transaction, with category mapping + rules (L3).** `appstate.ImportReceipt`
   turns a reconciled `extract.Receipt` into a single expense transaction whose category splits sum to the total
   (so it counts once against the account yet reports per-category spend). Each line's free-text category is
