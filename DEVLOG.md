@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: B16 story — add an account (net-worth correctness)
+
+- Second B16 story (e2e/story_add_account.test.mjs): add an asset account with a $5000 opening balance via the
+  Accounts add form (defaults make it a checking/asset in USD owned by the household, so only name + opening
+  balance are needed), then assert the account lists, the net-worth summary rises by EXACTLY the opening
+  balance (354070 → 359070), it autosaves, and survives reload. The net-worth delta is the correctness teeth —
+  it reads the ".stat" whose label is "Net worth" and parses its .stat-value figure before/after.
+- Confirms the ledger.NetWorth path end-to-end through the UI. Test-only, no sw bump. Next stories: budget
+  create + period switch, goal contribute, settings export→import round-trip.
+
 ## 2026-06-19 - test: first B16 E2E story — add a transaction
 
 - B20 done, so moved to the next high-value, in-my-lane item: B16 (end-to-end stories). Its TODO assumed
