@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Category reassign-before-delete only offers same-kind targets (C63, correctness).** Deleting an in-use category
+  let you reassign its transactions/budgets to a category of the *other* kind — e.g. moving an expense category's
+  data onto an income category — a semantic/data-integrity hazard. The reassign picker now lists only categories of
+  the same kind as the one being deleted (and labels the select). Covered by a new `categories_reassign_kind_check`
+  e2e.
+
 ### Added
 - **Members show a colored initial avatar (C62).** Each member row now leads with a small disc carrying the
   member's first initial, tinted with their chosen color — more scannable and personable than the bare swatch.

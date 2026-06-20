@@ -187,7 +187,10 @@ func Categories() ui.Node {
 		target := catByID[rid]
 		opts := []ui.Node{Option(Value(""), SelectedIf(reassignTo.Get() == ""), uistate.T("categories.chooseCategory"))}
 		for _, c := range cats {
-			if c.ID == rid {
+			// Only offer same-kind targets: reassigning an expense category's data to
+			// an income category (or vice versa) is semantically wrong and a
+			// data-integrity hazard (C63). Skip the category being deleted.
+			if c.ID == rid || c.Kind != target.Kind {
 				continue
 			}
 			opts = append(opts, Option(Value(c.ID), SelectedIf(reassignTo.Get() == c.ID), c.Name))
@@ -196,7 +199,7 @@ func Categories() ui.Node {
 			H2(Class("card-title"), uistate.T("common.reassignTitle")),
 			P(Class("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
 			Form(Class("form-grid"), OnSubmit(confirmReassign),
-				Select(Class("field"), OnChange(onReassignTo), opts),
+				Select(Class("field"), Attr("aria-label", uistate.T("common.reassignTitle")), OnChange(onReassignTo), opts),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
 				Button(Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),

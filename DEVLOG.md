@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: same-kind-only category reassign before delete (C63)
+
+- C63 item 1 (flagged correctness/data-integrity). The reassign-before-delete picker looped over ALL categories,
+  so deleting an in-use expense category let you move its transactions/budgets onto the income category (or vice
+  versa). Filtered the options to `c.Kind == target.Kind` (target = catByID[rid], the category being deleted), and
+  added the missing aria-label to that select.
+- New categories_reassign_kind_check.mjs: deletes the in-use sample expense "Groceries" → reassign panel; asserts
+  the picker does NOT offer "Income" (the only income category) and still offers other expense categories. PASS
+  (offered Dining/Housing/Utilities/… not Income). App wasm builds clean; gofmt clean. Committed via
+  git commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C63 remaining: real indentation vs em-dash nesting, per-row usage count + drill-down, name/kind/parent labels,
+  icon-only rows. Next: C64 (Rules) — flags a missing precedence-reorder.
+
 ## 2026-06-20 - feat: colored initial avatars for members (C62)
 
 - C62 item 4 (the "god-tier" delight; self-contained, no i18n/CSS-file). Replaced the bare color swatch in each
