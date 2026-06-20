@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Asset "Advanced" disclosure on the account add-form (C49).** The optional scoring fields (Return %,
+  Liquidity, Stability, Locked-until) now sit behind a "Show advanced fields" toggle so the common add path
+  stays short; most accounts never set them. The toggle carries `aria-expanded` for screen readers and only
+  appears for asset (non-liability) types. New `accounts_advanced_disclosure_check` e2e asserts collapse →
+  expand (all 4 fields) → re-collapse; existing `accounts_field_constraints_check` updated to expand first.
 - **Rule precedence-chain diagram (C70/C64).** `internal/mermaid.FromRules` renders auto-categorize rules as a
   top-down "match → category" chain (first match wins), flagging rules that can never fire — "(shadowed)" or
   "(matches nothing)" via `rules.Conflicts`. Wired into the Rules screen as a "Rule order" card (5th wired diagram).

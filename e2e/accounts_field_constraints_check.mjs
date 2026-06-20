@@ -26,6 +26,10 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/accounts", { waitUntil: "domcontentloaded" });
+  // Asset scoring fields (Liquidity/Stability/…) now sit behind an "Advanced"
+  // disclosure (C49) — expand it before asserting their constraints.
+  await page.waitForSelector(".cf-adv-toggle", { timeout: 60000 });
+  await page.locator(".cf-adv-toggle").first().click();
   await page.waitForSelector('input[placeholder^="Liquidity"]', { timeout: 60000 });
 
   // Asset (default) form: Liquidity / Stability are 1–5 with the hint.

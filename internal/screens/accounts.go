@@ -57,6 +57,10 @@ func Accounts() ui.Node {
 	liquidity := ui.UseState("")
 	stability := ui.UseState("")
 	lockUntil := ui.UseState("")
+	// advOpen gates the asset "Advanced" fields (expected return, liquidity,
+	// stability, lock-until) behind a disclosure so the common add-form stays
+	// short; they're optional scoring inputs most accounts never set (C49).
+	advOpen := ui.UseState(false)
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 	noticeAtom := uistate.UseNotice()
@@ -76,6 +80,7 @@ func Accounts() ui.Node {
 	onLiquidity := ui.UseEvent(func(v string) { liquidity.Set(v) })
 	onStability := ui.UseEvent(func(v string) { stability.Set(v) })
 	onLockUntil := ui.UseEvent(func(v string) { lockUntil.Set(v) })
+	onToggleAdv := ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })
 
 	bump := func() { rev.Set(rev.Get() + 1) }
 
@@ -257,13 +262,15 @@ func Accounts() ui.Node {
 				Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueDay.Get()), OnInput(onDueDay)))),
 			If(isLiab, labeledField(uistate.T("accounts.lender"),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lender.Get()), OnInput(onLender)))),
-			If(!isLiab, labeledField(uistate.T("accounts.expReturn"),
+			If(!isLiab, Button(Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
+				IfElse(advOpen.Get(), Text("Hide advanced fields"), Text("Show advanced fields")))),
+			If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
 				Input(Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn)))),
-			If(!isLiab, labeledField(uistate.T("accounts.liquidity"),
+			If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
 				Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity)))),
-			If(!isLiab, labeledField(uistate.T("accounts.stability"),
+			If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.stability"),
 				Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability)))),
-			If(!isLiab, labeledField(uistate.T("accounts.lockUntil"),
+			If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.lockUntil"),
 				Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), Value(lockUntil.Get()), OnInput(onLockUntil)))),
 			MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
@@ -408,6 +415,15 @@ func labeledField(label string, control ui.Node) ui.Node {
 		Span(Class("t-caption text-dim"), label),
 		control,
 	)
+}
+
+// ariaBool renders a Go bool as the "true"/"false" string an ARIA state attribute
+// (e.g. aria-expanded) expects, keeping disclosure toggles screen-reader-correct.
+func ariaBool(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // currencyOptions builds the account-currency picker's <option>s: every known

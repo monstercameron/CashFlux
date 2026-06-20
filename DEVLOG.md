@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: asset "Advanced" disclosure on account add-form (C49)
+
+- The asset add-form showed four optional scoring fields (Return %, Liquidity, Stability, Locked-until) inline,
+  bloating the common path even though most accounts never set them. Tucked them behind a "Show/Hide advanced
+  fields" toggle: new `advOpen` UseState + `onToggleAdv` UseEvent, the four `If(!isLiab, …)` gates now also
+  require `advOpen.Get()`, and a button (only for asset types) flips it. The button carries `aria-expanded`
+  ("true"/"false" via a small `ariaBool` helper) so screen readers announce the disclosure state.
+- e2e: new `accounts_advanced_disclosure_check` asserts collapsed (0 fields, aria-expanded=false) → expand
+  (4 fields, true) → re-collapse (0). The pre-existing `accounts_field_constraints_check` relied on the now-hidden
+  Liquidity/Stability inputs, so it now clicks the toggle first — caught and fixed before commit. Used literal
+  button labels (en.go is contested by the parallel session); the field labels themselves stay i18n'd.
+- Built screens for wasm + full wasm to web/bin, ran all three accounts checks → PASS. Committed via
+  git commit -- <paths>; TODOS.md untouched. Next: another uncontested slice (~5min cooldown).
+
 ## 2026-06-20 - fix: theme-aware Mermaid diagrams (C70/C69)
 
 - The mermaid shim hardcoded theme:'dark'; now that C69 lights the shell for light themes, dark diagrams looked
