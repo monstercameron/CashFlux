@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C81 phase 1 — AI provider registry (pure package)
+
+- Took C81 phase 1 (aiprovider area clean + un-taken; other agent on Mermaid C70). The ticket's key finding is that
+  the AI layer is already ~80% provider-agnostic (postCompletions takes a base URL), so multi-provider is mostly a
+  DATA model — perfect for a new pure package that can't collide with the contended internal/ai/settings/store.
+- New internal/aiprovider: Provider/Model/Capabilities + Dialect (openai covers 6/7; anthropic the lone special),
+  AuthStyle, Structured enum (json_schema/json_object/none — modelling the cross-provider structured-output gotcha
+  the ticket flags). Curated 7-provider registry (OpenAI, OpenRouter [free-text aggregator], Cerebras, DeepSeek,
+  GLM, Kimi, Anthropic) with base/key URLs + indicative cents-per-Mtoken pricing; Get/Model/Providers(sorted)/
+  Default lookups + EstimateCents (round-to-cent, negative-clamp).
+- Deliberately NOTED pricing + caps are indicative seeds that drift upstream (per the ticket) — not asserted as
+  fact. 7 test funcs incl. dialect↔auth pairing and free-text-only-OpenRouter invariants. Fixed one self-inflicted
+  test-math slip (4000 tok ×250c/M = exactly 1.0c, not 0). go test green. Committed 2d00b4e.
+- Phases 2-6 (generalize transport, AIConfig + key migration + redact-all on export, anthropic dialect, settings UI,
+  capability gating, backend proxy) all touch internal/ai + settings.go + store — contended; deferred. Next:
+  another non-contended pure C slice or continue here only where it stays out of contended files.
+
 ## 2026-06-20 - feat: ui.Mermaid renderer + wire Workflows flowchart (C70)
 
 - User asked to actually SEE a diagram. Built the renderer over the C70 generators: vendored mermaid@11 locally

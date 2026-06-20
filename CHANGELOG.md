@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **AI provider registry (C81 phase 1, logic).** New pure, table-tested `internal/aiprovider` models the inference
+  providers CashFlux can use: a `Provider`/`Model`/`Capabilities` type set, a `Dialect` enum (one `openai` dialect
+  covers OpenAI/OpenRouter/Cerebras/DeepSeek/GLM/Kimi; `anthropic` is the one needing its own wire), an auth-style
+  and a structured-output enum (`json_schema`/`json_object`/`none` — the cross-provider gotcha), a curated registry
+  of 7 providers with default endpoints + key links + indicative per-model pricing, lookups, and `EstimateCents`.
+  No transport/UI/settings change (those phases touch the contended AI/settings/store) — this is the data model the
+  rest builds on.
 - **Mermaid diagrams now render in the app (C70).** A new `uiw.Mermaid` component (mirroring `uiw.Chart`) renders
   generated Mermaid source to inline SVG via a vendored-locally `web/mermaid.min.js` (no CDN, C44) + a `web/mermaid.js`
   shim initialised with `securityLevel:'strict'` (no click-JS / raw-HTML labels, C45/C70). Wired the first case: the
