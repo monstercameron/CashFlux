@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: live match-count preview when authoring a rule (C64)
+
+- C64 item 2. Per-rule match counts already existed (Rule.MatchCount); the gap was authoring feedback. Moved the
+  payee+desc `texts` slice above the add-form build (reused for the per-rule counts + coverage below, no double
+  compute) and added a live preview: as the match phrase is typed, rules.Rule{Match: phrase}.MatchCount(texts)
+  drives a "Matches N transactions" status line under the form.
+- Chose this over C64's "top gap" rule reordering: the Rule struct has no order field, so reorder needs a
+  schema+store+state change (bottom-up, larger) — deferred.
+- New rules_live_count_check.mjs: types "a" in #rule-add, asserts a [role=status] "Matches N transactions" with
+  N>0 appears (and nothing before typing) — got "Matches 42 transactions". App wasm builds clean; gofmt clean.
+  Committed via git commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C64 remaining: reorder (schema change), match labels/semantics, drill-down. Next: C65 (Workflows).
+
 ## 2026-06-20 - feat: "Can I afford it?" check on Planning (L8)
 
 - Third UI wiring tick. Targets check: en.go + internal/app + planning.go clean (only categories.go dirty —

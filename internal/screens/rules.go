@@ -91,6 +91,22 @@ func Rules() ui.Node {
 		bump()
 	}
 
+	// Text each rule is matched against (payee + description), mirroring the engine
+	// at entry/import. Computed once and reused for the per-rule counts below and
+	// the live authoring preview.
+	txns := app.Transactions()
+	texts := make([]string, len(txns))
+	for i, t := range txns {
+		texts[i] = t.Payee + " " + t.Desc
+	}
+	// Live match-count preview while authoring: how many existing transactions the
+	// phrase being typed would hit, so the user can trust a rule before saving (C64).
+	liveMatch := strings.TrimSpace(match.Get())
+	liveCount := 0
+	if liveMatch != "" {
+		liveCount = rules.Rule{Match: liveMatch}.MatchCount(texts)
+	}
+
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("rules.add")),
 		P(Class("muted"), uistate.T("rules.hint")),
@@ -100,6 +116,7 @@ func Rules() ui.Node {
 			Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
 			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
+		If(liveMatch != "" && len(texts) > 0, P(Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))),
 		errText("rule-err", errMsg.Get()),
 	)
 
@@ -127,14 +144,8 @@ func Rules() ui.Node {
 			warnByID[rs[c.Index].ID] = uistate.T("rules.noMatch")
 		}
 	}
-	// Match-count preview: how many existing transactions each rule would hit, and
-	// overall how many auto-file — the "before you Apply to existing" signal (L15).
-	// The text matched mirrors the engine at entry/import: payee + " " + desc.
-	txns := app.Transactions()
-	texts := make([]string, len(txns))
-	for i, t := range txns {
-		texts[i] = t.Payee + " " + t.Desc
-	}
+	// Per-rule match counts + overall coverage — the "before you Apply to existing"
+	// signal (L15), reusing the texts computed above.
 	covered := rules.Covered(rs, texts)
 	hasTxns := len(texts) > 0
 

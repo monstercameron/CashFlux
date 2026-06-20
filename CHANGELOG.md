@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Live match-count preview when authoring a rule (C64).** As you type a rule's match phrase, the add form now
+  shows "Matches N transactions" against your existing history, so you can trust a rule before saving it (rules
+  already showed per-rule counts; this brings the same signal to authoring). Covered by a new
+  `rules_live_count_check` e2e.
+
 ### Fixed
 - **Category reassign-before-delete only offers same-kind targets (C63, correctness).** Deleting an in-use category
   let you reassign its transactions/budgets to a category of the *other* kind — e.g. moving an expense category's
