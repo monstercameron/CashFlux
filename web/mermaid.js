@@ -8,18 +8,29 @@
 // clear the box rather than inject error markup.
 (function () {
   var seq = 0;
-  var inited = false;
+  var lastTheme = null;
+
+  // Match the diagram theme to the app theme (C69/C70): a light shell sets
+  // data-theme="light" on <html>, where Mermaid's "default" (light) theme reads
+  // far better than dark-on-light. Re-initialise when the theme changes so a
+  // diagram rendered after a theme switch picks up the new palette.
+  function mermaidTheme() {
+    var t = document.documentElement.getAttribute("data-theme");
+    return t === "light" ? "default" : "dark";
+  }
 
   function ensureInit() {
-    if (inited) return true;
     if (!window.mermaid) return false;
-    window.mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      theme: "dark",
-      flowchart: { useMaxWidth: true, htmlLabels: false },
-    });
-    inited = true;
+    var theme = mermaidTheme();
+    if (theme !== lastTheme) {
+      window.mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+        theme: theme,
+        flowchart: { useMaxWidth: true, htmlLabels: false },
+      });
+      lastTheme = theme;
+    }
     return true;
   }
 

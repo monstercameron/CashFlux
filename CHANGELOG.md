@@ -107,6 +107,9 @@ and every commit updates this file under `Unreleased`.
   follow-up over this data.)
 
 ### Fixed
+- **Mermaid diagrams now match the app theme (C70/C69).** The diagram shim hardcoded a dark theme, which read poorly
+  once light themes (Paper) lit the shell. It now picks Mermaid's "default" (light) theme when `data-theme="light"`
+  and re-initialises on a theme change, so diagrams follow the active palette. Regression-checked by `mermaid_render_check`.
 - **Upcoming bills now show urgency at a glance (C57).** A bill's "due today / in N days" line is now toned —
   danger when due today (or past), warn within three days — so an imminent payment stands out (colour + the
   existing wording, B15) instead of reading like any other row.

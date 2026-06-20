@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: theme-aware Mermaid diagrams (C70/C69)
+
+- The mermaid shim hardcoded theme:'dark'; now that C69 lights the shell for light themes, dark diagrams looked
+  wrong. web/mermaid.js now reads document.documentElement data-theme — "light" → mermaid "default", else "dark" —
+  and re-initialises when the theme changes (tracks lastTheme), so a diagram rendered after a theme switch picks up
+  the new palette. web/mermaid.js is my own file (uncontested); bumped sw v219→v220 so clients re-fetch it.
+- Verified by regression: mermaid_render_check still PASS (4 diagrams render). The light-vs-dark palette branch is
+  simple and verified by inspection (mermaid's own theme internals aren't worth asserting in e2e). Committed via
+  git commit -- <paths>; TODOS.md untouched.
+- Next: another uncontested slice.
+
 ## 2026-06-20 - feat: rule precedence-chain Mermaid diagram (C70/C64)
 
 - Fifth wired Mermaid case + a 5th generator. mermaid.FromRules(rs, catName): a flowchart TD of "match → category"
