@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: fuzzy keyword matching in the command palette (L14)
+
+- Second UI wiring tick. Targets check: en.go + shortcuts.go clean (only documents.go dirty — isolated parallel
+  work), UI layer otherwise quiet. Took candidate #1: wire the L14 cmdmatch engine into the Ctrl/Cmd+K palette,
+  which until now filtered with a plain strings.Contains substring match.
+- internal/app/shortcuts.go: paletteCmd gains an optional keywords []string (search-only synonyms, never rendered);
+  renderPalette builds []cmdmatch.Command{ID: index, Title: label, Keywords} and orders rows by cmdmatch.Match
+  (subsequence over label+keywords, label beats keyword, early/contiguous beats scattered). Added verb aliases to
+  the direct actions (add/new/expense → New transaction, export/backup/download → Export, lock/security → passcode).
+- KEY WIN: no en.go change at all — keywords are internal English search terms, not displayed — so the commit is
+  just shortcuts.go + the e2e, zero i18n contention. Even safer than the rules-preview wiring.
+- Verification: gofmt clean; wasm built; new palette_fuzzy_check.mjs (open palette, "add" → "New transaction" via
+  alias-only, "export" → Export) PASSED standalone twice on 8099. Committed by pathspec (6ecf5f7).
+- Next: keep going down the deferred UI backlog while quiet — L9 backup-everything action (internal/backup
+  envelope), L8 affordability hook (internal/afford) — each gated on re-checking its target + en.go clean; pure
+  reports as fallback.
+
 ## 2026-06-20 - feat: Insights no-key hint links to Settings (C59)
 
 - C59 item 2 (bounded, uncontested; the headline result-collision split ripples into pin/save/usage so it's a

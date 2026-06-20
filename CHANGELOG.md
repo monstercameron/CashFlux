@@ -12,6 +12,12 @@ and every commit updates this file under `Unreleased`.
   one hop (same dead-end fix flagged on Allocate, C54). Covered by a new `insights_keyhint_check` e2e.
 
 ### Added
+- **Fuzzy keyword matching in the command palette (L14).** The Ctrl/⌘+K palette now ranks commands with the tested
+  `cmdmatch` engine instead of a plain substring filter: a query matches as a subsequence of a command's label or
+  any of its keywords, best match first. Direct actions carry search aliases (New transaction ← add/new/expense,
+  Export ← backup/download, the passcode commands ← lock/security, …), so typing a verb like "add" surfaces the
+  noun-labeled "New transaction". No new visible text (keywords are search-only). Covered by a new
+  `palette_fuzzy_check` e2e.
 - **Split gets select-all/clear and a result summary (C58).** For households with several members, the sharer
   picker now has Select-all and Clear buttons, and once an amount and sharers are set it shows a legible summary —
   "$X split among N → $Y each" (with any rounding remainder the core hands the first sharer; weighted splits note
