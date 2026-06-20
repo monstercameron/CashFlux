@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: thousands-group Customize results + variables (C61)
+
+- C61 item 2 (the C2-parallel formatting win; pure, no i18n/CSS). The formula result (formatFormulaValue) and the
+  available-variables reference both printed strconv.FormatFloat raw (354070). Added groupThousands(f) — up to 2
+  decimals, trailing zeros trimmed, integer part comma-grouped, sign preserved — and applied it to both the result
+  (float case) and each variable value. strconv stays used (inside the helper).
+- New customize_format_check.mjs: on /customize asserts a 4+ digit variable value is comma-grouped and that no raw
+  ungrouped 4+ digit value remains (saw 639,970). PASS. App wasm builds clean; gofmt clean. Committed via git
+  commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C61 remaining: split fields-vs-formulas IA (headers), per-formula display format (currency/percent), click-to-
+  insert variable + editor label, edit-in-place saved formulas (avoid duplicate IDs). Next: C62 (Members).
+
 ## 2026-06-20 - feat: draft-row category is a real-category select (C60)
 
 - C60 item 2 (correctness-adjacent). The Documents review DraftRow edited category via a free-text Input, so the

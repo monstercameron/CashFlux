@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Customize formats numbers instead of raw floats (C61).** The formula result and the available-variables
+  reference printed raw floats (net worth as `354070`), jarring against the app's money formatting. They now
+  thousands-separate with up to two trimmed decimals (`354,070`), matching the C2 style.
 - **Imported draft rows pick a real category instead of free text (C60).** When reviewing extracted transactions
   before import, the category field was a free-text box, so the AI's guessed category (or a typo) could create an
   orphan category. It's now a select of existing categories, with the extracted value preserved as an option when

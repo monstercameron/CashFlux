@@ -121,7 +121,7 @@ func Customize() ui.Node {
 	for _, k := range names {
 		varRows = append(varRows, Div(Class("row"),
 			Span(Class("row-desc"), k),
-			Span(Class("amount fig"), strconv.FormatFloat(vars[k], 'f', -1, 64)),
+			Span(Class("amount fig"), groupThousands(vars[k])),
 		))
 	}
 
@@ -212,11 +212,42 @@ func SavedFormulaRow(props savedFormulaRowProps) ui.Node {
 	)
 }
 
+// groupThousands renders a float with thousands separators and up to two
+// decimals (trailing zeros trimmed), so formula results and variable values read
+// like the rest of the app's figures (354,070 not 354070) instead of raw floats
+// (C61, matching the C2 money-formatting style).
+func groupThousands(f float64) string {
+	neg := f < 0
+	if neg {
+		f = -f
+	}
+	s := strconv.FormatFloat(f, 'f', 2, 64)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	intPart, frac := s, ""
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		intPart, frac = s[:i], s[i:]
+	}
+	var b strings.Builder
+	n := len(intPart)
+	for i := 0; i < n; i++ {
+		if i > 0 && (n-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteByte(intPart[i])
+	}
+	out := b.String() + frac
+	if neg {
+		out = "-" + out
+	}
+	return out
+}
+
 // formatFormulaValue renders a formula result (number, bool, or string).
 func formatFormulaValue(v formula.Value) string {
 	switch x := v.(type) {
 	case float64:
-		return strconv.FormatFloat(x, 'f', -1, 64)
+		return groupThousands(x)
 	case bool:
 		if x {
 			return "true"
