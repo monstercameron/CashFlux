@@ -106,6 +106,26 @@ func TestFromCategories(t *testing.T) {
 	}
 }
 
+func TestSankey(t *testing.T) {
+	src := Sankey([]SankeyFlow{
+		{From: "Income", To: "Housing", Value: 1200},
+		{From: "Income", To: "Food, dining", Value: 400}, // comma → CSV-quoted
+		{From: "Income", To: "Savings", Value: 0},        // non-positive → skipped
+	})
+	for _, want := range []string{
+		"sankey-beta\n\n",
+		"Income,Housing,1200\n",
+		`Income,"Food, dining",400` + "\n", // quoted because of the comma
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("sankey missing %q in:\n%s", want, src)
+		}
+	}
+	if strings.Contains(src, "Savings") {
+		t.Errorf("zero-value flow should be skipped:\n%s", src)
+	}
+}
+
 func TestFromSettleUp(t *testing.T) {
 	names := map[string]string{"a": "Alex", "b": "Bo", "c": "Cy"}
 	name := func(id string) string { return names[id] }

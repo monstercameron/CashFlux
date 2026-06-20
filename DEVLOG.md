@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Sankey Mermaid generator (C70 follow-on)
+
+- Fourth C70 generator. mermaid.Sankey([]SankeyFlow{From,To,Value}) emits sankey-beta source (header + blank line +
+  CSV rows source,target,value). Sankey uses CSV not node labels, so added csvField (quote+double-quote when a
+  label has comma/quote/newline) rather than reusing Escape; non-positive weights skipped (sankey weights must be
+  positive). Foundation for the income→categories→savings/debt money-flow chart (highest "wow" per the spec).
+- TestSankey (native): a normal row, a comma-containing label (asserts CSV-quoting), and a zero-value flow (asserts
+  skipped). go test ./internal/mermaid green; vet clean; app wasm builds; gofmt clean. Committed via
+  git commit -- <paths>; TODOS.md untouched.
+- C70 generators complete: workflow, category, settle-up, sankey. Wired & visible: /workflows + /categories.
+  Next: a domain sankey generator (spending flow) + wire it, or another slice.
+
 ## 2026-06-20 - feat: C82 in-house agent tool-calling loop (pure)
 
 - Took C82's pure core (internal/agent area clean + un-taken; other agent on Mermaid). The ticket's finding: no Go

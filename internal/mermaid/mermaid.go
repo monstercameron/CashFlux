@@ -202,6 +202,38 @@ func FromSettleUp(transfers []split.Transfer, name func(string) string, amount f
 	return f.String()
 }
 
+// SankeyFlow is one weighted link in a Sankey diagram: Value units flow From → To.
+type SankeyFlow struct {
+	From  string
+	To    string
+	Value int64
+}
+
+// Sankey renders flows as Mermaid `sankey-beta` source (e.g. income → categories →
+// savings/debt money-flow). The format is CSV (source,target,value), so labels are
+// CSV-quoted here rather than via Escape. Flows with a non-positive value are
+// skipped (Sankey weights must be positive).
+func Sankey(flows []SankeyFlow) string {
+	var b strings.Builder
+	b.WriteString("sankey-beta\n\n")
+	for _, fl := range flows {
+		if fl.Value <= 0 {
+			continue
+		}
+		b.WriteString(csvField(fl.From) + "," + csvField(fl.To) + "," + strconv.FormatInt(fl.Value, 10) + "\n")
+	}
+	return b.String()
+}
+
+// csvField CSV-quotes a Sankey label when it contains a comma, quote, or newline
+// (doubling embedded quotes), so a label can't shift the row's columns.
+func csvField(s string) string {
+	if strings.ContainsAny(s, ",\"\n\r") {
+		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
+	}
+	return s
+}
+
 func triggerLabel(k workflow.TriggerKind) string {
 	switch k {
 	case workflow.TriggerTxnAdded:
