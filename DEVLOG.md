@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: overdue cue on to-do tasks (C52)
+
+- C52 headline item: open tasks past their due date now render the due meta in the danger tone (.text-down) with
+  an explicit " · overdue" suffix (colour + text, B15). overdue = !done && !Due.IsZero() && FormatDate(Due) <
+  FormatDate(now) — ISO string compare sidesteps time-of-day/timezone edge cases. todo.go only.
+- The "overdue" word is a literal (not uistate.T) because en.go is parallel-dirty and committing it by pathspec
+  would absorb the other session's en.go WIP; a literal is the safe exception here, noted for an i18n follow-up.
+- New todo_overdue_check.mjs adds a task due 2020-01-01 and asserts its .row-meta.text-down contains "overdue".
+  PASS ("due 2020-01-01 · overdue"). App wasm builds clean; gofmt clean.
+- COMMIT METHOD FIX: applying my own memory now — git add only the new e2e file, then git commit -F msg -- <paths>
+  so the explicit pathspec scopes the commit to my files regardless of the shared index (last iteration's git add
+  swept the parallel session's staged TODOS.md/AGENTS.md into my commit). sw.js parallel-dirty, left out.
+- Next (C52): label the priority + due-date controls (reuse labeledField); then C53 (Planning).
+
 ## 2026-06-20 - feat: year-end / tax summary report (L16, logic)
 
 - Stock-take after L15 conditions: with the parallel session mid-burst on the whole UI layer (dashboard/goals/

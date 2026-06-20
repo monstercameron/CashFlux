@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Overdue to-dos now stand out (C52).** An open task past its due date used to look identical to one due next
+  month. Overdue tasks now render their due line in the danger tone with an explicit "overdue" word (colour + text,
+  not colour alone), so a past-due item is obvious at a glance. Covered by a new `todo_overdue_check` e2e.
+
 ### Added
 - **Year-end / tax summary report (L16, logic).** `internal/reports` gains pure, table-tested `YearTax(txns,
   year, start, end, rates)` returning a `YearTaxSummary` of per-category `{Income, Expense, Net}` rows plus

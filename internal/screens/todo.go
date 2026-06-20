@@ -262,9 +262,19 @@ func TaskRow(props taskRowProps) ui.Node {
 	}
 	plabel, pclass := priorityMeta(t.Priority)
 
+	// Overdue = an open task whose due date is before today. Flag it with the danger
+	// tone plus an explicit "overdue" word (colour + text, not colour alone — B15)
+	// so a past-due task is actionable at a glance (C52).
+	overdue := !done && !t.Due.IsZero() && dateutil.FormatDate(t.Due) < dateutil.FormatDate(time.Now())
 	meta := []ui.Node{Span(Class("badge badge-prio "+pclass), plabel)}
 	if !t.Due.IsZero() {
-		meta = append(meta, Span(Class("row-meta"), uistate.T("todo.due")+" "+pr.FormatDate(t.Due)))
+		dueText := uistate.T("todo.due") + " " + pr.FormatDate(t.Due)
+		dueCls := "row-meta"
+		if overdue {
+			dueText += " · overdue"
+			dueCls = "row-meta text-down"
+		}
+		meta = append(meta, Span(Class(dueCls), dueText))
 	}
 	if t.Notes != "" {
 		meta = append(meta, Span(Class("row-meta"), t.Notes))
