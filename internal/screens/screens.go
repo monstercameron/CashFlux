@@ -21,6 +21,7 @@ type Route struct {
 	Subtitle string
 	Phase    int
 	Group    string
+	SubGroup string // sub-section within a group (Tools only); "" for Primary/System
 	View     func() ui.Node
 }
 
@@ -31,6 +32,19 @@ const (
 	GroupTools   = "tools"   // Phase-2 power tools
 	GroupSystem  = "system"  // household configuration screens
 )
+
+// Tools sub-groups (C67): the Tools group is long, so its routes nest into four
+// short accordion sub-sections. Membership stays registry-driven (B7) — the shell
+// renders by SubGroup; it owns no hardcoded path lists.
+const (
+	SubGroupPlan  = "plan"  // Plan & analyze: Planning, Allocate, Reports, Insights
+	SubGroupBills = "bills" // Bills & recurring: Bills, Subscriptions, Split
+	SubGroupData  = "data"  // Data & import: Documents, Artifacts
+	SubGroupBuild = "build" // Build: Customize, Workflows
+)
+
+// ToolsSubGroups is the display order of the Tools sub-sections.
+var ToolsSubGroups = []string{SubGroupPlan, SubGroupBills, SubGroupData, SubGroupBuild}
 
 // All returns the ordered screen registry that drives both routing and the nav.
 func All() []Route {
@@ -43,17 +57,17 @@ func All() []Route {
 		{Path: "/budgets", Label: "nav.budgets", Title: "nav.budgets", Subtitle: "screen.budgetsSub", Phase: 1, Group: GroupPrimary, View: Budgets},
 		{Path: "/goals", Label: "nav.goals", Title: "nav.goals", Subtitle: "screen.goalsSub", Phase: 1, Group: GroupPrimary, View: Goals},
 		{Path: "/todo", Label: "nav.todo", Title: "nav.todo", Subtitle: "screen.todoSub", Phase: 1, Group: GroupPrimary, View: Todo},
-		{Path: "/planning", Label: "nav.planning", Title: "nav.planning", Subtitle: "screen.planningSub", Phase: 2, Group: GroupTools, View: Planning},
-		{Path: "/allocate", Label: "nav.allocate", Title: "nav.allocate", Subtitle: "screen.allocateSub", Phase: 2, Group: GroupTools, View: Allocate},
-		{Path: "/reports", Label: "nav.reports", Title: "nav.reports", Subtitle: "screen.reportsSub", Phase: 2, Group: GroupTools, View: Reports},
-		{Path: "/subscriptions", Label: "nav.subscriptions", Title: "nav.subscriptions", Subtitle: "screen.subscriptionsSub", Phase: 2, Group: GroupTools, View: Subscriptions},
-		{Path: "/bills", Label: "nav.bills", Title: "nav.bills", Subtitle: "screen.billsSub", Phase: 2, Group: GroupTools, View: Bills},
-		{Path: "/split", Label: "nav.split", Title: "nav.split", Subtitle: "screen.splitSub", Phase: 2, Group: GroupTools, View: Split},
-		{Path: "/insights", Label: "nav.insights", Title: "nav.insights", Subtitle: "screen.insightsSub", Phase: 2, Group: GroupTools, View: Insights},
-		{Path: "/documents", Label: "nav.documents", Title: "nav.documents", Subtitle: "screen.documentsSub", Phase: 2, Group: GroupTools, View: Documents},
-		{Path: "/customize", Label: "nav.customize", Title: "nav.customize", Subtitle: "screen.customizeSub", Phase: 2, Group: GroupTools, View: Customize},
-		{Path: "/artifacts", Label: "nav.artifacts", Title: "nav.artifacts", Subtitle: "screen.artifactsSub", Phase: 2, Group: GroupTools, View: Artifacts},
-		{Path: "/workflows", Label: "nav.workflows", Title: "nav.workflows", Subtitle: "screen.workflowsSub", Phase: 2, Group: GroupTools, View: Workflows},
+		{Path: "/planning", Label: "nav.planning", Title: "nav.planning", Subtitle: "screen.planningSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Planning},
+		{Path: "/allocate", Label: "nav.allocate", Title: "nav.allocate", Subtitle: "screen.allocateSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Allocate},
+		{Path: "/reports", Label: "nav.reports", Title: "nav.reports", Subtitle: "screen.reportsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Reports},
+		{Path: "/subscriptions", Label: "nav.subscriptions", Title: "nav.subscriptions", Subtitle: "screen.subscriptionsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBills, View: Subscriptions},
+		{Path: "/bills", Label: "nav.bills", Title: "nav.bills", Subtitle: "screen.billsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBills, View: Bills},
+		{Path: "/split", Label: "nav.split", Title: "nav.split", Subtitle: "screen.splitSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBills, View: Split},
+		{Path: "/insights", Label: "nav.insights", Title: "nav.insights", Subtitle: "screen.insightsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Insights},
+		{Path: "/documents", Label: "nav.documents", Title: "nav.documents", Subtitle: "screen.documentsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupData, View: Documents},
+		{Path: "/customize", Label: "nav.customize", Title: "nav.customize", Subtitle: "screen.customizeSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: Customize},
+		{Path: "/artifacts", Label: "nav.artifacts", Title: "nav.artifacts", Subtitle: "screen.artifactsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupData, View: Artifacts},
+		{Path: "/workflows", Label: "nav.workflows", Title: "nav.workflows", Subtitle: "screen.workflowsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: Workflows},
 		{Path: "/members", Label: "nav.members", Title: "nav.members", Subtitle: "screen.membersSub", Phase: 1, Group: GroupSystem, View: Members},
 		{Path: "/categories", Label: "nav.categories", Title: "nav.categories", Subtitle: "screen.categoriesSub", Phase: 1, Group: GroupSystem, View: Categories},
 		{Path: "/rules", Label: "nav.rules", Title: "nav.rules", Subtitle: "screen.rulesSub", Phase: 2, Group: GroupSystem, View: Rules},

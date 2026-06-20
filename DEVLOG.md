@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Tools rail sub-group data layer (C67, bottom-up first step)
+
+- C67 is a large rail-nav feature whose UI lives in internal/app/shell.go (heavily contested by the parallel
+  session). Per its "build bottom-up / data first" guidance, did the data layer only: added Route.SubGroup +
+  SubGroupPlan/Bills/Data/Build constants + ToolsSubGroups order, and tagged the 11 Tools routes:
+  plan = planning/allocate/reports/insights, bills = subscriptions/bills/split, data = documents/artifacts,
+  build = customize/workflows. Membership stays registry-driven (B7) — shell renders by SubGroup later, no hardcoded
+  path lists. No app behavior change yet (shell still groups by Group).
+- Test: added TestToolsSubGroups to registry_test.go (every Tools route → exactly one known sub-group; non-Tools
+  carry none; the four partition all 11). The screens package is //go:build js && wasm (View funcs are wasm), so
+  the test is wasm-only. Verification limitation (honest): this Windows env has no working js/wasm test exec — native
+  go test can't run a .wasm binary, and `gwc test -lane wasm` reports "no matching packages". Gated instead on
+  GOOS=js GOARCH=wasm `go build` + `go vet` (both clean) and partition-by-inspection; the test runs in the project's
+  normal wasm lane. Committed via git commit -- <paths>; sw.js parallel-dirty/n-a; TODOS.md untouched.
+- Next: C68 (rail command palette) or the C67 shell.go rendering once it's uncontested.
+
 ## 2026-06-20 - fix: surface artifact upload/import failures (C66)
 
 - C66 item 1 (flagged reliability), and the final original C-series ticket. uploadImage and importCSV both did

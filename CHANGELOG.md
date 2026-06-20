@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Tools rail sub-group data layer (C67, foundation).** The screen registry's `Route` gains a `SubGroup` field;
+  the 11 Tools screens now declare one of four sub-sections — Plan & analyze, Bills & recurring, Data & import,
+  Build — keeping rail membership registry-driven (B7). Table-tested that every Tools route maps to exactly one
+  sub-group, non-Tools routes carry none, and the four partition all Tools routes. (The nested rail rendering is a
+  follow-up over this data.)
+
 ### Fixed
 - **Artifact upload/import failures are no longer silent (C66, reliability).** Both image upload and CSV import
   swallowed errors (`if err == nil`), so a failed save — very plausibly a localStorage-quota overflow, since the
