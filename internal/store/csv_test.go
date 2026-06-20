@@ -92,6 +92,34 @@ func TestCSVImportDefaultsCurrencyAndFriendlyColumns(t *testing.T) {
 	if g.Payee != "Coffee Bar" || g.AccountID != "Checking" || g.CategoryID != "Food" || g.MemberID != "Alex" {
 		t.Errorf("friendly columns not read: %+v", g)
 	}
+	// The payee fills the (required) description when no desc column is present,
+	// so the documented shape actually imports rather than failing validation.
+	if g.Desc != "Coffee Bar" {
+		t.Errorf("Desc = %q, want the payee fallback %q", g.Desc, "Coffee Bar")
+	}
+}
+
+func TestCSVImportDescFallsBackToPayee(t *testing.T) {
+	// No desc column (the documented date,payee,amount,account shape): the ledger
+	// requires a description, so it falls back to the payee.
+	got, err := TransactionsFromCSV([]byte("date,payee,amount,account\n2026-06-05,Rent,-1200.00,Checking\n"), "USD")
+	if err != nil {
+		t.Fatalf("from csv: %v", err)
+	}
+	if len(got) != 1 || got[0].Desc != "Rent" {
+		t.Errorf("Desc = %q, want payee fallback \"Rent\"", got[0].Desc)
+	}
+	// An explicit desc column takes precedence over the payee.
+	got2, err := TransactionsFromCSV([]byte("date,payee,desc,amount,account\n2026-06-05,Rent,Monthly rent,-1200.00,Checking\n"), "USD")
+	if err != nil {
+		t.Fatalf("from csv: %v", err)
+	}
+	if got2[0].Desc != "Monthly rent" {
+		t.Errorf("Desc = %q, want explicit \"Monthly rent\"", got2[0].Desc)
+	}
+	if got2[0].Payee != "Rent" {
+		t.Errorf("Payee = %q, want \"Rent\"", got2[0].Payee)
+	}
 }
 
 func TestCSVImportExportIDColumnsWinOverFriendly(t *testing.T) {

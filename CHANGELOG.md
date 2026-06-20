@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **CSV import of the documented shape actually imports (C27 follow-up).** Pasting the importer's own documented
+  `date,payee,amount,account` format reported "Imported 0 transactions" because the payee column filled
+  `Transaction.Payee` while the ledger requires a description — every row failed validation silently. The CSV
+  parser now falls back to the payee for the description when no `desc` column is present (an explicit `desc`
+  still wins), so the documented shape imports as intended. Caught by the new B16 documents-CSV E2E story;
+  guarded by table tests in `internal/store`.
+
 ### Changed
 - **One appearance system — density & display scale unified into the theme (B20).** Density and text size are
   now owned by the theme engine: `ApplyTheme` sets `data-density` (so the editor's density control is finally

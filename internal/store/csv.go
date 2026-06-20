@@ -142,12 +142,21 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			tid = id.New()
 		}
 
+		// The documented "date,payee,amount,account" shape (C27) has no desc
+		// column, but the ledger requires a description — so fall back to the
+		// payee, which is the human-facing label, when desc is absent. An explicit
+		// desc column still takes precedence.
+		desc := col(row, "desc")
+		if desc == "" {
+			desc = col(row, "payee")
+		}
+
 		out = append(out, domain.Transaction{
 			ID:                tid,
 			AccountID:         colID(row, "account"),
 			Date:              date,
 			Payee:             col(row, "payee"),
-			Desc:              col(row, "desc"),
+			Desc:              desc,
 			CategoryID:        colID(row, "category"),
 			Amount:            money.New(amt, curr),
 			TransferAccountID: colID(row, "transfer_account"),

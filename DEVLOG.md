@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: CSV import desc falls back to payee (C27 follow-up; the bug my E2E found)
+
+- Pivoted off B16 to fix the real bug the documents-CSV story surfaced. Checked first: clean tree, csv.go last
+  touched 2 days ago by "fix: CSV import accepts its documented date,payee,amount,account format (C27)" — so
+  that fix made the parser READ the friendly columns but the documented shape still imported 0, because
+  store.TransactionsFromCSV set Payee from the `payee` column while leaving Desc empty, and ValidateTransaction
+  requires Desc → every row silently rejected. The existing test asserted Payee but not Desc, so it slipped
+  through.
+- Fix (internal/store/csv.go, pure + table-tested): Desc falls back to the payee when no `desc` column is
+  present; an explicit `desc` column still wins. Strengthened the existing friendly-columns test to assert the
+  Desc fallback (would have caught the bug) and added TestCSVImportDescFallsBackToPayee covering both cases.
+- Verified end-to-end: switched e2e/story_documents_csv.test.mjs to the DOCUMENTED `date,payee,amount,account`
+  shape (previously broken), rebuilt wasm, and it now imports + persists. Behavior change compiled into wasm,
+  so bumped sw cache v190->v191.
+
 ## 2026-06-20 - test: B16 story — documents CSV import (+ a real finding)
 
 - Twentieth journey story (e2e/story_documents_csv.test.mjs): on /documents, read a real (comma-free) account

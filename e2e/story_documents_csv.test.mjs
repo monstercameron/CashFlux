@@ -43,14 +43,14 @@ try {
   if (!acct) fail("no usable account found for the import");
   const acctName = acct && acct.name;
 
-  // Paste a one-row CSV and import it. A description column is included because the
-  // ledger requires a description (the "payee" column alone maps to a separate
-  // Payee field, not the required Desc).
-  const csv = `date,desc,amount,account\n2026-06-05,${PAYEE},12.34,${acctName}`;
+  // Paste a one-row CSV in the importer's DOCUMENTED shape (date,payee,amount,
+  // account) and import it. The payee fills the required description (the C27 fix),
+  // so this documented shape actually imports.
+  const csv = `date,payee,amount,account\n2026-06-05,${PAYEE},12.34,${acctName}`;
   await page.locator("textarea").first().fill(csv);
   await page.locator("form", { has: page.locator("textarea") }).locator('button[type="submit"]').first().click();
 
-  // The imported transaction shows in the dataset.
+  // The imported transaction shows in the dataset (payee filled the description).
   const d1 = await waitForDataset(page, (d) => (d.transactions || []).some((t) => t.desc === PAYEE));
   const txn = (d1.transactions || []).find((t) => t.desc === PAYEE);
   if (!txn) fail("CSV-imported transaction not found in the dataset");
