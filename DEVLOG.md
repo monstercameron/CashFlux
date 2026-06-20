@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: first B16 E2E story — add a transaction
+
+- B20 done, so moved to the next high-value, in-my-lane item: B16 (end-to-end stories). Its TODO assumed
+  Playwright wasn't installed, but I installed it earlier this session — so B16 is now actually buildable.
+  Wrote the canonical story (e2e/story_add_transaction.test.mjs): fill the Transactions add form (desc
+  #txn-add + amount; account defaults to the first, date to today), submit, then assert the row shows in the
+  ledger with its amount, the dataset autosaves to localStorage (cashflux:dataset contains it), and it
+  survives a reload.
+- Gotcha found while authoring: opening the +Add menu's quick-add panel adds a SECOND amount input (the
+  screen's inline add form + the quick-add panel both have `input[type=number][aria-required]`), so the
+  selector matched two and the fill no-op'd. Switched the story to the inline add form (stable `#txn-add` id,
+  no overlay) — cleaner and unambiguous. Found this via a throwaway debug script (now removed).
+- Test-only change (no app code), so no sw bump. Next B16 stories: account add (asset/liability), budget
+  create + period switch, goal contribute, settings persist + export/import round-trip — each its own story
+  file + commit.
+
 ## 2026-06-19 - feat: per-widget colors — the last B20 sub-item
 
 - Closed B20's final approved item. Pure layer: a reserved `widgetcfg.AccentKey` ("_accent") + a validated

@@ -21,6 +21,10 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **E2E story: add a transaction (B16).** The first scripted user-journey test now that Playwright + Chromium
+  are installed: it logs an expense via the Transactions add form and asserts the canonical path end-to-end —
+  the row appears in the ledger with its amount, autosaves to the dataset store, and survives a reload
+  (`e2e/story_add_transaction.test.mjs`). The start of B16's "every feature, provably flawless" story suite.
 - **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
   settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
   that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and
