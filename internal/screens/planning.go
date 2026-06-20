@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/afford"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -51,6 +52,14 @@ func Planning() ui.Node {
 	onTrim := ui.UseEvent(func(v string) { trimStr.Set(v) })
 	dsExtra := ui.UseState("")
 	onDsExtra := ui.UseEvent(func(v string) { dsExtra.Set(v) })
+
+	// "Can I afford it?" — a purchase amount checked against projected cash (L8).
+	afAmount := ui.UseState("")
+	afMonths := ui.UseState("")
+	afReserve := ui.UseState("")
+	onAfAmount := ui.UseEvent(func(v string) { afAmount.Set(v) })
+	onAfMonths := ui.UseEvent(func(v string) { afMonths.Set(v) })
+	onAfReserve := ui.UseEvent(func(v string) { afReserve.Set(v) })
 
 	// Recurring cash-flow management.
 	rev := ui.UseState(0)
@@ -276,6 +285,61 @@ func Planning() ui.Node {
 				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.trimPlaceholder", base)), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim)),
 			),
 			trimNote,
+		)
+	}
+
+	// Affordability check (L8): "can I afford $X (in N months, keeping a buffer)?"
+	// projected from today's net worth and this month's net cash flow, via the pure
+	// internal/afford engine — a deterministic answer, not an AI guess.
+	affordCard := Fragment()
+	if app != nil {
+		accounts := app.Accounts()
+		txns := app.Transactions()
+		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
+		mStart, mEnd := dateutil.MonthRange(time.Now())
+		income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
+		monthlyNet := income.Amount - expense.Amount
+
+		var afBody ui.Node = P(Class("muted"), uistate.T("planning.affordEnter"))
+		if amt, aerr := money.ParseMinor(strings.TrimSpace(afAmount.Get()), currency.Decimals(base)); aerr == nil && amt > 0 {
+			months, _ := strconv.Atoi(strings.TrimSpace(afMonths.Get()))
+			reserved, _ := money.ParseMinor(strings.TrimSpace(afReserve.Get()), currency.Decimals(base))
+			if reserved < 0 {
+				reserved = 0
+			}
+			res := afford.CanAfford(amt, net.Amount, monthlyNet, months, reserved)
+			var verdict ui.Node
+			if res.Affordable {
+				verdict = P(Class("budget-sub font-display"), uistate.T("planning.affordYes"))
+			} else {
+				when := uistate.T("planning.affordNever")
+				if res.MonthsNeeded > 0 {
+					when = uistate.T("planning.affordWhen", plural(res.MonthsNeeded, "month"))
+				}
+				verdict = Div(
+					P(Class("err"), Attr("role", "alert"), uistate.T("planning.affordShort", fmtMoney(money.New(res.Shortfall, base)))),
+					P(Class("muted"), when),
+				)
+			}
+			afBody = Div(
+				Div(Class("stat-grid"),
+					stat(uistate.T("planning.affordProjected"), fmtMoney(money.New(res.ProjectedBalance, base)), ""),
+					stat(uistate.T("planning.affordAvailable"), fmtMoney(money.New(res.Available, base)), ""),
+				),
+				verdict,
+			)
+		}
+
+		affordCard = Section(Class("card"),
+			H2(Class("card-title"), uistate.T("planning.affordTitle")),
+			P(Class("muted"), uistate.T("planning.affordHint")),
+			Form(Class("form-grid"),
+				Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("planning.affordAmountPlaceholder", base)), Value(afAmount.Get()), Step("0.01"), OnInput(onAfAmount)),
+				Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("planning.affordMonthsPlaceholder")), Value(afMonths.Get()), Step("1"), OnInput(onAfMonths)),
+				Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("planning.affordReservePlaceholder", base)), Value(afReserve.Get()), Step("0.01"), OnInput(onAfReserve)),
+			),
+			afBody,
 		)
 	}
 
@@ -542,6 +606,7 @@ func Planning() ui.Node {
 
 	return Div(
 		forecastCard,
+		affordCard,
 		recurringCard,
 		plansCard,
 		debtCard,
