@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Planning number fields now have sensible constraints (C53).** The plans horizon (≥ 1) and one-time-month
+  (1..horizon) inputs, and the payoff calculator + debt-strategy money inputs (≥ 0), were validated only after
+  submit. They now carry `min`/`max` so bad values are caught at the field. Covered by a new
+  `planning_constraints_check` e2e.
 - **The to-do priority and due-date controls are now labelled (C52).** Both the add and inline-edit forms had a
   priority `Select` and a due-date input with no `aria-label` or visible label — invisible to screen readers. Each
   now has a visible label (via the shared `labeledField`) plus a matching `aria-label`. Covered by a new

@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: number-field constraints on the Planning screen (C53)
+
+- C53 item 4 (chosen because it needs no new i18n — en.go is parallel-dirty, so the labels item is deferred). Added
+  min/max to planning.go's number inputs: plans horizon min=1, one-time month min=1 max=plHorizon.Get() (dynamic;
+  empty horizon → max="" which the browser ignores), and the payoff calculator (balance/APR/payment/extra) + debt-
+  strategy extra get min=0. Caught at the field instead of only after submit.
+- New planning_constraints_check.mjs counts number inputs on /planning: asserts >=2 with min=1 and >=4 with min=0
+  (got 2 and 5). PASS. App wasm builds clean; gofmt clean. Committed via git commit -- <paths> (git add only the new
+  e2e); sw.js parallel-dirty, left out; TODOS.md untouched.
+- C53 remaining: the big IA restructure (sub-nav/tabs, reunite payoff inputs+result, item 2 "most impactful"),
+  labels (needs en.go), and guided empty states — the IA/tabs likely want index.html (contended). Deferring those
+  heavier items; next C54 (Allocate) which is uncontested.
+
 ## 2026-06-20 - feat: label the to-do priority + due-date controls (C52)
 
 - C52 item 1: the priority Select and due-date Input in both the add and inline-edit forms had no aria-label or
