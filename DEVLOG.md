@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C47 ledger redesign — sort direction + keys (pure, bottom-up)
+
+- User switched the focus to C47 (redesign /transactions as a paginated, sortable table with a cleaner filter
+  toolbar). Per C47's own SDLC note ("most logic lives in pure txnfilter; extend with tests before UI"), started
+  bottom-up.
+- Extended internal/txnfilter: added an explicit Dir (asc/desc) field to Criteria; SortKeys =
+  date/amount/payee/category/account with ValidSortKey + DefaultDir (date/amount default desc, text asc);
+  Normalize now validates the sort key and fills the direction. Rewrote Apply to filter-then-sort via a single
+  pure compare() that handles all keys with direction and deterministic ID tie-breaks. Added ApplyWithLabels
+  (id→name maps) so category/account sort by display name, not opaque IDs; Apply delegates with empty labels
+  (raw-ID order) and keeps its old signature so the screen compiles unchanged.
+- Preserved all prior behavior (existing tests green, incl. determinism + no-mutation). Added table tests for
+  every key x direction, label-aware name sorting, and Normalize defaults. No UI/behavior change yet (the
+  screen still calls Apply the same way), so no sw bump. wasm builds clean.
+- Next C47 pieces: pure pagination math helpers (page index/size/total/slice bounds + clamp) with tests; then
+  persist page-size + sort key/dir in uistate.TxFilter; then the table UI + sortable headers + pagination bar +
+  compact filter toolbar.
+
 ## 2026-06-20 - fix: CSV import desc falls back to payee (C27 follow-up; the bug my E2E found)
 
 - Pivoted off B16 to fix the real bug the documents-CSV story surfaced. Checked first: clean tree, csv.go last

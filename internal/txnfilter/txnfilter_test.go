@@ -40,6 +40,64 @@ func TestApplyDefaultSortNewestFirst(t *testing.T) {
 	}
 }
 
+func TestApplySortByKeyAndDirection(t *testing.T) {
+	// sample(): a=06-01/food/acc1/"Coffee shop"/450, b=06-03/rent/acc2/"Rent"/120000,
+	// c=06-02/pay/acc1/"Payday"/250000. Category/account sort by raw ID here.
+	cases := []struct {
+		key, dir, want string
+	}{
+		{"date", Asc, "acb"},
+		{"date", Desc, "bca"},
+		{"amount", Asc, "abc"},
+		{"amount", Desc, "cba"},
+		{"payee", Asc, "acb"},
+		{"payee", Desc, "bca"},
+		{"category", Asc, "acb"}, // food < pay < rent
+		{"category", Desc, "bca"},
+		{"account", Asc, "acb"},  // acc1(a,c tie ID) then acc2(b)
+		{"account", Desc, "bac"}, // acc2(b) then acc1(a,c tie ID)
+	}
+	for _, tc := range cases {
+		got := ids(Apply(sample(), Criteria{Sort: tc.key, Dir: tc.dir}))
+		if got != tc.want {
+			t.Errorf("sort %s/%s = %q, want %q", tc.key, tc.dir, got, tc.want)
+		}
+	}
+}
+
+func TestApplyWithLabelsSortsByName(t *testing.T) {
+	labels := Labels{
+		Category: map[string]string{"food": "Food", "rent": "Rent", "pay": "Salary"},
+		Account:  map[string]string{"acc1": "Zebra", "acc2": "Apple"},
+	}
+	// Category by name asc: Food(a) < Rent(b) < Salary(c).
+	if got := ids(ApplyWithLabels(sample(), Criteria{Sort: "category", Dir: Asc}, labels)); got != "abc" {
+		t.Errorf("category-by-name asc = %q, want abc", got)
+	}
+	// Account by name asc: Apple(b) < Zebra(a,c tie on ID).
+	if got := ids(ApplyWithLabels(sample(), Criteria{Sort: "account", Dir: Asc}, labels)); got != "bac" {
+		t.Errorf("account-by-name asc = %q, want bac", got)
+	}
+}
+
+func TestNormalizeSortAndDir(t *testing.T) {
+	if n := (Criteria{}).Normalize(); n.Sort != "date" || n.Dir != Desc {
+		t.Errorf("empty normalize = %s/%s, want date/desc", n.Sort, n.Dir)
+	}
+	if n := (Criteria{Sort: "bogus"}).Normalize(); n.Sort != "date" {
+		t.Errorf("invalid sort key not reset: %s", n.Sort)
+	}
+	if n := (Criteria{Sort: "payee"}).Normalize(); n.Dir != Asc {
+		t.Errorf("payee default dir = %s, want asc", n.Dir)
+	}
+	if n := (Criteria{Sort: "amount", Dir: "sideways"}).Normalize(); n.Dir != Desc {
+		t.Errorf("invalid dir not reset to amount default: %s", n.Dir)
+	}
+	if n := (Criteria{Sort: "date", Dir: Asc}).Normalize(); n.Dir != Asc {
+		t.Errorf("explicit dir overwritten: %s", n.Dir)
+	}
+}
+
 func TestApplyFilters(t *testing.T) {
 	all := sample()
 	if got := Apply(all, Criteria{Account: "acc1"}); ids(got) != "ca" {
