@@ -484,6 +484,10 @@ func pickImageDataURL(onData func(string)) {
 	input := doc.Call("createElement", "input")
 	input.Set("type", "file")
 	input.Set("accept", "image/*")
+	// On a phone (the primary device for "snap a receipt") this asks the browser to
+	// open the rear camera directly rather than the file browser. Desktop browsers
+	// ignore it and still show a file picker.
+	input.Set("capture", "environment")
 
 	var onChange, onLoad js.Func
 	onLoad = js.FuncOf(func(this js.Value, _ []js.Value) any {

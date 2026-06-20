@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **"Snap a receipt" opens the camera on mobile (L3).** The Documents image picker set `accept="image/*"` but no
+  `capture` attribute, so on a phone — the primary device for photographing a receipt — it opened the file
+  browser instead of the camera. It now sets `capture="environment"` to ask for the rear camera directly;
+  desktop browsers ignore it and still show a file picker.
 - **Budget row sub-lines no longer glue together (L1).** A budget row stacks several status lines — the
   status (`Monthly · On track · 79% · $61.00 left`), the pace heads-up, the rollover carry, and the envelope
   balance — but `.budget-sub` was inline, so adjacent lines ran into each other (`…$61.00 leftAt this pace…`).

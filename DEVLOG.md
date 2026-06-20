@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: L3 receipt capture opens the mobile camera
+
+- Started L3 ("The Receipt Snap") with its smallest, highest-value isolated fix. pickImageDataURL in
+  documents.go created the image <input> with accept="image/*" but no capture attribute, so on a phone it opened
+  the file browser instead of the camera. Added input.Set("capture", "environment") so mobile asks for the rear
+  camera directly; desktop ignores it. Bumped sw v196->v197; wasm build green. (The input is created off-DOM so
+  there's no e2e surface to assert against — noted in the L3 probe-hardening item.)
+- Next L3 (bottom-up): receipt mode — a receipt is ONE charge split across categories (not N transactions); pure
+  logic + reconcile-to-the-cent tests in internal/extract first, then persistence/state/UI; plus mapping the
+  extracted free-text category to a real category through the Rules engine.
+
 ## 2026-06-20 - feat: L2 Split "Settle up" panel (UI + e2e)
 
 - L2 step 4 (UI). split_screen.go: after the forward split, a "Save split" button writes the current split as a
