@@ -89,7 +89,7 @@ type WidgetProps struct {
 	GridColumn string   // CSS grid-column span, e.g. "1" or "1 / span 2"
 	GridRow    string   // CSS grid-row span, e.g. "2" or "3 / span 2"
 	Draggable  bool     // mark the cell draggable (drag-reorder behavior wired separately)
-	Resizable  bool     // show the right/bottom resize handles
+	Resizable  bool     // show the directional resize handles
 	OnGear     func()   // open this widget's settings (gear click)
 }
 
@@ -375,22 +375,42 @@ func widget(props WidgetProps) uic.Node {
 			itemsAtom.Set(next)
 			uistate.PersistItems(next)
 		}
+		resizeHandle := func(dir, label string, disabled bool, onClick func()) uic.Node {
+			cls := "rz"
+			if disabled {
+				cls += " off"
+			}
+			return Button(
+				Class(cls),
+				Type("button"),
+				Attr("data-dir", dir),
+				Attr("title", label),
+				Attr("aria-label", label),
+				DisabledIf(disabled),
+				OnClick(func(e uic.MouseEvent) {
+					e.PreventDefault()
+					e.StopPropagation()
+					if !disabled {
+						onClick()
+					}
+				}),
+			)
+		}
 		args = append(args,
-			// Click grows the span by one, wrapping at the max back to 1; Shift+click
-			// shrinks by one (clamped at 1) so you can shrink directly instead of
-			// cycling all the way around (#1032) — mirroring the keyboard Shift+Arrow
-			// resize. With Pack the grid reflows around the new size, so growing never
-			// overlaps. Tooltip says so.
-			Div(Class("rz"), Attr("data-dir", "r"), Attr("title", uistate.T("widget.resizeWidth")),
-				OnClick(func(e uic.MouseEvent) {
-					resize(dashlayout.CycleSpan(curCol, maxColSpan, e.JSValue().Get("shiftKey").Bool()), curRow)
-				}),
-			),
-			Div(Class("rz"), Attr("data-dir", "b"), Attr("title", uistate.T("widget.resizeHeight")),
-				OnClick(func(e uic.MouseEvent) {
-					resize(curCol, dashlayout.CycleSpan(curRow, maxRowSpan, e.JSValue().Get("shiftKey").Bool()))
-				}),
-			),
+			// Hover/focus reveals four direct resize actions. Disabled handles are
+			// hidden at the span bounds so the tile keeps a calm default surface.
+			resizeHandle("l", uistate.T("widget.narrower"), curCol <= 1, func() {
+				resize(curCol-1, curRow)
+			}),
+			resizeHandle("r", uistate.T("widget.wider"), curCol >= maxColSpan, func() {
+				resize(curCol+1, curRow)
+			}),
+			resizeHandle("t", uistate.T("widget.shorter"), curRow <= 1, func() {
+				resize(curCol, curRow-1)
+			}),
+			resizeHandle("b", uistate.T("widget.taller"), curRow >= maxRowSpan, func() {
+				resize(curCol, curRow+1)
+			}),
 		)
 	}
 	return Div(args...)

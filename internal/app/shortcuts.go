@@ -127,7 +127,7 @@ func helpHTML() string {
 		row("shortcuts.palette", "Ctrl/&#8984; + K") +
 		row("shortcuts.save", "Enter") +
 		row("shortcuts.close", "Esc") +
-		row("shortcuts.resize", "Hold Shift") +
+		row("shortcuts.resize", "Shift + Arrows") +
 		row("shortcuts.toggleHelp", "?") +
 		`</table>`
 }

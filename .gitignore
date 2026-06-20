@@ -15,6 +15,7 @@
 # UI/UX review captures (screenshots + rendered text from gwc/Playwright runs)
 /.review-screenshots/
 /e2e/*.png
+/e2e/.artifacts/
 /e2e/serve-bin
 /e2e/serve-bin.exe
 

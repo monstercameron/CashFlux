@@ -103,9 +103,6 @@ func Run() {
 
 	r.Mount("#app")
 
-	// Reveal the widgets' resize handles only while Shift is held.
-	wireResizeReveal()
-
 	// Global keyboard shortcuts (Alt+1..9 → primary nav sections).
 	wireKeyboardShortcuts()
 

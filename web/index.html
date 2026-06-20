@@ -491,16 +491,31 @@
       .rstep:hover { color:#f4f4f5; }
       .rlabel { min-width:128px; text-align:center; font-size:.8rem; }
 
-      /* resize handles — hidden until Shift is held (root gets data-resize), to
-         keep the bento visually calm. Toggled by a global key listener in the app. */
-      .rz { position:absolute; z-index:3; opacity:0; pointer-events:none; transition:opacity .15s ease; }
-      [data-resize] .rz { opacity:1; pointer-events:auto; }
-      .rz[data-dir="r"] { top:0; right:0; height:100%; width:11px; cursor:ew-resize; }
-      .rz[data-dir="b"] { left:0; bottom:0; width:100%; height:11px; cursor:ns-resize; }
-      .rz::after { content:""; position:absolute; background:#5a5a64; border-radius:3px; }
-      .rz[data-dir="r"]::after { top:50%; right:2px; transform:translateY(-50%); width:3px; height:24px; }
-      .rz[data-dir="b"]::after { left:50%; bottom:2px; transform:translateX(-50%); height:3px; width:24px; }
-      .rz:hover::after { background:#9a9aa4; }
+      /* resize handles stay quiet until a tile is hovered or focused. */
+      .rz { position:absolute; z-index:3; opacity:0; pointer-events:none; border:0; padding:0; background:transparent; color:#d4d4d8; transition:opacity .12s ease, background .12s ease, color .12s ease; }
+      .w:hover .rz, .w:focus-within .rz, .w:focus-visible .rz { opacity:.9; pointer-events:auto; }
+      .rz[data-dir="l"], .rz[data-dir="r"] { top:24px; bottom:8px; width:16px; cursor:ew-resize; }
+      .rz[data-dir="l"] { left:0; }
+      .rz[data-dir="r"] { right:0; }
+      .rz[data-dir="t"], .rz[data-dir="b"] { left:34px; right:34px; height:16px; cursor:ns-resize; }
+      .rz[data-dir="t"] { top:0; }
+      .rz[data-dir="b"] { bottom:0; }
+      .rz::before { content:""; position:absolute; border-radius:999px; background:rgba(212,212,216,.62); box-shadow:0 0 0 1px rgba(244,244,245,.12), 0 6px 18px rgba(0,0,0,.28); }
+      .rz[data-dir="l"]::before, .rz[data-dir="r"]::before { top:50%; width:3px; height:min(44px,42%); transform:translateY(-50%); }
+      .rz[data-dir="l"]::before { left:4px; }
+      .rz[data-dir="r"]::before { right:4px; }
+      .rz[data-dir="t"]::before, .rz[data-dir="b"]::before { left:50%; width:min(48px,42%); height:3px; transform:translateX(-50%); }
+      .rz[data-dir="t"]::before { top:4px; }
+      .rz[data-dir="b"]::before { bottom:4px; }
+      .rz[data-dir="l"]::after, .rz[data-dir="r"]::after { content:""; position:absolute; top:50%; width:0; height:0; transform:translateY(-50%); border-top:4px solid transparent; border-bottom:4px solid transparent; }
+      .rz[data-dir="l"]::after { left:3px; border-right:5px solid currentColor; }
+      .rz[data-dir="r"]::after { right:3px; border-left:5px solid currentColor; }
+      .rz[data-dir="t"]::after, .rz[data-dir="b"]::after { content:""; position:absolute; left:50%; width:0; height:0; transform:translateX(-50%); border-left:4px solid transparent; border-right:4px solid transparent; }
+      .rz[data-dir="t"]::after { top:3px; border-bottom:5px solid currentColor; }
+      .rz[data-dir="b"]::after { bottom:3px; border-top:5px solid currentColor; }
+      .rz:hover, .rz:focus-visible { opacity:1; color:#fff; background:rgba(244,244,245,.045); outline:none; }
+      .rz:hover::before, .rz:focus-visible::before { background:rgba(244,244,245,.78); }
+      .rz.off { opacity:0 !important; pointer-events:none !important; }
 
       /* dark, modern scrollbar for the scroll pane */
       main.cf-scroll { scrollbar-width: thin; scrollbar-color: #34343a transparent; scroll-behavior: smooth; }

@@ -181,7 +181,7 @@ var english = Catalog{
 	"shortcuts.palette":    "Command palette",
 	"shortcuts.save":       "Save the open settings panel",
 	"shortcuts.close":      "Close a panel / this help",
-	"shortcuts.resize":     "Show dashboard resize handles",
+	"shortcuts.resize":     "Resize focused dashboard tile",
 	"shortcuts.toggleHelp": "Toggle this help",
 
 	// Command palette (§6.6)
@@ -564,6 +564,10 @@ var english = Catalog{
 	"widget.settings":            "Widget settings",
 	"widget.open":                "Open this screen",
 	"widget.openNamed":           "Open %s",
+	"widget.narrower":            "Narrower",
+	"widget.wider":               "Wider",
+	"widget.shorter":             "Shorter",
+	"widget.taller":              "Taller",
 	"widget.resizeWidth":         "Resize width — click grows, Shift+click shrinks",
 	"widget.resizeHeight":        "Resize height — click grows, Shift+click shrinks",
 	"widget.importance":          "Importance",
