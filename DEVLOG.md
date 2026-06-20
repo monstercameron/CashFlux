@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: allocate rows show the score once (C54)
+
+- C54 item 4 (chosen as the clean no-i18n win; the labels/IA items need en.go/index.html which are parallel-dirty).
+  AllocRow printed the score twice — head "60%" and a "Score 60%" .budget-sub — joined to the breakdown by a literal
+  " · " span. Removed the duplicate sub-line and the separator; the score stays in the head + the role=progressbar
+  bar (scoreLabel kept as the bar's aria-label, so a11y unchanged), and the returns/stability/liquidity breakdown is
+  now the sole sub-line directly under the bar.
+- New allocate_score_check.mjs: on /allocate asserts no .budget-sub is a "Score …" duplicate or a bare "·", the
+  "returns …" breakdown sub-line is present, and the head still shows a "%" score (got "60%"). PASS. App wasm builds
+  clean; gofmt clean. Committed via git commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C54 remaining: label the amount/reserve/max-per inputs + profile select (needs en.go), advanced-options
+  disclosure (index.html), surface allocate-amount, AI-error→Settings link. Next: C55 (Reports).
+
 ## 2026-06-20 - feat: number-field constraints on the Planning screen (C53)
 
 - C53 item 4 (chosen because it needs no new i18n — en.go is parallel-dirty, so the labels item is deferred). Added

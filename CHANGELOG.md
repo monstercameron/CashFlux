@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Allocate suggestions show their score once (C54).** Each ranked suggestion printed the score twice — in the
+  row head and again as a "Score NN%" sub-line — with a hand-rolled `" · "` separator span before the breakdown.
+  The duplicate sub-line and separator are gone; the score now lives in the head plus the labelled progress bar,
+  and the returns/stability/liquidity breakdown is the lone sub-line. Covered by a new `allocate_score_check` e2e.
+
 ### Fixed
 - **Planning number fields now have sensible constraints (C53).** The plans horizon (≥ 1) and one-time-month
   (1..horizon) inputs, and the payoff calculator + debt-strategy money inputs (≥ 0), were validated only after

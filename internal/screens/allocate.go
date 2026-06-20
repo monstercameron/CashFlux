@@ -61,14 +61,13 @@ func AllocRow(props allocRowProps) ui.Node {
 			Span(Class("budget-amount fig"), headRight),
 			Button(Class("btn"), Type("button"), Title(uistate.T("allocate.excludeTitle")), OnClick(excl), uistate.T("allocate.exclude")),
 		),
+		// The score is shown once — in the head (headRight) and as this labelled
+		// progress bar (C54). The breakdown is its own sub-line below, so no manual
+		// separator span is needed.
 		Div(Class("bar"), Attr("role", "progressbar"), Attr("aria-label", scoreLabel),
 			Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-valuenow", strconv.Itoa(scorePct)),
 			Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", scorePct))),
 		),
-		Span(Class("budget-sub fig"), scoreLabel),
-		// Explicit separator so the score and the breakdown don't run together
-		// ("Score 60%returns 100") — these are adjacent inline spans (§6.15).
-		Span(Class("budget-sub"), " · "),
 		Span(Class("budget-sub"), uistate.T("allocate.breakdown",
 			r.Breakdown.Returns*100, r.Breakdown.Stability*100, r.Breakdown.Liquidity*100, note)),
 	)
