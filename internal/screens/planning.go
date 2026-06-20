@@ -390,6 +390,31 @@ func Planning() ui.Node {
 			debts = append(debts, payoff.Debt{Name: a.Name, Balance: owed, AprPercent: a.InterestRateAPR, MinPayment: a.MinPayment.Abs().Amount})
 		}
 
+		// Payoff progress vs a stored baseline (L5 gap 5): "paid off $X of $Y".
+		var currentOwed int64
+		for _, d := range debts {
+			currentOwed += d.Balance
+		}
+		prog, since, tracking := app.PayoffProgress(currentOwed)
+		var progressNode ui.Node = Fragment()
+		if tracking {
+			w := prog.Percent
+			if w > 100 {
+				w = 100
+			}
+			progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
+				P(Class("budget-sub font-display"), "Paid off "+fmtMoney(money.New(prog.PaidOff, base))+" of "+fmtMoney(money.New(prog.Baseline, base))+" ("+strconv.Itoa(prog.Percent)+"%) since "+since.Format("Jan 2, 2006")+"."),
+				Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", w)))),
+				Button(Class("btn"), Type("button"), Style(map[string]string{"margin-top": "0.4rem"}), OnClick(func() { _ = app.ClearPayoffTracking(); rev.Set(rev.Get() + 1) }), "Reset progress"),
+			)
+		} else if len(debts) > 0 {
+			owed := currentOwed
+			progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
+				Button(Class("btn"), Type("button"), Title("Snapshot today's balances to track how much you pay off over time"),
+					OnClick(func() { _ = app.StartPayoffTracking(owed, base); rev.Set(rev.Get() + 1) }), "Start tracking progress"),
+			)
+		}
+
 		// Per-liability include/exclude toggles (each ToggleRow is its own component,
 		// so the per-row hook is safe inside this loop).
 		var includeToggles []ui.Node
@@ -507,6 +532,7 @@ func Planning() ui.Node {
 				),
 			),
 			body,
+			progressNode,
 			If(len(includeToggles) > 0, Div(Style(map[string]string{"margin-top": "0.6rem"}),
 				P(Class("budget-sub"), "Include in payoff plan (a mortgage is excluded by default):"),
 				Div(includeToggles),

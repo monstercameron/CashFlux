@@ -7,12 +7,21 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
+
+// PayoffBaseline snapshots the total debt owed when the user started tracking
+// payoff progress, so "paid off $X since you started" can be measured against it.
+type PayoffBaseline struct {
+	TotalOwed int64     `json:"totalOwed"` // minor units, base currency
+	Currency  string    `json:"currency"`
+	StartedAt time.Time `json:"startedAt"`
+}
 
 // SchemaVersion is the current on-disk dataset schema version. Bump it when the
 // shape changes and add a migration step in migrate.
@@ -26,6 +35,7 @@ type Settings struct {
 	OpenAIModel        string             `json:"openAiModel,omitempty"`
 	FreshnessOverrides map[string]int     `json:"freshnessOverrides,omitempty"`
 	BudgetMethodology  string             `json:"budgetMethodology,omitempty"` // budgeting.Methodology; empty = simple
+	PayoffBaseline     *PayoffBaseline    `json:"payoffBaseline,omitempty"`    // debt-payoff progress baseline (L5)
 }
 
 // Dataset is the complete CashFlux dataset: every entity plus settings. It is

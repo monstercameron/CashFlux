@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L5 payoff progress tracking (completes L5)
+
+- L5 gap 5 (the last). Pure payoff.TrackProgress(baseline, current) -> Progress{PaidOff, Remaining, Percent}
+  with paid-off clamped at >= 0 (a grown balance reads 0%, never negative) and a non-positive baseline = 100%
+  when nothing's owed (table-tested incl. clamps).
+- Persistence (additive, store was clean): store.Settings gains *PayoffBaseline{TotalOwed, Currency, StartedAt}
+  (json omitempty pointer; dataset.go gained a time import) — round-trip tested. appstate seam (payoff_progress.go):
+  StartPayoffTracking(total, currency) snapshots into Settings via PutSettings; ClearPayoffTracking nils it;
+  PayoffProgress(currentOwed) returns (Progress, startedAt, tracking) — unit-tested.
+- planning.go: computes the current included-debt total; when not tracking + there are debts, a "Start tracking
+  progress" button (snapshots today's total); when tracking, a strip "Paid off $X of $Y (NN%) since <date>" + a
+  .bar progress bar + a "Reset progress" button (rev bump on each). Bumped sw v205->v206.
+- E2E (story_payoff_progress.test.mjs): start tracking -> baseline saved (sample $16,900 consumer debt, mortgage
+  excluded) -> "Paid off ..." strip shows -> survives reload. Full suite 39/0 green; go test ./internal/payoff
+  ./internal/store ./internal/appstate green. Screenshot shows the complete Debt Crusher card: burn-down chart,
+  dated payoff order, progress strip+bar, include toggles (mortgage off) - and it renders clean (splash fix
+  holding). L5 is now 5/5 COMPLETE.
+- Next: L6 "The First Night" (fresh-start / no-empty-state gap) and L7-L14; circle back to deferred (L4
+  FX-staleness, L2 sample-seeding, L3 receipt-flow e2e harness).
+
 ## 2026-06-20 - feat: L5 payoff burn-down chart
 
 - L5 gap 4 (timeline chart). Exposed an additive payoff.Plan.Schedule []int64 from BuildPlan = the remaining

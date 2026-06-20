@@ -59,6 +59,12 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Payoff progress tracking against a baseline (L5).** A **"Start tracking progress"** button snapshots today's
+  total debt; the debt card then shows a progress strip — **"Paid off $X of $Y (NN%) since <date>"** with a bar —
+  that updates as balances fall, and a **Reset** to start over. Backed by a pure `payoff.TrackProgress`
+  (paid-off clamped at ≥ 0, table-tested) and an additive `store.Settings.PayoffBaseline` (persisted + round-trip
+  tested) with `appstate.StartPayoffTracking`/`ClearPayoffTracking`/`PayoffProgress`; covered end-to-end by a
+  Playwright story (start tracking → strip shows → survives reload). This completes the L5 "Debt Crusher" story.
 - **Debt payoff burn-down chart (L5).** The debt-strategy card now draws an area chart of the remaining total
   balance falling to zero across the payoff timeline, so the plan reads at a glance. Backed by an additive
   `payoff.Plan.Schedule []int64` (the remaining balance at the end of each month, ending at 0) populated by
