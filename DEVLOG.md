@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C82 in-house agent tool-calling loop (pure)
+
+- Took C82's pure core (internal/agent area clean + un-taken; other agent on Mermaid). The ticket's finding: no Go
+  agent framework fits wasm + local-first, and the loop is ~a few hundred lines of pure Go — so build in-house.
+- New internal/agent: Tool/ToolSpec/ToolCall/ToolResult + a name-keyed Registry (register-replaces; Specs() is the
+  model offer) + Run(ctx, model, reg, history, opts): a bounded model→tool-calls→execute→repeat loop. Model is an
+  INTERFACE (wasm layer implements over a real provider; tests use a scripted fake), tools are plain Go handlers.
+- Key design calls: every tool failure (unknown tool / invalid JSON args / handler error) degrades to a ToolResult
+  the model can react to — the loop NEVER aborts on a tool error (the realistic agent behavior); only a model error
+  stops it (wraps ErrModel, returns the partial transcript). Bounds: MaxSteps (default 8) + TokenBudget + ctx
+  cancel. Transcript records steps/final/StopReason(done|max_steps|budget|canceled|error)/tokens for explainability.
+- 9 test funcs via the fake model: multi-step done, max_steps, budget, tool-error-continues, unknown tool, canceled,
+  model-error-wraps-ErrModel, registry replace/Specs, invalid-JSON args. go test green. Committed d7de4a8.
+- Deferred (contended/later): binding tools to appstate (read-then-guarded-writes, actor=agent, routed through C78
+  undo), capability gating + plan-only fallback, the agent UI surface. Next: another non-contended pure C slice.
+
 ## 2026-06-20 - feat: wire the category-map Mermaid diagram (C70/C63)
 
 - Second wired Mermaid case (renderer landed last iteration). Categories() now renders a "Category map" card after

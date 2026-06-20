@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Sankey Mermaid generator (C70).** `internal/mermaid.Sankey` emits `sankey-beta` money-flow source from weighted
+  flows (CSV-quoting labels and skipping non-positive weights) — the foundation for an income→categories→savings/debt
+  flow chart. Pure + table-tested; fourth of the C70 generators.
+- **In-house agent tool-calling loop (C82, logic).** New pure, table-tested `internal/agent`: a `Tool`/`ToolSpec`/
+  `ToolCall`/`ToolResult` type set, a name-keyed `Registry`, and `Run` — a bounded model→tool-calls→execute→repeat
+  loop with step and token-budget caps, context cancellation, and a recorded `Transcript` (steps, final answer, stop
+  reason, tokens). The `Model` is an interface the AI layer implements over a real provider; tools are plain Go
+  handlers, and every tool failure becomes a result the model can react to rather than aborting the loop. The core
+  the agentic AI builds on; binding tools to appstate (actor=agent, audited/undoable) and the UI are later phases.
 - **Category map diagram on the Categories screen (C70/C63).** The category hierarchy now renders as a Mermaid
   graph beneath the lists, via `uiw.Mermaid` over `mermaid.FromCategories` — a second wired diagram alongside the
   Workflows flowcharts. Covered by a new `categories_diagram_check` e2e (asserts real `<svg>`).
