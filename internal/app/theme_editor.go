@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/artifacts"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/theme"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -61,6 +62,28 @@ func themeEditor() uic.Node {
 			next.FontUI = family
 			apply(next)
 		})
+	}
+	removeFont := func(family string) {
+		fonts.Set(uistate.RemoveFont(family))
+		// If the active theme referenced the removed font, fall back to a curated
+		// one so nothing points at a now-missing @font-face.
+		next := t
+		changed := false
+		if next.FontUI == family {
+			next.FontUI = "Inter"
+			changed = true
+		}
+		if next.FontDisplay == family {
+			next.FontDisplay = "Fraunces"
+			changed = true
+		}
+		if changed {
+			apply(next)
+		}
+	}
+	var fontRows []uic.Node
+	for _, f := range fonts.Get() {
+		fontRows = append(fontRows, uic.CreateElement(themeFontRow, themeFontRowProps{Family: f.Family, OnRemove: removeFont}))
 	}
 
 	banner := uic.UseState(uistate.LoadBanner())
@@ -210,6 +233,7 @@ func themeEditor() uic.Node {
 			Span(Class("muted text-xs"), "WOFF2, WOFF, TTF, or OTF · up to 1 MB"),
 		),
 		If(fontMsg.Get() != "", P(Class("text-xs"), Style(map[string]string{"color": "#d8716f"}), fontMsg.Get())),
+		If(len(fontRows) > 0, Div(Class("flex flex-col gap-1 py-1"), fontRows)),
 		ui.Segmented(ui.SegmentedProps{
 			Options:  []ui.SegOption{{Value: string(theme.Comfortable), Label: "Comfortable"}, {Value: string(theme.Compact), Label: "Compact"}},
 			Selected: string(t.Density),
@@ -341,6 +365,31 @@ func themePresetBtn(props themePresetBtnProps) uic.Node {
 			}
 		}),
 		props.Theme.Name,
+	)
+}
+
+// themeFontRowProps configures one uploaded-font row with a remove control.
+type themeFontRowProps struct {
+	Family   string
+	OnRemove func(family string)
+}
+
+// themeFontRow lists one uploaded custom font with a remove button. Own component
+// so each remove hook stays stable across the list.
+func themeFontRow(props themeFontRowProps) uic.Node {
+	return Div(Class("flex items-center justify-between gap-2 text-xs"),
+		Span(Class("muted truncate"), props.Family),
+		Button(Class("btn inline-flex items-center gap-1"), Type("button"),
+			Attr("aria-label", "Remove "+props.Family),
+			Title("Remove "+props.Family),
+			OnClick(func() {
+				if props.OnRemove != nil {
+					props.OnRemove(props.Family)
+				}
+			}),
+			ui.Icon(icon.Close, Class("w-3.5 h-3.5 shrink-0")),
+			Span("Remove"),
+		),
 	)
 }
 

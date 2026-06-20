@@ -21,6 +21,10 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Remove uploaded fonts (B20).** Each uploaded custom font now lists in the theme editor with a Remove
+  button. Removing it drops the font from storage, clears its `@font-face`, and — if the active theme was using
+  it — falls back to a curated font (Inter/Fraunces) so nothing points at a missing face. Verified end-to-end
+  via Playwright (upload → row + Remove appear → remove clears store, face, and falls back).
 - **Selectable icon weight (B13).** The theme editor gains an "Icon weight" control (Thin / Regular / Bold) —
   `ui.Icon` now draws every glyph at the theme's `--icon-stroke` width, so the whole curated icon set thins or
   thickens together, live and persistent. Verified via Playwright (Bold takes a rail icon from 1.6px → 2.2px,

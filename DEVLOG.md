@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: per-font remove UI (B20 completion)
+
+- Closed the font-management gap: uploads could be added but not removed. The editor now lists each uploaded
+  font (themeFontRow, its own component for hook stability) with a Remove button. removeFont calls the existing
+  uistate.RemoveFont (which re-applies @font-face) and, if the active theme's FontUI/FontDisplay referenced the
+  removed family, falls back to Inter/Fraunces and re-applies so nothing points at a missing face.
+- Verified via Playwright (e2e/font_remove_check.mjs): upload a dummy font → row + Remove appear, store +
+  theme.fontUi set; Remove → cashflux:fonts cleared, @font-face gone, theme.fontUi falls back to Inter, row
+  disappears — no page errors. Bumped sw cache v188→v189.
+- Branding/theming + artifact-upload focus is now feature-complete (engine, editor, import/export, font
+  upload+remove, banner upload, density/scale unify, icon weight). Remaining optional B20 sub-item: per-widget
+  colors. Otherwise the focus area is done; broader app backlog (B21 reports, etc.) remains for "all features".
+
 ## 2026-06-19 - feat: selectable icon weight, wired + UI (B13)
 
 - Wired the icon-stroke token through the renderer and editor. ui.Icon now sets stroke-width via an inline
