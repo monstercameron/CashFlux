@@ -5,11 +5,13 @@ package app
 import "syscall/js"
 
 // focusMain moves keyboard and screen-reader focus to the <main> content
-// region. It's called on route changes so SPA navigation doesn't strand focus
-// on a control in the screen the user just left; landing on <main> (which is
-// labelled and at the top of the new screen) mirrors how a full page load would
-// behave. preventScroll keeps the focus move from yanking the scroll position,
-// since main is already the scroll container's top.
+// region and scrolls it back to the top. It's called on route changes so SPA
+// navigation doesn't strand focus on a control in the screen the user just left;
+// landing on <main> (which is labelled) mirrors how a full page load would
+// behave. <main> is itself the scroll container, and its scrollTop persists
+// across an SPA navigation, so a new screen would otherwise open at the previous
+// page's scroll position — reset it to 0 here. The focus move uses preventScroll
+// so it doesn't fight the explicit reset.
 func focusMain() {
 	doc := js.Global().Get("document")
 	if doc.IsNull() || doc.IsUndefined() {
@@ -19,6 +21,7 @@ func focusMain() {
 	if el.IsNull() || el.IsUndefined() {
 		return
 	}
+	el.Set("scrollTop", 0) // open each screen at the top, not the last page's scroll position
 	opts := js.Global().Get("Object").New()
 	opts.Set("preventScroll", true)
 	el.Call("focus", opts)

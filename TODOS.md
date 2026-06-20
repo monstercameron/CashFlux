@@ -2283,6 +2283,267 @@ critical (overlapping statement periods) → lean on `dedupe` (hash date+amount+
 _Cross-links: **C60** (Documents — the home), **C64** (rules categorization), **C56** (richer history → better
 subscription detection), **C45/B17** (privacy — local vs AI), **C44** (no CDN/bundle), Recurring/Bills (cadence)._
 
+### C75. Notifications/reminders — finish B19 Phase A surfaces (center + rules page + browser wiring) ★ (feature, user-requested 2026-06-20)
+**Context (code-verified).** The reminder/notification **engine already exists** — pure `internal/notify`
+(rules: per-event enable/channels/threshold/quiet-hours/frequency-cap, dedupe/delivered-log, catch-up math;
+events: bill-due, budget-threshold, goal-milestone, stale-balance, large-transaction, digest, backup-due) +
+`internal/notifyfeed` (candidate builders) + `app/notifyrun.go` (catch-up on load → one "while you were away"
+summary toast). What's **missing is the UI/wiring half** (most of the B19 Phase-A checklist is still open):
+- [ ] **Notification Center page/panel** — a bell + deduped, capped, severity-ordered list of fired
+      notifications (the "while you were away" summary expands into this). Acknowledge/dismiss; persists.
+- [ ] **Notification-rules settings page** — today it runs on hardcoded `default-*` rules; expose a UI to
+      enable/disable each event, pick channels, set threshold + quiet hours + frequency cap (the `notify.Rule`
+      fields already exist). Persist rules to the durable store.
+- [ ] **Wire the Browser channel** — `ChannelBrowser` is defined but **nothing calls
+      `Notification.requestPermission` / `new Notification`** (grep confirms). Add the permission prompt +
+      desktop pop-ups (fire only while a tab is open — Phase A constraint).
+- [ ] **Catch-up completeness** — persist `lastSeenAt`; run the engine on **wake** (`visibilitychange`→visible
+      / focus) over the gap; and on a **timer while open** so a midday bill-due fires in-session, not only on
+      next open. (`notify.CatchUp(...)` is pure/testable — table-test gap windows/dedupe/long-gap collapse.)
+- [ ] **Privacy:** the lock-screen/glanceable surface shows **counts/previews only, no balances** (ties the
+      B17 lock-screen data rule); respect quiet hours.
+- [ ] **Verify:** rules configurable + persisted; center lists deduped items; browser permission + pop-ups
+      work; a due event fires mid-session and on reopen exactly once.
+_Note — SMS/email is **Phase B**, intentionally absent (client-side can't: CORS + key exposure + closed-app
+can't schedule). Paths documented in **B19**: hosted relay, BYO serverless, or the **Electron desktop wrapper
+as its own local backend** (most local-first-friendly). Out of scope for this entry._
+_Cross-links: **B19** (the approved plan + Phase B), **C42/C43** (FlipPanel/overlay for the center/rules),
+**C69** (theme), **B15** (a11y/live-region), **C73** (build the center/rules with shared components)._
+
+### C76. AI quick-suggestion modal (FlipPanel) — unify the scattered inline AI affordances ★ (UX, user-requested 2026-06-20)
+**Context.** AI suggestions are currently **inline cards**, not a modal, and inconsistent across screens:
+Allocate "Explain with AI" (C54), Insights explain/Q&A (C59), Rules suggestions (C64), Documents draft
+extraction/categorization (C60). The `FlipPanel` modal is only used for Settings + the +Add quick-add.
+- [ ] **A reusable `AiSuggestionModal` (FlipPanel-based)** — consistent chrome for "ask/suggest/explain":
+      prompt/context in, streamed answer + accept/dismiss/save-as-task/pin actions out. Reuses `ai` +
+      `FlipPanel` + the cancel-while-thinking pattern (C59).
+- [ ] **Route the existing AI affordances through it** so explain/suggest/categorize feel like one feature
+      (incl. per-line-item category suggestions for statement import, **C74**).
+- [ ] **Fixes carried in:** the "needs key" dead-ends link to Settings → AI (C54/C59); separate explain vs
+      Q&A results (C59); sanitize/markdown-render answers once **C71** lands.
+- [ ] **A11y:** focus-trapped, Esc-closable, labelled; respects reduced-motion.
+- [ ] **Verify:** every AI affordance opens the same modal; accept/dismiss/save works; keyboard + offline-key
+      handling correct.
+_Cross-links: **C54/C59/C64/C60** (the inline affordances it unifies), **C74** (import categorization),
+**C71** (markdown render), **C70**-style lib pattern, **C73** (reusable component), **B15** (a11y)._
+
+### C77. Dashboard To-do widget — show-completed setting + sort + inline checkboxes ★ (UX, user-requested 2026-06-20)
+**Context (code-verified).** `todoWidget` (`internal/screens/dashboard.go`) shows **open tasks only**, capped
+at a configurable `count`, in **raw storage order** (it doesn't use `tasksort`), with a priority dot and
+**read-only** rows. Three asks, all mapping onto existing infra (the per-widget gear/flip-panel `widgetcfg`
+schema + pure `tasksort`). Build bottom-up.
+- [ ] **Sort (pure first).** Extend `internal/tasksort` with `OrderBy(mode)` — **Smart** (default; reuse the
+      screen's open-first → soonest-due → title), **Priority** (high→low), **A–Z** (and optionally **Due**) —
+      table-tested. The widget currently sorts not at all, so Smart is itself an upgrade and keeps the widget
+      consistent with the To-do screen.
+- [ ] **Widget settings (gear → flip panel).** Add to the **todo widget schema** (same pattern as
+      `savings.showBar`/`goals.showDate`/`accounts.cleared`): **`showCompleted`** (bool, default off →
+      completed render below open, dimmed + strikethrough via the existing `.row.done`) and **`sort`** (enum
+      above). Keep `count`. Persisted via the existing widget-config path (C12/C21/B12).
+- [ ] **Inline checkboxes (toggle complete on the dashboard).** Decompose rows into a **`DashTaskRow`
+      component** (owns its hook — no `On*` in loops) with a **real `<input type=checkbox>` / `role=checkbox`
+      + `aria-checked`**, labelled by the task title, keyboard-operable. Toggling calls `app.PutTask` + bumps
+      `UseDataRevision` (content change, not layout — won't disturb the bento FLIP signature, B2). On check:
+      strike-through, then (if show-completed off) **FLIP-animate out** + reflow, honoring
+      `prefers-reduced-motion`. Cross-link **B15** (a11y), **B2** (FLIP).
+- [ ] **Separate hit areas / drill-in.** Checkbox = complete; **clicking the title navigates to `/todo`**
+      (mirror the C30 tile-click drill-in).
+- [ ] **High-quality extras:** widget-header **progress line** ("3 left · 2 done"); **overdue emphasis**
+      (warn tone + sort overdue to top — fixes the C52 "no overdue cue" gap, ideal on the dashboard);
+      **"+N more →"** footer linking to `/todo` when capped (no silent truncation); keep priority as
+      **shape + color** (B15). Optional: a small **+ add** opening the C72 add-modal.
+- [ ] **Verify:** settings persist + change the widget; sort modes correct; checkbox toggles persist and
+      animate out; overdue stands out; drill-in works; bento layout/FLIP undisturbed.
+_Cross-links: **C52** (To-do screen — overdue/labels), **C72** (To-do v2 — share sort + add-modal; show
+top-level + rollup if subtasks land), **C21/C12/B12** (per-widget settings), **C30** (tile drill-in),
+**B2** (FLIP), **B15** (checkbox a11y), **C73** (DashTaskRow as a reusable row)._
+
+### C78. Audit log + timeline undo/redo (diff-based change history) ★ (feature, user-requested 2026-06-20)
+**Design doc:** [`docs/DESIGN_AUDIT_UNDO_REDO.md`](./docs/DESIGN_AUDIT_UNDO_REDO.md) — read first; this is the condensed backlog.
+**Idea:** a persistent **audit system** ("what changed, when, by whom") + a traversable **timeline**
+powering **undo/redo** and point-in-time restore. Chosen approach is **diff-based** (not a command
+pattern): snapshot before→after each mutation, diff into a minimal id-keyed `ChangeSet`
+(forward + inverse patch). Undo = apply inverse; redo = apply forward; restore = walk a cursor. Diffing
+(not hand-written inverses) is what makes **cascades** (transfer-pair delete, reassign-on-delete,
+cover-budget) reverse for free. Reuses existing `store.Snapshot()`/`Load`, lossless serialization, and
+`triggersSuspended` (replay must not re-fire workflows).
+**Decisions (locked 2026-06-20):** undo **survives reload** via a bounded, quota-aware persisted stack
+(discard stack on schema bump; audit log stays read-only across versions); undo covers **data entities
+only** (settings/appearance/layout are audited but excluded from data-undo).
+**Open (decide at spec):** audit retention cap (rec. 500 entries / 90 days); per-entity rollback vs
+global-only restore; actor model (needs a "current member" concept for who-changed-what).
+**Build bottom-up (one feature per commit):**
+- [ ] **Phase 1 — `internal/history` (pure Go, native-tested):** `Diff(before, after) ChangeSet`,
+      `ChangeSet.Invert()`, `Apply(ds, cs)`, bounded `Stack` (undo/redo cursor + byte cap + coalescing
+      of rapid same-entity edits). Rows stored as `json.RawMessage` so the differ is generic over all
+      ~20 `Dataset` collections. Exhaustive table tests (insert/update/delete/cascade/no-op/settings-
+      only/bulk). No `syscall/js`, no UI.
+- [ ] **Phase 2 — `appstate` commit seam:** add `commit(label, actor, mutate)` + a `replaying` flag;
+      route every `Put*`/`Delete*`/bulk through it (bulk import/ApplyRules/Reassign = one entry).
+      Tests: one entry per action, **none on validation failure**, cascades reverse, replay runs with
+      `triggersSuspended` so undo doesn't re-fire workflows/rules or record new history.
+- [ ] **Phase 3 — persistence:** `audit_log` SQLite table + `SchemaVersion` bump + migration step +
+      **secret redaction** (never log `Settings.OpenAIKey`) + export; persisted bounded undo stack;
+      special-case `Artifact.Bytes`/`BlobRef` (diff on hash, never copy bytes). Round-trip tests.
+- [ ] **Phase 4 — UI (last):** (1) inline **Undo** action on the existing `Toast`/`Notice` atom
+      ("Deleted transaction · Undo") — highest value; (2) global `⌘Z`/`⌘⇧Z`/`Ctrl+Y` in the keyboard
+      layer (suppressed while typing) + Undo/Redo in the ⌘K palette; (3) **Activity/History timeline**
+      screen (registry-driven Tools screen, auto-railed per B7) with before→after diffs + "Restore to
+      this point"; (4) per-entity "Recent changes" in inline editors. Playwright stories for
+      undo/redo + restore.
+**Risks to honor:** side effects aren't undoable (notifications/AI/backend push — data only);
+localStorage quota (cap + drop-oldest, like autosave); schema-migration of stored ChangeSets.
+_Cross-links: **C42** (replace native popups — confirms restore should use FlipPanel, not `confirm`),
+**C75** (notifications — audit feeds an activity feed), **C73** (timeline rows as reusable components),
+`docs/GOWEBCOMPONENTS_GAPS.md` G5 (the revision-atom re-render gap the commit seam can standardize)._
+
+### C79. One global "+ Add" menu for all entities (remove per-page add sections; each type opens a modal) ★ (UX, user-requested 2026-06-20)
+**Idea:** there is **ONE** add surface — the topbar **`+ Add ▾`** menu (`internal/app/addmenu.go`).
+Every addable entity is a menu item that opens that type's **FlipPanel modal in place** (no navigation).
+**Remove the inline add `Section(Class("card"))` from every rail page** so each page leads with its
+content/list. No per-page add buttons.
+**Decisions (locked 2026-06-20):** (1) **global menu only** — no contextual per-page `+ Add` buttons;
+(2) each menu item opens the right **modal** per type (today account/budget/goal/document merely
+**navigate** — change them to open modals); transaction already opens the quick-add modal
+(`uistate.UseQuickAdd()`); (3) only the **top add-entity sections** are removed — row-edit
+(`saveEdit`), contribute, cover, reassign, and tool/AI forms stay inline on their pages.
+**Menu must list ALL addable types** (it's now the only way in). Current menu has 5 (txn, account,
+budget, goal, document); add the rest: **To-do task, Category, Member, Rule** (consider grouping the
+menu: *Money* — transaction/account/budget/goal · *Organize* — category/member/rule · *Plan* — task ·
+*Import* — document). Document/CSV **import** is a multi-step flow, not a one-form add → keep it
+**navigating to `/documents`** (don't force it into a single modal).
+**Architecture — host + atom (the outside-render overlay pattern):**
+- Add a single `uistate` enum atom, e.g. `AddTarget` ∈ {none, account, budget, goal, task, category,
+  member, rule}, with `UseAddTarget()`. The menu sets it; `Escape`/close sets `none`.
+- Add one **`AddHost`** component mounted at the shell root (beside `QuickAddHost`/`SettingsHost`,
+  `internal/app/shell.go:73-75`) that switches on `AddTarget` and renders the matching add modal.
+- **Extract each screen's existing add `Form` body into a reusable add-form component** (e.g.
+  `screens.AccountAddForm`, …) so both the host modal and the (now-removed) inline section share one
+  source — and so logic stays put. Ties into **C73** component-ization.
+**Per entity (each its own commit):**
+- [ ] **Account** — extract add form → modal; menu item opens it (was: navigate `/accounts`).
+- [ ] **Budget** — same (was: navigate `/budgets`).
+- [ ] **Goal** — same (was: navigate `/goals`). **(reference entity — do first.)**
+- [ ] **To-do task** — extract `todo.go:137` add form → modal; **new** menu item. Coordinate with
+      **C72** (To-do v2 add-modal + nested subtasks): build the modal once.
+- [ ] **Category** — extract `categories.go:136` → modal; **new** menu item.
+- [ ] **Member** — extract `members.go:231` → modal; **new** menu item.
+- [ ] **Rule** — extract `rules.go:113` → modal; **new** menu item.
+- [ ] **Transaction** — already opens quick-add; just remove the inline add at `transactions.go:435`.
+- [ ] **Remove inline add Sections** from all 8 screens so content leads (accounts:239, budgets:200,
+      goals:200, todo:137, categories:136, members:231, rules:113, transactions:435).
+**Already compliant (precedent):** Custom pages "Add widget" reveal (`custompage.go:602-708`) — leave
+as-is (it's page-scoped widget config, not a global entity add).
+**FlipPanel wrinkle — auto-closes on Save:** `ui.FlipPanel`'s footer `save()` runs `onSave` then
+`onClose` **unconditionally** (`internal/ui/flippanel.go:165-177`), but add forms must **stay open on a
+validation error** and **clear on success**. Pattern: the host owns the open-state (`AddTarget`); render
+the form (keep its own submit button + `errText`) inside the FlipPanel `Back`; on a **successful**
+`add()` set `AddTarget=none` (+ clear fields), on error keep it open. Do **not** wire `FlipPanel.OnSave`
+to `add` (no conditional close).
+**Empty states:** `EmptyStateCTA` (`emptystate.go`) currently `focusByID`s the inline form's first
+field — rewire its CTA to **set `AddTarget`** for that page's entity (opening the modal), then focus the
+first field once shown.
+**Verify:** build `GOOS=js GOARCH=wasm`; every rail page leads with content (no add card); the `+ Add`
+menu lists all types and each opens the right modal (import still navigates); invalid submit keeps modal
+open, valid submit adds + closes; EmptyStateCTA opens the modal; quick-add unchanged; no regression to
+inline edit/contextual forms. Playwright: open menu → each item → modal appears; invalid/valid submit.
+_Hazard: `addmenu.go` + the 8 screen files + `shell.go` are co-edited by the parallel session —
+implement **one entity per commit, surgical `git commit <file>`**, never `git add -A`. Cross-links:
+**C72** (To-do modal — same surface), **C73** (add-form components + `AddHost`), **C76** (FlipPanel AI
+modal — consistent modal language), **C42** (FlipPanel over native popups), **C23** (the menu's original
+"data entry not trapped per screen" goal — this completes it), `docs/GOWEBCOMPONENTS_GAPS.md` **G4** (no
+portal — host+atom is the in-tree overlay workaround) + the FlipPanel-conditional-close gap above._
+
+### C80. Surface the project version in the UI ★ (UX, user-requested 2026-06-20)
+**Context:** there is **no product/app version** anywhere today — only `store.SchemaVersion`,
+`server.APIVersion`, `CurrentServerSchemaVersion`, and the `sw.js` cache version. Need a single UI-facing
+version.
+**Version source:** new `internal/version` package — `var Version = "0.1.0"` (a `var`, not `const`, so a
+release build can inject the git tag via `-ldflags "-X github.com/monstercameron/CashFlux/internal/version.Version=$(git describe --tags)"`; constant default when not injected). One source of truth.
+**Placement (locked 2026-06-20):**
+- [ ] **Primary — rail bottom**, a small muted `v0.1.0` line under the Household card
+      (`internal/app/shell.go` `HouseholdCard`, already `mt-auto` at the rail foot). Always visible,
+      unobtrusive (Slack/Linear/VS Code convention); anchors the rail footer.
+- [ ] **Secondary — Settings "About" footer** (global settings FlipPanel): "CashFlux v0.1.0" + link to
+      the changelog/GitHub releases. The canonical "where's the version?" spot + home for build info.
+- Both read `version.Version`. (Rejected: brand-header tooltip — too hidden; topbar — already busy.)
+**Nice tie-ins (agent-maintained project — worth it):** stamp `version.Version` into JSON exports
+(`Dataset`/export envelope) and the log ring, and include it in any bug-report/feedback surface so every
+issue carries its originating version.
+**Verify:** build `GOOS=js GOARCH=wasm`; version shows at rail bottom + in Settings; ldflags injection
+overrides the default; i18n if the label is more than the bare version string.
+_Cross-links: **C75** (notifications/feedback can carry version), `CHANGELOG.md` (the link target),
+**C45/C44** (a known version aids security/prod diagnostics)._
+
+### C81. Multi-provider AI inference (OpenAI/Claude/Cerebras/OpenRouter/DeepSeek/GLM/Kimi) ★ (feature, user-requested 2026-06-20)
+**Design doc:** [`docs/DESIGN_AI_PROVIDERS.md`](./docs/DESIGN_AI_PROVIDERS.md) — read first; this is the condensed backlog.
+**Key finding:** the AI layer is **already ~80% provider-agnostic** — `postCompletions(apiKey, **baseURL**,
+…)` (`internal/ai/transport.go`) already takes baseURL; `internal/ai/ai.go` shaping is pure/isolated.
+So **every OpenAI-compatible provider works by swapping base URL + key + model**. Missing: a provider
+registry, a settings model holding >1 key + an active (provider, model), capability awareness, and **one
+new wire dialect (Anthropic)**.
+**Two dialects only:** `openai` (chat/completions, Bearer) covers **6/7** — OpenAI, OpenRouter, Cerebras,
+DeepSeek, GLM/Zhipu, Kimi/Moonshot; `anthropic` (`/messages`, `x-api-key`+`anthropic-version`, base64
+vision, tool-use structured) is the only one needing new code.
+**Highest-leverage:** add **OpenRouter** first — OpenAI-compatible **aggregator**, one integration
+reaches Claude/DeepSeek/GLM/Kimi/Gemini/Llama. **CORS caveat:** browser-direct Anthropic is blocked by
+default (dangerous header exposes the key) → default Claude via **OpenRouter or the existing backend
+gRPC proxy** (`proxy_transport.go`), not direct.
+**Capability gotchas:** structured outputs aren't universal (OpenAI native `json_schema`; others
+`json_object`/none → prompt-coerced-JSON fallback for vision import); vision is **model**-specific not
+provider-specific. Verify endpoints/caps at build (they drift).
+**Build bottom-up (one feature per commit):**
+- [ ] **Phase 1 — `internal/aiprovider` (pure, native-tested):** `Provider`/`Model`/`Capabilities` +
+      curated defaults + per-(provider,model) pricing; dialect enum; table tests. No UI/transport change.
+- [ ] **Phase 2 — generalize openai-dialect transport + settings:** thread provider auth header/extra
+      headers/base/path through `postCompletions`; new `AIConfig{ActiveProvider, ActiveModel,
+      Keys map[id]key, BaseOverrides}`; migrate `Settings.OpenAIKey/Model` → `Keys["openai"]` (schema
+      bump + `store.migrate`); **redact ALL keys** on export (today only `OpenAIKey`). **Ships 6
+      providers.**
+- [ ] **Phase 3 — anthropic dialect:** `buildAnthropicRequest`/parse/vision-base64/usage/errors;
+      dispatch on dialect; default Claude→OpenRouter/proxy w/ CORS note. Table tests.
+- [ ] **Phase 4 — settings UI:** provider/model pickers, key field + "Get a key" link, capability
+      badges (Vision/Structured/Streaming), price estimate, "Test connection" ping. Playwright story.
+- [ ] **Phase 5 — capability-aware features:** gate vision import + structured features per active
+      model; prompt-coerced-JSON fallback (reuse existing schema as prompt contract).
+- [ ] **Phase 6 (optional) — backend proxy provider passthrough:** add `provider`/`baseURL` to
+      `backendrpc` so hosted/self-host holds keys server-side (the no-CORS home for Claude).
+**Open (decide at spec):** Anthropic direct vs OpenRouter/proxy-only; per-feature provider routing
+(later); curated vs free-text models (both; free-text required for OpenRouter); default provider/model;
+remember-key scope (global vs per-provider).
+_Cross-links: **C45** (security — keys at rest/redaction), **C44** (prod hardening), **C27** (live AI
+key testing), `docs/DESIGN_AI_PROVIDERS.md`. Touches `internal/ai/*`, `internal/store` (Settings +
+migration), `internal/app/settings.go`, `internal/backendrpc` (proxy)._
+
+### C82. Agentic tool-calling harness (in-house, on the provider abstraction) ★ (feature, user-requested 2026-06-20)
+**Design doc:** [`docs/DESIGN_AI_PROVIDERS.md`](./docs/DESIGN_AI_PROVIDERS.md) §9 — read first.
+**Finding:** no off-the-shelf Go agent framework fits `GOOS=js GOARCH=wasm` + local-first
+(langchaingo/eino/genkit/swarmgo are server-oriented, heavy deps, wasm-unproven; vendor SDKs don't
+provide a loop and would replace our isolated transport). The loop is ~a few hundred lines of pure Go →
+**build in-house on the C81 provider abstraction**, borrow concepts not frameworks.
+**Design:** tool-call dialect = same two-dialect split as C81 (OpenAI `tools`/`tool_calls` covers 6/7;
+Anthropic tool-use); typed Go tool registry over `appstate` (read + guarded writes; reuse the structured-
+output JSON-schema machinery); bounded pure loop (`internal/agent`: max steps + token budget,
+model→tool_calls→execute→repeat, cancelable); capability-gated on a new `Capabilities.Tools` flag with a
+**plan-only fallback** for non-tool models.
+**Safety (the key argument for in-house):** every agent mutation goes through `appstate` validation and
+is recorded by the **audit/undo system (C78)** with `actor="agent"` → one-`⌘Z` reversible + in the
+activity timeline; destructive/bulk tools require explicit FlipPanel confirmation; data-minimization
+preserved; render a **step transcript** (explainability rule).
+**Build bottom-up:**
+- [ ] Extend C81 registry: `Capabilities.Tools` + per-dialect tool-call mapping.
+- [ ] **`internal/agent` (pure, native-tested):** `Tool`/`ToolCall`/`ToolResult` + registry + bounded
+      loop; tests with a fake model (multi-step, stop conditions, budget caps, tool errors). No UI.
+- [ ] Bind tools to `appstate` (read first, then guarded writes), actor=`agent`, routed through C78.
+- [ ] wasm wiring + UI: agent surface w/ step transcript + approval prompts; capability gating +
+      plan-only fallback. Playwright story.
+- [ ] (Later) Expose the same tool registry as an **MCP server** over the self-host backend so external
+      agents (Claude Code, etc.) can drive CashFlux.
+**Sequencing:** lands **after C81 Phase 1–3** (needs provider/dialect abstraction) and is much safer
+**after C78** (undo). _Cross-links: **C81** (providers/dialects/caps), **C78** (undo = agent seatbelt),
+**C76** (AI modal/approval surface), **C75** (notifications), `internal/workflow` (agent can author
+workflows/rules), `internal/formula` (sandboxed compute tool)._
+
 ### C1. Dashboard "Income" shows $0.00 despite a $4,200 salary in-period ★ (correctness)
 **Symptom:** with sample data, the Dashboard Income KPI reads **$0.00 · 0 deposits** for Jun 2026,
 but `tx-1` Salary (+$4,200, income, cleared, **2026-06-01**) is clearly in June. Spending ($1,800.75,
@@ -4970,6 +5231,283 @@ regex grabbed the **cleared-balance meta** ("cleared $8,876.00") instead of the 
 so my expected delta was wrong; (2) I read `amt.amount` but the field is `amt.Amount`. The logged values
 (target 8999.45, adj 929.45) prove the reconcile math is correct. Fix `loopstory_30` to read the row's
 main amount and the `Amount` field.
+
+### L31. Story — "The Automator" (Raj, Workflows / no-code automation) — 2026-06-20 ★
+
+**The ritual:** Raj wants to automate his monthly routine — define a trigger + actions and have them run
+on a schedule (e.g. on the 1st: post recurring bills, flag any budget over 90%, create a review to-do).
+**Drive script:** `e2e/loopstory_31_automator.mjs`.
+**✅ VERIFIED WORKING end-to-end (impressive, sophisticated — keep as a regression anchor):**
+- Full **no-code builder**: name, **trigger**, **formula condition** (e.g. `contains(txn_payee,"coffee")`,
+  `txn_abs > 200`), **write-safe actions** (create task / set category / add tag / flag review / apply
+  rules / notify), Add-action, Save. Sample workflows ship. ✓
+- **Dry run is non-destructive** (verified: previewing did NOT create the task) and **Run now APPLIES**
+  the effect (verified: a CreateTask workflow **actually created the task** — confirmed in the dataset AND
+  on the To-do screen). ✓
+- Enable/disable, delete, and a **run history / last-run** record. Clean professional UI. ✓
+- **Action:** promote to a CI gate (`e2e/workflow_apply_check.mjs`) — dry-run no-op vs run-now applies.
+
+**Gaps (dream-big — make it a real unattended automator):**
+- [ ] **No scheduled / time trigger (headline).** Triggers are only **"When I run it"** (manual) and
+      **"When a transaction is added"**. Raj's "on the 1st of the month / every Monday" is impossible —
+      time-based automations require manually clicking **Run now**, which defeats automation. Add a
+      **`TriggerScheduled`** (cadence: daily/weekly/monthly + day-of) that fires via a due-check on app
+      open (and records the run). Ties to the recurrence theme (L24 txns, L26 tasks, L27
+      `PostDueRecurring`) — share one scheduler. Bottom-up: pure `workflow.DueScheduled(workflows, now,
+      lastRun)` (tested) → a boot-time runner → the trigger option in the builder.
+- [ ] **Richer actions for real routines.** Raj wanted "**post recurring bills**" and "**flag budgets
+      over 90%**" — current actions don't include post-recurring, budget-threshold flag, transfer, or
+      goal-contribute. Extend the `workflow.Action` set + the apply layer (write-safe, tested), e.g.
+      `ActionPostDueRecurring`, `ActionFlagBudgetOver(pct)`, `ActionContributeGoal`.
+- [ ] **Event triggers beyond txn-added** — budget-exceeded, bill-due, goal-reached as triggers for
+      event-driven automation. Bottom-up: emit domain events → match against workflow triggers; tested.
+
+**Probe note:** all checks passed and were **double-confirmed** (the run-now task verified in both the
+dataset and the To-do screen; dry-run verified to NOT create it) — no false positives this run. Trigger
+inventory (manual + txn-added, no schedule) confirmed from the builder dropdown + the sample workflows.
+
+---
+
+## UX — God-tier teardowns of core flows (focus shift from L32)
+
+Deep UX scrutiny of the daily-driver flows against a god-tier bar — measured, screenshot- and
+source-verified. "Anchors" = already excellent; keep. Items are prioritized UX polish, bottom-up.
+
+### L32. Core flow — "Three Seconds at the Register" (logging a transaction) — 2026-06-20 ★
+
+**Why it matters:** logging a purchase is the single highest-frequency action; its friction sets the
+whole app's feel. **Drive script:** `e2e/loopstory_32_quickadd_ux.mjs` (+ `_enterdiag` / `_txndiag`).
+**Already god-tier (anchors — keep):**
+- **Low friction:** only **amount** is required; description + amount is the entire minimal entry — type,
+  account, category, date all sensibly default. **1 Tab** from description → amount. ✓
+- Clean, well-spaced **mobile** form; **44px** tap targets; amount uses a numeric input; a **visible green
+  focus border** on fields. ✓
+- **"Repeat last"** for fast re-entry; **rule-based auto-suggest** of category/tags from the description
+  (L15). The add form is a proper `<form>` (`transactions.go:435`, `OnSubmit(add)`). ✓
+
+**God-tier UX gaps (verified):**
+- [ ] **No auto-focus on Description.** Landing on `/transactions` leaves focus on `body` (measured) — a
+      wasted click/tap before the primary action. Auto-focus `#txn-add` on the transactions screen (and
+      the quick-add). Scope it so it doesn't steal focus on unrelated navigation. (`transactions.go`
+      formCard + a `ui.UseEffect` focus, like the EmptyStateCTA already does via `FocusID`.)
+- [ ] **Enter does not submit the add form.** Verified twice (no transaction added; **no crash**) despite
+      a real `<form>`+submit button. Keyboard users must mouse to "Add" — unacceptable for a high-
+      frequency flow. Verify on a real browser; if the framework swallows implicit submission, wire an
+      explicit **Enter → add** on the description/amount inputs. before→after: type "Coffee" ⇥ "4.50" ⏎
+      logs it.
+- [ ] **Focus doesn't return to Description after submit.** For logging several purchases in a row, the
+      cleared form should re-focus `#txn-add` so the next entry is immediate (measured: focus did not
+      return). Add focus-return in the `add` success path.
+- [ ] **Mobile: the "Add" button sits ~7 fields down**, below period controls that dominate the top
+      (cross-ref L11). For the primary action that's a lot of scrolling. Offer a **compact quick mode**
+      (description + amount + Add visible) or a sticky Add, and collapse the period controls on mobile.
+- [ ] **Amount input → `inputmode="decimal"`** (currently `type="number"`) for a cleaner money keypad on
+      mobile (no spinner/scientific notation). One-line attr in `transactions.go:437`.
+
+**Needs verification (don't action yet):**
+- [ ] **Global quick-add reachability.** Alt+N is documented as the add shortcut (shortcuts.go) and the
+      palette has "New transaction" → `UseQuickAdd`, but pressing **Alt+N on `/budgets` did not surface a
+      quick-add form** (`#txn-add` absent after 700ms). The god-tier path is "log from anywhere" — verify
+      what Alt+N does (navigate vs modal) and ensure a fast global quick-add exists. Re-test with a longer
+      settle + check for a modal container.
+- [ ] **One-off "Go program has already exited"** appeared during the Alt+N + viewport-resize sequence
+      but was **NOT reproduced** in isolation (the add flow itself never crashed). Flag for the dev agent
+      to watch the global-shortcut / rapid-navigation path; not a confirmed bug.
+
+**Probe note:** the "no focus ring" check **false-negatived** — I measured `outline`/`box-shadow`, but the
+focus indicator is a **border-color** change (visible green border in the mobile screenshot). The
+"form clears / success toast" checks were taken after the crash-y Alt+N sequence and are **unreliable** —
+re-measure in isolation. Programmatic `.focus()` can't trigger `:focus-visible`; use real Tab to test
+focus rings.
+
+### L33. Core flow — "The Morning Glance" (Dashboard) — 2026-06-20 ★
+
+**Why it matters:** the dashboard is the first thing seen every session; it must answer "are we okay?" in
+~2s and route attention to anything that needs action. **Drive script:**
+`e2e/loopstory_33_dashboard_ux.mjs` (measured CLS, hero size, tile count, mobile chrome).
+**Already god-tier (anchors — keep):**
+- **Zero layout shift on load (CLS = 0)** — content lands stable, no jank. ✓
+- Clean dark **bento** of 22 tiles with good color semantics (green/red figures), icons, sparklines, a
+  savings-rate donut; **reconfigurable** (drag/resize/reset). Rich at-a-glance coverage. ✓
+
+**God-tier UX gaps (verified):**
+- [ ] **Prime real estate is spent on a how-to, not a signal.** The top-left permanently reads "Your
+      dashboard · Drag tiles to move · grab the edge handles to resize" — the spot the eye lands first is
+      a rearrange tutorial. before→after: replace with a **glanceable greeting + health line** ("Good
+      morning — you're on track; net worth ▲ 0% this month") and move the drag hint into an **edit mode**
+      / one-time dismissible tip. (`internal/screens/dashboard.go` header; a `seenDragTip` flag.)
+- [ ] **No visual hero — the four top stats are all 24px** (net worth = income = spending = liabilities,
+      measured identical font size). Nothing draws the eye to the "are we okay" number. before→after:
+      give **net worth** dominant weight (larger figure, prominent period delta + arrow, optionally span
+      two cells) so the glance resolves instantly. (`dashboard.go` stat tiles / a hero variant.)
+- [ ] **No consolidated "needs attention" strip.** Priya's 2nd question ("anything need me?") is scattered
+      across the Freshness, Budgets, and Upcoming-bills tiles. Add a compact **attention summary** near
+      the top: "2 budgets near limit · 1 bill due in 3 days · 3 balances stale → review". Bottom-up: a
+      pure `dashboard.Attention(state, now)` that rolls up the existing freshness/budget/bill signals
+      (table-tested) → a single strip with deep links; nothing new computed, just surfaced together.
+- [ ] **Mobile: desktop-only drag/resize chrome shows on touch** — measured **86 drag/resize handles +
+      "Reset layout"** at 390px. Meaningless on a phone and adds visual noise. Hide under a
+      `@media (pointer:coarse)` / width breakpoint; keep tiles read-only-stacked. (Cross-ref **L11**;
+      fix once for both.)
+
+**Probe note:** CLS, hero font sizes (all 24px), tile count (22), and the mobile handle count (86) were
+measured directly from the DOM/screenshot — no false positives this run. The "drag instructional clutter"
+and "no hero" findings are confirmed in `loop33-dash-desktop.png`.
+
+### L34. Core flow — "Twenty Trips a Day" (navigation rail) — 2026-06-20 ★
+
+**Why it matters:** the rail is the app spine, used dozens of times a session; it must be instant,
+unambiguous, and fully keyboard-operable. **Drive script:** `e2e/loopstory_34_nav_ux.mjs` (measured
+href/aria-current/tab-reach/skip-link/Alt-jump/collapse/mobile).
+**Already god-tier (anchors — keep):**
+- Clean **visual hierarchy + grouping**: brand → workspace switcher → primary → **Tools / System / My
+  pages** → household card. Icons + labels; **active item visually distinct** (bg `rgb(28,28,30)` vs
+  transparent). ✓
+- **Title on every item** (collapsed tooltip), a **"Skip to content"** link, **Alt+1–9 jump** shortcuts
+  (Alt+3 → /transactions verified), a **collapse toggle**, and a slim **55px** mobile rail. ✓
+
+**God-tier UX gaps (verified — all keyboard/a11y; the rail's biggest weakness):**
+- [ ] **HEADLINE: nav items aren't real links and aren't keyboard-focusable.** Measured **0/21 have
+      `href`**, and **Tab never reached the nav in 8 stops** — href-less click-anchors with no tabindex
+      are not in the tab order. So keyboard + screen-reader users **cannot Tab to the primary
+      navigation**; only the undiscoverable Alt+1–9 works. before→after: render each item as a real
+      **`<a href={uistate.RoutePath(path)}>`** (the history router already supports pushState links). One
+      change delivers: tab-focusability, **middle-click / open-in-new-tab / copy-link**, and correct SR
+      link semantics. (`internal/app/shell.go` `navItem`/`Sidebar`.) Supersedes the L19 incidental note.
+- [ ] **No `aria-current="page"` on the active item.** It's visually distinct but SR users aren't told
+      which screen is current. Add `aria-current="page"` when active. (`shell.go` navItem.)
+- [ ] **Alt+1–9 jumps are undiscoverable.** They work but nothing surfaces them outside the "?" help.
+      Once the rail is tabbable (fix #1) they become a bonus rather than the only keyboard path; consider
+      a subtle hint on hover/focus.
+
+**Probe note:** `href` count (0/21), tab-reach ("not reached" in 8 stops), `aria-current` ("none"),
+active-bg-vs-sibling, skip-link target (`/budgets#main`), and Alt+3 → /transactions were all measured
+directly — no false positives. The "not reached" + "0 href" corroborate each other (href-less anchors
+aren't focusable), so the keyboard-unreachable conclusion is solid, not a tab-budget artifact.
+
+### L35. Core flow — "Can I Order Takeout?" (Budgets) — 2026-06-20 ★
+
+**Why it matters:** people check budgets constantly to answer "do I have room?" — the LEFT number + status
+must read in ~3s. **Drive script:** `e2e/loopstory_35_budgets_ux.mjs`.
+**Already god-tier (anchors — keep):**
+- Clear **SPENT / BUDGETED / LEFT** summary strip + a **"1 over budget · 2 near the limit"** status count.
+- Every row shows the **LEFT** amount and a **status in WORDS** ("On track / Near limit / Over budget") —
+  not color-only, so it survives colorblindness (5/5 measured). Color bars (green/amber/red) reinforce.
+- **Smart default** on add: "You've averaged $236.00/mo here recently · **Use this**". ✓
+- Over-budget bar is **capped red** (doesn't overflow), and a **"Cover…"** action is present — *the L1
+  "cover overspending / move money between budgets" feature has shipped.* 👍 The L1 sub-line glue is fixed.
+
+**God-tier UX gaps (verified from `loop35-overbudget.png`):**
+- [ ] **Over-budget copy reads as buggy/alarming.** The OVERTEST row shows "Over budget · **2390%** ·
+      **($229.00) left**" — a runaway percentage and a *negative "left"* in accounting parens. before→
+      after: drop the absurd % (or cap at "100%+") and say **"over by $229.00"** instead of "($229.00)
+      left". Plain, calm, direct. (`internal/screens/budgets.go` `rowSub` / the over-budget branch.)
+- [ ] **Status word contradicts the pace projection.** Dining shows "**On track** · 79% · $61 left" AND
+      "At this pace, projected to go over by $64.08" (same for Shopping) — "on track" while "projected to
+      go over" is a mixed signal that erodes trust. Reconcile into a coherent state: when the pace
+      projects an overage, surface a distinct **"Trending over"** status (not "On track"), or fold the
+      projection into the status. Bottom-up: a pure `budgeting.Status` that returns on-track / trending-
+      over / near-limit / over (table-tested) → the row renders one consistent label.
+- [ ] **Progress bars aren't a11y-exposed** (`.bar` is a plain div — no `role="progressbar"` /
+      `aria-valuenow/min/max`). Low priority (the text "79% · $61 left" already conveys it), but adding
+      the role gives SR users the bar semantics. (`budgets.go` bar markup.)
+
+**Probe note:** the "smart default helper" check **false-negatived** — the "Use this" helper renders under
+the add form and my form-scope innerText missed it; it IS present (screenshot). The over-budget "2390% /
+($229) left" string and the "On track + projected to go over" contradiction are both verified verbatim in
+the screenshot. Bars measured as `div-bar` (no role) — accurate.
+
+### L36. Core flow — "Oops, Wrong Amount" (edit + delete + forgiveness) — 2026-06-20 ★
+
+**Why it matters:** correcting a mistake is constant; and a destructive delete must be FORGIVING.
+**Drive script:** `e2e/loopstory_36_edit_undo_ux.mjs` (+ `_deldiag`).
+**Already god-tier (anchors — keep):**
+- **Inline edit is excellent:** clicking Edit turns the row into **in-place fields**, and **focus
+  auto-lands in the edit field** (measured `focusedInEdit: true`); Save/Cancel present. Discoverable
+  per-row Edit affordance. ✓
+
+**God-tier UX gaps (verified):**
+- [ ] **HEADLINE: deleting a transaction is one-click, immediate, and IRREVERSIBLE.** Confirmed via
+      `_deldiag`: clicking the row "×" took **57 → 56 with no confirm dialog and no Undo**. One mis-tap
+      permanently destroys a financial record — a forgiveness failure. before→after: show an **Undo toast**
+      ("Deleted 'Weekend dinner' · **Undo**", ~6s) — the god-tier pattern (a confirm dialog would add
+      friction to the common case; undo is better). Bottom-up: snapshot the deleted txn before removal →
+      a restore action → a toast with Undo. **Build ONE shared undo mechanism** for single delete +
+      bulk delete/recategorize/clear (ties **L25**). (`internal/screens/transactions.go` `del`/`bulkDelete`
+      + `internal/appstate`.)
+- [ ] **Mobile: all 50 row controls are <40px** (measured) and the per-row **Edit sits right next to the
+      delete ×** — small + adjacent makes accidental deletes likely, compounding the no-undo gap. Enforce
+      ≥44px hit areas and/or collapse row actions into an overflow (⋯) menu on mobile (ties **L11**,
+      **L25**). (`transactions.go` `TransactionRow` action buttons.)
+- [ ] **Consistency: edit auto-focuses but the ADD form does not** (L32). Unify — both should auto-focus
+      their first field on open. Minor, but it makes the app feel coherent.
+
+**Probe note:** the in-run delete check **false-negatived** (57→57) on **autosave timing** — I read
+`localStorage` at 900ms before the ~2.5s autosave. The `_deldiag` re-check with a 3s wait confirmed the
+delete fires (57→56) and that there is genuinely **no confirm and no undo**. Inline-edit auto-focus
+measured directly (`editingInPlace` + `focusedInEdit` both true) — no false positive.
+
+### L37. Core flow — "What's My Runway?" (Accounts) — 2026-06-20 ★
+
+**Why it matters:** Accounts is the net-worth/balances hub; reading it + adding a new account are both
+common. **Drive script:** `e2e/loopstory_37_accounts_ux.mjs`.
+**Already god-tier (anchors — keep):**
+- Clear **NET WORTH / ASSETS / LIABILITIES** strip with color semantics (liabilities red), and accounts
+  **grouped into Assets vs Liabilities** sections. ✓
+- **Freshness is handled well:** STALE badges per row + a "**Mark all updated (7 accounts stale)**"
+  shortcut. ✓
+- Add-account fields have **real visible labels** (not placeholder-only). Mobile reflows to one column,
+  no overflow. ✓
+
+**God-tier UX gaps (verified):**
+- [ ] **HEADLINE: add-account is a 9-field wall with no progressive disclosure.** Measured 9 visible
+      fields (Name, Type, Owner, Currency, Opening balance, **Return %, Liquidity (1–5), Stability (1–5),
+      Locked-until**, date) and **no advanced toggle**. "I just opened a savings account" needs ~3 (Name,
+      Type, Opening balance). before→after: show **Name · Type · Opening balance** up front (+ **Currency**
+      only when >1 currency is in use), and tuck Return%/Liquidity/Stability/Locked-until/Owner behind a
+      **"More options"** expander (collapsed by default, sane defaults). (`internal/screens/accounts.go`
+      add-form → essential block + `If(showAdvanced)` + a toggle state.)
+- [ ] **Field labels use finance jargon** — "**Liquidity (1–5)**", "**Stability (1–5)**", "**Return %**"
+      are allocation-modeling inputs that a normal user can't decode (violates CLAUDE.md "plain, friendly
+      English, no jargon"). Even once disclosed, relabel with plain English + a one-line hint, e.g.
+      Liquidity → "How fast can you get this money? (1 locked … 5 instant)". (`accounts.go` labels + the
+      i18n strings.)
+- [ ] *(Minor)* **Currency field shows for a single-currency household** — hide it unless the user has
+      >1 currency (ties FX/L4); one less field for the 99% case.
+
+**Probe note:** field count (9) + no-advanced-toggle measured directly; the jargon labels
+("Liquidity (1–5)", "Stability (1–5)", "Return %") are verified verbatim in `loop37-accounts-desktop.png`.
+Labels confirmed present (so not a placeholder-only a11y issue). No false positives this run.
+
+### L38. Core flow — "Are We There Yet?" (Goals) — 2026-06-20 ★
+
+**Why it matters:** goals are the motivational core — progress must feel clear + rewarding, and
+contributing must be frictionless. **Drive script:** `e2e/loopstory_38_goals_ux.mjs`.
+**Already god-tier (anchors — keep; one of the strongest flows):**
+- An **"Overall progress" hero** summarizes all goals; each goal shows the **complete, motivating
+  picture**: "**75% · $7,500.00 to go · by 2026-12-31 · save $1,071.43/mo**" (% + remaining + target date
+  + pace). ✓
+- **Contribute is a god-tier micro-interaction:** opens an **inline amount field** (not a jarring
+  prompt) and **auto-focuses** it (measured `focused:true`) — consistent with inline edit (L36). ✓
+- Mobile: no overflow. Completion shows "Complete 🎉" (L20). ✓
+
+**God-tier UX polish (this flow is close — small lifts):**
+- [ ] **Add-goal: 6 fields up front** (Name, Target, **Saved so far**, **Owner**, **Linked account**,
+      Target date). Lead with **Name · Target · Target date**; tuck the three optional/defaulted fields
+      (Saved-so-far=0, Owner=group, Linked account) behind a **"More options"** expander. Same pattern as
+      L37 (accounts) — milder here. (`internal/screens/goals.go` add-form.)
+- [ ] **Delight on contribute.** Contributing is an emotional win — the progress bar should **animate the
+      fill** on contribute, and crossing a milestone (25/50/75%) deserves a subtle moment (today only
+      100% celebrates, L20). Bottom-up: a CSS width transition on the goal `.bar` fill + a one-shot
+      milestone toast keyed on crossing a threshold (pure `goals.MilestoneCrossed(before,after)`, tested).
+- [ ] **Verify Enter-to-contribute** in the inline amount field (consistency with the L32 add-form
+      Enter-submit gap) — should submit without reaching for the Contribute button.
+
+**Probe note:** "contributing gives feedback" **false-positived** — my `/saved/` match hit the
+"**Saved so far**" add-goal label, not a post-contribute confirmation; and I did not confirm the
+contribution actually applied (the `evaluateHandle` value-set is fragile). Re-test with a real focused
+type + a before/after progress delta + an explicit toast assertion. The inline-form + auto-focus +
+goal-row copy were measured/verified directly (solid). Add-goal field count (6) measured directly.
 
 ---
 
