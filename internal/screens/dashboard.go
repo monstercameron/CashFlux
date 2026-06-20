@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 	"syscall/js"
 	"time"
 
@@ -65,7 +66,8 @@ func Dashboard() ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
-	net, assets, liabilities, _ := ledger.NetWorth(accounts, txns, rates)
+	nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
+	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 	w := uistate.UsePeriod().Get()
 	widgetCfgs := uistate.UseWidgetConfigs().Get()
 	start, end := w.Range()
@@ -123,6 +125,12 @@ func Dashboard() ui.Node {
 				nwTone, nwSub = "text-up", fmt.Sprintf("▲ %d%% this month", d)
 			}
 		}
+	}
+	// A missing FX rate excludes accounts from the total (L4) — say so on the tile,
+	// rather than letting net worth silently collapse.
+	if len(nw.MissingCurrencies) > 0 {
+		nwTone = "text-down"
+		nwSub = "excludes " + plural(len(nw.ExcludedAccounts), "account") + " — no " + strings.Join(nw.MissingCurrencies, ", ") + " rate"
 	}
 
 	return Fragment(

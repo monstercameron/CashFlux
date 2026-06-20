@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Net worth no longer silently miscomputes when an FX rate is missing (L4, determinism rule).** Previously a
+  single account in a currency with no exchange rate made the whole net-worth roll-up return an error that the
+  screens discarded — collapsing the entire figure to zero. Now a new `ledger.NetWorthExplained` **excludes** any
+  rate-less account from the totals and reports which currencies/accounts it dropped, and both the Accounts
+  net-worth header and the Dashboard net-worth tile show a notice ("Net worth excludes 1 account — no GBP rate.
+  Add it in Settings"). A rate-less balance is never treated as base or zero. Table-tested (asset, liability, and
+  all-rates-present cases) and covered by a Playwright story.
 - **"Snap a receipt" opens the camera on mobile (L3).** The Documents image picker set `accept="image/*"` but no
   `capture` attribute, so on a phone — the primary device for photographing a receipt — it opened the file
   browser instead of the camera. It now sets `capture="environment"` to ask for the rear camera directly;

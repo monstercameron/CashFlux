@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: L4 net worth excludes missing-rate accounts (no silent zero)
+
+- L4 correctness gap (determinism rule). ledger.NetWorth returns an error when a currency has no FX rate, but
+  accounts.go and dashboard.go both DISCARDED that error (`_`), so a single rate-less account collapsed the
+  whole net-worth figure to zero (money.Money{}).
+- Added ledger.NetWorthExplained -> NetWorthResult{Net, Assets, Liabilities, MissingCurrencies,
+  ExcludedAccounts}: it converts each account to base, and on a currency.ErrUnknownRate EXCLUDES that account
+  (recording its currency + name) instead of failing; other errors still propagate. Never treats a missing rate
+  as base/zero. New file networth_explained.go + tests (asset excluded, liability excluded, all-rates-present);
+  go test ./internal/ledger green.
+- Wired both screens to it: accounts.go shows a P.err notice under the net-worth stat-grid ("Net worth excludes
+  N account - no GBP rate. Add it in Settings"); dashboard.go overrides the net-worth tile subtitle to "excludes
+  N account - no GBP rate" (text-down). Bumped sw v199->v200.
+- E2E (story_networth_missing_rate.test.mjs): reads the seeded fxRates, picks a registry currency with no rate
+  (GBP in the sample), adds an account in it, and asserts the "Net worth excludes ..." notice appears (not a
+  zeroed total). Screenshot-verified; full suite 33/0 green; wasm green.
+- Next L4: FX-rate staleness (per-rate UpdatedAt + freshness nudge) - bigger, changes the shared Settings.FXRates
+  shape, so do carefully (check git status on store/dataset.go first; additive parallel map).
+
 ## 2026-06-20 - feat: L4 validated account-currency picker
 
 - Started L4 ("The Expat", multi-currency). First gap: the account currency was a free-text Input (typo-prone;

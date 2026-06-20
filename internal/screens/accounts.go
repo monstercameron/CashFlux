@@ -266,7 +266,10 @@ func Accounts() ui.Node {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	net, assets, liabilities, _ := ledger.NetWorth(accounts, txns, rates)
+	// Explainable roll-up (L4): an account whose currency has no FX rate is excluded
+	// with a notice rather than silently collapsing the whole total to zero.
+	nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
+	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 
 	var assetList, liabList, archivedList []domain.Account
 	for _, ac := range accounts {
@@ -359,6 +362,8 @@ func Accounts() ui.Node {
 			stat(uistate.T("accounts.assets"), fmtMoney(assets), "pos"),
 			stat(uistate.T("dashboard.liabilities"), fmtMoney(liabilities), "neg"),
 		),
+		If(len(nw.MissingCurrencies) > 0, P(Class("err"), Attr("role", "alert"),
+			"Net worth excludes "+plural(len(nw.ExcludedAccounts), "account")+" — no exchange rate for "+strings.Join(nw.MissingCurrencies, ", ")+". Add it in Settings to include them.")),
 		If(staleCount > 0, Div(Style(map[string]string{"margin-bottom": "0.6rem"}),
 			Button(Class("btn"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
 				Text(uistate.T("accounts.markAll", plural(staleCount, "account")))),
