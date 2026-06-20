@@ -146,6 +146,26 @@ func Reports() ui.Node {
 		return uistate.T("reports.uncategorized")
 	}
 	fmtMinor := func(v int64) string { return fmtMoney(money.New(v, base)) }
+	absI64 := func(v int64) int64 {
+		if v < 0 {
+			return -v
+		}
+		return v
+	}
+	// shareBar is a thin proportion bar for a ranked-list row: the row's amount as a
+	// share of the list's largest, so the distribution is scannable at a glance
+	// (C55). Inline-styled to avoid a stylesheet dependency.
+	shareBar := func(amount, max int64) ui.Node {
+		if max <= 0 {
+			return Fragment()
+		}
+		pct := int(absI64(amount) * 100 / max)
+		if pct > 100 {
+			pct = 100
+		}
+		return Div(Class("share-bar"), Style(map[string]string{"height": "4px", "max-width": "260px", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
+	}
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
 
 	// Heads-up: categories spending well above their recent monthly norm (top 3).
@@ -164,6 +184,12 @@ func Reports() ui.Node {
 
 	// Category rows are plain text (no interactive controls), so building them in
 	// a loop is safe (no On* hooks involved).
+	var maxCat int64
+	for _, r := range rows {
+		if a := absI64(r.Amount); a > maxCat {
+			maxCat = a
+		}
+	}
 	var rowNodes []ui.Node
 	for _, r := range rows {
 		if r.Amount == 0 && r.Prior == 0 {
@@ -183,7 +209,7 @@ func Reports() ui.Node {
 			delta = Span(Class("row-meta inline-flex items-center gap-1 "+tone), uiw.Icon(arrow, Class("w-3.5 h-3.5 shrink-0")), Text(fmt.Sprintf("%d%%", pct)))
 		}
 		rowNodes = append(rowNodes, Div(Class("row"),
-			Div(Class("row-main"), Span(Class("row-desc"), nameOf(r.CategoryID))),
+			Div(Class("row-main"), Span(Class("row-desc"), nameOf(r.CategoryID)), shareBar(r.Amount, maxCat)),
 			delta,
 			Span(Class("budget-amount"), fmtMinor(r.Amount)),
 		))
@@ -198,6 +224,12 @@ func Reports() ui.Node {
 
 	// Top payees: where the money went by merchant/description this period.
 	payees, _ := reports.TopPayees(txns, cs, ce, rates, 8)
+	var maxPayee int64
+	for _, p := range payees {
+		if a := absI64(p.Amount); a > maxPayee {
+			maxPayee = a
+		}
+	}
 	var payeeNodes []ui.Node
 	for _, p := range payees {
 		name := p.Name
@@ -205,13 +237,19 @@ func Reports() ui.Node {
 			name = uistate.T("reports.noPayee")
 		}
 		payeeNodes = append(payeeNodes, Div(Class("row"),
-			Div(Class("row-main"), Span(Class("row-desc"), name)),
+			Div(Class("row-main"), Span(Class("row-desc"), name), shareBar(p.Amount, maxPayee)),
 			Span(Class("budget-amount"), fmtMinor(p.Amount)),
 		))
 	}
 
 	// Biggest individual expenses this period.
 	largest, _ := reports.LargestExpenses(txns, cs, ce, rates, 8)
+	var maxExp int64
+	for _, e := range largest {
+		if a := absI64(e.Amount); a > maxExp {
+			maxExp = a
+		}
+	}
 	var largestNodes []ui.Node
 	for _, e := range largest {
 		desc := e.Desc
@@ -222,6 +260,7 @@ func Reports() ui.Node {
 			Div(Class("row-main"),
 				Span(Class("row-desc"), desc),
 				Span(Class("row-meta"), pr.FormatDate(e.Date)),
+				shareBar(e.Amount, maxExp),
 			),
 			Span(Class("budget-amount"), fmtMinor(e.Amount)),
 		))

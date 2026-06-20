@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Reports ranked lists now show proportion bars (C55).** The spending-by-category, top-payees and biggest-expenses
+  lists were plain name + amount rows. Each row now carries a thin bar sized to its share of the list's largest
+  value, so the distribution is scannable at a glance instead of having to read every figure. Covered by a new
+  `reports_sharebars_check` e2e.
+
 ### Changed
 - **Allocate suggestions show their score once (C54).** Each ranked suggestion printed the score twice — in the
   row head and again as a "Score NN%" sub-line — with a hand-rolled `" · "` separator span before the breakdown.

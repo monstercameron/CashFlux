@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: proportion bars on reports ranked lists (C55)
+
+- C55 item 3 (the "god-tier" win, no-i18n/no-CSS so uncontested). The spending-by-category, top-payees and
+  biggest-expenses lists were name+amount text rows. Added a shareBar(amount, max) helper rendering a thin bar
+  sized amount/max of the list's largest (abs; sorted-desc lists → max from a quick pre-loop), inserted into each
+  row-main. Inline-styled (4px, accent fill on a border track) with a .share-bar class for selectability — no
+  stylesheet change (index.html parallel-dirty).
+- New reports_sharebars_check.mjs: on /reports asserts >=3 .share-bar, some inner fill reaches width:100% (the list
+  max) and some don't (proportional, not decorative) — got 25 bars. PASS. App wasm builds clean; gofmt clean.
+  Committed via git commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C55 remaining: section grouping/jump-nav, "Showing: <period>" header, consistent CSV + print/PDF, whole-screen
+  empty state — mostly IA/CSS/i18n. Next: C56 (Subscriptions).
+
 ## 2026-06-20 - feat: per-category spend trend series (L16, logic)
 
 - UI layer went quiet (parallel session committed its C48/C52/C53 burst — no tracked UI files dirty), so a wasm-UI
