@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — set the default member
+
+- Fifteenth journey story (e2e/story_member_default.test.mjs): add a member, click their row's "Make default
+  member" button, and assert exactly one member has isDefault === true and it's ours (SetDefaultMember clears
+  the flag on all others). Scoped the row to the one bearing the Make-default button (the screen also lists
+  owners with the same names). Suite now 24 green. Test-only, no sw bump.
+
 ## 2026-06-20 - test: B16 story — duplicate a transaction
 
 - Fourteenth journey story (e2e/story_txn_duplicate.test.mjs): seed a txn, filter the ledger to it, click the
