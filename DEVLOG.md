@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: state bridge wires the theme engine to the DOM (B20)
+
+- Second B20 rung: `internal/uistate/theme.go` (js+wasm) — `ApplyTheme` sets a theme's `CSSVars()` on the
+  document root, `LoadTheme` reads a saved custom theme from localStorage (`cashflux:theme`) or falls back to
+  `theme.FromPrefs(prefs)` with `system` resolved to a concrete light/dark palette, and `PersistTheme` saves.
+- Wired at boot in app.go right after `ApplyPrefs`. Deliberately kept `ApplyPrefs` in place (it still sets
+  data-theme/data-density, which the `[data-theme=light]` stylesheet keys on) and layered `ApplyTheme` on top
+  rather than ripping out the legacy path in one commit — the full unify/migration of the Settings UI comes
+  with the editor. Verified the migrated default's tokens equal index.html's own values, so the inline vars
+  ApplyTheme writes match the stylesheet exactly: no visible change yet.
+- Added a `--bg` alias (legacy stylesheet paints the body from `--bg`; the engine names it `--bg-base`) so a
+  future background edit actually takes effect. Bumped sw cache v180→v181. Wasm builds clean.
+- Next: the Settings→Appearance editor (preset pick + token pickers + live preview + save/reset + import/
+  export), then font/header-image artifact uploads.
+
 ## 2026-06-19 - feat: theme migration from display prefs (B20 bottom-up start)
 
 - New focus per the user: branding/theming + artifact uploads for fonts/icons/images. Grepped first and

@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Theme tokens drive the live UI (B20).** New wasm `uistate.ApplyTheme/LoadTheme/PersistTheme` bridge the
+  pure `theme` engine to the document: `ApplyTheme` writes a theme's design tokens onto `:root` as CSS custom
+  properties (surfaces, border, text, accent, radius, fonts, scale, plus a `--bg` alias), `LoadTheme` returns
+  the saved custom theme or — on a fresh install — one migrated from the display preferences (with `system`
+  resolved to a concrete light/dark palette), and `PersistTheme` saves it. Applied at boot after `ApplyPrefs`;
+  with no custom theme yet every token equals the stylesheet default, so the first application is invisible.
 - **Theme migration from display preferences (B20).** New pure `theme.FromPrefs` upgrades the legacy
   theme/accent/density/display-scale preferences into a full `theme.Theme` of design tokens — the migration
   path for the unified appearance engine. It picks the dark or light surface palette to mirror today's live

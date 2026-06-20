@@ -40,6 +40,11 @@ func Run() {
 	// Apply saved appearance preferences (theme/accent/density) before mounting,
 	// so the first paint matches the user's choice instead of flashing defaults.
 	uistate.ApplyPrefs(uistate.LoadPrefs())
+	// Then apply the design-token theme (B20) on top: it sets the full token set
+	// (surfaces, border, text, accent, radius, fonts, scale) as CSS custom
+	// properties. With no saved custom theme this is migrated from the same prefs,
+	// so it reproduces the default appearance until the user edits a token.
+	uistate.ApplyTheme(uistate.LoadTheme())
 
 	// Derive the URL sub-path the app is served under (e.g. "/CashFlux" on a
 	// GitHub Pages project site) from the <base href> index.html set, so routes

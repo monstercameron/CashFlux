@@ -1,0 +1,71 @@
+//go:build js && wasm
+
+package uistate
+
+import (
+	"syscall/js"
+
+	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/theme"
+)
+
+const themeStoreID = "cashflux:theme"
+
+// LoadTheme returns the active appearance theme. If the user has saved a custom
+// theme it is loaded from localStorage; otherwise the theme is migrated from the
+// legacy display preferences (theme.FromPrefs) so a fresh install reproduces the
+// app's default appearance exactly. A "system" preference is resolved to a
+// concrete light/dark palette here, where the OS color scheme is readable.
+func LoadTheme() theme.Theme {
+	v := js.Global().Get("localStorage").Call("getItem", themeStoreID)
+	if !v.IsNull() && !v.IsUndefined() {
+		if t, err := theme.FromJSON([]byte(v.String())); err == nil {
+			return t
+		}
+	}
+	p := loadPrefs()
+	p.Theme = resolvePrefsTheme(p.Theme)
+	return theme.FromPrefs(p)
+}
+
+// PersistTheme saves the active theme to localStorage so it survives reloads.
+func PersistTheme(t theme.Theme) {
+	data, err := t.ToJSON()
+	if err != nil {
+		return
+	}
+	js.Global().Get("localStorage").Call("setItem", themeStoreID, string(data))
+}
+
+// ApplyTheme reflects a theme's design tokens onto the document root as CSS
+// custom properties, so the stylesheet repaints to match. It writes every var
+// from CSSVars() plus a --bg alias (the legacy stylesheet paints the app
+// background from --bg, while the engine names it --bg-base), so editing the
+// background actually takes effect. Call it on boot and whenever the theme
+// changes. With the migrated default theme every value equals the stylesheet's
+// own default, so the first application is a no-op the user can't see.
+func ApplyTheme(t theme.Theme) {
+	root := js.Global().Get("document").Get("documentElement")
+	if root.IsNull() || root.IsUndefined() {
+		return
+	}
+	style := root.Get("style")
+	for k, v := range t.CSSVars() {
+		style.Call("setProperty", k, v)
+	}
+	style.Call("setProperty", "--bg", t.BgBase)
+}
+
+// resolvePrefsTheme collapses the "system" theme preference to a concrete
+// light or dark value by consulting the OS color scheme, so a migrated theme
+// has fixed surfaces. Concrete preferences pass through unchanged.
+func resolvePrefsTheme(t prefs.Theme) prefs.Theme {
+	if t != prefs.ThemeSystem {
+		return t
+	}
+	m := js.Global().Call("matchMedia", "(prefers-color-scheme: light)")
+	if !m.IsNull() && !m.IsUndefined() && m.Get("matches").Bool() {
+		return prefs.ThemeLight
+	}
+	return prefs.ThemeDark
+}
