@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard now uses a semantic type scale instead of ad-hoc pixel sizes (C48).** The dashboard scattered
+  `text-[11px]/[12px]/[13px]/[22px]/[24px]/[34px]` with no shared scale, so sizing was inconsistent tile-to-tile.
+  Replaced all 27 sites with four rem-based tokens — `.t-caption` (labels/captions), `.t-body` (tile body),
+  `.t-figure` (the single primary data-figure size), `.t-figure-lg` (the hero figure). KPI, net-worth-trend and
+  goal figures that were 22/24px ad hoc now share one primary size, so the figure hierarchy is consistent (hero
+  34px → primary 24px → body 13px → caption 12px). rem keeps the whole scale tracking the display-scale zoom.
+  Covered by a new `dashboard_typescale_check` e2e (figure sizes + no leftover ad-hoc px in the bento).
 - **The transactions filter toolbar is now a portable, reusable `uiw.FilterToolbar` widget (C47, refactor).** The
   compact search + Filters-popover + removable-chips UI was extracted out of `transactions.go` into
   `internal/ui/filtertoolbar.go`, mirroring how `uiw.DataTable` owns the ledger table — so any screen with filters

@@ -449,6 +449,15 @@
     <style id="design-system">
       body.cf { -webkit-font-smoothing: antialiased; }
       .fig { font-variant-numeric: tabular-nums lining-nums; }
+      /* Type scale (C48): a small semantic set so dashboard sizing is consistent
+         instead of ad-hoc text-[Npx]. Sizes are rem, so the whole scale tracks the
+         display-scale zoom on #app coherently. caption/body cover label and body
+         text; figure/figure-lg are the single primary and hero data-figure sizes
+         (line-height is left to any explicit leading-* utility on the element). */
+      .t-caption   { font-size: 0.75rem; }    /* labels, captions, legends, sublines */
+      .t-body      { font-size: 0.8125rem; }  /* default tile body text */
+      .t-figure    { font-size: 1.5rem; }     /* primary KPI / data figure */
+      .t-figure-lg { font-size: 2.125rem; }   /* hero figure */
       .nav:hover { background:#161617; color:#f4f4f5; }
 
       /* Bento grid — square outlined cells with a small gap.

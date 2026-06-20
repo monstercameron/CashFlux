@@ -184,7 +184,7 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismi
 	stale := freshness.VisibleStaleAccounts(accounts, windows, dismissals, now)
 	var body ui.Node
 	if len(stale) == 0 {
-		body = P(Class("text-up text-[13px]"), uistate.T("dashboard.allFresh"))
+		body = P(Class("text-up t-body"), uistate.T("dashboard.allFresh"))
 	} else {
 		chips := make([]ui.Node, 0, len(stale))
 		for _, a := range stale {
@@ -194,7 +194,7 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismi
 			))
 		}
 		body = Div(
-			P(Class("text-dim text-[13px] mb-2"), uistate.T("dashboard.staleCount", len(stale))),
+			P(Class("text-dim t-body mb-2"), uistate.T("dashboard.staleCount", len(stale))),
 			Div(Class("flex flex-wrap gap-2 items-center"), chips),
 			Div(Class("flex gap-2 mt-2"),
 				Button(Class("btn"), Type("button"), Title(uistate.T("dashboard.remindTitle")), OnClick(onRemind), uistate.T("dashboard.remind")),
@@ -219,7 +219,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 
 	var body ui.Node
 	if len(upcoming) == 0 {
-		body = P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noUpcomingBills"))
+		body = P(Class("empty text-dim t-body"), uistate.T("dashboard.noUpcomingBills"))
 	} else {
 		if len(upcoming) > 4 {
 			upcoming = upcoming[:4]
@@ -236,7 +236,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 				Span(Class("font-display fig text-down w-24 text-right"), fmtMoney(b.Amount.Neg())),
 			))
 		}
-		body = Div(Class("text-[13px] space-y-2.5"), rows)
+		body = Div(Class("t-body space-y-2.5"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "bills", Title: uistate.T("dashboard.upcomingBills"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "6",
@@ -298,7 +298,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 	if total == 0 {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "breakdown", Title: uistate.T("dashboard.breakdown"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
-			Body: P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noSpending")),
+			Body: P(Class("empty text-dim t-body"), uistate.T("dashboard.noSpending")),
 		})
 	}
 
@@ -336,7 +336,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 
 	body := Div(
 		Div(Class("h-2.5 rounded-full overflow-hidden flex"), barParts),
-		Div(Class("flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[12px] text-dim"), legend),
+		Div(Class("flex flex-wrap gap-x-4 gap-y-1 mt-3 t-caption text-dim"), legend),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "breakdown", Title: uistate.T("dashboard.breakdown"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
@@ -371,14 +371,14 @@ func savingsRateWidget(income, expense money.Money, cfg widgetcfg.Config) ui.Nod
 	}
 
 	left := Div(
-		Div(Class("font-display fig text-[34px] leading-none "+tone), fmt.Sprintf("%d%%", pct)),
-		Div(Class("text-[12px] text-dim mt-1"), uistate.T("dashboard.savingsSub", target)),
+		Div(Class("font-display fig t-figure-lg leading-none "+tone), fmt.Sprintf("%d%%", pct)),
+		Div(Class("t-caption text-dim mt-1"), uistate.T("dashboard.savingsSub", target)),
 	)
 	var right ui.Node = Fragment()
 	if showBar {
 		right = Div(Class("flex-1"),
 			uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: bar}),
-			Div(Class("text-[11px] text-faint mt-2"), uistate.T("dashboard.thisPeriod")),
+			Div(Class("t-caption text-faint mt-2"), uistate.T("dashboard.thisPeriod")),
 		)
 	}
 	body := Div(Class("flex items-center gap-5"), left, right)
@@ -396,12 +396,12 @@ func topHighlightWidget(txns []domain.Transaction, categories []domain.Category,
 	anomalies := detectSpendingAnomalies(txns, categories, rates)
 	var body ui.Node
 	if len(anomalies) == 0 {
-		body = P(Class("text-dim text-[13px]"), uistate.T("dashboard.noHighlights"))
+		body = P(Class("text-dim t-body"), uistate.T("dashboard.noHighlights"))
 	} else {
 		a := anomalies[0]
 		body = Div(Class("flex items-start gap-2"),
 			Span(Class("insight-dot "+highlightTone(a)), Text(highlightArrow(a))),
-			Span(Class("text-[13px]"), highlightText(a, rates.Base)),
+			Span(Class("t-body"), highlightText(a, rates.Base)),
 		)
 	}
 	return uiw.Widget(uiw.WidgetProps{
@@ -446,7 +446,7 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 				Div(Class("w-3 bg-up"), Style(map[string]string{"height": fmt.Sprintf("%d%%", int(mb.income*100/maxv))})),
 				Div(Class("w-3 bg-down"), Style(map[string]string{"height": fmt.Sprintf("%d%%", int(mb.expense*100/maxv))})),
 			),
-			Span(Class("text-[11px] "+labelTone), mb.label),
+			Span(Class("t-caption "+labelTone), mb.label),
 		))
 	}
 
@@ -457,7 +457,7 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 		netTone = "text-down"
 	}
 	netBlock := Div(Class("ml-auto text-right"),
-		Div(Class("text-[11px] text-faint"), "net · "+last.label),
+		Div(Class("t-caption text-faint"), "net · "+last.label),
 		Div(Class("font-display fig text-lg "+netTone), fmtMoney(netMoney)),
 	)
 
@@ -505,7 +505,7 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 		Y:      chartspec.Axis{Format: yFmt},
 	}
 	body := Div(Class("flex flex-col h-full"),
-		Div(Class("font-display fig text-[22px]"), fmtMoney(net)),
+		Div(Class("font-display fig t-figure"), fmtMoney(net)),
 		uiw.Chart(uiw.ChartProps{Spec: spec, Height: "120px", Label: uistate.T("dashboard.netWorthChartLabel", fmtMoney(net))}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
@@ -531,7 +531,7 @@ type emptyAddProps struct {
 func emptyAddCTA(props emptyAddProps) ui.Node {
 	nav := router.UseNavigate()
 	path := props.Path
-	return Div(Class("empty text-dim text-[13px] flex flex-col items-start gap-2"),
+	return Div(Class("empty text-dim t-body flex flex-col items-start gap-2"),
 		Span(props.Message),
 		Button(Class("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath(path)) }), props.Label),
 	)
@@ -574,7 +574,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.
 	if len(cells) == 0 {
 		body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No accounts yet.", Label: uistate.T("dashboard.addAccount"), Path: "/accounts"})
 	} else {
-		body = Div(Class("grid grid-cols-3 gap-4 text-[13px]"), cells)
+		body = Div(Class("grid grid-cols-3 gap-4 t-body"), cells)
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "accounts", Title: uistate.T("nav.accounts"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "5",
@@ -622,7 +622,7 @@ func todoWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 				Span(t.Title),
 			))
 		}
-		body = Div(Class("text-[13px] space-y-2"), rows)
+		body = Div(Class("t-body space-y-2"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "todo", Title: uistate.T("nav.todo"), Draggable: true, Resizable: true, GridColumn: "2", GridRow: "5",
@@ -666,12 +666,12 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 		caption += " · by " + g.TargetDate.Format("Jan 2")
 	}
 	body := Div(
-		Div(Class("flex justify-between text-[13px]"),
+		Div(Class("flex justify-between t-body"),
 			Span(Class("text-dim"), "saved"),
 			Span(Class("font-display fig"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 		),
 		uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: "bg-fg", Class: "mt-2"}),
-		Div(Class("text-[12px] text-dim mt-1.5"), caption),
+		Div(Class("t-caption text-dim mt-1.5"), caption),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goals", Title: uistate.T("dashboard.goalPrefix", g.Name), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
@@ -727,7 +727,7 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 			body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No budgets yet.", Label: uistate.T("dashboard.addBudget"), Path: "/budgets"})
 		} else {
 			// Budgets exist but none match the at-risk filter — not an add case.
-			body = P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noBudgetAlerts"))
+			body = P(Class("empty text-dim t-body"), uistate.T("dashboard.noBudgetAlerts"))
 		}
 	} else {
 		if len(statuses) > limit {
@@ -754,7 +754,7 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 				uiw.ProgressBar(uiw.ProgressBarProps{Percent: s.Percent, Tone: bar, Class: "mt-1.5"}),
 			))
 		}
-		body = Div(Class("space-y-4 text-[13px]"), rows)
+		body = Div(Class("space-y-4 t-body"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budgets", Title: uistate.T("nav.budgets"), Draggable: true, Resizable: true,
@@ -774,7 +774,7 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 	recent := ledger.Recent(txns, count)
 	var body ui.Node
 	if len(recent) == 0 {
-		body = P(Class("empty text-dim text-[13px]"), uistate.T("dashboard.noTransactions"))
+		body = P(Class("empty text-dim t-body"), uistate.T("dashboard.noTransactions"))
 	} else {
 		rows := make([]ui.Node, 0, len(recent))
 		for _, t := range recent {
@@ -784,7 +784,7 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 				Td(Class("py-2.5 text-right font-display fig "+figTone(t.Amount)), fmtMoney(t.Amount)),
 			))
 		}
-		body = Table(Class("w-full text-[13px]"), Tbody(rows))
+		body = Table(Class("w-full t-body"), Tbody(rows))
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "recent", Title: uistate.T("dashboard.recent"), Draggable: true, Resizable: true,
@@ -826,9 +826,9 @@ func dashboardHeaderCell() ui.Node {
 				// The page <h1> lives in the top bar (the breadcrumb's current page),
 				// so this in-canvas header is an <h2> to keep the heading order valid.
 				H2(Class("font-display text-2xl font-semibold tracking-tight"), uistate.T("dashboard.title")),
-				P(Class("text-dim mt-0.5 text-[13px]"), uistate.T("dashboard.hint")),
+				P(Class("text-dim mt-0.5 t-body"), uistate.T("dashboard.hint")),
 			),
-			Select(Class("rstep text-[12px]"), Attr("title", uistate.T("dashboard.layoutMode")), OnChange(onMode),
+			Select(Class("rstep t-caption"), Attr("title", uistate.T("dashboard.layoutMode")), OnChange(onMode),
 				Option(Value(string(dashlayout.ModeCustom)), SelectedIf(mode == dashlayout.ModeCustom), uistate.T("dashboard.layoutCustom")),
 				Option(Value(string(dashlayout.ModeAutoDefault)), SelectedIf(mode == dashlayout.ModeAutoDefault), uistate.T("dashboard.layoutAutoDefault")),
 				Option(Value(string(dashlayout.ModeAutoImportance)), SelectedIf(mode == dashlayout.ModeAutoImportance), uistate.T("dashboard.layoutAutoImportance")),
@@ -851,7 +851,7 @@ func plural(n int, singular string) string {
 // subline. figTone/subTone are color classes (e.g. "text-up", "text-dim").
 func kpiBody(figure, figTone, subline, subTone string) ui.Node {
 	return Div(
-		Div(Class("font-display fig text-[24px] leading-tight "+figTone), figure),
-		Div(Class("pt-1.5 text-[12px] "+subTone), subline),
+		Div(Class("font-display fig t-figure leading-tight "+figTone), figure),
+		Div(Class("pt-1.5 t-caption "+subTone), subline),
 	)
 }

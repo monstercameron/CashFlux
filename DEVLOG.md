@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: semantic type scale for the dashboard (C48)
+
+- C48: the dashboard scattered text-[11px]/[12px]/[13px]/[22px]/[24px]/[34px] with no shared scale (inconsistent
+  tile-to-tile). Note the ticket's "bypasses the text-size setting" framing is off — there's one Scale pref applied
+  via #app{zoom}, and zoom scales px and rem alike; the real defect is inconsistency + no figure hierarchy.
+- Added four rem-based semantic tokens to index.html — .t-caption (12px), .t-body (13px), .t-figure (24px primary),
+  .t-figure-lg (34px hero); font-size only, so explicit leading-* utilities still own line-height. Swapped all 27
+  ad-hoc sites in dashboard.go: 11+12px → caption, 13px → body, 22+24px → the single primary figure, 34px → hero.
+  The KPI/net-worth-trend/goal figures (were 22/24 ad hoc) now share one primary size — one clear hierarchy.
+- Tokens are real CSS in the <style> block, which is *more* reliable than the old arbitrary text-[Npx] (those
+  depended on Tailwind's play-CDN JIT observing runtime-added nodes). Bumped sw v209->v210.
+- New e2e dashboard_typescale_check.mjs: asserts .t-figure-lg ≈34px, .t-figure ≈24px (found 5 primary figures
+  sharing the size), caption/body resolve, and NO text-[Npx] remain inside .bento. PASS. App wasm builds clean;
+  gofmt clean. The app shell (shell.go/custompagesnav.go/wsswitcher.go) still has a few text-[13px] — out of C48's
+  dashboard scope, so the check is scoped to .bento and they're left for a shell pass.
+- Coordination: the parallel session committed 565e831 (L7 a11y) on top of my C47 work; shared tree/.git, so I'm
+  committing strictly by pathspec (dashboard.go, index.html, sw.js, the new e2e, CHANGELOG, DEVLOG) and never -A.
+- Next: C48 spacing rhythm (space-y-*/mt-* consolidation) + the two full-width band tiles, then C49.
+
 ## 2026-06-20 - test: L7 a11y sweep gate + fix txn-cleared story for the new filter popover
 
 - L7 gap 2: promoted the runtime a11y sweep to a committed gate e2e/a11y_check.mjs. For /transactions,
