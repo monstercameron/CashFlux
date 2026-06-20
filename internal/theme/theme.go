@@ -189,6 +189,7 @@ func (t Theme) Validate() []Issue {
 	}{
 		{"text", t.Text, t.BgBase, false},
 		{"text", t.Text, t.BgCard, false},
+		{"text", t.Text, t.bgElev(), false}, // primary text also sits on the elevated surface (C69)
 		{"textDim", t.TextDim, t.BgCard, false},
 		{"accent", t.Accent, t.BgBase, true}, // accent is used for UI/large elements
 	}
@@ -239,7 +240,7 @@ func (t Theme) Valid() bool { return len(t.Validate()) == 0 }
 // the UI to set on :root. Color vars are the hex strings; radius/scale carry
 // their units.
 func (t Theme) CSSVars() map[string]string {
-	return map[string]string{
+	vars := map[string]string{
 		"--bg-base":      t.BgBase,
 		"--bg-card":      t.BgCard,
 		"--border":       t.Border,
@@ -255,6 +256,13 @@ func (t Theme) CSSVars() map[string]string {
 		"--density":      string(t.Density),
 		"--icon-stroke":  fmt.Sprintf("%g", t.IconStroke),
 	}
+	// Derived tokens the shell needs (elevated surface, faint text, dim accent,
+	// warn, --danger alias) — see derivedVars. Emitted here so the stylesheet can
+	// reference them once the shell is rewired off hardcoded literals (C69).
+	for k, v := range t.derivedVars() {
+		vars[k] = v
+	}
+	return vars
 }
 
 // Merge returns a copy of t with every non-zero field of override applied, so a
