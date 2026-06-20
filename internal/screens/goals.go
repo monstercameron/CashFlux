@@ -20,6 +20,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -33,6 +34,17 @@ func Goals() ui.Node {
 
 	rev := state.UseAtom("rev:goals", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
+
+	// Drill from a goal's linked account to that account's transactions (mirrors
+	// Accounts→Transactions and the budget drill, C30/C50).
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	viewAccountTxns := func(accountID string) {
+		f := uistate.TxFilter{Account: accountID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -249,7 +261,7 @@ func Goals() ui.Node {
 		rows := MapKeyed(goals,
 			func(g domain.Goal) any { return g.ID },
 			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: app.Members(), OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal})
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: app.Members(), OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns})
 			},
 		)
 		listBody = Div(rows)
@@ -270,12 +282,13 @@ func Goals() ui.Node {
 }
 
 type goalRowProps struct {
-	Goal         domain.Goal
-	Accounts     []domain.Account
-	Members      []domain.Member
-	OnDelete     func(string)
-	OnContribute func(domain.Goal, string)
-	OnSave       func(id, name, target, date, accountID, owner string)
+	Goal           domain.Goal
+	Accounts       []domain.Account
+	Members        []domain.Member
+	OnDelete       func(string)
+	OnContribute   func(domain.Goal, string)
+	OnSave         func(id, name, target, date, accountID, owner string)
+	OnDrillAccount func(accountID string) // open Transactions filtered to the linked account
 }
 
 // goalAccountOptions builds the linked-account <option>s for a goal, with a
@@ -320,6 +333,11 @@ func GoalRow(props goalRowProps) ui.Node {
 	}
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(g.ID) }))
+	drillAcct := ui.UseEvent(Prevent(func() {
+		if props.OnDrillAccount != nil {
+			props.OnDrillAccount(g.AccountID)
+		}
+	}))
 	pr := uistate.UsePrefs().Get()
 	editing := ui.UseState(false)
 	contributing := ui.UseState(false)
@@ -417,8 +435,16 @@ func GoalRow(props goalRowProps) ui.Node {
 			}
 		}
 	}
-	if n := accountName(props.Accounts, g.AccountID); n != "" {
-		sub += uistate.T("goals.linkedSuffix", n)
+	// The linked account is split out of the run-on sub-line into its own clickable
+	// element that drills to that account's transactions (C51).
+	linkedName := accountName(props.Accounts, g.AccountID)
+	var linkedLine ui.Node = Fragment()
+	if linkedName != "" {
+		linkedLine = Span(Class("budget-sub"),
+			Button(Class("budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drillAcct),
+				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
+				uistate.T("goals.linkedSuffix", linkedName)),
+		)
 	}
 
 	return Div(Class("budget"),
@@ -431,5 +457,6 @@ func GoalRow(props goalRowProps) ui.Node {
 		),
 		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
 		Span(Class("budget-sub"), sub),
+		linkedLine,
 	)
 }

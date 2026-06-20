@@ -75,6 +75,15 @@ ordered reflow + size-aware packing.
 - [x] **Resize handles only while holding Shift**: `.rz` hidden by default, revealed when the root has
       `data-resize` (toggled by a global Shift keydown/keyup listener + window-blur clear in
       `internal/app/resizereveal.go`), with an opacity fade. Keeps the bento visually calm.
+- [ ] **Rethink resize controls: hover/focus directional handles instead of Shift+click cycle.** Keep the
+      default dashboard visually calm, but make resize discoverable when a tile is explored: show subtle
+      edge handles only on `.w:hover` / `.w:focus-within`. Use direct spatial controls instead of cycling:
+      left edge = narrower, right edge = wider, top edge = shorter, bottom edge = taller. Hide/disable
+      impossible directions at min/max spans (`1..4` columns, `1..3` rows). Plain click changes one step;
+      no modifier key required. Keep Shift+Arrow keyboard resizing as the accessible power path, and add
+      clear `aria-label`/tooltips (`Narrower`, `Wider`, `Shorter`, `Taller`). Touch fallback: expose the
+      same handles for the focused/selected tile in layout/customize mode later; do not move spatial
+      resizing into the flip settings modal.
 - [~] Verify: multi-cell tiles never overlap + resize re-packs — **done** (Pack model + render verified
       in-browser); smooth FLIP animations — **done** (above). Still open: a live drag-over preview (reflow
       lands on drop) and pointer-events over HTML5 DnD for touch (the deferred top item).
@@ -1400,6 +1409,879 @@ icon pass above, add small characterful touches that make the app feel richer:
       balances are stale; gentle hover lift on tiles. Keep them quiet and optional — never naggy (CLAUDE.md).
 _All of these are local SVG/CSS (no CDN per C44), inherit theme color (B20), and stay decorative+`aria-hidden`
 with text labels intact for a11y. Build behind the C46 `internal/ui/icon` helper once it exists._
+
+### C47. Transactions: redesign the ledger as a paginated, sortable table with a cleaner filter UI ★ (UX, user-requested 2026-06-20)
+**Reviewed live** (`gwc probe` against the running dev server at `http://127.0.0.1:8080`; the SPA boots
+clean at `/` — 200, no console errors — but a direct hit on `/transactions` still 404s, confirming B1)
+**plus the authoritative render code** (`internal/screens/transactions.go`). What ships today:
+- **Not a table — a flat "rows" list.** The ledger is `Div(Class("rows"), …)` of `TransactionRow` flex
+  cards: a checkbox glyph, a stacked desc + meta line (`category · date · account · #tags · cleared`),
+  a cleared toggle, the amount, then Edit / Duplicate / Delete buttons. No column headers, no aligned
+  columns, amounts not in a tabular column — it reads as one long ugly scroll.
+- **No real pagination.** "Pagination" is an incremental **"Show more" (+50)** button (`visN` state,
+  `txnPageSize = 50`). The list only ever grows; there are no page numbers, no prev/next, no
+  page-size choice, no "X–Y of N" position. (This is the concrete fix for the Transactions half of
+  **C39**; keep C39 for the *other* growable lists.)
+- **Sorting is a dropdown, not columns.** A single `Sort` select (Date / Amount / Payee) — you can't
+  click a column header to sort, and there's **no ascending/descending control or indicator** at all
+  (direction is fixed inside `txnfilter`).
+- **Filters are a cramped 10-control row.** One `form-grid` crams search + account + category + member
+  + from-date + to-date + cleared + sort + Clear + Export CSV into a single wrapping strip. Functional
+  but noisy; no sense of which filters are active, no grouping.
+
+**Goal:** a clean, dense, accessible **paginated data table** with **click-to-sort columns** and a
+**compact filter toolbar**, preserving every existing behavior (inline edit, duplicate, delete with
+transfer-pair handling, bulk select/recategorize/clear/delete, dedupe notice, persisted filters,
+CSV export of the filtered set, the a11y live region). Build **bottom-up** per the SDLC rule — most
+of the logic already exists in the pure `txnfilter` package; extend it with tests before touching UI.
+
+**Logic / state (pure, tested first):**
+- [ ] Extend `internal/txnfilter` (or `uistate.TxFilter`) with an explicit **sort direction**
+      (`Asc`/`Desc`) alongside the existing `Sort` field, and add `date|amount|payee|category|account`
+      as sortable keys. Table-driven tests for each key × direction, including ties and transfer legs.
+- [ ] Add **pagination math** as pure helpers (page index, page size, total pages, slice bounds,
+      clamp on filter change) with table tests — never compute window math in view code.
+- [ ] Persist **page size** and **sort key + direction** in `uistate.TxFilter` (already persisted via
+      `PersistTxFilter`), so they survive reload like the other filters. Reset to page 1 whenever the
+      filter set or sort changes.
+
+**Table UI (replaces the `rows` list):**
+- [ ] Render a real semantic `<table>`: `thead` columns = ☐ (select-all) · Date · Description ·
+      Category · Account · Tags · Amount (right-aligned, tabular figures) · Cleared · Actions. Align
+      columns; money uses the existing `fmtMoney`/`amountClass`. Keep the inline-edit row (it can
+      become an in-row editor or a `colspan` edit panel — keep all current edit fields).
+- [ ] **Sortable column headers:** click Date/Description/Category/Account/Amount to sort by it; click
+      again to flip direction. Show a caret indicator and set `aria-sort` (`ascending`/`descending`/
+      `none`) on the active header; headers are real `<button>`s (keyboard-operable). Remove the
+      standalone Sort dropdown.
+- [ ] **Select-all checkbox in the header** that selects/clears the current page's rows (wire into the
+      existing `selected` map + bulk action bar; keep per-row checkboxes).
+- [ ] **Responsive:** on narrow screens collapse the table back to a stacked card layout (reuse the
+      current row markup) so mobile stays usable — pairs with C10/C19.
+
+**Pagination control (replaces "Show more"):**
+- [ ] A footer bar with **prev / next**, current page + total ("**1–50 of 312**"), and a **page-size
+      selector** (e.g. 25 / 50 / 100 / All). Disable prev/next at the ends; keep it keyboard-reachable
+      and labelled. "All" is allowed but should warn/virtualize for very large sets (defer virtualization
+      to C39 if needed).
+
+**Cleaner filter interface:**
+- [ ] Collapse the 10-control strip into a **compact toolbar**: an always-visible search box + a
+      **"Filters" dropdown/popover** (use the existing `FlipPanel`) holding Account / Category / Member /
+      date range / Cleared. Show an **active-filter count badge** on the trigger and render the active
+      filters as removable **chips** below the toolbar; keep **Clear** and **Export CSV** beside it.
+- [ ] Keep the **summary line** ("N transactions · net $X") and the screen-reader live region; make sure
+      the count reflects the full filtered set (not just the visible page).
+
+**Verify (browser oracle; note B1 blocks direct `/transactions` nav — drive from `/` then navigate):**
+- [ ] Sort by each column asc/desc; paginate forward/back; change page size — all persist across reload.
+- [ ] Filters via the new popover narrow the set; chips remove individual filters; Clear resets to page 1.
+- [ ] Inline edit, duplicate, delete (incl. transfer pair), and every bulk action still work from the table.
+- [ ] CSV export still exports the **full filtered** set (not just the current page).
+- [ ] Table collapses to cards on a narrow viewport; `aria-sort` + header buttons are keyboard-operable.
+_Cross-links: **C39** (general long-list pagination — this resolves it for Transactions), **C18** (inline-edit
+consistency), **C10/C19** (responsive), **C42/C43** (FlipPanel for the filter popover), **B1** (deep-link 404
+makes the page only reachable via in-app nav during verification)._
+
+### C48. Dashboard: UX review — strong bento, but typography/spacing scale is ad-hoc ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/dashboard.go`). **Verdict:** the page makes sense for its purpose — a
+glanceable bento of KPIs + trends + nudges — and buttons are appropriately sized (`.btn`/`.data-btn`/
+`.rstep` are all small; no oversized controls). The weak spots are **typographic consistency and internal
+spacing rhythm**, which keep it from reading as fully "professional." Existing dashboard items already
+cover layout/behavior (C5 dup widget, C11 empty gear panel, C21 per-tile settings, C22 reflow, C30
+tile-click-to-navigate, C24 auto-layout) — these findings are **visual/UX polish only** and don't overlap.
+- [ ] **Hardcoded arbitrary px font sizes everywhere** — the file scatters `text-[11px]`, `text-[12px]`,
+      `text-[13px]`, `text-[22px]`, `text-[24px]`, `text-[34px]` ad hoc. There's no shared type scale, so
+      sizing is inconsistent tile-to-tile **and it bypasses the user text-size / display-scale setting**
+      (B6/C26). Replace with a small set of semantic type tokens (caption / body / figure / figure-lg) that
+      respond to the scale setting. _Biggest professional-polish win._ Cross-link **C25** (density tokens),
+      **C26**/**B6** (configurable text size).
+- [ ] **KPI figure sizes don't follow one hierarchy** — KPI tiles use `24px`, Savings rate `34px`, Net-worth
+      trend & goal figures `22px`. Define one "primary figure" size and one "hero figure" size and apply them
+      consistently so the eye isn't pulled around arbitrarily.
+- [ ] **Inconsistent internal vertical rhythm** — widget bodies mix `space-y-2`, `space-y-2.5`, `space-y-4`,
+      and one-off `mt-0.5/mt-1.5/mt-2/mt-3`. Standardize on the spacing scale so every tile breathes the same.
+- [ ] **Full-width single-line bands feel heavy** — Freshness (`1 / span 4`, row 8) and Top highlight
+      (`1 / span 4`, row 9) each take a full 4-column band for one line of content. Consider narrower default
+      spans (or pairing them on one row) so the grid stays dense and balanced rather than ending in two thin
+      full-width strips.
+- [ ] **Header control pairing** — the layout-mode `Select` (`.rstep text-[12px]`) sits beside the Reset
+      `.data-btn`; they're different control families at slightly different heights. Align their height/padding
+      so the header toolbar reads as one set.
+- [ ] **Verify** after changes: tiles still align on the bento grid at all widths; figures share a clear
+      hierarchy; changing the display-scale setting actually resizes dashboard text (closes the B6/C26 gap here).
+
+### C49. Accounts: UX review — solid layout, but the add/edit form is a dense placeholder-only grid ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/accounts.go`). **Verdict:** the page is well-organized for its purpose — a
+net-worth/assets/liabilities stat grid, an add form, sectioned Assets / Liabilities / Archived lists, and a
+clean per-row action pattern (primary **Transactions** / **Edit** inline, secondary **Update balance /
+Mark updated / Archive** tucked in a `⋯` overflow menu, destructive **✕** last). **Row buttons are NOT
+oversized** and the empty state ("Welcome" + Load sample) is good. The weak spots are the **add/edit form**
+and a couple of input affordances:
+- [ ] **Placeholder-only labels everywhere.** The add form and inline-edit form use `Placeholder(...)` with
+      no visible `<label>`. Placeholders vanish on input and several are cryptic number fields ("APR",
+      "Liquidity", "Stability", "Due day") — a user can't tell what an empty-after-typing field was. Add
+      persistent visible labels (or a label+field pattern). Cross-link **B15** (a11y labelling), **C18**
+      (inline-edit consistency).
+- [ ] **Currency is free-text.** `Currency` is a `Type("text")` input (just uppercased) instead of a
+      **select of known currency codes** — typo-prone and unguided. Make it a dropdown (the app already has a
+      currency list / FX table).
+- [ ] **Number fields lack constraints + unit hints.** Due day should be `min=1 max=31`; Liquidity/Stability
+      are "1–5" scores (no range shown); APR/expected-return are percents (no `%` affordance). Add
+      `min`/`max`/`step` and inline unit hints so the figures are unambiguous (correctness + UX).
+- [ ] **The add form mixes common + advanced fields in one flat grid.** Asset accounts still surface
+      Expected return / Liquidity / Stability / Lock-until inline — all advanced/optional. Tuck them behind an
+      **"Advanced" disclosure** so the common path (name · type · owner · currency · opening balance) stays a
+      short, calm form. Same for the inline-edit grid.
+- [ ] **Row primary actions render icon + text and may wrap on narrow screens** (Transactions, Edit). On small
+      widths collapse to icon-only with tooltip/`aria-label` to avoid wrapping. Cross-link **C10/C19**
+      (responsive).
+- [ ] **Verify** after changes: every field has a discoverable label; currency can only be a valid code;
+      number ranges are enforced; the default add form is short with advanced fields collapsed; rows don't
+      wrap on mobile.
+
+### C50. Budgets: UX review — feature-rich and correct, but rows get text-busy + form labels are hidden ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/budgets.go`). **Verdict:** genuinely strong for its purpose — totals stat grid
+(spent / budgeted / left), methodology-aware banner (zero-based "to assign" / envelope note), per-budget
+progress bar with on-track/near/over tones + labels, pace-projection heads-up, rollover carry, envelope
+balance, a recent-spend **limit suggestion** with one-tap "use this", and a proper empty-state CTA. It also
+correctly defers the period window to the shared top-bar control (C7 already fixed). **Buttons aren't
+oversized.** Polish opportunities:
+- [ ] **Placeholder-only labels in the add + inline-edit forms** (name, limit, and the Category / Owner /
+      Period selects use `aria-label`/placeholder only, no visible label) — same systemic issue as Accounts
+      (**C49**). Add visible labels. Cross-link **B15**, **C18**.
+- [ ] **Budget rows can stack up to four small sub-lines** — the `budgets.rowSub` line plus conditional
+      **pace**, **rollover carry**, and **envelope** lines all render as separate `budget-sub` text rows. When
+      several apply at once a row reads as a wall of tiny text. Consolidate into one meta line or render
+      pace/rollover/envelope as small **badges/chips** with tone, keeping the row scannable.
+- [ ] **The over/near summary is plain text** ("0 over · 2 near") — give it the same tone/badge treatment as
+      the row states so the at-a-glance risk reads consistently (color + shape, not text only — B15).
+- [ ] **No drill-down from a budget to its transactions.** A budget row should be clickable to open
+      Transactions filtered to that category (mirror the Accounts→Transactions and dashboard tile-click
+      pattern, **C30**) — a natural "why am I over?" affordance that's currently missing.
+- [ ] **Edit action is icon+text inline in the row head** — same narrow-screen wrap risk as other rows;
+      collapse to icon-only on small widths. Cross-link **C10/C19** (responsive).
+- [ ] **Verify** after changes: rows stay scannable when pace+rollover+envelope all apply; form fields are
+      labelled; risk summary uses tone+shape; clicking a budget lands on its filtered transactions.
+
+### C51. Goals: UX review — clean and consistent, but flat progress tone + silent contribute ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/goals.go`). **Verdict:** purpose-fit and tidy — a totals stat grid (saved /
+target / overall %), an add form, an inline **Contribute** mini-flow, inline edit, incomplete-goals-first
+sorting, monthly-needed pacing, linked-account display, and a proper empty-state CTA. It reuses the budget
+row layout for visual consistency. **Buttons aren't oversized.** Smaller polish items:
+- [ ] **Progress bar has no state tone.** Goal bars are always the single `bar-fill` color — even at 100%.
+      Give completed goals a success tone (and optionally an at-risk tone when the target date is near but
+      pace is behind, paralleling Budgets' near/over coloring). Pairs with the goal-reached delight already
+      noted in **C46.1** (don't duplicate the confetti item — this is just the bar tone).
+- [ ] **Placeholder-only labels** across the add / edit / contribute forms (name, target, saved-so-far,
+      owner/linked selects, date) — same systemic labelling gap as **C49/C50**. Add visible labels (B15).
+- [ ] **The row sub-line is a run-on concatenation** — pct + remaining + "by <date>" + "save <X>/mo" +
+      "linked: <account>" all in one `budget-sub` string. For a dated, linked goal it gets long; split the
+      pacing/linked bits into small badges or a second muted line. (Milder version of **C50**'s row-busyness.)
+- [ ] **"Contribute" silently edits the number.** Contributing just increments `CurrentAmount` — it does
+      **not** post a transaction or move money from the linked account, so a goal linked to a real account can
+      drift from that account's balance with no audit trail. Consider (a) optionally recording a
+      transfer/transaction into the linked account on contribute, or (b) a clear note that contributions are
+      manual tracking only. Cross-link the linked-account concept and **C47** (ledger).
+- [ ] **Three icon+text actions in the row head** (Contribute, Edit, Delete) risk wrapping on narrow screens
+      — collapse to icon-only on small widths. Cross-link **C10/C19**.
+- [ ] **No drill-down from a linked goal to its account.** Make the "linked: <account>" affordance clickable
+      to the account/its transactions (same drill pattern as **C30**/C50).
+- [ ] **Verify** after changes: completed goals read as done at a glance (bar tone); forms are labelled;
+      contribute behavior re: linked accounts is unambiguous; rows don't wrap on mobile.
+
+### C52. To-do: UX review — the cleanest screen; a few unlabelled controls + no overdue cue ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/todo.go`). **Verdict:** the simplest and tidiest screen reviewed so far and
+clearly fit for purpose — add form, open-first/soonest-due/title sort (pure `tasksort`), complete/reopen via
+a glyph checkbox, inline edit, a hide-done toggle, priority rendered as a **shape+color badge** (already
+B15-compliant), and proper empty / all-done states. **Buttons aren't oversized.** Gaps are small:
+- [ ] **Unlabelled priority + due-date controls.** The priority `Select` in both the add and inline-edit
+      forms has **no `aria-label` or visible label at all**; the due-date `Input(Type("date"))` is likewise
+      unlabelled. These are screen-reader-invisible. Add labels (visible or at minimum `aria-label`). Same
+      systemic labelling theme as **C49/C50/C51**; cross-link **B15**.
+- [ ] **Overdue tasks have no visual cue.** A past-due `Due` date renders the same as any other — an open
+      task overdue by a week looks identical to one due next month. Flag overdue items (warn tone on the due
+      meta + optional sort-to-top) so the list is actionable at a glance.
+- [ ] **Only filter is hide-done.** Consider a lightweight priority/status filter (or grouping by High /
+      Medium / Low) for longer lists — pairs with the general long-list concern in **C39** if task counts grow.
+- [ ] **Edit action is icon+text inline** — same narrow-screen wrap risk as other rows; icon-only on small
+      widths. Cross-link **C10/C19**.
+- [ ] **Long notes shown inline as `row-meta`** could overflow the row; truncate with a tooltip/expand for
+      long notes.
+- [ ] **Verify** after changes: every control is labelled for screen readers; overdue tasks stand out;
+      filtering/grouping works; rows don't wrap on mobile.
+
+### C53. Planning: UX review — powerful but overloaded; 5 tools on one page, primary calc buried ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/planning.go`). **Verdict:** analytically rich and genuinely useful — net-worth
+**forecast** chart with a "trim spending" what-if overlay, a **recurring cash-flows** manager (with a real
+autopost `ToggleRow` and post-due action), saved **what-if plans** (with projected end-balance sparklines),
+a **debt strategy** snowball-vs-avalanche comparison, and a live **debt-payoff calculator**. Content quality
+is high and buttons aren't oversized. The problem is **information architecture and density** — it's really a
+*Tools hub* crammed into one long scroll:
+- [ ] **Five+ heavy cards stacked with no sub-structure.** Forecast → Recurring → Plans → Debt strategy →
+      Payoff inputs → Projection result, all vertically. It's overwhelming and gives no entry point. Introduce
+      sub-navigation (tabs/segmented sections or an accordion), or split into distinct routes under a Tools/
+      Planning group. Cross-link **C35** (Tools/Workflows nav grouping) and the SPEC §12 configurability.
+- [ ] **The primary payoff calculator is buried last AND split from its result.** The function's stated
+      primary purpose (debt-payoff calc) renders at the very bottom, and its **inputs** (balance/APR/payment/
+      extra) sit in one card while the **Projection result** is a *separate* card below it. Reunite the form
+      with its live result and surface it higher (or in its own tab). _Most impactful fix._
+- [ ] **Placeholder-only labels at scale.** Nearly every input is placeholder-only. The **Plans add form has
+      six number fields in a row** (horizon, start, monthly, one-time amount, one-time month) — cryptic and
+      high cognitive load; the "one-time amount in month N" pair especially needs labels + visual grouping.
+      Add visible labels/field groups. Same systemic gap as **C49/C50/C51/C52**; cross-link **B15**.
+- [ ] **Number inputs lack constraints/units.** Horizon (positive int), APR (percent), one-time month
+      (1..horizon) are validated only after submit — add `min`/`max`/unit hints so bad values are caught at the
+      field and the percent/months/currency meaning is visible.
+- [ ] **Recurring & Plans use bare `P(empty)` instead of the EmptyStateCTA pattern** the other screens use —
+      give them guided empty states with an add affordance for consistency (cross-link **C23**).
+- [ ] **Verify** after changes: the page has a clear entry point / sub-nav; payoff inputs and result read as
+      one unit and are easy to find; every field is labelled with sensible constraints; empty states are guided.
+
+### C54. Allocate: UX review — strong & explainable; label inconsistency + config-heavy top ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/allocate.go`). **Verdict:** a genuinely good, explainable tool — ranks where to
+put new capital from accounts + high-APR debts + unfunded goals, with editable criterion weights, preset +
+**saved** profiles, an optional amount-split distribution (reserve + max-per), exclude/restore, and an
+on-demand AI explanation. It honors the determinism/explainability rule (per-row score bar + returns/
+stability/liquidity breakdown with `role=progressbar` + aria values). **Note: C6 is already fixed** — the five
+weight inputs now have visible labels. Remaining issues:
+- [ ] **Labelling is now inconsistent.** Weights got labels (C6) but the **amount / reserve / max-per** inputs
+      and the **profile `Select`** are still placeholder-only / `aria-label`-less. "Reserve" and "Max per" are
+      non-obvious without persistent labels. Bring them up to the labelled standard the weights set. Cross-link
+      **C6**, **C49**, **B15**.
+- [ ] **Config-heavy top card.** The first card stacks three `form-grid`s (profile + split amounts, then the
+      weights row, then the save-profile form) — a lot before the user reaches the actual **Suggestions** card.
+      Add clearer sub-headings/grouping or collapse the weights/save-profile into an "Advanced / tune weights"
+      disclosure so the common path (pick profile → see suggestions) is calm. Cross-link **C53** (same
+      density theme on Planning).
+- [ ] **The amount-split entry point is buried.** Splitting a real amount across destinations is a key feature
+      but the **amount** field sits mid-row beside reserve/max-per with no emphasis; a user may not realize
+      entering an amount populates per-row suggested amounts. Surface it (e.g. a labelled "Amount to allocate"
+      as the primary input) and hint the behavior.
+- [ ] **Redundant score display + hand-rolled separator in the row.** Each `AllocRow` shows the score twice
+      (head `60%` and a `Score 60%` sub-line) and injects a manual `" · "` span to keep score/breakdown from
+      colliding (§6.15). Consolidate into one score presentation and use proper spacing/markup instead of a
+      literal separator span.
+- [ ] **AI "needs key" error is a dead-end.** When no OpenAI key/backend is set, `explain` shows an error;
+      link it to Settings → AI so the user can fix it in one hop. Cross-link **C27** (AI features).
+- [ ] **Verify** after changes: all inputs labelled; the top card reads calmly with advanced options tucked
+      away; the allocate-amount flow is discoverable; rows show score once; AI error routes to settings.
+
+### C55. Reports: UX review — comprehensive & correct, but a long ungrouped scroll of text lists ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/reports_screen.go`). **Verdict:** thorough and trustworthy — a headline stat
+grid (income / spend / net / savings rate / cash runway / no-spend days), a plain-English spending narrative,
+overspend "heads-up" anomalies, spending-by-category with prior-period delta arrows (tone **and** shape, so
+B15-friendly), biggest deposits / income-by-source / top payees / biggest expenses / by-member, and
+cash-flow / net-worth / savings-rate **trend area charts**. It reuses the shared period + pure `reports`
+core so figures match the rest of the app, and **buttons aren't oversized** (only CSV downloads). The weak
+spots are information architecture and scannability:
+- [ ] **~12 cards in one long single-column scroll, ungrouped.** There's no in-page jump-nav or grouping
+      (e.g. Spending / Income / Net worth / Trends). Add section grouping or a sticky jump-nav so the report is
+      navigable. Cross-link **C53** (same density theme), **B21** (Reports engine).
+- [ ] **The period the report covers isn't shown on the page.** It silently uses the top-bar window; a report
+      should state **"Showing: <period>"** and the comparison period prominently at the top (essential when
+      printed/exported). Add a clear period header.
+- [ ] **Category / payee / expense lists are plain text rows** (name + amount). The code itself notes "charts
+      come in a follow-up" (B21). Add proportion **mini-bars** (share of total) to the ranked lists so the
+      distribution is scannable at a glance — biggest "god-tier" win here.
+- [ ] **CSV export is inconsistent + there's no print/PDF.** Download buttons appear on category / income /
+      member cards but **not** on payees / biggest-expenses / deposits. A reporting screen also wants a single
+      **Print / Save as PDF** (or "export full report"). Standardize per-section export and add a report-level one.
+- [ ] **No whole-screen empty state.** With no data the `If` guards hide every card, leaving just a zero stat
+      grid. Add a guided empty state (cross-link **C23**).
+- [ ] **Verify** after changes: the report is navigable/grouped; the covered period + comparison are labelled
+      up top; ranked lists show proportion bars; export is consistent and a print/PDF path exists.
+
+### C56. Subscriptions: UX review — clean detection, but read-only with no user correction or drill-down ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/subscriptions_screen.go`). **Verdict:** a tidy, well-scoped screen — it
+auto-detects recurring charges from history (`subscriptions.Detect`), shows monthly/annual burden, a
+**share-of-spending** gauge, normalized "/mo" for non-monthly subs (smart: hidden when it equals the charge),
+a **price-changes** card, a **renewing-soon** card, a **remind-me-to-cancel** action that files a dated task,
+and CSV export. **Buttons aren't oversized.** The gaps are about user control and trust in the detection:
+- [ ] **Detection is read-only with no correction path.** A heuristic that flags subscriptions from 2+
+      matches will have false positives/negatives, but the user can't **confirm**, **ignore/dismiss** ("not a
+      subscription"), or **manually add** a known subscription. Add per-row confirm/ignore (persisted) and a
+      manual-add affordance so the list can be trusted and curated. _Highest-value gap._
+- [ ] **No drill-down to the underlying charges.** Clicking a detected subscription should open Transactions
+      filtered to that payee — this is how a user verifies the detection is right. Mirror the
+      Accounts→Transactions / **C30** drill pattern (and the same idea raised in C50/C51/C55).
+- [ ] **Price-change rows lack tone/icon.** Up vs down is conveyed only by wording (`priceUp`/`priceDown`);
+      Reports already uses colored up/down arrows for the same idea. Apply tone + arrow icon here for
+      consistency and color-plus-shape (B15). Cross-link **C55**.
+- [ ] **"Renewing soon" rows are a stripped-down variant** (name + date + amount only) — no cadence, no remind
+      action. Reuse the richer `SubscriptionRow` so a soon-to-renew item is actionable in place.
+- [ ] **Plain `P(empty)` empty state.** Guide it — detection needs transaction history, so point the user to
+      import/add transactions (cross-link **C23**, Documents import).
+- [ ] **Verify** after changes: subscriptions can be confirmed/ignored/added and the choice persists; rows
+      drill into their charges; price changes show tone+icon; renewing-soon rows are actionable.
+
+### C57. Bills: UX review — clean calendar, but no mark-paid, no urgency tone, + a suspect "annual" figure ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/bills_screen.go`). **Verdict:** a tidy, purpose-fit screen — derives upcoming
+bills from liability due-day + minimum payment and recurring items (`bills.UpcomingAll`), a stat grid
+(total due / annual / count / next due), a soonest-first list with **remind-me-to-pay** (files a dated task),
+and a **month calendar** with due-day dots. **Buttons aren't oversized.** Issues (a couple are correctness,
+not just polish):
+- [ ] **No mark-paid.** The code itself says "mark-paid comes next" — but for a bills screen, marking a bill
+      paid (and reflecting it / advancing to next due) is core. Add a paid action + paid state. _Top gap._
+- [ ] **`bills.annualCost = total * 12` looks wrong.** `total` is the sum of the current upcoming occurrences
+      (mixed cadences — monthly liabilities **and** weekly/quarterly/yearly recurring). Multiplying that
+      one-time total by 12 misstates the annual cost. Compute annual from each item's cadence-normalized
+      amount. **Flagged as correctness** — cross-link the cadence math in `subscriptions`/`recurring`.
+- [ ] **No urgency tone.** `daysUntilLabel` says "Due today / tomorrow / in N days" as plain text — no
+      warn/danger tone for imminent or overdue bills (the dashboard widget already tones bills due ≤7 days).
+      Add tone + shape so urgency reads at a glance (B15). Cross-link **C55/C56** (consistent tone usage).
+- [ ] **Calendar dot info is hover-only and uncounted.** A day with bills shows a single `cal-dot` whose names
+      live in a `title` (mouse-only, not touch/keyboard accessible), and multiple bills still show one dot with
+      no count/amount. Make day cells show a count and be tappable/focusable to reveal that day's bills (a11y +
+      touch). Cross-link **B15**, **C10/C19**.
+- [ ] **Row key may collide.** `MapKeyed` keys bill rows by `r.Bill.AccountID`; if one account yields more
+      than one bill (e.g. a liability + a recurring on the same account) the keys collide and a row could be
+      dropped. Use a composite key (account + due date/label). _Potential silent data loss._
+- [ ] **Plain `P(empty)` empty state** — guide it (set due dates on liability accounts / add recurring bills).
+      Cross-link **C23**.
+- [ ] **Verify** after changes: bills can be marked paid; the annual figure is cadence-correct; urgent/overdue
+      bills stand out; calendar days are countable + tappable; no rows dropped when an account has 2+ bills.
+
+### C58. Split: UX review — focused calculator, but ephemeral + row layout/affordance gaps ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/split_screen.go`). **Verdict:** a clean, well-scoped shared-expense calculator
+— enter amount + payer, pick sharers with real **ToggleRow** switches, choose even or **weighted** split, and
+it shows each share plus a **settle-up** ("X owes Y") with CSV export, all over the pure `split` core. **Buttons
+aren't oversized** and the amount/weight inputs are aria-labelled. Gaps:
+- [ ] **Everything is ephemeral.** The result (shares + who-owes-whom) is recomputed each render and lost on
+      navigation — there's no save, no link to an actual transaction, and no persisted settle-up/debt ledger.
+      The code notes "transaction-level split + persisted settle-up build on the same core" as future work;
+      this is the screen's biggest gap. Add: split an existing transaction, and persist a settle-up balance per
+      member. Cross-link **C47** (ledger/transactions), Members.
+- [ ] **Member row nests a full-width `ToggleRow` next to a weight input + share.** `SplitMemberRow` renders
+      `ToggleRow(label=name)` (which has its own label-left / switch-right layout) and then appends the weight
+      field and the share span — likely producing awkward alignment. Use a purpose-built row (checkbox/toggle +
+      name + weight + share in aligned columns) rather than composing a row component meant to stand alone.
+- [ ] **No select-all / clear for sharers** and **no result summary.** For a household with several members,
+      add select-all/clear; and show a summary line ("$X split among N → $Y each", note any rounding remainder
+      the core distributes) so the math is legible at a glance.
+- [ ] **`no members` is a dead end.** Replace the plain `P(empty)` with a guided empty state linking to the
+      Members screen to add people first. Cross-link **C23**.
+- [ ] **Settle-up is single-payer only** (everyone owes the one payer) — fine for the B24 scope, but note the
+      multi-payer / netting case for when persisted settle-up lands.
+- [ ] **Verify** after changes: a split can attach to a transaction and the settle-up persists; member rows
+      align cleanly; select-all + summary work; the no-members state guides to Members.
+
+### C59. Insights: UX review — strong AI screen; shared-result collision + thin Q&A context ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/insights.go`). **Verdict:** one of the better-built screens — an **offline**
+spending-anomaly highlights card (tone + arrow icon, no key needed), AI **"Explain my month"**, free-form
+**Q&A**, **pin** + **save-as-task**, a cancel-while-thinking button, and a token/cost note for BYO-key users.
+It already handles several prior notes (C9 disabled Q&A preview with key hint; C27 answer saved to task notes,
+not the title; privacy — only 4 aggregates sent). **Buttons aren't oversized.** Remaining gaps:
+- [ ] **Explain and Q&A share one `result` slot.** Both write the same `result` state, so running one wipes
+      the other and the single "Answer" card shows only whichever ran last — you can't keep the monthly
+      narrative while also asking a question. Give them separate result areas (or a small history/thread).
+- [ ] **The "needs key" hint is a non-linking dead-end** (appears in both the Explain action and the Q&A box).
+      Make it a single clear call-to-action linking to **Settings → AI**. Same dead-end pattern flagged on
+      Allocate (**C54**); cross-link **C27** (AI setup).
+- [ ] **Q&A context is very thin → detailed questions will fail.** Only net worth / income / spending /
+      account-count are sent (`ai.FinancialContext`), so "how much did I spend on groceries?" can't be
+      answered. Either enrich the (still-local) context with a category/payee breakdown, or set expectations in
+      the placeholder ("Ask about your totals, savings rate, net worth…") so users aren't surprised. Balance
+      against the documented privacy guardrail (B17 / C45).
+- [ ] **No streaming / progressive output.** Answers pop in all at once after the callback; for longer
+      responses, stream tokens into the answer card for better perceived speed (the `ai` layer already has the
+      callback seam).
+- [ ] **Pinned-insight rows show full untruncated text** in `row-desc` — long insights make tall, unwieldy
+      rows. Truncate with expand-on-click. Cross-link **C39** (lists) if pins accumulate.
+- [ ] **Verify** after changes: an explain narrative and a Q&A answer can coexist; the key hint routes to
+      settings; the Q&A scope is clear (or richer); long answers stream; pinned rows stay compact.
+
+### C60. Documents: UX review — strong import flow; no image preview + free-text category + paste-only CSV ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/documents.go`). **Verdict:** a genuinely strong, well-thought-out screen — two
+import paths (OpenAI **vision** receipt/statement extraction with strict structured-output schema, and **CSV
+paste**), a **draft review** list with inline edit + remove before committing, a **monthly spend summary** of
+the pending rows so you see the damage before importing, dedupe (skipped count), an account picker, and an
+**import history** with delete. Privacy-conscious (image only leaves the device on "Read"). **Buttons aren't
+oversized.** Gaps:
+- [ ] **No image preview during review.** After choosing a file it only says "image ready"; the user can't see
+      the receipt while checking the extracted rows. Show a thumbnail (ideally image **side-by-side** with the
+      draft rows) so extraction can be verified at a glance. _Highest-value gap for the vision flow._
+- [ ] **Draft category is free-text, not mapped to real categories.** The review row edits category as a plain
+      `Input(text)`, and the AI's category string may not match any existing category — so imports can create
+      orphan/typo categories. Make it a select/autocomplete of existing categories (with "create new" as an
+      explicit choice). _Correctness-adjacent_; cross-link Categories + Rules (auto-categorize).
+- [ ] **CSV is paste-only.** There's a file picker for images but CSV must be pasted into a textarea — clunky
+      for real `.csv` files. Add a CSV **file picker + drag-and-drop** (and consider a column-mapping step so
+      non-matching headers still import). Cross-link **B1**-adjacent import robustness.
+- [ ] **"Needs key" is a dead-end** again (vision import shows `needKey` with no link). Route it to Settings →
+      AI. Same pattern as **C54/C59**; cross-link **C27**.
+- [ ] **Import-account `Select` is unlabelled** (no `aria-label`) — same systemic labelling gap (**C49** etc.,
+      **B15**). Also the draft-row edit action is icon+text (narrow-screen wrap, **C10/C19**).
+- [ ] **No progress affordance for vision** beyond the button text "Reading…"; vision calls are slow — add a
+      spinner/disabled state and ideally a cancel (Insights already has cancel — reuse).
+- [ ] **Verify** after changes: the picked image previews next to its draft rows; categories resolve to real
+      ones; CSV files import by picker/drag-drop; the key prompt links to settings; the account select is labelled.
+
+### C61. Customize: UX review — two tools in one screen; unformatted results + no var-insert ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/customize.go`; it also embeds `CustomFieldsManager` from `customfields.go`).
+**Verdict:** powerful and safe — a sandboxed **formula calculator** over live figures (net worth, income,
+expense, counts), with one-tap **example** formulas, **save / load / delete** named formulas (each evaluated
+live), and an available-variables reference; plus the **Custom Fields Manager**. Live eval as you type is a
+nice touch and **buttons aren't oversized**. Issues:
+- [ ] **Two unrelated tools under one "Customize" screen.** Defining per-entity **custom fields** and writing
+      **formulas** are different jobs stacked together with no separating hierarchy. Add clear section
+      headers/sub-nav (or split), so a user looking to add a field isn't wading through the formula calculator.
+      Cross-link **C53/C55** (IA/grouping theme).
+- [ ] **Results and variable values are unformatted.** The result and the variables reference print raw
+      floats (`strconv.FormatFloat`), so net worth shows `354070` not `$354,070` and a savings formula shows
+      `36` not `36%` — jarring against the app's money formatting (**C2**). At minimum thousands-separate;
+      ideally let a saved formula carry a display format (currency / percent / number). Cross-link **C2**.
+- [ ] **Formula editor has no label, no variable-insert, no inline help.** The expression `Input` is
+      placeholder-only (B15) and you must hand-type variable names. Let the user **click a variable** in the
+      reference to insert it, show the snake_case **token next to a friendly name**, and surface function help
+      (round/if/…). Examples are good — keep them.
+- [ ] **Saving always creates a new formula (new ID).** Loading then re-saving makes a **duplicate** (and
+      same-name collisions are possible); there's no edit-in-place for a saved formula. Add update/rename.
+- [ ] **Custom Fields Manager not separately reviewed here** — flag a dedicated pass (or fold into this entry)
+      for its add/edit/delete UX, field-type affordances, and labelling, since it lives on this screen.
+- [ ] **Verify** after changes: the screen separates fields vs formulas clearly; results/variables are
+      formatted; variables can be click-inserted; saved formulas can be edited without duplicating.
+
+### C62. Members: UX review — solid, with great reassign-on-delete; minor label/wrap/avatar polish ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/members.go`). **Verdict:** one of the most complete CRUD screens — add (name +
+native color picker), a member list with color swatch and default-member badge, inline edit, drill-to-
+transactions, a **net-worth-by-owner** breakdown, a proper empty-state CTA, and an **excellent
+reassign-before-delete** flow that protects accounts/budgets/goals/transactions from being orphaned. **C8
+(color picker rendered as a bare line) appears fixed** — it's now a real `<input type=color>` with title +
+`aria-label`. **Buttons aren't oversized.** Only light polish remains:
+- [ ] **Name field is placeholder-only** (add + inline-edit). Add a visible label — same systemic gap as
+      **C49–C61**; cross-link **B15**. (Color input is already labelled — good.)
+- [ ] **Reassign-target `Select` is unlabelled** (`aria-label`/visible label), and when the reassign panel
+      opens (triggered from a delete button down in the list) focus/scroll doesn't move to it, so it can be
+      missed. Label the select and move focus to the panel on open. Cross-link **B15**, §6.7 (focus-on-open).
+- [ ] **Member row has two icon+text actions** (Transactions, Edit) plus default + delete — narrow-screen
+      wrap risk; collapse to icon-only on small widths. Cross-link **C10/C19**.
+- [ ] **Members are name + swatch only — add a colored initial avatar** for scannability/personality (uses the
+      member's color), a small "god-tier" touch. Cross-link **C46.1** (delight).
+- [ ] **Verify** after changes: name labelled; reassign select labelled and focused on open; rows don't wrap
+      on mobile; member avatars render with the member color.
+
+### C63. Categories: UX review — solid tree CRUD; reassign-kind bug + em-dash nesting + no usage count ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/categories.go`). **Verdict:** a solid, complete screen — add (name / kind /
+parent / color), separate **Expense** and **Income** groups with **tree nesting**, inline edit (incl.
+re-parenting, with self-parent prevented), **reassign-before-delete**, color swatches, and proper empty-state
+CTAs. **Buttons aren't oversized.** Issues (one is a correctness/data risk):
+- [ ] **Reassign target isn't filtered to the same kind.** The reassign-before-delete `Select` lists **all**
+      categories (`for _, c := range cats`), so deleting an *expense* category lets you reassign its
+      transactions/budgets to an *income* category — semantically wrong and a likely data-integrity bug. Filter
+      the options to the deleted category's kind (and indent the tree like the add form does). **Flagged as
+      correctness.** Cross-link the reassign flow in Members (**C62**).
+- [ ] **Tree nesting is rendered with literal "— " prefixes** (`indentLabel` repeats em-dashes) in both row
+      labels and parent dropdowns. Use real indentation (padding/guide line) for a cleaner, more professional
+      hierarchy; keep the dropdown indent but consider spaces/padding over em-dashes.
+- [ ] **No per-row usage count.** A category row doesn't show how many transactions/budgets use it (the count
+      only appears once you hit delete). Show "N transactions" inline so users know what's safe to remove — and
+      make it a **drill-down** to Transactions filtered by that category (Accounts/Members have this; Categories
+      doesn't). Cross-link **C30** drill pattern.
+- [ ] **Labelling gaps:** name is placeholder-only; the kind + parent selects (add and edit) and the reassign
+      select lack `aria-label`s (color is labelled). Add labels + focus the reassign panel on open. Cross-link
+      **B15**, **C62**.
+- [ ] **Edit action is icon+text** — narrow-screen wrap risk; icon-only on small widths (**C10/C19**).
+- [ ] **Verify** after changes: reassign only offers same-kind targets; nesting reads cleanly without
+      em-dashes; rows show usage + drill into transactions; all controls labelled.
+
+### C64. Rules: UX review — excellent shadow warnings + suggestions; missing precedence reorder ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/rules.go`). **Verdict:** a genuinely strong screen — add an auto-categorize
+rule (match phrase → category + optional tags), **history-based rule suggestions** with supporting evidence
+counts and one-tap Accept, an **apply-to-existing** action, inline edit, a proper empty-state CTA, and — best
+of all — **conflict warnings** that flag rules which never fire because an earlier rule shadows them, or match
+nothing. **Buttons aren't oversized.** Gaps:
+- [ ] **No way to reorder rules, despite "first match wins."** Precedence is positional and shadowing is
+      *detected* (good) but not *fixable* here — a shadowed rule can only be deleted/re-added. Add
+      drag-to-reorder (or move up/down) so users can resolve precedence directly. _Top gap_, given the
+      first-match-wins semantics. Cross-link **B8** (sidebar reorder pattern), **B2** (drag/reflow).
+- [ ] **No live match preview while authoring.** Suggestions show counts, but when adding/editing a rule there's
+      no "this matches N existing transactions" feedback. Show a live count (and ideally a peek at sample
+      matches) so users can trust a rule before saving. Cross-link **C47** (transactions filter reuse).
+- [ ] **Match is "contains" only, with no stated semantics or types.** The match field is placeholder-only and
+      offers no exact / starts-with / amount-based options; users may expect more. At minimum label it and state
+      it matches payee/description text; consider match-type options later.
+- [ ] **Labelling gaps:** match + tags inputs are placeholder-only and the category `Select` (add + edit) has
+      no `aria-label`. Add labels. Cross-link **B15**, **C49+**.
+- [ ] **No drill-down from a rule to the transactions it affects**, and the edit action is icon+text (wrap on
+      narrow screens). Cross-link **C30** (drill), **C10/C19** (responsive).
+- [ ] **Verify** after changes: rules can be reordered and shadow warnings clear when precedence is fixed; the
+      author sees a live match count; controls are labelled; a rule drills into its matched transactions.
+
+### C65. Workflows: UX review — great dry-run; but no edit, no staged-action remove, condition unguided ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/workflows.go`). **Verdict:** a capable automation manager — create (name,
+trigger, optional condition formula, an **incremental action builder** whose parameter control adapts to the
+chosen action kind), enable/disable, **run now**, an excellent **dry-run preview** of planned effects, and a
+run history. C37 (a filled-but-unstaged action being lost on save) is already handled. **Buttons aren't
+oversized.** Gaps:
+- [ ] **No edit for an existing workflow.** Rows offer dry-run / run / enable / delete but **no edit** — every
+      other CRUD screen has inline edit; here you must delete and recreate to change anything. Add inline (or
+      panel) edit. _Top gap._
+- [ ] **Staged actions can't be removed before saving.** The action builder only **adds**; the staged list is
+      plain text with no remove/reorder, so a mistaken action means starting over. Add per-staged-row remove
+      (and ideally reorder). Cross-link **C64** (rules ordering), **B2** (drag).
+- [ ] **The condition is a raw formula string with no help.** It's placeholder-only with no examples, variable
+      reference, or validation feedback — unlike Customize, which has example buttons + a variable list. Share
+      that formula help/variable reference here (and validate before save). Cross-link **C61**.
+- [ ] **Heading hierarchy is inconsistent** — this screen uses `H3` for card titles while the rest of the app
+      uses `H2`, which breaks the heading order for screen readers. Normalize to the shared card-title level.
+      Cross-link **B15** (a11y/landmarks).
+- [ ] **Labelling gaps:** name / condition / action-text inputs and the trigger / action-kind / category
+      selects are placeholder-only with no `aria-label`. Add labels. Cross-link **C49+**, **B15**.
+- [ ] **Run history is silently capped at 12** with no "view all" — note the cap and add paging if it grows
+      (cross-link **C39**).
+- [ ] **Verify** after changes: a workflow can be edited in place; staged actions can be removed/reordered; the
+      condition field offers help + validates; headings are H2; controls are labelled.
+
+### C66. Artifacts: UX review — simple & functional, but silent upload failures + no card titles or "where used" ★ (UX review loop, user-requested 2026-06-20)
+**Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
+render code (`internal/screens/artifacts.go`). **Verdict:** a focused asset manager — upload an image or
+import a CSV dataset via native file pickers, see them listed with an **image thumbnail** + size, delete them,
+and a **storage meter** of total localStorage dataset bytes (smart, since artifacts live in the single
+autosaved blob and custom-page Image/Table widgets reference them by id). **Buttons aren't oversized.** Gaps
+(one is a real reliability issue):
+- [ ] **Upload/save failures are silent.** Both `uploadImage` and `importCSV` do `if err == nil { refresh() }`
+      — a failed `PutArtifact` (very plausible: a large image can blow the **localStorage quota**, since the
+      whole dataset is one blob) gives the user **no feedback**; the file just doesn't appear. Surface
+      errors (toast/notice), and ideally warn/refuse before exceeding quota. **Flagged as reliability.**
+- [ ] **Storage meter is text-only with no quota awareness.** Show a progress **bar** against the practical
+      localStorage limit (~5–10 MB) and a warning tone as it fills, so users don't hit silent save failures.
+      Pairs with the item above and the persistence model (B17/C45 storage notes).
+- [ ] **No card titles / headings.** Neither the upload card nor the list card has an `H2 card-title` — every
+      other screen does. Add headings for structure/scannability and consistent heading order. Cross-link
+      **B15** (landmarks), **C65** (heading-level consistency).
+- [ ] **No "where used" before delete.** Artifacts are referenced by custom-page widgets by id; deleting one
+      can silently break a page. Show "used by N pages" and confirm/guard on delete (mirror the
+      reassign-before-delete integrity pattern from Members/Categories). Cross-link **C32** (custom pages).
+- [ ] **CSV artifacts have no preview** (images do) — show columns + first rows; and there's **no rename** for
+      either kind. Add a peek + rename. Cross-link **C60** (Documents CSV) for shared CSV viewing.
+- [ ] **Plain `P(empty)` empty state** — guide it (explain artifacts power custom-page Image/Table widgets;
+      link to add one). Cross-link **C23**, **C32**.
+- [ ] **Verify** after changes: a failed/oversized upload tells the user why; the storage meter warns near the
+      limit; both cards have titles; deleting an in-use artifact warns; CSV previews + items can be renamed.
+
+### C67. Rail navigation v2 — collapsible + nested groups ★ (UX, user-requested 2026-06-20)
+**Context.** The rail is registry-driven (`screens.All()` → `Route.Group`; rendered in `internal/app/shell.go`),
+so all 20 screens already appear and a new one can't be dropped (B7). The problem is **length**: Primary (6) +
+**Tools (11)** + System (3) + My pages + Settings card is a long flat scroll. Existing behaviors to preserve:
+icon-collapse (`UseRailCollapsed`), Primary **drag-reorder** (B8), **hide-modules** filtering, custom pages,
+the household/Settings card (B4). **Design verdict:** keep browse-by-structure (this entry) AND add find-by-
+search (**C68**) — they're complementary, not either/or. Build bottom-up.
+- [ ] **IA / sub-groups (data first).** Keep **Primary flat & always-expanded** (home base). Nest **Tools**
+      into 4 sub-sections: **Plan & analyze** (Planning, Allocate, Reports, Insights) · **Bills & recurring**
+      (Bills, Subscriptions, Split) · **Data & import** (Documents, Artifacts) · **Build** (Customize,
+      Workflows). **System** (Members, Categories, Rules) flat under a collapsible header. Keep the registry
+      **presentation-free**: add a `SubGroup` field to `screens.Route` (or a `path→subgroup` map in the
+      `railMeta` design layer in `shell.go`) so membership stays registry-driven (B7 still holds). Table-test
+      that every Tools route maps to exactly one sub-group and nothing is orphaned.
+- [ ] **Collapse state (pure + persisted, tested).** New `uistate` group-collapsed set + `Persist…` (mirror
+      `RailCollapsed`/nav-order). Each Tools/System header (and each Tools sub-section) is an accordion with a
+      chevron. **Active route auto-expands its ancestors** so nav/refresh never hides the current screen.
+      **Default = expanded** (no first-run surprise); the rail shortens as users collapse what they don't use.
+- [ ] **Rail UI (last).** Turn `railHeader` into a header **button** (`aria-expanded`/`aria-controls`,
+      chevron, `prefers-reduced-motion`-aware animation); render nested sub-sections indented. Each collapsible
+      header is its **own component** (no `On*` hooks in a loop — framework rule, like `navItem`). Must not
+      break Primary drag-reorder (B8) or hide-modules (both run on the filtered lists before grouping).
+- [ ] **Icon-collapsed interaction.** When the rail is icon-only, group/sub-section headers become icons with
+      **hover/focus flyout submenus** listing their items — otherwise nesting is unreachable collapsed.
+      Cross-link **C15/C20** (collapsed-rail behavior).
+- [ ] **A11y:** headers are real buttons with `aria-expanded`; keyboard expand/collapse; keep `Title`/
+      `aria-label` on icon-only items; flyouts focus-manageable. Cross-link **B15**, **C36**.
+- [ ] **Verify:** all 20 screens still reachable; Tools reads as 4 short groups; collapse state persists and the
+      active screen's group auto-opens; flyouts work when icon-collapsed; drag-reorder + hide-modules intact.
+_Cross-links: **B7** (registry-driven membership), **B8** (drag-reorder), **C15/C20** (collapse), **C32** (My
+pages), **C46** (chevron/group icons), **C68** (search is the speed path to this browse path)._
+
+### C68. Rail command palette (⌘K) + optional inline filter ★ (UX, user-requested 2026-06-20)
+**Context.** At ~20+ destinations, type-to-find beats scan-and-click for repeat/power users and is keyboard-/
+a11y-first. This is the **speed** path that complements the collapsible/nested rail (**C67**, the browse path) —
+search **flattens past nesting** so users never expand a group to reach something. Build bottom-up.
+- [ ] **Source list (pure, tested).** A `navsearch`-style helper that builds the searchable index from
+      `screens.All()` + custom pages (phase 2: quick **actions** — "Add transaction", "New account"…),
+      respecting **hidden modules** (still findable, with a "hidden" hint). Fuzzy/substring, case-insensitive
+      match on label; returns results grouped with their section + icon. Table-test ranking + hidden handling.
+- [ ] **⌘K / Ctrl-K command palette (primary).** Global keydown (reuse `internal/app/shortcuts.go`) opens a
+      modal overlay with **focus trap** (reuse FlipPanel chrome): search input + grouped results (icon +
+      section breadcrumb). Keyboard: type-filter, ↑/↓ move (wrap), **Enter** navigates, **Esc** closes; first
+      result preselected; show **recents** when the query is empty; "No screens match '…'" empty state. Also
+      add a small search affordance in the rail head that opens it — this **doubles as the find path when the
+      rail is icon-collapsed** (labels hidden). Cross-link **C20/C15**.
+- [ ] **Inline rail filter (optional, lower priority).** A small search box atop the `<nav>` that live-filters
+      visible items and **flattens nesting while typing**; Esc clears. Keep it a **transient view filter** —
+      do NOT touch persisted nav-order/hide-modules. Ship only if the palette isn't enough.
+- [ ] **Framework rule:** result rows are interactive in a variable-length list → each row is its **own
+      component** (no `On*` hooks in a loop), like `navItem`.
+- [ ] **Verify:** ⌘K opens/focuses/escapes correctly; typing filters across all groups + custom pages; Enter
+      navigates; works when the rail is icon-collapsed; hidden screens are findable with a hint; nothing
+      persists from the transient filter.
+_Cross-links: **C67** (browse path), **B7** (registry source), **C32** (custom pages), **C36/B15** (keyboard/
+a11y), **C43/C42** (overlay/FlipPanel + z-index/stacking)._
+
+### C69. Theming engine doesn't reach the shell (rail / header / dashboard); Paper (light) is broken ★ (bug, user-reported 2026-06-20)
+**Root cause (source-verified).** There are **two disconnected appearance systems**: (1) the **theme engine**
+(`internal/theme` + `uistate/theme.go:ApplyTheme`) writes CSS vars (`--bg`, `--bg-card`, `--text`, `--accent`,
+`--up`, `--down`, `--radius`, `--font-*`, `--ui-scale`) + `data-density` — these only repaint the **var-based
+content** components (`.card`, `.stat`, `.row`, `.btn`, `.field`, `.budget`, `.bar-fill`); (2) a separate
+`ApplyPrefs` (`uistate/prefs.go:52`) sets the **`data-theme` attribute** from the dark/light/system *preference*,
+which is the **only** thing that triggers the hand-written `[data-theme="light"]` override block
+(`web/index.html:221‑250`) that re-skins the shell. The **rail (`internal/app/shell.go`), top bar, and
+dashboard bento are painted by hardcoded literals** — Tailwind config colors (`web/index.html:41‑45`, e.g.
+`base:'#0e0e0f'`, `fg:'#f4f4f5'`), the candidate-C `#design-system` block (`index.html:449‑643`, e.g.
+`.w{background:#121214}`), and inline literals (`bg-[#1c1c1e]` active nav `shell.go:296`, chart strokes
+`#7c83ff` in `dashboard.go`) — **none reference the engine's vars**.
+**Why Forest/Midnight mostly work but Paper doesn't:** dark presets set dark vars and the shell is *permanently*
+dark anyway, so they read fine. **Paper is the only light preset** — `ApplyTheme` sets light vars (content goes
+light) but **never sets `data-theme`**, so the light-shell override never fires → light cards inside a dark
+rail/header/bento. Paper is the canary exposing the shell-hardcoding bug. **Secondary:** `ApplyPrefs` and
+`ApplyTheme` both write `--accent` (`prefs.go:53` vs theme) → last-writer-wins can clobber a preset's accent.
+**Design / fix — one token source of truth, applied bottom-up (SDLC):**
+- [ ] **(Immediate Paper unblock) Derive + set `data-theme` from the theme.** Add `Theme.IsLight()` (luminance
+      of `BgBase` via the already-imported `contrast` pkg) + table tests; have `ApplyTheme` set
+      `data-theme="light"/"dark"` from it. This re-triggers the existing override block so Paper's shell goes
+      light today (shell uses the block's hardcoded light values — close, not exact; the real fix is below).
+- [ ] **Extend the token model (pure, tested).** Add to `theme.Theme` + `CSSVars()` the tokens the CSS needs
+      but the engine never emits: **elevated surface** (`--bg-elev`), **faint text** (`--text-faint`),
+      **accent-dim** (`--accent-dim`), **warn** (`--warn`), and a **`--danger` alias = `Down`** (mirroring the
+      existing `--bg` alias). Extend `theme.Validate()` contrast pairs to cover the new fg/bg combos (B15/AA).
+- [ ] **Engine owns accent (kill the conflict).** Stop `ApplyPrefs` writing `--accent`; migrate the prefs
+      accent into the theme so there's a single writer. (`prefs.go:53`.)
+- [ ] **Rewire the painters to vars — Tailwind.** Change `tailwind.config` colors from literals to
+      `var(--…)`: `base→var(--bg-base)`, `tile→var(--bg-card)`, `line→var(--border)`, `hover→var(--bg-elev)`,
+      `fg→var(--text)`, `dim→var(--text-dim)`, `faint→var(--text-faint)`, `up→var(--up)`, `down→var(--down)`,
+      `warn→var(--warn)`, add `accent→var(--accent)`. Every `bg-base`/`text-fg`/`border-line`/… util then themes
+      automatically across rail/header/dashboard.
+- [ ] **Rewire the painters to vars — candidate-C stylesheet.** Convert the `#design-system` block's literal
+      hex to `var(--…)`: bento `.w`, `.seg`/`.seg-btn`, `.nv:hover`, `.flip-*`, widget header `.wh`, scrollbars,
+      `.member-chip`/`.data-btn`/etc. And the inline component literals: active-nav `bg-[#1c1c1e]`
+      (`shell.go`), brand square, and `dashboard.go` chart strokes (read `--accent`/`--up`/`--down`).
+- [ ] **Retire the dual system.** Once the shell is var-driven, delete the `[data-theme="light"]` override
+      block and the dual `--accent` write — **light becomes just a theme whose tokens are light**, and any
+      custom light theme works. Keep setting `data-theme` only for `color-scheme`/native control hinting (no
+      longer load-bearing for app colors).
+- [ ] **Verify (browser oracle):** Paper themes rail + header + bento (not just cards); Forest's surfaces +
+      accent reach the shell; a hand-rolled custom **light** theme works; dark presets look unchanged;
+      light/dark text passes AA; the new collapsible rail (**C67**) + palette (**C68**) inherit it for free.
+_Cross-links: **B20** (appearance engine origin), the rail (**C67/C68**), **C25** (density tokens), **C46**
+(icons inherit `currentColor`), **B15** (contrast/AA), **C44** (no CDN — Tailwind config is local)._
+
+### C70. Mermaid diagram support — `ui.Mermaid` + `internal/mermaid` generators ★ (feature, user-requested 2026-06-20)
+**Why.** Relationship/flow visuals the D3 line/area charts can't do (graphs, trees, sankeys). Slots into the
+existing JS-lib-behind-a-Go-interface pattern (B13 icons, B14 D3: `web/chart.js` + `uiw.Chart` over the pure
+`chartspec`). Build bottom-up.
+- [ ] **`internal/mermaid` (pure Go, tested).** Source-generator builders that turn **tested domain models**
+      into Mermaid text — `Workflow→flowchart`, `CategoryTree→graph`, `Split settle-up→digraph`,
+      `spending→sankey` — plus **label escaping/sanitizing**. No `syscall/js`; table-driven tests. Keeps the
+      determinism/explainability rule (generated diagrams come from the model, not free text).
+- [ ] **`ui.Mermaid(source)` component + `web/mermaid.js` shim** (mirror `ui.Chart`). Renders a source string
+      to `<svg>`. **Bundle Mermaid LOCALLY (no CDN) + lazy-load** only when a diagram is on screen +
+      service-worker cache (Mermaid is large; **C44** — don't add another CDN `<script>`).
+- [ ] **Security: render strict.** Init `securityLevel:'strict'`, no click-to-run-JS, no raw-HTML labels —
+      diagrams render user/AI/imported text (XSS-critical for the widget + AI source). Cross-link **C45**.
+- [ ] **Theme-aware.** Initialize Mermaid `themeVariables` from the theme CSS vars so diagrams follow
+      Paper/Forest/Midnight — fold into the token unification (**C69**).
+- [ ] **Wire the lead cases:** (1) **Workflows flowchart** — `trigger → condition◇ → actions`, highlight the
+      **dry-run path** (**C65**); (2) **custom-page "Diagram" widget** — free-form Mermaid stored as a new
+      artifact kind `KindMermaid` referenced by id, beside the Image/Table widgets (**C66/C32**).
+- [ ] **Follow-on cases (after the two above):** **Sankey money-flow** (Income→categories→savings/debt) for
+      Reports/Insights/Allocate (**C55/C54**) — highest "wow"; **Split settle-up** who-owes-whom graph
+      (**C58**); **Categories** tree view (**C63**); **Planning** debt-payoff gantt (**C53**); **Rules**
+      precedence/shadow chain (**C64**).
+- [ ] **Verify:** generated diagrams match the model (unit) + render in-browser; offline (SW-cached, no CDN);
+      strict mode blocks script/HTML injection; diagrams recolor with the active theme.
+_Cross-links: **B13/B14** (lib-behind-Go-interface), **C44** (no CDN/offline), **C45** (XSS), **C69** (theme
+tokens), **C65** (workflows), **C66/C32** (custom-page widgets/artifacts)._
+
+### C71. Markdown rendering (marked + syntax highlighting) — `ui.Markdown` ★ (feature, later effort, user-requested 2026-06-20)
+**Why (later).** Several surfaces emit/store Markdown that's currently shown as plain text — notably **AI
+answers** (Insights renders `P(result.Get())` raw, **C59**), task/transaction **notes**, and a future
+custom-page **text/note widget**. Render Markdown (lists, bold, headings, tables, code) via **marked**, with
+**syntax highlighting** for code blocks. Same JS-lib-behind-a-Go-interface pattern as **C70**; lower priority.
+- [ ] **`ui.Markdown(source)` component + `web/markdown.js` shim** wrapping **marked** + a highlighter
+      (highlight.js or Prism) for fenced code. **Bundle LOCALLY (no CDN), lazy-load, SW-cache** (**C44**).
+- [ ] **Sanitize output (XSS-critical).** marked alone is **not** safe for untrusted/AI/imported input — pipe
+      through a sanitizer (DOMPurify) or marked's sanitize hook; disallow raw HTML, `javascript:` URLs, and
+      inline event handlers. This is the gating requirement. Cross-link **C45**.
+- [ ] **Theme-aware code blocks.** Pick/derive a highlight theme from the theme tokens so code blocks follow
+      Paper/Forest/Midnight (**C69**); base prose styles use the existing type/spacing tokens (**C25**).
+- [ ] **Wire the lead case:** render **Insights AI answers** as Markdown (**C59**) — the model already emits
+      lists/bold/headings that currently show as a flat paragraph. Then: notes fields, and a custom-page
+      **Markdown widget** (beside Diagram/Image/Table, **C66/C32**).
+- [ ] **A11y/perf:** rendered output keeps heading order sane within the host card (don't inject `<h1>`s);
+      lazy-render long content; safe-link `rel="noopener"` + external-link affordance.
+- [ ] **Verify:** Markdown renders + code highlights; malicious input is neutralized (script/`onerror`/
+      `javascript:` stripped); offline; output recolors with the theme.
+_Cross-links: **C70** (same lib pattern/bundling), **C44** (no CDN), **C45** (sanitize/XSS), **C59** (AI
+answers), **C69** (theme), **C66/C32** (custom-page widgets)._
+
+### C72. To-do v2 — add-in-modal + nested sub-tasks (CRUD, x-deep) ★ (feature, user-requested 2026-06-20)
+**Context.** Today the To-do screen (`internal/screens/todo.go`, reviewed in **C52**) puts an always-visible
+add-form card above the list, and tasks are flat (`domain.Task` has no parent). Two asks: reclaim the page for
+the list by moving "Add task" into the flip modal, and let tasks nest as sub-tasks any number of levels deep.
+Both reuse existing patterns (FlipPanel/+Add from **B11**; the category tree from `internal/categorytree`).
+Build bottom-up.
+
+**Part A — Move "Add task" into the flippable modal.**
+- [ ] Replace the top add-form card with an **"Add task" button that opens the FlipPanel** (reuse the +Add /
+      QuickAdd pattern, **B11**), so the list uses the full page for the more important items.
+- [ ] Add **"New task"** to the global **+ Add** quick-add menu for consistency with New transaction/account/…
+- [ ] Fix **C52** labelling in the modal form: the priority `Select` and due-date `Input` get visible labels /
+      `aria-label` (currently unlabelled). Cross-link **B15**.
+- [ ] The empty-state CTA (`FocusID:"task-add"`) should **open the modal** (and focus its first field) rather
+      than focus an inline field that no longer exists.
+
+**Part B — Nested sub-tasks (tree, CRUD, x levels deep).**
+- [ ] **Data + pure logic first.** Add `ParentID` to `domain.Task`; new pure `internal/tasktree` package
+      (mirror `categorytree`): `Flatten` w/ depth, `Descendants`, reparent/`Move`, **cycle-safe**, and a
+      **completion rollup** (n/m descendants done + percent). Table-driven tests.
+- [ ] **Persistence + ops.** Store `ParentID`; export/import **round-trips** losslessly (tests). Appstate ops:
+      add sub-task (under a parent), edit, and **delete — DECISION: cascade-delete the subtree vs promote
+      children up one level.** Recommend **promote (reparent to grandparent) with a confirm** to avoid silent
+      loss (mirror the reassign-before-delete integrity pattern, **C62/C63**); confirm the choice before build.
+- [ ] **Completion semantics — DECISION:** completing a parent = **rollup display only** vs **auto-complete the
+      subtree**. Recommend rollup-only by default (parent shows "2/5 done" + a progress affordance), with
+      completing all children optionally auto-completing the parent. Confirm before build.
+- [ ] **Tree UI.** Indented nested rows with **real indentation** (not em-dash prefixes — the issue flagged on
+      Categories, **C63**), an **expand/collapse** toggle per subtree (persisted collapsed set, reuses the
+      accordion idea from **C67**), and a per-row **"Add sub-task"** action alongside edit/complete/delete.
+      Keep priority-as-shape+color badges (already B15-good). Reasonable **depth guard** (cap visual indent /
+      hint at very deep nesting).
+- [ ] **Ripples.** Dashboard To-do widget + freshness/insight-created tasks stay **top-level**; `tasksort`
+      ordering applies **per sibling level**; hide-done + overdue cue (**C52**) work within the tree.
+- [ ] **Verify:** add/edit/delete sub-tasks at multiple depths; delete behavior matches the chosen decision;
+      rollup progress is correct; expand/collapse persists; export→import preserves the tree; mobile rows don't
+      break (**C10/C19**).
+_Cross-links: **C52** (To-do review), **B11** (+Add flip modal), **categorytree** (tree template), **C62/C63**
+(delete integrity, real indentation), **C67** (collapsible subtrees), **B15** (labels/shape cues)._
+
+### C73. Component-ization epic — port ad-hoc markup to reusable components + decompose super-components ★ (refactor/architecture, user-requested 2026-06-20)
+**Context.** A real component library already exists (`internal/ui`: `DataTable`, `FilterToolbar`, `FlipPanel`,
+`Widget`, `Chart`/`AreaChart`, `ProgressBar`, `Icon`, `Segmented`, `StepperPill`, `Toggle`, `ToggleRow`,
+`Swatch`, `SwatchPicker`; screen helpers `EmptyStateCTA`, `CustomFieldInput`, `stat()`). But it's **under-used**:
+`DataTable`/`FilterToolbar` are used by **transactions.go only**; every other screen hand-rolls markup. This is
+an adoption + decomposition refactor (behavior-preserving), done **bottom-up, one screen per commit**.
+
+**Markup scan — quantified duplication (whole project, `rg` counts):**
+- **Card scaffold** `Section(.card)` + `H2(.card-title)`: **170× / 21 files** → biggest structural idiom.
+- **Select-option loops** `Option(Value(...))`: **103× / 17 files** → build options from a slice.
+- **Ad-hoc inline `Style(map[string]string{})`**: **39× / 15 files** → styling scattered inline, not in classes/props.
+- **`Div(.rows)` lists**: **40× / 19 files** → the core list-port target.
+- **Error text/attrs** `errText`/`errAttrs` + **overflow menus** `add-menu`/`add-wrap`: **27× / 12 files**.
+- **`btn-del` delete buttons**: **18× / 15 files**. **Icon+text buttons** (`inline-flex items-center gap-1.5`
+  +Icon+Span): **16× / 11 files**. **Export buttons** (`downloadBytes`): **14× / 10 files**. **`stat-grid`**: **9× / 7 files**.
+
+**Component catalog.**
+- _Adopt widely (exist):_ `DataTable` (+tree variant), `FilterToolbar`, `EmptyStateCTA`, `ToggleRow`,
+  `ProgressBar`, `FlipPanel`.
+- _New primitives (Phase 0, build + unit-test in isolation, no screen change):_
+  - [ ] **`Card`/`EntityListSection`** — card + title + empty-state + body (absorbs the 170× scaffold + 40× lists).
+  - [ ] **`FormField`** — label + control + inline error (fixes placeholder-only labelling across C49–C65/B15).
+  - [ ] **`Select`/`OptionsFrom(items, selected, keyFn, labelFn)`** — kills the 103× option loops; pairs with FormField.
+  - [ ] **`EntityRow`** — swatch/icon · title · meta · primary actions · `⋯` overflow (unifies the row display halves).
+  - [ ] **`InlineEditForm`** — the `row-edit` + `form-grid` wrapper repeated on every CRUD screen.
+  - [ ] **`IconButton`/`IconTextButton`** (16×) + **`DeleteButton`** (18×) + **`ExportButton`** (14×, wraps `downloadBytes`).
+  - [ ] **`OverflowMenu`** (the `add-wrap`/`add-menu` pattern) + **`ReassignDialog`** (Members C62 + Categories C63).
+  - [ ] **`StatGrid`/`Stat`** (promote the `stat()` helper) (9×).
+  - [ ] **`TreeRows`** — indented rows + expand/collapse (Categories C63, Tasks C72).
+  - [ ] **Replace ad-hoc inline `Style{}` (39×)** with utility classes / component props (no scattered inline styles).
+
+**Decompose super-components (single responsibility; ≲100 lines; hooks stable; no `On*` in loops).**
+- [ ] **`Planning()` (~450 lines, 5 tools, C53)** → `ForecastCard`, `RecurringManager`, `PlansManager`,
+      `DebtStrategyCard`, `PayoffCalculator`.
+- [ ] **`Documents()`** → `ImageImportCard`, `DraftReviewList`, `SpendSummaryCard`, `CsvImportCard`, `ImportHistoryList`.
+- [ ] **`Allocate()`** → `ProfileConfig`, `WeightEditor`, `SuggestionList`, `AiExplainCard`.
+- [ ] **`Customize()`** → split Custom-Fields manager from Formula calculator (C61).
+- [ ] **`settings.go` global panel** → per-section sub-components.
+- [ ] **Big row components** (`AccountRow` ~180 lines, `BudgetRow`, `GoalRow`, `TransactionRow`) → split each into
+      **`*DisplayRow`** + **`*EditForm`** (+ `SetBalanceForm`/`ContributeForm`); fold the display halves onto `EntityRow`.
+
+**Phased plan (bottom-up, behavior-preserving, one commit per screen).**
+- [ ] **Phase 0 — Foundations:** build the new primitives above with unit tests. No screen edits.
+- [ ] **Phase 1 — Forms:** migrate every add/edit form to `FormField` + `Select`/`OptionsFrom` (resolves the
+      labelling cluster C49–C65, B15). One screen per commit.
+- [ ] **Phase 2 — Lists:** port `Div(.rows)` → `DataTable`/`EntityListSection` (+`FilterToolbar`), longest lists
+      first (Reports, Subscriptions, Bills, Categories, Accounts). Resolves C55–C57, C63, C39.
+- [ ] **Phase 3 — Rows:** decompose `*Row` → Display+Edit; fold Display onto `EntityRow`.
+- [ ] **Phase 4 — Super-screens:** decompose Planning, Documents, Allocate, Customize, settings.
+- [ ] **Phase 5 — Cleanup:** delete dead bespoke markup; component inventory doc; a check/lint banning raw
+      `Div(.rows)` + `Section(.card)` scaffolds in screens.
+- **Per-screen checklist:** `[ ] forms→FormField · [ ] list→DataTable · [ ] row→EntityRow split · [ ] empty→EmptyStateCTA · [ ] inline-Style removed · [ ] tests green · [ ] one commit`.
+
+**Guardrails / risk.**
+- [ ] Behavior parity — each migration is a refactor; verify in-browser per screen (lean on B16 stories).
+- [ ] **Don't build super-components** — resist a mega `EntityRow` with 20 props; keep a thin screen-specific
+      wrapper over shared parts when a row genuinely differs. Small > clever.
+- [ ] **Concurrency:** this touches ~every screen while a second session edits the tree — sequence it and
+      **pause the other loop before Phase 2+** (parallel-git-tree rule).
+_Cross-links: **C47** (DataTable/FilterToolbar precedent), **C49–C65** (labelling/list findings this resolves),
+**C39** (pagination), **C61/C53** (Customize/Planning splits), **C62/C63** (reassign/tree), **C67/C72**
+(collapsible/tree rows), **C69** (theme tokens), **B15** (a11y)._
+
+### C74. Statement import engine — multi-format extraction + mapping + AI categorization + reminders ★ (feature, user-requested 2026-06-20)
+**Why.** Import friction is the #1 adoption blocker. Today the CSV import (`appstate.ImportTransactionsCSV` →
+`store.TransactionsFromCSV`) is **fixed-schema** — it only accepts CashFlux's own column layout, which no real
+bank/card export matches. ~70% of the plumbing already exists (Documents screen **C60**: file pick + draft
+review + `dedupe` + `domain.Document` history; `extract.Row`; AI vision `SendStructuredVisionChat`; `rules`/
+`rulesuggest` categorization **C64**; `Recurring` cadence + task/freshness nudges). The new core is a
+**normalize → map** pipeline that accepts many document formats. **Local-first: no bank-aggregation APIs**
+(Plaid/Teller need a backend + stored creds — out of scope per SPEC). Build bottom-up.
+
+**A. Multi-format extraction — `internal/docextract` (per-format adapters → a normalized `Grid`/text, pure & tested).**
+The mapping + AI layers operate on the normalized output, so adding a format = one adapter.
+- [ ] **Tier 1 (local, deterministic, lead with these):** **CSV/TSV** (stdlib), **XLSX** (ZIP+XML — minimal
+      SpreadsheetML reader or excelize, **watch wasm bundle size** via `gwc size`), **OFX/QFX** (structured →
+      **no mapping needed**).
+- [ ] **Tier 2 (local):** **DOCX** tables (`<w:tbl>` from ZIP+XML), **text-based PDF** (pure-Go extractor).
+- [ ] **Tier 3 (AI fallback, opt-in):** **scanned/columnar PDF** (render → vision, reuse existing), **legacy
+      .xls/.doc** (binary — pure-Go is weak; AI or guide "save as .xlsx/.csv"), images.
+- [ ] **Security:** XLSX/DOCX are zip archives → **zip-bomb guard** (cap decompressed size); keep
+      `encoding/xml` external-entity resolution off (XXE). **Bundle size:** Go parsers compile into the wasm
+      binary (no lazy-load) → prefer minimal readers; if a heavy parser is needed, do it in a **lazy JS shim**
+      (D3/Mermaid pattern) instead of wasm. Cross-link **C45**, **C44**.
+
+**B. Manual mapping engine — `internal/importmap` (pure, tested) — the deterministic core.**
+- [ ] An **`ImportProfile`** = field→column map + transforms: date layout, **amount sign convention**
+      (single signed col vs separate debit/credit cols), decimal/thousands locale, **description regex
+      cleanup**, default account/category, header/skip-row + summary-row detection. `Apply(profile, grid) →
+      []extract.Row`. Table-test with **real bank-export fixtures**.
+- [ ] **Save profiles per bank** (reusable, like alloc profiles/rules); deterministic + **previewable** (live
+      preview in the wizard) → satisfies the determinism/explainability rule and keeps data **fully local**.
+
+**C. AI extraction (||) + AI categorization.**
+- [ ] Wizard offers **"Map columns" (deterministic) OR "Extract with AI"** per the `||` ask; AI path extends
+      the existing vision/LLM engine to PDF/scanned.
+- [ ] **Per-line-item categorization:** `rules`/`rulesuggest` first (free, local), then an **AI fallback**
+      (BYO-key) for unmatched rows, surfaced as accept/dismiss in the draft review. Reuses `ai` + `rules`.
+
+**D. Scheduled upload reminders.**
+- [ ] Per-account/source **import cadence** (e.g. monthly) → a dated **nudge/task** "Import your <Bank>
+      statement," reusing the `Recurring` cadence + task/freshness pattern. **Off by default, dismissible**
+      (friendly-not-naggy rule).
+
+**Pipeline & UX.** File → **detect format** (`docextract`) → normalized grid/text → **column-map step with
+live preview** (or AI extract) → existing **draft review + dedupe + import** → history. Idempotent re-import is
+critical (overlapping statement periods) → lean on `dedupe` (hash date+amount+desc) and show "N skipped".
+- [ ] **Verify:** real CSV/XLSX/OFX/PDF samples import correctly; profiles persist + preview; sign/date/locale
+      edge cases handled; re-import dedupes; AI path is opt-in with a privacy notice; wasm size stays in budget.
+_Cross-links: **C60** (Documents — the home), **C64** (rules categorization), **C56** (richer history → better
+subscription detection), **C45/B17** (privacy — local vs AI), **C44** (no CDN/bundle), Recurring/Bills (cadence)._
 
 ### C1. Dashboard "Income" shows $0.00 despite a $4,200 salary in-period ★ (correctness)
 **Symptom:** with sample data, the Dashboard Income KPI reads **$0.00 · 0 deposits** for Jun 2026,
@@ -2920,6 +3802,1174 @@ Savings KPIs) · `period.Window`.
 - [ ] Assert chart axes/labels use major units + currency formatting (**C16**).
 - [ ] fix: route every money render through `money.FormatAccounting`; add a guard test/shared helper so
       new surfaces can't bypass it.
+
+---
+
+## L. Loop user-story QA — story-driven gaps ★
+
+Findings from the recurring user-story QA loop: invent a real household's flow, drive the app
+end-to-end, screenshot it, and log mechanical + UI/UX gaps the dev agent should build/fix
+bottom-up (model → tested logic → store → state → UI). Each story below names the persona and the
+exact ritual, then the gaps that block it. Screenshots live in `e2e/loop*-*.png`; the driving
+script is `e2e/loopstory_NN_*.mjs` (run via `node e2e/run-stories.mjs` or standalone against :8099).
+
+### L1. Story — "The Sunday Budget Reset" (Maya & Devon, dual-income) — 2026-06-20 ★
+
+**The ritual:** every Sunday evening Maya spends ~15 min: glance at a calm dashboard → reconcile the
+week → spot any **overspent budget** → **move money between budgets to cover the overspend** → check
+the **Emergency Fund** pace → eyeball **upcoming bills** — without hunting.
+**Drive script:** `e2e/loopstory_01_sunday_reset.mjs` (seeds sample data, shoots dashboard/budgets/goals).
+**What already works well (verified by screenshot, keep as regression anchors):**
+- Dashboard is clean and professional: bento grid, net worth / income / spending / liabilities stats,
+  recent transactions, budgets mini-bars, net-worth trend, goals, cash flow, upcoming bills,
+  savings-rate, spending breakdown, freshness, spending highlight. Strong typography hierarchy. ✓
+- Budgets screen flags pace: "0 over budget · 2 near the limit", per-row on-track/near-limit colored
+  bars + "projected to go over by $X". ✓
+- Goals screen shows real pace: "75% · $7,500.00 to go · by 2026-12-31 · save $1,071.43/mo · linked
+  to High-Yield Savings". ✓  (Earlier probe false-negatived this — it uses "/mo", not "per month".)
+- Bills nav entry exists under Tools (probe false-negatived it — nav items aren't `role=link`). ✓
+
+**Mechanical gap (the core of the ritual — NOT supported):**
+- [ ] **"Cover overspending" — move money between budgets.** When Groceries is at 92% (projected
+      +$304 over) Maya needs to pull from an under-budget envelope (e.g. Shopping, 72%) to cover it.
+      Budgets today support add / inline-edit / delete / rollover toggle only — there is **no
+      inter-budget transfer**. Build bottom-up:
+  - [ ] **Model/logic** `internal/budgeting` (pure, no `syscall/js`): a `Transfer(from, to BudgetID, amt money.Money)`
+        that produces a balanced, explainable adjustment (records both legs, never lets a source go
+        negative unless allowed), table-tested incl. overspend-cover and insufficient-source cases.
+  - [ ] **Persistence** `internal/store`: persist the adjustment/transfer as first-class data so it
+        survives reload and round-trips through export/import (lossless test).
+  - [ ] **State** `internal/appstate`: a single covering action + atom refresh.
+  - [ ] **UI** `internal/screens/budgets.go`: a "Cover…" action on an over-budget row that opens a
+        small form (pick source budget + amount, with "cover the full $X over" one-tap), plain-English,
+        keyboard-reachable, light/dark. Show the resulting balance change inline (determinism rule).
+  - [ ] **E2E** story test: overspend Groceries, cover from Shopping, assert both budgets re-balance,
+        the projected-over line clears, and it survives a reload.
+
+**UI/UX defect (real, screenshot-confirmed):**
+- [ ] **Budget row sub-lines render glued together.** `internal/screens/budgets.go` renders
+      `budgets.rowSub` ("Monthly · On track · 79% · $61.00 left") and the pace `Span`
+      ("At this pace, projected to go over by $72.25") as **adjacent inline `Span`s with no
+      separator**, so they read as "...$61.00 left**At this pace**, projected to go over...". Fix:
+      make `.budget-sub` lines block-level (or insert a separator dot / spacing) so the status line,
+      pace line, rollover line, and envelope line each sit on their own line. Re-screenshot to confirm.
+
+**Probe hardening (so future loops don't false-negative):**
+- [ ] Goals-pace and Bills-nav assertions in the drive scripts should match the app's actual copy
+      ("/mo", nav `<a title>` not `role=link`). Tighten `loopstory_01` accordingly.
+
+### L2. Story — "The Roommate Split" (Priya + Sam + Lee, shared flat) — 2026-06-20 ★
+
+**The ritual:** Priya fronts shared costs — rent, the electric bill, a Costco run — then splits each
+across the three roommates. At month-end she wants a dead-simple **"who owes whom → settle up"** view
+so nobody chases receipts.
+**Drive script:** `e2e/loopstory_02_roommate_split.mjs` (seeds sample, drives /members + /split).
+**What already works well (keep as regression anchors):**
+- Split screen forward flow is clean: "Enter an amount, pick who's sharing it, and (optionally) who
+  paid"; equal split + a "Split by weight (shares or income)" toggle; per-member share toggles. ✓
+- Members screen renders + offers add-member. ✓
+
+**Mechanical gaps (block the ritual):**
+- [ ] **"Settle up" — the reverse ledger of who owes whom.** Split today only computes a *single*
+      expense's shares; there is **no running net-balance across many split expenses** and **no way to
+      record a settlement**. Build bottom-up:
+  - [ ] **Model/logic** `internal/settle` (pure, no `syscall/js`): given a set of shared expenses
+        (payer + per-member shares) and any recorded settlements, compute each member's **net balance**
+        and a **minimal set of "X pays Y $Z" transfers** to zero everyone out (classic debt
+        simplification). Table-tested: 3-way uneven shares, a partial settlement, rounding to minor
+        units (no lost/created cents), already-settled = empty.
+  - [ ] **Persistence** `internal/store`: persist shared expenses + settlements as first-class records;
+        export/import round-trips losslessly (test).
+  - [ ] **State** `internal/appstate`: atoms for shared-expense list + settlements; one record-settlement
+        action.
+  - [ ] **UI** `internal/screens/split_screen.go`: after the forward split, **save the split** to the
+        shared ledger; add a **"Settle up"** panel listing each member's net (you owe / owes you) and
+        the minimal transfer list, with a **"Record settlement"** action per suggested transfer. Plain
+        English, light/dark, keyboard-reachable; show the math (determinism rule).
+  - [ ] **E2E**: log 3 shared expenses with different payers, assert net balances + minimal transfers,
+        record one settlement, assert the ledger re-balances and survives reload.
+- [ ] **Sample data is a single-member household** ("Michael Brooks", footer "1 member"), so every
+      multi-person tool (Split, member filters, per-member budgets/goals owners) is undemoable from the
+      sample. Add **2–3 sample members** with a few shared expenses so Split/Settle-up have real data
+      out of the box. (`internal/app` LoadSample / sample dataset.)
+
+**UI/UX defects (screenshot-confirmed):**
+- [ ] **Lingering load splash overlays content.** The full-viewport "CashFlux — Getting your money in
+      order…" splash is still visible (low-opacity, mid-viewport) over the screen content after
+      sample-load + route navigation — reproduced on **both** `/split` (L2) and `/goals` (L1). It
+      should fully dismiss once the app is interactive. Investigate the splash dismiss condition
+      (likely tied to a load/persist signal that the sample-reload path doesn't clear). Re-screenshot
+      to confirm it's gone.
+- [ ] **Split screen is sparse** once past the form (lots of dead space below "Who's sharing?"). The
+      Settle-up panel above will fill it; until then consider an empty-state hint ("Add a shared
+      expense to see who owes whom").
+
+### L3. Story — "The Receipt Snap" (Marcus, no-typing dad) — 2026-06-20 ★
+
+**The ritual:** after the grocery run Marcus photographs the paper receipt and wants CashFlux to read
+it, split it into categorized line items, dedupe against what he already logged, and import the rest
+in one tap — no typing.
+**Drive script:** `e2e/loopstory_03_receipt_snap.mjs` (seeds sample, drives /documents).
+**What already works well (verified by screenshot + source — keep as regression anchors):**
+- Documents screen is genuinely strong: **"Read a receipt or statement image"** → "Choose image" +
+  "Read with AI" (OpenAI vision), with a plain-English explainer + key-in-Settings note. ✓
+- Vision extraction (`internal/extract`) returns **per-row** `{Date, Description, Amount, Category}` —
+  so line-item categorization is supported at the data level. ✓
+- CSV import with a clear column guide + textarea; **Import history** section. ✓
+- Clean, readable layout in **light theme** (app default when no theme is persisted). ✓
+
+**Mechanical gaps (block / weaken the ritual):**
+- [ ] **A receipt is ONE bank charge with MANY lines — import it as a split, not N transactions.**
+      Today vision extraction yields N independent transaction rows; importing a grocery receipt that
+      way creates many standalone transactions that (a) **double-count** against the single bank/card
+      charge the user will also see, and (b) **break dedupe** against that one charge. Build the
+      "receipt mode" bottom-up:
+  - [ ] **Model/logic** `internal/extract` (+ `internal/domain`): distinguish a *statement* (many
+        charges → many transactions) from a *receipt* (one charge → one transaction **split across
+        categories**). Add a receipt result shape: a single total + categorized line splits that sum to
+        the total (table-tested: splits reconcile to the total to the cent; mixed/discount lines).
+  - [ ] **Persistence/state** `internal/store` + `internal/appstate`: import a receipt as one
+        transaction carrying category splits (reuse/extend the category-split model from the budgets
+        "cover"/Split work in L1/L2); export/import round-trips.
+  - [ ] **UI** `internal/screens/documents.go`: a **Receipt vs Statement** toggle on the AI import; in
+        receipt mode the review table shows one transaction with editable per-line category splits that
+        must sum to the total before Import enables. Plain English; show the running remainder.
+- [ ] **Extracted category is free text — map it to a real category + run Rules.** The model returns a
+      raw `Category` string; it should resolve to an existing category (by-name/fuzzy, create-on-confirm)
+      and pass through the auto-categorization **Rules** engine so Marcus's "Costco → Groceries" rule
+      applies on import. Wire + test the mapping (`internal/extract` → `internal/rules`/category lookup).
+- [ ] **Mobile camera capture.** `pickImageDataURL` (`documents.go:482`) sets `accept="image/*"` but
+      **no `capture` attribute**, so on a phone it opens the file browser instead of the camera. Add
+      `capture="environment"` (and a "Take photo" affordance / hint) so "snap a receipt" works on
+      mobile — the primary device for this story.
+
+**UI/UX notes:**
+- [ ] **Lingering load splash — 3rd reproduction.** The "Getting your money in order…" splash is faintly
+      over content again here (light theme, /documents), after L2 (/split) and L1 (/goals). Reinforces
+      the L2 splash-dismiss bug — fix once, re-verify across all three routes.
+- [ ] **Probe hardening:** the image picker input is created off-DOM (`createElement`, never appended),
+      so `input[type=file]` probes false-negative. Future Documents probes should assert the
+      **"Choose image" / "Read with AI"** button text instead. Tighten `loopstory_03`.
+
+### L4. Story — "The Expat" (Aisha, Lisbon, multi-currency) — 2026-06-20 ★
+
+**The ritual:** Aisha's salary lands in a **EUR** checking account; she also keeps a **USD** savings
+account and a **GBP** brokerage back home. She wants each account in its native currency and one
+consolidated **net worth in her base currency (EUR)** via an FX table she controls.
+**Drive script:** `e2e/loopstory_04_expat_fx.mjs` (seeds sample, drives Settings FX + /accounts).
+**What already works well (verified by screenshot + source — keep as regression anchors):**
+- Settings has a **base-currency picker** ("USD — US Dollar") + an **editable FX-rate table**
+  (AUD/CAD/CHF… → base). ✓
+- Accounts carry a **per-account currency** (`accounts.go:238`, an ISO-code field) and the row subtitle
+  shows "type · CURRENCY". ✓
+- Net worth is rolled up **through the FX table** (`accounts.go:263`, `currency.Rates{Base, FXRates}`). ✓
+
+**Gaps (UX-refinement + one correctness edge — this is a strong area, refine it):**
+- [ ] **Account currency is a free-text field — make it a validated picker.** Typing "EUR" works but is
+      typo-prone (unknown/lowercase codes silently break conversion). Replace the text input with a
+      **searchable currency dropdown** sourced from the known ISO list / the FX-table currencies, with
+      validation. Bottom-up:
+  - [ ] **Logic** `internal/currency`: expose a known-currency list (code + name + decimals) and a
+        `Valid(code)`; table-test.
+  - [ ] **State/UI** `internal/screens/accounts.go`: swap the currency `Input` (line 238) for a
+        labelled select/searchable picker; reject/flag unknown codes before save.
+- [ ] **FX rates are fully manual with no staleness signal — net worth silently drifts.** Aisha must
+      hand-enter and maintain EUR/USD/GBP rates. Add a **last-updated timestamp per rate** + a
+      **freshness nudge** when rates are stale (reuse the existing `internal/freshness` concept), and
+      optionally an online **"Refresh rates"** action. Bottom-up:
+  - [ ] **Model** `internal/domain`/settings: store `UpdatedAt` per FX rate.
+  - [ ] **Logic** `internal/freshness` (or a small `fxfreshness`): "rate is stale after N days" — tested.
+  - [ ] **State/UI**: show "rates updated X days ago" in the FX table + a dashboard nudge → task.
+- [ ] **Correctness: net worth with a currency that has NO FX rate must NOT silently miscompute.**
+      Determinism/explainability rule. Add a logic test in `internal/currency` / the net-worth
+      aggregation for the missing-rate case (account in GBP, no GBP rate): it must **warn / show a
+      breakdown / exclude-with-notice**, never treat it as base or zero. Surface the warning on the
+      dashboard net-worth widget (tooltip/breakdown) and the accounts total.
+
+**Probe hardening:**
+- [ ] The add-account currency control is a **text `Input`, not a `<select>`**, so option-value probes
+      false-negative. Once it becomes a picker, update `loopstory_04` to assert the picker + a non-base
+      option (EUR/GBP). Also the settings panel must be **closed (Escape) before re-opening** — the
+      `.flip-backdrop.show` intercepts clicks (fixed in this script).
+
+### L5. Story — "The Debt Crusher" (Jordan & Mei, payoff plan) — 2026-06-20 ★
+
+**The ritual:** Jordan & Mei carry an auto loan, a near-limit credit card, and a store card. They want
+a **snowball vs avalanche** plan side-by-side, a projected **debt-free date** per debt, a monthly
+amount to commit, and to **track progress** as balances fall.
+**Drive script:** `e2e/loopstory_05_debt_crusher.mjs` (seeds sample, drives /planning).
+**What already works well (verified by screenshot + source — keep as regression anchors):**
+- `internal/payoff` is rich + table-tested: single-debt `Project`, `MinimumViablePayment`, and a full
+  **Snowball/Avalanche `BuildPlan`** (strategy.go). ✓
+- Planning screen surfaces it: **Snowball vs Avalanche side-by-side** (months + total interest each) +
+  the per-debt **payoff order** ("Auto Loan → Credit Card → Mortgage"), plus a single-debt payoff
+  calculator. ✓
+
+**Gaps (strong logic — the gaps are presentation, scope, and tracking):**
+- [ ] **Show a calendar DEBT-FREE DATE, not just "170 months".** The card shows a month count; the
+      story wants "debt-free by Aug 2031" (and a date per debt as each clears). Bottom-up:
+  - [ ] **Logic** `internal/payoff`: add a pure helper turning `Months` (+ a start month) into a target
+        month/date, and expose per-debt clear months from `BuildPlan`; table-test.
+  - [ ] **UI** `internal/screens/planning.go`: render the debt-free **date** beside the months, and a
+        per-debt "cleared by" date in the order list.
+- [ ] **Strategy comparison is useless at $0 extra (shows "170 vs 170 months").** Snowball/avalanche
+      only differ when there's extra to allocate; the default extra is empty. Default/prompt a sensible
+      **extra-per-month**, and when the two strategies tie, **explain why** ("Add an extra monthly
+      amount to see snowball vs avalanche diverge"). UX + a small empty/equal state in planning.go.
+- [ ] **Exclude the mortgage (and any chosen debt) from the payoff plan.** Including the mortgage makes
+      it 170 months and dominates the plan; real debt-crusher tools target revolving/consumer debt and
+      exclude the mortgage. Bottom-up:
+  - [ ] **Model/store** `internal/domain`/`internal/store`: a per-account **"include in payoff"** flag
+        (default: exclude mortgage-type / long-term loans), persisted + round-tripped.
+  - [ ] **Logic**: the `BuildPlan` caller filters by the flag; test that excluding the mortgage changes
+        months/order as expected.
+  - [ ] **UI**: a checkbox per liability in the debt-strategy card ("include in payoff plan").
+- [ ] **Per-debt month-by-month schedule / payoff timeline chart.** Surface which debt the rolling
+      snowball targets each month and a burn-down of total balance. `BuildPlan` likely computes the
+      schedule internally — expose it and render with the existing chart helpers (`ui.AreaChart`).
+- [ ] **Payoff PROGRESS tracking over time.** "Paid off $X since you started; on pace for [date]."
+      Needs a stored **baseline** of starting balances. Bottom-up: snapshot baseline in store →
+      progress calc in `payoff` (tested) → a progress strip on the debt card + a dashboard widget.
+
+**Probe note:** the "calendar debt-free date" check false-**positived** on the date-picker's "2026";
+tighten `loopstory_05` to assert a date *inside the debt card* once the date is added.
+
+### L6. Story — "The First Night" (Tessa, cold start / onboarding) — 2026-06-20 ★
+
+**The ritual:** Tessa just installed CashFlux and opens it cold, wanting to add her first account and
+learn where to start.
+**Drive script:** `e2e/loopstory_06_first_night.mjs` (wipes `localStorage`, reloads, screenshots every
+main screen's first-run state — deliberately does NOT load sample).
+**Key discovery:** there is **no reachable empty/first-run state** — the app **always shows the sample
+household**. `hydrateDataset` (`internal/app/persist.go:34-39`) calls `LoadSample()` whenever the
+dataset key is null/empty. Verified by repro: clearing `localStorage` and reloading brought the sample
+($354,070 net worth, "Michael Brooks", a mortgage) right back. Seeding a sample on *first run* is a
+fine product choice — but the current implementation has a real trap and missing onboarding:
+
+**Mechanical gap (real BUG — confirmed by repro):**
+- [ ] **Wipe → reload re-seeds the sample; a clean slate is unreachable.** Because hydrate re-seeds on
+      an empty/missing key, a user who wipes their data (or any genuinely empty store) gets the
+      stranger's household back on the next reload. Fix by distinguishing "never set up" from "set up
+      and intentionally empty":
+  - [ ] **Logic/persistence** `internal/app/persist.go` + `internal/store`: after a wipe, **persist an
+        explicit empty dataset** (key present, valid empty JSON) and/or a `seededOnce` flag, so hydrate
+        loads empty instead of re-seeding. Only seed when the key has *never* existed.
+  - [ ] **Test** (native): hydrate with (a) no key → seeds sample; (b) explicit empty dataset → stays
+        empty; (c) wipe-then-hydrate → stays empty. Table-driven.
+  - [ ] **E2E**: wipe via Settings → reload → assert zero accounts (no re-seed). Add to `loopstory_06`.
+
+**UX gaps (onboarding):**
+- [ ] **No "this is sample data" framing.** A brand-new user sees a stranger's finances with nothing
+      saying so. Add a **dismissible first-run banner**: "You're exploring sample data — **Start fresh**
+      to add your own accounts, or keep looking around." **Start fresh** = wipe → clean empty (per the
+      bug fix) → land on a guided "add your first account". (`internal/app` shell/dashboard + a
+      first-run flag.)
+- [ ] **Empty states need friendly design** (now reachable once the bug above is fixed): Dashboard,
+      Accounts, Budgets, Goals currently render bare forms / zero-stat tiles with no guidance. Add
+      "add your first account / budget / goal" empty states with a single clear CTA (per screen,
+      `internal/screens/*`), plain English.
+- [ ] **Offer the sample as an explicit choice, not a silent default.** On a true first run, a small
+      "Add my first account" **or** "Explore with sample data" choice respects the user's intent
+      instead of auto-seeding a stranger's household.
+
+**UI/UX defect (reinforced):**
+- [ ] **Lingering load splash — 4th and most prominent reproduction** (accounts list, mid-render). See
+      L2's splash-dismiss bug; this run shows it squarely over the account rows. Fix once, re-verify.
+
+**Probe note:** the empty-state probes all reported GAP, but that's because the sample masks the empty
+state, not because empty states were evaluated — the real issue is reachability (the bug above).
+
+### L7. Story — "Eyes-Free Evening" (Devin, keyboard-only / screen reader) — 2026-06-20 ★
+
+**The ritual:** Devin is blind, uses NVDA + keyboard only, and wants to log a coffee purchase as a
+transaction entirely by keyboard, with every control announcing a meaningful name.
+**Drive script:** `e2e/loopstory_07_eyes_free.mjs` (accessibility-tree unnamed-control scan, form-label
+check, custom-control ARIA, focus-ring on Tab).
+**⚠ BLOCKED — runtime verification could not run this iteration.** The wasm build was **red**:
+`internal/screens/transactions.go:505-510` calls undefined `sortTh` / `sortThProps` (a concurrent
+in-progress edit — sortable table headers — left the tree non-compiling). So the runtime a11y sweep is
+**deferred to a green build**. *Process reminder for whoever owns that change: per CLAUDE.md the build
++ tests must pass before committing (one feature per commit) — don't commit the tree in this state.*
+**Source review delivered instead (shared custom controls — these are strong, keep as anchors):**
+- `internal/ui/controls.go`: **Segmented** = `role="radiogroup"` + `aria-label` + Arrow-key nav
+  (Left/Up/Right/Down, PreventDefault); each option `role="radio"` + `aria-checked`. ✓
+- **Toggle** = `role="switch"` + `aria-checked` + `tabindex=0` + Space/Enter operate it; **ToggleRow**
+  passes its visible label into the switch's `aria-label` (named). ✓
+- **Swatch / SwatchPicker** = wrapping `role="radiogroup"` + per-swatch `role="radio"`/`aria-checked`/
+  `aria-label`(color) + Space/Enter operable. ✓
+
+**A11y refinement gaps (real, source-grounded):**
+- [ ] **Roving tabindex for radiogroups.** `Segmented` options are native `<button>`s and swatches are
+      `tabindex=0` divs, so **every** option is a Tab stop. The ARIA radio pattern wants **one** Tab
+      stop (the checked option, `tabindex=0`) with the rest `tabindex=-1`, moved between by arrows.
+      Apply roving tabindex in `segButton` + `swatch` (drive from `Active`/`Selected`). Pure
+      view-layer; verify with the runtime sweep below.
+- [ ] **Promote the runtime a11y sweep to a committed gate.** Once the build is green, turn
+      `loopstory_07` into `e2e/a11y_check.mjs` run by `run-stories.mjs`: assert (1) `nav[aria-label]`
+      + `main#main` landmarks, (2) **zero** focusable controls without an accessible name, (3) zero
+      unlabeled form fields, (4) a visible focus ring on first Tab — across `/transactions`,
+      `/accounts`, and the Settings panel. This locks in the a11y audit (§ accessibility) so
+      regressions fail CI.
+- [ ] **Re-run L7 after the green build** to capture the transactions add-form field labels + the
+      unnamed-control scan that this iteration could not execute.
+
+### L8. Story — "The Money Question" (Renu, Insights Q&A) — 2026-06-20 ★
+
+**The ritual:** Renu doesn't want charts — she wants to ASK. "How much did we spend on dining last
+month?", "Can we afford a $2,000 vacation in August?" — and save the useful answers as a to-do.
+**Drive script:** `e2e/loopstory_08_money_question.mjs` (seeds sample, drives /insights). Build was
+**green again** this iteration (the L7 `sortTh` breakage was fixed).
+**What already works well (verified by screenshot + source — keep as regression anchors):**
+- **Spending highlights**: deterministic, grounded insights computed from the user's own figures, **no
+  API key needed** ("Housing spending is up 50% — $1,850 this month vs about $1,200/mo", …). ✓
+- **Explain my month** + **Ask about your money** free-text box, each with a graceful **needs-an-API-key**
+  state and clear **privacy copy** ("stays on this device, only sent to OpenAI when you ask"). ✓
+- **Save-as-task** exists (`insights.go:81-103`, button `:252`) — gated behind a generated answer;
+  the answer goes into the task notes (C27). **Pinned/saved insights** + token-cost display too. ✓
+
+**Gaps:**
+- [ ] **Suggested/example questions (beat blank-box paralysis).** There's only a single placeholder
+      hint; offer 3–4 **tappable starter questions** that fill the input ("How much did we spend on
+      dining last month?", "Where did our money go?", "Can we afford $2,000 in August?"). Bottom-up:
+  - [ ] **Logic** (pure): a small generator that picks starters, ideally tailored to the user's data
+        (their top category / a near-limit budget / an upcoming goal); table-test.
+  - [ ] **UI** `internal/screens/insights.go`: clickable chips above the question box.
+- [ ] **Grounded affordability check (dream-big, determinism rule).** "Can we afford $X by [date]?" is
+      a *forward-looking* question; today it just goes to the LLM as free text. Back it with the
+      existing **`forecast`/`planning`** engine so the answer shows the math (projected surplus by the
+      date, minus commitments + goal contributions), not an LLM guess. Bottom-up:
+  - [ ] **Logic** `internal/forecast` (or a new `internal/afford`): `CanAfford(amount, byDate)` →
+        {affordable, projectedSurplus, shortfall, impactedGoals}, pure + table-tested.
+  - [ ] **State/UI**: an "Affordability" insight card (or wire the Q&A to call it when it detects an
+        affordability question) that renders the breakdown; the LLM only narrates the computed result.
+- [ ] **Testability: a stub/mock AI provider behind a flag.** The answer surface, save-as-task, the
+      vision receipt import (L3), and Explain-my-month can't be e2e-driven without a live key. Add a
+      deterministic **mock `ai` provider** (returns canned, well-formed responses) selectable via a
+      test flag / env so `run-stories.mjs` can exercise the full ask → answer → save-as-task flow in CI.
+      Bottom-up: an `ai` provider interface seam (likely already present) + a fake impl + tests.
+
+**Probe note:** save-as-task false-**negatived** (it only renders after an answer, which needs a key);
+the suggested-questions check missed the "e.g." placeholder. Tighten `loopstory_08` once the mock AI
+provider lands so it can assert the post-answer controls.
+
+### L9. Story — "The Migration" (Sahil, export/import backup round-trip) — 2026-06-20 ★
+
+**The ritual:** Sahil switches laptops, exports all his CashFlux data, imports it on the new machine,
+and expects a **lossless round-trip** — accounts, transactions, budgets, goals, custom fields, AND his
+preferences/theme/FX rates/uploaded fonts. Anything silently dropped = lost records.
+**Drive script:** `e2e/loopstory_09_migration.mjs` (seeds sample, enumerates localStorage keys + dataset
+entity counts, opens Settings data section).
+**What already works well (verified — keep as anchors):**
+- The **dataset is comprehensive**: one `cashflux:dataset` blob with `schemaVersion, members, accounts,
+  categories, transactions, budgets, goals, tasks, workflows, settings` (sample = 7 accounts / 57 txns /
+  5 budgets / 3 goals). ✓
+- Settings has **Export JSON / Export CSV / Import**, a **backup-reminder cadence** (B28), and stamps
+  the last backup. ✓
+
+**Mechanical gap (silent data-loss on migration — confirmed by source + storage enumeration):**
+- [ ] **"Export JSON" is dataset-only — it is NOT a complete backup, yet it's framed as one.**
+      `exportJSON` → `app.ExportJSON()` serializes only the **active workspace's dataset**. State that
+      lives in **separate localStorage keys is left behind**:
+  - **`cashflux:workspaces`** — the workspace registry + every **non-active workspace/household** (a user
+    with "Personal" + "Side business" exports only the open one; the rest are lost).
+  - **Uploaded custom fonts** (`@font-face` binary), the **banner image**, and custom **theme** tokens /
+    appearance **prefs** — loaded from their own uistate keys at boot (`app.go` `LoadFonts/LoadBanner/
+    LoadTheme/LoadPrefs`), not part of `ExportJSON`.
+  The B28 reminder ("A quick backup keeps your data safe") makes users trust this as a full backup, so
+  the omission is a silent trap. Fix bottom-up:
+  - [ ] **Logic** (pure, `internal/store` or a new `internal/backup`): a versioned **full-backup
+        envelope** `{schemaVersion, datasets[] (all workspaces), workspaceRegistry, appearance{theme,
+        fonts, banner, prefs}, fxRates}`; `MarshalBackup` / `UnmarshalBackup`; **round-trip test**
+        (build → marshal → unmarshal → deep-equal).
+  - [ ] **State** `internal/appstate` + `internal/app`: gather all workspaces' datasets + the uistate
+        side-keys; restore them all on import (and re-apply appearance live).
+  - [ ] **UI** `internal/app/settings.go`: a distinct **"Back up everything"** action (keep the existing
+        per-workspace "Export JSON" for sharing a single household) + an import that detects a full
+        backup vs a single dataset and restores accordingly. Plain-English copy stating exactly what's
+        included.
+  - [ ] **E2E gate** (`e2e/backup_roundtrip_check.mjs`, run by `run-stories.mjs`): seed sample, customize
+        appearance + add a 2nd workspace, **full-backup → wipe → import**, assert entity counts, the 2nd
+        workspace, and the appearance all survive. Make it CI-blocking (lossless round-trip is a
+        non-negotiable per CLAUDE.md).
+
+**Probe note:** the "complete backup" copy check false-**positived** (the real export string is just
+"Export JSON" / "Exported your data", which makes **no** completeness claim — itself a reason to clarify
+the copy). The accent-swatch tweak didn't surface a separate key in this run (appearance keys only
+appear once actually changed); the round-trip test above should set them explicitly.
+
+### L10. Story — "Payday Tuesday" (Nadia, interactive reactivity) — 2026-06-20 ★
+
+**The ritual:** Nadia logs a $140 grocery expense and expects, with **no refresh**, the Groceries
+budget "spent" to tick up and the dashboard spending to rise.
+**Drive script:** `e2e/loopstory_10_payday.mjs` — a true *interactive* end-to-end (mutate, then assert
+the chain reacts via client-side navigation, NOT a reload).
+**✅ VERIFIED WORKING (strongest positive result so far — keep as a regression anchor):**
+- Filled the add-transaction form (desc + amount + **category select incl. "Groceries"**), submitted;
+  the row appeared in the ledger **immediately**. ✓
+- Navigated Budgets→Transactions→Budgets via the rail (SPA pushState, **no reload**); Groceries "spent"
+  went **$645 → $785 (exactly +$140)**. The reactive chain transaction → budget rollup is correct. ✓
+- Transactions also support income/expense kind, **repeat-last**, and **rule-based auto-suggest** of
+  category/tags (`transactions.go:96-98,366,403`). ✓
+
+**Action (lock in the win):**
+- [ ] **Promote this to a committed CI gate.** Rename to `e2e/reactivity_check.mjs` and add to
+      `run-stories.mjs`: assert a logged expense moves the matching budget's spent by the exact amount
+      **without a reload**, across budget + dashboard. The existing per-screen stories don't cover
+      **cross-screen reactivity**; this guards the core state model against regressions.
+- [ ] Extend the assertion to the **dashboard** (Spending / This-month tiles) and to an **income** entry
+      raising the Income tile — same no-reload contract.
+
+**Dream-big gap (close the income→envelopes loop):**
+- [ ] **Logging income offers no path to allocate it.** Nadia's $3,200 paycheck just lands in the
+      ledger; the **Allocate** flow (rank budgets/goals, split an amount) is a separate manual screen she
+      has to remember to visit. Offer a low-pressure nudge after an **income** transaction: "Allocate
+      this $3,200 to your budgets & goals?" → opens Allocate pre-filled with that amount. Bottom-up:
+  - [ ] **Logic** `internal/allocate`: already supports amount-split + ranking — add/confirm an entry
+        that takes a single income amount as the pool (tested).
+  - [ ] **State/UI** `internal/screens/transactions.go` + `allocate.go`: a dismissible post-income nudge
+        (friendly, never naggy — per UI rules) that deep-links to Allocate with the amount prefilled.
+
+**Probe note:** rail nav links are `<a href title>` (not `role=link` with a clean name) — drive them by
+`href$="/budgets"`, not `getByRole("link", {name})` (fixed in this script; same lesson as L7).
+
+### L11. Story — "The Bus Commute" (Priya, mobile / responsive) — 2026-06-20 ★
+
+**The ritual:** Priya logs a $4 coffee and checks her money on a phone (390×844) one-handed on the bus.
+**Drive script:** `e2e/loopstory_11_bus_commute.mjs` (drives every main screen at a mobile viewport;
+measures horizontal overflow, rail footprint, mobile-nav affordance, tap-target sizes).
+**What already works well (verified — keep as anchors):**
+- **No horizontal overflow** on `/`, `/transactions`, `/budgets`, `/accounts` at 390px (0px each). ✓
+- Rail **collapses to a 56px icon rail** on mobile; content stacks full-width and readably; a
+  collapse-toggle is present. ✓
+
+**UI/UX gaps (mobile):**
+- [ ] **Tap targets too small for touch.** Of 268 interactive controls on `/transactions`, **104 are
+      small in BOTH dimensions** (true icon buttons — the per-row edit/delete/transactions/⋯ cluster ×57
+      rows) and **148 more are <40px tall** (below WCAG 2.5.5's 44px). The C-section touch-target item
+      isn't resolved on mobile. Fix: (a) enforce a ≥44px hit area on icon buttons (padding, not just
+      visual size); (b) on narrow viewports collapse each transaction row's 3–4 inline icons into a
+      single **overflow (⋯) menu**. Add the mobile tap-target check to the responsive gate below.
+- [ ] **Bento drag/resize affordances are meaningless on touch and add clutter.** The mobile dashboard
+      shows per-tile drag handles + resize handles + "Reset layout"; reorder/resize is a desktop
+      interaction. Hide drag/resize chrome under a touch/`pointer:coarse` media query (or below a width
+      breakpoint); keep tiles read-only-stacked on phones.
+- [ ] **Period/date controls dominate the top of small screens.** Week/Month/Quarter + Jump-to + date
+      stepper + Custom range + Add stack vertically and push real content below the fold. Collapse them
+      into a compact single-row control bar (or a sheet) on mobile.
+- [ ] *(Enhancement)* **Consider a real mobile nav pattern** — a bottom tab bar or a hamburger drawer —
+      so phones get full-width content instead of a permanent 56px rail. Optional; the icon rail is
+      acceptable today.
+
+**UI/UX defect (reinforced — 5th reproduction, now on mobile):**
+- [ ] **Lingering load splash dominates the mobile `/transactions` screen** (squarely over the add-form).
+      Same L2 splash-dismiss bug; small screens make it worse (it fills the viewport). Fix once, verify
+      across desktop + mobile.
+
+**Action:**
+- [ ] **Promote to a responsive CI gate** (`e2e/responsive_check.mjs` in `run-stories.mjs`): assert zero
+      horizontal overflow + the mobile tap-target threshold across all main routes at 390px.
+
+### L12. Story — "The Subscription Audit" (Marcus & Lin) + splash root-cause — 2026-06-20 ★
+
+**The ritual:** Marcus & Lin suspect they're bleeding money on forgotten subscriptions; they want every
+recurring charge surfaced, the monthly + annual total, price-hike + unused flags, and help cancelling.
+**Drive script:** `e2e/loopstory_12_subscription_audit.mjs`.
+**⚠ Runtime BLOCKED — build red AGAIN (2nd time this run).** `internal/screens/transactions.go`: `strconv`
+imported-and-unused + a type error at `:523` (`rows` []Node used as Node) — another in-progress sortable-
+headers edit left the tree non-compiling. Findings below are **source-grounded**; re-run when green.
+*Process reminder (repeat of L7): the build + tests must pass before committing — don't leave the shared
+tree red.*
+**What already works well (source — `internal/screens/subscriptions_screen.go` + pure `internal/subscriptions`):**
+- **Auto-detection** of recurring charges from transaction history (`subscriptions.Detect`, B25), with
+  cadence, normalized monthly cost, and next renewal per sub. ✓
+- **Monthly AND annual** total burden (`AnnualAmount()`); **price-change** detection up/down
+  (`DetectPriceChanges`, `priceUp`/`priceDown`); a **recurring-share-of-spending** gauge. ✓
+
+**Gaps (the screen is read-only; the story wants to ACT):**
+- [ ] **Make it actionable: mark-to-cancel + "charged after cancel" alert** (the real money-saver).
+  - [ ] **Model/store** `internal/domain`+`internal/store`: a cancellations record (sub identity +
+        cancelled-on date), persisted + round-tripped.
+  - [ ] **Logic** `internal/subscriptions`: `ChargedAfterCancel(txns, cancellations)` → flag any charge
+        matching a cancelled sub after its cancel date; table-tested.
+  - [ ] **State/UI**: a "Mark as cancelled" action per row + a prominent **alert** when a cancelled sub
+        bills again ("You cancelled Netflix on Mar 2 but were charged $15.99 on Apr 2").
+- [ ] **"Cancel these → save $X/year" framing.** Multi-select cancel-candidates and show the annual
+      savings of cancelling them — turns the annual total into action.
+- [ ] **Unused proxy (no usage signal available).** Offer a low-pressure "review" nudge for subs above a
+      cost threshold or not recently re-confirmed; let the user tag "rarely use" to prioritize the audit.
+
+**🔎 SPLASH ROOT-CAUSE — corrects L1/L2/L3/L6/L11 (the "lingering load splash").** The dismiss logic in
+`web/index.html:674-683` is **correct**: a `MutationObserver` adds `.hidden` to `#boot` as soon as
+`#app` gets children (first mount), then disconnects. The splash kept appearing in earlier screenshots
+because **those scripts shot ~700-1000 ms after a full `page.goto()`**, and a cold wasm
+re-instantiation+mount frequently takes longer than that — so `#boot` simply hadn't hidden yet. L10
+(SPA nav + `waitForSelector`) saw **no** splash, corroborating. **So this is mostly a test-harness timing
+artifact, not an app bug** — do NOT spend effort "fixing the dismiss."
+- [ ] **Harness fix (real action):** add a shared `ready(page)` helper (wait for `nav` + `#boot.hidden`/
+      opacity 0) and call it before every screenshot; replace fixed `waitForTimeout`s in all `loopstory_*`
+      scripts. (Implemented in `loopstory_12`; back-port to the rest when promoting them to gates.)
+- [ ] **Minor perf note (optional):** if first mount on a hard refresh is slow enough that users see the
+      splash >~1s, track it as a wasm-startup/perf item — separate from the (non-existent) dismiss bug.
+- [x] Downgrade the L1/L2/L3/L6/L11 "splash" bullets to "see L12" — not a dismiss defect.
+
+### L13. Story — "Paycheck to Paycheck" (Dani, cash-flow timing / overdraft warning) — 2026-06-20 ★
+
+**The ritual:** Dani lives close to the edge — rent ($1,800) hits the 1st, payday is the 5th. She wants
+CashFlux to project her **forward daily balance** and **warn** her when an account would dip below zero
+before payday ("Checking dips to -$240 on Jul 2 — move money or delay a bill").
+**Drive script:** `e2e/loopstory_13_paycheck_to_paycheck.mjs` (seeds sample, drives /bills, ready-gated
+screenshot).
+**What already works well (verified by screenshot — keep as anchors):**
+- Bills screen is clean + professional: **Total due soon / Per year / Upcoming count / Next due** stats;
+  a bills list (Mortgage/Auto Loan/Credit Card with due dates + "due in N days"); a **month calendar
+  with bill dots**; **Download CSV**; per-bill **"Remind me"**. ✓
+
+**Gaps (the safety net the story needs is absent):**
+- [ ] **Forward daily cash-flow projection + overdraft warning (headline).** Project each spending
+      account's balance day-by-day over the next N days from known **upcoming bills** (due date+amount)
+      and **expected income** (recurring paychecks), and flag the first day any account dips below zero
+      (or below a user-set **buffer**). Bottom-up:
+  - [ ] **Logic** `internal/forecast` (or new `internal/cashflow`, pure): `DailyBalances(startBal, bills,
+        income, days, buffer)` → daily series + first-below-buffer date + the shortfall amount.
+        Table-tested: rent-before-payday → negative on day X; buffer threshold; multiple accounts.
+  - [ ] **State/UI**: a **"Cash-flow runway"** card (Bills and/or Dashboard) — a daily balance line with
+        a red marker on the danger day and a plain-English warning. Determinism: show the contributing
+        bills/income.
+- [ ] **Warning → suggested action.** On a detected dip: "Checking dips to -$240 on Jul 2 — move $X from
+      High-Yield Savings, or delay the Auto Loan." Reuse the L1 cover/move-money + a bill-delay; emit a
+      dismissible nudge → task (friendly, never naggy).
+- [ ] **Mark a bill paid.** Bills currently offer only **"Remind me"** — there's no way to record that a
+      bill was paid. Add **"Mark paid"** that records the payment (links/creates the paying transaction,
+      advances next due, clears the reminder). Note bills are **derived from liability accounts**, so
+      this needs a small payment-tracking model (bill ↔ paying transaction) — bottom-up: domain link +
+      store + UI action + test.
+
+**Probe note:** "mark paid" GAP is accurate (the affordance is "Remind me", not paid). Calendar/upcoming
+checks passed against real content.
+
+### L14. Story — "The Power User" (Theo, command palette) — 2026-06-20 ★
+
+**The ritual:** Theo runs his money mouse-free — Ctrl/⌘+K, type "budgets" or "add transaction", jump or
+fire an action with fuzzy search.
+**Drive script:** `e2e/loopstory_14_power_user.mjs` (opens palette by keyboard, types, asserts filter +
+Enter-navigation + Esc-close).
+**✅ VERIFIED WORKING (strong feature — keep as a regression anchor):**
+- **Ctrl+K opens** the palette; clean "Search commands…" + vertical list. Fuzzy "budg" → **Budgets**;
+  **Enter navigated to /budgets**; palette **closed after running**; **Esc closes**. ✓
+- `buildPaletteCommands` (`shortcuts.go:224`) covers all nav (primary/tools/system) **plus actions**:
+  New transaction, toggle theme, toggle sidebar, shortcuts help, and full **workspace management**
+  (switch/new/export/import). ✓ Also: Alt+1–9 jump, Alt+N add, "?" help cheat-sheet. ✓
+
+**Gaps (enhance an already-good feature):**
+- [ ] **Intent/verb discovery — add command aliases/synonyms.** The add-transaction command is labeled
+      by its noun ("New transaction"), so typing "**add**" doesn't surface it (a power user thinks in
+      verbs). Give each `paletteCmd` optional **keywords/aliases** ("add", "create", "new", "export",
+      "wipe", "backup") and match against them in the fuzzy filter. Bottom-up: extend the `paletteCmd`
+      struct + the match function (pure, table-tested) → no UI change beyond results.
+- [ ] **Broaden the action set.** Add the high-value actions a keyboard user expects: **add account /
+      budget / goal**, **export JSON / CSV**, **load sample / wipe**, **period jump** (this/next month),
+      **mark-all-updated**. Each is a one-line `paletteCmd` calling an existing action.
+- [ ] **Make data entities searchable jump targets (dream-big).** Let the palette include the user's
+      **accounts / budgets / goals** by name so "Everyday Checking" jumps to that ledger and "Groceries"
+      to that budget. Bottom-up: a provider that appends entity commands from appstate (cap + ranked);
+      keep static commands first. Table-test the ranking.
+- [ ] *(Polish)* **Group + hint.** Section the list (Navigate / Actions / Workspaces) and show the
+      keyboard hint (Alt+N, etc.) beside matching commands.
+
+**Probe note:** the "list narrows (before/after count)" + "actions" checks **false-negatived** — palette
+items aren't `[data-cmd]/li/button` (different markup), and typing "add" can't match the noun-labeled
+"New transaction" (which is exactly gap #1). Tighten `loopstory_14`'s item selector + assert via the
+alias once added.
+
+### L15. Story — "Set It and Forget It" (Bianca, Rules / auto-categorization) — 2026-06-20 ★
+
+**The ritual:** Bianca creates a rule — match "Starbucks" → Dining — and expects every new transaction to
+auto-file itself, plus a way to backfill existing uncategorized ones.
+**Drive script:** `e2e/loopstory_15_set_and_forget.mjs` (interactive: create a rule, add a matching txn,
+assert the category auto-fills).
+**✅ VERIFIED WORKING end-to-end (strong feature — keep as a regression anchor):**
+- Created a rule (match → category + tags) on `/rules`; it listed and **persisted**. ✓
+- Added a transaction whose description matched; the **category select auto-filled to "Dining"** (the
+  `SuggestTransactionFields` path), **surviving a full page reload** (verified the 3 selects = Expense /
+  Auto Loan / **Dining**). ✓
+- An **"Apply to existing"** backfill affordance is present. ✓
+- Engine (`internal/rules`): case-insensitive substring match + **first-match-wins** with specificity
+  ordering, table-tested. ✓
+
+**Action (lock in the win):**
+- [ ] **Promote to a CI gate** (`e2e/rules_check.mjs` in `run-stories.mjs`): create rule → matching txn
+      auto-categorizes → survives reload. No existing test covers the rule→txn round-trip.
+
+**Dream-big gaps (extend a solid engine):**
+- [ ] **Richer match conditions.** Today a rule matches a single case-insensitive **substring of the
+      description** only. Power users want: **amount range**, **account scope**, payee-vs-memo, multiple
+      keywords (AND/OR), and starts-with/regex. Bottom-up: extend the `Rule` type with optional
+      conditions + a `Matches(txn)` in `internal/rules` (pure, table-tested for each condition + combos)
+      → store migration (additive) → extra fields in the rule form.
+- [ ] **Actions beyond category + tags.** Let a rule also set **member/owner**, assign a **budget**, mark
+      **transfer**, or **flag-for-review**. Additive `Rule` action fields + applied in
+      `SuggestTransactionFields` + the backfill; tested.
+- [ ] **"Create rule from this transaction" + preview count.** A per-transaction action "Always
+      categorize like this" prefilling the rule form; and on the rule form show **"matches N existing
+      transactions"** before you hit Apply-to-existing (which is currently blind). Bottom-up: a pure
+      `CountMatches(rules, txns)` → a count label + a row action.
+
+**Probe note:** the auto-categorize check **false-negatived** first (the script read the *account* select
+"Auto Loan", not the *category* select); a focused re-measure confirmed the category = "Dining". Fix
+`loopstory_15` to read the category select by position/label, then promote per the gate above.
+
+### L16. Story — "Tax Season" (Priya, Reports / annual review) — 2026-06-20 ★
+
+**The ritual:** Priya's accountant needs her annual numbers — total income, total expenses, a by-category
+breakdown for the **year**, deductible categories called out, and a clean export to hand off.
+**Drive script:** `e2e/loopstory_16_tax_season.mjs` (seeds sample, drives /reports, ready-gated shot).
+**What already works well (verified by screenshot + source — strong screen, keep as anchors):**
+- Rich Reports: Income / Spending / Net, **savings rate**, **cash runway**, **no-spend days**; a
+  **spending-by-category** breakdown with period-over-period % deltas + sparkline; **biggest deposits**,
+  **income by source**, **top payees**; per-section **Download CSV**; a "Heads up" anomaly section. ✓
+- **Per-member spending** (`reports.SpendingByMember` + by-member CSV) — present, but only rendered
+  `If(len(memberSpend) > 1)`, so the **single-member sample hides it** (ties to L2). ✓
+
+**Gaps (make it tax-ready):**
+- [ ] **No one-tap YEAR / fiscal-year view.** The period is Week/Month/Quarter (+ manual custom range);
+      there's no annual preset, which is exactly what a tax year needs. Add a **"Year"** period option
+      honoring the **fiscal-month-start** preference. Bottom-up: extend the period-range model
+      (`internal/budgeting` PeriodRange already has weekly/quarterly) with an annual/fiscal-year range
+      (table-tested) → add the option to the period selector → Reports/totals respect it.
+- [ ] **No deductible/tax tagging or tax-summary export.** Add a category **"tax group / deductible"**
+      attribute, a Reports **"Deductible totals"** section, and a single **annual tax-summary export**
+      (all sections, year-stamped) to hand to an accountant. Bottom-up: `Deductible`/`TaxGroup` on the
+      category domain type (additive, store round-trip) → a pure totals roll-up in `internal/reports`
+      (tested) → the section + a one-click export.
+- [ ] **Per-member report needs >1 member to be visible** — reinforce the L2 "add 2-3 sample members"
+      item so this (and joint-filing splits) are demoable out of the box.
+
+**Probe note:** all keyword checks passed; the "year selector" and "per-member" PASSes were partly
+**false-positives** (matched the date "2026" / the nav "Members") — source confirms there's a custom
+range but **no annual preset**, and per-member exists but is **hidden** at one member. Tighten
+`loopstory_16` to assert an explicit "Year" control and an on-page member breakdown.
+
+### L17. Story — "Every Dollar a Job" (Marcus, Allocate / zero-based) — 2026-06-20 ★
+
+**The ritual:** Marcus has $2,000 left after bills and wants to assign every dollar — zero-based. He
+opens Allocate, enters $2,000, and expects it distributed across ranked destinations with the math shown
+and nothing silently lost.
+**Drive script:** `e2e/loopstory_17_every_dollar.mjs` (interactive: enter an amount, assert the split +
+remainder sum exactly to the input).
+**✅ VERIFIED WORKING (standout feature — keep as a regression anchor):**
+- Profile + **weighted criterion sliders** (returns / stability / liquidity / debt-paydown / goal),
+  **Amount to allocate** + **Keep back (emergency buffer)** + **Max per destination** inputs. ✓
+- Ranked, **explainable** distribution: each destination shows its amount, score %, and the per-criterion
+  breakdown (`allocate.RankWith` + `allocate.Distribute`); **Exclude/restore** per destination. ✓
+- **Determinism (financial correctness):** entering $2,000 → distributed **$1,999.95 + kept back $0.05
+  = $2,000.00 exactly**; the 5¢ rounding remainder is correctly held back and disclosed ("Kept back").
+  No money created or lost. ✓
+
+**Action (lock in the win):**
+- [ ] **Promote to a CI gate** (`e2e/allocate_determinism_check.mjs`): for several amounts/reserves, assert
+      `sum(distributed) + keptBack == amount` to the cent. Financial-correctness invariant.
+
+**Dream-big gaps (close the loop from SUGGESTION to ASSIGNMENT):**
+- [ ] **"Apply this allocation" — actually commit the dollars.** Today Allocate only *suggests*; nothing
+      moves. Zero-based budgeting means the dollars get assigned. Add an **Apply** action that turns the
+      plan into real **goal contributions / budget fundings / transfers**. Bottom-up:
+  - [ ] **Logic** `internal/allocate`: a `Plan → []Action` mapping (contribute-to-goal / fund-budget /
+        transfer-to-account), pure + tested (sum of actions == distributed).
+  - [ ] **State** `internal/appstate`: apply all actions atomically (reuse the L1 cover/move + L5 goal
+        contribute + L10 income paths); single undo.
+  - [ ] **UI** `internal/screens/allocate.go`: an "Apply allocation" button + a confirm summary; show
+        the resulting balances (determinism).
+- [ ] **Fill-to-target (envelope) mode.** Zero-based often means funding each budget to its limit in
+      priority order (rent $1,800, groceries $600, …) rather than score-weighted spread. Add a mode that
+      `Distribute`s to each destination's remaining-to-target first, then ranks the rest. Pure + tested.
+- [ ] **Save an allocation as a recurring plan** ("every paycheck, split like this") — ties to the L10
+      income→allocate nudge so a logged paycheck can one-tap apply the saved split.
+
+**Probe note:** the reserve-input check **false-negatived** (placeholders aren't in `innerText`); the
+"Keep back (emergency buffer)" input is present on screen + in source (`allocate.go:395`). Assert it via
+`getByPlaceholder` in `loopstory_17`.
+
+### L18. Story — "The Landlord's Ledger" (Dana, custom fields) — 2026-06-20 ★
+
+**The ritual:** Dana rents two properties; she needs to tag each transaction with which **Property** it
+belongs to and whether it's **deductible** — fields CashFlux lacks natively — then **filter and report**
+by them.
+**Drive script:** `e2e/loopstory_18_landlord.mjs` (interactive: define a custom field, confirm it
+renders in the transaction form, probe filter/report by it).
+**✅ VERIFIED WORKING (define + fill — keep as anchors):**
+- **Custom Fields manager** on `/customize`: define a field on any of **5 entities**
+  (account/transaction/budget/goal/member) × **5 types** (text/number/date/bool/select+options) +
+  a required flag. Created a `Property` select field on the transaction entity; it **listed** and
+  **rendered in the transaction add form** (verified `propInTxnForm: true`). ✓
+- Bonus: the same screen has a strong **Formula calculator** (live-figure expressions — sum/avg/min/max/
+  count/abs/round/if — with presets + a variables panel). ✓
+
+**Gaps (define+fill works, but the data is a dead end — you can't slice by it):**
+- [ ] **Filter lists by a custom field.** Dana can tag "Property = Maple St" but can't list all Maple St
+      transactions. The transactions filter set (account/category/cleared/tags) has **no custom-field
+      predicate**. Bottom-up:
+  - [ ] **Logic** (pure, tested): extend the transaction filter to match custom-field values
+        (equals / one-of for select, range for number, true/false for bool).
+  - [ ] **State/UI** `internal/screens/transactions.go`: a filter control per filterable custom field
+        (persisted with the other filters, per C-section).
+- [ ] **Report / total by a custom field.** No way to see "spending per Property" or a "Deductible"
+      total. Bottom-up: `reports.ByCustomField(txns, fieldKey, rates)` roll-up (pure, table-tested) → a
+      Reports section grouped by the field + CSV. **This also satisfies L16's tax-tagging** — a bool
+      "Deductible" custom field + this roll-up = a deductibles total, no separate tax-flag schema needed.
+- [ ] *(Enhancement)* **Custom fields in export/import + the Allocate/Insights context** so the
+      extensibility is end-to-end (verify they round-trip in the backup from L9).
+
+**Probe note:** first-run GAPs for "field types" and "appears in txn form" were **test artifacts** — the
+script's `select.first()` hit the *entity* select (account/transaction/…), so the field was created on
+Accounts with type Text. A corrected re-drive (entity=transaction, type=select) confirmed both work.
+Fix `loopstory_18` to target the entity/type selects by their option sets.
+
+### L19. Story — "Airplane Mode" (Sofia, offline / local-first) — 2026-06-20 ★
+
+**The ritual:** Sofia is on a 6-hour flight with no wifi. She reviews her budget and logs the coffee +
+snacks she bought — fully offline — and expects it all there when she lands.
+**Drive script:** `e2e/loopstory_19_airplane_mode.mjs` (online boot + SW cache, then `setOffline(true)`,
+navigate, add a txn, verify persistence, reload offline).
+**✅ VERIFIED WORKING (the core local-first promise — keep as anchors):**
+- A **service worker registers + becomes ready**; after online boot the cache holds **all 8 CORE assets**
+  (`./`, index.html, wasm_exec.js, **bin/main.wasm**, manifest, chart.js, flip.js, d3) — confirmed by
+  enumerating `caches`. ✓
+- **Offline in-session works fully:** navigated to Budgets offline, **logged a transaction offline** (it
+  appeared in the ledger), and it **autosaved to `localStorage`** offline. The offline write path is
+  solid. ✓
+
+**Uncertain — needs a real-browser check (do NOT treat as a confirmed bug yet):**
+- [ ] **Offline hard-refresh** failed in Playwright (`net::ERR_FAILED`, blank page) even though the cache
+      is fully populated and `sw.js`'s navigate→`appShell()` fallback is correct. This is **most likely a
+      Playwright `setOffline` artifact** (headless Chromium can bypass SW interception for top-level
+      navigations), not necessarily a production defect. **Action:** verify offline reload on a real
+      browser (DevTools → Network: Offline, or an installed PWA in airplane mode). Only if it fails there
+      is it a real bug — then look at SW controlling-client timing on reload.
+
+**Real robustness gaps (worth doing regardless):**
+- [ ] **`cache.addAll(CORE)` is all-or-nothing AND includes a cross-origin CDN (d3).** If d3's CDN (or any
+      single asset) fails at install, the **entire precache rejects** and `install`'s `.catch(()=>{})`
+      **swallows it silently** → offline boot would break with zero signal. Fix (`web/sw.js`): (a) cache
+      per-item via `Promise.allSettled` so one failure doesn't void the rest; (b) **self-host d3**
+      (`./d3.min.js`) so the precache is all same-origin and offline never depends on a third party;
+      (c) log precache failures instead of swallowing. Pure SW change + an e2e offline-boot assertion.
+- [ ] **No offline indicator / "saved locally" reassurance.** Offline, the app shows no affordance that
+      it's offline and still saving. Add a subtle offline badge (online/offline via `navigator.onLine` +
+      events) so the airplane user trusts their entries are safe. Bottom-up: a small state atom + a
+      header pill; tested toggling.
+
+**Incidental finding (a11y/semantics regression — ties to L7):**
+- [ ] **Rail nav `<a>` elements have NO `href`** (now onClick-only — confirmed by enumerating nav anchors:
+      every `href` is null). An anchor without `href` isn't a real link: not keyboard-focusable as a link,
+      no middle-click / open-in-new-tab, and screen readers don't announce it as a link. Restore real
+      `href` (the router already supports pushState links) or switch the role appropriately. This also
+      broke href-based test selectors (L10/L13 used `a[href$="/x"]`) — drive nav by text until fixed.
+
+**Probe note:** the nav-by-href selectors timed out because of the missing-`href` regression above; the
+script now clicks nav items by text.
+
+### L20. Story — "The Finish Line" (Aaliyah, goal-completion lifecycle) — 2026-06-20 ★
+
+**The ritual:** Aaliyah's emergency-fund goal is about to be reached. She wants CashFlux to recognize the
+milestone — celebrate it, mark the goal achieved, stop nagging her to contribute, and suggest
+redirecting the freed-up monthly amount to her next goal.
+**Drive script:** `e2e/loopstory_20_finish_line.mjs` (create a goal, push it past 100%, inspect the
+completed state). Verified by creating a goal over target ($80 saved / $50 target).
+**✅ VERIFIED WORKING (the completion moment is handled well — keep as anchors):**
+- At/over target the goal shows a **full (capped) progress bar + "Complete 🎉"** badge. ✓
+- The **pace nag is removed** when complete (no "save $X/mo", no "$X to go"). ✓
+- Contribute/Edit remain available; the bar correctly caps at 100% even when over-funded ($80/$50). ✓
+
+**Gaps (what happens AFTER the finish line):**
+- [ ] **Over-funding isn't acknowledged or handled.** The row shows "$80.00 / $50.00" — $30 over — but
+      nothing flags the surplus or offers to do anything with it. Add an **"$X over target"** note + an
+      action to **redirect the excess** to another goal (or back to available). Bottom-up: a pure
+      `goals.Overfund(goal)` calc (tested) → a row note + a "move excess" action reusing the
+      L17 allocate / L5 contribute paths.
+- [ ] **No "what next" when a goal completes.** Completing a goal frees its monthly contribution; nothing
+      suggests redirecting it. Add a low-pressure prompt ("🎉 Emergency fund is funded — send its
+      $1,071/mo to your next goal?") → deep-link to that goal's contribute / Allocate. Friendly, never
+      naggy.
+- [ ] **Completed goals stay inline in the active list with no archive.** Over time finished goals
+      clutter the list, and **"Overall progress" includes them** (so the headline % is diluted by done
+      goals). Add an **Achieved** section / archive toggle and an option to exclude completed goals from
+      the overall-progress math. Bottom-up: a `goal.Achieved`/`ArchivedAt` flag (store round-trip) →
+      grouping + a progress calc that can exclude completed; tested.
+- [ ] *(Polish)* **One-time celebration moment** on crossing the line (a subtle toast/animation), not just
+      a persistent static "Complete 🎉" badge — keep it calm per the UI rules.
+
+**Probe note:** the first run's "achieved state" + "100% cap" checks **false-negatived** — the inline
+**Contribute opens an amount form (not a JS `prompt`)**, so the `page.on("dialog")` handler never fired
+and the goal stayed at $0 (and my row filter clicked the wrong goal's Contribute). A corrected re-drive
+(create goal already over target) confirmed the **"Complete 🎉"** state + capped bar exist. Fix
+`loopstory_20` to fill the inline contribute form for the *named* goal.
+
+### L21. Story — "Yours, Mine, and Ours" (Priya & Sam, multi-member / household-aware) — 2026-06-20 ★
+
+**The ritual:** Priya & Sam share a household but want to see who spent what. Priya adds Sam as a 2nd
+member, attributes transactions to each person, filters the ledger by member, and checks per-member
+spending — so they split fairly.
+**Drive script:** `e2e/loopstory_21_yours_mine_ours.mjs` (add a member, then probe the household-aware
+surfaces).
+**What already works well (verified by source — keep as anchors):**
+- **Add a member** on /members. ✓
+- **Member filter on the ledger** (`transactions.go:539-556`): "All members" + each member, driving
+  `TxFilter.Member`. ✓
+- **Per-member Reports** section + by-member CSV (`reports.SpendingByMember`, L16) — present when >1
+  member *with spending*. ✓
+- Transactions are **member-aware**: each new transaction is stamped with a member. ✓
+
+**Gaps (the crux of "who spent what" on shared accounts):**
+- [ ] **No EXPLICIT per-transaction member assignment — it's derived from the account's owner.** The add
+      form has no "Who" picker; the member comes from `MemberForNewTransaction`/`memberFor(acc)`
+      (`transactions.go:174,218`). On a **joint/shared account** every transaction attributes to the same
+      owner, so Priya & Sam can't say "this one was Sam's." Add an optional **"Who" member select** on the
+      transaction add/edit form, defaulting to the account owner. Bottom-up:
+  - [ ] **Domain/state**: `Transaction.MemberID` already exists — expose it as an editable field (add +
+        inline edit); default to the account owner, allow override.
+  - [ ] **UI** `internal/screens/transactions.go`: a member select on the add form + in `TransactionRow`
+        edit; respects the existing member filter.
+  - [ ] **Test**: a shared-account txn overridden to Sam attributes to Sam in the ledger filter + the
+        per-member report.
+- [ ] **Per-member report stays hidden until ≥2 members have attributed spending.** Combined with the
+      single-member sample (L2), the household-aware value is invisible out of the box. Reinforces L2's
+      "add 2-3 sample members **with a few transactions each**" so /reports by-member + Split/Settle-up
+      (L2) demo immediately.
+- [ ] *(Enhancement)* **Per-member dashboard view / "my money" toggle** — a member switcher that filters
+      the whole app to one person's view (the household-aware promise end-to-end).
+
+**Probe note:** the "assign to member" + "ledger filter by member" PASSes were partly **false-positive/
+imprecise** — the script detected the member *filter* select (which lists Sam), not a per-transaction
+assignment field. Source confirms the **filter is real** but **per-transaction assignment is
+account-derived only**. The Reports-by-member GAP is because the newly added Sam has **no attributed
+spending** (no account owned / no explicit assignment), not a broken report. Tighten `loopstory_21` to
+attribute spending to the 2nd member (own an account or set MemberID) before asserting the report.
+
+### L22. Story — "Make It Mine" (Renée, theme / appearance customization, B20) — 2026-06-20 ★
+
+**The ritual:** Renée finds finance apps sterile. She opens appearance settings, switches theme, picks an
+accent, bumps the font scale, and expects it to apply INSTANTLY and STICK after a reload.
+**Drive script:** `e2e/loopstory_22_make_it_mine.mjs` (open theme editor, apply a preset/accent, read live
+CSS tokens, reload, assert persistence).
+**✅ VERIFIED WORKING (strong, complete feature — keep as a regression anchor):**
+- A **theme editor** opens from the settings panel; design tokens are exposed as **live CSS custom
+  properties** (`--accent`, `--ui-scale`, surfaces, text). ✓
+- **Live apply:** applying a preset changed the page background immediately
+  (`rgb(14,14,15)→rgb(15,23,20)`) — no reload needed. ✓
+- **Persists:** writes `cashflux:theme` + `cashflux:prefs`; after reload the non-default accent
+  (`#4fae84`) and background survived (app.go applies prefs/theme **before mount**, so no flash to
+  defaults). ✓
+- Controls present: **dark/light**, **accent swatches**, **font/UI scale + density**, **custom font**,
+  **dashboard banner**. ✓
+
+**Gaps (this area is well-covered; the gaps are a11y + portability):**
+- [ ] **No contrast guard on custom themes (a11y, ties to L7).** A user can pick a low-contrast
+      accent/text/surface combo with no warning. Add a **WCAG contrast check** in the theme editor that
+      flags text/background and accent/surface pairs below AA (4.5:1 / 3:1). Bottom-up: a pure
+      `contrastRatio(fg,bg)` + `MeetsAA(...)` in a small color util (table-tested) → an inline warning
+      badge in the editor next to failing tokens.
+- [ ] **Custom appearance isn't portable (cross-ref L9).** The theme/custom-fonts/banner persist locally
+      but are **excluded from Export JSON** (L9), so "Make It Mine" doesn't follow Renée to a new device.
+      Fold the appearance keys into the **full-backup envelope** (L9) so they round-trip.
+- [ ] *(Enhancement)* **Share a theme** — export/import just the theme token set (a small JSON) so a user
+      can share or restore a crafted look independent of their data.
+
+**Probe note:** the "persisted across reload" check **false-negatived** — the `after` token snapshot was
+read before the accent swatch's live update fully propagated, so it compared the reloaded accent
+(`#4fae84`, persisted correctly) against a stale value. Background persistence matched, and the reloaded
+accent is non-default, confirming persistence works. Fix `loopstory_22` to re-read tokens after a short
+settle before snapshotting, and assert against the swatch's known color.
+
+### L23. Story — "The Decade Importer" (Hector, bulk CSV import resilience) — 2026-06-20 ★
+
+**The ritual:** Hector pastes 10 years of transactions — a big, slightly messy CSV (hundreds of rows,
+a few with missing/garbage fields) — and expects valid rows imported with correct totals, bad rows
+handled gracefully, and the app to stay snappy.
+**Drive script:** `e2e/loopstory_23_decade_importer.mjs` (+ focused `_impdiag` diagnostics).
+**What works (verified):**
+- CSV paste import works for clean rows: 10/10 imported and persisted; an **unmatched account name still
+  imports** (the importer doesn't require a pre-existing account); huge numbers, empty lines, and missing
+  dates are each handled fine. ✓
+
+**🔴 CONFIRMED BUG (high value — precisely root-caused):**
+- [ ] **One row with a non-numeric amount ABORTS the ENTIRE CSV import — silently.** Isolated by trials:
+      `clean=10/10`, **`+1 row "amount=not-a-number" → 0/10 imported`**, `+huge=10/10`, `+empty=10/10`,
+      `+missing-date=10/10`. So a single bad **amount** discards *all* valid rows, with **no page error
+      and no toast**. This is exactly why a 600-row paste containing one `not-a-number` imported nothing.
+      For a "paste my old data" flow this is the worst failure mode. Fix bottom-up:
+  - [ ] **Logic** (the CSV parser — `internal/extract` / the documents import path): parse **row-by-row**;
+        a bad row is **skipped, not fatal**. Return a structured `{imported:int, skipped:[{line, field,
+        reason}]}`. Table-test: bad amount, missing required field, empty line, extra columns, huge value
+        — assert valid rows still import and each bad row is reported with its line + reason.
+  - [ ] **State/UI** `internal/screens/documents.go`: after import show **"Imported 598 of 600. 2 skipped:
+        line 12 — amount 'not-a-number' isn't a number; line 45 — …"** in plain English, so Hector can fix
+        and re-import. (Today there is no success/skip feedback at all.)
+  - [ ] **E2E gate** (`e2e/import_resilience_check.mjs`): valid+malformed CSV → valid rows imported, bad
+        rows reported, no silent loss.
+
+**Unverified (blocked by the bug above):**
+- [ ] **Scale/perf at 600+ rows** could NOT be measured because the malformed import aborted (final count
+      was just the 57 sample rows; the "30s import" was my poll *timeout*, not real time). Re-test ledger
+      render + scroll responsiveness with 600–1000 **clean** rows once row-level import lands. (Clean
+      10-row import + a 57-row ledger rendered in ~1.9s and stayed interactive — promising but not at
+      scale.)
+
+**Probe note:** the main script's "all 600 imported" and "import time" findings were **misleading** — the
+import silently failed on the bad amount, so the delta was just the sample (57) and the "30124ms" was the
+`waitForFunction` timeout. The `_impdiag` trials are the source of truth here.
+
+### L24. Story — "Pay Yourself First" (Leah, transfers / accounting invariants) — 2026-06-20 ★
+
+**The ritual:** Leah moves $500 from Checking to High-Yield Savings monthly. She expects: Checking
+-$500, Savings +$500, **net worth UNCHANGED**, and the transfer **excluded** from income/expense.
+**Drive script:** `e2e/loopstory_24_pay_yourself.mjs` (+ `_xfer` diagnostic for a real from→to).
+**✅ VERIFIED WORKING (correctness — keep as a regression anchor):**
+- The transaction form supports a **Transfer kind** with **from + to account** selectors. A real
+  $500 **Everyday Checking → High-Yield Savings** transfer recorded correctly. ✓
+- **Accounting invariants hold:** after the transfer, **net worth unchanged ($354,070)**, **income
+  unchanged ($6,400)**, **spending unchanged ($4,088)** — transfers are net-worth-neutral and correctly
+  excluded from income/expense. ✓ (Individual per-account ±$500 not separately asserted, but the
+  net-worth-flat + not-income/expense invariants confirm balanced legs.)
+- **Action:** promote to a CI gate (`e2e/transfer_invariants_check.mjs`) — net-worth-neutral +
+  excluded-from-income/expense is a core correctness invariant.
+
+**Gaps (dream-big automation + edge cases):**
+- [ ] **No recurring / scheduled transactions or transfers.** The `Transaction` struct
+      (`domain/entities.go:69`) has **no recurrence field**; the UI "repeat" is only manual **"repeat
+      last"**. A monthly "pay yourself first" (and recurring bills/income) must be re-entered by hand.
+      Bottom-up: add a recurrence (reuse `RecurringCadence` weekly/monthly/quarterly/yearly + nextDate +
+      optional end) to a **scheduled-transaction** model that **auto-posts** on its date; pure scheduler
+      (tested: next-occurrence, catch-up on missed dates, end) → store → state → a "Repeat monthly"
+      option on the add form + an upcoming/auto-post surface. Ties to L13 (cash-flow projection should
+      consume these) and the Planning recurring cash flows (which are projection-only today).
+- [ ] **Cross-currency transfer (ties L4).** A transfer assumes one amount/one currency; moving USD→EUR
+      needs an FX rate (and likely a received-amount). Verify + handle: apply the FX table, optionally let
+      the user set the received amount; test net-worth stays consistent in base currency.
+
+**Bonus note for the dev agent (cross-cuts L1/L3/L17/L18):** `Transaction.Splits []CategorySplit`
+**already exists** in the model (`entities.go:77`). The category-split *data model* is in place — the
+budgets-cover (L1), receipt-as-split (L3), allocate-apply (L17), and custom-field reporting work mostly
+need **UI + apply logic over the existing Splits**, not a new schema. Verify the splits UI/round-trip.
+
+**Probe note:** the first run's transfer was **vacuous** — my account picker selected the placeholder
+"— To account —" as the destination, so submit failed validation and *no* transfer occurred (making the
+invariant PASSes meaningless). The `_xfer` re-drive with a real Checking→Savings destination is the source
+of truth. Fix `loopstory_24` to pick accounts by name and skip empty-value options.
+
+### L25. Story — "The Cleanup" (Wei, bulk transaction operations) — 2026-06-20 ★
+
+**The ritual:** Wei has a pile of messy transactions; he multi-selects a batch, bulk-assigns a category,
+bulk-marks-cleared after reconciling, and bulk-deletes duplicates — fast, ideally with undo.
+**Drive script:** `e2e/loopstory_25_cleanup.mjs` (+ `_bulkdiag` 1-3 diagnostics).
+**✅ VERIFIED WORKING (strong — keep as a regression anchor):**
+- Per-row select (`button.check`) → a **bulk bar** with the selection count and actions: **Apply
+  category**, **Mark cleared / uncleared**, **Delete selected**, **Clear selection**. ✓
+- **Bulk recategorize is correct:** with the bulk "Category to apply" select set to Dining, applying it
+  changed exactly the selected non-Dining rows **to Dining** (Groceries→Dining, Household&shopping→Dining;
+  the already-Dining row unchanged). Selection clears after the action. ✓
+- Bonus: **duplicate detection** — "N possible duplicates" + a **"Select duplicates"** helper. ✓
+- No page errors across bulk operations. ✓
+- **Action:** promote to a CI gate (`e2e/bulk_ops_check.mjs`) — assert recategorize/clear/delete affect
+  exactly the selected set.
+
+**Gaps:**
+- [ ] **No undo after bulk actions (risk).** Bulk recategorize / mark-cleared / **delete** are
+      irreversible — an accidental bulk delete of N transactions or a mis-applied category can't be
+      reverted. For a cleanup flow this is dangerous. Add **Undo** (toast: "Recategorized 3 · Undo" /
+      "Deleted 5 · Undo"). Bottom-up: snapshot the affected transactions' prior state before the op →
+      an undo action that restores it → a toast with Undo (also applies to single delete). Part of a
+      broader "undo for destructive actions" theme.
+- [ ] **No "select all / select all filtered".** To recategorize 50 "Amazon" rows, Wei would filter to
+      Amazon then want **"select all shown"** — today he must click each `button.check`. There's
+      "Select duplicates" but no select-all-visible. Add a header select-all that selects the current
+      filtered set (the bulk ops already operate on the selection).
+
+**Probe note (IMPORTANT — not a bug):** the main script + `_bulkdiag`/`_bulkdiag2` initially showed bulk
+apply **clearing categories to empty** — that was a **test artifact**: setting the bulk `<select>` via JS
+`dispatchEvent` and via `selectOption(nth(0))` hit the **wrong** select (the add-form/filter category, not
+the bulk one), so `bulkCat` stayed empty and apply cleared. Targeting the exact
+`select[aria-label="Category to apply"]` (`_bulkdiag3`, value confirmed `cat-dining`) proved bulk
+recategorize works correctly. **Do not chase a "bulk clears category" bug.** Fix `loopstory_25` to target
+the bulk select by its aria-label and assert the chosen category is applied.
+
+### L26. Story — "The Money To-Do List" (Nina, tasks lifecycle) — 2026-06-20 ★
+
+**The ritual:** Nina keeps money chores as to-dos ("call about the APR", "rebalance 401k", "cancel gym")
+with due dates, marks them done, and expects overdue ones surfaced + a hide-done filter.
+**Drive script:** `e2e/loopstory_26_money_todo.mjs` (+ screenshot/source verification).
+**✅ VERIFIED WORKING (clean, complete lifecycle — keep as a regression anchor):**
+- Add a task (title + **priority** + **due date** + notes); **priority color-badges** (HIGH/MEDIUM/LOW);
+  Edit + delete. ✓
+- **Toggle done** works (proven: the **hide-done filter removed the completed task** — only possible if
+  status flipped to done; "Show all" toggles back). ✓
+- **Ordering**: open first, soonest due, then title (`todo.go:147`, pure `internal/tasksort`). Due date
+  is shown on the row when set (`todo.go:266-267`). Clean professional UI. ✓
+
+**Gaps:**
+- [ ] **Overdue tasks are NOT visually flagged.** A past-due task shows "Due <date>" with no red/badge/
+      "Overdue" treatment (`todo.go` has no overdue styling) — Nina can't spot what's late. Add overdue
+      styling + an "Overdue" / "N days late" badge for `Due < today && status==open`. Bottom-up: pure
+      `tasksort.IsOverdue(task, now)` (tested) → conditional row class/badge; optionally a dashboard
+      "N tasks overdue" nudge.
+- [ ] **Money chores can't link to the entity they're about.** "Pay credit card by the 18th" / "cancel
+      gym" are free text; they can't deep-link to the **account / bill / subscription / goal** or carry
+      an action ("mark paid", "go to subscription"). Add an optional **linked-entity ref** on a task →
+      a link + contextual action. Ties to L13 (mark-paid), L12 (cancel subscription), goals — turns the
+      to-do into an actionable money command center.
+- [ ] **No recurring tasks** ("rebalance 401k" quarterly, "review budget" monthly) — same recurrence
+      theme as L24. Reuse `RecurringCadence` to auto-recreate a task on completion/schedule.
+
+**Probe note:** two checks **false-negatived on autosave timing** — "status=open persists" and
+"status=done persists" read `localStorage` at 700ms, before the ~2.5s autosave; the hide-done behavior
+proves the toggle worked. And "overdue flagged" **false-positived** (matched the "2025" in the due-date
+string; there is no real overdue flag — that's gap #1). Fix `loopstory_26` to wait for autosave and to
+assert an explicit overdue badge.
+
+### L27. Story — "The What-If" (Dev & Priya, Planning / scenario forecasting) — 2026-06-20 ★
+
+**The ritual:** Dev & Priya weigh a 6-month sabbatical — income drops $4,000/mo while expenses hold.
+They model it, watch the trajectory, see their runway, and save the scenario.
+**Drive script:** `e2e/loopstory_27_what_if.mjs` (+ `_whatif2` re-drive).
+**✅ VERIFIED WORKING (rich, correct — keep as a regression anchor):**
+- **Savings & spending what-if plan** is correct: start $22,500 · −$4,000/mo · 12 months → **Projected
+  ($25,500)** = exactly 22,500 − 12×4,000. Deterministic + reflects the drawdown into negative. ✓
+- A **baseline net-worth forecast** ("this month's net cash flow continued → $X in 12 months") with a
+  **"trim spending" what-if** overlay (two compared curves). ✓
+- **Recurring cash flows** exist here (`domain.Recurring` + `PutRecurring` + **"Post due now"**
+  `PostDueRecurring`) — *refines L24*: there IS a recurring-transaction mechanism (manual-post,
+  Planning-scoped), just not on the transaction add form. ✓
+- Debt payoff strategy (snowball/avalanche) + **"Start tracking progress"** + a suggested extra — looks
+  like the dev agent has already begun building **L5** (was "170 months / no rec"; now "45 months / Try
+  $X/mo / track progress"). 👍
+
+**Gaps (dream-big modeling):**
+- [ ] **No RUNWAY indicator — the key sabbatical number.** The plan projects to −$25,500 at 12 months but
+      never says **"funds run out in month ~6"** (22,500 / 4,000 ≈ 5.6) — it just goes negative silently.
+      Add a runway/depletion readout ("money lasts ~5.6 months · depleted by ~Dec 2026") + a warning when
+      a plan crosses zero. Bottom-up: pure `forecast.RunwayMonths(start, monthly, oneTimes)` (table-
+      tested incl. never-depletes) → a line on the plan card + a red marker on the curve. (Ties to L13's
+      cash-flow runway — share the calc.)
+- [ ] **Baseline forecast = THIS month's net extrapolated 12×** (`planning.go:231-234`,
+      `monthlyNet = income−expense for MonthRange(now)`). If the current month is atypical (a one-off
+      purchase, a bonus), the 12-month forecast is misleading. Base it on a **trailing average** (last
+      3–6 months) or the recurring cash flows. Bottom-up: an averaged `monthlyNet` (pure, tested) feeding
+      `forecast.Project`; show the basis ("based on your last 3 months").
+- [ ] *(Enhancement)* **Prefill starting balance from a chosen account**, and let two saved plans be
+      **compared side-by-side** (sabbatical vs status-quo curves), like the trim overlay already does.
+
+**Probe note:** the first run's "plan created" + "drawdown" GAPs were **test artifacts** — my
+`/add$/`-named button matched the **recurring card's "Add"** (earlier in the DOM), so the plan form never
+submitted. The `_whatif2` re-drive with the exact **"Add plan"** button confirmed the plan + correct
+projection. Also "forecast uses average/recurring basis" **false-positived** (matched the "Recurring"
+card heading; source confirms single-month basis — that's gap #2). Fix `loopstory_27` to click "Add plan"
+exactly.
+
+### L28. Story — "The Category Nerd" (Tomás, sub-categories tree + rollup) — 2026-06-20 ★
+
+**The ritual:** Tomás wants granularity — under "Food" he splits into Groceries/Dining/Coffee, assigns
+transactions to the leaves, and expects the parent to **roll up** the sum of its children.
+**Drive script:** `e2e/loopstory_28_category_tree.mjs` (create parent+child → assign txn to child →
+budget on parent → assert rollup).
+**✅ VERIFIED WORKING end-to-end (strong, complete — keep as a regression anchor):**
+- Create a **parent** category; create a **child** via an **indented parent picker** (`categorytree`).
+  The child is selectable on the transaction form. ✓
+- **Rollup is correct:** assigned a $25 txn to the **child** (COFFEETEST), created a budget on the
+  **parent** (FOODTEST) → the parent budget shows **$25.00 / $100.00 spent** (D5 sub-category rollup).
+  This also *proves* the nesting (a parent budget can only roll up a child's txn if
+  `child.parentId == parent.id`). ✓
+- **Action:** promote to a CI gate (`e2e/category_rollup_check.mjs`) — child spend rolls into a
+  parent budget.
+
+**Gaps (this area is solid; gaps are coverage + polish):**
+- [ ] **Verify Reports rolls up by parent too.** Budgets roll up children (confirmed); the by-category
+      **Reports** breakdown should also roll child spend into the parent (or offer a parent-total view),
+      not just list leaf categories flat. Verify; if flat, add a rollup option. Bottom-up: a pure
+      `reports.ByCategory` that respects the tree (tested) → a parent/leaf toggle.
+- [ ] **Deleting a parent with children — verify no orphans.** CLAUDE.md notes reassign-on-delete for
+      categories; confirm deleting a parent reassigns/keeps children consistent (no dangling parentId).
+      Add a test for the parent-delete case.
+- [ ] *(Polish)* **Collapsible tree view.** Categories render as an indented flat list; for deep trees a
+      collapse/expand per parent would help navigation. Minor.
+
+**Positive observation (dev-agent progress):** the **L1 budget sub-line glue defect appears FIXED** — the
+budget rows now show "…$61.00 left" and "At this pace, projected to go over by $86.45" on **separate
+lines** (was glued in L1). Nice.
+
+**Probe note:** the "child nested (childParent === parent.id)" check **false-negatived** — it read
+`localStorage` right after creating the child, before the ~2.5s autosave persisted `parentId` (the eval
+returned `undefined`). The **budget rollup is definitive proof** the nesting worked. Fix `loopstory_28` to
+wait for autosave (or assert via the rollup) and to set the parent select with a real change event.
+
+### L29. Story — "Keep the Receipt" (Lena, receipt attachments / Artifacts) — 2026-06-20 ★
+
+**The ritual:** Lena buys a $1,200 laptop and wants to attach the receipt image to **that transaction**
+for warranty/tax proof — a paperclip on the row, retrieve/preview later, survive the backup.
+**Drive script:** `e2e/loopstory_29_keep_receipt.mjs`.
+**What exists (verified by screenshot + source):**
+- An **Artifacts** screen: **Upload image** + **Import CSV** → a local artifact store, with a
+  **storage-usage** readout ("Local storage in use: 29.7 KB") and an empty state. ✓
+- The domain model already has `Transaction.Attachments []AttachmentRef` (→ ArtifactID) and AI import
+  sets `SourceDocID` — the *plumbing* exists. ✓
+
+**🔴 Gap (the story's core need is unmet):**
+- [ ] **No per-transaction receipt attachment in the UI.** `transactions.go` has **no attach code** — you
+      can't attach an artifact to a specific transaction, there's **no paperclip indicator** on rows, and
+      no transaction→receipt navigation. The `Attachments` field is unused by the UI. Build bottom-up:
+  - [ ] **State/UI** `internal/screens/transactions.go`: an **"Attach receipt"** action (add/edit/row)
+        that uploads via `pickFile` → creates an Artifact → appends an `AttachmentRef`; a **paperclip
+        marker** on rows with attachments; click → preview the image.
+  - [ ] **Artifacts↔txn linkage** `internal/screens/artifacts.go`: each artifact row shows **which
+        transaction(s)** reference it; ideally create-and-link in one step.
+  - [ ] **Round-trip** (ties L9): ensure `AttachmentRef` + the artifact bytes are included in the
+        backup/export so receipts survive a device migration; test.
+- [ ] **Storage scalability for receipts.** Artifacts live in **localStorage** (the "KB in use" readout
+      is good) — but binary receipt images will blow the ~5-10 MB quota fast for "keep all my receipts".
+      Move artifact bytes to **IndexedDB** (keep refs in the dataset), with a graceful quota warning.
+      Bottom-up: an artifact-store seam (interface) → IndexedDB impl → quota check + nudge; tested.
+
+**Probe note:** "the transaction UI exposes attaching" **false-positived** (the loose `/file/` match hit
+unrelated markup); source confirms **no** attach UI in transactions — the add-form-control + row-indicator
+GAPs are the accurate signal. "Artifacts show linked transaction" PASS is **unverified** (the store was
+empty); re-test after uploading + linking once that flow exists. Artifact upload uses an **off-DOM**
+`pickFile` input, so `setInputFiles` can't drive it — needs a test seam or a DOM input to be E2E-testable.
+
+### L30. Story — "Reconciliation Day" (Omar, account reconcile / update-balance) — 2026-06-20 ★
+
+**The ritual:** Omar reconciles monthly — his bank shows Checking = (CashFlux + $123.45). He updates
+CashFlux to match and expects a reconciling adjustment for the difference, the account marked fresh
+(stale cleared), and a clear confirmation.
+**Drive script:** `e2e/loopstory_30_reconcile.mjs`.
+**✅ VERIFIED WORKING & CORRECT (keep as a regression anchor):**
+- Per-account **"… → Update balance"** reveals a **New balance** form (`#acct-setbal-<id>` + Save). ✓
+- **Reconcile is correct:** entered target $8,999.45 on an account whose actual balance was $8,070.00 →
+  posted a **"Balance adjustment"** transaction of **+$929.45** (= target − current, `Amount:92945`),
+  **`cleared=true`**. ✓ (`ledger.AdjustmentToTarget`)
+- **Freshness:** `BalanceAsOf` updated → the **stale flag clears**; a **"Mark all updated"** affordance
+  exists for stale accounts (`freshness.IsStale`). ✓
+- A **confirmation toast** ("Updated X to $Y") is shown. ✓
+- **Action:** promote to a CI gate (`e2e/reconcile_check.mjs`) — adjustment == target − current, cleared,
+  freshness updated.
+
+**Gaps (dream-big — make reconciliation trustworthy, not just a force-to-target):**
+- [ ] **Show the computed difference + let the user label the adjustment.** The form takes only the new
+      balance; it doesn't preview "current $8,070.00 → entered $8,999.45 = **+$929.45 adjustment**" before
+      saving, and the adjustment lands as a generic **uncategorized** "Balance adjustment" (which can skew
+      reports — a $929 uncategorized entry). Show the delta inline + an optional **category/note** (e.g.
+      interest, a missed transaction), or flag adjustments excludable from spending. Bottom-up: surface
+      `AdjustmentToTarget` delta in the form + a category field on the adjustment; test.
+- [ ] **Guided statement reconciliation (gold standard).** True reconcile = tick off each transaction on
+      the statement until the **cleared balance** matches the statement, rather than forcing the total.
+      The pieces exist (a `cleared` flag — L25 bulk-clear — and a cleared-balance display). Add a
+      **"Reconcile to statement"** mode: enter the statement balance, check cleared items, and confirm
+      when cleared-balance == statement (only then no adjustment needed). Bottom-up: pure
+      `reconcile.Diff(clearedTxns, statementBalance)` (tested) → a guided UI over the existing cleared
+      flag.
+
+**Probe note:** the "adjustment equals $123.45" check **false-negatived** twice over — (1) my row-balance
+regex grabbed the **cleared-balance meta** ("cleared $8,876.00") instead of the actual balance ($8,070),
+so my expected delta was wrong; (2) I read `amt.amount` but the field is `amt.Amount`. The logged values
+(target 8999.45, adj 929.45) prove the reconcile math is correct. Fix `loopstory_30` to read the row's
+main amount and the `Amount` field.
 
 ---
 

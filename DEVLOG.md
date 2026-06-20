@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: linked-goal → account transactions drill-down (C51)
+
+- C51 item 6: a goal linked to an account should drill to that account's activity. Added Goals() nav + txFilter +
+  viewAccountTxns(accountID) (TxFilter{Account}.Normalize → atom.Set + PersistTxFilter → nav to /transactions),
+  wired via a new goalRowProps.OnDrillAccount (added router import). In GoalRow, split the linked account out of
+  the run-on progress sub-line into its own clickable element (also a partial fix for item 3's run-on) — inline-
+  styled link (dotted underline) since index.html is parallel-dirty.
+- New goals_drill_check.mjs adds a goal linked to a real account, clicks the linked affordance, asserts navigation
+  to /transactions and that the persisted tx-filter carries an account (landed on sample-autoloan). PASS;
+  goals_labels_check still PASS. App wasm builds clean; gofmt clean. sw.js parallel-dirty, left out. Committed by
+  pathspec (goals.go, the new e2e, journals); TODOS.md untouched.
+- C51 now: bar tone done, labels done, linked drill-down done. Remaining (row sub-line badges, contribute audit
+  note, icon-only narrow rows) are CSS/behavior-heavy and overlap the contended index.html — deferred. Next: C52.
+
 ## 2026-06-20 - feat: richer rule match conditions (L15, logic)
 
 - Last clean pure-logic gap for L15: a rule today matches one case-insensitive description substring; the
