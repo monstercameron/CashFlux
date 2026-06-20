@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Category rows show a usage count that drills into Transactions (C63).** Each category row now displays how
+  many transactions are filed under it (e.g. "25 transactions"); clicking the badge navigates to Transactions
+  pre-filtered to that category, matching the Accounts/Members drill pattern. Categories with no transactions show
+  a muted "No transactions". New `categories_usage_drill_check` e2e covers the badge and the persisted-filter drill.
 - **Custom-page Text widget renders Markdown (C66/C32).** The Text widget on custom pages now renders its content
   as Markdown (headings, lists, emphasis, links) instead of a flat paragraph, via the same GFM-aware, raw-HTML-
   escaping framework `Markdown` used for Insights — so a note can be a real rich-text block and imported page

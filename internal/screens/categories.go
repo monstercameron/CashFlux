@@ -14,6 +14,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -76,6 +77,22 @@ func Categories() ui.Node {
 			}
 		}
 		return used
+	}
+
+	// txnByCat counts transactions per category in one pass, for the per-row usage
+	// badge (C63). Budgets are excluded here: the badge drills into Transactions, so
+	// it counts exactly the thing it links to.
+	txnByCat := map[string]int{}
+	for _, t := range app.Transactions() {
+		txnByCat[t.CategoryID]++
+	}
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	viewTxns := func(catID string) {
+		f := uistate.TxFilter{Category: catID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
 	deleteCat := func(catID string) {
@@ -178,7 +195,7 @@ func Categories() ui.Node {
 		bump()
 	}
 	renderFlat := func(f categorytree.Flat) ui.Node {
-		return ui.CreateElement(CategoryRow, categoryRowProps{Category: f.Category, Depth: f.Depth, AllCategories: cats, OnDelete: deleteCat, OnSave: saveCat})
+		return ui.CreateElement(CategoryRow, categoryRowProps{Category: f.Category, Depth: f.Depth, AllCategories: cats, TxnCount: txnByCat[f.Category.ID], OnView: viewTxns, OnDelete: deleteCat, OnSave: saveCat})
 	}
 	flatKey := func(f categorytree.Flat) any { return f.Category.ID }
 
@@ -230,6 +247,8 @@ type categoryRowProps struct {
 	Category      domain.Category
 	Depth         int
 	AllCategories []domain.Category // for the inline parent picker
+	TxnCount      int               // transactions filed under this category
+	OnView        func(string)      // drill into Transactions filtered by category
 	OnDelete      func(string)
 	OnSave        func(id, name, kind, parent, color string)
 }
@@ -244,6 +263,11 @@ func indentLabel(depth int) string {
 func CategoryRow(props categoryRowProps) ui.Node {
 	c := props.Category
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(c.ID) }))
+	view := ui.UseEvent(func() {
+		if props.OnView != nil {
+			props.OnView(c.ID)
+		}
+	})
 	editing := ui.UseState(false)
 	nameS := ui.UseState(c.Name)
 	kindS := ui.UseState(string(c.Kind))
@@ -320,7 +344,16 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		Span(Class("cat-swatch"), Style(map[string]string{"background": catColor(c.Color)})),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), desc),
-			Span(Class("row-meta"), kindLabel),
+			Span(Class("row-meta"),
+				Text(kindLabel),
+				Text(" · "),
+				// Per-row usage (C63): show how many transactions are filed under
+				// this category, and drill into Transactions filtered by it when
+				// there are any (matches the Accounts/Members drill pattern).
+				IfElse(props.TxnCount > 0,
+					Button(Class("btn-link cat-usage"), Type("button"), Title("View these transactions"), OnClick(view), Text(plural(props.TxnCount, "transaction"))),
+					Span(Class("text-faint"), Text("No transactions"))),
+			),
 		),
 		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("categories.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
 		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("categories.deleteTitle")), Title(uistate.T("categories.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),

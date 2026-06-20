@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: category per-row usage count + drill-down (C63)
+
+- The last open C63 item: category rows didn't show how many transactions used them (the count only surfaced on
+  delete), and — unlike Accounts/Members — there was no drill into the filtered ledger. Added both. A single pass
+  builds `txnByCat map[string]int` (budgets excluded; the badge links to Transactions, so it counts what it links
+  to), passed per-row into `CategoryRow` along with a `viewTxns` callback that sets+persists a `TxFilter{Category}`
+  and navigates to /transactions — the same pattern accounts.go uses.
+- The row meta now reads "Expense · 25 transactions" where the count is a `btn-link` drill button (its OnClick hook
+  is stable — CategoryRow is its own component, so no loop-hook hazard); zero-use categories show a muted
+  "No transactions". Literal button title (en.go is contested); the count text uses the existing `plural` helper.
+- e2e `categories_usage_drill_check`: asserts the badge text matches "N transaction(s)", that clicking drills to
+  /transactions, and that `cashflux:tx-filter` persists a category — PASS ("25 transactions"). Regression: the
+  reassign-kind and category-diagram checks still PASS. categories.go was clean/uncontested; committed by pathspec,
+  TODOS.md untouched.
+
 ## 2026-06-20 - feat: custom-page Text widget renders Markdown (C66/C32)
 
 - Now that the framework's Markdown is in use (C59), the custom-page Text widget was the next free win: its
