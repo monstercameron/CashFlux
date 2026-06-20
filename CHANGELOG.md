@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The boot splash fully dismisses instead of lingering over the app (L12 root-cause; clears L1/L2/L3/L6/L11).**
+  The "Getting your money in order…" splash (`#boot`, a full-viewport `position:fixed; z-index:10` overlay) was
+  only faded out via a CSS opacity transition once the app rendered — so a slow or interrupted transition could
+  leave it stuck translucent over the content (seen on /planning, /split, /goals, /documents). It now also drops
+  out of the layer (`display:none`) once faded (via `transitionend` plus a fallback timeout), checks for content
+  already mounted before the observer attaches, and has a safety timeout so a re-mount can't outrace it. Guarded
+  by a new `splash_dismiss_check` e2e across all four routes.
 - **Net worth no longer silently miscomputes when an FX rate is missing (L4, determinism rule).** Previously a
   single account in a currency with no exchange rate made the whole net-worth roll-up return an error that the
   screens discarded — collapsing the entire figure to zero. Now a new `ledger.NetWorthExplained` **excludes** any

@@ -680,15 +680,34 @@
         const app = document.getElementById("app");
         const errorBox = document.getElementById("boot-error");
 
-        if (app && typeof MutationObserver === "function") {
-          const obs = new MutationObserver(function () {
-            if (app.children.length > 0) {
-              app.classList.add("app-enter");
-              boot.classList.add("hidden");
-              obs.disconnect();
-            }
-          });
-          obs.observe(app, { childList: true });
+        // Dismiss the boot splash once the app has rendered. We fade it (CSS) AND
+        // then pull it out of the layer (display:none) so a slow or interrupted
+        // transition can never leave a translucent #boot stuck over the app — the
+        // lingering-splash bug seen across /planning, /split, /goals, /documents.
+        function hideBoot() {
+          if (!boot || boot.classList.contains("hidden")) return;
+          if (app) app.classList.add("app-enter");
+          boot.classList.add("hidden");
+          var remove = function () { boot.style.display = "none"; };
+          boot.addEventListener("transitionend", remove, { once: true });
+          setTimeout(remove, 700); // fallback if transitionend never fires
+        }
+
+        if (app) {
+          if (app.children.length > 0) {
+            hideBoot(); // content already mounted before this script ran
+          } else if (typeof MutationObserver === "function") {
+            const obs = new MutationObserver(function () {
+              if (app.children.length > 0) {
+                hideBoot();
+                obs.disconnect();
+              }
+            });
+            obs.observe(app, { childList: true });
+          }
+          // Safety net: never let the splash outlive the boot, even if a re-mount
+          // races the observer.
+          setTimeout(function () { if (app.children.length > 0) hideBoot(); }, 4000);
         }
 
         if (typeof Go !== "function") {

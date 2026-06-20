@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: L12 boot splash fully dismisses (clears L1/L2/L3/L6/L11)
+
+- Last tick's screenshot confirmed the lingering-splash bug visibly (translucent #boot over /planning), so I
+  pulled the L12 root-cause forward — it's a fix-once that clears the splash complaint in L1/L2/L3/L6/L11.
+- Root cause: web/index.html dismissed #boot (full-viewport position:fixed z-index:10) by adding a .hidden class
+  that only fades opacity to 0 over 0.45s. The element stayed in the layer, so a slow/interrupted transition (or
+  a re-instantiation racing the MutationObserver) could leave it stuck translucent over the app.
+- Fix (index.html boot script): a hideBoot() that adds .hidden AND removes the element from the layer
+  (display:none) once faded — via transitionend plus a 700ms fallback (covers reduced-motion / no-transition).
+  Also: if #app already has children when the script runs, hide immediately (no missed first-render); and a 4s
+  safety timeout hides it even if a re-mount outraces the observer. Bumped sw v202->v203.
+- New permanent gate e2e/splash_dismiss_check.mjs: visits /planning, /split, /goals, /documents, waits for
+  content + the fade, and asserts #boot is gone (display:none / opacity 0 / .hidden) on each. Full suite 36/0
+  green. Screenshot confirms /planning renders clean with no overlay (vs last tick's overlaid shot).
+
 ## 2026-06-20 - feat: L5 suggest a starting extra + explain strategy ties
 
 - L5 gap 2: snowball vs avalanche is useless at $0 extra (identical). Added pure payoff.SuggestedExtra(debts) ->
