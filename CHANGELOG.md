@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **The transactions filter toolbar is now a portable, reusable `uiw.FilterToolbar` widget (C47, refactor).** The
+  compact search + Filters-popover + removable-chips UI was extracted out of `transactions.go` into
+  `internal/ui/filtertoolbar.go`, mirroring how `uiw.DataTable` owns the ledger table — so any screen with filters
+  (Budgets, Accounts, Reports, …) can reuse it. It's screen-agnostic: callers pass the search wiring, the popover
+  field controls, a `[]uiw.Chip` active-filter list, and the handlers; the component owns the popover open/close
+  state and the count badge internally. The transactions-specific `FilterChip` and inline toolbar assembly are
+  gone. Behavior is unchanged (e2e green).
 - **Transactions filters are now a compact toolbar with a Filters popover and removable chips (C47, completes it).**
   The cramped 10-control `form-grid` strip is replaced by an always-visible search box, a **Filters** button
   badged with the active-filter count, and **Clear** / **Export CSV** beside it. The button opens a `FlipPanel`

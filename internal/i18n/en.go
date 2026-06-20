@@ -776,7 +776,6 @@ var english = Catalog{
 	"transactions.summary":             "%s shown · net %s",
 	"transactions.filters":             "Filters",
 	"transactions.filtersTitle":        "Filter transactions",
-	"transactions.filtersBadge":        "%d filter(s) active",
 	"transactions.removeFilter":        "Remove this filter",
 	"transactions.clearAllFilters":     "Clear all filters",
 	"transactions.chipSearch":          "Search: %s",

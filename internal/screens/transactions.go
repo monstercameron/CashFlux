@@ -3,7 +3,6 @@
 package screens
 
 import (
-	"strconv"
 	"strings"
 	"time"
 
@@ -69,7 +68,6 @@ func Transactions() ui.Node {
 	customVals := ui.UseState(map[string]string{})
 	selected := ui.UseState(map[string]bool{})
 	bulkCat := ui.UseState("")
-	filtersOpen := ui.UseState(false)
 	errMsg := ui.UseState("")
 	noticeAtom := uistate.UseNotice()
 	notifyErr := func(text string) { noticeAtom.Set(noticeAtom.Get().With(text, true)) }
@@ -105,7 +103,7 @@ func Transactions() ui.Node {
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
 	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
 	onTags := ui.UseEvent(func(v string) { tagsStr.Set(v) })
-	onFilterText := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) })
+	onFilterText := func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) }
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Account = e.GetValue() }) })
 	onFilterCat := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue() }) })
 	// Click a column header to sort by it; click the active column again to flip
@@ -131,6 +129,12 @@ func Transactions() ui.Node {
 	// page resets back to 1 via ResetPageIfScopeChanged.
 	removeFilter := func(field txnfilter.FilterField) {
 		setFilter(func(x *uistate.TxFilter) { *x = x.Without(field) })
+	}
+	// clearAllFilters resets every filter at once (the toolbar's "clear all" link).
+	clearAllFilters := func() {
+		cleared := uistate.TxFilter{}.Normalize()
+		filterAtom.Set(cleared)
+		uistate.PersistTxFilter(cleared)
 	}
 
 	txnDefs := app.CustomFieldDefsFor("transaction")
@@ -581,31 +585,14 @@ func Transactions() ui.Node {
 		return af.Value
 	}
 	active := f.ActiveFilters()
-	chips := MapKeyed(active,
-		func(af txnfilter.ActiveFilter) any { return string(af.Field) },
-		func(af txnfilter.ActiveFilter) ui.Node {
-			return ui.CreateElement(FilterChip, filterChipProps{Label: chipLabel(af), Field: af.Field, OnRemove: removeFilter})
-		},
-	)
-
-	// Compact filter toolbar: an always-visible search box, a "Filters" popover
-	// trigger badged with the active count, then Clear and Export CSV (C47).
-	filtersTrigger := Button(Class("btn filters-trigger"), Type("button"),
-		Attr("aria-haspopup", "dialog"), Title(uistate.T("transactions.filtersTitle")),
-		OnClick(func() { filtersOpen.Set(true) }),
-		uistate.T("transactions.filters"),
-		If(len(active) > 0, Span(Class("filter-badge"), Attr("aria-label", uistate.T("transactions.filtersBadge", len(active))), Text(strconv.Itoa(len(active))))),
-	)
-	toolbar := Div(Class("filter-toolbar"),
-		Input(Class("field filter-search"), Type("search"), Attr("aria-label", uistate.T("transactions.searchPlaceholder")), Placeholder(uistate.T("transactions.searchPlaceholder")), Value(f.Text), OnInput(onFilterText)),
-		filtersTrigger,
-		Button(Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear")),
-		Button(Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
-	)
+	chips := make([]uiw.Chip, 0, len(active))
+	for _, af := range active {
+		chips = append(chips, uiw.Chip{Key: string(af.Field), Label: chipLabel(af)})
+	}
 
 	// The Filters popover body — the controls that used to crowd the inline strip,
-	// now grouped inside a FlipPanel. Filters apply live (each onChange persists),
-	// so the panel is close-only with nothing to "save".
+	// now grouped inside the toolbar's FlipPanel. Filters apply live (each onChange
+	// persists), so the panel is close-only with nothing to "save".
 	filtersBody := Div(Class("filter-fields"),
 		Label(Class("field-label"), uistate.T("transactions.filterAccount"),
 			Select(Class("field"), Attr("aria-label", uistate.T("transactions.filterAccount")), OnChange(onFilterAcc), filterAccOptions)),
@@ -629,17 +616,23 @@ func Transactions() ui.Node {
 		formCard,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("transactions.listTitle")),
-			toolbar,
-			If(len(active) > 0, Div(Class("filter-chips"), chips,
-				Button(Class("btn-link chip-clear-all"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clearAllFilters")),
-			)),
-			If(filtersOpen.Get(), uiw.FlipPanel(uiw.FlipPanelProps{
-				Title:     uistate.T("transactions.filtersTitle"),
-				Back:      filtersBody,
-				Height:    "440px",
-				CloseOnly: true,
-				OnClose:   func() { filtersOpen.Set(false) },
-			})),
+			uiw.FilterToolbar(uiw.FilterToolbarProps{
+				Search:        f.Text,
+				SearchLabel:   uistate.T("transactions.searchPlaceholder"),
+				OnSearch:      onFilterText,
+				FiltersLabel:  uistate.T("transactions.filters"),
+				FiltersTitle:  uistate.T("transactions.filtersTitle"),
+				FilterFields:  filtersBody,
+				Chips:         chips,
+				OnRemoveChip:  func(key string) { removeFilter(txnfilter.FilterField(key)) },
+				OnClearAll:    clearAllFilters,
+				ClearAllLabel: uistate.T("transactions.clearAllFilters"),
+				RemoveLabel:   uistate.T("transactions.removeFilter"),
+				Actions: []ui.Node{
+					Button(Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear")),
+					Button(Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
+				},
+			}),
 			If(len(selected.Get()) > 0, Div(Class("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
 				Span(Class("muted"), uistate.T("transactions.selected", plural(len(selected.Get()), "transaction"))),
 				Select(Class("field"), Attr("aria-label", uistate.T("transactions.categoryToApply")), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
@@ -659,23 +652,6 @@ func Transactions() ui.Node {
 			)),
 			listBody,
 		),
-	)
-}
-
-type filterChipProps struct {
-	Label    string
-	Field    txnfilter.FilterField
-	OnRemove func(txnfilter.FilterField)
-}
-
-// FilterChip is one removable active-filter chip in the transactions toolbar. It
-// is its own component so its remove-button OnClick hook sits at a stable render
-// position (the chip list is variable-length — see the framework loop gotcha).
-func FilterChip(props filterChipProps) ui.Node {
-	return Span(Class("filter-chip"),
-		Span(Class("chip-text"), props.Label),
-		Button(Class("chip-x"), Type("button"), Attr("aria-label", uistate.T("transactions.removeFilter")),
-			OnClick(func() { props.OnRemove(props.Field) }), "✕"),
 	)
 }
 

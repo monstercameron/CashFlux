@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - refactor: extract a reusable uiw.FilterToolbar (C47 portability)
+
+- Self-review caught that the first C47 UI pass baked the toolbar + a transactions-specific FilterChip into
+  transactions.go (only FlipPanel + the pure txnfilter logic were reusable). That doesn't match the bar set by
+  uiw.DataTable, and Budgets/Accounts/Reports have filters that want the same chrome.
+- Extracted internal/ui/filtertoolbar.go: a screen-agnostic uiw.FilterToolbar(FilterToolbarProps) — always-visible
+  search, a "Filters" trigger badged with the chip count, caller-supplied trailing Actions ([]uic.Node), and a
+  removable-chip row. The popover (FlipPanel) and its open/close state are owned internally, so callers only hold
+  their own filter state. Public API is plain types (Search string / OnSearch func(string) / Chips []uiw.Chip{Key,
+  Label} / OnRemoveChip func(key) / OnClearAll / Actions); OnSearch is wrapped with UseEvent inside the component
+  (OnInput wants a framework Handler). The chip remove button is its own filterChip component (stable hook position
+  for the loop). Badge is aria-hidden — the chips convey the active filters to SR users.
+- transactions.go now just builds []uiw.Chip from f.ActiveFilters() (chipLabel resolves IDs→names) and passes
+  handlers; removed the local FilterChip/filtersOpen/strconv and the now-unused transactions.filtersBadge i18n key.
+  App wasm builds clean; gofmt/vet clean. E2E re-run green: story_txn_filter_toolbar + story_txn_filter +
+  story_txn_bulk_clear all PASS — behavior preserved.
+- Next: tick C47 and move to C48 (Dashboard typography/spacing tokens).
+
 ## 2026-06-20 - feat: transactions filter toolbar + chips UI (completes C47)
 
 - The UI half over yesterday's active-filter logic. transactions.go's filter `form-grid` (10 controls in one
