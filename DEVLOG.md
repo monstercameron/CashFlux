@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: visible labels on budget forms (C50) + generalize labeledField
+
+- C50 item 1 (same systemic placeholder-only issue as C49). Reused the labeledField helper (same `screens` package)
+  on the budgets add form (name, category, owner, period, limit) and the inline editor (name, limit, period, owner).
+- Generalized the helper's hook class from `acct-field` to `labeled-field` since it's now shared across screens;
+  updated the accounts_labels_check selectors to match (accounts check still green).
+- New budgets_labels_check.mjs asserts the add form shows Name/Category/Owner/Period/Limit labels and the inline
+  editor shows Name/Limit/Period/Owner. PASS. App wasm builds clean; gofmt clean. Bumped sw v213->v214. Committed by
+  pathspec (budgets.go, accounts.go, both label e2e, sw.js, journals); TODOS.md untouched.
+- Next (C50): consolidate the up-to-4 stacked row sub-lines into tone badges, give the over/near summary the same
+  badge treatment, and add budget→filtered-transactions drill-down (mirrors C30 + the new uiw.FilterToolbar/txfilter
+  persistence). Those are uncontested (budgets.go); the badge styling may reuse existing tone classes to avoid
+  index.html.
+
 ## 2026-06-20 - feat: L8 grounded affordability check (pure logic)
 
 - L8 gap 2 (determinism rule): back "can we afford $X by [date]?" with the user's projected cash flow, not an

@@ -403,7 +403,7 @@ func Accounts() ui.Node {
 // The wrapping <label> also associates the text with the control for a11y. Styled
 // inline (stacked text-over-control) to avoid a stylesheet dependency.
 func labeledField(label string, control ui.Node) ui.Node {
-	return Label(Class("acct-field"),
+	return Label(Class("labeled-field"),
 		Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
 		Span(Class("t-caption text-dim"), label),
 		control,

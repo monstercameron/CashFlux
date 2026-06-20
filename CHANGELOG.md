@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Budget add and inline-edit forms now have persistent visible labels (C50).** Both budget forms were
+  placeholder-only (name, limit, and the Category / Owner / Period selects), so labels vanished on input — the same
+  systemic issue fixed for Accounts. Each control is now wrapped in the shared `labeledField` helper with visible
+  text above it; the helper's hook class was generalised from `acct-field` to `labeled-field` since it's now shared
+  across screens. Covered by a new `budgets_labels_check` e2e.
 - **The inline account editor and the set-balance form now have visible labels too (C49).** Extends the add-form
   labelling to the per-row edit form and the "set balance" form, so every account field is self-describing in every
   entry path (not just when adding). Uses the same `labeledField` wrapper; the `accounts_labels_check` e2e now also
