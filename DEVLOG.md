@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: urgency tone on upcoming bills (C57 item 3)
+
+- C57 item 3. BillRow's "due …" meta now carries a tone via a new billUrgencyTone(daysUntil): text-down when n<=0
+  (due today / past), text-warn when n<=3, none otherwise. The daysUntilLabel wording already conveys timing, so
+  it's colour + text (B15). bills_screen.go uncontested.
+- Build-gated (like the C57 row-key fix): the tone depends on today vs the sample due-days, so it isn't
+  deterministically e2e-able offline, and billUrgencyTone is trivially correct (and the screen pkg is wasm-tagged,
+  so no native unit test). app wasm builds clean; gofmt clean. Committed via git commit -- <paths>; TODOS.md
+  untouched.
+- C57 now: annual figure done, row key done, urgency tone done. Next: another uncontested slice.
+
 ## 2026-06-20 - feat: C74 delimited statement parser (pure)
 
 - Took C74's pure extraction/mapping slice (internal/statement area free + un-taken; other agent on Mermaid).

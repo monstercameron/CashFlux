@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Gravatar avatar URLs (C88, logic).** New pure, table-tested `internal/gravatar`: `Hash(email)` (hex MD5 of the
+  trimmed, lowercased address) and `URL(email, size)` (the avatar URL with an identicon fallback, size clamped to
+  1–2048, default 80). The pure Gravatar half of member avatars; the members-screen wiring and uploaded-photo/Giphy
+  options are later steps.
 - **Delimited statement parser (C74, logic).** New pure, table-tested `internal/statement` parses a bank/card
   statement (CSV/semicolon/tab/pipe) into normalized rows: `DetectDelimiter`, `MapColumns` (header-name heuristics →
   date/description/amount/debit/credit/balance), a lenient `ParseAmount` (currency symbols, thousands separators,
@@ -99,6 +103,9 @@ and every commit updates this file under `Unreleased`.
   follow-up over this data.)
 
 ### Fixed
+- **Upcoming bills now show urgency at a glance (C57).** A bill's "due today / in N days" line is now toned —
+  danger when due today (or past), warn within three days — so an imminent payment stands out (colour + the
+  existing wording, B15) instead of reading like any other row.
 - **Light themes now light the shell, not just the cards (C69).** The Paper preset set light content tokens but
   the rail/header/dashboard stayed dark, because the `[data-theme="light"]` stylesheet override that re-skins the
   shell only fires off the `data-theme` attribute — which the theme engine never set. New pure, table-tested

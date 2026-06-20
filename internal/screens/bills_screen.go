@@ -193,14 +193,34 @@ func BillRow(props billRowProps) ui.Node {
 	d := props.Data
 	remind := ui.UseEvent(Prevent(func() { props.OnRemind(d.Bill, d.Shown, d.DueLabel) }))
 	meta := d.DueLabel + " · " + daysUntilLabel(d.Bill.DaysUntil)
+	// Urgency tone so an imminent bill stands out at a glance (C57): danger when
+	// due today/past, warn within three days. The "due today / in N days" wording
+	// carries the meaning too, so it's colour + text (B15).
+	metaCls := "row-meta"
+	if t := billUrgencyTone(d.Bill.DaysUntil); t != "" {
+		metaCls += " " + t
+	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), d.Bill.Name),
-			Span(Class("row-meta"), meta),
+			Span(Class(metaCls), meta),
 		),
 		Span(Class("budget-amount"), fmtMoney(d.Shown)),
 		Button(Class("btn"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
 	)
+}
+
+// billUrgencyTone maps days-until-due to a tone class: danger when due today or
+// past, warn within three days, none otherwise (C57).
+func billUrgencyTone(n int) string {
+	switch {
+	case n <= 0:
+		return "text-down"
+	case n <= 3:
+		return "text-warn"
+	default:
+		return ""
+	}
 }
 
 // daysUntilLabel renders how soon a bill is due in friendly terms.
