@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Completed goals now read as done at a glance (C51).** A goal's progress bar was always the same flat accent
+  colour even at 100%. A reached goal's bar now uses a brighter success tone, so finished goals stand out from
+  in-progress ones without reading the numbers. Covered by a new `goals_bar_tone_check` e2e.
+
 ### Added
 - **Click a budget to see its transactions (C50).** A budget's title is now a button that opens Transactions
   filtered to that budget's category — the natural "why am I over?" drill-down, mirroring Accounts→Transactions and

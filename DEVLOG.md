@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: success tone on completed goal progress bars (C51)
+
+- C51 headline item: goal bars were always the flat accent fill, so a reached goal looked the same as one barely
+  started. Added barFillStyle(pct, complete) — width plus, when complete, an inline background:var(--up) (the
+  brighter success green). Inline style (not a .bar-fill.done CSS class) because index.html is parallel-dirty;
+  inline beats class specificity so it cleanly overrides .bar-fill's accent. complete comes from goalsvc.IsComplete
+  (already computed in the row). At-risk amber tone left as the spec's optional follow-up.
+- New goals_bar_tone_check.mjs adds a goal at 100% (saved==target) and asserts its .bar-fill style carries
+  var(--up), and that an incomplete goal's bar (<100% width) doesn't. PASS. App wasm builds clean; gofmt clean.
+- sw.js parallel-dirty (their bump covers the wasm refresh) so left out. Committed by pathspec (goals.go, the new
+  e2e, journals); TODOS.md untouched. goals.go is uncontested while the parallel session churns app.go/shortcuts.go/
+  widget.go/en.go/index.html.
+- Next (C51): visible labels on the goal add/edit/contribute forms (reuse labeledField) and the linked-goal→account
+  drill-down — both uncontested in goals.go.
+
 ## 2026-06-20 - feat: L14 fuzzy command-palette match with keyword aliases (pure logic)
 
 - L14 gap 1: the palette labels commands by noun ("New transaction"), so a verb query ("add") misses them.

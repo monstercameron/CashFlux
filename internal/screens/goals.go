@@ -290,6 +290,18 @@ func accountName(accounts []domain.Account, id string) string {
 	return ""
 }
 
+// barFillStyle is the inline style for a goal's progress bar: the width, plus a
+// brighter success tone once the goal is complete so a reached goal reads as done
+// at a glance instead of using the same flat accent fill (C51). Inline (not a CSS
+// class) to stay out of the shared stylesheet.
+func barFillStyle(pct int, complete bool) string {
+	s := fmt.Sprintf("width:%d%%", pct)
+	if complete {
+		s += ";background:var(--up)"
+	}
+	return s
+}
+
 // GoalRow renders one goal's progress toward its target, with contribute and
 // (inline) edit actions. All hooks are declared unconditionally so the edit
 // toggle never reorders them.
@@ -405,7 +417,7 @@ func GoalRow(props goalRowProps) ui.Node {
 			Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
 			Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 		),
-		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", pct)))),
+		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
 		Span(Class("budget-sub"), sub),
 	)
 }
