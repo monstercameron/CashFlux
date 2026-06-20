@@ -262,13 +262,6 @@ func globalSettingsForm() uic.Node {
 	onBackupCadence := uic.UseEvent(func(e uic.Event) {
 		saveBackupCadence(backup.ParseCadence(e.GetValue()))
 	})
-	onScale := uic.UseEvent(func(e uic.Event) {
-		p := prefsAtom.Get()
-		if n, err := strconv.Atoi(e.GetValue()); err == nil {
-			p.Scale = n
-		}
-		savePrefs(p)
-	})
 	hiddenAtom := uistate.UseHiddenModules()
 	toggleModule := func(path string) {
 		nh := hiddenAtom.Get().Toggle(path)
@@ -640,15 +633,8 @@ func globalSettingsForm() uic.Node {
 			}),
 		),
 		accentContrastNote(pr.Accent, pr.Theme),
-		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.compact"), On: pr.Compact, OnChange: func(v bool) {
-			p := prefsAtom.Get()
-			p.Compact = v
-			savePrefs(p)
-		}}),
-		Div(Class("toggle-row"),
-			Span(uistate.T("settings.displayScale")),
-			Select(Class("set-input"), Attr("aria-label", uistate.T("settings.displayScale")), Title(uistate.T("settings.displayScale")), OnChange(onScale), scaleOptions(pr.Scale)),
-		),
+		// Density and display scale moved into the theme editor below — the theme
+		// engine is now the single source of truth for both (B20 unify).
 		uic.CreateElement(themeEditor),
 		Div(Class("set-label"), uistate.T("settings.preferences")),
 		Div(Class("toggle-row"),
@@ -731,20 +717,6 @@ func globalSettingsForm() uic.Node {
 		Div(Class("grid grid-cols-2 gap-x-7 content-start"), left, right),
 		debugLog,
 	)
-}
-
-// scaleOptions builds the Display-scale <option>s (70%–130% in 10% steps), with
-// the current scale preselected and 100% labelled as the default.
-func scaleOptions(current int) []uic.Node {
-	opts := make([]uic.Node, 0, 7)
-	for s := prefs.ScaleMin; s <= prefs.ScaleMax; s += 10 {
-		label := strconv.Itoa(s) + "%"
-		if s == prefs.ScaleDefault {
-			label = uistate.T("settings.scaleDefault", s)
-		}
-		opts = append(opts, Option(Value(strconv.Itoa(s)), SelectedIf(current == s), label))
-	}
-	return opts
 }
 
 // accentSurfaceHexes returns the elevated surface color(s) the accent is judged

@@ -61,6 +61,15 @@ func ApplyTheme(t theme.Theme) {
 		style.Call("setProperty", k, v)
 	}
 	style.Call("setProperty", "--bg", t.BgBase)
+	// The theme owns density: the stylesheet keys compact spacing off the
+	// data-density attribute, and --ui-scale (set above via CSSVars) drives the
+	// zoom. This makes the theme the single source of truth for both (the legacy
+	// prefs no longer apply them).
+	density := string(t.Density)
+	if density == "" {
+		density = string(theme.Comfortable)
+	}
+	root.Call("setAttribute", "data-density", density)
 }
 
 // resolvePrefsTheme collapses the "system" theme preference to a concrete

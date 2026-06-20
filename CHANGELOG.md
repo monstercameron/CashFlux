@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **One appearance system — density & display scale unified into the theme (B20).** Density and text size are
+  now owned by the theme engine: `ApplyTheme` sets `data-density` (so the editor's density control is finally
+  live) and `--ui-scale`, while `ApplyPrefs` no longer touches either (no more two systems fighting over the
+  same vars). The duplicate legacy "Compact density" toggle and "Display scale" select were removed from
+  Settings; the theme editor's density and text-size controls are the single source of truth, and they mirror
+  back into `prefs.Compact`/`Scale` so migration and any prefs reader stay consistent. Verified via Playwright
+  (editor density sets `data-density`, text size drives `--ui-scale` and syncs prefs; legacy select gone).
 - **Fonts are now themeable (B20).** The app consumes the `--font-ui` / `--font-display` theme tokens: the
   Tailwind `font-sans` / `font-display` families and the base `body` / heading styles lead with `var(--font-ui)`
   / `var(--font-display)` (with the Inter/Fraunces stack as fallback), and `:root` carries static defaults. So

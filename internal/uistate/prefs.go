@@ -4,7 +4,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"strconv"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -39,8 +38,10 @@ func PersistPrefs(p prefs.Prefs) {
 func LoadPrefs() prefs.Prefs { return loadPrefs() }
 
 // ApplyPrefs reflects the appearance preferences onto the document root so CSS
-// can react: a data-theme attribute (resolving "system" to the OS setting), a
-// data-density attribute, and the --accent custom property. Call it on boot and
+// can react: a data-theme attribute (resolving "system" to the OS setting) and
+// the --accent custom property. Density and display scale are owned by the theme
+// engine (see ApplyTheme), which sets data-density and --ui-scale; ApplyPrefs no
+// longer touches them, so the two systems can't fight. Call it on boot and
 // whenever the preferences change.
 func ApplyPrefs(p prefs.Prefs) {
 	p = p.Normalize()
@@ -49,13 +50,7 @@ func ApplyPrefs(p prefs.Prefs) {
 		return
 	}
 	root.Call("setAttribute", "data-theme", resolveTheme(p.Theme))
-	density := "comfortable"
-	if p.Compact {
-		density = "compact"
-	}
-	root.Call("setAttribute", "data-density", density)
 	root.Get("style").Call("setProperty", "--accent", p.Accent)
-	root.Get("style").Call("setProperty", "--ui-scale", strconv.FormatFloat(p.ScaleFraction(), 'f', -1, 64))
 }
 
 // resolveTheme turns the theme preference into a concrete "dark"/"light" value,

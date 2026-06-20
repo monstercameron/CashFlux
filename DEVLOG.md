@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - refactor: unify density/scale into the theme engine (B20)
+
+- Diagnosed the duplication: density CSS keys off `[data-density]`, which only ApplyPrefs set — so the theme
+  editor's density control was INERT (it set an unread `--density` var). Scale (`--ui-scale`) was set by BOTH
+  ApplyPrefs and ApplyTheme, unsynced. prefs.Compact/Scale were read only by ApplyPrefs.
+- Made the theme the single owner + applier: ApplyTheme now sets `data-density` (from t.Density) alongside
+  `--ui-scale`; ApplyPrefs no longer sets either (dropped its now-unused strconv import too). The editor's
+  density control now works, and its apply() mirrors density+scale back into the prefs atom + localStorage so a
+  fresh FromPrefs migration and any straggler prefs reader stay correct.
+- Removed the duplicate legacy controls from settings.go (the Compact ToggleRow, the Display-scale Select, the
+  onScale handler, and the now-dead scaleOptions helper). The theme editor is the single appearance UI for
+  density+scale. (Left the now-unused settings.compact/displayScale/scaleDefault i18n keys in en.go alone —
+  parallel-session territory; harmless dead keys.)
+- Verified via Playwright (e2e/unify_check.mjs): editor Compact sets data-density=compact, text-size 130 drives
+  --ui-scale=1.3 and syncs prefs.scale=130/compact=true and theme.scale=1.3, and no legacy scale <select>
+  remains — no page errors. Bumped sw cache v186→v187.
+- Note (out of scope, follow-up): the legacy dark/light/system theme toggle + accent swatch still live in
+  settings and partially duplicate the editor's colors/presets; a future pass can unify those too. Next: icon
+  packs (B13).
+
 ## 2026-06-19 - feat: dashboard banner — store, band, editor controls (B20)
 
 - Wasm half of the banner: `internal/uistate/banner.go` — a `cashflux:banner` localStorage slot

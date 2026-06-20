@@ -27,12 +27,21 @@ func themeEditor() uic.Node {
 	importMsg := uic.UseState("")
 	fonts := uic.UseState(uistate.LoadFonts())
 	fontMsg := uic.UseState("")
+	prefsAtom := uistate.UsePrefs()
 	t := cur.Get()
 
 	apply := func(next theme.Theme) {
 		next.Name = "Custom"
 		uistate.ApplyTheme(next)
 		uistate.PersistTheme(next)
+		// The theme owns density + display scale now; mirror them back into the
+		// legacy prefs so a fresh migration and any prefs reader stay consistent
+		// (one appearance system, two stores kept in lockstep).
+		p := prefsAtom.Get()
+		p.Compact = next.Density == theme.Compact
+		p.Scale = int(next.Scale*100 + 0.5)
+		prefsAtom.Set(p)
+		uistate.PersistPrefs(p)
 		cur.Set(next)
 	}
 	uploadFont := func() {
