@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: subscription price-change rows get tone + arrow icon (C56/C46)
+
+- Another C56 item: price-change rows conveyed up vs down by wording only (priceUp/priceDown). Added color-plus-
+  shape, mirroring the Reports trend markers exactly: increase → "text-down" (red) + icon.ArrowUp, decrease →
+  "text-up" (green) + icon.ArrowDown, rendered in an inline-flex meta span. Added the icon + uiw imports.
+- Gate: screens build+vet + wasm clean; new `subscriptions_price_tone_check` e2e (every toned row has an arrow
+  <svg>; no-op-but-visible if the sample has no changes) — PASS (6 rows). subscriptions_drill_check still PASS.
+  subscriptions_screen.go uncontested (parallel is on internal/aiprovider). Committed by pathspec; TODOS.md
+  untouched. C56 now down to confirm/ignore/manual-add curation + the renewing-soon-row reuse.
+
 ## 2026-06-20 - feat: C89 prompts — system-prompt assembler (pure)
 
 - The "prompts" half of C89 / the MCP triad (resources=aicontext, tools=aitools, prompts=aiprompt). New pure

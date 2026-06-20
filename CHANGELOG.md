@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Subscription price-change rows show tone + an arrow icon (C56/C46).** A price increase now renders red with an
+  up arrow and a decrease green with a down arrow, instead of conveying direction by wording alone — color-plus-
+  shape, matching the Reports trend markers. Covered by a new `subscriptions_price_tone_check` e2e.
 - **Category tree nesting uses real indentation, not em-dashes (C63).** Sub-category rows now indent with depth-
   proportional left padding and a subtle guide line instead of literal "— " prefixes, for a cleaner hierarchy. The
   parent-picker dropdowns (where CSS padding can't reach) indent with non-breaking spaces rather than em-dashes.

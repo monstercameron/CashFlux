@@ -10,10 +10,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -107,14 +109,18 @@ func Subscriptions() ui.Node {
 			delta := fmtMoney(money.New(c.Delta, base).Abs())
 			pctStr := fmt.Sprintf("%d%%", pct)
 			date := pr.FormatDate(c.ChangedAt)
-			key := "subs.priceDown"
+			// A price increase is worse (red, up arrow); a decrease is better
+			// (green, down arrow) — color-plus-shape, matching Reports (C56/C46).
+			key, tone, arrow := "subs.priceDown", "text-up", icon.ArrowDown
 			if c.Increased() {
-				key = "subs.priceUp"
+				key, tone, arrow = "subs.priceUp", "text-down", icon.ArrowUp
 			}
 			return Div(Class("row"),
 				Div(Class("row-main"),
 					Span(Class("row-desc"), c.Name),
-					Span(Class("row-meta"), uistate.T(key, delta, pctStr, date)),
+					Span(Class("row-meta inline-flex items-center gap-1 "+tone),
+						uiw.Icon(arrow, Class("w-3.5 h-3.5 shrink-0")),
+						Text(uistate.T(key, delta, pctStr, date))),
 				),
 				Span(Class("budget-amount"), fmtMoney(money.New(c.NewAmount, base))),
 			)
