@@ -19,6 +19,11 @@ and every commit updates this file under `Unreleased`.
   backend can't surface websocket connection errors the user can't dismiss. Backed by a new (inverted, default-on)
   `BackendDisabled` pref and a central `prefs.BackendActive()` predicate that every sync and AI-proxy path now
   gates on. Covered by a new `settings_backend_toggle_check` e2e.
+- **Anthropic Messages-dialect shaping (C81 phase 3, logic).** New pure, table-tested `internal/anthropic` builds
+  the Anthropic `/messages` request body and parses its response — the one wire dialect that isn't OpenAI-compatible.
+  It models the differences: a top-level `system` field, required `max_tokens`, tools with `input_schema`, and
+  base64 image content blocks for vision. `ParseResponse` returns concatenated text + `tool_use` calls + usage +
+  stop reason, and turns an error envelope into a Go error. No I/O — the transport wires it later.
 - **Insights agent read-tools (C89 phase 2, logic).** New pure, table-tested `internal/aitools` registers the
   Insights agent's read tools on the C82 `agent.Registry`: `query_transactions` (reuses `txnfilter.MultiCriteria`
   to answer "how much on groceries?"), `account_balances`, and `affordability` (reuses `afford.CanAfford` for real

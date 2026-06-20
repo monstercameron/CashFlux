@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C81 phase 3 — Anthropic Messages dialect (pure)
+
+- Continued the insights/AI objective with C81-p3, the one non-OpenAI dialect, as a new pure package
+  internal/anthropic (no I/O → native tests; transport wires it later in the contended internal/ai).
+- Modelled the dialect's real differences vs OpenAI: system is a TOP-LEVEL field not a message; max_tokens required
+  (defaulted); tools use input_schema not parameters; vision = base64 image content blocks. BuildRequest(model,
+  system, messages, tools, maxTokens, stream) + ParseResponse → text (concatenated blocks) + tool_use calls +
+  usage(input/output) + stop_reason; {"type":"error"} envelope → Go error. Types mirror internal/ai's OpenAI
+  shaping conceptually without importing it.
+- 6 test funcs (request basics + omit-when-empty, tools input_schema, vision blocks, response text/usage,
+  tool_use, error envelope). go test green. Committed 8e3cfcf.
+- Insights/AI done so far (all pure): C89 p1 aicontext, gpt-5.5+profiles, C89 p2 read-tools, C81 p3 anthropic. The
+  remaining slices are mostly CONTENDED wiring (C81-p2 Responses/websocket transport in internal/ai; C89-p3 write-
+  tools via appstate+C78; C59 insights.go result-slots/streaming; L8 chips; settings UI) — take as files come free.
+
 ## 2026-06-20 - fix: clear backend on/off switch in Settings (user-reported)
 
 - User hit a websocket connection error on load ("WASM: WebSocket error during connection setup … online,
