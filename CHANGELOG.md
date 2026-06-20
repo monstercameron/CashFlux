@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Imported draft rows pick a real category instead of free text (C60).** When reviewing extracted transactions
+  before import, the category field was a free-text box, so the AI's guessed category (or a typo) could create an
+  orphan category. It's now a select of existing categories, with the extracted value preserved as an option when
+  it doesn't match one — keeping the import constrained to real categories.
 - **The Insights "needs a key" hint now links to Settings (C59).** Both the Explain action and the Q&A box showed
   a dead-end "add your OpenAI key in Settings" sentence; it now includes a Settings button that navigates there in
   one hop (same dead-end fix flagged on Allocate, C54). Covered by a new `insights_keyhint_check` e2e.

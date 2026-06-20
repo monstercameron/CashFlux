@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: draft-row category is a real-category select (C60)
+
+- C60 item 2 (correctness-adjacent). The Documents review DraftRow edited category via a free-text Input, so the
+  AI's extracted string (or a typo) could import as an orphan category. Swapped it for a Select via a new
+  draftCategoryOptions(cats, current) helper: "no category" + every existing category + the current value as a
+  final option when it matches none (so the AI suggestion isn't silently dropped). Added a Categories prop to
+  draftRowProps, passed app.Categories() once from the parent; reused the existing transactions.noCategory string
+  (en.go is parallel-dirty, so no new key).
+- Build note: the full app build was blocked twice this turn by the parallel session's internal/app/shortcuts.go
+  (unused import); verified my change with `go build ./internal/screens/...` in isolation, then held until the app
+  built green. E2E limitation (honest): the draft/review list is populated ONLY by the key-gated vision flow — the
+  CSV path imports directly with no draft rows — so the DraftRow category select isn't reachable in offline e2e.
+  Gated on the wasm app build + package compile; gofmt clean. Committed via git commit -- <paths>; sw.js parallel-
+  dirty, left out; TODOS.md untouched.
+- C60 remaining: image preview beside drafts (highest value; needs file→dataURL), CSV file-picker/drag-drop, the
+  key-hint→Settings link (same as C59), account-select aria-label. Next: C61 (Customize).
+
 ## 2026-06-20 - feat: fuzzy keyword matching in the command palette (L14)
 
 - Second UI wiring tick. Targets check: en.go + shortcuts.go clean (only documents.go dirty — isolated parallel

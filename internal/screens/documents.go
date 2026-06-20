@@ -250,8 +250,9 @@ func Documents() ui.Node {
 	draftBody := ui.Node(nil)
 	if len(rows) > 0 {
 		items := make([]ui.Node, 0, len(rows))
+		draftCats := app.Categories()
 		for i, r := range rows {
-			items = append(items, ui.CreateElement(DraftRow, draftRowProps{Index: i, Row: r, Currency: reviewCur, OnRemove: removeDraft, OnUpdate: updateDraft}))
+			items = append(items, ui.CreateElement(DraftRow, draftRowProps{Index: i, Row: r, Currency: reviewCur, Categories: draftCats, OnRemove: removeDraft, OnUpdate: updateDraft}))
 		}
 		acctOptions := make([]ui.Node, 0, len(accounts))
 		for _, a := range accounts {
@@ -425,11 +426,31 @@ func Documents() ui.Node {
 }
 
 type draftRowProps struct {
-	Index    int
-	Row      extract.Row
-	Currency string // for accounting-formatting the review amount (C27)
-	OnRemove func(int)
-	OnUpdate func(int, extract.Row)
+	Index      int
+	Row        extract.Row
+	Currency   string            // for accounting-formatting the review amount (C27)
+	Categories []domain.Category // existing categories, so editing picks a real one (C60)
+	OnRemove   func(int)
+	OnUpdate   func(int, extract.Row)
+}
+
+// draftCategoryOptions builds the draft-row category picker: a "no category" entry,
+// every existing category, and — when the AI's extracted category matches none of
+// them — the extracted value itself as a final option, so editing constrains to
+// real categories without silently dropping the AI's suggestion (C60).
+func draftCategoryOptions(cats []domain.Category, current string) []ui.Node {
+	opts := []ui.Node{Option(Value(""), SelectedIf(current == ""), uistate.T("transactions.noCategory"))}
+	found := false
+	for _, c := range cats {
+		opts = append(opts, Option(Value(c.Name), SelectedIf(current == c.Name), c.Name))
+		if c.Name == current {
+			found = true
+		}
+	}
+	if current != "" && !found {
+		opts = append(opts, Option(Value(current), SelectedIf(true), current))
+	}
+	return opts
 }
 
 // DraftRow renders one extracted transaction in the review list. It can be edited
@@ -446,7 +467,7 @@ func DraftRow(props draftRowProps) ui.Node {
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
 	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	onAmt := ui.UseEvent(func(v string) { amtS.Set(v) })
-	onCat := ui.UseEvent(func(v string) { catS.Set(v) })
+	onCat := ui.UseEvent(func(e ui.Event) { catS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		dateS.Set(r.Date)
 		descS.Set(r.Description)
@@ -482,7 +503,10 @@ func DraftRow(props draftRowProps) ui.Node {
 				Input(Class("field"), Attr("id", draftFieldID), Type("date"), Value(dateS.Get()), OnInput(onDate)),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
 				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), Value(amtS.Get()), OnInput(onAmt)),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("documents.categoryPlaceholder")), Value(catS.Get()), OnInput(onCat)),
+				// Category is a select of existing categories (plus the AI's extracted
+				// value when it doesn't match one) so editing can't introduce an
+				// orphan/typo category on import (C60).
+				Select(Class("field"), Attr("aria-label", uistate.T("documents.categoryPlaceholder")), OnChange(onCat), draftCategoryOptions(props.Categories, catS.Get())),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
