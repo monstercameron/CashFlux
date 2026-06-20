@@ -45,6 +45,9 @@ func Run() {
 	// properties. With no saved custom theme this is migrated from the same prefs,
 	// so it reproduces the default appearance until the user edits a token.
 	uistate.ApplyTheme(uistate.LoadTheme())
+	// Register any uploaded custom fonts (@font-face) so a theme that selects one
+	// can use it from the first paint.
+	uistate.ApplyFonts(uistate.LoadFonts())
 
 	// Derive the URL sub-path the app is served under (e.g. "/CashFlux" on a
 	// GitHub Pages project site) from the <base href> index.html set, so routes

@@ -4,7 +4,9 @@ package app
 
 import (
 	"strconv"
+	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/theme"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -23,6 +25,8 @@ import (
 func themeEditor() uic.Node {
 	cur := uic.UseState(uistate.LoadTheme())
 	importMsg := uic.UseState("")
+	fonts := uic.UseState(uistate.LoadFonts())
+	fontMsg := uic.UseState("")
 	t := cur.Get()
 
 	apply := func(next theme.Theme) {
@@ -30,6 +34,24 @@ func themeEditor() uic.Node {
 		uistate.ApplyTheme(next)
 		uistate.PersistTheme(next)
 		cur.Set(next)
+	}
+	uploadFont := func() {
+		pickFileNamed(".woff2,.woff,.ttf,.otf", func(name, mime string, data []byte) {
+			if mime == "" {
+				mime = theme.FontMIMEForName(name)
+			}
+			if errs := theme.ValidateFontUpload(mime, len(data)); len(errs) > 0 {
+				fontMsg.Set(strings.Join(errs, " "))
+				return
+			}
+			family := fontFamilyFromName(name)
+			fonts.Set(uistate.AddFont(theme.FontAsset{Family: family, MIME: mime, DataURL: artifacts.DataURL(mime, data)}))
+			fontMsg.Set("")
+			// Start using the uploaded font for the interface right away.
+			next := t
+			next.FontUI = family
+			apply(next)
+		})
 	}
 	setColor := func(field, hex string) {
 		n := t
@@ -139,12 +161,17 @@ func themeEditor() uic.Node {
 		),
 		Div(Class("toggle-row"),
 			Span("Interface font"),
-			Select(Class("set-input"), Attr("aria-label", "Interface font"), OnChange(onFontUI), fontOptions(t.FontUI)),
+			Select(Class("set-input"), Attr("aria-label", "Interface font"), OnChange(onFontUI), fontOptions(t.FontUI, fonts.Get())),
 		),
 		Div(Class("toggle-row"),
 			Span("Heading font"),
-			Select(Class("set-input"), Attr("aria-label", "Heading font"), OnChange(onFontDisplay), fontOptions(t.FontDisplay)),
+			Select(Class("set-input"), Attr("aria-label", "Heading font"), OnChange(onFontDisplay), fontOptions(t.FontDisplay, fonts.Get())),
 		),
+		Div(Class("flex flex-wrap items-center gap-2 py-1"),
+			dataBtn("Upload font…", false, uploadFont),
+			Span(Class("muted text-xs"), "WOFF2, WOFF, TTF, or OTF · up to 1 MB"),
+		),
+		If(fontMsg.Get() != "", P(Class("text-xs"), Style(map[string]string{"color": "#d8716f"}), fontMsg.Get())),
 		ui.Segmented(ui.SegmentedProps{
 			Options:  []ui.SegOption{{Value: string(theme.Comfortable), Label: "Comfortable"}, {Value: string(theme.Compact), Label: "Compact"}},
 			Selected: string(t.Density),
@@ -193,13 +220,42 @@ var curatedFonts = []struct{ value, label string }{
 	{"ui-monospace, SFMono-Regular, monospace", "Monospace"},
 }
 
-// fontOptions renders the curated font <option>s with the current one selected.
-func fontOptions(current string) []uic.Node {
+// fontOptions renders the curated font <option>s plus any uploaded custom
+// families, with the current one selected. Uploaded families that duplicate a
+// curated value are skipped so the list stays clean.
+func fontOptions(current string, uploaded []theme.FontAsset) []uic.Node {
+	seen := map[string]bool{}
 	var opts []uic.Node
 	for _, f := range curatedFonts {
+		seen[f.value] = true
 		opts = append(opts, Option(Value(f.value), SelectedIf(f.value == current), f.label))
 	}
+	for _, f := range uploaded {
+		if f.Family == "" || seen[f.Family] {
+			continue
+		}
+		seen[f.Family] = true
+		opts = append(opts, Option(Value(f.Family), SelectedIf(f.Family == current), f.Family+" (uploaded)"))
+	}
 	return opts
+}
+
+// fontFamilyFromName derives a CSS font-family name from an uploaded file's name
+// by stripping any directory and extension. Spaces are kept (the family is quoted
+// in the @font-face rule). A blank result falls back to a generic label.
+func fontFamilyFromName(name string) string {
+	base := name
+	if i := strings.LastIndexAny(base, `/\`); i >= 0 {
+		base = base[i+1:]
+	}
+	if i := strings.LastIndex(base, "."); i > 0 {
+		base = base[:i]
+	}
+	base = strings.TrimSpace(base)
+	if base == "" {
+		return "Custom font"
+	}
+	return base
 }
 
 // themePresetBtnProps configures a preset-apply button.

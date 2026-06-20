@@ -14,6 +14,11 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Upload your own font (B20).** The theme editor now has an "Upload font" button that accepts a WOFF2/WOFF/
+  TTF/OTF file (≤1 MB): it's validated, stored as a data URL in its own `cashflux:fonts` slot, registered via
+  an injected `@font-face` rule, added to the interface/heading font pickers, and applied immediately. Uploaded
+  fonts are registered at boot too, so a theme that selects one renders correctly on reload. Verified
+  end-to-end via Playwright (upload → @font-face injected, persisted, selected, applied; no console errors).
 - **Custom-font upload logic (B20).** New pure `theme.FontAsset` (family + MIME + data URL) with
   `FontFaceCSS` (renders an `@font-face` rule with a `format()` hint and `font-display: swap`),
   `ValidateFontUpload` (accepts WOFF2/WOFF/TTF/OTF up to a 1 MiB cap, rejects other formats / empty /

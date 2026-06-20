@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: custom font-file upload, end to end (B20)
+
+- Completed the user's font-upload ask. Wasm pieces: `internal/uistate/fonts.go` — a `cashflux:fonts`
+  localStorage slot (LoadFonts/PersistFonts/AddFont/RemoveFont) and `ApplyFonts`, which injects every stored
+  font's @font-face into one managed `<style id="cashflux-fonts">`. Wired `ApplyFonts(LoadFonts())` at boot
+  after ApplyTheme so a selected custom font paints from the first frame.
+- The file picker dropped the name/MIME, which I need for the family + format fallback, so I added
+  `pickFileNamed` (name + MIME + bytes) and made the old `pickFile` delegate to it. The editor's "Upload font"
+  handler: pickFileNamed → MIME fallback via theme.FontMIMEForName(name) → theme.ValidateFontUpload →
+  artifacts.DataURL → uistate.AddFont → set theme.FontUI to the new family and apply. The family is derived
+  from the file name (dir + extension stripped). Uploaded families show in both font selects as
+  "<name> (uploaded)".
+- Verified end-to-end with a new Playwright check (e2e/font_upload_check.mjs) that drives the file chooser with
+  a dummy WOFF2: asserts the @font-face is injected, the family persists to localStorage, the Interface font
+  select is set to it, and theme.fontUi updates — all green, no page errors. Bumped sw cache v184→v185.
+- Deferred (small): per-font remove UI (RemoveFont exists; just needs a row+button component). Next big rung:
+  header/banner image upload, then the density/scale unify, then icon packs.
+
 ## 2026-06-19 - feat: app consumes the font tokens — fonts are themeable (B20)
 
 - Found the gap: ApplyTheme was already setting `--font-ui`/`--font-display`, but nothing read them — the
