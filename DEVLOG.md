@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — sub-category nesting
+
+- Thirteenth journey story (e2e/story_subcategory.test.mjs): add a top-level parent category, then a child
+  with that parent chosen in the add form's parent select, and assert the child's parentId === the parent's id
+  while the parent has no parentId. Targeted the parent select (which uses a Title, not aria-label) by the
+  select that contains the parent's option: `select.filter({has: getByRole('option',{name: PARENT})})`. This is
+  the data linkage the categorytree rollup (already unit-tested) is built on. Suite now 22 green. Test-only,
+  no sw bump.
+
 ## 2026-06-20 - test: cross-platform E2E suite runner for CI (run-stories.mjs)
 
 - Added e2e/run-stories.mjs: a Node, no-PowerShell runner so the whole browser suite can gate CI on Linux. It
