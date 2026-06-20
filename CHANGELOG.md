@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Active-filter introspection for the transactions toolbar (C47, logic).** `txnfilter.Criteria` gains a pure
+  `ActiveFilters()` (the engaged filters in toolbar order — search, account, category, member, from, to, cleared;
+  whitespace-only values and sort/direction/pagination never count), `ActiveCount()` for the "Filters" trigger
+  badge, and `Without(field)` to clear one filter when its chip ✕ is clicked (sort, direction and page size are
+  preserved; removal is a scope change so the page resets on re-apply). Table-tested. This is the logic layer for
+  C47's remaining piece — replacing the cramped 10-control filter strip with a compact toolbar + Filters popover +
+  removable chips (UI to follow).
+
 ### Fixed
 - **A wiped store stays empty instead of re-seeding the sample household (L6).** Boot used to re-seed the sample
   whenever the dataset key was empty/missing, so wiping your data (or any genuinely empty store) brought a

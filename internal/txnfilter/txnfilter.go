@@ -112,6 +112,80 @@ func (c Criteria) ResetPageIfScopeChanged(prev Criteria) Criteria {
 	return c
 }
 
+// FilterField identifies one removable filter dimension on Criteria. The values
+// match the dimensions the compact filter toolbar exposes; Sort, Dir and
+// pagination are deliberately not filter fields.
+type FilterField string
+
+// The filter dimensions, in toolbar display order.
+const (
+	FieldText     FilterField = "text"
+	FieldAccount  FilterField = "account"
+	FieldCategory FilterField = "category"
+	FieldMember   FilterField = "member"
+	FieldFrom     FilterField = "from"
+	FieldTo       FilterField = "to"
+	FieldCleared  FilterField = "cleared"
+)
+
+// ActiveFilter describes one engaged filter for the toolbar's count badge and
+// removable chips. Value is the raw stored value (an entity ID, a date, the
+// search text, or "yes"/"no" for Cleared); the view resolves IDs to display
+// names. Field is what Without clears when the chip's ✕ is clicked.
+type ActiveFilter struct {
+	Field FilterField
+	Value string
+}
+
+// ActiveFilters returns the filters currently narrowing the result set, in
+// toolbar order. Whitespace-only text/date values count as inactive. Sort
+// direction and pagination are never included.
+func (c Criteria) ActiveFilters() []ActiveFilter {
+	var out []ActiveFilter
+	add := func(f FilterField, v string) {
+		if strings.TrimSpace(v) != "" {
+			out = append(out, ActiveFilter{Field: f, Value: v})
+		}
+	}
+	add(FieldText, c.Text)
+	add(FieldAccount, c.Account)
+	add(FieldCategory, c.Category)
+	add(FieldMember, c.Member)
+	add(FieldFrom, c.From)
+	add(FieldTo, c.To)
+	if c.Cleared == "yes" || c.Cleared == "no" {
+		out = append(out, ActiveFilter{Field: FieldCleared, Value: c.Cleared})
+	}
+	return out
+}
+
+// ActiveCount is the number of engaged filters — the number shown on the
+// "Filters" trigger badge.
+func (c Criteria) ActiveCount() int { return len(c.ActiveFilters()) }
+
+// Without returns c with the given filter field cleared, as when a chip's ✕ is
+// clicked. Sort, direction and page size are preserved; the caller resets the
+// page (the scope changed). An unknown field returns c unchanged.
+func (c Criteria) Without(f FilterField) Criteria {
+	switch f {
+	case FieldText:
+		c.Text = ""
+	case FieldAccount:
+		c.Account = ""
+	case FieldCategory:
+		c.Category = ""
+	case FieldMember:
+		c.Member = ""
+	case FieldFrom:
+		c.From = ""
+	case FieldTo:
+		c.To = ""
+	case FieldCleared:
+		c.Cleared = ""
+	}
+	return c
+}
+
 // Labels resolves entity IDs to display names for name-aware sorting (category,
 // account). Missing entries fall back to the raw ID so sorting stays deterministic.
 type Labels struct {

@@ -138,6 +138,57 @@ func TestScopeChangedAndPageReset(t *testing.T) {
 	}
 }
 
+func TestActiveFiltersAndCount(t *testing.T) {
+	// Sort, direction, pagination and a blank Cleared are not filters.
+	if c := (Criteria{Sort: "amount", Dir: Asc, Page: 4, PageSize: 25}); c.ActiveCount() != 0 {
+		t.Errorf("sort/dir/page only: ActiveCount = %d, want 0; got %+v", c.ActiveCount(), c.ActiveFilters())
+	}
+	// Whitespace-only values do not count as active.
+	if c := (Criteria{Text: "  ", From: " "}); c.ActiveCount() != 0 {
+		t.Errorf("whitespace-only: ActiveCount = %d, want 0", c.ActiveCount())
+	}
+	c := Criteria{Text: "coffee", Account: "acc1", Category: "food", Member: "m1",
+		From: "2026-06-01", To: "2026-06-30", Cleared: "yes", Sort: "amount", Page: 2}
+	got := c.ActiveFilters()
+	if len(got) != 7 {
+		t.Fatalf("ActiveFilters len = %d, want 7: %+v", len(got), got)
+	}
+	wantOrder := []FilterField{FieldText, FieldAccount, FieldCategory, FieldMember, FieldFrom, FieldTo, FieldCleared}
+	for i, w := range wantOrder {
+		if got[i].Field != w {
+			t.Errorf("filter %d = %q, want %q", i, got[i].Field, w)
+		}
+	}
+	if got[0].Value != "coffee" || got[6].Value != "yes" {
+		t.Errorf("values: text=%q cleared=%q", got[0].Value, got[6].Value)
+	}
+}
+
+func TestWithoutClearsOneFilterKeepingSortAndPaging(t *testing.T) {
+	c := Criteria{Text: "coffee", Account: "acc1", Category: "food", Sort: "amount", Dir: Asc, Page: 3, PageSize: 25, Cleared: "no"}
+	got := c.Without(FieldAccount)
+	if got.Account != "" {
+		t.Errorf("account = %q, want cleared", got.Account)
+	}
+	if got.Text != "coffee" || got.Category != "food" || got.Cleared != "no" {
+		t.Error("Without cleared more than the targeted field")
+	}
+	if got.Sort != "amount" || got.Dir != Asc || got.PageSize != 25 {
+		t.Error("Without must preserve sort, direction and page size")
+	}
+	// Removing a chip is a scope change, so the page should reset when re-applied.
+	if !ScopeChanged(c, got) {
+		t.Error("Without should produce a scope change")
+	}
+	if c.Without(FieldCleared).Cleared != "" {
+		t.Error("Without(FieldCleared) should clear Cleared")
+	}
+	// Unknown field is a no-op.
+	if c.Without(FilterField("nope")) != c {
+		t.Error("Without(unknown) should return c unchanged")
+	}
+}
+
 func TestApplyFilters(t *testing.T) {
 	all := sample()
 	if got := Apply(all, Criteria{Account: "acc1"}); ids(got) != "ca" {

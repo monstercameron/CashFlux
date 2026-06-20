@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: active-filter logic for the transactions toolbar (C47)
+
+- Picking up C47 (Transactions: paginated, sortable table + cleaner filter UI). The table half is already shipped:
+  `txnfilter` carries sort key + direction + pagination, the `pagination` package does the window math, and
+  transactions.go renders `uiw.DataTable` with sortable headers, prev/next and a page-size selector. The genuine
+  remaining piece is the **cleaner filter interface** — transactions.go still crams 10 controls into one `form-grid`
+  strip (no active-filter sense, no chips, no popover).
+- Bottom-up, so the logic lands first: `txnfilter.Criteria.ActiveFilters()` returns the engaged filters as
+  `ActiveFilter{Field, Value}` in toolbar order (text/account/category/member/from/to/cleared); sort, direction and
+  pagination are deliberately excluded, and whitespace-only text/date values read as inactive. `ActiveCount()` feeds
+  the trigger badge; `Without(field)` clears a single filter for chip removal while preserving sort/dir/page-size
+  (and, being a scope change, lets the page reset on re-apply). New `FilterField` constants name the dimensions.
+- Table-tested (TestActiveFiltersAndCount, TestWithoutClearsOneFilterKeepingSortAndPaging) — order, whitespace,
+  scope-change and unknown-field no-op all covered. go test ./internal/txnfilter green; go vet clean.
+- Note: a parallel session owns the uncommitted TODOS.md (the C47–C66 spec block); committing strictly by pathspec
+  (logic + tests + journals only), never TODOS.md.
+- Next: the toolbar UI in transactions.go — always-visible search + a FlipPanel "Filters" popover holding
+  account/category/member/date-range/cleared, the count badge, and removable chips below; then verify in-browser.
+
 ## 2026-06-20 - feat: L5 payoff progress tracking (completes L5)
 
 - L5 gap 5 (the last). Pure payoff.TrackProgress(baseline, current) -> Progress{PaidOff, Remaining, Percent}
