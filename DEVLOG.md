@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: year-end / tax summary report (L16, logic)
+
+- Stock-take after L15 conditions: with the parallel session mid-burst on the whole UI layer (dashboard/goals/
+  chartd3/widget/chart.js/index.html/sw.js all dirty), a wasm-UI commit would race their build and be
+  unverifiable. So I looked for a clean PURE-LOGIC gap instead — found one in L16's Reports catalog: "Year-end /
+  tax summary (annual category totals, exportable)". The reports package had SpendingByCategory + IncomeByCategory
+  for arbitrary ranges but no whole-year per-category roll-up with both sides + totals.
+- New internal/reports/yeartax.go: YearTax(txns, year, start, end, rates) → YearTaxSummary{Year, Rows[]
+  {CategoryID, Income, Expense, Net}, TotalIncome, TotalExpense, NetIncome}. Matched the package idiom exactly
+  (domain.Transaction, FX via rates.Convert, transfers excluded by IsIncome/IsExpense, dateutil.InRange bounds).
+  Half-open [start,end) supports calendar or fiscal year; year is the header label. Rows sort by |Net| desc.
+- Table-tested (mixed income/expense/transfer/out-of-range → per-row + totals + sort; empty → zero summary, label
+  passes through). go test ./internal/reports green; gofmt clean. Committed by pathspec (678bfe8), additive.
+- Next: pure-logic for L8/L9/L13/L14/L15/L16 now all landed. Remaining L-series work is deferred wasm-UI wiring
+  (rules_screen condition/count UI, bills runway + mark-paid, cmdmatch palette, backup-everything action,
+  affordability hook) — paused until the parallel C-series burst settles. Slowing the loop a tick.
+
 ## 2026-06-20 - feat: linked-goal → account transactions drill-down (C51)
 
 - C51 item 6: a goal linked to an account should drill to that account's activity. Added Goals() nav + txFilter +

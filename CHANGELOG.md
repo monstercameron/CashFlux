@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Year-end / tax summary report (L16, logic).** `internal/reports` gains pure, table-tested `YearTax(txns,
+  year, start, end, rates)` returning a `YearTaxSummary` of per-category `{Income, Expense, Net}` rows plus
+  headline `TotalIncome`/`TotalExpense`/`NetIncome` — the annual category totals you hand a tax preparer.
+  Income and expense roll up in the base currency (FX-converted, transfers excluded); rows sort by largest net
+  magnitude first; the half-open `[start, end)` bounds a calendar **or** fiscal year and `year` labels the header.
 - **Click a goal's linked account to see its transactions (C51).** A goal linked to an account now shows that link
   as a clickable affordance that opens Transactions filtered to the account — the same drill pattern as
   Budgets→category and Accounts→Transactions (C30/C50). It also splits the linked-account bit out of the run-on
