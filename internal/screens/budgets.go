@@ -20,6 +20,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -34,6 +35,18 @@ func Budgets() ui.Node {
 
 	rev := state.UseAtom("rev:budgets", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
+
+	// Drill from a budget to its spending: open Transactions filtered to the
+	// budget's category (mirrors Accounts→Transactions and the dashboard
+	// tile-click, C30/C50) — the natural "why am I over?" affordance.
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	viewTransactions := func(categoryID string) {
+		f := uistate.TxFilter{Category: categoryID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
 
 	categories := app.Categories()
 	catName := make(map[string]string, len(categories))
@@ -319,7 +332,7 @@ func Budgets() ui.Node {
 				if shortfall.IsPositive() {
 					coverDefault = money.FormatMinor(shortfall.Amount, currency.Decimals(shortfall.Currency))
 				}
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnDrill: viewTransactions})
 			},
 		)
 		listBody = Div(rows)
@@ -358,6 +371,7 @@ type budgetRowProps struct {
 	OnDelete       func(string)
 	OnSave         func(id, name, limit, period, owner string, rollover bool)
 	OnCover        func(toID, fromID, amount string) error
+	OnDrill        func(categoryID string) // open Transactions filtered to this budget's category
 }
 
 // coverSource is one budget offered as a funding source in a row's "Cover…" picker.
@@ -413,6 +427,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	limitMajor := money.FormatMinor(s.Budget.Limit.Amount, currency.Decimals(s.Budget.Limit.Currency))
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(s.Budget.ID) }))
+	drill := ui.UseEvent(Prevent(func() {
+		if props.OnDrill != nil {
+			props.OnDrill(s.Budget.CategoryID)
+		}
+	}))
 	editing := ui.UseState(false)
 	nameS := ui.UseState(s.Budget.Name)
 	limitS := ui.UseState(limitMajor)
@@ -590,7 +609,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 
 	return Div(Class("budget"),
 		Div(Class("budget-head"),
-			Span(Class("row-desc"), title),
+			IfElse(s.Budget.CategoryID != "",
+				Button(Class("row-desc budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
+					Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
+					title),
+				Span(Class("row-desc"), title)),
 			Span(Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
 			coverBtn,
 			Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),

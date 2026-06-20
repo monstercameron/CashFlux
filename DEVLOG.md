@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: budget → filtered-transactions drill-down (C50)
+
+- C50 item 4: a budget row should answer "why am I over?". Made the budget title a button that sets the persisted
+  txfilter to the budget's CategoryID and navigates to /transactions — same pattern as Accounts→Transactions
+  (uistate.TxFilter{Category}.Normalize() → atom.Set + PersistTxFilter → nav.Navigate). Wired via a new
+  budgetRowProps.OnDrill passed from Budgets() (added router import). Only clickable when the budget has a category
+  (uncategorized budgets keep a plain Span). The button is reset to look like the title text via inline styles
+  (dotted underline affordance) — index.html is parallel-dirty, so no stylesheet hook.
+- Mid-iteration the build was blocked twice by the parallel session's uncommitted WIP (insights.go earlier, now
+  widget.go with syntax errors); I held the commit until it compiled rather than ship unverified. Once green:
+  new budgets_drill_check.mjs clicks the first budget title, asserts navigation to /transactions and that the
+  persisted tx-filter carries a category (landed on "cat-dining"). PASS; budgets_labels_check still PASS. App wasm
+  builds clean; gofmt clean.
+- sw.js is parallel-dirty (they bumped to v215), so I left it out of this commit — their bump covers the wasm
+  refresh. Committed by pathspec (budgets.go, the new e2e, journals); TODOS.md untouched.
+- Next (C50): consolidate the up-to-4 stacked row sub-lines into tone badges + give the over/near summary the same
+  treatment (uncontested budgets.go, but the badge styling may want index.html — will inline if needed).
+
 ## 2026-06-20 - feat: L13 forward daily cash-flow projection + overdraft warning (pure logic)
 
 - L13 headline: a paycheck-to-paycheck safety net that projects the forward daily balance and warns before an
