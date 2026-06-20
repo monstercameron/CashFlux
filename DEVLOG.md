@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C89 phase 2 — Insights agent read-tools (pure)
+
+- Continued the insights/AI objective. C89 p2: read tools on the C82 agent.Registry, built PURE in a new package
+  (internal/aitools) so it avoids the contended appstate/insights files and table-tests with a fake.
+- Design: a small DataSource interface (transactions/accounts/balance/liquid/monthly-net/format+parse money) that
+  appstate will implement; RegisterRead(reg, src) adds query_transactions (reuses txnfilter.MultiCriteria/C83),
+  account_balances, affordability (reuses afford.CanAfford/L8). Each agent.Tool parses JSON args → concise text;
+  bad args error → the loop turns it into a recoverable ToolResult. Currency formatting stays at the impl so the
+  package is currency-agnostic.
+- 6 test funcs against a real agent.Registry + fake source (register, query filter+net, balances, affordability
+  yes/months-needed, bad-args). go test green. Committed a6b248e.
+- Insights/AI progress: C89 p1 (aicontext) + gpt-5.5/profiles + C89 p2 (read-tools) done — all pure. Next un-taken
+  slices: C89 p3 write-tools (need appstate+C78 — contended), C81 p3 anthropic dialect (could be pure shaping in a
+  new file), C59 result-slot/streaming/truncation + L8 chips (insights.go — contended, other agent active there).
+  Keep taking pure-first, contended when the target file is clear.
+
 ## 2026-06-20 - refactor: category tree uses real indentation, not em-dashes (C63)
 
 - Closed another C63 item: nested category rows rendered with literal "— " prefixes (`indentLabel` repeating

@@ -13,6 +13,11 @@ and every commit updates this file under `Unreleased`.
   Covered by a new `categories_nesting_check` e2e.
 
 ### Added
+- **Insights agent read-tools (C89 phase 2, logic).** New pure, table-tested `internal/aitools` registers the
+  Insights agent's read tools on the C82 `agent.Registry`: `query_transactions` (reuses `txnfilter.MultiCriteria`
+  to answer "how much on groceries?"), `account_balances`, and `affordability` (reuses `afford.CanAfford` for real
+  math, not an LLM guess). Tools bind to a small `DataSource` interface — not `appstate` — so the package is pure
+  and fakeable; appstate provides the production source when wired, and the write tools + audit/undo are phase 3.
 - **gpt-5.5 default + Responses/websocket/streaming request profiles (C81/C89, logic).** `internal/aiprovider` now
   leads with **gpt-5.5** (a reasoning model) as the default and models the app's preferred request shape: a `Profile`
   of `APIStyle` (Responses / chat-completions), `Transport` (websocket / https), streaming, and reasoning `Effort`.
