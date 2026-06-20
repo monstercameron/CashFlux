@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: cadence-correct Bills annual figure (C57)
+
+- C57 item 2 (flagged correctness). bills_screen showed annual = total×12, where total is the sum of the current
+  upcoming occurrences across mixed cadences — multiplying that by 12 is wrong (e.g. a yearly bill counted 12×).
+  Added pure bills.AnnualAmounts(accounts, recurring) []money.Money: each qualifying liability's min payment ×12,
+  plus each negative recurring annualized via MonthlyEquivalent()×12 (weekly ×52 / monthly ×12 / quarterly ×4 /
+  yearly ×1), in native currency. The screen FX-converts each (mirroring how it totals the upcoming list) and sums.
+- Table test TestAnnualAmounts: a liability + 4 negative recurring of each cadence + skipped (asset/no-due/zero-min/
+  archived/income) → asserts count=5, all positive USD, total = 120,000+1,440,000+62,400+120,000+9,000. go test
+  ./internal/bills green; wasm builds; gofmt clean. Native-tested logic + a one-line screen swap, so no new e2e.
+- Committed via git commit -- <paths> (all tracked, no git add); sw.js parallel-dirty, left out; TODOS.md untouched.
+- C57 remaining: mark-paid (needs persistence), urgency tone, countable/tappable calendar days, composite row key
+  (also flagged — quick follow-up), guided empty state. Next: the row-key fix, then C58 (Split).
+
 ## 2026-06-20 - feat: subscription → charges drill-down (C56)
 
 - C56 item 2: a detected subscription should let you verify it against the real charges. Made the subscription

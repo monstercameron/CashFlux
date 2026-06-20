@@ -72,6 +72,17 @@ func Bills() ui.Node {
 		billRows = append(billRows, billRowData{Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate)})
 	}
 
+	// Cadence-correct yearly total: annualize each obligation by its own cadence,
+	// then FX-convert and sum (C57) — not total×12, which mixes cadences.
+	var annual int64
+	for _, m := range bills.AnnualAmounts(app.Accounts(), app.Recurring()) {
+		c, err := rates.Convert(m, base)
+		if err != nil {
+			c = money.New(m.Amount, base)
+		}
+		annual += c.Amount
+	}
+
 	rows := MapKeyed(billRows,
 		func(r billRowData) any { return r.Bill.AccountID },
 		func(r billRowData) ui.Node {
@@ -94,7 +105,7 @@ func Bills() ui.Node {
 	return Div(
 		If(len(upcoming) > 0, Div(Class("stat-grid"),
 			stat(uistate.T("bills.totalDue"), fmtMoney(money.New(total, base)), "neg"),
-			stat(uistate.T("bills.annualCost"), fmtMoney(money.New(total*12, base)), ""),
+			stat(uistate.T("bills.annualCost"), fmtMoney(money.New(annual, base)), ""),
 			stat(uistate.T("bills.count"), fmt.Sprintf("%d", len(upcoming)), ""),
 			stat(uistate.T("bills.nextDue"), nextDue, ""),
 		)),

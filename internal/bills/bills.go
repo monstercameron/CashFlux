@@ -81,6 +81,40 @@ func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now ti
 	return out
 }
 
+// AnnualAmounts returns the cadence-annualized cost of each recurring obligation,
+// in its own currency: every qualifying liability's minimum payment ×12 (monthly
+// statements), plus each negative recurring cash flow normalized to a yearly
+// amount via its cadence (weekly ×52, monthly ×12, quarterly ×4, yearly ×1). This
+// is the correct basis for a yearly total — unlike multiplying the sum of the
+// current upcoming occurrences by 12, which mixes cadences. Callers FX-convert and
+// sum the results (mirroring how the upcoming list is totalled).
+func AnnualAmounts(accounts []domain.Account, recurring []domain.Recurring) []money.Money {
+	var out []money.Money
+	for _, a := range accounts {
+		if a.Archived || a.Class != domain.ClassLiability {
+			continue
+		}
+		if a.DueDayOfMonth <= 0 || a.MinPayment.Amount == 0 {
+			continue
+		}
+		mp := a.MinPayment.Abs()
+		out = append(out, money.New(mp.Amount*12, mp.Currency))
+	}
+	for _, r := range recurring {
+		if !r.Amount.IsNegative() {
+			continue
+		}
+		// MonthlyEquivalent already normalizes the cadence to a per-month figure;
+		// ×12 yields the yearly amount. Abs since recurring outflows are negative.
+		annual := r.MonthlyEquivalent() * 12
+		if annual < 0 {
+			annual = -annual
+		}
+		out = append(out, money.New(annual, r.Amount.Currency))
+	}
+	return out
+}
+
 func billLess(a, b Bill) bool {
 	if !a.DueDate.Equal(b.DueDate) {
 		return a.DueDate.Before(b.DueDate)

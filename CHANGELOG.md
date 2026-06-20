@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The Bills "Per year" figure is now cadence-correct (C57, correctness).** It was computed as the upcoming-total
+  × 12, which mixed cadences — a one-off sum of differently-recurring items (monthly liabilities, weekly/quarterly/
+  yearly recurring) multiplied by 12 misstated the annual cost. A new pure, table-tested `bills.AnnualAmounts`
+  annualizes each obligation by its own cadence (liability min payment ×12; recurring normalized weekly ×52 /
+  monthly ×12 / quarterly ×4 / yearly ×1); the screen FX-converts and sums those.
+
 ### Added
 - **Click a detected subscription to see its charges (C56).** A subscription's name is now a button that opens
   Transactions searched for that payee, so you can verify the auto-detection against the underlying charges —
