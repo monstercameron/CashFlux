@@ -112,6 +112,9 @@ and every commit updates this file under `Unreleased`.
   follow-up over this data.)
 
 ### Fixed
+- **Documents importer account picker is now labelled (C49/B15).** The "import into account" `Select` on both the
+  CSV-draft and receipt-import footers had no accessible name, so screen readers announced it as an unlabelled
+  combobox. Added an `aria-label`; the CSV import flow is regression-covered by `story_documents_csv`.
 - **Mermaid diagrams now match the app theme (C70/C69).** The diagram shim hardcoded a dark theme, which read poorly
   once light themes (Paper) lit the shell. It now picks Mermaid's "default" (light) theme when `data-theme="light"`
   and re-initialises on a theme change, so diagrams follow the active palette. Regression-checked by `mermaid_render_check`.

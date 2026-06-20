@@ -317,13 +317,13 @@ func Documents() ui.Node {
 				),
 				remainderLine,
 				Form(Class("form-grid"), OnSubmit(importReceipt),
-					Select(Class("field"), OnChange(onAcct), acctOptions),
+					Select(Class("field"), Attr("aria-label", "Import into account"), OnChange(onAcct), acctOptions),
 					Button(importBtn...),
 				),
 			)
 		} else {
 			footer = Form(Class("form-grid"), OnSubmit(importDraft),
-				Select(Class("field"), OnChange(onAcct), acctOptions),
+				Select(Class("field"), Attr("aria-label", "Import into account"), OnChange(onAcct), acctOptions),
 				Button(Class("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
 			)
 		}

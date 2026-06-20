@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: label the Documents importer account picker (C49/B15)
+
+- The account `Select` on the Documents importer (both the CSV-draft footer and the receipt-import footer) had
+  no accessible name — the systemic placeholder/label gap C49/B15 track. Added `aria-label="Import into account"`
+  to both (literal text; en.go is contested by the parallel session). The draft-category select was already
+  labelled (C60); this closes the last unlabelled control in that screen's import path.
+- The footer selects only render once a draft/receipt exists, which isn't trivially reachable in headless e2e, so
+  the gate is build+vet plus the existing `story_documents_csv` end-to-end import (still PASS — no regression). The
+  attr addition is trivially correct by inspection. Committed via git commit -- <paths>; TODOS.md untouched.
+
 ## 2026-06-20 - feat: asset "Advanced" disclosure on account add-form (C49)
 
 - The asset add-form showed four optional scoring fields (Return %, Liquidity, Stability, Locked-until) inline,
