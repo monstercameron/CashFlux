@@ -64,6 +64,10 @@ and every commit updates this file under `Unreleased`.
   full suite green.
 
 ### Added
+- **Rule match-count preview + coverage stats (L15, logic).** `internal/rules` gains pure, table-tested
+  `(Rule).MatchCount(texts)` — how many existing transactions a rule would hit, the "matches N existing
+  transactions" preview before a blind Apply-to-existing — plus `Covered`/`Uncovered(rules, texts)` for a "N of
+  M auto-file by your rules" coverage signal (texts are each transaction's payee + description).
 - **Fuzzy command-palette match with keyword aliases (L14, logic).** New pure, table-tested `internal/cmdmatch`
   package: `Command{ID, Title, Keywords}` + `Match(query, cmds)` ranks commands by a case-insensitive
   subsequence score over the title **and** each keyword — so a verb query like "add" or "export" surfaces a

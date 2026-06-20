@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L15 rule match-count preview + coverage (pure logic)
+
+- L15 gap: "Apply to existing" is blind (no count of what a rule will hit) and there's no rule-coverage signal.
+  Added internal/rules/preview.go (additive to the existing rules engine, NO Rule type change so it's a
+  low-risk new file): (Rule).MatchCount(texts) counts case-insensitive substring matches over the supplied
+  texts (a txn's payee+desc); Covered/Uncovered(rules, texts) report first-match-wins coverage. Reuses the
+  engine's existing matches()/FirstMatch().
+- Table-tested (preview_test.go): match counting incl. trimmed + empty phrase (empty matches nothing),
+  coverage/uncovered across rules, nil-rules. go test ./internal/rules green; committed+pushed atomically.
+- The L-series pure-logic seam is now nearly mined out. The remaining clean pure-logic candidates are richer
+  rule conditions (amount/account/AND-OR — but that needs a Rule type extension in the shared rules.go, so a
+  bigger additive change to schedule carefully) and assorted small bits; the bulk of what's left is WASM-UI
+  wiring blocked by the parallel session's ongoing C-series churn (they're on C50/C51 + shared wasm). Keeping to
+  atomic pure-logic commits has kept ~11 ticks conflict-free.
+
 ## 2026-06-20 - feat: success tone on completed goal progress bars (C51)
 
 - C51 headline item: goal bars were always the flat accent fill, so a reached goal looked the same as one barely
