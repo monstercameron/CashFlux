@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/cmdmatch"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -200,10 +201,13 @@ const (
 	cmdListID    = "cf-cmd-list"
 )
 
-// paletteCmd is one searchable command: a label and the action to run.
+// paletteCmd is one searchable command: a label, optional search keywords (verbs /
+// synonyms / aliases that match the query alongside the label but aren't shown), and
+// the action to run.
 type paletteCmd struct {
-	label string
-	run   func()
+	label    string
+	keywords []string
+	run      func()
 }
 
 var (
@@ -235,10 +239,10 @@ func buildPaletteCommands() []paletteCmd {
 	add(toolsNav())
 	add(systemNav())
 	cmds = append(cmds,
-		paletteCmd{label: uistate.T("addmenu.transaction"), run: func() { uistate.UseQuickAdd().Set(true) }},
-		paletteCmd{label: uistate.T("cmd.toggleTheme"), run: toggleTheme},
-		paletteCmd{label: uistate.T("cmd.toggleSidebar"), run: toggleSidebar},
-		paletteCmd{label: uistate.T("shortcuts.title"), run: toggleHelpOverlay},
+		paletteCmd{label: uistate.T("addmenu.transaction"), keywords: []string{"add", "new", "create", "transaction", "expense", "income", "spend"}, run: func() { uistate.UseQuickAdd().Set(true) }},
+		paletteCmd{label: uistate.T("cmd.toggleTheme"), keywords: []string{"theme", "dark", "light", "appearance"}, run: toggleTheme},
+		paletteCmd{label: uistate.T("cmd.toggleSidebar"), keywords: []string{"sidebar", "rail", "collapse", "expand"}, run: toggleSidebar},
+		paletteCmd{label: uistate.T("shortcuts.title"), keywords: []string{"help", "keyboard", "shortcuts", "keys"}, run: toggleHelpOverlay},
 	)
 	// Workspace management straight from the palette.
 	reg := loadRegistry()
@@ -265,21 +269,21 @@ func buildPaletteCommands() []paletteCmd {
 		}},
 	)
 	cmds = append(cmds,
-		paletteCmd{label: uistate.T("settings.exportJSON"), run: func() { exportJSON(paletteNotify) }},
-		paletteCmd{label: uistate.T("settings.exportCSV"), run: func() { exportCSV(paletteNotify) }},
+		paletteCmd{label: uistate.T("settings.exportJSON"), keywords: []string{"export", "backup", "save", "download", "json"}, run: func() { exportJSON(paletteNotify) }},
+		paletteCmd{label: uistate.T("settings.exportCSV"), keywords: []string{"export", "csv", "spreadsheet", "download"}, run: func() { exportCSV(paletteNotify) }},
 	)
 	// Passcode lock (adaptive to current state).
 	if loadAppLock().Enabled {
 		cmds = append(cmds,
-			paletteCmd{label: uistate.T("applock.cmdLock"), run: showAppLockGate},
-			paletteCmd{label: uistate.T("applock.cmdChange"), run: setPasscodeFlow},
-			paletteCmd{label: uistate.T("applock.cmdRemove"), run: func() {
+			paletteCmd{label: uistate.T("applock.cmdLock"), keywords: []string{"lock", "passcode", "password", "security"}, run: showAppLockGate},
+			paletteCmd{label: uistate.T("applock.cmdChange"), keywords: []string{"passcode", "password", "change", "security"}, run: setPasscodeFlow},
+			paletteCmd{label: uistate.T("applock.cmdRemove"), keywords: []string{"passcode", "password", "remove", "disable", "security"}, run: func() {
 				disableAppLock()
 				js.Global().Call("alert", uistate.T("applock.removed"))
 			}},
 		)
 	} else {
-		cmds = append(cmds, paletteCmd{label: uistate.T("applock.cmdSet"), run: setPasscodeFlow})
+		cmds = append(cmds, paletteCmd{label: uistate.T("applock.cmdSet"), keywords: []string{"lock", "passcode", "password", "security"}, run: setPasscodeFlow})
 	}
 	return cmds
 }
@@ -431,10 +435,16 @@ func renderPalette(doc js.Value, query string) {
 	if list.IsNull() || list.IsUndefined() {
 		return
 	}
-	cmdPaletteShown = cmdPaletteShown[:0]
+	// Rank with the shared fuzzy matcher (subsequence + keyword aliases) so a verb
+	// query like "add" or "export" surfaces a noun-labeled command, best match first.
+	ranked := make([]cmdmatch.Command, len(cmdPaletteCmds))
 	for i, c := range cmdPaletteCmds {
-		if query == "" || strings.Contains(strings.ToLower(c.label), query) {
-			cmdPaletteShown = append(cmdPaletteShown, i)
+		ranked[i] = cmdmatch.Command{ID: strconv.Itoa(i), Title: c.label, Keywords: c.keywords}
+	}
+	cmdPaletteShown = cmdPaletteShown[:0]
+	for _, m := range cmdmatch.Match(query, ranked) {
+		if ci, err := strconv.Atoi(m.ID); err == nil {
+			cmdPaletteShown = append(cmdPaletteShown, ci)
 		}
 	}
 	cmdPaletteSel = 0
