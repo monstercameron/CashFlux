@@ -20,6 +20,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -77,6 +78,17 @@ func Insights() ui.Node {
 		}
 	}
 	starters := insights.SuggestedQuestions(insights.QuestionContext{TopCategory: topCat})
+
+	nav := router.UseNavigate()
+	// The no-key hint is a clear call to action that hops to Settings (where the AI
+	// key lives), not a dead-end sentence (C59; same fix as C54). Built fresh per
+	// use so the two placements get independent button nodes.
+	keyHintNode := func() ui.Node {
+		return Div(
+			P(Class("muted"), uistate.T("insights.keyHint")),
+			Button(Class("btn"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
+		)
+	}
 
 	result := ui.UseState("")
 	loading := ui.UseState(false)
@@ -217,7 +229,7 @@ func Insights() ui.Node {
 	var action ui.Node
 	switch {
 	case key == "" && !useBackendAI:
-		action = P(Class("muted"), uistate.T("insights.keyHint"))
+		action = keyHintNode()
 	case loading.Get():
 		action = Div(Class("flex items-center gap-2"),
 			Button(Class("btn btn-primary"), Type("button"), Attr("disabled", "disabled"), uistate.T("insights.thinking")),
@@ -272,7 +284,7 @@ func Insights() ui.Node {
 				// Disabled preview still reflects a picked starter question, so the
 				// chips work as a compose aid even before a key is added.
 				Input(Class("field field-wide"), Type("text"), Attr("disabled", "disabled"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(question.Get())),
-				P(Class("muted"), uistate.T("insights.keyHint")),
+				keyHintNode(),
 			)),
 		),
 		If(result.Get() != "", Section(Class("card"),

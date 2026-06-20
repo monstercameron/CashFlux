@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The Insights "needs a key" hint now links to Settings (C59).** Both the Explain action and the Q&A box showed
+  a dead-end "add your OpenAI key in Settings" sentence; it now includes a Settings button that navigates there in
+  one hop (same dead-end fix flagged on Allocate, C54). Covered by a new `insights_keyhint_check` e2e.
+
 ### Added
 - **Split gets select-all/clear and a result summary (C58).** For households with several members, the sharer
   picker now has Select-all and Clear buttons, and once an amount and sharers are set it shows a legible summary —

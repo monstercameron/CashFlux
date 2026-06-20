@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights no-key hint links to Settings (C59)
+
+- C59 item 2 (bounded, uncontested; the headline result-collision split ripples into pin/save/usage so it's a
+  larger follow-up). The "Add your OpenAI key in Settings…" hint appeared as a dead-end P in two places (the
+  Explain action + the disabled Q&A box). Added a keyHintNode() closure (hint text + a "Settings" button that
+  navigates to /settings via the router) and used it in both spots — built fresh per use so each placement gets an
+  independent button node. Added the router import.
+- New insights_keyhint_check.mjs: with no key (sample default), finds the Explain card's hint, clicks Settings,
+  asserts navigation to /settings. PASS. App wasm builds clean; gofmt clean. Committed via git commit -- <paths>;
+  sw.js parallel-dirty, left out; TODOS.md untouched.
+- C59 remaining: separate Explain vs Q&A result slots (headline; touches pin/save), richer/clearer Q&A scope,
+  streaming, pinned-row truncation. Next: C60 (Documents).
+
 ## 2026-06-20 - feat: split select-all/clear + result summary (C58)
 
 - C58 item 3 (the no-persistence, no-CSS slice — the ephemeral/persist item is a bigger bottom-up feature). Added
