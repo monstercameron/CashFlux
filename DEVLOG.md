@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: internal/mermaid diagram source generators (C70, bottom-up)
+
+- C70 (Mermaid support) is a JS-lib-behind-a-Go-interface feature like D3 charts; per "build bottom-up" this is the
+  pure generator layer (the ui.Mermaid component + locally-bundled, SW-cached, no-CDN mermaid.js shim follow). New
+  internal/mermaid (no syscall/js): Escape (whitespace-collapse, " → ', and entity-escape < > so condition
+  operators read correctly yet no raw tag forms — XSS defense paired with the renderer's strict mode, C45); a
+  Flowchart builder (ShapeBox/Round/Diamond nodes, plain + labelled edges, "flowchart TD" output); and FromWorkflow
+  (trigger terminal → optional condition diamond → ordered action boxes, condition's outgoing edge labelled "yes" =
+  the dry-run path, C65). Imports internal/workflow (both pure).
+- Table tests (native — both packages are pure Go, so this runs under plain go test unlike the wasm-tagged screen
+  tests): TestEscape, TestFlowchartBuilder, TestFromWorkflow (with + without a condition). go test ./internal/mermaid
+  green; go vet clean; app wasm builds; gofmt clean. Committed via git commit -- <paths>; TODOS.md untouched.
+- C70 next: ui.Mermaid + web/mermaid.js (local bundle, lazy, strict, theme-aware), then wire Workflows flowchart +
+  the custom-page Diagram widget; later Sankey/settle-up/category-tree/payoff-gantt generators.
+
 ## 2026-06-20 - feat: surface the product version in the UI (C80)
 
 - C80, full feature (data layer + primary placement). New internal/version package: var Version = "0.1.0" (a var so

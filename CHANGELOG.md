@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Mermaid diagram source generators (C70, foundation).** New pure, table-tested `internal/mermaid`: a label
+  `Escape` (collapses whitespace, single-quotes embedded quotes, entity-escapes `<`/`>` so comparison operators
+  survive while no raw HTML tag can form), a `Flowchart` builder (box/round/diamond nodes + labelled edges), and
+  `FromWorkflow` (trigger → optional condition diamond → actions, with the condition's yes-path highlighted). The
+  `ui.Mermaid` renderer + locally-bundled shim are the follow-up.
 - **The product version is now shown in the UI (C80).** A new dependency-free `internal/version` package holds one
   source of truth (`var Version = "0.1.0"`, override-able at build time via `-ldflags -X`), surfaced as a small
   muted `v0.1.0` line at the foot of the navigation rail under the household card. Covered by a native `version`
