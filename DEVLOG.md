@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: label the to-do priority + due-date controls (C52)
+
+- C52 item 1: the priority Select and due-date Input in both the add and inline-edit forms had no aria-label or
+  visible label (screen-reader-invisible). Wrapped each in the shared labeledField with a visible label and added a
+  matching aria-label. Labels are literals ("Priority", "Due date") since en.go is parallel-dirty — committing it by
+  pathspec would absorb the other session's WIP; noted for an i18n follow-up.
+- New todo_labels_check.mjs asserts the add form shows visible "Priority"/"Due date" labels and the controls carry
+  the matching aria-labels; todo_overdue_check still passes. App wasm builds clean; gofmt clean. Committed via
+  git commit -- <paths> (git add only the new e2e); sw.js parallel-dirty, left out; TODOS.md untouched.
+- C52 now: overdue cue done, control labels done. Remaining (priority/status filter, icon-only narrow rows, long-
+  note truncation) are CSS/filter work; defer the CSS-y ones. Next: C53 (Planning).
+
 ## 2026-06-20 - feat: overdue cue on to-do tasks (C52)
 
 - C52 headline item: open tasks past their due date now render the due meta in the danger tone (.text-down) with

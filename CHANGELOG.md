@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The to-do priority and due-date controls are now labelled (C52).** Both the add and inline-edit forms had a
+  priority `Select` and a due-date input with no `aria-label` or visible label — invisible to screen readers. Each
+  now has a visible label (via the shared `labeledField`) plus a matching `aria-label`. Covered by a new
+  `todo_labels_check` e2e.
 - **Overdue to-dos now stand out (C52).** An open task past its due date used to look identical to one due next
   month. Overdue tasks now render their due line in the danger tone with an explicit "overdue" word (colour + text,
   not colour alone), so a past-due item is obvious at a glance. Covered by a new `todo_overdue_check` e2e.
