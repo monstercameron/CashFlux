@@ -289,7 +289,12 @@ func Insights() ui.Node {
 		),
 		If(result.Get() != "", Section(Class("card"),
 			H2(Class("card-title"), uistate.T("insights.answerTitle")),
-			P(result.Get()),
+			// The model emits Markdown (lists, bold, headings, code), so render it
+			// as rich text instead of one flat paragraph (C59). The framework's
+			// Markdown is GFM-aware and drops active URL schemes (javascript:/data:),
+			// so model-authored text can't smuggle an executable href; links open
+			// safely in a new tab.
+			Div(Class("md insights-answer"), Markdown(result.Get(), MarkdownRenderOptions{LinkTarget: "_blank", LinkRel: "noopener noreferrer"})),
 			Div(Class("flex flex-wrap gap-2 items-center"),
 				Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(saveAsTask), uistate.T("insights.saveTask")),
 				Button(Class("btn"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pinInsight), uistate.T("insights.pin")),

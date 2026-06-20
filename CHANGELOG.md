@@ -7,12 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Markdown parser for AI answers (C59, logic).** New pure, table-tested `internal/markdown`: `Parse` turns the
-  lightweight Markdown the assistant emits (`#`–`######` headings, `**bold**`/`*italic*`, inline and fenced
-  ` ``` ` code, `[label](url)` links, and `-`/`1.` lists) into a structured `[]Block` tree of inline spans. It is
-  total and forgiving — unterminated markers and malformed links degrade to literal text, code is never
-  re-parsed, and any input yields a (possibly empty) block list without panicking. The parsing core for rendering
-  Insights answers as rich text; the screen wiring (block tree → framework nodes, no raw HTML) is a later step.
+- **Insights AI answers render as Markdown (C59).** The assistant emits Markdown (headings, bold/italic, inline
+  and fenced code, links, bullet/number lists) that previously showed as one flat paragraph; the answer card now
+  renders it as rich text via the framework's GFM-aware `Markdown`, which escapes raw HTML and drops active URL
+  schemes (`javascript:`/`data:`) so model-authored text can't smuggle an executable href. Links open in a new
+  tab with `rel="noopener noreferrer"`.
 - **Asset "Advanced" disclosure on the account add-form (C49).** The optional scoring fields (Return %,
   Liquidity, Stability, Locked-until) now sit behind a "Show advanced fields" toggle so the common add path
   stays short; most accounts never set them. The toggle carries `aria-expanded` for screen readers and only

@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: render Insights answers as Markdown; drop in-house parser (C59)
+
+- Going to wire the renderer for the markdown parser I'd just built, I found the framework already ships a
+  `Markdown(source, opts...)` (re-exported from `html.Markdown`): goldmark-backed, GFM, raw-HTML-escaping, with a
+  URL-scheme allowlist that drops `javascript:`/`data:` and options for link target/rel. It's strictly better than
+  my hand-rolled parser — tested upstream and security-hardened — so the right call was to use it and delete mine.
+- Wired it into Insights: the answer card's `P(result.Get())` became `Div(Class("md insights-answer"),
+  Markdown(result.Get(), {LinkTarget:"_blank", LinkRel:"noopener noreferrer"}))`. Removed `internal/markdown`
+  (parser + tests, added earlier today) and the unfinished `internal/ui/markdownview.go` — no dead code.
+- Lesson logged: should have grepped the framework's exported surface before building a parser (the dot-import even
+  shadowed my `Markdown` name, which is how I noticed). Gate: screens build+vet + full wasm clean; `/insights`
+  still loads (insights_keyhint_check PASS — confirms no render regression). A real AI answer needs a key so the
+  rendered-markdown path isn't headlessly e2e-able; the framework component carries its own upstream tests.
+- insights.go was clean (not mid-edit by the parallel session); committed surgically by pathspec, TODOS.md
+  untouched. Supersedes the parser entry below.
+
 ## 2026-06-20 - feat: pure Markdown parser for AI answers (C59, logic)
 
 - Insights AI answers render as a flat paragraph today even though the model emits lists/bold/headings (C59). Built
