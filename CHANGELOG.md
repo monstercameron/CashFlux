@@ -35,7 +35,10 @@ and every commit updates this file under `Unreleased`.
   (date/amount lead descending, text columns ascending) and deterministic ID tie-breaking. Table-tested for
   every key × direction; this is the pure foundation for the upcoming click-to-sort table headers. New pure
   `internal/pagination` provides the page window math — total pages, page clamping, slice bounds, a generic
-  `Slice`, and the "from-to of total" `Window` (with a "show all" mode) — also table-tested.
+  `Slice`, and the "from-to of total" `Window` (with a "show all" mode) — also table-tested. The ledger filter
+  state (`txnfilter.Criteria`) now also carries the persisted **page** and **page size** (defaults to 50, with
+  a "show all" sentinel), plus a `ScopeChanged`/`ResetPageIfScopeChanged` rule that snaps back to page 1 when
+  the filters or sort change — all table-tested.
 - **E2E stories (B16).** Scripted user-journey tests, now that Playwright + Chromium are installed — each
   asserts the standard path end-to-end (UX + data correctness + persistence across reload): **add a
   transaction** (logs an expense, sees it in the ledger with its amount, autosaved), **add an account**

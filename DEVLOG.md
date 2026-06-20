@@ -20,8 +20,17 @@ problems and fixes, and what's next.
 - Pagination math (also pure, also committed): new internal/pagination with TotalPages, Clamp (snap an
   out-of-range page back after a filter/size change), Bounds (slice indices), a generic Slice[T], and Window
   (the "1-50 of 312" pair), all with a size<=0 "show all" mode. Table-tested.
-- Next C47 pieces: persist page-size + sort key/dir in uistate.TxFilter (TxFilter already persists); then the
-  table UI + sortable headers + pagination bar + compact filter toolbar.
+- State piece (also committed): added Page + PageSize (json) to txnfilter.Criteria (TxFilter), so pagination
+  persists with the rest of the filter via PersistTxFilter. Normalize defaults Page>=1 and PageSize=50 (0=unset;
+  negative PageSizeAll = "show all"). Added the pure reset rule: ScopeChanged(prev,next) (filter/sort identity,
+  ignoring pagination) + Criteria.ResetPageIfScopeChanged(prev) so the UI snaps to page 1 when filters/sort
+  change but keeps the page when only the page/size moves. Table-tested; wasm builds clean.
+- Next C47 pieces: the table UI in transactions.go (semantic <table> + click-to-sort headers with aria-sort,
+  select-all header checkbox, wire ApplyWithLabels with account/category name maps, keep all existing
+  behaviors + the row markup as the responsive stacked fallback); then the pagination bar (prev/next +
+  "1-50 of N" + page-size select) replacing "Show more"; then the compact filter toolbar (search + Filters
+  FlipPanel popover + active-filter chips). UI commits bump sw + re-verify the e2e suite (txn stories may need
+  selector updates as rows move into table cells).
 
 ## 2026-06-20 - fix: CSV import desc falls back to payee (C27 follow-up; the bug my E2E found)
 

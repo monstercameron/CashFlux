@@ -22,6 +22,16 @@ const (
 	Desc = "desc"
 )
 
+// Pagination defaults for the ledger. PageSizeAll is the sentinel page size that
+// shows every row on one page; DefaultPageSize is the out-of-the-box window.
+const (
+	DefaultPageSize = 50
+	PageSizeAll     = -1
+)
+
+// PageSizes are the offered page-size choices (plus "All" = PageSizeAll).
+var PageSizes = []int{25, 50, 100}
+
 // ValidSortKey reports whether k is a known sortable column.
 func ValidSortKey(k string) bool {
 	for _, s := range SortKeys {
@@ -57,16 +67,47 @@ type Criteria struct {
 	Sort     string `json:"sort,omitempty"`
 	Dir      string `json:"dir,omitempty"`
 	Cleared  string `json:"cleared,omitempty"`
+	// Pagination (persisted with the rest). Page is 1-based; PageSize 0 means the
+	// default, PageSizeAll (negative) means "show all".
+	Page     int `json:"page,omitempty"`
+	PageSize int `json:"pageSize,omitempty"`
 }
 
-// Normalize fills defaults: sort defaults to date, and the direction defaults to
-// the key's natural direction (DefaultDir) when unset or invalid.
+// Normalize fills defaults: sort defaults to date, the direction defaults to the
+// key's natural direction (DefaultDir) when unset or invalid, the page is at
+// least 1, and an unset page size becomes DefaultPageSize (a negative size is
+// kept as the "all" sentinel).
 func (c Criteria) Normalize() Criteria {
 	if !ValidSortKey(c.Sort) {
 		c.Sort = "date"
 	}
 	if c.Dir != Asc && c.Dir != Desc {
 		c.Dir = DefaultDir(c.Sort)
+	}
+	if c.Page < 1 {
+		c.Page = 1
+	}
+	if c.PageSize == 0 {
+		c.PageSize = DefaultPageSize
+	}
+	return c
+}
+
+// ScopeChanged reports whether the filter/sort scope of two criteria differs —
+// i.e. the result set or its order changed, ignoring pagination. The UI uses this
+// to reset to page 1 when filters or sort change.
+func ScopeChanged(prev, next Criteria) bool {
+	a, b := prev.Normalize(), next.Normalize()
+	a.Page, a.PageSize = 0, 0
+	b.Page, b.PageSize = 0, 0
+	return a != b
+}
+
+// ResetPageIfScopeChanged returns c with Page reset to 1 when its filter/sort
+// scope differs from prev, so a new result set/order starts at the first page.
+func (c Criteria) ResetPageIfScopeChanged(prev Criteria) Criteria {
+	if ScopeChanged(prev, c) {
+		c.Page = 1
 	}
 	return c
 }

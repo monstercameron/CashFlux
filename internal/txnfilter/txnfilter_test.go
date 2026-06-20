@@ -98,6 +98,46 @@ func TestNormalizeSortAndDir(t *testing.T) {
 	}
 }
 
+func TestNormalizePagination(t *testing.T) {
+	if n := (Criteria{}).Normalize(); n.Page != 1 || n.PageSize != DefaultPageSize {
+		t.Errorf("empty page normalize = page %d size %d, want 1/%d", n.Page, n.PageSize, DefaultPageSize)
+	}
+	if n := (Criteria{Page: 0}).Normalize(); n.Page != 1 {
+		t.Errorf("page 0 -> %d, want 1", n.Page)
+	}
+	if n := (Criteria{Page: 4, PageSize: 25}).Normalize(); n.Page != 4 || n.PageSize != 25 {
+		t.Errorf("explicit page/size changed: %d/%d", n.Page, n.PageSize)
+	}
+	if n := (Criteria{PageSize: PageSizeAll}).Normalize(); n.PageSize != PageSizeAll {
+		t.Errorf("All page size not preserved: %d", n.PageSize)
+	}
+}
+
+func TestScopeChangedAndPageReset(t *testing.T) {
+	base := Criteria{Account: "acc1", Sort: "date", Page: 3}
+	// Only the page differs -> same scope.
+	if ScopeChanged(base, Criteria{Account: "acc1", Sort: "date", Page: 7}) {
+		t.Error("changing only the page should not be a scope change")
+	}
+	// Different filter / sort / direction -> scope changed.
+	if !ScopeChanged(base, Criteria{Account: "acc2", Sort: "date", Page: 3}) {
+		t.Error("changing the account filter should be a scope change")
+	}
+	if !ScopeChanged(base, Criteria{Account: "acc1", Sort: "amount", Page: 3}) {
+		t.Error("changing the sort key should be a scope change")
+	}
+	if !ScopeChanged(base, Criteria{Account: "acc1", Sort: "date", Dir: Asc, Page: 3}) {
+		t.Error("flipping the sort direction should be a scope change")
+	}
+	// ResetPageIfScopeChanged keeps the page on a same-scope change, resets otherwise.
+	if got := (Criteria{Account: "acc1", Sort: "date", Page: 5}).ResetPageIfScopeChanged(base); got.Page != 5 {
+		t.Errorf("same-scope page reset to %d, want kept 5", got.Page)
+	}
+	if got := (Criteria{Account: "acc2", Sort: "date", Page: 5}).ResetPageIfScopeChanged(base); got.Page != 1 {
+		t.Errorf("scope-changed page = %d, want reset to 1", got.Page)
+	}
+}
+
 func TestApplyFilters(t *testing.T) {
 	all := sample()
 	if got := Apply(all, Criteria{Account: "acc1"}); ids(got) != "ca" {
