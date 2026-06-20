@@ -27,7 +27,11 @@ func Icon(name icon.Name, extra ...PropOption) ui.Node {
 		Attr("viewBox", "0 0 24 24"),
 		Attr("fill", "none"),
 		Attr("stroke", "currentColor"),
-		Attr("stroke-width", "1.6"),
+		// Line weight follows the theme's --icon-stroke token (default 1.6). An
+		// inline style is used rather than the stroke-width presentation attribute
+		// because SVG attributes don't accept var(), while the CSS property does —
+		// and inline style beats the attribute, so themed weight always wins.
+		Style(map[string]string{"stroke-width": "var(--icon-stroke, 1.6)"}),
 		Attr("stroke-linecap", "round"),
 		Attr("stroke-linejoin", "round"),
 	}

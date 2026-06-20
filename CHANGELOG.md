@@ -21,6 +21,10 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Selectable icon weight (B13).** The theme editor gains an "Icon weight" control (Thin / Regular / Bold) —
+  `ui.Icon` now draws every glyph at the theme's `--icon-stroke` width, so the whole curated icon set thins or
+  thickens together, live and persistent. Verified via Playwright (Bold takes a rail icon from 1.6px → 2.2px,
+  persists; screenshot confirms).
 - **Icon stroke weight token (B13/B20).** New pure `theme.IconStroke` (SVG line thickness, default 1.6)
   carried through `Default`/presets/migration, validated (1.0–3.0), merged, and emitted as the `--icon-stroke`
   CSS var. Table-tested foundation for a selectable icon weight; the renderer wiring and editor control follow.

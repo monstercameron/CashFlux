@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: selectable icon weight, wired + UI (B13)
+
+- Wired the icon-stroke token through the renderer and editor. ui.Icon now sets stroke-width via an inline
+  style `var(--icon-stroke, 1.6)` (not the presentation attr, which can't take var()), so every glyph in the
+  curated set follows the theme token at once. index.html carries a `--icon-stroke: 1.6` :root default for the
+  pre-engine frame. The editor's Shape & type section gets an "Icon weight" segmented (Thin 1.2 / Regular 1.6 /
+  Bold 2.2) that writes theme.IconStroke and applies live.
+- Verified via Playwright (e2e/icon_weight_check.mjs): switching to Bold takes a rail icon's computed
+  stroke-width from 1.6px to 2.2px, sets --icon-stroke=2.2, and persists theme.iconStroke=2.2 — no page errors.
+  Screenshot (icon-weight-bold.png) shows the rail rendering crisp and bolder.
+- B13 icon-style is now shippable. The full branding/theming + artifact-upload backlog (fonts, images, icon
+  weight, unify) is complete. Next: review TODOS for the next branding/theming item, or report the area done.
+
 ## 2026-06-19 - feat: pure icon-stroke token (B13 icon style, bottom-up)
 
 - Started B13's "icon pack" as a feasible, offline icon STYLE: a selectable line weight. Pure layer first —

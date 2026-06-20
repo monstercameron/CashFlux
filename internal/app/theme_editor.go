@@ -219,6 +219,20 @@ func themeEditor() uic.Node {
 				apply(nt)
 			},
 		}),
+		Div(Class("toggle-row"),
+			Span("Icon weight"),
+			ui.Segmented(ui.SegmentedProps{
+				Options:  []ui.SegOption{{Value: "1.2", Label: "Thin"}, {Value: "1.6", Label: "Regular"}, {Value: "2.2", Label: "Bold"}},
+				Selected: strconv.FormatFloat(t.IconStroke, 'g', -1, 64),
+				OnSelect: func(v string) {
+					if f, err := strconv.ParseFloat(v, 64); err == nil {
+						nt := t
+						nt.IconStroke = f
+						apply(nt)
+					}
+				},
+			}),
+		),
 
 		Div(Class("set-label mt-2"), "Dashboard banner"),
 		P(Class("muted text-xs"), "A decorative band atop the dashboard. Choose a gradient or upload your own image."),
