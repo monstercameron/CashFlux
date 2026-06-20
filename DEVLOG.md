@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — allocate exclude/restore
+
+- Seventeenth journey story (e2e/story_allocate.test.mjs). The Allocate screen ranks where to put new capital;
+  its output is a live, non-persisted ranking, so the story asserts on the UI: count the active suggestions
+  (rows with an Exclude button "Leave this out of the suggestions"), exclude the top one and assert the active
+  count drops by one and a Restore button ("Bring this back into the suggestions") appears, then restore and
+  assert the active count returns. (10 -> 9 -> 10 on the sample data.) The ranking math itself is covered by
+  internal/allocate unit tests; this proves the screen's interaction. Suite now 26 green. Test-only, no sw bump.
+
 ## 2026-06-20 - test: B16 story — bulk clear
 
 - Sixteenth journey story (e2e/story_txn_bulk_clear.test.mjs): seed two txns, filter the ledger to them, select
