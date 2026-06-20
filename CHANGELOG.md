@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **gpt-5.5 default + Responses/websocket/streaming request profiles (C81/C89, logic).** `internal/aiprovider` now
+  leads with **gpt-5.5** (a reasoning model) as the default and models the app's preferred request shape: a `Profile`
+  of `APIStyle` (Responses / chat-completions), `Transport` (websocket / https), streaming, and reasoning `Effort`.
+  `DefaultProfile()` = Responses over a websocket, streaming, **medium** effort; `LowEffortProfile()` for lightweight
+  chain-of-thought; `Provider.For(model, base)` resolves it — downgrading to chat-completions/https for non-OpenAI
+  dialects, dropping effort for non-reasoning models. Table-tested; the websocket transport itself is the C81-p2 step.
 - **Bounded Insights-agent context builder (C89 phase 1, logic).** New pure, table-tested `internal/aicontext`
   assembles a richer, privacy-tiered financial snapshot for the model's system prompt — net worth, period income/
   expense, accounts, budgets, goals, top categories/payees, recent transactions, and **every enabled Formula

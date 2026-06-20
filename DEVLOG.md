@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: gpt-5.5 default + AI request profiles (C81/C89)
+
+- User pinned the AI stack: default gpt-5.5 at MEDIUM reasoning effort, low-effort CoT variant for light calls,
+  OpenAI Responses API over a websocket (if possible, else HTTPS+SSE), and streaming text. Baked these into the
+  provider data model now (internal/aiprovider, mine/non-contended) so every later phase honors them.
+- Capabilities gained Reasoning; OpenAI registry leads with gpt-5.5 (reasoning/vision/tools/json_schema) and
+  Default() returns it. New request.go: APIStyle/Transport/Effort enums + Profile; DefaultProfile (Responses+ws+
+  stream+medium), LowEffortProfile (low), and Provider.For(model, base) that resolves the achievable shape per
+  target (Anthropic → chat_completions/https; non-reasoning → no effort; non-streaming → no stream). 3 new test
+  funcs + updated TestDefault. f20f48e.
+- These are MODELLING the intent (pure/testable). The actual websocket+streaming Responses transport is C81-p2 in
+  the contended internal/ai — to be wired carefully next, checking the other agent isn't mid-file. Objective stands:
+  complete every insights/AI todo.
+
 ## 2026-06-20 - feat: C89 phase 1 — Insights-agent context builder (pure)
 
 - User added C89 ("Insights as an agent") and redirected me to it, then asked to complete ALL insights/AI todos —
