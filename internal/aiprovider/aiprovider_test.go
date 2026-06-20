@@ -84,8 +84,11 @@ func TestGetAndModelLookup(t *testing.T) {
 
 func TestDefault(t *testing.T) {
 	p, m := Default()
-	if p.ID != "openai" || m.ID != "gpt-4o-mini" {
-		t.Errorf("Default = %s/%s, want openai/gpt-4o-mini", p.ID, m.ID)
+	if p.ID != "openai" || m.ID != "gpt-5.5" {
+		t.Errorf("Default = %s/%s, want openai/gpt-5.5", p.ID, m.ID)
+	}
+	if !m.Caps.Reasoning {
+		t.Error("the default model should be a reasoning model")
 	}
 }
 

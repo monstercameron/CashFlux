@@ -10,6 +10,8 @@ var registry = []Provider{
 		ID: "openai", Label: "OpenAI", Dialect: DialectOpenAI, Auth: AuthBearer,
 		BaseURL: "https://api.openai.com/v1", KeyURL: "https://platform.openai.com/api-keys",
 		Models: []Model{
+			{ID: "gpt-5.5", Label: "GPT-5.5", InputCentsPerMTok: 200, OutputCentsPerMTok: 800,
+				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Reasoning: true, Structured: StructuredJSONSchema}},
 			{ID: "gpt-4o", Label: "GPT-4o", InputCentsPerMTok: 250, OutputCentsPerMTok: 1000,
 				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Structured: StructuredJSONSchema}},
 			{ID: "gpt-4o-mini", Label: "GPT-4o mini", InputCentsPerMTok: 15, OutputCentsPerMTok: 60,

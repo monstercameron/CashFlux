@@ -47,6 +47,7 @@ type Capabilities struct {
 	Vision     bool
 	Streaming  bool
 	ToolUse    bool
+	Reasoning  bool // accepts a reasoning-effort parameter (a "thinking" model)
 	Structured Structured
 }
 
@@ -103,11 +104,12 @@ func Providers() []Provider {
 	return out
 }
 
-// Default returns the recommended starting provider and model (OpenAI / gpt-4o-mini
-// — cheap, vision-capable, and the most widely available key).
+// Default returns the recommended starting provider and model: OpenAI / gpt-5.5, a
+// reasoning model run at medium effort over the streaming Responses API (see
+// DefaultProfile). gpt-4o-mini remains for cheap, non-reasoning calls.
 func Default() (Provider, Model) {
 	p, _ := Get("openai")
-	m, _ := p.Model("gpt-4o-mini")
+	m, _ := p.Model("gpt-5.5")
 	return p, m
 }
 
