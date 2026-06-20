@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -253,9 +254,13 @@ type categoryRowProps struct {
 	OnSave        func(id, name, kind, parent, color string)
 }
 
-// indentLabel returns a depth-proportional prefix for nested category labels.
+// indentLabel returns a depth-proportional prefix for nested category names in
+// <option> lists, where CSS padding can't reach. It uses non-breaking spaces
+// (which, unlike normal leading spaces, browsers don't collapse in an option)
+// rather than em-dashes, for a cleaner hierarchy (C63). Row labels indent with
+// real CSS padding instead — see CategoryRow.
 func indentLabel(depth int) string {
-	return strings.Repeat("— ", depth)
+	return strings.Repeat("   ", depth)
 }
 
 // CategoryRow is a per-category row. It can be edited inline (name + kind). All
@@ -332,9 +337,13 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		)
 	}
 
-	desc := c.Name
+	// Sub-categories nest with real left padding (a guide line via border) rather
+	// than literal "— " prefixes, for a cleaner hierarchy (C63). Depth 0 is flush.
+	descStyle := map[string]string{}
 	if props.Depth > 0 {
-		desc = indentLabel(props.Depth) + c.Name // visually nest sub-categories
+		descStyle["padding-left"] = strconv.Itoa(props.Depth*16) + "px"
+		descStyle["border-left"] = "2px solid var(--border, #2a2a2a)"
+		descStyle["margin-left"] = "2px"
 	}
 	kindLabel := uistate.T("category.expense")
 	if c.Kind == domain.KindIncome {
@@ -343,7 +352,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 	return Div(Class("row"),
 		Span(Class("cat-swatch"), Style(map[string]string{"background": catColor(c.Color)})),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), desc),
+			Span(Class("row-desc"), Style(descStyle), c.Name),
 			Span(Class("row-meta"),
 				Text(kindLabel),
 				Text(" · "),

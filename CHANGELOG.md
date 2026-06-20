@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Category tree nesting uses real indentation, not em-dashes (C63).** Sub-category rows now indent with depth-
+  proportional left padding and a subtle guide line instead of literal "— " prefixes, for a cleaner hierarchy. The
+  parent-picker dropdowns (where CSS padding can't reach) indent with non-breaking spaces rather than em-dashes.
+  Covered by a new `categories_nesting_check` e2e.
+
 ### Added
 - **gpt-5.5 default + Responses/websocket/streaming request profiles (C81/C89, logic).** `internal/aiprovider` now
   leads with **gpt-5.5** (a reasoning model) as the default and models the app's preferred request shape: a `Profile`

@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - refactor: category tree uses real indentation, not em-dashes (C63)
+
+- Closed another C63 item: nested category rows rendered with literal "— " prefixes (`indentLabel` repeating
+  em-dashes). Row labels now indent with depth-proportional CSS padding (16px/level) plus a subtle left guide line;
+  `indentLabel` is repurposed for the parent-picker <option> lists only — switched from em-dashes to non-breaking
+  spaces (regular leading spaces collapse inside an <option>, nbsp don't).
+- Subtlety: the Edit tool rendered my `" ..."` input as literal nbsp bytes (0xC2 0xA0) in source — confirmed via
+  od -c; that's exactly what's wanted, so left as-is. Added `strconv` for the px padding value.
+- e2e `categories_nesting_check`: no row label starts with "—" and ≥1 nested row carries real left padding — PASS
+  (4 nested rows padded). Regression: usage-drill + reassign-kind checks still PASS. categories.go uncontested
+  (parallel session is on internal/aiprovider, C81); committed by pathspec, TODOS.md untouched.
+
 ## 2026-06-20 - feat: gpt-5.5 default + AI request profiles (C81/C89)
 
 - User pinned the AI stack: default gpt-5.5 at MEDIUM reasoning effort, low-effort CoT variant for light calls,
