@@ -41,6 +41,12 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Shared expenses + settlements are first-class persisted records (L2).** New `domain.SharedExpense` (a cost
+  fronted by one member with per-member shares) and `domain.Settlement` (a payment squaring members up) are now
+  stored in their own SQLite tables and carried in the exported `Dataset`, so the roommate settle-up ledger
+  survives reload and round-trips losslessly through export/import. Full CRUD on the store
+  (`Put/Get/Delete/List SharedExpense` and `…Settlement`) plus a `SharedExpense.Total()` helper, covered by
+  round-trip and CRUD tests.
 - **Settle-up logic for shared expenses (L2, bottom-up start).** A new pure `internal/settle` turns a set of
   shared expenses (who paid + each member's share) and any recorded settlements into each member's **net
   balance** (positive = the group owes them) and a **minimal set of "X pays Y $Z" transfers** that zero everyone

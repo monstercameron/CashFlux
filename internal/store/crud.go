@@ -385,3 +385,31 @@ func (s *SQLiteStore) DeleteWorkflowRun(id string) (bool, error) {
 func (s *SQLiteStore) ListWorkflowRuns() ([]workflow.Run, error) {
 	return loadRows[workflow.Run](s.db, "workflowruns")
 }
+
+// --- Shared expenses + settlements (the roommate "settle up" ledger) ---
+
+func (s *SQLiteStore) PutSharedExpense(e domain.SharedExpense) error {
+	return putJSON(s.db, "sharedexpenses", e.ID, e)
+}
+func (s *SQLiteStore) GetSharedExpense(id string) (domain.SharedExpense, bool, error) {
+	return getJSON[domain.SharedExpense](s.db, "sharedexpenses", id)
+}
+func (s *SQLiteStore) DeleteSharedExpense(id string) (bool, error) {
+	return deleteRow(s.db, "sharedexpenses", id)
+}
+func (s *SQLiteStore) ListSharedExpenses() ([]domain.SharedExpense, error) {
+	return loadRows[domain.SharedExpense](s.db, "sharedexpenses")
+}
+
+func (s *SQLiteStore) PutSettlement(st domain.Settlement) error {
+	return putJSON(s.db, "settlements", st.ID, st)
+}
+func (s *SQLiteStore) GetSettlement(id string) (domain.Settlement, bool, error) {
+	return getJSON[domain.Settlement](s.db, "settlements", id)
+}
+func (s *SQLiteStore) DeleteSettlement(id string) (bool, error) {
+	return deleteRow(s.db, "settlements", id)
+}
+func (s *SQLiteStore) ListSettlements() ([]domain.Settlement, error) {
+	return loadRows[domain.Settlement](s.db, "settlements")
+}

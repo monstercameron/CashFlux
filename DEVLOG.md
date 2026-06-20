@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L2 persist shared expenses + settlements (store round-trip)
+
+- L2 step 2 (persistence). Added domain.SharedExpense (ID, Desc, Date, PayerID, Shares []SharedExpenseShare{
+  MemberID, Amount}, Custom) + domain.Settlement (ID, FromID, ToID, Amount, Date) in a new
+  internal/domain/shared_expense.go, with a SharedExpense.Total() helper (sum of shares = what the payer
+  fronted). Kept them as a separate file to minimise collision with the parallel session in the store area.
+- Wired both into internal/store the same way every other entity is: two new tables (sharedexpenses,
+  settlements), replaceRows in Load, loadRows in Snapshot, two Dataset fields (sharedExpenses/settlements,
+  omitempty), and full CRUD in crud.go (Put/Get/Delete/List for each). No schema-version bump needed — the new
+  fields are additive and omitempty, so older datasets import unchanged.
+- Tests (store/settle_persist_test.go, a new file so I don't touch the shared store test files): CRUD happy path
+  + a Snapshot->Export->Import round-trip asserting both records survive with correct totals/links. go test
+  ./internal/store ./internal/domain green; gofmt clean; wasm build green.
+- Next L2: appstate accessors + a record-settlement action (save the forward split as a SharedExpense, record a
+  Settlement), then the Split screen "Settle up" panel, sample members, and the e2e.
+
 ## 2026-06-20 - feat: L2 settle-up logic (pure, bottom-up)
 
 - Started L2 ("The Roommate Split"): the missing piece is a running "who owes whom -> settle up" across many

@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS custompages  (id TEXT PRIMARY KEY, data TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS artifacts    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS workflows    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS workflowruns (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sharedexpenses (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settlements  (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 `
 
@@ -151,6 +153,12 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "workflowruns", ds.WorkflowRuns, func(r workflow.Run) string { return r.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "sharedexpenses", ds.SharedExpenses, func(e domain.SharedExpense) string { return e.ID }); err != nil {
+		return err
+	}
+	if err := replaceRows(tx, "settlements", ds.Settlements, func(s domain.Settlement) string { return s.ID }); err != nil {
+		return err
+	}
 
 	settingsData, err := json.Marshal(ds.Settings)
 	if err != nil {
@@ -224,6 +232,12 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.WorkflowRuns, err = loadRows[workflow.Run](s.db, "workflowruns"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.SharedExpenses, err = loadRows[domain.SharedExpense](s.db, "sharedexpenses"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.Settlements, err = loadRows[domain.Settlement](s.db, "settlements"); err != nil {
 		return Dataset{}, err
 	}
 
