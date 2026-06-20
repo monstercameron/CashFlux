@@ -26,9 +26,10 @@ and every commit updates this file under `Unreleased`.
   transaction** (logs an expense, sees it in the ledger with its amount, autosaved), **add an account**
   (adds an asset with an opening balance, sees it listed and the net-worth summary rise by exactly that
   balance), **create a budget** (adds a Weekly budget, sees it listed with its limit, and confirms the
-  saved budget carries the chosen period), and **create a goal + contribute** (adds a goal, contributes to it,
-  and confirms the saved amount advances and persists). The start of B16's "every feature, provably flawless"
-  story suite (`e2e/story_*.test.mjs`).
+  saved budget carries the chosen period), **create a goal + contribute** (adds a goal, contributes to it,
+  and confirms the saved amount advances and persists), and **settings export→import round-trip** (exports the
+  dataset, imports it back, re-exports, and proves the round-trip is lossless — same entities preserved). The
+  start of B16's "every feature, provably flawless" story suite (`e2e/story_*.test.mjs`).
 - **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
   settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
   that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and

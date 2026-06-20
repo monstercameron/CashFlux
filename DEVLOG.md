@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: B16 story — settings export→import round-trip (lossless)
+
+- Fifth B16 story (e2e/story_settings_roundtrip.test.mjs): the data-integrity teeth. Click Export JSON (capture
+  via page.waitForEvent('download') + saveAs), import that exact file back (Import… opens a pickFile chooser →
+  page.once('filechooser', fc=>fc.setFiles(path))), export again, and assert the two exports carry the same
+  entities — a structure-agnostic count of every object-with-an-id, plus that a known id survives. Proves
+  import/export is lossless (89 sample entities preserved). Also asserts the export is valid, non-empty JSON.
+- Test-only, no sw bump. Next: an aggregating e2e/run-stories.ps1 so the whole suite runs as one command.
+
 ## 2026-06-19 - test: B16 story — create a goal + contribute
 
 - Fourth B16 story (e2e/story_add_goal.test.mjs): create a savings goal (name #goal-add + target aria-required
