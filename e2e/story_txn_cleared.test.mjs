@@ -75,8 +75,11 @@ try {
   txn = await waitForTxn(page, DESC, (t) => t && t.cleared === true);
   if (!txn || txn.cleared !== true) fail(`transaction should be cleared after toggling, got cleared=${txn && txn.cleared}`);
 
-  // The cleared-status filter now excludes it under "not cleared" and includes it
-  // under "cleared".
+  // The cleared-status filter now lives in the "Filters" popover (C47 toolbar) —
+  // open it, then it excludes the txn under "not cleared" and includes it under
+  // "cleared".
+  await page.locator(".filters-trigger").first().click();
+  await page.waitForSelector('select:has(option[value="yes"])', { timeout: 8000 });
   const clearedSelect = page.locator('select:has(option[value="yes"])').first();
   await clearedSelect.selectOption("no");
   await page.waitForTimeout(400);

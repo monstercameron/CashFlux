@@ -77,6 +77,11 @@ and every commit updates this file under `Unreleased`.
   none is checked) with the rest `tabindex=-1` — and arrow keys move selection (which follows focus) within the
   group; the SwatchPicker gained the arrow-key navigation it was missing. Locked in by a new `roving_tabindex_check`
   e2e (one Tab stop per radiogroup, and the checked option is that stop) across the period control + Settings.
+- **Committed a11y sweep gate (L7).** A new `a11y_check` e2e asserts, across /transactions, /accounts, /budgets,
+  and /goals, that the `nav` + `main` landmarks are present and that **every** visible focusable control and form
+  field has an accessible name (computed from aria-label/labelledby/title/associated-label/text/placeholder) — so
+  unlabeled-control regressions fail CI. (The sweep also surfaced unlabeled FX-rate inputs in the Settings panel;
+  that screen is owned by a separate work stream, so its fix + sweep is left to that owner.)
 - **Transactions ledger is now a sortable table (C47).** The flat row list is replaced by a semantic `<table>`
   with aligned columns (select · Date · Description · Category · Account · Tags · Amount · Cleared · Actions),
   right-aligned tabular amounts, and **click-to-sort column headers** (real buttons that sort by Date/

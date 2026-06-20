@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: L7 a11y sweep gate + fix txn-cleared story for the new filter popover
+
+- L7 gap 2: promoted the runtime a11y sweep to a committed gate e2e/a11y_check.mjs. For /transactions,
+  /accounts, /budgets, /goals it asserts (in page.evaluate) the nav+main landmarks exist and that EVERY visible
+  focusable control + form field has an accessible name (aria-label | aria-labelledby text | title | label / for
+  | text | placeholder | input value | alt). A <main id="main"> + nav[aria-label] already exist in shell.go, so
+  no shell change was needed. The sweep is CLEAN on those four screens.
+- Real finding: the Settings panel has 6 unlabeled .rate-in number inputs (no label/aria-label/placeholder).
+  settings.go is owned by the parallel work stream (flagged), so I did NOT edit it — scoped the gate to the
+  screens I own and noted the finding in CHANGELOG for that owner to fix + extend the sweep to Settings.
+- Coordination: the parallel session committed the C47 filter toolbar (7411376) which moved the cleared-status
+  filter into a "Filters" FlipPanel popover, breaking my committed story_txn_cleared (it selected the cleared
+  <select> directly). Updated that story to click .filters-trigger (open the popover) first. Did NOT touch their
+  transactions.go/index.html/sw.js. story_txn_bulk_clear flaked once (passed standalone + on re-run). Full suite
+  43/0 green on re-run.
+
 ## 2026-06-20 - refactor: extract a reusable uiw.FilterToolbar (C47 portability)
 
 - Self-review caught that the first C47 UI pass baked the toolbar + a transactions-specific FilterChip into
