@@ -3,6 +3,30 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: transactions filter toolbar + chips UI (completes C47)
+
+- The UI half over yesterday's active-filter logic. transactions.go's filter `form-grid` (10 controls in one
+  wrapping strip) becomes a `.filter-toolbar`: always-visible search, a "Filters" trigger badged with
+  `f.ActiveCount()`, then Clear + Export CSV. The trigger opens a `uiw.FlipPanel` (CloseOnly — filters apply live
+  on each onChange, nothing to "save") whose body stacks the account/category/member/from/to/cleared fields as
+  labelled `.field-label` rows.
+- Active filters render as removable chips below the toolbar via `MapKeyed(f.ActiveFilters(), …)` over a new
+  `FilterChip` component (its own component so the per-chip remove-button OnClick hook sits at a stable position —
+  the framework loop-hook gotcha). `chipLabel` resolves IDs→names (account/category/member maps) and cleared→its
+  word; the ✕ calls `removeFilter(field)` → `Criteria.Without(field)` (a scope change, so the page resets). A
+  "Clear all filters" link sits at the end of the chip row.
+- New i18n keys (transactions.filters/filtersTitle/filtersBadge/removeFilter/clearAllFilters/chip*). New CSS in
+  web/index.html for .filter-toolbar/.filter-badge/.filter-chip/.chip-x/.filter-fields. Bumped sw v208->v209.
+- App wasm builds clean (go build -o static/bin/main.wasm . green); go vet + gofmt clean; ./internal/txnfilter
+  tests still green. Note: `internal/server` is currently broken on a grpctunnel API drift — pre-existing and
+  outside the wasm app path (the parallel session's WIP), left untouched. Committed by pathspec; TODOS.md (the
+  parallel session's uncommitted C47-C66 block) not staged.
+- E2E-gated before pushing: new story_txn_filter_toolbar.test.mjs drives the real toolbar — a search term raises
+  the badge to "1" + a chip; the Filters popover opens (FlipPanel) and adding cleared raises it to "2"; Escape
+  closes it; the chip ✕ removes just that filter (search box clears, badge → "1"); "Clear all filters" empties
+  everything. Full Playwright suite green at 43/0 (was 42; story_txn_filter still passes through the new search box).
+- Next: tick C47's boxes and move to C48 (Dashboard typography/spacing scale).
+
 ## 2026-06-20 - feat: active-filter logic for the transactions toolbar (C47)
 
 - Picking up C47 (Transactions: paginated, sortable table + cleaner filter UI). The table half is already shipped:

@@ -6,6 +6,17 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Transactions filters are now a compact toolbar with a Filters popover and removable chips (C47, completes it).**
+  The cramped 10-control `form-grid` strip is replaced by an always-visible search box, a **Filters** button
+  badged with the active-filter count, and **Clear** / **Export CSV** beside it. The button opens a `FlipPanel`
+  popover holding account / category / member / date-range / cleared (each a labelled field; filters still apply
+  live). Active filters render below as **removable chips** (✕ clears just that one, with a "Clear all filters"
+  link), so it's obvious what's narrowing the list. The summary line and the screen-reader live region are kept.
+  Built over the `txnfilter` active-filter logic; the sortable table + pagination were already in place, so C47 is
+  now complete. Covered by a new `story_txn_filter_toolbar` Playwright e2e (badge, popover, chip removal, clear-all);
+  full suite green.
+
 ### Added
 - **Active-filter introspection for the transactions toolbar (C47, logic).** `txnfilter.Criteria` gains a pure
   `ActiveFilters()` (the engaged filters in toolbar order — search, account, category, member, from, to, cleared;

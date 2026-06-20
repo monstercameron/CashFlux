@@ -326,6 +326,29 @@
       .amount-income { color: var(--accent); }
       .amount-expense { color: var(--danger); }
 
+      /* Transactions filter toolbar (C47): compact search + Filters popover + chips. */
+      .filter-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
+      .filter-search { flex: 1 1 220px; min-width: 160px; }
+      .filters-trigger { display: inline-flex; align-items: center; gap: 0.4rem; }
+      .filter-badge { display: inline-flex; align-items: center; justify-content: center;
+        min-width: 1.25rem; height: 1.25rem; padding: 0 0.35rem; border-radius: 999px;
+        background: var(--accent); color: #fff; font-size: 0.72rem; font-weight: 700;
+        font-variant-numeric: tabular-nums; }
+      .filter-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; }
+      .filter-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+        background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px; font-size: 0.82rem; }
+      .filter-chip .chip-text { line-height: 1.2; }
+      .chip-x { display: inline-flex; align-items: center; justify-content: center; width: 1.1rem; height: 1.1rem;
+        padding: 0; border: none; border-radius: 999px; background: transparent; color: var(--muted);
+        font-size: 0.8rem; line-height: 1; cursor: pointer; }
+      .chip-x:hover { background: var(--danger); color: #fff; }
+      .chip-clear-all { background: none; border: none; color: var(--accent); font: inherit; cursor: pointer; padding: 0.2rem 0.3rem; }
+      .chip-clear-all:hover { text-decoration: underline; }
+      /* Filters popover body: stacked labelled fields. */
+      .filter-fields { display: flex; flex-direction: column; gap: 0.7rem; }
+      .filter-fields .field-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+      .filter-fields .field-label .field { color: var(--text); }
+
       /* Forms */
       .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; align-items: end; }
       .field { width: 100%; padding: 0.5rem 0.6rem; min-height: 44px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: inherit; }
