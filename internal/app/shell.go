@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/version"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -351,17 +352,23 @@ func HouseholdCard() uic.Node {
 		}
 		summary = fmt.Sprintf("%d %s · %s base", members, noun, base)
 	}
-	return Button(
-		Class("hh mt-auto m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover"),
-		// Tooltip/accessible name — keeps the "Settings" affordance (the gear icon
-		// signals it visually) without repeating it in the visible summary line.
-		Title(name+" · "+summary+" · "+uistate.T("household.settings")),
-		OnClick(func() { settings.Set(uistate.Global()) }),
-		ui.Icon(icon.Settings, Class("w-4 h-4 shrink-0 text-dim")),
-		Span(Class("hh-text leading-tight"),
-			Span(Class("font-display text-[14px] font-medium block"), name),
-			Span(Class("text-xs text-faint block"), summary),
+	// The household card plus a small muted version line anchored at the rail foot
+	// (mt-auto on the wrapper). One source of truth: internal/version (C80).
+	return Div(Class("mt-auto"),
+		Button(
+			Class("hh m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover w-full"),
+			// Tooltip/accessible name — keeps the "Settings" affordance (the gear icon
+			// signals it visually) without repeating it in the visible summary line.
+			Title(name+" · "+summary+" · "+uistate.T("household.settings")),
+			OnClick(func() { settings.Set(uistate.Global()) }),
+			ui.Icon(icon.Settings, Class("w-4 h-4 shrink-0 text-dim")),
+			Span(Class("hh-text leading-tight"),
+				Span(Class("font-display text-[14px] font-medium block"), name),
+				Span(Class("text-xs text-faint block"), summary),
+			),
 		),
+		Span(Class("app-version text-faint text-[11px] block text-center pb-2"),
+			Attr("title", "CashFlux "+version.Label()), version.Label()),
 	)
 }
 

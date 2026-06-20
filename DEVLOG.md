@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: surface the product version in the UI (C80)
+
+- C80, full feature (data layer + primary placement). New internal/version package: var Version = "0.1.0" (a var so
+  a release can inject git-describe via -ldflags -X) + Label() ("v"-prefixed, idempotent if already prefixed). One
+  source of truth, dependency-free. Native test TestLabel (bare semver, already-prefixed, pre-release).
+- Primary placement (spec-locked): shell.go HouseholdCard now returns a Div(mt-auto) wrapping the existing card
+  Button (m-3, w-full) plus a muted .app-version line (version.Label()) centered at the rail foot. shell.go +
+  settings.go were clean and internal/app compiled, so wiring was safe; build-verified.
+- New version_rail_check.mjs: asserts .app-version reads like v0.1.0 at the rail foot — got "v0.1.0". go test
+  ./internal/version green; app wasm builds clean; gofmt clean. Committed via git commit -- <paths> (git add the new
+  version pkg + e2e); TODOS.md untouched.
+- C80 secondary (Settings About footer) + export/log stamping are nice follow-ups. Next: another C68–C90 ticket.
+
 ## 2026-06-20 - feat: cash-runway card on Planning (L13, UI)
 
 - Completed L13 by wiring the runway bridge (built last tick) into Planning. Targets clean (planning.go + en.go),

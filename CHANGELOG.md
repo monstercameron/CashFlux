@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The product version is now shown in the UI (C80).** A new dependency-free `internal/version` package holds one
+  source of truth (`var Version = "0.1.0"`, override-able at build time via `-ldflags -X`), surfaced as a small
+  muted `v0.1.0` line at the foot of the navigation rail under the household card. Covered by a native `version`
+  test and a `version_rail_check` e2e.
 - **Cash-runway card on the Planning screen (L13).** A new card projects your accounts' liquid balance over the
   next 60 days against your scheduled recurring cash flows (via the pure `runway`/`cashflow` engines) and reports
   the first day it dips below an optional buffer — "Dips below your buffer on <date> — short $X" — alongside the
