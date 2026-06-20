@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L8 grounded affordability check (pure logic)
+
+- L8 gap 2 (determinism rule): back "can we afford $X by [date]?" with the user's projected cash flow, not an
+  LLM guess. New pure internal/afford: CanAfford(amount, start, monthlyNet, months, reserved) -> projected =
+  start + monthlyNet*months; available = projected - reserved; {Affordable, ProjectedBalance, Available,
+  Shortfall, MonthsNeeded}. MonthsNeeded = first month affordable at the current rate (0 already, -1 if a
+  non-positive cash flow never gets there; ceil rounding). Table-tested (8 cases: now, by-date via savings,
+  short-then-later, never, reserved, boundary, negative-months clamp, ceil). Built on the same model as
+  forecast.Project.
+- Chose pure-logic this tick deliberately: it's go-test verifiable and immune to the parallel session's
+  wasm-clobbering race that made full e2e runs spuriously mass-fail last tick. Committed+pushed atomically
+  (gofmt+test+add+commit+push in one shot) per the new discipline. The insights.go UI hook (an Affordability
+  breakdown the LLM only narrates) + a mock ai provider for e2e land next.
+
 ## 2026-06-20 - feat: visible labels on the inline account editor + set-balance form (C49)
 
 - Extended the labeledField treatment from the add form to the per-row inline editor and the "set balance" form, so

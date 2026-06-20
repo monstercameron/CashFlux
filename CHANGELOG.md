@@ -48,6 +48,11 @@ and every commit updates this file under `Unreleased`.
   full suite green.
 
 ### Added
+- **Grounded affordability check (L8, logic).** New pure, table-tested `internal/afford` package: `CanAfford`
+  projects the balance to a target date from the steady monthly net cash flow, subtracts what's reserved
+  (commitments / safety buffer / goal contributions), and returns whether the amount fits plus the projected
+  balance, what's available, any shortfall, and the months until it becomes affordable at the current rate — so
+  an "Can we afford $X by [date]?" answer can show the math rather than guess.
 - **Suggested starter questions for the Insights Q&A (L8).** The "Ask about your money" box now offers up to four
   **tappable starter questions** above it — tailored to the user's top spend category ("How much did we spend on
   Housing last month?") with generic fallbacks — so a blank box never stalls the user; tapping one fills the box.
