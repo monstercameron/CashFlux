@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: app consumes the font tokens — fonts are themeable (B20)
+
+- Found the gap: ApplyTheme was already setting `--font-ui`/`--font-display`, but nothing read them — the
+  body hardcoded the system sans stack and headings hardcoded Fraunces, so the editor's font selects were
+  inert. Wired consumption at the source: the Tailwind `fontFamily` config now leads `sans`/`display` with
+  `var(--font-ui)`/`var(--font-display)` (so every font-sans/font-display utility follows the token), the raw
+  `body` and the two raw heading selectors (.set-h h3, .wh h3) do the same, and `:root` carries `--font-ui:
+  Inter; --font-display: 'Fraunces'` defaults. Consumers keep the Inter/Fraunces fallback chain after the
+  var() so text still renders if a chosen font fails to load.
+- Note: body text now resolves to Inter by default (the documented design-system UI font — Tailwind's `sans`
+  was already Inter; only the raw body element lagged on the system stack). Left the boot-loader splash
+  hardcoded to Fraunces — it's brand, shown before the engine runs, and shouldn't be themed.
+- Verified live with a new Playwright check (e2e/font_check.mjs): switching the Interface font to the serif
+  option flips `getComputedStyle(document.body).fontFamily` from the Inter stack to the serif stack — the
+  token is live, no console errors. Bumped sw cache v183→v184.
+- Next: the custom font-file upload itself (font store + @font-face injection + editor upload button), which
+  now has a visible effect since the tokens are consumed.
+
 ## 2026-06-19 - feat: pure custom-font upload logic (B20, bottom-up)
 
 - Started the user's "artifact uploads for fonts/icons/images" ask, SDLC-first: pure tested logic before any

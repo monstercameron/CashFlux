@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Fonts are now themeable (B20).** The app consumes the `--font-ui` / `--font-display` theme tokens: the
+  Tailwind `font-sans` / `font-display` families and the base `body` / heading styles lead with `var(--font-ui)`
+  / `var(--font-display)` (with the Inter/Fraunces stack as fallback), and `:root` carries static defaults. So
+  choosing an interface or heading font in the theme editor now actually changes the app's type. Verified live
+  via Playwright (switching the interface font changes the body's computed font-family).
+
 ### Added
 - **Custom-font upload logic (B20).** New pure `theme.FontAsset` (family + MIME + data URL) with
   `FontFaceCSS` (renders an `@font-face` rule with a `format()` hint and `font-display: swap`),
