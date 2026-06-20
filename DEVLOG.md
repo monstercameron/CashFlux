@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: wire the money-flow Sankey into Reports (C70)
+
+- Fourth (and "highest wow") wired Mermaid case. Reports builds moneyFlows []mermaid.SankeyFlow: one Income→category
+  link per spending row (absI64(r.Amount)) plus an Income→Savings link from flow.Net() when positive, and renders
+  uiw.Mermaid(mermaid.Sankey(moneyFlows)) in a "Money flow" card (guarded len>1). Values are minor units — only
+  relative widths matter. reports_screen.go uncontested; added the mermaid import.
+- New reports_sankey_check.mjs: /reports → asserts .cf-mermaid svg renders (confirms the vendored mermaid 11 bundle
+  includes sankey-beta). PASS. App wasm builds clean; gofmt clean. Committed via git commit -- <paths>; TODOS.md
+  untouched.
+- C70 essentially complete: all 4 generators wired & visible — /workflows (flowchart), /categories (tree), /split
+  (digraph), /reports (sankey). Next: another uncontested slice.
+
 ## 2026-06-20 - feat: wire the settle-up Mermaid diagram into Split (C70)
 
 - Third wired Mermaid case. Split's settle-up card now renders uiw.Mermaid(mermaid.FromSettleUp(transfers, name,

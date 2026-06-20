@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Delimited statement parser (C74, logic).** New pure, table-tested `internal/statement` parses a bank/card
+  statement (CSV/semicolon/tab/pipe) into normalized rows: `DetectDelimiter`, `MapColumns` (header-name heuristics →
+  date/description/amount/debit/credit/balance), a lenient `ParseAmount` (currency symbols, thousands separators,
+  parentheses- and DR-negatives, signs → signed minor units), a multi-layout `ParseDate` (MM/DD-first, DD/MM
+  fallback for day>12), and `Parse` tying them together — amount from an Amount column or Credit−Debit, bad rows
+  recorded and skipped. The extraction/mapping core of the import engine; the Documents-screen wiring is later.
+- **Reports money-flow Sankey (C70).** The Reports screen now renders a Mermaid Sankey of income → spending
+  categories → savings, via `uiw.Mermaid` over `mermaid.Sankey` — the "highest wow" diagram. Fourth wired diagram;
+  covered by a new `reports_sankey_check` e2e (asserts real `<svg>`).
 - **Split settle-up who-owes-whom diagram (C70).** The Split screen's settle-up card now renders a Mermaid digraph
   (debtor → payer, labelled with the amount) via `uiw.Mermaid` over `mermaid.FromSettleUp` — a third wired diagram.
   Covered by a new `split_diagram_check` e2e (asserts real `<svg>`).

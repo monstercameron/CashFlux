@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/mermaid"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
@@ -323,6 +324,19 @@ func Reports() ui.Node {
 	}
 
 	net := money.New(flow.Net(), base)
+
+	// Money-flow Sankey (C70): income fans out to each spending category, with the
+	// leftover going to Savings. Values are minor units — only relative widths matter.
+	var moneyFlows []mermaid.SankeyFlow
+	for _, r := range rows {
+		if v := absI64(r.Amount); v > 0 {
+			moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: "Income", To: nameOf(r.CategoryID), Value: v})
+		}
+	}
+	if sav := flow.Net(); sav > 0 {
+		moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: "Income", To: "Savings", Value: sav})
+	}
+
 	return Div(
 		Div(Class("stat-grid"),
 			stat(uistate.T("dashboard.income"), fmtMoney(money.New(flow.Income, base)), "pos"),
@@ -350,6 +364,10 @@ func Reports() ui.Node {
 				}), uistate.T("reports.downloadCsv")),
 			)),
 		),
+		If(len(moneyFlows) > 1, Section(Class("card"),
+			H2(Class("card-title"), "Money flow"),
+			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow"}),
+		)),
 		If(len(bigIncomeNodes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("reports.biggestDeposits")),
 			Div(Class("rows"), bigIncomeNodes),
