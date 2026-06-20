@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: number-field constraints + hints on the accounts form (C49)
+
+- Moved to C49 (Accounts) because the remaining C48 items (band layout, header pairing) overlap the dashboard/
+  widget infra the parallel session is actively editing (widget.go/flip.js/index.html all dirty); accounts.go is
+  uncontested. C49's currency-free-text item was already done (the add + edit forms use a currency <select> via
+  currencyOptions), so I took the number-field-constraints item.
+- Added min/max/step to the score + day inputs in BOTH the add form and the inline-edit row: Liquidity/Stability
+  min=1 max=5 step=1, Due day min=1 max=28 step=1 (28 to match the field's existing "(1–28)" copy — safe for every
+  month; the spec said 31 but I kept it internally consistent with the visible hint). Money fields (credit limit,
+  APR, min payment) get min=0 so negatives can't be entered. Added the "(1–5)" hint to the Liquidity/Stability
+  i18n strings (APR/Return already carried "%", Due day already "(1–28)").
+- New e2e accounts_field_constraints_check.mjs: asserts Liquidity/Stability are 1/5/1 with the (1–5) hint on the
+  default (asset) form, then switches the type to a liability and asserts Due day is 1/28/1. PASS. App wasm builds
+  clean; gofmt clean. Bumped sw v210->v211 (behavior lives in the wasm the SW caches).
+- Committed by pathspec (accounts.go, en.go, sw.js, the new e2e, CHANGELOG, DEVLOG); widget.go/flip.js/index.html
+  left to the parallel session, TODOS.md untouched.
+- Deferred for C49: visible labels for the placeholder-only fields (item 1), an "Advanced" disclosure to split the
+  flat grid (item 4), icon-only row actions on narrow widths (item 5) — next. Then the remaining C48 polish once
+  the parallel session is out of the dashboard.
+
 ## 2026-06-20 - feat: semantic type scale for the dashboard (C48)
 
 - C48: the dashboard scattered text-[11px]/[12px]/[13px]/[22px]/[24px]/[34px] with no shared scale (inconsistent

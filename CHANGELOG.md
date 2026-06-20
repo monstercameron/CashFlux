@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Account number fields now have ranges and clearer hints (C49).** The Liquidity and Stability score inputs (both
+  the add form and inline edit) are constrained to **1–5** with `min`/`max`/`step` and a visible `(1–5)` hint, and
+  the Due day field is constrained to a valid **1–28** day-of-month; the money fields (credit limit, APR, minimum
+  payment) get `min="0"` so negatives can't be typed. Removes the guesswork from those bare number boxes. Covered
+  by a new `accounts_field_constraints_check` e2e.
+
 ### Changed
 - **Dashboard now uses a semantic type scale instead of ad-hoc pixel sizes (C48).** The dashboard scattered
   `text-[11px]/[12px]/[13px]/[22px]/[24px]/[34px]` with no shared scale, so sizing was inconsistent tile-to-tile.
