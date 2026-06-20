@@ -155,6 +155,20 @@ func Budgets() ui.Node {
 		bump()
 	}
 
+	// coverBudget (L1) moves money from another budget's limit into this one to
+	// clear an overspend. It returns any error so the row can show it inline.
+	coverBudget := func(toID, fromID, amountStr string) error {
+		amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(base))
+		if err != nil || amt <= 0 {
+			return fmt.Errorf("enter an amount greater than zero")
+		}
+		if err := app.CoverBudget(fromID, toID, money.New(amt, base)); err != nil {
+			return err
+		}
+		bump()
+		return nil
+	}
+
 	var formCard ui.Node
 	if len(expenseCats) == 0 {
 		formCard = Section(Class("card"), P(Class("empty"), uistate.T("budgets.needCategory")))
@@ -283,10 +297,24 @@ func Budgets() ui.Node {
 	if len(statuses) == 0 {
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("budgets.empty"), CTALabel: uistate.T("budgets.addFirst"), FocusID: "budget-add"})
 	} else {
+		// Source budgets a "Cover…" action can pull from: every budget, labelled with
+		// its remaining room (the row drops itself when building its picker).
+		coverSources := make([]coverSource, 0, len(statuses))
+		for _, s := range statuses {
+			coverSources = append(coverSources, coverSource{
+				ID:    s.Budget.ID,
+				Label: budgetTitle(s.Budget.Name, catName[s.Budget.CategoryID]) + " · " + fmtMoney(s.Remaining) + " left",
+			})
+		}
 		rows := MapKeyed(statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], OnDelete: deleteBudget, OnSave: saveBudget})
+				shortfall := budgeting.CoverAmount(s)
+				coverDefault := ""
+				if shortfall.IsPositive() {
+					coverDefault = money.FormatMinor(shortfall.Amount, currency.Decimals(shortfall.Currency))
+				}
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget})
 			},
 		)
 		listBody = Div(rows)
@@ -311,16 +339,39 @@ func Budgets() ui.Node {
 }
 
 type budgetRowProps struct {
-	Status        budgeting.Status
-	Category      string
-	Members       []domain.Member
-	Envelope      string // formatted envelope balance (envelope methodology); "" hides the line
-	EnvelopeNeg   bool   // envelope is overdrawn → danger tone
-	PaceOver      string // formatted projected overspend (pace, in-progress only); "" hides the line
-	RolloverCarry string // formatted previous-period carry for per-budget rollover; "" hides the line
-	RolloverNeg   bool   // previous-period carry is negative → danger tone
-	OnDelete      func(string)
-	OnSave        func(id, name, limit, period, owner string, rollover bool)
+	Status         budgeting.Status
+	Category       string
+	Members        []domain.Member
+	Envelope       string        // formatted envelope balance (envelope methodology); "" hides the line
+	EnvelopeNeg    bool          // envelope is overdrawn → danger tone
+	PaceOver       string        // formatted projected overspend (pace, in-progress only); "" hides the line
+	RolloverCarry  string        // formatted previous-period carry for per-budget rollover; "" hides the line
+	RolloverNeg    bool          // previous-period carry is negative → danger tone
+	CoverSources   []coverSource // budgets that can fund a "Cover…" (the row drops itself)
+	CoverShortfall string        // formatted overspend, for the "covers the $X over" hint
+	CoverDefault   string        // major-units default amount to prefill the cover field
+	OnDelete       func(string)
+	OnSave         func(id, name, limit, period, owner string, rollover bool)
+	OnCover        func(toID, fromID, amount string) error
+}
+
+// coverSource is one budget offered as a funding source in a row's "Cover…" picker.
+type coverSource struct {
+	ID    string
+	Label string
+}
+
+// budgetTitle renders a budget's display title: its name, or its category when
+// unnamed, or "name · category" when both add information (never "Food · Food").
+func budgetTitle(name, category string) string {
+	switch {
+	case name == "":
+		return category
+	case category != "" && !strings.EqualFold(category, name):
+		return name + " · " + category
+	default:
+		return name
+	}
 }
 
 // periodOptions builds the budget-period <option>s with selected marked.
@@ -382,6 +433,42 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		editing.Set(false)
 	}))
 
+	// "Cover…" inline form (L1): move money from another budget to clear an overspend.
+	covering := ui.UseState(false)
+	coverFrom := ui.UseState("")
+	coverAmt := ui.UseState("")
+	coverErr := ui.UseState("")
+	onCoverFrom := ui.UseEvent(func(e ui.Event) { coverFrom.Set(e.GetValue()) })
+	onCoverAmt := ui.UseEvent(func(v string) { coverAmt.Set(v) })
+	firstSource := func() string {
+		for _, src := range props.CoverSources {
+			if src.ID != s.Budget.ID {
+				return src.ID
+			}
+		}
+		return ""
+	}
+	startCover := ui.UseEvent(Prevent(func() {
+		coverFrom.Set(firstSource())
+		coverAmt.Set(props.CoverDefault)
+		coverErr.Set("")
+		covering.Set(true)
+	}))
+	cancelCover := ui.UseEvent(Prevent(func() { covering.Set(false) }))
+	fullCover := ui.UseEvent(Prevent(func() { coverAmt.Set(props.CoverDefault) }))
+	submitCover := ui.UseEvent(Prevent(func() {
+		from := coverFrom.Get()
+		if from == "" {
+			from = firstSource()
+		}
+		if err := props.OnCover(s.Budget.ID, from, coverAmt.Get()); err != nil {
+			coverErr.Set(err.Error())
+			return
+		}
+		coverErr.Set("")
+		covering.Set(false)
+	}))
+
 	// Land the cursor in the first field when the inline editor opens (§6.7).
 	editKey := "closed"
 	if editing.Get() {
@@ -428,16 +515,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		label = uistate.T("budgets.overBudget")
 	}
 
-	// Show "name · category" only when they add information: an unnamed budget
-	// shows just its category, and a budget named after its category ("Food" for
-	// the Food category) shows one label, not a redundant "Food · Food".
-	title := s.Budget.Name
-	switch {
-	case title == "":
-		title = props.Category
-	case props.Category != "" && !strings.EqualFold(props.Category, title):
-		title += " · " + props.Category
-	}
+	// Show "name · category" only when they add information (see budgetTitle).
+	title := budgetTitle(s.Budget.Name, props.Category)
 
 	// Envelope methodology: show the carried-forward balance under the period row.
 	var envLine ui.Node = Fragment()
@@ -464,10 +543,47 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 		rolloverLine = Span(Class(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
 	}
+
+	// "Cover…" is offered only on an over-budget row that has another budget to
+	// pull from. The inline form picks a source and an amount (prefilled to the
+	// exact overspend), so Maya can clear the overspend without leaving the screen.
+	isOver := s.State == budgeting.StateOver
+	hasSource := firstSource() != ""
+	var coverBtn ui.Node = Fragment()
+	if isOver && hasSource && !covering.Get() {
+		coverBtn = Button(Class("btn"), Type("button"), Title("Move money from another budget to cover this overspend"), OnClick(startCover), "Cover…")
+	}
+	var coverForm ui.Node = Fragment()
+	if covering.Get() {
+		srcOpts := make([]ui.Node, 0, len(props.CoverSources))
+		for _, src := range props.CoverSources {
+			if src.ID == s.Budget.ID {
+				continue
+			}
+			srcOpts = append(srcOpts, Option(Value(src.ID), SelectedIf(coverFrom.Get() == src.ID), src.Label))
+		}
+		var coverErrLine ui.Node = Fragment()
+		if coverErr.Get() != "" {
+			coverErrLine = P(Class("budget-sub text-down"), coverErr.Get())
+		}
+		coverForm = Div(Class("cover-form"),
+			Span(Class("budget-sub"), "Cover the "+props.CoverShortfall+" over by moving money from another budget:"),
+			Form(Class("form-grid"), OnSubmit(submitCover),
+				Select(Class("field"), Attr("aria-label", "Cover from budget"), OnChange(onCoverFrom), srcOpts),
+				Input(Class("field"), Type("number"), Attr("aria-label", "Amount to move"), Placeholder("Amount"), Value(coverAmt.Get()), Step("0.01"), OnInput(onCoverAmt)),
+				Button(Class("btn"), Type("button"), Title("Use the full overspend amount"), OnClick(fullCover), "Full "+props.CoverShortfall),
+				Button(Class("btn btn-primary"), Type("submit"), "Cover"),
+				Button(Class("btn"), Type("button"), OnClick(cancelCover), uistate.T("action.cancel")),
+			),
+			coverErrLine,
+		)
+	}
+
 	return Div(Class("budget"),
 		Div(Class("budget-head"),
 			Span(Class("row-desc"), title),
 			Span(Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
+			coverBtn,
 			Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
 			Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 		),
@@ -476,5 +592,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		paceLine,
 		rolloverLine,
 		envLine,
+		coverForm,
 	)
 }

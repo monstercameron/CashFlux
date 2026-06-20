@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -1283,6 +1284,47 @@ func (a *App) PutBudget(b domain.Budget) error {
 	return nil
 }
 func (a *App) DeleteBudget(id string) error { return a.del("budget", id, a.store.DeleteBudget) }
+
+// CoverBudget moves amt of budgeted money from the source budget's limit to the
+// destination's, covering an overspend without changing the household's total
+// budgeted amount (the balanced, explainable budgeting.Transfer). Both adjusted
+// budgets are persisted. The source must keep a positive limit — a budget with a
+// non-positive limit fails validation — so a move that would drain the source is
+// rejected.
+func (a *App) CoverBudget(fromID, toID string, amt money.Money) error {
+	budgets := a.Budgets()
+	var from, to domain.Budget
+	var haveFrom, haveTo bool
+	for _, b := range budgets {
+		switch b.ID {
+		case fromID:
+			from, haveFrom = b, true
+		case toID:
+			to, haveTo = b, true
+		}
+	}
+	if !haveFrom {
+		return fmt.Errorf("appstate: source budget %q not found", fromID)
+	}
+	if !haveTo {
+		return fmt.Errorf("appstate: destination budget %q not found", toID)
+	}
+	res, err := budgeting.Transfer(from, to, amt, false)
+	if err != nil {
+		return err
+	}
+	if !res.From.Limit.IsPositive() {
+		return fmt.Errorf("%w: %s would have nothing left", budgeting.ErrInsufficientSource, from.Name)
+	}
+	if err := a.PutBudget(res.From); err != nil {
+		return err
+	}
+	if err := a.PutBudget(res.To); err != nil {
+		return err
+	}
+	a.log.Info("budget cover", "from", fromID, "to", toID, "amount", amt.String())
+	return nil
+}
 
 func (a *App) PutGoal(g domain.Goal) error {
 	if is := validate.ValidateGoal(g); !is.OK() {

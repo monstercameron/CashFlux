@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L1 "Cover…" overspent budget (state + UI + e2e)
+
+- Finished the L1 cover-overspending ritual on top of the pure budgeting.Transfer. Added
+  appstate.CoverBudget(fromID, toID, amt): looks up both budgets, applies Transfer, and persists both via
+  PutBudget. The appstate layer enforces a stricter rule than the primitive — ValidateBudget requires limit > 0,
+  so a move that would leave the source at <= 0 is rejected (ErrInsufficientSource), not just < 0. Unit-tested
+  (cover_budget_test.go): the balanced cover persists both new limits, draining the source is rejected with
+  nothing persisted, and a missing budget errors.
+- UI (budgets.go): an over-budget row now shows a "Cover…" button (only when there's another budget to pull
+  from). It toggles an inline .cover-form: a "Cover from" source select (each option labelled "Name · $X left"),
+  an amount field prefilled to the exact overspend (budgeting.CoverAmount) with a one-tap "Full $X" button, and
+  Cover/Cancel. OnCover returns an error so the row shows it inline. The cover hooks are all declared
+  unconditionally (hook-order safety); extracted a budgetTitle helper (also de-duplicates the row title logic).
+  Added .cover-form CSS; bumped sw v194->v195.
+- E2E (story_budget_cover.test.mjs): seed a $1 Groceries budget (over, since Groceries has sample spend) + a
+  $500 Shopping source, open Cover…, move $50, and assert the rendered rows re-balance ($1->$51, $500->$450) and
+  the move survives a reload. Note: the post-cover assertion reads the DOM (the dataset autosave to localStorage
+  lags a couple seconds); persistence is checked after the reload, whose pagehide flush is deterministic.
+  Full suite 30/0 green; go test ./... green. Screenshot-verified (budget-cover.png).
+- L1 remaining: the probe-hardening tweaks to loopstory_01 (match "/mo" and the nav <a title>); then on to L2.
+
 ## 2026-06-20 - fix: L1 budget row sub-lines glued together
 
 - The independent UI defect from L1: budget rows render the status line, the pace heads-up, the rollover-carry

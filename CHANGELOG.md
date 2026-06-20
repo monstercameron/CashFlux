@@ -41,6 +41,14 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **"Cover…" an overspent budget from the Budgets screen (L1).** An over-budget row now offers a **Cover…**
+  action that opens a small inline form: pick a funding budget (each labelled with its remaining room), an
+  amount prefilled to the exact overspend (with a one-tap "Full $X" button), and apply — moving budgeted money
+  from the source's limit into the over budget without changing the household's total. The move persists and
+  survives reload. Backed by a new `appstate.CoverBudget(fromID, toID, amount)` action (applies the pure
+  `budgeting.Transfer`, persists both budgets, and refuses to drain a source below a valid limit), unit-tested,
+  and covered end-to-end by a new Playwright story (overspend Groceries → cover $50 from Shopping → both rows
+  re-balance and survive a reload).
 - **Inter-budget transfer logic — "cover overspending" (L1, bottom-up start).** `internal/budgeting` gains a
   pure `Transfer(from, to, amount, allowNegativeSource)` that moves budgeted money from one budget's limit to
   another's. It is **balanced** (the household's total budgeted amount never changes) and **explainable** — the
