@@ -37,7 +37,7 @@ var catalog = []Def{
 	{TypeKPI, "KPI", "A single number from a formula over your figures."},
 	{TypeList, "List", "Rows from your data (transactions, accounts, …)."},
 	{TypeChart, "Chart", "A trend line of a figure over time."},
-	{TypeText, "Text", "A note or heading you write."},
+	{TypeText, "Text", "A note you write — Markdown supported (headings, lists, links)."},
 	{TypeTable, "Table", "A table from an imported dataset artifact."},
 	{TypeImage, "Image", "An uploaded image artifact."},
 }

@@ -536,12 +536,17 @@ func chartBody(ctx pageCtx) ui.Node {
 }
 
 // textBody renders the widget's authored text.
+// textBody renders the text widget's content as Markdown (C66/C32) so a note
+// can carry headings, lists, emphasis, and links — not just a flat paragraph.
+// The framework's Markdown escapes raw HTML and drops active URL schemes, so
+// even imported page content can't smuggle an executable href.
 func textBody(w domain.PageWidget) ui.Node {
 	t := w.Config["text"]
 	if t == "" {
 		return P(Class("empty"), uistate.T("pages.emptyText"))
 	}
-	return P(Class("muted"), t)
+	return Div(Class("md md-widget muted"),
+		Markdown(t, MarkdownRenderOptions{LinkTarget: "_blank", LinkRel: "noopener noreferrer"}))
 }
 
 // --- small helpers ---

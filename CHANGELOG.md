@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Custom-page Text widget renders Markdown (C66/C32).** The Text widget on custom pages now renders its content
+  as Markdown (headings, lists, emphasis, links) instead of a flat paragraph, via the same GFM-aware, raw-HTML-
+  escaping framework `Markdown` used for Insights — so a note can be a real rich-text block and imported page
+  content still can't smuggle an executable href. The widget palette description notes Markdown support.
 - **Insights AI answers render as Markdown (C59).** The assistant emits Markdown (headings, bold/italic, inline
   and fenced code, links, bullet/number lists) that previously showed as one flat paragraph; the answer card now
   renders it as rich text via the framework's GFM-aware `Markdown`, which escapes raw HTML and drops active URL

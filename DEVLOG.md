@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: custom-page Text widget renders Markdown (C66/C32)
+
+- Now that the framework's Markdown is in use (C59), the custom-page Text widget was the next free win: its
+  `textBody` rendered `P(Class("muted"), t)` — one flat paragraph. Swapped it for `Div(Class("md md-widget muted"),
+  Markdown(t, {LinkTarget:"_blank", LinkRel:"noopener noreferrer"}))`, so a note widget can carry headings, lists,
+  emphasis, and safe links. Updated the widget-palette catalog description to say "Markdown supported".
+- Same security posture as Insights: GFM, raw HTML escaped, `javascript:`/`data:` schemes dropped — matters more
+  here since page content travels with import/export, so an imported page can't smuggle an executable href.
+- custompage.go + widgetspec.go were both clean (not mid-edit by the parallel session). Gate: widgetspec test +
+  screens build+vet + full wasm clean; app boots (version_rail_check PASS). A custom-page widget needs a seeded
+  page to render and the dataset is a SQLite blob (not trivially seedable headlessly), so — as with the C59 wire —
+  this rides build+vet plus the framework component's upstream tests. Committed by pathspec; TODOS.md untouched.
+
 ## 2026-06-20 - feat: render Insights answers as Markdown; drop in-house parser (C59)
 
 - Going to wire the renderer for the markdown parser I'd just built, I found the framework already ships a
