@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"syscall/js"
+
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -248,19 +250,49 @@ func widget(props WidgetProps) uic.Node {
 					uistate.PersistLayoutMode(dashlayout.ModeCustom)
 				}
 			}),
-			OnDragStart(func() { dragSrc.Set(id) }),
-			OnDragOver(Prevent(func() { dragPreview.Set(id) })), // allow drop + live preview
-			OnDrop(Prevent(func() {
+			OnDragStart(func() {
+				dragSrc.Set(id)
+				if fn := js.Global().Get("cashfluxBentoDragStart"); fn.Type() == js.TypeFunction {
+					fn.Invoke(id)
+				}
+			}),
+			OnDragOver(Prevent(func(e uic.Event) {
+				// Native dragover fires constantly, and the animated grid moves
+				// underneath the pointer. Use the JS drag snapshot to choose a
+				// stable target from the pre-drag geometry instead of trusting the
+				// current DOM hit target, which can oscillate during FLIP.
+				target := id
+				if fn := js.Global().Get("cashfluxBentoDragTarget"); fn.Type() == js.TypeFunction {
+					v := fn.Invoke(e.JSValue().Get("clientX"), e.JSValue().Get("clientY"))
+					if v.Type() == js.TypeString && v.String() != "" {
+						target = v.String()
+					}
+				}
+				if target != "" && target != dragPreview.Get() {
+					dragPreview.Set(target)
+				}
+			})), // allow drop + live preview
+			OnDrop(Prevent(func(e uic.Event) {
 				// Reorder the dragged tile to the drop target's position, then the
 				// grid re-Packs around it (iOS-home-screen reflow) instead of a
 				// pairwise swap. A manual drag is an explicit hand-arrangement, so it
 				// bakes the current (possibly auto-arranged) order into the sequence
 				// and switches to Custom mode (C24).
-				if src := dragSrc.Get(); src != "" && src != id {
+				target := dragPreview.Get()
+				if target == "" {
+					target = id
+				}
+				if fn := js.Global().Get("cashfluxBentoDragTarget"); fn.Type() == js.TypeFunction {
+					v := fn.Invoke(e.JSValue().Get("clientX"), e.JSValue().Get("clientY"))
+					if v.Type() == js.TypeString && v.String() != "" {
+						target = v.String()
+					}
+				}
+				if src := dragSrc.Get(); src != "" && target != "" && src != target {
 					baked := dashlayout.Arrange(items, mode)
 					ti := -1
 					for i, it := range baked {
-						if it.ID == id {
+						if it.ID == target {
 							ti = i
 							break
 						}
@@ -277,8 +309,36 @@ func widget(props WidgetProps) uic.Node {
 				}
 				dragSrc.Set("")
 				dragPreview.Set("")
+				if fn := js.Global().Get("cashfluxBentoDragEnd"); fn.Type() == js.TypeFunction {
+					fn.Invoke()
+				}
 			})),
-			OnDragEnd(func() { dragSrc.Set(""); dragPreview.Set("") }), // clear (reverts preview if dropped outside)
+			OnDragEnd(func() {
+				if src, target := dragSrc.Get(), dragPreview.Get(); src != "" && target != "" && src != target {
+					baked := dashlayout.Arrange(items, mode)
+					ti := -1
+					for i, it := range baked {
+						if it.ID == target {
+							ti = i
+							break
+						}
+					}
+					if ti >= 0 {
+						next := dashlayout.Move(baked, src, ti)
+						itemsAtom.Set(next)
+						uistate.PersistItems(next)
+						if mode != dashlayout.ModeCustom {
+							modeAtom.Set(dashlayout.ModeCustom)
+							uistate.PersistLayoutMode(dashlayout.ModeCustom)
+						}
+					}
+				}
+				dragSrc.Set("")
+				dragPreview.Set("")
+				if fn := js.Global().Get("cashfluxBentoDragEnd"); fn.Type() == js.TypeFunction {
+					fn.Invoke()
+				}
+			}), // clear (reverts preview if dropped outside)
 		)
 	}
 	// The title drills into the tile's data screen when one exists (C30); it stays

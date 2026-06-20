@@ -462,10 +462,12 @@
 
       /* Bento grid — square outlined cells with a small gap.
          One base cell unit; every row is exactly one unit so widgets integer-scale. */
-      .bento { display:grid; --cell:152px; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap:10px; }
-      .w { position:relative; background:#121214; border:1px solid #34343a; overflow:hidden; display:flex; flex-direction:column; transition: border-color .15s ease; }
+      .bento { display:grid; --cell:152px; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap:10px; overflow-anchor:none; }
+      .w { position:relative; background:#121214; border:1px solid #34343a; overflow:hidden; display:flex; flex-direction:column; transition: border-color .15s ease; will-change: transform; }
       .w:hover { border-color:#44444c; }
-      .w.drag { opacity:.4; }
+      .w.drag { opacity:.35; pointer-events:none; cursor:grabbing; }
+      [data-bento-dragging] .bento { cursor:grabbing; }
+      [data-bento-dragging] .bento .w:not(.drag) { transition: border-color .15s ease, box-shadow .15s ease; }
 
       /* reconfigure controls */
       .ghandle { position:absolute; top:7px; right:40px; z-index:3; color:#5a5a64; cursor:grab; font-size:.95rem; line-height:1; }
