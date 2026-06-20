@@ -53,6 +53,11 @@ and every commit updates this file under `Unreleased`.
   full suite green.
 
 ### Added
+- **Full-backup envelope for lossless migration (L9, logic).** New pure, table-tested `backup.Envelope` (with
+  `MarshalEnvelope`/`UnmarshalEnvelope`/`IsEnvelope`): a versioned "back up everything" container holding every
+  workspace's dataset, the workspace registry, and the device-local appearance keys (theme/fonts/banner/prefs) —
+  not just the active workspace's dataset that "Export JSON" carries today, which silently drops the rest. The
+  round-trip is deep-equal lossless; `IsEnvelope` lets an import tell a full backup from a single dataset.
 - **Grounded affordability check (L8, logic).** New pure, table-tested `internal/afford` package: `CanAfford`
   projects the balance to a target date from the steady monthly net cash flow, subtracts what's reserved
   (commitments / safety buffer / goal contributions), and returns whether the amount fits plus the projected

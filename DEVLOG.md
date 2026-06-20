@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L9 full-backup envelope (pure logic)
+
+- L9 gap: "Export JSON" only serializes the active workspace's dataset, silently leaving behind other
+  workspaces, the cashflux:workspaces registry, and the device-local appearance keys (theme/fonts/banner/prefs)
+  loaded from their own uistate keys at boot - a silent data-loss trap framed as a backup. Started bottom-up
+  with the pure envelope.
+- internal/backup already existed (the B28 backup-REMINDER cadence), so I added envelope.go to the same package
+  rather than colliding: Envelope{SchemaVersion, Datasets []string (verbatim per-workspace dataset JSON),
+  WorkspaceRegistry, Appearance{Theme,Fonts,Banner,Prefs}} - all opaque localStorage blobs the app
+  gathers/restores; this just frames+versions. MarshalEnvelope/UnmarshalEnvelope (v0->v1, rejects newer) +
+  IsEnvelope (datasets-array probe to route a full backup vs a single dataset on import). Used []string for
+  datasets (not RawMessage) so the round-trip is byte-stable deep-equal.
+- Table-tested (envelope_test.go): build->marshal->unmarshal->DeepEqual (nothing dropped), versioning, and
+  IsEnvelope discrimination (envelope vs dataset vs garbage). go test ./internal/backup green; committed+pushed
+  atomically (pure logic, immune to the wasm race). Next: the app wiring (gather localStorage side-keys + a
+  "Back up everything" Settings action + import that detects an envelope) - that's the wasm part, done later
+  atomically; settings.go is the parallel session's, so the action may need to live elsewhere or wait.
+
 ## 2026-06-20 - feat: visible labels on budget forms (C50) + generalize labeledField
 
 - C50 item 1 (same systemic placeholder-only issue as C49). Reused the labeledField helper (same `screens` package)
