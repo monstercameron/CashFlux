@@ -19,7 +19,7 @@ const fail = (m) => {
   process.exitCode = 1;
 };
 
-const rowCount = (page) => page.locator(".rows .row-desc").count();
+const rowCount = (page) => page.locator(".txn-table .row-desc").count();
 
 try {
   const page = await browser.newPage();

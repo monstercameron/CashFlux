@@ -49,6 +49,10 @@ func Transactions() ui.Node {
 	for _, c := range categories {
 		catName[c.ID] = c.Name
 	}
+	accName := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		accName[a.ID] = a.Name
+	}
 	// Auto-categorization: the user's saved rules take priority (first match wins,
 	// and they can also assign tags), then fall back to implicit rules that treat
 	// each category name as a match — so typing "Groceries" suggests that category.
@@ -101,7 +105,21 @@ func Transactions() ui.Node {
 	onFilterText := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) })
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Account = e.GetValue() }) })
 	onFilterCat := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue() }) })
-	onSortBy := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Sort = e.GetValue() }) })
+	// Click a column header to sort by it; click the active column again to flip
+	// direction. (Replaces the old Sort dropdown — C47.)
+	sortBy := func(key string) {
+		setFilter(func(x *uistate.TxFilter) {
+			if x.Sort == key {
+				if x.Dir == txnfilter.Asc {
+					x.Dir = txnfilter.Desc
+				} else {
+					x.Dir = txnfilter.Asc
+				}
+			} else {
+				x.Sort, x.Dir = key, txnfilter.DefaultDir(key)
+			}
+		})
+	}
 	onFilterMember := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Member = e.GetValue() }) })
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
@@ -424,7 +442,7 @@ func Transactions() ui.Node {
 	}
 
 	txns := app.Transactions()
-	shown := txnfilter.Apply(txns, f)
+	shown := txnfilter.ApplyWithLabels(txns, f, txnfilter.Labels{Account: accName, Category: catName})
 
 	// Heads-up for likely double entries (same date, amount, and description).
 	dupCount := dedupe.Count(dedupe.FindDuplicates(txns))
@@ -482,8 +500,19 @@ func Transactions() ui.Node {
 				})
 			},
 		)
+		head := Tr(
+			Th(Attr("scope", "col"), Span(Class("sr-only"), "Select")),
+			ui.CreateElement(sortTh, sortThProps{Key: "date", Label: "Date", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
+			ui.CreateElement(sortTh, sortThProps{Key: "payee", Label: "Description", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
+			ui.CreateElement(sortTh, sortThProps{Key: "category", Label: "Category", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
+			ui.CreateElement(sortTh, sortThProps{Key: "account", Label: "Account", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
+			Th(Attr("scope", "col"), "Tags"),
+			ui.CreateElement(sortTh, sortThProps{Key: "amount", Label: "Amount", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
+			Th(Attr("scope", "col"), "Cleared"),
+			Th(Attr("scope", "col"), "Actions"),
+		)
 		listBody = Div(
-			Div(Class("rows"), rows),
+			Table(Class("txn-table"), Thead(head), Tbody(rows)),
 			If(hidden > 0, Div(Class("flex justify-center py-1"),
 				Button(Class("btn"), Type("button"), OnClick(func() { visN.Set(visN.Get() + txnPageSize) }),
 					uistate.T("transactions.showMore", hidden)),
@@ -523,11 +552,6 @@ func Transactions() ui.Node {
 					Option(Value(""), SelectedIf(f.Cleared == ""), uistate.T("transactions.clearedAll")),
 					Option(Value("no"), SelectedIf(f.Cleared == "no"), uistate.T("transactions.notCleared")),
 					Option(Value("yes"), SelectedIf(f.Cleared == "yes"), uistate.T("transactions.cleared")),
-				),
-				Select(Class("field"), Attr("aria-label", uistate.T("transactions.sortBy")), Title(uistate.T("transactions.sortBy")), OnChange(onSortBy),
-					Option(Value("date"), SelectedIf(f.Sort == "date"), uistate.T("transactions.sortDate")),
-					Option(Value("amount"), SelectedIf(f.Sort == "amount"), uistate.T("transactions.sortAmount")),
-					Option(Value("payee"), SelectedIf(f.Sort == "payee"), uistate.T("transactions.sortPayee")),
 				),
 				Button(Class("btn"), Type("submit"), uistate.T("transactions.clear")),
 				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
@@ -623,14 +647,16 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		for _, c := range props.Categories {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catS.Get() == c.ID), c.Name))
 		}
-		return Div(Class("row-edit"),
-			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
-				Select(Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
-				Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate)),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+		return Tr(Class("row-edit"),
+			Td(Attr("colspan", "9"),
+				Form(Class("form-grid"), OnSubmit(saveEdit),
+					Input(Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
+					Input(Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
+					Select(Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
+					Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate)),
+					Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+					Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				),
 			),
 		)
 	}
@@ -642,12 +668,9 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	case cat == "":
 		cat = uistate.T("transactions.uncategorized")
 	}
-	meta := cat + " · " + pr.FormatDate(props.Txn.Date)
-	if props.Account != "" {
-		meta += " · " + props.Account
-	}
+	tagsText := ""
 	if len(props.Txn.Tags) > 0 {
-		meta += " · #" + strings.Join(props.Txn.Tags, " #")
+		tagsText = "#" + strings.Join(props.Txn.Tags, " #")
 	}
 
 	selectGlyph := "☐"
@@ -657,22 +680,49 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	clearedLabel := uistate.T("transactions.markCleared")
 	if t.Cleared {
 		clearedLabel = uistate.T("transactions.clearedCheck")
-		meta += uistate.T("transactions.clearedMeta")
 	}
 	rowClass := "row"
 	if props.Selected {
 		rowClass += " selected"
 	}
-	return Div(Class(rowClass),
-		Button(Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph),
-		Div(Class("row-main"),
-			Span(Class("row-desc"), props.Txn.Desc),
-			Span(Class("row-meta"), meta),
+	return Tr(Class(rowClass),
+		Td(Class("td-select"), Button(Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph)),
+		Td(Class("td-date fig"), pr.FormatDate(props.Txn.Date)),
+		Td(Class("row-desc"), props.Txn.Desc),
+		Td(Class("td-cat"), cat),
+		Td(Class("td-acct"), props.Account),
+		Td(Class("td-tags"), tagsText),
+		Td(Class("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
+		Td(Class("td-cleared"), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.toggleClearedTitle")), OnClick(clr), clearedLabel)),
+		Td(Class("td-actions"),
+			If(!props.Txn.IsTransfer(), Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit")))),
+			If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
+			Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 		),
-		Button(Class("btn"), Type("button"), Title(uistate.T("transactions.toggleClearedTitle")), OnClick(clr), clearedLabel),
-		Span(Class(amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
-		If(!props.Txn.IsTransfer(), Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit")))),
-		If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+	)
+}
+
+// sortThProps configures one sortable column header.
+type sortThProps struct {
+	Key, Label, Active, Dir string
+	OnSort                  func(string)
+}
+
+// sortTh renders a sortable column header: a real <button> that sorts by Key (and
+// flips direction when already active), with a caret and aria-sort on the active
+// column. Its own component so the click hook stays stable across the header row.
+func sortTh(props sortThProps) ui.Node {
+	ariaSort, caret := "none", ""
+	if props.Active == props.Key {
+		if props.Dir == txnfilter.Asc {
+			ariaSort, caret = "ascending", " ▲"
+		} else {
+			ariaSort, caret = "descending", " ▼"
+		}
+	}
+	key := props.Key
+	on := ui.UseEvent(Prevent(func() { props.OnSort(key) }))
+	return Th(Attr("scope", "col"), Attr("aria-sort", ariaSort),
+		Button(Class("th-sort"), Type("button"), OnClick(on), props.Label+caret),
 	)
 }

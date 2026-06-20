@@ -49,14 +49,14 @@ try {
   await page.waitForTimeout(500);
   await page.locator('input[type="search"]').first().fill(DESC);
   await page.waitForTimeout(400);
-  if ((await page.locator(".rows .row-desc").count()) !== 1) fail("expected exactly the seeded row before duplicating");
+  if ((await page.locator(".txn-table .row-desc").count()) !== 1) fail("expected exactly the seeded row before duplicating");
 
   // Duplicate it.
   await page.locator('button[title="Copy this transaction to today"]').first().click();
   await page.waitForTimeout(500);
 
   // UX: the filtered ledger now shows two rows with the same description.
-  if ((await page.locator(".rows .row-desc").count()) !== 2) fail("duplicate did not add a second ledger row");
+  if ((await page.locator(".txn-table .row-desc").count()) !== 2) fail("duplicate did not add a second ledger row");
 
   // Correctness: two transactions with this description, neither a transfer leg.
   const list = await waitForTxns(page, DESC, (l) => l.length >= 2);

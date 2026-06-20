@@ -15,6 +15,14 @@ and every commit updates this file under `Unreleased`.
   guarded by table tests in `internal/store`.
 
 ### Changed
+- **Transactions ledger is now a sortable table (C47).** The flat row list is replaced by a semantic `<table>`
+  with aligned columns (select · Date · Description · Category · Account · Tags · Amount · Cleared · Actions),
+  right-aligned tabular amounts, and **click-to-sort column headers** (real buttons that sort by Date/
+  Description/Category/Account/Amount and flip direction on a second click, with a caret and `aria-sort` on the
+  active column). Category and account sort by display name. The standalone Sort dropdown is gone. Every
+  behavior is preserved — inline edit, duplicate, delete (+transfer pair), per-row select + bulk actions,
+  dedupe notice, persisted filters, CSV export, the a11y live region — and the table collapses to stacked cards
+  on narrow screens. (Pagination control and the compact filter toolbar land next.)
 - **One appearance system — density & display scale unified into the theme (B20).** Density and text size are
   now owned by the theme engine: `ApplyTheme` sets `data-density` (so the editor's density control is finally
   live) and `--ui-scale`, while `ApplyPrefs` no longer touches either (no more two systems fighting over the

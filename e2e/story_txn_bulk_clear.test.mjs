@@ -54,10 +54,10 @@ try {
   await addTxn(page, B, "4.00");
   await page.locator('input[type="search"]').first().fill("ZZBULK");
   await page.waitForTimeout(400);
-  if ((await page.locator(".rows .row-desc").count()) !== 2) fail("expected exactly the two seeded rows after filtering");
+  if ((await page.locator(".txn-table .row-desc").count()) !== 2) fail("expected exactly the two seeded rows after filtering");
 
   // Select both rows, then bulk-clear.
-  const checks = page.locator('.rows .row button[title="Select for bulk actions"]');
+  const checks = page.locator('.txn-table tr.row button[title="Select for bulk actions"]');
   const n = await checks.count();
   for (let i = 0; i < n; i++) await checks.nth(i).click();
   await page.locator('button[title="Mark the selected transactions cleared"]').first().click();

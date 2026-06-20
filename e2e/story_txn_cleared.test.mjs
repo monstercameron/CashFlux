@@ -34,7 +34,7 @@ const txnByDesc = (page, desc) =>
     return found;
   }, desc);
 
-const rowCount = (page) => page.locator(".rows .row-desc").count();
+const rowCount = (page) => page.locator(".txn-table .row-desc").count();
 
 // Polls the dataset store (autosave is on a short ticker) until the transaction
 // matches the predicate, or times out — returns the last seen value either way.

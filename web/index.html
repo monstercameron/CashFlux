@@ -291,6 +291,30 @@
       .row-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
       .row-desc { font-weight: 500; }
       .row-meta { color: var(--text-dim); font-size: 0.82rem; }
+      /* Transactions table (C47): a dense, sortable, column-aligned ledger. */
+      .txn-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+      .txn-table thead th { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); color: var(--text-dim); font-weight: 600; white-space: nowrap; position: sticky; top: 0; background: var(--bg); z-index: 1; }
+      .txn-table .th-sort { background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 0.15rem; }
+      .txn-table .th-sort:hover { color: var(--text); }
+      .txn-table th[aria-sort="ascending"] .th-sort, .txn-table th[aria-sort="descending"] .th-sort { color: var(--accent); }
+      .txn-table tr { display: table-row; }                 /* override the legacy .row flex */
+      .txn-table tbody td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+      .txn-table tbody tr.selected { background: var(--accent-dim); }
+      .txn-table tbody tr.row:hover { background: #161617; }
+      .txn-table .td-date { white-space: nowrap; color: var(--text-dim); }
+      .txn-table .td-cat, .txn-table .td-acct, .txn-table .td-tags { color: var(--text-dim); }
+      .txn-table .td-amount { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+      .txn-table .td-actions { white-space: nowrap; text-align: right; }
+      .txn-table .td-select .check { background: transparent; border: 0; cursor: pointer; font-size: 1rem; line-height: 1; }
+      .txn-table .row-edit td { padding: 0.5rem 0.3rem; }
+      /* Narrow screens (C10/C19): stack each row as a card. */
+      @media (max-width: 760px) {
+        .txn-table, .txn-table tbody, .txn-table tr, .txn-table td { display: block; width: 100%; }
+        .txn-table thead { display: none; }
+        .txn-table tbody tr.row { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 0.5rem; padding: 0.3rem 0.5rem; }
+        .txn-table tbody td { border: 0; padding: 0.15rem 0.2rem; }
+        .txn-table .td-amount { text-align: left; }
+      }
       .amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
       .amount-income { color: var(--accent); }
       .amount-expense { color: var(--danger); }

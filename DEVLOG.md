@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C47 ledger table UI — semantic table + click-to-sort headers
+
+- First C47 UI commit (the big one). Rewrote the /transactions list in internal/screens/transactions.go from a
+  Div(.rows) of TransactionRow flex cards into a semantic <table class="txn-table">: thead (a select column +
+  sortable header buttons Date/Description(payee)/Category/Account/Amount + Tags/Cleared/Actions) and tbody of
+  TransactionRow now rendering <tr class="row"> with <td>s (description keeps class row-desc; amount right-
+  aligned tabular). The inline edit row became a <tr> with a colspan <td> wrapping the same form.
+- Sortable headers: a sortTh component (own hook) renders a real <button>; sortBy(key) sets Sort=key with
+  DefaultDir on a fresh column and flips Dir when already active; the active th gets aria-sort
+  ascending/descending + a caret, others aria-sort=none. Removed the standalone Sort <select> + onSortBy. Wired
+  txnfilter.ApplyWithLabels with account/category id->name maps so those columns sort by display name.
+- Added .txn-table CSS to web/index.html, including `.txn-table tr { display: table-row }` to override the
+  legacy `.row { display:flex }`, and a <=760px media query that stacks rows into cards (responsive, C10/C19).
+- Preserved every behavior + the per-row button titles/classes the e2e relies on (#txn-add, input[type=search],
+  the Select/cleared/Duplicate titles, bulk "Mark cleared"). Updated the 4 txn e2e stories that keyed on
+  `.rows .row(-desc)` to `.txn-table .row-desc` / `.txn-table tr.row`. Screenshot-verified (clicking Amount
+  sets aria-sort=descending on it, none elsewhere; no console errors) and the full e2e suite is green (the lone
+  failing run was banner_check flaking on a remove-timing race; it passes in isolation — unrelated to this
+  change). Bumped sw cache v191->v192.
+- Next C47: pagination bar (prev/next + "1-50 of N" + page-size select, using internal/pagination, replacing
+  the visN "Show more" + ResetPageIfScopeChanged in setFilter) and the header select-all checkbox; then the
+  compact filter toolbar (search + Filters FlipPanel popover + active chips).
+
 ## 2026-06-20 - feat: C47 ledger redesign — sort direction + keys (pure, bottom-up)
 
 - User switched the focus to C47 (redesign /transactions as a paginated, sortable table with a cleaner filter
