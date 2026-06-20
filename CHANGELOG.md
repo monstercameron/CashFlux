@@ -45,6 +45,12 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Account currency is a validated picker, not free text (L4).** Adding an account now chooses its currency from
+  a labelled dropdown ("EUR — Euro") sourced from the known ISO registry plus any code already in play (the base
+  currency and the FX-table currencies), defaulting to the household base — so an expat picks EUR/GBP without the
+  typos or lowercase codes that used to silently break conversion. Backed by new pure `currency.Valid(code)` and
+  `currency.List()` (table-tested), and covered by a Playwright story (add a EUR account → persists as `EUR`,
+  survives reload).
 - **Receipt vs Statement import toggle on the Documents review (L3).** After reading an image with AI, the
   review now offers **"Import as one receipt (split across categories)"**. In receipt mode the extracted lines
   become the category splits of a single transaction: enter the store name + receipt total (pre-filled to the

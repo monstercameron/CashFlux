@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -39,7 +40,11 @@ func Accounts() ui.Node {
 	rev := state.UseAtom("rev:accounts", 0)
 
 	name := ui.UseState("")
-	curr := ui.UseState("USD")
+	baseCur := app.Settings().BaseCurrency
+	if baseCur == "" {
+		baseCur = "USD"
+	}
+	curr := ui.UseState(baseCur)
 	amount := ui.UseState("0")
 	accType := ui.UseState(string(domain.TypeChecking))
 	owner := ui.UseState(domain.GroupOwnerID)
@@ -58,7 +63,7 @@ func Accounts() ui.Node {
 	notifyErr := func(text string) { noticeAtom.Set(noticeAtom.Get().With(text, true)) }
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
-	onCurr := ui.UseEvent(func(v string) { curr.Set(strings.ToUpper(v)) })
+	onCurr := ui.UseEvent(func(e ui.Event) { curr.Set(strings.ToUpper(e.GetValue())) })
 	onAmount := ui.UseEvent(func(v string) { amount.Set(v) })
 	onType := ui.UseEvent(func(e ui.Event) { accType.Set(e.GetValue()) })
 	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
@@ -235,7 +240,7 @@ func Accounts() ui.Node {
 			Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("acct-err", errMsg.Get())...)...),
 			Select(Class("field"), Attr("aria-label", uistate.T("accounts.typeLabel")), OnChange(onType), typeOptions),
 			Select(Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions),
-			Input(Class("field"), Type("text"), Placeholder(uistate.T("accounts.currency")), Value(curr.Get()), OnInput(onCurr)),
+			Select(Class("field"), Attr("aria-label", uistate.T("accounts.currency")), OnChange(onCurr), currencyOptions(app, curr.Get())),
 			Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
 			If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.creditLimit")), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit))),
 			If(isLiab, Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.apr")), Value(apr.Get()), Step("0.01"), OnInput(onApr))),
@@ -372,6 +377,43 @@ func Accounts() ui.Node {
 			Div(Class("rows"), MapKeyed(archivedList, keyOf, renderRow)),
 		)),
 	)
+}
+
+// currencyOptions builds the account-currency picker's <option>s: every known
+// registry currency, plus any code already in play (the base currency, the FX-table
+// currencies, and the current selection) so an in-use code is never dropped. Each
+// option reads "CODE — Name"; the chosen code is marked selected. A validated
+// picker (vs the old free-text input) keeps typos from silently breaking FX.
+func currencyOptions(app *appstate.App, selected string) []ui.Node {
+	seen := map[string]bool{}
+	var codes []string
+	add := func(c string) {
+		c = strings.ToUpper(strings.TrimSpace(c))
+		if c == "" || seen[c] {
+			return
+		}
+		seen[c] = true
+		codes = append(codes, c)
+	}
+	for _, c := range currency.List() {
+		add(c.Code)
+	}
+	add(app.Settings().BaseCurrency)
+	for code := range app.Settings().FXRates {
+		add(code)
+	}
+	add(selected)
+	sort.Strings(codes)
+
+	opts := make([]ui.Node, 0, len(codes))
+	for _, c := range codes {
+		label := c
+		if cur, ok := currency.Lookup(c); ok {
+			label = c + " — " + cur.Name
+		}
+		opts = append(opts, Option(Value(c), SelectedIf(selected == c), label))
+	}
+	return opts
 }
 
 // accountMeta builds an account row's subtitle: type · currency, plus credit

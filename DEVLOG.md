@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L4 validated account-currency picker
+
+- Started L4 ("The Expat", multi-currency). First gap: the account currency was a free-text Input (typo-prone;
+  unknown/lowercase codes silently break FX). Built bottom-up.
+- Logic: internal/currency gains Valid(code) (is it a known registry currency, case-insensitive) and List()
+  (registry sorted by code, with names) - table-tested (valid_test.go). Convert already returns ErrUnknownRate
+  for a missing rate, so the registry was the only missing piece for a picker.
+- UI: accounts.go swaps the currency Input (line 238) for a Select via a new currencyOptions(app, selected)
+  helper - options = registry currencies UNION the base currency UNION the FX-table codes UNION the current value
+  (so an in-use code is never dropped), each "CODE - Name", and the add form now defaults the currency to the
+  household base instead of hardcoded USD. onCurr became a select-change handler. Bumped sw v198->v199.
+- E2E (story_account_currency.test.mjs): add a EUR account via the picker (select option EUR), assert it persists
+  as currency "EUR" and survives reload; screenshot shows "Checking - EUR" with a EUR1,000.00 balance. Full suite
+  32/0 green; go test ./internal/currency green; wasm green.
+- Next L4: FX-rate staleness (per-rate UpdatedAt + freshness nudge - bigger, changes Settings.FXRates shape in
+  the shared store, do carefully) and surfacing the missing-rate warning on the dashboard net-worth widget +
+  accounts total (Convert already errors; make the aggregation show a breakdown/exclude-with-notice + test).
+
 ## 2026-06-20 - feat: L3 documents Receipt-vs-Statement import UI
 
 - L3 UI. documents.go: after the AI image read populates the draft, a "Import as one receipt (split across

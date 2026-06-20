@@ -61,6 +61,25 @@ func Lookup(code string) (Currency, bool) {
 	return c, ok
 }
 
+// Valid reports whether code is a known, registered currency (case-insensitive).
+// A validated currency picker uses this to reject typos that would silently break
+// conversion.
+func Valid(code string) bool {
+	_, ok := registry[normalize(code)]
+	return ok
+}
+
+// List returns every registered currency sorted by code — for building a labelled
+// currency picker (code + name).
+func List() []Currency {
+	out := make([]Currency, 0, len(registry))
+	for _, c := range registry {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Code < out[j].Code })
+	return out
+}
+
 // Decimals returns the minor-unit digit count for a code, defaulting to 2 for
 // unknown codes.
 func Decimals(code string) int {
