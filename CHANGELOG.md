@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Guard against blank icons.** A new `internal/icon` test asserts every curated glyph's markup contains a
+  renderable `<path>/<circle>/<rect>` shape (and no element the renderer can't draw), so a new icon can't
+  silently render blank again.
 - **Workspace reorder buttons use arrow icons (C46).** The switcher's move-up/move-down controls use
   arrow-up/arrow-down glyphs (with aria-labels) instead of bare ↑/↓.
 - **Reports change-% arrows use colored icons (C46).** The ▲/▼ delta markers on report rows are now

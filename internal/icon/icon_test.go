@@ -38,6 +38,44 @@ func TestEveryConstantResolves(t *testing.T) {
 	}
 }
 
+// TestEveryIconHasRenderableShape guards against the blank-icon regression: the
+// wasm renderer (internal/ui.Icon) draws each glyph by parsing its Inner() markup
+// for <path>/<circle>/<rect> elements, so a glyph whose markup has none would show
+// as an empty SVG. Every curated icon must therefore contain at least one such
+// shape (and only those tags, since the renderer handles no others).
+func TestEveryIconHasRenderableShape(t *testing.T) {
+	allowed := []string{"<path", "<circle", "<rect"}
+	for _, n := range All() {
+		body := n.Inner()
+		has := false
+		for _, tag := range allowed {
+			if strings.Contains(body, tag) {
+				has = true
+				break
+			}
+		}
+		if !has {
+			t.Errorf("%q has no renderable shape (<path>/<circle>/<rect>); it would render blank: %q", n, body)
+		}
+		// Catch any element the renderer can't draw (it only knows path/circle/rect).
+		for _, frag := range strings.Split(body, "<") {
+			frag = strings.TrimSpace(frag)
+			if frag == "" || strings.HasPrefix(frag, "/") {
+				continue
+			}
+			tag := frag
+			if i := strings.IndexAny(frag, " /\t>"); i >= 0 {
+				tag = frag[:i]
+			}
+			switch tag {
+			case "path", "circle", "rect":
+			default:
+				t.Errorf("%q uses unsupported element <%s>; the renderer only draws path/circle/rect", n, tag)
+			}
+		}
+	}
+}
+
 func TestValidAndInnerForUnknown(t *testing.T) {
 	var u Name = "definitely-not-an-icon"
 	if u.Valid() {
