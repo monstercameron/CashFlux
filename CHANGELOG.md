@@ -33,7 +33,9 @@ and every commit updates this file under `Unreleased`.
   **direction** (`asc`/`desc`) and three new sort keys — **category** and **account** (name-aware via a new
   `ApplyWithLabels` that takes id→name maps) on top of date/amount/payee — with per-key default directions
   (date/amount lead descending, text columns ascending) and deterministic ID tie-breaking. Table-tested for
-  every key × direction; this is the pure foundation for the upcoming click-to-sort table headers.
+  every key × direction; this is the pure foundation for the upcoming click-to-sort table headers. New pure
+  `internal/pagination` provides the page window math — total pages, page clamping, slice bounds, a generic
+  `Slice`, and the "from-to of total" `Window` (with a "show all" mode) — also table-tested.
 - **E2E stories (B16).** Scripted user-journey tests, now that Playwright + Chromium are installed — each
   asserts the standard path end-to-end (UX + data correctness + persistence across reload): **add a
   transaction** (logs an expense, sees it in the ledger with its amount, autosaved), **add an account**

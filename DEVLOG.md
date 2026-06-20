@@ -17,9 +17,11 @@ problems and fixes, and what's next.
 - Preserved all prior behavior (existing tests green, incl. determinism + no-mutation). Added table tests for
   every key x direction, label-aware name sorting, and Normalize defaults. No UI/behavior change yet (the
   screen still calls Apply the same way), so no sw bump. wasm builds clean.
-- Next C47 pieces: pure pagination math helpers (page index/size/total/slice bounds + clamp) with tests; then
-  persist page-size + sort key/dir in uistate.TxFilter; then the table UI + sortable headers + pagination bar +
-  compact filter toolbar.
+- Pagination math (also pure, also committed): new internal/pagination with TotalPages, Clamp (snap an
+  out-of-range page back after a filter/size change), Bounds (slice indices), a generic Slice[T], and Window
+  (the "1-50 of 312" pair), all with a size<=0 "show all" mode. Table-tested.
+- Next C47 pieces: persist page-size + sort key/dir in uistate.TxFilter (TxFilter already persists); then the
+  table UI + sortable headers + pagination bar + compact filter toolbar.
 
 ## 2026-06-20 - fix: CSV import desc falls back to payee (C27 follow-up; the bug my E2E found)
 
