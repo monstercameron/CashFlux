@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L1 inter-budget transfer logic (pure, bottom-up)
+
+- User: "when you are done with the table start the l-series todos." Started L1 ("The Sunday Budget Reset"),
+  whose core ritual is *covering an overspend by moving money between budgets* — which the app didn't support
+  (budgets had add/edit/delete/rollover only). Per the strict bottom-up SDLC, began with the pure logic.
+- Added internal/budgeting/transfer.go: `Transfer(from, to domain.Budget, amt money.Money, allowNegativeSource
+  bool) (TransferResult, error)`. It debits the source limit and credits the destination by the same amount, so
+  the total budgeted is invariant (balanced). The TransferResult carries both legs (from/to limit before+after)
+  for the determinism/explainability rule and for persistence/export later. Guards: same-budget, non-positive
+  amount, and currency mismatch return sentinel errors (ErrTransferSameBudget/NonPositive/Currency); driving the
+  source negative returns ErrInsufficientSource unless allowNegativeSource. Inputs are not mutated.
+- Added `CoverAmount(Status)` — the shortfall (overspend) to clear, read off Status.Remaining so it's correct
+  even when the raw limit currency is empty; it's the default amount for the "cover the full $X over" one-tap.
+- Table tests (transfer_test.go) cover cover-overspend, exact-to-zero, insufficient-source (rejected + allowed),
+  same-budget/non-positive/currency rejections, the balanced-total invariant, and no-input-mutation. go test
+  ./internal/budgeting green. Reused the package's existing `usd` test helper.
+- Next L1: persist the transfer (store + export round-trip), an appstate covering action, the budgets.go
+  "Cover…" form on over-budget rows + e2e; plus the independent quick fix for the glued budget sub-lines.
+
 ## 2026-06-20 - feat: C47 reusable DataTable + ledger pagination bar
 
 - Built the pagination bar (prev/next + "1–50 of N" + page-size select replacing the old visN "Show more"), and

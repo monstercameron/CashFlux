@@ -37,6 +37,15 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Inter-budget transfer logic — "cover overspending" (L1, bottom-up start).** `internal/budgeting` gains a
+  pure `Transfer(from, to, amount, allowNegativeSource)` that moves budgeted money from one budget's limit to
+  another's. It is **balanced** (the household's total budgeted amount never changes) and **explainable** — the
+  returned `TransferResult` records both legs (each budget's limit before/after) so the UI can show exactly what
+  changed. The source limit cannot go negative unless explicitly allowed; same-budget, non-positive, and
+  cross-currency moves are rejected with sentinel errors. A companion `CoverAmount(Status)` returns the exact
+  shortfall to clear an overspend (the default for a "cover the full $X over" one-tap). Table-tested, including
+  overspend-cover, exact-to-zero, insufficient-source (allowed and rejected), no-input-mutation, and the
+  balanced-total invariant.
 - **Reusable `DataTable` component + ledger pagination bar (C47).** A new generic `internal/ui` `DataTable`
   owns the table chrome — semantic `<table>`, click-to-sort column headers (with `aria-sort` + caret), and an
   optional pagination footer — while each screen still renders its own body rows, so it can be reused across the
