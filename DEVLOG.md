@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: per-category spend trend series (L16, logic)
+
+- UI layer went quiet (parallel session committed its C48/C52/C53 burst — no tracked UI files dirty), so a wasm-UI
+  wiring was in theory open. But the obvious next wiring (L15 rule match-count preview) needs new user-facing
+  strings in i18n/en.go, the explicitly-contended file — risky to edit even while momentarily clean. Chose the
+  lower-risk, equal-value move: another pure report from the L16 catalog.
+- Picked "Category trends (sparklines + biggest movers %)" — a genuine gap. The reports package had TopMovers
+  (two-period change) and IncomeExpenseSeries (whole-ledger buckets) but no per-category multi-bucket spend series.
+  New internal/reports/trends.go: CategoryTrends(txns, bounds, rates) → []CategoryTrend{CategoryID, Spend []int64,
+  Total, DeltaPct, HasDelta}, reusing the unexported categoryTotals + the shared bounds convention; sorted by Total
+  desc; first→last % via ledger.PercentChange. Table-tested (3 buckets, +100%/-50%/no-delta, exclusions, too-few-
+  bounds nil). go test ./internal/reports green; gofmt clean. Committed by pathspec (e9e6c46), additive.
+- Note for next tick: the deferred wasm-UI wiring (rules preview, bills runway/mark-paid, cmdmatch palette,
+  backup-everything, affordability) is the real remaining L-series work, but each needs en.go strings. When the
+  loop next fires and en.go is verifiably clean, do ONE UI wiring with a surgical en.go Edit + atomic pathspec
+  commit; the moment en.go shows dirty, fall back to pure reports/logic.
+
 ## 2026-06-20 - feat: allocate rows show the score once (C54)
 
 - C54 item 4 (chosen as the clean no-i18n win; the labels/IA items need en.go/index.html which are parallel-dirty).

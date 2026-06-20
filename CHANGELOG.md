@@ -26,6 +26,12 @@ and every commit updates this file under `Unreleased`.
   not colour alone), so a past-due item is obvious at a glance. Covered by a new `todo_overdue_check` e2e.
 
 ### Added
+- **Per-category spend trend series for sparklines (L16, logic).** `internal/reports` gains pure, table-tested
+  `CategoryTrends(txns, bounds, rates)` — one `CategoryTrend{CategoryID, Spend []int64, Total, DeltaPct, HasDelta}`
+  per category, where `Spend` is the absolute expense for each consecutive bucket (oldest first, base currency,
+  income/transfers excluded) using the same `bounds` convention as `IncomeExpenseSeries`. It carries each
+  category's window `Total` and first→last percent change, sorted by `Total` descending — the data behind the
+  "category trends (sparklines + biggest movers %)" report.
 - **Year-end / tax summary report (L16, logic).** `internal/reports` gains pure, table-tested `YearTax(txns,
   year, start, end, rates)` returning a `YearTaxSummary` of per-category `{Income, Expense, Net}` rows plus
   headline `TotalIncome`/`TotalExpense`/`NetIncome` — the annual category totals you hand a tax preparer.
