@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: cash-runway card on Planning (L13, UI)
+
+- Completed L13 by wiring the runway bridge (built last tick) into Planning. Targets clean (planning.go + en.go),
+  UI quiet. New runwayCard: runway.Project(assets, app.Recurring(), now, 60, buffer, rates) → starting balance +
+  projected-low stats and a verdict (holds 60 days / "dips below your buffer on <date> — short $X" + low point).
+- Start balance = ledger.NetWorth's ASSETS figure (sum of asset accounts), not net worth — a runway is about cash
+  on hand, not net of debts you don't pay all at once. Optional "warn me below" buffer input. 9 planning.runway*
+  i18n keys added surgically on the affordNever anchor.
+- e2e runway_check.mjs: add a large recurring outflow via the recurring form (amount field has no min, so negatives
+  work), assert the breach warning. The recurring NextDue defaults to now → event on day 0 → guaranteed breach with
+  a huge outflow regardless of sample balances. PASSED standalone twice. Committed daf868f.
+- L13 now fully done (bridge 69602ba + card daf868f). Three of the deferred UI items now landed (L15/L14/L8/L13).
+  Remaining deferred: L9 backup-everything (download/file-picker — still hard to e2e). Next: reassess for any
+  clean pure gap or an easily-verifiable UI bit; else slow.
+
 ## 2026-06-20 - feat: Tools rail sub-group data layer (C67, bottom-up first step)
 
 - C67 is a large rail-nav feature whose UI lives in internal/app/shell.go (heavily contested by the parallel

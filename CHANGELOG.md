@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Cash-runway card on the Planning screen (L13).** A new card projects your accounts' liquid balance over the
+  next 60 days against your scheduled recurring cash flows (via the pure `runway`/`cashflow` engines) and reports
+  the first day it dips below an optional buffer — "Dips below your buffer on <date> — short $X" — alongside the
+  starting balance and projected low. Short-term liquidity, distinct from the 12-month net-worth forecast above.
+  Covered by a new `runway_check` e2e.
 - **Tools rail sub-group data layer (C67, foundation).** The screen registry's `Route` gains a `SubGroup` field;
   the 11 Tools screens now declare one of four sub-sections — Plan & analyze, Bills & recurring, Data & import,
   Build — keeping rail membership registry-driven (B7). Table-tested that every Tools route maps to exactly one
