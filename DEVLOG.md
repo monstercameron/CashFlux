@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — planning recurring item
+
+- Eighteenth journey story (e2e/story_planning_recurring.test.mjs): on /planning, scope to the recurring form
+  (the form.form-grid containing the "How often" cadence select — the screen has several forms), fill the label
+  (placeholder "Label (e.g. Rent, Salary)") + amount, submit, and assert the item lists, persists to the
+  dataset's `recurring` array (domain.Recurring, json "label"), and survives a reload. Suite now 27 green.
+  Test-only, no sw bump.
+
 ## 2026-06-20 - test: B16 story — allocate exclude/restore
 
 - Seventeenth journey story (e2e/story_allocate.test.mjs). The Allocate screen ranks where to put new capital;
