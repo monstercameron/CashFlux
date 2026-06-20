@@ -300,6 +300,8 @@ var english = Catalog{
 	"rules.suggestionMeta":     "Seen in %d transactions",
 	"rules.accept":             "Add",
 	"rules.acceptTitle":        "Add this as a rule",
+	"rules.matchCountMeta":     "Matches %s",
+	"rules.coverage":           "Your rules auto-file %d of %d transactions.",
 
 	"common.owner": "Owner",
 

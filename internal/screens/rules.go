@@ -127,6 +127,17 @@ func Rules() ui.Node {
 			warnByID[rs[c.Index].ID] = uistate.T("rules.noMatch")
 		}
 	}
+	// Match-count preview: how many existing transactions each rule would hit, and
+	// overall how many auto-file — the "before you Apply to existing" signal (L15).
+	// The text matched mirrors the engine at entry/import: payee + " " + desc.
+	txns := app.Transactions()
+	texts := make([]string, len(txns))
+	for i, t := range txns {
+		texts[i] = t.Payee + " " + t.Desc
+	}
+	covered := rules.Covered(rs, texts)
+	hasTxns := len(texts) > 0
+
 	list := IfElse(len(rs) == 0,
 		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), FocusID: "rule-add"}),
 		Div(Class("rows"), MapKeyed(rs,
@@ -134,7 +145,8 @@ func Rules() ui.Node {
 			func(r rules.Rule) ui.Node {
 				return ui.CreateElement(RuleRow, ruleRowProps{
 					Rule: r, Categories: cats, CategoryName: catName[r.SetCategoryID],
-					Warning: warnByID[r.ID], OnDelete: deleteRule, OnSave: saveRule,
+					Warning: warnByID[r.ID], MatchCount: r.MatchCount(texts), ShowMatchCount: hasTxns,
+					OnDelete: deleteRule, OnSave: saveRule,
 				})
 			},
 		)),
@@ -176,6 +188,7 @@ func Rules() ui.Node {
 				H2(Class("card-title"), uistate.T("rules.listTitle")),
 				If(len(rs) > 0, Button(Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
 			),
+			If(len(rs) > 0 && hasTxns, P(Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
 			list,
 		),
 	)
@@ -230,12 +243,14 @@ func SuggestionRow(props suggestionRowProps) ui.Node {
 }
 
 type ruleRowProps struct {
-	Rule         rules.Rule
-	Categories   []domain.Category
-	CategoryName string
-	Warning      string // non-empty when this rule never fires (shadowed)
-	OnDelete     func(string)
-	OnSave       func(id, match, category, tags string)
+	Rule           rules.Rule
+	Categories     []domain.Category
+	CategoryName   string
+	Warning        string // non-empty when this rule never fires (shadowed)
+	MatchCount     int    // how many existing transactions this rule's phrase hits
+	ShowMatchCount bool   // whether to show the count (there are transactions to count)
+	OnDelete       func(string)
+	OnSave         func(id, match, category, tags string)
 }
 
 // RuleRow is a per-rule row, editable inline (match + category + tags). All hooks
@@ -298,6 +313,7 @@ func RuleRow(props ruleRowProps) ui.Node {
 		Div(Class("row-main"),
 			Span(Class("row-desc"), uistate.T("rules.matchLabel", r.Match)),
 			Span(Class("row-meta"), meta),
+			If(props.ShowMatchCount, Span(Class("row-meta"), uistate.T("rules.matchCountMeta", plural(props.MatchCount, "transaction")))),
 			If(props.Warning != "", Span(Class("row-meta text-warn"), props.Warning)),
 		),
 		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
