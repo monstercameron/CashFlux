@@ -52,6 +52,12 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Debt payoff shows a calendar debt-free date, not just a month count (L5).** The debt-strategy card now reads
+  "Debt-free by Nov 2035 (snowball) · … (avalanche)" beside the month totals, and the payoff order dates each
+  debt as it clears ("Auto Loan (Aug 2027) → Credit Card (Jan 2028)"). Backed by a pure `payoff.DebtFreeMonth`
+  (month-count → calendar month) and a new `Plan.ClearedMonths` exposing when each debt is paid off from
+  `BuildPlan`; both table-tested, and the card's extra-payment input gained an accessible label. Covered by a
+  Playwright story.
 - **Account currency is a validated picker, not free text (L4).** Adding an account now chooses its currency from
   a labelled dropdown ("EUR — Euro") sourced from the known ISO registry plus any code already in play (the base
   currency and the FX-table currencies), defaulting to the household base — so an expat picks EUR/GBP without the

@@ -28,6 +28,7 @@ type Plan struct {
 	TotalInterest int64    // total interest paid across all debts, minor units
 	TotalPaid     int64    // principal + interest paid, minor units
 	Order         []string // debt names in the order they were paid off
+	ClearedMonths []int    // 1-based month each Order entry was paid off (parallel to Order)
 }
 
 // BuildPlan simulates clearing several debts together using the classic debt
@@ -71,6 +72,7 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 
 	var totalInterest, totalPaid int64
 	var order []string
+	var clearedMonths []int
 	months := 0
 
 	for months < maxMonths {
@@ -142,6 +144,7 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 			if !cleared[i] {
 				cleared[i] = true
 				order = append(order, debts[i].Name)
+				clearedMonths = append(clearedMonths, months+1) // 1-based month it cleared
 			}
 		}
 		months++
@@ -158,7 +161,7 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 			return Plan{}, false
 		}
 	}
-	return Plan{Months: months, TotalInterest: totalInterest, TotalPaid: totalPaid, Order: order}, true
+	return Plan{Months: months, TotalInterest: totalInterest, TotalPaid: totalPaid, Order: order, ClearedMonths: clearedMonths}, true
 }
 
 // focusIndex returns the index of the active debt the strategy targets next, or

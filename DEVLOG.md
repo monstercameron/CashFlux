@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L5 debt-free calendar date on the payoff plan
+
+- Deferred L4 gap 3 (FX-rate staleness): it entangles with the parallel-session-flagged settings.go (stamping
+  rate edits + the Settings FX-table UI), so per the loop's fallback I skipped it and moved to L5. (Logged to
+  circle back when settings.go is safely editable.)
+- L5 ("The Debt Crusher") gap 1: the strategy card showed only "170 months". Added pure payoff.DebtFreeMonth(
+  start, months) -> the calendar month the final payment lands (first-of-month + months-1; months<=0 returns the
+  start month), and a new Plan.ClearedMonths []int (parallel to Order) giving the 1-based month each debt clears,
+  populated in BuildPlan. Both table-tested (date crossing year/long mortgage; ClearedMonths parallel + last ==
+  plan length). Existing payoff tests unaffected (they compare Plan.Order field-wise, not whole structs).
+- UI (planning.go): the debt card now prints "Debt-free by <Mon Year> (snowball) · <Mon Year> (avalanche)" and a
+  dated payoff order ("Auto Loan (Aug 2027) -> Credit Card (Jan 2028)"); added an aria-label to the extra-payment
+  input. Inline English (avoided en.go). Bumped sw v200->v201.
+- E2E (story_payoff_date.test.mjs): enter an extra so the multi-debt plan is viable, assert the debt-free line
+  shows a Month-Year date and the order dates each debt; screenshot-verified. Full suite 34/0 green; go test
+  ./internal/payoff green; wasm green.
+- Next L5 gaps: strategy ties at $0 extra (default/prompt a sensible extra + explain when snow==aval); a per-
+  account "include in payoff" flag to exclude the mortgage; a payoff timeline chart; progress tracking vs a
+  stored baseline.
+
 ## 2026-06-20 - fix: L4 net worth excludes missing-rate accounts (no silent zero)
 
 - L4 correctness gap (determinism rule). ledger.NetWorth returns an error when a currency has no FX rate, but

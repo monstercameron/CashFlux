@@ -403,14 +403,28 @@ func Planning() ui.Node {
 				if saved := snow.TotalInterest - aval.TotalInterest; saved > 0 {
 					rec = P(Class("muted"), uistate.T("planning.strategyRecommend", fmtMoney(money.New(saved, base))))
 				}
+				// A calendar debt-free date reads better than a bare month count
+				// (L5), plus a "cleared by <month>" beside each debt in the order.
+				now := time.Now()
+				snowDate := payoff.DebtFreeMonth(now, snow.Months).Format("Jan 2006")
+				avalDate := payoff.DebtFreeMonth(now, aval.Months).Format("Jan 2006")
+				orderParts := make([]string, len(aval.Order))
+				for i, n := range aval.Order {
+					if i < len(aval.ClearedMonths) {
+						orderParts[i] = n + " (" + payoff.DebtFreeMonth(now, aval.ClearedMonths[i]).Format("Jan 2006") + ")"
+					} else {
+						orderParts[i] = n
+					}
+				}
 				body = Div(
 					Div(Class("stat-grid"),
 						stat(uistate.T("planning.snowball"), uistate.T("planning.strategyMonths", snow.Months), ""),
 						stat(uistate.T("planning.avalanche"), uistate.T("planning.strategyMonths", aval.Months), ""),
 					),
+					P(Class("budget-sub font-display"), "Debt-free by "+snowDate+" (snowball) · "+avalDate+" (avalanche)."),
 					P(Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.snowball"), fmtMoney(money.New(snow.TotalInterest, base)))),
 					P(Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.avalanche"), fmtMoney(money.New(aval.TotalInterest, base)))),
-					P(Class("muted"), uistate.T("planning.strategyOrder", strings.Join(aval.Order, " → "))),
+					P(Class("muted"), "Payoff order: "+strings.Join(orderParts, " → ")),
 					rec,
 				)
 			}
@@ -419,7 +433,7 @@ func Planning() ui.Node {
 			H2(Class("card-title"), uistate.T("planning.debtStrategyTitle")),
 			P(Class("muted"), uistate.T("planning.debtStrategyHint")),
 			Form(Class("form-grid"),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("planning.debtStrategyExtra", base)), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra)),
+				Input(Class("field"), Type("number"), Attr("aria-label", "Extra monthly payment"), Placeholder(uistate.T("planning.debtStrategyExtra", base)), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra)),
 			),
 			body,
 		)
