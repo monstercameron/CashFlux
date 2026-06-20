@@ -32,11 +32,12 @@ and every commit updates this file under `Unreleased`.
   **transactions filter persistence** (filters the ledger to a unique transaction, confirms the list narrows
   to the one match, and that the filter and narrowed view survive a reload), and **reconcile / cleared**
   (toggles a transaction's cleared status, confirms the cleared-status filter includes/excludes it and that the
-  flag persists). The
+  flag persists), and **to-do complete-toggle** (adds a task, marks it complete, and confirms the status flips
+  to done and persists). The
   start of B16's "every feature, provably flawless" story suite (`e2e/story_*.test.mjs`). The whole suite —
   every story plus the feature checks (theme/fonts/banner/icon-weight/density-unify/per-widget-color) — now
   runs as one command, `e2e/run-stories.ps1` (builds the wasm once, serves it, runs each `.mjs` in a fresh
-  browser, exits non-zero on any failure): currently **16 green**.
+  browser, exits non-zero on any failure): currently **17 green**.
 - **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
   settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
   that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and

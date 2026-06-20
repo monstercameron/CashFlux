@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: B16 story — to-do complete-toggle
+
+- Eighth journey story (e2e/story_todo_toggle.test.mjs): add a task via #task-add, mark it complete via the
+  row's .check toggle, and assert the UI shows the done state (.row.done) and the task's status flips open→done
+  in the dataset (Task.Title/Status are json "title"/"status"; values "open"/"done") and survives reload. Used
+  the poll-the-store pattern from the start. Suite now 17 green. Test-only, no sw bump.
+- Next: members and categories reassign-on-delete (the trickier flow — delete with a reassignment target).
+
 ## 2026-06-19 - test: B16 story — reconcile (toggle cleared)
 
 - Seventh journey story (e2e/story_txn_cleared.test.mjs): seed a txn, toggle its cleared status via the per-row
