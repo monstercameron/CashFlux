@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: theme migration from display prefs (B20 bottom-up start)
+
+- New focus per the user: branding/theming + artifact uploads for fonts/icons/images. Grepped first and
+  confirmed the pure `internal/theme` package already exists (typed tokens, presets, Validate w/ WCAG AA
+  contrast, CSSVars, JSON round-trip) and is fully tested — but nothing imports it yet. So B20's foundation
+  is done; the next bottom-up rung is persistence/state, then the editor UI.
+- Built the migration rung first as pure tested logic (zero DOM risk): `theme.FromPrefs(prefs.Prefs)` maps
+  the legacy theme/accent/density/scale prefs into a full Theme. Key decision: the dark/light surface
+  palettes mirror `web/index.html`'s live candidate-C colors exactly (#0e0e0f / #f7f6f3 etc.), so applying
+  the migrated theme is a *visual no-op* — switching the app onto the engine changes nothing until a token
+  is edited. "system" can't be resolved in pure Go, so it falls back to dark; the wasm layer will resolve it
+  before calling.
+- Aligned `theme.Validate`'s scale floor 0.75 → 0.70 to match prefs' 70% display-scale minimum, so a user at
+  minimum zoom migrates to a valid theme. No existing test regressed.
+- Next: the state bridge — `uistate.ApplyTheme/LoadTheme/PersistTheme` (set CSSVars on :root, alias index's
+  `--bg`/`--accent-dim`/`--danger`, resolve system→light/dark), then the Settings→Appearance editor and
+  font/header-image artifact uploads.
+
 ## 2026-06-19 - fix: rail highlight follows navigation; add Playwright nav E2E
 
 - After restoring navigation, a real Playwright E2E (e2e/navigation.test.mjs, run via e2e/run.ps1 against a

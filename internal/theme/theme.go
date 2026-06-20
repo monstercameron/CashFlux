@@ -209,8 +209,8 @@ func (t Theme) nonColorIssues() []Issue {
 	if t.Radius < 0 || t.Radius > 48 {
 		issues = append(issues, Issue{Field: "radius", Message: "must be between 0 and 48 pixels"})
 	}
-	if t.Scale < 0.75 || t.Scale > 2.0 {
-		issues = append(issues, Issue{Field: "scale", Message: "must be between 0.75 and 2.0"})
+	if t.Scale < 0.70 || t.Scale > 2.0 {
+		issues = append(issues, Issue{Field: "scale", Message: "must be between 0.70 and 2.0"})
 	}
 	if !t.Density.Valid() {
 		issues = append(issues, Issue{Field: "density", Message: "must be comfortable or compact"})

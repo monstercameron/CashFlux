@@ -6,7 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Theme migration from display preferences (B20).** New pure `theme.FromPrefs` upgrades the legacy
+  theme/accent/density/display-scale preferences into a full `theme.Theme` of design tokens — the migration
+  path for the unified appearance engine. It picks the dark or light surface palette to mirror today's live
+  `web/index.html` colors exactly and overlays the user's accent, scale, and density, so moving the app onto
+  the theme engine is a visual no-op until a token is edited. Table-tested (valid in both palettes, system →
+  dark fallback, accent/scale/density overlay, minimum-zoom stays valid).
+
 ### Changed
+- **Theme scale floor aligned to 70%.** `theme.Validate` now accepts a font-size scale down to 0.70 (was
+  0.75) to match the display-scale preference's 70% minimum, so migrating a user at minimum zoom yields a
+  valid theme.
 - **Guard against blank icons.** A new `internal/icon` test asserts every curated glyph's markup contains a
   renderable `<path>/<circle>/<rect>` shape (and no element the renderer can't draw), so a new icon can't
   silently render blank again.
