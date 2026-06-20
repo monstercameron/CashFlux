@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: split select-all/clear + result summary (C58)
+
+- C58 item 3 (the no-persistence, no-CSS slice — the ephemeral/persist item is a bigger bottom-up feature). Added
+  selectAll/clearAll handlers (set/clear the `selected` member map) surfaced as buttons when the household has 2+
+  members, and a summary line: "$X split among N → $Y each" with the even per-person figure and any rounding
+  remainder the core gives the first sharer; weighted splits show "(weighted)". Literals (en.go parallel-dirty).
+  Added the fmt import.
+- New split_summary_check.mjs adds a 2nd member via /members (sample seeds only "You"), then on /split fills $100,
+  clicks Select all → asserts "split among 2 → $50.00 each", and Clear removes the summary. PASS. App wasm builds
+  clean; gofmt clean. Committed via git commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C58 remaining: persist a split / attach to a transaction (bigger), purpose-built aligned member row (CSS), guided
+  no-members empty state. Next: C59 (Insights).
+
 ## 2026-06-20 - fix: collision-proof Bills row key (C57)
 
 - C57 item 5. The bills MapKeyed keyed rows by r.Bill.AccountID. Switched to a composite (AccountID + DueDate +

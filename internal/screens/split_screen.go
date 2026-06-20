@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +57,14 @@ func Split() ui.Node {
 		next[id] = !next[id]
 		selected.Set(next)
 	}
+	selectAll := func() {
+		all := make(map[string]bool, len(members))
+		for _, m := range members {
+			all[m.ID] = true
+		}
+		selected.Set(all)
+	}
+	clearAll := func() { selected.Set(map[string]bool{}) }
 	setWeight := func(id, v string) {
 		cur := weights.Get()
 		next := make(map[string]string, len(cur)+1)
@@ -208,6 +217,32 @@ func Split() ui.Node {
 		memberBody = Div(Class("rows"), memberRows)
 	}
 
+	// Summary so the math is legible at a glance: amount, how many share it, and the
+	// even per-person figure with any rounding remainder the core hands the first
+	// sharer (C58). For a weighted split the per-person figure doesn't apply.
+	var splitSummary ui.Node = Fragment()
+	if n := len(ids); n > 0 && amt > 0 {
+		if weighted.Get() {
+			splitSummary = P(Class("muted"), fmt.Sprintf("%s split among %d (weighted)", fmtMoney(money.New(amt, base)), n))
+		} else {
+			each := amt / int64(n)
+			rem := amt - each*int64(n)
+			s := fmt.Sprintf("%s split among %d → %s each", fmtMoney(money.New(amt, base)), n, fmtMoney(money.New(each, base)))
+			if rem > 0 {
+				s += fmt.Sprintf(" (+%s remainder to the first)", fmtMoney(money.New(rem, base)))
+			}
+			splitSummary = P(Class("muted"), s)
+		}
+	}
+	// Select-all / clear for households with several members.
+	var memberControls ui.Node = Fragment()
+	if len(members) > 1 {
+		memberControls = Div(Class("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
+			Button(Class("btn"), Type("button"), OnClick(selectAll), "Select all"),
+			Button(Class("btn"), Type("button"), OnClick(clearAll), "Clear"),
+		)
+	}
+
 	return Div(
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("nav.split")),
@@ -222,7 +257,9 @@ func Split() ui.Node {
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("split.members")),
+			memberControls,
 			memberBody,
+			splitSummary,
 		),
 		If(len(owes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("split.settleUp")),

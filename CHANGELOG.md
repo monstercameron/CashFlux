@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Split gets select-all/clear and a result summary (C58).** For households with several members, the sharer
+  picker now has Select-all and Clear buttons, and once an amount and sharers are set it shows a legible summary —
+  "$X split among N → $Y each" (with any rounding remainder the core hands the first sharer; weighted splits note
+  "(weighted)"). Covered by a new `split_summary_check` e2e.
+
 ### Fixed
 - **Bills rows use a collision-proof key (C57).** The bills list keyed each row by `AccountID` alone; a composite
   key (account + due date + name) removes the latent risk of two bills on one account colliding and a row being
