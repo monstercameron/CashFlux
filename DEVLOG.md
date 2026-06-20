@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C69 step 2 — derived shell tokens (pure)
+
+- Continued C69 (verified the theme area was clean + the last theme commits were mine; the other agent was on
+  internal/mermaid). Took step 2 "extend the token model", which is pure-logic and avoids the contended index.html.
+- Chose DERIVATION over new struct fields: rather than add BgElev/TextFaint/etc. to Theme (which would touch presets,
+  migrate, JSON round-trip), derive them in CSSVars from existing tokens. New internal/theme/derived.go: mixHex (hex
+  lerp, clamps t, degrades to a real color on bad input) + derivedVars → --bg-elev (card 6% toward text),
+  --text-faint (dim 40% toward bg), --accent-dim (accent 45% toward bg), --warn (fixed amber), --danger (= Down
+  alias). No migration, every theme gets values for free.
+- Validate() gained a text-on-bg-elev AA pair. Risk: theme_test asserts Default + ALL presets validate with 0
+  issues — a borderline preset could break. Verified empirically by running the full suite: all green (the elevated
+  surface keeps text high-contrast on both dark and Paper). 7 mixHex cases + derived-token assertions added.
+- Committed 159502f. Deeper C69 (rewire Tailwind/#design-system literals to var(--…), kill dual --accent, retire the
+  override block) CONSUMES these tokens but needs index.html — still deferred/contended. Next: another non-contended
+  C step (C83 txnfilter multi-select pure logic, or C81 AI provider abstraction as a new package).
+
 ## 2026-06-20 - feat: settle-up Mermaid generator (C70 follow-on)
 
 - Third C70 generator. mermaid.FromSettleUp(transfers, name, amount): a flowchart LR where each person is a round

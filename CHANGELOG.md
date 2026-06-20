@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Derived shell tokens in the theme engine (C69, logic).** The theme now emits the CSS tokens the shell needs but
+  the engine never produced — `--bg-elev` (elevated surface), `--text-faint`, `--accent-dim`, `--warn`, and a
+  `--danger` alias of the down color — derived from the theme's own tokens via a new pure `mixHex` blend, so any
+  built-in or custom theme gets sensible values with no migration. `CSSVars()` emits them and `Validate()` checks
+  text legibility on the elevated surface. Pure + table-tested; the prep step before rewiring the shell's hardcoded
+  colors to these vars (which touches `index.html`, deferred).
 - **Settle-up Mermaid generator (C70).** `internal/mermaid.FromSettleUp` renders a split settle-up plan as a
   who-owes-whom digraph (debtor→creditor edges labelled with the amount), taking name/amount formatter closures so
   the package stays currency-free. Pure + table-tested; third of the C70 generators.
