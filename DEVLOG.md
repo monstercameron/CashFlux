@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — transfer excluded from totals
+
+- Eleventh journey story (e2e/story_txn_transfer.test.mjs), a correctness gem: add two same-currency accounts
+  (USD default), capture the dashboard Income/Spending KPIs (the `.fig` inside [data-widget="kpi-income/spending"]),
+  then add a transfer A->B via the kind select (option value "Transfer", which reveals the From/To account
+  selects), and assert (a) two transfer legs are created (txns with transferAccountId set — IsTransfer) and
+  (b) the Income/Spending KPIs are UNCHANGED, proving transfers are excluded from income/expense totals
+  (domain: IsIncome/IsExpense are false when TransferAccountID is set). Used two fresh accounts so the
+  same-currency transfer constraint always holds. Passed first try. Suite now 20 green. Test-only, no sw bump.
+- Next: account archive/restore, sub-category rollup, or a cross-platform Node suite runner for CI.
+
 ## 2026-06-20 - test: B16 story — member reassign-on-delete (no orphan)
 
 - Tenth journey story (e2e/story_member_reassign.test.mjs): mirror of the category one for members. Add a
