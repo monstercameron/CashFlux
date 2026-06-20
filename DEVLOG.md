@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: label the category form selects (C63/B15)
+
+- Closed the C63 labelling item: the category type + parent selects (add form and inline-edit form) had no
+  accessible name — only the parent select had a hover title. Added `aria-label`s to all four (literals; en.go is
+  contested by the parallel session's AI work). The reassign select and color input were already labelled.
+- Gate: screens build+vet + wasm clean; new `categories_labels_check` e2e asserts every select in the add form
+  carries an aria-label (2 selects) — PASS. categories.go uncontested (parallel is on internal/aiprovider). Committed
+  by pathspec; TODOS.md untouched. C63 is now down to its last item (icon-only edit on narrow widths, C10/C19).
+
 ## 2026-06-20 - feat: C81 phase 3 — Anthropic Messages dialect (pure)
 
 - Continued the insights/AI objective with C81-p3, the one non-OpenAI dialect, as a new pure package

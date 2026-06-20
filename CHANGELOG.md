@@ -159,6 +159,9 @@ and every commit updates this file under `Unreleased`.
   follow-up over this data.)
 
 ### Fixed
+- **Category form selects are now labelled (C63/B15).** The category type and parent pickers in both the add and
+  inline-edit forms had no accessible name (only the parent carried a hover title), so screen readers announced
+  unlabelled comboboxes. Added `aria-label`s to all four; covered by a new `categories_labels_check` e2e.
 - **Documents importer account picker is now labelled (C49/B15).** The "import into account" `Select` on both the
   CSV-draft and receipt-import footers had no accessible name, so screen readers announced it as an unlabelled
   combobox. Added an `aria-label`; the CSV import flow is regression-covered by `story_documents_csv`.
