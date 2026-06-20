@@ -59,6 +59,11 @@ and every commit updates this file under `Unreleased`.
   full suite green.
 
 ### Added
+- **Fuzzy command-palette match with keyword aliases (L14, logic).** New pure, table-tested `internal/cmdmatch`
+  package: `Command{ID, Title, Keywords}` + `Match(query, cmds)` ranks commands by a case-insensitive
+  subsequence score over the title **and** each keyword — so a verb query like "add" or "export" surfaces a
+  noun-labeled command ("New transaction"). Title matches outrank keyword-only matches, a prefix beats a
+  scattered match, an empty query returns all in order, and ties keep input order.
 - **Forward daily cash-flow projection + overdraft warning (L13, logic).** New pure, table-tested
   `internal/cashflow` package: `DailyBalances(startBal, events, days, buffer)` projects an account's running
   balance day by day from upcoming bills + paychecks and returns the daily series, the lowest balance and when

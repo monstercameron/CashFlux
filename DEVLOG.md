@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L14 fuzzy command-palette match with keyword aliases (pure logic)
+
+- L14 gap 1: the palette labels commands by noun ("New transaction"), so a verb query ("add") misses them.
+  Extracted the match into a NEW pure package internal/cmdmatch (the live shortcuts.go match is js/wasm, so a
+  separate package is the only natively-testable home): Command{ID, Title, Keywords} + Match(query, cmds) ranks
+  by a case-insensitive subsequence score over the title and each keyword. subseqScore = first-match index +
+  total gaps (lower better → prefix/contiguous beats scattered); keyword matches get a +1000 penalty so a title
+  match always wins; empty query → all in input order; sort.SliceStable with an order tiebreak.
+- Table-tested (7 cases): empty->all-ordered, "budg"->Budgets, "add"->New transaction (alias), title-beats-
+  keyword, "trans" prefix Transactions ranks first, no-match->empty, case-insensitive. go test ./internal/cmdmatch
+  green; committed+pushed atomically.
+- STOCK-TAKE — the L-series PURE-LOGIC foundations are now largely in place (L1-L5 full; L6 core; L7; L8 starter+
+  afford; L9 backup envelope; L12 splash; L13 cashflow; L14 match). What REMAINS is mostly WASM-UI wiring + a few
+  store/domain touches, deferred while the parallel session churns the shared tree/wasm: L9 "Back up everything"
+  Settings action + gather/restore localStorage (settings.go is theirs); L8 affordability UI hook + mock-ai env
+  wiring; L13 cash-flow runway card + mark-paid model; L4 FX-staleness; L2 sample-seeding; L3 receipt-flow e2e
+  harness; L6 onboarding UX; Settings .rate-in a11y labels; L10/L11/L15 UI bits; and wiring cmdmatch keywords
+  into buildPaletteCommands. Plan: keep mining any remaining pure logic; do the wasm UI atomically when
+  contention drops (verify per-story standalone).
+
 ## 2026-06-20 - feat: budget → filtered-transactions drill-down (C50)
 
 - C50 item 4: a budget row should answer "why am I over?". Made the budget title a button that sets the persisted
