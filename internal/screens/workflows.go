@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/mermaid"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workflow"
@@ -284,6 +285,12 @@ func workflowRow(props workflowRowProps) ui.Node {
 			),
 		),
 		result,
+		// A Mermaid flowchart of this workflow: trigger → condition → actions (C70).
+		uiw.Mermaid(uiw.MermaidProps{
+			Source: mermaid.FromWorkflow(w),
+			Class:  "mt-2",
+			Label:  "Flowchart of " + w.Name,
+		}),
 	)
 }
 

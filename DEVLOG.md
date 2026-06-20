@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: ui.Mermaid renderer + wire Workflows flowchart (C70)
+
+- User asked to actually SEE a diagram. Built the renderer over the C70 generators: vendored mermaid@11 locally
+  (web/mermaid.min.js, 3.3MB, no CDN — C44; it ends with globalThis.mermaid = …default so window.mermaid is the
+  clean global), a web/mermaid.js shim (cashfluxRenderMermaid: securityLevel 'strict', startOnLoad off, async
+  mermaid.render → inline svg, clears box on parse error — C45), and uiw.Mermaid (internal/ui/mermaidview.go),
+  mirroring chartd3.go's UseId + UseEffect(getElementById)+shim-invoke ref/portal pattern. Wired the lead case:
+  workflowRow renders uiw.Mermaid(mermaid.FromWorkflow(w)) so each workflow shows its flowchart. index.html loads
+  the two scripts (after chart.js/flip.js); sw.js caches them + bumped v218→v219.
+- New e2e mermaid_render_check.mjs: /workflows → asserts real <svg> inside .cf-mermaid — PASS, 4 diagrams rendered.
+  App wasm builds clean; gofmt clean.
+- HAZARD HIT: web/index.html + web/sw.js are co-edited by the parallel session and my edits to them got clobbered
+  once mid-work (their concurrent write to the same files); re-applied and committed atomically the instant they
+  were clean at HEAD. Committed by explicit pathspec (incl. index.html/sw.js while clean) + git add for the new
+  files; TODOS.md untouched. To SEE it: /workflows. Follow-ups: theme-aware themeVariables (C69), lazy-load, more
+  wired cases (custom-page Diagram widget, sankey).
+
 ## 2026-06-20 - feat: C83 multi-select filter model (pure, additive)
 
 - Moved to C83 (txnfilter area clean + un-taken; other agent on workflows.go). The ticket frames the "real work" as
