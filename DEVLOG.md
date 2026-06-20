@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: richer rule match conditions (L15, logic)
+
+- Last clean pure-logic gap for L15: a rule today matches one case-insensitive description substring; the
+  dream-big version wants amount ranges, account scope, and AND/OR keyword sets. Built the matcher FIRST as a new
+  file (internal/rules/conditions.go) WITHOUT touching the shared Rule type — lowest-risk move under the parallel
+  C-series burst (no collision with their rule/transactions edits).
+- Condition{AllKeywords,AnyKeywords []string; AccountID string; MinAmount,MaxAmount int64} + TxnView{Text,
+  AccountID, Amount(abs minor)} + (Condition).Matches. Zero-value matches all; parts AND together; keywords reuse
+  the engine's existing matches() (case-insensitive substring), blanks ignored; amount range inclusive, 0=unbounded.
+- 15 table cases (empty/AND/OR/account/amount/min-only/combos/blank). go test ./internal/rules green; gofmt clean.
+  Committed by pathspec (conditions.go + test only) atomically; d631f45. The Rule-type extension + rule form land
+  later, atomically, once the wasm-UI race subsides.
+- STOCK-TAKE: pure-logic foundations for L8(starter+afford), L9(backup envelope), L13(cashflow), L14(cmdmatch),
+  L15(preview+coverage AND conditions) are now all in. Remaining L-series work is wasm-UI wiring (deferred until the
+  parallel session's C-series settles) + L16/L17, which have no obvious pure helper not already covered by
+  forecast/budgeting. Next loop: re-scan for a clean UI target (rules_screen count label / bills runway card /
+  shortcuts cmdmatch wiring) or slow the cadence if all are contended.
+
 ## 2026-06-20 - feat: visible labels on the goal forms (C51)
 
 - C51 labelling item: the add, inline-edit, and contribute goal forms were placeholder/aria-label only. Wrapped

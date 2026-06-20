@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Click a goal's linked account to see its transactions (C51).** A goal linked to an account now shows that link
+  as a clickable affordance that opens Transactions filtered to the account — the same drill pattern as
+  Budgets→category and Accounts→Transactions (C30/C50). It also splits the linked-account bit out of the run-on
+  progress sub-line into its own element. Covered by a new `goals_drill_check` e2e.
+
 ### Fixed
 - **Goal add / edit / contribute forms now have persistent visible labels (C51).** All three goal forms were
   placeholder-only (name, target, saved-so-far, owner/linked selects, date, contribute amount), the same systemic
@@ -70,6 +76,12 @@ and every commit updates this file under `Unreleased`.
   full suite green.
 
 ### Added
+- **Richer rule match conditions (L15, logic).** `internal/rules` gains a pure, table-tested `Condition`
+  (`AllKeywords`/`AnyKeywords []string`, `AccountID`, `MinAmount`/`MaxAmount int64`) matched against a minimal
+  `TxnView{Text, AccountID, Amount}`. `(Condition).Matches` AND-composes only the parts that are set: every
+  `AllKeyword` must appear, at least one `AnyKeyword` must appear (case-insensitive substrings, blanks ignored),
+  the account must match when scoped, and the absolute amount must fall in the inclusive `[Min, Max]` range
+  (0 = unbounded) — a zero-value `Condition` matches everything. Additive: the shared `Rule` type is untouched.
 - **Rule match-count preview + coverage stats (L15, logic).** `internal/rules` gains pure, table-tested
   `(Rule).MatchCount(texts)` — how many existing transactions a rule would hit, the "matches N existing
   transactions" preview before a blind Apply-to-existing — plus `Covered`/`Uncovered(rules, texts)` for a "N of
