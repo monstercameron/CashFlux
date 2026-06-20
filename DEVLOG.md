@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — bulk clear
+
+- Sixteenth journey story (e2e/story_txn_bulk_clear.test.mjs): seed two txns, filter the ledger to them, select
+  both via the per-row select buttons (button[title="Select for bulk actions"]), then click the bulk
+  "Mark the selected transactions cleared" action (which appears once rows are selected), and assert both txns
+  flip to cleared in the dataset (polled). Suite now 25 green. Test-only, no sw bump.
+
 ## 2026-06-20 - test: B16 story — set the default member
 
 - Fifteenth journey story (e2e/story_member_default.test.mjs): add a member, click their row's "Make default
