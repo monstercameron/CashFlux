@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: wire the settle-up Mermaid diagram into Split (C70)
+
+- Third wired Mermaid case. Split's settle-up card now renders uiw.Mermaid(mermaid.FromSettleUp(transfers, name,
+  amount)) — the active split's debtor→payer digraph, beside the existing "X owes Y" rows. transfers is already
+  []split.Transfer (the current split); name = nameByID lookup, amount = money.FormatMinor (reused from the CSV
+  export formatter). split_screen.go uncontested; added the mermaid import.
+- New split_diagram_check.mjs: adds a 2nd member, drives a $100 split (select-all sharers + pick a payer), asserts
+  .cf-mermaid svg renders. PASS. App wasm builds clean; gofmt clean. Committed via git commit -- <paths>; TODOS.md
+  untouched.
+- Three diagrams now visible: /workflows (flowcharts), /categories (tree), /split (settle-up). Next: another slice.
+
 ## 2026-06-20 - feat: C78 phase 1 — diff-based change history (pure)
 
 - Took C78 phase 1 (internal/history area clean + un-taken; other agent on Mermaid). The ticket's locked approach is

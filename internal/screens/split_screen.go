@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/mermaid"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/split"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -264,6 +265,14 @@ func Split() ui.Node {
 		If(len(owes) > 0, Section(Class("card"),
 			H2(Class("card-title"), uistate.T("split.settleUp")),
 			Div(Class("rows"), owes),
+			// Who-owes-whom as a Mermaid digraph (C70): debtor → payer, labelled.
+			uiw.Mermaid(uiw.MermaidProps{
+				Source: mermaid.FromSettleUp(transfers,
+					func(id string) string { return nameByID[id] },
+					func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }),
+				Label: "Who owes whom",
+				Class: "mt-2",
+			}),
 			Div(Class("flex flex-wrap gap-2 py-1"),
 				Button(Class("btn btn-primary"), Type("button"), Title("Save this split to the settle-up ledger below"), OnClick(saveSplit), "Save split"),
 				Button(Class("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
