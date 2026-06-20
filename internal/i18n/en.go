@@ -185,13 +185,16 @@ var english = Catalog{
 	"shortcuts.toggleHelp": "Toggle this help",
 
 	// Command palette (§6.6)
-	"cmd.search":          "Search commands…",
-	"cmd.noMatch":         "No matching commands",
-	"cmd.toggleTheme":     "Toggle light / dark theme",
-	"cmd.toggleSidebar":   "Collapse / expand sidebar",
-	"cmd.switchTo":        "Switch to workspace: ",
-	"cmd.newWorkspace":    "New workspace…",
-	"cmd.exportWorkspace": "Export current workspace",
+	"cmd.search":            "Search commands…",
+	"cmd.noMatch":           "No matching commands",
+	"cmd.toggleTheme":       "Toggle light / dark theme",
+	"cmd.toggleSidebar":     "Collapse / expand sidebar",
+	"cmd.switchTo":          "Switch to workspace: ",
+	"cmd.newWorkspace":      "New workspace…",
+	"cmd.exportWorkspace":   "Export current workspace",
+	"cmd.backupEverything":  "Back up everything (all workspaces)",
+	"backup.everythingDone": "Backed up every workspace to a file.",
+	"backup.everythingErr":  "Couldn't build the backup file.",
 
 	// Passcode lock (B17)
 	"applock.unlockPrompt":      "Enter your passcode to unlock",
