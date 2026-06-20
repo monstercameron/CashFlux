@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L5 payoff burn-down chart
+
+- L5 gap 4 (timeline chart). Exposed an additive payoff.Plan.Schedule []int64 from BuildPlan = the remaining
+  total balance at the end of each month (recorded as sumAfter each loop iteration); len == Months, last is 0,
+  non-increasing. Table-tested (schedule_test.go): length/ends-at-zero/monotone, and an exact single-debt
+  burn-down (10000 at $40/mo, no interest -> 6000,2000,0). Existing payoff + planning tests unaffected.
+- planning.go: in the viable debt plan, render a uiw.Chart area burn-down (chartspec.Area) from the avalanche
+  schedule, prepending the full starting balance as month 0 so it falls from the total to zero; major-unit Y with
+  the "$.2~s" compact format like the net-worth trend. "Balance burn-down to zero:" heading; chart is a
+  .cf-chart[role=img] div. Bumped sw v204->v205.
+- E2E (story_payoff_chart.test.mjs): with an extra entered (viable plan), assert the heading + the
+  .cf-chart[aria-label*="Debt balance falling to zero"] render. Full suite 38/0 green; go test ./internal/payoff
+  green; wasm green.
+- Next L5 gap 5: payoff progress tracking vs a stored baseline of starting balances (needs a store snapshot; pure
+  progress calc + a progress strip). After that, L6-L14.
+
 ## 2026-06-20 - feat: L5 exclude debts (mortgage by default) from the payoff plan
 
 - L5 gap 3: including the mortgage makes the plan ~170 months and dominates it. Added an additive

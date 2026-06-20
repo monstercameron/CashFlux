@@ -447,6 +447,36 @@ func Planning() ui.Node {
 						orderParts[i] = n
 					}
 				}
+				// Burn-down chart (L5 gap 4): the remaining total balance falling to
+				// zero, from the full starting balance through the avalanche schedule.
+				burnChart := Fragment()
+				if len(aval.Schedule) > 0 {
+					divf := 1.0
+					for k := 0; k < currency.Decimals(base); k++ {
+						divf *= 10
+					}
+					var startTotal int64
+					for _, d := range debts {
+						startTotal += d.Balance
+					}
+					burnPts := make([]chartspec.Point, 0, len(aval.Schedule)+1)
+					burnPts = append(burnPts, chartspec.Point{X: 0, Y: float64(startTotal) / divf})
+					for i, b := range aval.Schedule {
+						burnPts = append(burnPts, chartspec.Point{X: float64(i + 1), Y: float64(b) / divf})
+					}
+					yFmt := ".2~s"
+					if currency.Symbol(base) == "$" {
+						yFmt = "$.2~s"
+					}
+					burnChart = Div(Style(map[string]string{"margin-top": "0.6rem"}),
+						P(Class("budget-sub"), "Balance burn-down to zero:"),
+						uiw.Chart(uiw.ChartProps{
+							Spec:   chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{{Name: "Remaining balance", Points: burnPts}}, Y: chartspec.Axis{Format: yFmt}},
+							Height: "150px",
+							Label:  "Debt balance falling to zero over " + strconv.Itoa(aval.Months) + " months",
+						}),
+					)
+				}
 				body = Div(
 					Div(Class("stat-grid"),
 						stat(uistate.T("planning.snowball"), uistate.T("planning.strategyMonths", snow.Months), ""),
@@ -458,6 +488,7 @@ func Planning() ui.Node {
 					P(Class("muted"), "Payoff order: "+strings.Join(orderParts, " → ")),
 					rec,
 					explain,
+					burnChart,
 				)
 			}
 		}

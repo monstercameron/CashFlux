@@ -59,6 +59,10 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Debt payoff burn-down chart (L5).** The debt-strategy card now draws an area chart of the remaining total
+  balance falling to zero across the payoff timeline, so the plan reads at a glance. Backed by an additive
+  `payoff.Plan.Schedule []int64` (the remaining balance at the end of each month, ending at 0) populated by
+  `BuildPlan` and table-tested (length == Months, ends at 0, non-increasing).
 - **Exclude a debt (the mortgage by default) from the payoff plan (L5).** Real debt-crusher plans target
   revolving/consumer debt, so a 30-year mortgage no longer dominates the timeline: each liability with a balance
   now has an **"include in payoff plan"** toggle in the debt-strategy card, and a **mortgage is excluded by
