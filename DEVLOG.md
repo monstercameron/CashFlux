@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: visible labels on the inline account editor + set-balance form (C49)
+
+- Extended the labeledField treatment from the add form to the per-row inline editor and the "set balance" form, so
+  every account field is self-describing in all three entry paths. The name input keeps its acct-edit-<id> id inside
+  the wrapping <label>, so the open-editor focus effect (focusByID) still lands the cursor there.
+- Extended accounts_labels_check.mjs: after the add-form assertions it now clicks the first row's Edit button and
+  asserts the .row-edit form renders .acct-field labels (Name/Owner/Opening balance). PASS. App wasm builds clean;
+  gofmt clean. Bumped sw v212->v213. Committed by pathspec; parallel session's files + TODOS.md untouched.
+- C49 status: currency-select (pre-existing) done, number constraints done, visible labels (add + edit + set-balance)
+  done. Remaining: an "Advanced" disclosure to fold the optional asset fields (item 4) and icon-only row actions on
+  narrow widths (item 5) — both likely want CSS in index.html (still parallel-dirty), so deferred until it frees up.
+  Next likely C50 (Budgets), uncontested.
+
 ## 2026-06-20 - feat: L8 suggested starter questions for Insights Q&A
 
 - L8 first gap: a blank Ask box with one placeholder stalls users. Added pure insights.SuggestedQuestions(

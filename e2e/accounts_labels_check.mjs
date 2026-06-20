@@ -35,8 +35,22 @@ try {
     if (!texts.some((t) => t.trim() === want)) fail(`missing visible label "${want}" (saw: ${texts.join(", ")})`);
   }
 
+  // The inline-edit form is labeled too: open the first account's editor and
+  // assert it renders labeled fields with the common labels visible.
+  const edit = page.getByRole("button", { name: "Edit" }).first();
+  if (await edit.count()) {
+    await edit.click();
+    await page.waitForSelector(".row-edit .acct-field", { timeout: 5000 });
+    const editTexts = await page.locator(".row-edit .acct-field span").allInnerTexts();
+    for (const want of ["Name", "Owner", "Opening balance"]) {
+      if (!editTexts.some((t) => t.trim() === want)) fail(`inline-edit missing visible label "${want}" (saw: ${editTexts.join(", ")})`);
+    }
+  } else {
+    fail("no account row Edit button found to verify the inline-edit labels");
+  }
+
   if (errors.length) fail("page errors: " + errors.join(" | "));
-  if (!process.exitCode) console.log(`PASS: account add form — ${count} labeled fields with persistent visible labels.`);
+  if (!process.exitCode) console.log(`PASS: account add form — ${count} labeled fields; inline-edit form labeled too.`);
 } finally {
   await browser.close();
 }

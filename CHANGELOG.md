@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The inline account editor and the set-balance form now have visible labels too (C49).** Extends the add-form
+  labelling to the per-row edit form and the "set balance" form, so every account field is self-describing in every
+  entry path (not just when adding). Uses the same `labeledField` wrapper; the `accounts_labels_check` e2e now also
+  opens a row's editor and asserts the labels render.
 - **The Add-account form now has persistent visible labels (C49).** Every field in the add form was placeholder-only,
   so the label vanished once you typed (and several — APR, Liquidity, Stability, Due day — were cryptic empty number
   boxes). Each control is now wrapped in a labeled field with visible text above it (Name, Account type, Owner,
