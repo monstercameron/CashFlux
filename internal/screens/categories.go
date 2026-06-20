@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/mermaid"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -217,6 +218,11 @@ func Categories() ui.Node {
 			H2(Class("card-title"), uistate.T("categories.incomeTitle")),
 			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), FocusID: "cat-add"}), Div(Class("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
 		),
+		// Visual category map: the hierarchy as a Mermaid graph (C70/C63 tree view).
+		If(len(cats) > 0, Section(Class("card"),
+			H2(Class("card-title"), "Category map"),
+			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.FromCategories(cats), Label: "Category hierarchy diagram"}),
+		)),
 	)
 }
 

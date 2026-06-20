@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: wire the category-map Mermaid diagram (C70/C63)
+
+- Second wired Mermaid case (renderer landed last iteration). Categories() now renders a "Category map" card after
+  the expense/income lists: uiw.Mermaid(mermaid.FromCategories(cats)) — the hierarchy as a graph (also satisfies
+  C63's "tree view" want). categories.go was uncontested; added the mermaid import; literal card title/label
+  (en.go parallel-dirty).
+- New categories_diagram_check.mjs: /categories → asserts .cf-mermaid svg renders. PASS. App wasm builds clean;
+  gofmt clean. Committed via git commit -- <paths>; TODOS.md untouched. index.html already loads mermaid (from the
+  renderer commit), so no web-file edits this time — clean of the parallel index.html churn.
+- Two diagrams now visible: /workflows (flowcharts) + /categories (tree). Next: sankey generator or another slice.
+
 ## 2026-06-20 - feat: C81 phase 1 — AI provider registry (pure package)
 
 - Took C81 phase 1 (aiprovider area clean + un-taken; other agent on Mermaid C70). The ticket's key finding is that

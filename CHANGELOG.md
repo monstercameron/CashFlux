@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Category map diagram on the Categories screen (C70/C63).** The category hierarchy now renders as a Mermaid
+  graph beneath the lists, via `uiw.Mermaid` over `mermaid.FromCategories` — a second wired diagram alongside the
+  Workflows flowcharts. Covered by a new `categories_diagram_check` e2e (asserts real `<svg>`).
 - **AI provider registry (C81 phase 1, logic).** New pure, table-tested `internal/aiprovider` models the inference
   providers CashFlux can use: a `Provider`/`Model`/`Capabilities` type set, a `Dialect` enum (one `openai` dialect
   covers OpenAI/OpenRouter/Cerebras/DeepSeek/GLM/Kimi; `anthropic` is the one needing its own wire), an auth-style
