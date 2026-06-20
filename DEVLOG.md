@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: B16 story — create a goal + contribute
+
+- Fourth B16 story (e2e/story_add_goal.test.mjs): create a savings goal (name #goal-add + target aria-required
+  + an initial saved amount in the second, non-required number field), then drive the per-row contribute flow
+  — click the row's Contribute button, fill the revealed `#goal-contrib-<id>` form, save — and assert the saved
+  amount advances (100 + 250 = 350), shows in the goal row, and persists across reload. Targeted the row via
+  `.budget` hasText NAME and the contribute input via `input[id^="goal-contrib-"]` (id is goal-id-suffixed).
+- Test-only, no sw bump. Next: settings export→import round-trip, then an aggregating story runner.
+
 ## 2026-06-19 - test: B16 story — create a budget + pick its period
 
 - Third B16 story (e2e/story_add_budget.test.mjs): create a Weekly budget via the Budgets add form (add()
