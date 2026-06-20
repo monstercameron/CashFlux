@@ -29,7 +29,10 @@ and every commit updates this file under `Unreleased`.
   saved budget carries the chosen period), **create a goal + contribute** (adds a goal, contributes to it,
   and confirms the saved amount advances and persists), and **settings export→import round-trip** (exports the
   dataset, imports it back, re-exports, and proves the round-trip is lossless — same entities preserved). The
-  start of B16's "every feature, provably flawless" story suite (`e2e/story_*.test.mjs`).
+  start of B16's "every feature, provably flawless" story suite (`e2e/story_*.test.mjs`). The whole suite —
+  every story plus the feature checks (theme/fonts/banner/icon-weight/density-unify/per-widget-color) — now
+  runs as one command, `e2e/run-stories.ps1` (builds the wasm once, serves it, runs each `.mjs` in a fresh
+  browser, exits non-zero on any failure): currently **14 green**.
 - **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
   settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
   that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and

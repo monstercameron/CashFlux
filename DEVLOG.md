@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: aggregating E2E suite runner (run-stories.ps1)
+
+- Tied the suite together: e2e/run-stories.ps1 builds wasm once, serves web/ on :8099, then runs every
+  *.test.mjs (nav, rerender, the 5 B16 stories) and *_check.mjs (theme/font×3/banner/unify/icon-weight/
+  widget-color feature checks) — each in its own fresh browser so they're isolated — and exits non-zero if any
+  fail. theme_shot.mjs (screenshot-only, no assertions) is excluded. First full run: 14 passed, 0 failed.
+- Gotcha: PowerShell 5.1 reads a non-BOM UTF-8 .ps1 in the ANSI codepage, so box-drawing/ellipsis chars
+  (U+2500 / U+2026) corrupted string termination and the script wouldn't parse. Rewrote it ASCII-only. (Good
+  reminder for any future committed .ps1.)
+- Test infra only, no sw bump. B16 now has a real, runnable suite covering the core CRUD journeys + all the
+  B20 appearance features. Next B16 stories: members/categories reassign-on-delete, to-do toggle, transactions
+  filter persistence, reconcile/cleared — or wire this runner into CI.
+
 ## 2026-06-19 - test: B16 story — settings export→import round-trip (lossless)
 
 - Fifth B16 story (e2e/story_settings_roundtrip.test.mjs): the data-integrity teeth. Click Export JSON (capture
