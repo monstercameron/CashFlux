@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C78 phase 1 — diff-based change history (pure)
+
+- Took C78 phase 1 (internal/history area clean + un-taken; other agent on Mermaid). The ticket's locked approach is
+  diff-based, not command-pattern: the win is cascades (transfer-pair delete, reassign-on-delete, cover-budget)
+  reverse for FREE because the inverse is computed from the diff, not hand-written.
+- Key purity call: the ticket frames the differ over store.Dataset, but to stay non-contended I made it GENERIC —
+  Snapshot = map[collection]map[id]json.RawMessage. So it diffs all ~20 collections without importing store/appstate
+  (phase 2's commit seam adapts Dataset↔Snapshot — that's the contended step). encoding/json only.
+- history.go: Diff (deterministic, sorted; unchanged rows omitted) + Invert (add↔delete, update swap) + Apply
+  (returns a fresh clone, never mutates input — verified by a test). stack.go: bounded Stack with cursor-based
+  undo/redo, redo-tail discard on diverging Push, byte-cap drop-oldest (autosave-style), and PushCoalescing that
+  merges rapid same-row edits into ONE undo step preserving the original Before (so one undo reverts the burst).
+- 11 test funcs incl. forward+inverse round-trip restore and coalesce-same-row-vs-different. go test green.
+  Committed cdd8a17. Phases 2-4 (appstate commit seam with actor/replaying flag, SQLite audit_log + redaction +
+  persistence, UI: toast-undo / ⌘Z / Activity timeline) all touch contended files — deferred.
+- Pure-foundation stack now: C69 tokens, C83 filter, C81-p1 providers, C82 agent loop, C78-p1 history — all
+  ready-but-unwired pending the contended shared files.
+
 ## 2026-06-20 - feat: Sankey Mermaid generator (C70 follow-on)
 
 - Fourth C70 generator. mermaid.Sankey([]SankeyFlow{From,To,Value}) emits sankey-beta source (header + blank line +

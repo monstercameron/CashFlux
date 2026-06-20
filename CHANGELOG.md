@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Split settle-up who-owes-whom diagram (C70).** The Split screen's settle-up card now renders a Mermaid digraph
+  (debtor → payer, labelled with the amount) via `uiw.Mermaid` over `mermaid.FromSettleUp` — a third wired diagram.
+  Covered by a new `split_diagram_check` e2e (asserts real `<svg>`).
+- **Diff-based change-history core for undo/redo (C78 phase 1, logic).** New pure, table-tested `internal/history`:
+  a `Snapshot` (collection → id → row JSON) and `Diff(before, after)` that yields a minimal, deterministic
+  `ChangeSet` of add/update/delete changes, `Invert()` (so undo applies the inverse — cascades reverse for free),
+  and `Apply()` (returns a new snapshot, never mutates input). Plus a bounded undo/redo `Stack` with a redo-tail
+  discard, a byte cap that drops oldest, and same-row coalescing so a burst of rapid edits is one undo step. Generic
+  over the dataset (no store/appstate import); the commit seam, SQLite audit log, and UI are later phases.
 - **Sankey Mermaid generator (C70).** `internal/mermaid.Sankey` emits `sankey-beta` money-flow source from weighted
   flows (CSV-quoting labels and skipping non-positive weights) — the foundation for an income→categories→savings/debt
   flow chart. Pure + table-tested; fourth of the C70 generators.
