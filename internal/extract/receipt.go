@@ -49,6 +49,17 @@ func (r Receipt) LinesTotalMinor(decimals int) (int64, error) {
 	return linesTotalMinor(r.Lines, decimals)
 }
 
+// TotalMinor parses the receipt's total to integer minor units (tolerating the
+// $/comma formatting a model emits).
+func (r Receipt) TotalMinor(decimals int) (int64, error) {
+	return parseAmountMinor(r.Total, decimals)
+}
+
+// AmountMinor parses a line's amount to integer minor units.
+func (l ReceiptLine) AmountMinor(decimals int) (int64, error) {
+	return parseAmountMinor(l.Amount, decimals)
+}
+
 // Residual returns total minus the sum of the lines, in minor units: 0 means the
 // splits reconcile to the total to the cent, a positive value means the lines fall
 // short of the total (unassigned remainder), and a negative value means they

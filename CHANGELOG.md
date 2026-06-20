@@ -45,6 +45,14 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Import a receipt as one split transaction, with category mapping + rules (L3).** `appstate.ImportReceipt`
+  turns a reconciled `extract.Receipt` into a single expense transaction whose category splits sum to the total
+  (so it counts once against the account yet reports per-category spend). Each line's free-text category is
+  resolved to a real category — the extracted per-line category by name first (exact, then fuzzy substring), then
+  a fallback through the user's auto-categorization rules on the line + merchant (so a "Costco → Groceries" rule
+  still applies). Amounts import as expenses (negative), a single-category receipt also tags the transaction, and
+  non-reconciling / account-less imports are rejected. Unit-tested (name mapping, merchant-rule fallback,
+  validation).
 - **Transaction category-split model (L3).** `domain.Transaction` gains an additive `Splits []CategorySplit`
   (`omitempty`) so a single bank charge can carry a per-category breakdown — a grocery receipt counts once
   against the account yet reports produce/dairy/household spend separately. Pure helpers `SplitsTotal`,

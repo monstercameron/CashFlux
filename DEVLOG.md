@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L3 ImportReceipt + category mapping/rules (state)
+
+- L3 steps 2+4 (state + category resolution). appstate.ImportReceipt(receipt, accountID, date): validates the
+  receipt reconciles, builds ONE domain.Transaction with Amount = -total and a CategorySplit per line
+  (amounts negated to expenses), validates SplitsReconcile, and persists via the existing PutTransaction. A
+  single-category receipt also sets tx.CategoryID.
+- Category mapping (the "map free text -> real category + run Rules" item): mapReceiptCategory prefers the
+  extracted per-line category by name (resolveCategoryName: exact case-insensitive, then fuzzy substring either
+  way over expense categories), and only when the line has no usable category falls back to rules.FirstMatch on
+  (line description + merchant) against the user's rules — so the per-line vision categories win, but a
+  "Costco -> Groceries" merchant rule still catches uncategorized lines. Added exported extract helpers
+  Receipt.TotalMinor / ReceiptLine.AmountMinor so appstate can read minor units without duplicating the $/comma
+  stripping.
+- Tests (appstate/receipt_test.go): a 2-line Costco receipt -> one txn, -1500, splits mapped groc/house by name,
+  reconciling; an uncategorized line at Costco -> groc via the merchant rule + tx.CategoryID set; non-reconciling
+  and account-less imports rejected. go test ./internal/appstate ./internal/extract green; wasm green. No sw bump
+  (no UI yet).
+- Next L3: documents.go Receipt-vs-Statement toggle on the AI import review (one txn, editable per-line splits,
+  running remainder via Receipt.Residual, Import gated on reconcile) + e2e/screenshot.
+
 ## 2026-06-20 - feat: L3 transaction category-split model
 
 - L3 step 1 (model). domain.Transaction now has an additive `Splits []CategorySplit` (json omitempty), so a
