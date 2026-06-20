@@ -14,6 +14,11 @@ and every commit updates this file under `Unreleased`.
   monthly ×12 / quarterly ×4 / yearly ×1); the screen FX-converts and sums those.
 
 ### Added
+- **Rule match-count + coverage preview on the Rules screen (L15).** The Rules screen now wires up the L15 preview
+  logic: each rule row shows "Matches N transactions" (how many existing transactions its phrase hits) and the
+  list card shows a coverage line "Your rules auto-file N of M transactions" — so you can see what a rule does to
+  your data before hitting "Apply to existing". The counted text mirrors the engine (payee + description). Covered
+  by a new `rules_preview_check` e2e.
 - **Click a detected subscription to see its charges (C56).** A subscription's name is now a button that opens
   Transactions searched for that payee, so you can verify the auto-detection against the underlying charges —
   the same drill pattern as Budgets/Goals/Accounts (C30/C56). Covered by a new `subscriptions_drill_check` e2e.

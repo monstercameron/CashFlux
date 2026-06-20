@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: rule match-count + coverage preview UI (L15)
+
+- First wasm-UI wiring since the contention pivot. Checked the targets specifically: en.go/rules.go/bills_screen.go/
+  shortcuts.go all clean, parallel session had moved to docs/markdown (README/.github/CONTRIBUTING) — UI layer
+  quiet. Green light, so I took the L15 rule preview wiring (avoided bills_screen.go since they'd just committed
+  C57 there).
+- internal/screens/rules.go: build texts = payee+" "+desc for every transaction (mirrors the engine at entry/
+  import), pass r.MatchCount(texts) + a ShowMatchCount flag into RuleRow (new "Matches N transactions" meta span),
+  and add a coverage line "Your rules auto-file N of M transactions" via rules.Covered on the list card. Two new
+  i18n keys (rules.matchCountMeta, rules.coverage) added with surgical Edits on the rules.acceptTitle anchor.
+- Verification: gofmt clean; built wasm (GOOS=js GOARCH=wasm -o web/bin/main.wasm) — compiled; new
+  rules_preview_check.mjs (add a rule, assert a row's "Matches N" + the coverage line) PASSED standalone twice on
+  the live 8099 server. Committed by pathspec (en.go + rules.go + the e2e ONLY; wasm git-ignored, sw.js untouched);
+  a5375b2. en.go edit landed without clobbering — the surgical-Edit + immediate-atomic-commit discipline held.
+- Next: more deferred wasm-UI wiring while the UI layer stays quiet (cmdmatch palette in shortcuts.go, backup-
+  everything action, affordability hook), each gated on re-checking its target + en.go is clean; else pure reports.
+
 ## 2026-06-20 - fix: cadence-correct Bills annual figure (C57)
 
 - C57 item 2 (flagged correctness). bills_screen showed annual = total×12, where total is the sum of the current
