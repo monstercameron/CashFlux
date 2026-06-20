@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Category-tree Mermaid generator (C70).** `internal/mermaid.FromCategories` renders a category hierarchy as a
+  left-to-right graph (parent→child edges), with generated node ids so unsafe category IDs can't break the syntax
+  and orphan parent references don't produce dangling edges. Pure + table-tested; second of the C70 generators.
 - **"Restore from a backup file" — the L9 import half.** The inverse of the full-install export: a command-palette
   action that picks a backup `.json`, validates it via the `backup` envelope, confirms the destructive replace, and
   writes the workspace registry, appearance side-state, and every workspace's dataset back into place before

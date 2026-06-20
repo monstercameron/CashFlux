@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
@@ -135,6 +136,32 @@ func FromWorkflow(w workflow.Workflow) string {
 		}
 		f.Edge(prev, id, edge)
 		prev = id
+	}
+	return f.String()
+}
+
+// FromCategories renders a category hierarchy as a left-to-right graph: each
+// category is a node, and every category with a known parent gets a parent→child
+// edge (so the tree's nesting is visible). Node ids are generated (c0, c1, …) so a
+// category ID containing Mermaid-unsafe characters can never break the syntax;
+// labels are escaped. Orphan parent references (parent not in the set) render the
+// child as a root rather than a dangling edge.
+func FromCategories(cats []domain.Category) string {
+	f := NewFlowchart("LR")
+	idToNode := make(map[string]string, len(cats))
+	for i, c := range cats {
+		idToNode[c.ID] = "c" + strconv.Itoa(i)
+	}
+	for i, c := range cats {
+		f.Node("c"+strconv.Itoa(i), c.Name, ShapeBox)
+	}
+	for i, c := range cats {
+		if c.ParentID == "" {
+			continue
+		}
+		if parent, ok := idToNode[c.ParentID]; ok {
+			f.Edge(parent, "c"+strconv.Itoa(i), "")
+		}
 	}
 	return f.String()
 }

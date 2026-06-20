@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
@@ -76,5 +77,29 @@ func TestFromWorkflow(t *testing.T) {
 	}
 	if strings.Contains(src2, "cond") {
 		t.Errorf("conditionless workflow should have no condition node:\n%s", src2)
+	}
+}
+
+func TestFromCategories(t *testing.T) {
+	cats := []domain.Category{
+		{ID: "food", Name: "Food", Kind: domain.KindExpense}, // c0, root
+		{ID: "dining", Name: "Dining", ParentID: "food"},     // c1, child of c0
+		{ID: "grocery", Name: "Grocery", ParentID: "food"},   // c2, child of c0
+		{ID: "orphan", Name: "Orphan", ParentID: "missing"},  // c3, parent not in set → root
+	}
+	src := FromCategories(cats)
+	for _, want := range []string{
+		"flowchart LR\n",
+		`c0["Food"]`, `c1["Dining"]`, `c2["Grocery"]`, `c3["Orphan"]`,
+		`c0 --> c1`, // food → dining
+		`c0 --> c2`, // food → grocery
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("category graph missing %q in:\n%s", want, src)
+		}
+	}
+	// The orphan's missing parent must NOT produce a dangling edge.
+	if strings.Contains(src, "--> c3") {
+		t.Errorf("orphan child with an unknown parent should have no edge:\n%s", src)
 	}
 }

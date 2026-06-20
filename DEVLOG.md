@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: category-tree Mermaid generator (C70 follow-on)
+
+- Continued C70's pure generator layer (C83 multi-select was the alternative but it's a breaking txnfilter change
+  that ripples into the contested transactions.go and can't compile in isolation — deferred). Added
+  mermaid.FromCategories(cats): a flowchart LR with one node per category and a parent→child edge for each category
+  whose ParentID resolves in the set. Node ids are generated (c0,c1,…) so a Mermaid-unsafe category ID can't break
+  syntax; labels escaped; an orphan parent reference yields a root node, not a dangling edge.
+- TestFromCategories (native): root + two children + an orphan-parent → asserts the nodes, the two parent→child
+  edges, and that the orphan produces no "--> c3" edge. go test ./internal/mermaid green; vet clean; app wasm
+  builds; gofmt clean. Imports internal/domain (pure). Committed via git commit -- <paths>; TODOS.md untouched.
+- Full session e2e was re-verified green earlier this turn (23/23 screen checks); also cleaned a stale serve.go that
+  had been squatting port 8099. Next: more C70 generators (settle-up digraph, sankey) or another uncontested slice.
+
 ## 2026-06-20 - stock-take: L-series cleared for this session's scope
 
 - Scanned the full L-series (L1–L39, more than the original L1–L17). The named feature/UI work is done (L8/L9/L13/
