@@ -59,6 +59,25 @@ func Insights() ui.Node {
 	// The only financial data sent to the model: aggregates, no PII (see ai.FinancialContext).
 	aiCtx := ai.FinancialContext{NetWorth: fmtMoney(net), Income: fmtMoney(income), Spending: fmtMoney(expense), Accounts: active}
 
+	// Starter questions for the Ask box (L8): tailored to this month's top spend
+	// category so a blank box never stalls the user.
+	topCatSpend := map[string]int64{}
+	for _, t := range txns {
+		if t.IsExpense() && dateutil.InRange(t.Date, mStart, mEnd) {
+			if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
+				topCatSpend[t.CategoryID] += conv.Amount
+			}
+		}
+	}
+	topCat := ""
+	var topAmt int64
+	for _, c := range app.Categories() { // category order → deterministic on ties
+		if topCatSpend[c.ID] > topAmt {
+			topAmt, topCat = topCatSpend[c.ID], c.Name
+		}
+	}
+	starters := insights.SuggestedQuestions(insights.QuestionContext{TopCategory: topCat})
+
 	result := ui.UseState("")
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
@@ -234,6 +253,15 @@ func Insights() ui.Node {
 		),
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("insights.askTitle")),
+			// Tappable starter questions so a blank box never stalls the user (L8).
+			If(len(starters) > 0, Div(Class("flex flex-wrap gap-2 mb-2"),
+				MapKeyed(starters,
+					func(q string) any { return q },
+					func(q string) ui.Node {
+						return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: func(s string) { question.Set(s) }})
+					},
+				),
+			)),
 			// The Q&A needs a key; show the box either way so the feature is visible,
 			// with a disabled preview + key hint when no key is set (C9).
 			If(key != "" || useBackendAI, Form(Class("form-grid"), OnSubmit(ask),
@@ -241,7 +269,9 @@ func Insights() ui.Node {
 				Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("submit"), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.ask"))),
 			)),
 			If(key == "" && !useBackendAI, Div(
-				Input(Class("field field-wide"), Type("text"), Attr("disabled", "disabled"), Placeholder(uistate.T("insights.askPlaceholder"))),
+				// Disabled preview still reflects a picked starter question, so the
+				// chips work as a compose aid even before a key is added.
+				Input(Class("field field-wide"), Type("text"), Attr("disabled", "disabled"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(question.Get())),
 				P(Class("muted"), uistate.T("insights.keyHint")),
 			)),
 		),
@@ -277,6 +307,18 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 		),
 		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("insights.unpinTitle")), Title(uistate.T("insights.unpinTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
+}
+
+type suggestChipProps struct {
+	Q      string
+	OnPick func(string)
+}
+
+// suggestChip renders one tappable starter question that fills the Ask box. Its own
+// component so the click handler's hook stays stable across the chip list.
+func suggestChip(props suggestChipProps) ui.Node {
+	q, onPick := props.Q, props.OnPick
+	return Button(Class("btn chip-suggest"), Type("button"), OnClick(func() { onPick(q) }), q)
 }
 
 // spendingHighlights renders an offline "what changed" card: it detects
