@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C74 delimited statement parser (pure)
+
+- Took C74's pure extraction/mapping slice (internal/statement area free + un-taken; other agent on Mermaid).
+  First confirmed internal/extract does NOT cover this — it parses AI-vision JSON replies, not delimited statements.
+- New internal/statement: DetectDelimiter + MapColumns (header heuristics) + ParseAmount (currency/commas/parens/
+  DR-CR/sign → signed minor units, delegating the final numeric to money.ParseMinor) + ParseDate (multi-layout,
+  MM/DD-first then DD/MM fallback) + Parse → []Row, amount = Amount col or Credit−Debit, bad rows skipped with line
+  numbers, unmappable header rejected. Reused money.ParseMinor + kept date layouts in-package (dateutil is ISO-only).
+- Two snags fixed: (1) I literally typed a UTF-8 BOM into a Go string literal → "illegal byte order mark"; the Edit
+  tool kept re-inserting the BOM when I tried to type the ﻿ escape, so I built the backslash from [char]92 in
+  PowerShell to write the escape as ASCII. (2) A debit/credit test used DD/MM dates the MM/DD-first parser rejected
+  → added DD/MM fallback layouts (strictly more lenient; day>12 resolves unambiguously). go test green. ae1a4f2.
+- Documents-screen wiring (mapping UI, AI categorization, dedupe) is the contended later step. Pure-foundation stack
+  now: C69, C83, C81-p1, C82, C78-p1, C74 — six tested foundations awaiting their contended wiring.
+
 ## 2026-06-20 - feat: wire the money-flow Sankey into Reports (C70)
 
 - Fourth (and "highest wow") wired Mermaid case. Reports builds moneyFlows []mermaid.SankeyFlow: one Income→category
