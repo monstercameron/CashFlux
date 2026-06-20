@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: pure Markdown parser for AI answers (C59, logic)
+
+- Insights AI answers render as a flat paragraph today even though the model emits lists/bold/headings (C59). Built
+  the bottom-up half: a dependency-free `internal/markdown.Parse` → `[]Block` (Paragraph/Heading/List/Code) with
+  inline spans (Text/Strong/Emphasis/CodeSpan/Link). Block parsing is line-based (fenced code, ATX headings,
+  homogeneous bullet/ordered lists, soft-wrapped paragraphs); inline parsing is a single left-to-right scan with
+  code-first precedence so `` `**x**` `` stays literal.
+- Design choice: the package returns an AST, not framework nodes — a pure logic package can't import the wasm `ui`
+  layer, and keeping the tree pure means it unit-tests natively (12 block cases + 10 inline cases, all green) and
+  the renderer stays the single security boundary (it will emit only known elements, never raw HTML — C59 a11y
+  note). Forgiving by design: unterminated `**`/`` ` `` and malformed `[..]` fall back to literal text.
+- Deferred the screen wiring deliberately: insights.go is actively churned by the parallel session (recent C59/L8
+  commits), so wiring the block-tree→nodes renderer is its own later slice once this lands. Committed the package
+  alone via git commit -- <paths>; TODOS.md untouched.
+
 ## 2026-06-20 - fix: label the Documents importer account picker (C49/B15)
 
 - The account `Select` on the Documents importer (both the CSV-draft footer and the receipt-import footer) had
