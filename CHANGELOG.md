@@ -19,6 +19,11 @@ and every commit updates this file under `Unreleased`.
   backend can't surface websocket connection errors the user can't dismiss. Backed by a new (inverted, default-on)
   `BackendDisabled` pref and a central `prefs.BackendActive()` predicate that every sync and AI-proxy path now
   gates on. Covered by a new `settings_backend_toggle_check` e2e.
+- **Insights system-prompt assembler (C89 prompts, logic).** New pure, table-tested `internal/aiprompt`: `System`
+  composes the agent's system prompt from the house rules (determinism — narrate computed figures, never invent
+  numbers; call a tool for exact values; plain English), the bounded context block (`aicontext`), and a tool
+  manifest (`agent.Registry` specs). Empty context/tools sections are omitted. The "prompts" piece that ties the
+  context and tools together.
 - **Anthropic Messages-dialect shaping (C81 phase 3, logic).** New pure, table-tested `internal/anthropic` builds
   the Anthropic `/messages` request body and parses its response — the one wire dialect that isn't OpenAI-compatible.
   It models the differences: a top-level `system` field, required `max_tokens`, tools with `input_schema`, and

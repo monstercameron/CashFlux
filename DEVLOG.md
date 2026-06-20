@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C89 prompts — system-prompt assembler (pure)
+
+- The "prompts" half of C89 / the MCP triad (resources=aicontext, tools=aitools, prompts=aiprompt). New pure
+  package internal/aiprompt: System(contextBlock, tools) leads with house rules (determinism: narrate computed
+  figures, never invent numbers; call a tool for exact values; plain English), then the aicontext block, then a
+  "## Tools" manifest from agent.Registry specs. Decoupled: takes the rendered context as a STRING (no aicontext
+  import) + []agent.ToolSpec, so it composes the existing pieces without the contended insights/ai layer.
+- 3 tests (full prompt rules-first+context+tools; empty→rules only; tool-without-description→name only). go test
+  green. Committed 41aca30.
+- Insights/AI pure scaffolding now COMPLETE: aiprovider (gpt-5.5/profiles/anthropic caps), internal/anthropic
+  (dialect), aicontext (resources), aitools (read tools), aiprompt (prompts), agent (loop), afford/cashflow/runway/
+  txnfilter reused. The MCP triad + dialects + context + tools + prompt are all pure+tested. EVERYTHING REMAINING is
+  contended wiring: C81-p2 transport (internal/ai: Responses/websocket/streaming + AIConfig + key migration + redact-
+  all), C89-p3 write-tools (appstate+C78), C81-p4/p5 settings UI + gating, C59 insights.go result-slots/streaming/
+  truncation, L8 chips, polish. Next: take internal/ai (C81-p2) when clear — it's the keystone the UI needs.
+
 ## 2026-06-20 - fix: label the category form selects (C63/B15)
 
 - Closed the C63 labelling item: the category type + parent selects (add form and inline-edit form) had no
