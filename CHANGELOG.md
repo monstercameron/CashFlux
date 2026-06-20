@@ -45,6 +45,14 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Receipt-mode logic — one charge split across categories (L3, bottom-up start).** `internal/extract` gains a
+  `Receipt` (a single total plus categorized `ReceiptLine` splits) distinct from a statement: a statement is many
+  charges → many transactions, a receipt is one charge → one transaction split across categories (so importing a
+  grocery receipt no longer double-counts against the single card charge or breaks dedupe). `ReceiptFromRows`
+  turns extracted vision rows into a receipt (defaulting the total to the line sum), and `Residual`/`Reconciles`
+  check that the splits sum to the total to the cent. Tolerates the `$`/comma formatting models emit. Table-
+  tested: reconcile, short/over remainder, discount (negative) lines, currency-symbol parsing, and unparsable
+  amounts.
 - **Split screen "Settle up" panel — who owes whom across every saved split (L2).** The Split calculator can now
   **Save split** (with an optional "what was it for?" note), recording it as a shared expense. A new **Settle up**
   card then shows the running balance across every saved split — each member's net ("is owed $X" / "owes $X") —

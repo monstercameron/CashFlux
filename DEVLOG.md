@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L3 receipt-mode logic (pure, bottom-up)
+
+- L3 core gap: vision extraction yields N independent rows, so importing a grocery receipt creates many
+  standalone transactions that double-count against the single card charge and break dedupe. The fix is "receipt
+  mode" — one charge split across categories. Started bottom-up with the pure logic.
+- internal/extract/receipt.go: ReceiptLine{Description, Category, Amount} and Receipt{Date, Merchant, Total,
+  Lines}. ReceiptFromRows(rows, date, merchant, totalHint, decimals) maps extracted vision Rows into receipt
+  lines (defaulting Total to the line sum when no printed total). Residual(decimals) = total - sum(lines) in
+  minor units (0 = reconciled to the cent, + = unassigned remainder, - = overshoot); Reconciles wraps it.
+  parseAmountMinor strips the $/commas a model emits before money.ParseMinor.
+- Tests (receipt_test.go): reconcile to total, short/over remainder, a discount (negative) line netting down,
+  "$1,234.50" parsing, and unparsable-amount errors. go test ./internal/extract green; gofmt clean.
+- Next L3 (bottom-up): a transaction-level category-split model in internal/domain + store/appstate, then the
+  documents.go Receipt-vs-Statement toggle with an editable split table that must reconcile before Import; plus
+  mapping the extracted free-text category to a real category through the Rules engine.
+
 ## 2026-06-20 - fix: L3 receipt capture opens the mobile camera
 
 - Started L3 ("The Receipt Snap") with its smallest, highest-value isolated fix. pickImageDataURL in
