@@ -40,13 +40,15 @@ and every commit updates this file under `Unreleased`.
   two accounts and confirms the paired legs are created while the Income/Spending KPIs stay unchanged), and
   **account archive + restore** (archives an account via its row menu and restores it, confirming the archived
   flag round-trips), and **sub-category nesting** (adds a parent and a child category and confirms the child
-  links to the parent while the parent stays top-level — the linkage the tree rollup is built on).
+  links to the parent while the parent stays top-level — the linkage the tree rollup is built on), and
+  **duplicate a transaction** (duplicates a ledger row and confirms a standalone copy is created — two rows,
+  neither a transfer leg).
   The
   start of B16's "every feature, provably flawless" story suite (`e2e/story_*.test.mjs`). The whole suite —
   every story plus the feature checks (theme/fonts/banner/icon-weight/density-unify/per-widget-color) — now
   runs as one command — `e2e/run-stories.ps1` (Windows) or the cross-platform `e2e/run-stories.mjs` (Node,
   CI-friendly: builds the wasm + serve binary, runs each `.mjs` in a fresh browser, exits non-zero on any
-  failure): currently **22 green**.
+  failure): currently **23 green**.
 - **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
   settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
   that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and

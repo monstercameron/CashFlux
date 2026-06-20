@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — duplicate a transaction
+
+- Fourteenth journey story (e2e/story_txn_duplicate.test.mjs): seed a txn, filter the ledger to it, click the
+  row's Duplicate button (title "Copy this transaction to today"), and assert two ledger rows with the same
+  desc and two dataset transactions named the same, neither carrying transferAccountId (a duplicate is a
+  standalone copy, not a transfer leg — the code clears TransferAccountID on duplicate). Suite now 23 green.
+  Test-only, no sw bump.
+
 ## 2026-06-20 - test: B16 story — sub-category nesting
 
 - Thirteenth journey story (e2e/story_subcategory.test.mjs): add a top-level parent category, then a child
