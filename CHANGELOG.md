@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Insights anomaly arrows use colored icons (C46).** The bare ↑/↓ direction markers on each spending
+  highlight are now arrow-up/arrow-down glyphs that inherit the row's up/down tone color via currentColor.
 - **Dashboard KPI tiles have leading header icons (C46).** Each tile header now leads with a glyph keyed off
   its stable id — Net worth (wallet), Income (down-circle), Spending (up-circle), Liabilities (credit-card),
   Recent (receipt), Budgets/Breakdown (pie), Goals (target), To-do (check), Accounts (landmark), Net-worth

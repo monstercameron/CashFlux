@@ -293,7 +293,7 @@ func spendingHighlights(txns []domain.Transaction, categories []domain.Category,
 	rows := make([]ui.Node, 0, len(anomalies))
 	for _, a := range anomalies {
 		rows = append(rows, P(Class("insight-row"),
-			Span(Class("insight-dot "+highlightTone(a)), Text(highlightArrow(a))),
+			Span(Class("insight-dot "+highlightTone(a)), uiw.Icon(highlightArrow(a), Class("w-4 h-4"))),
 			Span(highlightText(a, base)),
 		))
 	}
@@ -362,10 +362,11 @@ func highlightTone(a insights.Anomaly) string {
 	return "text-up"
 }
 
-// highlightArrow is the ↑/↓ marker for an anomaly's direction.
-func highlightArrow(a insights.Anomaly) string {
+// highlightArrow is the arrow-up/arrow-down glyph for an anomaly's direction; it
+// inherits the row's tone color via currentColor (C46).
+func highlightArrow(a insights.Anomaly) icon.Name {
 	if a.Direction == insights.Up {
-		return "↑"
+		return icon.ArrowUp
 	}
-	return "↓"
+	return icon.ArrowDown
 }
