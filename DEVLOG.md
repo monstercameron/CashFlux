@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: persistent visible labels on the add-account form (C49)
+
+- C49 item 1: the add form was placeholder-only, so labels vanished on input (and APR/Liquidity/Stability/Due day
+  read as cryptic empty number boxes). Added a labeledField(label, control) helper that wraps a control in a <label>
+  with visible text stacked above it — styled inline (flex column) so it needs no stylesheet (web/index.html is
+  dirty under the parallel session, so I'm keeping out of it). The wrapping <label> also gives the control an
+  accessible name. Applied to all add-form fields (name, type, owner, currency, opening balance + the per-type
+  fields). Kept existing aria-labels/placeholders (same text) — harmless, and placeholders still give example hints.
+- Mid-iteration the package didn't compile: the parallel session's uncommitted insights.go referenced an
+  undefined suggestChip (their WIP). I did NOT commit unverified — waited; they finished the symbol and the build
+  went green, at which point my accounts.go (independent of insights.go) type-checks. Committing accounts.go by
+  pathspec is safe regardless: HEAD's insights.go is the older working one.
+- New e2e accounts_labels_check.mjs: asserts the add form renders several .acct-field labeled fields and that
+  Name/Account type/Owner/Currency/Opening balance show as visible label text. PASS (9 labeled fields);
+  accounts_field_constraints_check still PASS (inputs still found post-wrap). App wasm builds clean; gofmt clean.
+  Bumped sw v211->v212.
+- Next (C49): the inline-edit form labels, an "Advanced" disclosure to fold the optional asset fields, and
+  icon-only row actions on narrow widths.
+
 ## 2026-06-20 - feat: number-field constraints + hints on the accounts form (C49)
 
 - Moved to C49 (Accounts) because the remaining C48 items (band layout, header pairing) overlap the dashboard/

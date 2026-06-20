@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The Add-account form now has persistent visible labels (C49).** Every field in the add form was placeholder-only,
+  so the label vanished once you typed (and several — APR, Liquidity, Stability, Due day — were cryptic empty number
+  boxes). Each control is now wrapped in a labeled field with visible text above it (Name, Account type, Owner,
+  Currency, Opening balance, and the type-specific fields), via a small `labeledField` helper; the wrapping `<label>`
+  also associates the text with its control for screen readers. Covered by a new `accounts_labels_check` e2e.
 - **Account number fields now have ranges and clearer hints (C49).** The Liquidity and Stability score inputs (both
   the add form and inline edit) are constrained to **1–5** with `min`/`max`/`step` and a visible `(1–5)` hint, and
   the Due day field is constrained to a valid **1–28** day-of-month; the money fields (credit limit, APR, minimum

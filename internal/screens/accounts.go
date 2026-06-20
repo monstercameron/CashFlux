@@ -237,20 +237,34 @@ func Accounts() ui.Node {
 	form := Section(Class("card"),
 		H2(Class("card-title"), uistate.T("accounts.addTitle")),
 		Form(Class("form-grid"), OnSubmit(add),
-			Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("acct-err", errMsg.Get())...)...),
-			Select(Class("field"), Attr("aria-label", uistate.T("accounts.typeLabel")), OnChange(onType), typeOptions),
-			Select(Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions),
-			Select(Class("field"), Attr("aria-label", uistate.T("accounts.currency")), OnChange(onCurr), currencyOptions(app, curr.Get())),
-			Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
-			If(isLiab, Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit))),
-			If(isLiab, Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Value(apr.Get()), Step("0.01"), OnInput(onApr))),
-			If(isLiab, Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minPayment.Get()), Step("0.01"), OnInput(onMinPayment))),
-			If(isLiab, Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueDay.Get()), OnInput(onDueDay))),
-			If(isLiab, Input(Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lender.Get()), OnInput(onLender))),
-			If(!isLiab, Input(Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn))),
-			If(!isLiab, Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity))),
-			If(!isLiab, Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability))),
-			If(!isLiab, Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), Value(lockUntil.Get()), OnInput(onLockUntil))),
+			labeledField(uistate.T("common.name"),
+				Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("acct-err", errMsg.Get())...)...)),
+			labeledField(uistate.T("accounts.typeLabel"),
+				Select(Class("field"), Attr("aria-label", uistate.T("accounts.typeLabel")), OnChange(onType), typeOptions)),
+			labeledField(uistate.T("common.owner"),
+				Select(Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
+			labeledField(uistate.T("accounts.currency"),
+				Select(Class("field"), Attr("aria-label", uistate.T("accounts.currency")), OnChange(onCurr), currencyOptions(app, curr.Get()))),
+			labeledField(uistate.T("accounts.openingBalance"),
+				Input(Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+			If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
+				Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit)))),
+			If(isLiab, labeledField(uistate.T("accounts.apr"),
+				Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Value(apr.Get()), Step("0.01"), OnInput(onApr)))),
+			If(isLiab, labeledField(uistate.T("accounts.minPayment"),
+				Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minPayment.Get()), Step("0.01"), OnInput(onMinPayment)))),
+			If(isLiab, labeledField(uistate.T("accounts.dueDay"),
+				Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueDay.Get()), OnInput(onDueDay)))),
+			If(isLiab, labeledField(uistate.T("accounts.lender"),
+				Input(Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lender.Get()), OnInput(onLender)))),
+			If(!isLiab, labeledField(uistate.T("accounts.expReturn"),
+				Input(Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn)))),
+			If(!isLiab, labeledField(uistate.T("accounts.liquidity"),
+				Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity)))),
+			If(!isLiab, labeledField(uistate.T("accounts.stability"),
+				Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability)))),
+			If(!isLiab, labeledField(uistate.T("accounts.lockUntil"),
+				Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), Value(lockUntil.Get()), OnInput(onLockUntil)))),
 			MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),
@@ -381,6 +395,18 @@ func Accounts() ui.Node {
 			H2(Class("card-title"), uistate.T("accounts.archived")),
 			Div(Class("rows"), MapKeyed(archivedList, keyOf, renderRow)),
 		)),
+	)
+}
+
+// labeledField wraps a form control in a <label> with persistent visible text, so
+// the field stays self-describing after a placeholder would have vanished (C49).
+// The wrapping <label> also associates the text with the control for a11y. Styled
+// inline (stacked text-over-control) to avoid a stylesheet dependency.
+func labeledField(label string, control ui.Node) ui.Node {
+	return Label(Class("acct-field"),
+		Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
+		Span(Class("t-caption text-dim"), label),
+		control,
 	)
 }
 
