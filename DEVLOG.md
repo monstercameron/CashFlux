@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - stock-take: L-series cleared for this session's scope
+
+- Scanned the full L-series (L1–L39, more than the original L1–L17). The named feature/UI work is done (L8/L9/L13/
+  L14/L15/L16 wired + all pure-logic foundations). The five remaining unchecked "Pure" checkboxes (internal/lock,
+  pwcheck, theme, notify.CatchUp, reports) are STALE — those packages already exist in internal/. L18–L39 are
+  story / core-flow e2e-VALIDATION tickets whose loopstory_*.mjs drive scripts are the parallel session's untracked
+  work (32 untracked, 0 tracked) — not mine to author without colliding.
+- Conclusion: no buildable L gap remains in my lane without touching contended C-series/e2e-harness territory.
+  Slowing the loop (1200s) and surfacing to the user for direction rather than spinning on empty ticks.
+
 ## 2026-06-20 - feat: "Restore from a backup file" — L9 import half
 
 - Completed L9 with the restore inverse. internal/app/backupall.go: restoreFromBackup (pickFile → UnmarshalEnvelope
