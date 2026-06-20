@@ -46,13 +46,14 @@ and every commit updates this file under `Unreleased`.
   member is flagged default), and **bulk clear** (selects two transactions and marks them cleared in one bulk
   action, confirming both flip to cleared), and **allocate exclude/restore** (excludes a ranked allocation
   suggestion and confirms it leaves the active list and can be restored), and **planning recurring item**
-  (adds a recurring cash-flow and confirms it lists, persists, and survives a reload).
+  (adds a recurring cash-flow and confirms it lists, persists, and survives a reload), and **customize formula**
+  (types an arithmetic expression, confirms the live result, and saves a formula that persists).
   The
   start of B16's "every feature, provably flawless" story suite (`e2e/story_*.test.mjs`). The whole suite —
   every story plus the feature checks (theme/fonts/banner/icon-weight/density-unify/per-widget-color) — now
   runs as one command — `e2e/run-stories.ps1` (Windows) or the cross-platform `e2e/run-stories.mjs` (Node,
   CI-friendly: builds the wasm + serve binary, runs each `.mjs` in a fresh browser, exits non-zero on any
-  failure): currently **27 green**.
+  failure): currently **28 green**.
 - **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
   settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
   that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and

@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: B16 story — customize formula (evaluate + save)
+
+- Nineteenth journey story (e2e/story_customize_formula.test.mjs): on /customize (the sandboxed formula
+  calculator), type "6 * 7" into the expression input (placeholder substring "round((income") and assert the
+  live .stat-value result is "42" (formatFormulaValue renders a float64 with no trailing zeros), then name and
+  save the formula and assert it persists to the dataset's `formulas` array (domain.Formula, json "name").
+  Used placeholder substrings to dodge the ellipsis unicode. Suite now 28 green. Test-only, no sw bump.
+
 ## 2026-06-20 - test: B16 story — planning recurring item
 
 - Eighteenth journey story (e2e/story_planning_recurring.test.mjs): on /planning, scope to the recurring form
