@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: recurring → cash-flow runway bridge (L13, logic)
+
+- Stock-take found no genuine pure-REPORT gap left: budget-performance is already covered by budgeting.Evaluate/
+  EvaluateAll (spent/remaining/percent/over-near state), and net-worth-history is already ledger.NetWorthSeries. So
+  the catalog reports are done; what remained was the L13 cash-flow runway, whose engine (internal/cashflow) takes
+  generic events with nothing to produce them from the household's real recurring items.
+- Built that missing pure bridge as a NEW package internal/runway (zero contention): Events expands domain.Recurring
+  into dated cashflow.Events over a horizon (cadence stepping via RecurringCadence.Next, stale-NextDue fast-forward,
+  FX to base with sign preserved); Project chains into cashflow.DailyBalances. dayOffset reconstructs both dates at
+  UTC midnight so the day index is DST-proof. 5 table tests (offsets/signs/cadence, fast-forward, FX, breach,
+  empty). go test green; committed 69602ba.
+- Also noted: the parallel session built C64 (live authoring match-count) ON TOP of my L15 rules preview — the
+  shared work is compounding, not colliding.
+- Next: wire the Planning runway card on top of internal/runway (planning.go is mine + clean) — short-term daily
+  liquidity ("you dip below your buffer on <day>") distinct from the 12-month net-worth forecast. Gate on clean
+  targets; reuse runway.Project + app.Recurring + current liquid balance.
+
 ## 2026-06-20 - feat: remove staged workflow actions before saving (C65)
 
 - C65 item 2. The workflow action builder only appended; the staged list was plain text with no remove, so a

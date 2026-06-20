@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Recurring → cash-flow runway bridge (L13, logic).** New pure, table-tested `internal/runway`: `Events(recs,
+  from, days, rates)` expands the household's `domain.Recurring` cash flows into the dated `cashflow.Event`s that
+  fall in a horizon (stepping each by its cadence, fast-forwarding a stale `NextDue`, converting amounts to the base
+  currency with sign preserved), and `Project(...)` runs them through `cashflow.DailyBalances` to flag the first day
+  the balance dips below a buffer. Bridges real recurring data to the cash-flow engine ahead of the runway card.
 - **Staged workflow actions can be removed before saving (C65).** The action builder only ever added actions — a
   mistaken one meant starting the whole workflow over. Each staged action row now has a remove button. Covered by a
   new `workflows_staged_remove_check` e2e.
