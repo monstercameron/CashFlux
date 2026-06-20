@@ -44,6 +44,11 @@ and every commit updates this file under `Unreleased`.
   full suite green.
 
 ### Added
+- **Suggested starter questions for the Insights Q&A (L8).** The "Ask about your money" box now offers up to four
+  **tappable starter questions** above it — tailored to the user's top spend category ("How much did we spend on
+  Housing last month?") with generic fallbacks — so a blank box never stalls the user; tapping one fills the box.
+  Backed by a pure, table-tested `insights.SuggestedQuestions` (deterministic, de-duplicated, never empty), with
+  the chips also acting as a compose aid on the no-key preview path. Covered by a Playwright story.
 - **Active-filter introspection for the transactions toolbar (C47, logic).** `txnfilter.Criteria` gains a pure
   `ActiveFilters()` (the engaged filters in toolbar order — search, account, category, member, from, to, cleared;
   whitespace-only values and sort/direction/pagination never count), `ActiveCount()` for the "Filters" trigger

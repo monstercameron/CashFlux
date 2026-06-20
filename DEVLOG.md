@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L8 suggested starter questions for Insights Q&A
+
+- L8 first gap: a blank Ask box with one placeholder stalls users. Added pure insights.SuggestedQuestions(
+  QuestionContext{TopCategory, NearLimitBudget, UpcomingGoal}) -> up to 4 deterministic, de-duplicated starters
+  (tailored first, then generic), never empty. Table-tested. UI (insights.go): chips above the Ask box (each a
+  suggestChip component so the click hook is stable), filling the question on tap; the top expense category is
+  computed deterministically (category order on ties); the no-key disabled preview binds the question value so
+  chips also work as a compose aid. e2e/story_insights_starters: 4 tailored chips ("...Housing...") + tap fills
+  the box; screenshot-verified.
+- PARALLEL-TREE HAZARD (hard lesson): I batched several insights.go edits before committing, and the parallel
+  session ran a destructive git op (reset/checkout) on the shared tree that REVERTED my uncommitted changes to
+  that tracked file (untracked new files survived). Also, both sessions build to web/bin/main.wasm + run e2e on
+  the same port, so a concurrent build clobbers the wasm mid-suite -> spurious mass failures (39/46) that pass
+  standalone. Recovery: re-applied insights.go and committed+pushed the code ATOMICALLY (gofmt+build+add+commit+
+  push in one shot) to minimise the revert window. Going forward: commit+push each tracked-file change
+  immediately; treat full-suite runs as unreliable while the other session is building, and verify per-story
+  standalone. Skipped the sw bump (parallel session owns web/sw.js; network-first SW serves fresh wasm anyway).
+- This story's feature (52576d6) is verified standalone (story_insights_starters + a11y_check both PASS) and
+  pushed.
+
 ## 2026-06-20 - feat: persistent visible labels on the add-account form (C49)
 
 - C49 item 1: the add form was placeholder-only, so labels vanished on input (and APR/Liquidity/Stability/Due day
