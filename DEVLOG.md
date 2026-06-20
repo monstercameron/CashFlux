@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: surface artifact upload/import failures (C66)
+
+- C66 item 1 (flagged reliability), and the final original C-series ticket. uploadImage and importCSV both did
+  `if err == nil { refresh() }`, swallowing PutArtifact failures — most plausibly a localStorage-quota overflow
+  (the whole dataset is one blob), leaving the user with a silently-missing file. Added a notice helper
+  (uistate.UseNotice) and both paths now notify(err.Error()) on PutArtifact failure; importCSV also surfaces a
+  ParseCSV error (previously a silent return). Real error text shown (no new i18n; conveys the actual cause).
+- New artifacts_error_check.mjs: intercepts pickFile's native chooser (page.once filechooser), feeds an empty CSV,
+  and asserts the app toast (.toast-msg) shows the error — got "artifacts: empty csv". App wasm builds clean; gofmt
+  clean. Committed via git commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C66 remaining: storage meter quota bar, card titles, where-used-before-delete, CSV preview + rename, empty state.
+- Scope note: the user extended the loop to C47–C90; the C-series has grown to C80 (parallel session added
+  C67–C80). C47–C66 each now have shipped improvements. Next: C67 (Rail navigation v2).
+
 ## 2026-06-20 - feat: recurring → cash-flow runway bridge (L13, logic)
 
 - Stock-take found no genuine pure-REPORT gap left: budget-performance is already covered by budgeting.Evaluate/

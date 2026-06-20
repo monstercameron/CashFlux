@@ -32,6 +32,12 @@ func Artifacts() ui.Node {
 	rev := ui.UseState(0)
 	_ = rev.Get()
 	refresh := func() { rev.Set(rev.Get() + 1) }
+	// Surface upload/save failures instead of swallowing them — a large image can
+	// blow the localStorage quota (the whole dataset is one blob), and silently
+	// dropping the file leaves the user confused (C66, reliability). The real error
+	// text (e.g. the quota message) is shown so the cause is clear.
+	notice := uistate.UseNotice()
+	notify := func(text string) { notice.Set(notice.Get().With(text, true)) }
 
 	uploadImage := func() {
 		pickFile("image/*", func(name, mime string, data []byte) {
@@ -43,15 +49,18 @@ func Artifacts() ui.Node {
 				Bytes: data, CreatedAt: time.Now(),
 			}
 			art.Size = artifacts.Size(art)
-			if err := app.PutArtifact(art); err == nil {
-				refresh()
+			if err := app.PutArtifact(art); err != nil {
+				notify(err.Error())
+				return
 			}
+			refresh()
 		})
 	}
 	importCSV := func() {
 		pickFile(".csv,text/csv", func(name, _ string, data []byte) {
 			cols, rows, err := artifacts.ParseCSV(data)
 			if err != nil {
+				notify(err.Error())
 				return
 			}
 			art := domain.Artifact{
@@ -59,9 +68,11 @@ func Artifacts() ui.Node {
 				Columns: cols, Rows: rows, CreatedAt: time.Now(),
 			}
 			art.Size = artifacts.Size(art)
-			if err := app.PutArtifact(art); err == nil {
-				refresh()
+			if err := app.PutArtifact(art); err != nil {
+				notify(err.Error())
+				return
 			}
+			refresh()
 		})
 	}
 

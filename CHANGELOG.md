@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Artifact upload/import failures are no longer silent (C66, reliability).** Both image upload and CSV import
+  swallowed errors (`if err == nil`), so a failed save — very plausibly a localStorage-quota overflow, since the
+  whole dataset is one blob — just made the file silently not appear. Both paths now surface the actual error in the
+  app toast (and CSV parse errors too). Covered by a new `artifacts_error_check` e2e.
+
 ### Added
 - **Recurring → cash-flow runway bridge (L13, logic).** New pure, table-tested `internal/runway`: `Events(recs,
   from, days, rates)` expands the household's `domain.Recurring` cash flows into the dated `cashflow.Event`s that
