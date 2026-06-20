@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/split"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
@@ -232,6 +233,36 @@ func csvField(s string) string {
 		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
 	}
 	return s
+}
+
+// FromRules renders auto-categorize rules as a top-down precedence chain (first
+// match wins): each rule is "match → category", chained in order, with rules that
+// can never fire flagged inline — "(shadowed)" when an earlier rule already covers
+// them, "(matches nothing)" when the match phrase is empty (via rules.Conflicts).
+// catName resolves a category id to a name (nil → raw id).
+func FromRules(rs []rules.Rule, catName func(string) string) string {
+	warn := make(map[int]string)
+	for _, c := range rules.Conflicts(rs) {
+		if c.ShadowedBy >= 0 {
+			warn[c.Index] = " (shadowed)"
+		} else {
+			warn[c.Index] = " (matches nothing)"
+		}
+	}
+	f := NewFlowchart("TD")
+	for i, r := range rs {
+		cat := r.SetCategoryID
+		if catName != nil {
+			if n := catName(r.SetCategoryID); n != "" {
+				cat = n
+			}
+		}
+		f.Node("r"+strconv.Itoa(i), r.Match+" → "+cat+warn[i], ShapeBox)
+		if i > 0 {
+			f.Edge("r"+strconv.Itoa(i-1), "r"+strconv.Itoa(i), "")
+		}
+	}
+	return f.String()
 }
 
 func triggerLabel(k workflow.TriggerKind) string {

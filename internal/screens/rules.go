@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/mermaid"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/rulesuggest"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -202,6 +203,15 @@ func Rules() ui.Node {
 			If(len(rs) > 0 && hasTxns, P(Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
 			list,
 		),
+		// Precedence chain: first match wins, top to bottom; shadowed rules flagged (C70/C64).
+		If(len(rs) > 1, Section(Class("card"),
+			H2(Class("card-title"), "Rule order"),
+			P(Class("muted"), "First match wins, top to bottom."),
+			uiw.Mermaid(uiw.MermaidProps{
+				Source: mermaid.FromRules(rs, func(id string) string { return catName[id] }),
+				Label:  "Rule precedence chain",
+			}),
+		)),
 	)
 }
 

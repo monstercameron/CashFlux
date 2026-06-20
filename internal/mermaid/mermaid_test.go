@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/split"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
@@ -103,6 +104,28 @@ func TestFromCategories(t *testing.T) {
 	// The orphan's missing parent must NOT produce a dangling edge.
 	if strings.Contains(src, "--> c3") {
 		t.Errorf("orphan child with an unknown parent should have no edge:\n%s", src)
+	}
+}
+
+func TestFromRules(t *testing.T) {
+	names := map[string]string{"food": "Food", "din": "Dining"}
+	catName := func(id string) string { return names[id] }
+	rs := []rules.Rule{
+		{Match: "coffee", SetCategoryID: "din"},
+		{Match: "coffee", SetCategoryID: "food"}, // shadowed by rule 0 (same phrase)
+		{Match: "", SetCategoryID: "food"},       // empty phrase → matches nothing
+	}
+	src := FromRules(rs, catName)
+	for _, want := range []string{
+		"flowchart TD\n",
+		`r0["coffee → Dining"]`,
+		`r1["coffee → Food (shadowed)"]`,
+		`r2["→ Food (matches nothing)"]`, // empty match → leading space trimmed by Escape
+		`r0 --> r1`, `r1 --> r2`,         // precedence chain
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("rules chain missing %q in:\n%s", want, src)
+		}
 	}
 }
 

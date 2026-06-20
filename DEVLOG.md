@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: rule precedence-chain Mermaid diagram (C70/C64)
+
+- Fifth wired Mermaid case + a 5th generator. mermaid.FromRules(rs, catName): a flowchart TD of "match → category"
+  nodes chained in precedence order (first match wins), with rules.Conflicts marking each node "(shadowed)" (an
+  earlier rule covers it) or "(matches nothing)" (empty phrase). Imports internal/rules (pure). Wired into rules.go
+  as a "Rule order" card (len>1).
+- TestFromRules (native): shadowed rule + empty-match rule → asserts labels (incl. Escape trimming the empty
+  match's leading space), shadow/no-match suffixes, and the precedence edges. New rules_diagram_check.mjs adds two
+  rules then asserts .cf-mermaid svg renders. PASS. go test ./internal/mermaid green; app wasm builds; gofmt clean.
+  Committed via git commit -- <paths>; TODOS.md untouched.
+- Mermaid now visible on FIVE screens: workflows, categories, split, reports, rules. Next: another slice.
+
 ## 2026-06-20 - feat: C88 Gravatar URLs (pure) + non-contended backlog stock-take
 
 - Took C88's pure Gravatar half (internal/gravatar free + un-taken; other agent on bills_screen.go). Tiny complete

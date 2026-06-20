@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Rule precedence-chain diagram (C70/C64).** `internal/mermaid.FromRules` renders auto-categorize rules as a
+  top-down "match → category" chain (first match wins), flagging rules that can never fire — "(shadowed)" or
+  "(matches nothing)" via `rules.Conflicts`. Wired into the Rules screen as a "Rule order" card (5th wired diagram).
+  Pure + table-tested; e2e `rules_diagram_check` asserts real `<svg>`.
 - **Gravatar avatar URLs (C88, logic).** New pure, table-tested `internal/gravatar`: `Hash(email)` (hex MD5 of the
   trimmed, lowercased address) and `URL(email, size)` (the avatar URL with an identicon fallback, size clamped to
   1–2048, default 80). The pure Gravatar half of member avatars; the members-screen wiring and uploaded-photo/Giphy
