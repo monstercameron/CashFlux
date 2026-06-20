@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: pure banner-image logic (B20, bottom-up)
+
+- Started the header/banner image feature SDLC-first. New `internal/theme/image.go`: image-upload validation
+  (`ValidateImageUpload` PNG/JPEG/WebP/GIF ≤2 MB, `ValidImageMIME`, `ImageMIMEForName` ext fallback) mirroring
+  the font helpers, plus a `Banner` model — Kind none/gradient/image, `CSS()` returning the background-image
+  value (gradient as-is, `url(dataURL)` for images), built-in gradient presets, and `ImageBanner`.
+- A11y by construction: the banner is a purely decorative band with no essential text on it, so a busy image
+  can't hurt content legibility — the guardrail is "don't put text over it" rather than a runtime contrast
+  check. Built-ins are CSS gradients (no binary assets, offline, tiny); custom = uploaded image data URL.
+- Storage will mirror fonts: a separate `cashflux:banner` slot, NOT embedded in the theme JSON. Table tests
+  cover MIME/ext/size validation, None/CSS for each kind, and that BannerPresets returns a defensive copy. No
+  rendered change yet → no sw bump.
+- Next: wasm banner store + ApplyBanner + a dashboard header band + editor controls (presets / upload / clear).
+
 ## 2026-06-19 - feat: custom font-file upload, end to end (B20)
 
 - Completed the user's font-upload ask. Wasm pieces: `internal/uistate/fonts.go` — a `cashflux:fonts`

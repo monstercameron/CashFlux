@@ -14,6 +14,10 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Banner image logic (B20).** New pure `theme.Banner` (none / built-in gradient / uploaded image) with
+  `CSS()` (the `background-image` value), built-in gradient presets (`BannerPresets`), and image-upload
+  validation — `ValidateImageUpload` (PNG/JPEG/WebP/GIF up to 2 MB), `ValidImageMIME`, and `ImageMIMEForName`
+  (extension fallback). Table-tested foundation for the dashboard header band; the UI follows.
 - **Upload your own font (B20).** The theme editor now has an "Upload font" button that accepts a WOFF2/WOFF/
   TTF/OTF file (≤1 MB): it's validated, stored as a data URL in its own `cashflux:fonts` slot, registered via
   an injected `@font-face` rule, added to the interface/heading font pickers, and applied immediately. Uploaded
