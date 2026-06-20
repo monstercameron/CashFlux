@@ -23,7 +23,8 @@ func init() {
 		WidgetID: "trend",
 		Title:    "Net worth trend",
 		Fields: []Field{
-			{Key: "months", Label: "Months of history", Type: Number, Default: "6", Min: 3, Max: 12},
+			{Key: "months", Label: "History window", Type: Number, Default: "6", Unit: "months", Min: 3, Max: 120},
+			{Key: "showXAxis", Label: "Show time labels", Type: Toggle, Default: "true"},
 		},
 	})
 	register(Schema{

@@ -3,6 +3,7 @@
 package ui
 
 import (
+	"fmt"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
@@ -153,16 +154,24 @@ func widget(props WidgetProps) uic.Node {
 	}
 	packed := dashlayout.Pack(arranged, gridCols)
 	gridCol, gridRow := props.GridColumn, props.GridRow
+	colSpan, rowSpan := 1, 1
 	if p, ok := packed.Get(props.ID); ok {
 		gridCol = p.GridColumn()
 		gridRow = dashlayout.Placement{Row: p.Row + 1, RowSpan: p.RowSpan}.GridRow()
+		colSpan = p.ColSpan
+		rowSpan = p.RowSpan
 	}
 
 	cellClass := "w"
 	if dragSrc.Get() == props.ID && props.ID != "" {
 		cellClass += " drag" // dims the widget while it is being dragged
 	}
-	args := []any{Class(cellClass), Attr("data-widget", props.ID)}
+	args := []any{
+		Class(cellClass),
+		Attr("data-widget", props.ID),
+		Attr("data-col-span", fmt.Sprintf("%d", colSpan)),
+		Attr("data-row-span", fmt.Sprintf("%d", rowSpan)),
+	}
 	// Per-widget color (B20): if this tile has a saved accent, tint it with a
 	// colored top strip (an inset box-shadow, so it never collides with the cell
 	// border). The key is always set — to the color or "none" — because the

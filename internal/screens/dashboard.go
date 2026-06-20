@@ -472,9 +472,13 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 // geometry helpers).
 func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, net money.Money, cfg widgetcfg.Config) ui.Node {
 	months := 6
+	showXAxis := true
 	if sch, ok := widgetcfg.SchemaFor("trend"); ok {
 		if f, ok := sch.FieldByKey("months"); ok {
 			months = f.Int(cfg)
+		}
+		if f, ok := sch.FieldByKey("showXAxis"); ok {
+			showXAxis = f.Bool(cfg)
 		}
 	}
 	start := dateutil.MonthStart(time.Now())
@@ -483,6 +487,31 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 		cutoffs = append(cutoffs, dateutil.AddMonths(start, i-(months-2))) // window ends at the current month +1
 	}
 	series, _ := ledger.NetWorthSeries(accounts, txns, cutoffs, rates)
+	deltaLabel, deltaTone := "No change", "text-dim"
+	rangeLabel := ""
+	if len(series) > 0 {
+		first := series[0]
+		last := series[len(series)-1]
+		delta := money.New(last.Amount-first.Amount, last.Currency)
+		switch {
+		case delta.IsPositive():
+			deltaLabel = "Up " + fmtMoney(delta)
+			deltaTone = "text-up"
+		case delta.IsNegative():
+			deltaLabel = "Down " + fmtMoney(delta.Abs())
+			deltaTone = "text-down"
+		}
+		low, high := first, first
+		for _, m := range series[1:] {
+			if m.Amount < low.Amount {
+				low = m
+			}
+			if m.Amount > high.Amount {
+				high = m
+			}
+		}
+		rangeLabel = fmt.Sprintf("%s - %s", fmtMoney(low), fmtMoney(high))
+	}
 	// Plot in major units (dollars), not raw minor units (cents): feeding cents
 	// made the Y axis read "2,000,000 / 1,500,000 …" and clip in the narrow
 	// widget (C16). The Y-axis format hint renders ticks as compact currency
@@ -493,7 +522,7 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 	}
 	pts := make([]chartspec.Point, len(series))
 	for i, m := range series {
-		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div}
+		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div, Label: trendPointLabel(cutoffs[i], months)}
 	}
 	yFmt := ".2~s" // compact SI, e.g. "21k"
 	if currency.Symbol(net.Currency) == "$" {
@@ -502,15 +531,37 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 	spec := chartspec.Spec{
 		Kind:   chartspec.Area,
 		Series: []chartspec.Series{{Name: "Net worth", Points: pts}}, // empty Color → theme accent
+		X:      chartspec.Axis{Label: "Time"},
 		Y:      chartspec.Axis{Format: yFmt},
 	}
-	body := Div(Class("flex flex-col h-full"),
-		Div(Class("font-display fig t-figure"), fmtMoney(net)),
-		uiw.Chart(uiw.ChartProps{Spec: spec, Height: "120px", Label: uistate.T("dashboard.netWorthChartLabel", fmtMoney(net))}),
+	if !showXAxis {
+		spec.X.Format = "hidden"
+	}
+	body := Div(Class("trend-body"),
+		Div(Class("trend-head"),
+			Div(Class("trend-figure font-display fig t-figure"), fmtMoney(net)),
+			Div(Class("trend-standard t-caption text-dim"), trendWindowLabel(months)),
+		),
+		Div(Class("trend-expanded"),
+			Div(Class("trend-stat"),
+				Span(Class("t-caption text-faint"), "Change"),
+				Span(Class("fig t-body "+deltaTone), deltaLabel),
+			),
+			Div(Class("trend-stat"),
+				Span(Class("t-caption text-faint"), "Range"),
+				Span(Class("fig t-body text-dim"), rangeLabel),
+			),
+		),
+		uiw.Chart(uiw.ChartProps{
+			Spec:   spec,
+			Height: "100%",
+			Class:  "trend-chart",
+			Label:  uistate.T("dashboard.netWorthChartLabel", fmtMoney(net)),
+		}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "trend", Title: uistate.T("dashboard.netWorthTrend"), Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",
-		BodyClass: "flex flex-col", Body: body,
+		BodyClass: "flex flex-col min-h-0", Body: body,
 	})
 }
 
@@ -535,6 +586,26 @@ func emptyAddCTA(props emptyAddProps) ui.Node {
 		Span(props.Message),
 		Button(Class("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath(path)) }), props.Label),
 	)
+}
+
+func trendWindowLabel(months int) string {
+	if months >= 24 && months%12 == 0 {
+		return fmt.Sprintf("%d years", months/12)
+	}
+	if months == 12 {
+		return "1 year"
+	}
+	return fmt.Sprintf("%d months", months)
+}
+
+func trendPointLabel(t time.Time, months int) string {
+	if months > 36 {
+		if t.Month() == time.January {
+			return t.Format("2006")
+		}
+		return t.Format("Jan '06")
+	}
+	return t.Format("Jan '06")
 }
 
 func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {

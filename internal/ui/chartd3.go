@@ -56,7 +56,11 @@ func chartD3(props ChartProps) uic.Node {
 		}
 		return func() {
 			if !el.IsNull() && !el.IsUndefined() {
-				el.Set("innerHTML", "")
+				if fn := js.Global().Get("cashfluxDisposeChart"); fn.Type() == js.TypeFunction {
+					fn.Invoke(el)
+				} else {
+					el.Set("innerHTML", "")
+				}
 			}
 		}
 	}, specJSON)

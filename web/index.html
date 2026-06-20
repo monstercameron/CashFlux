@@ -460,6 +460,48 @@
       .t-figure-lg { font-size: 2.125rem; }   /* hero figure */
       .nav:hover { background:#161617; color:#f4f4f5; }
 
+      /* Shape-aware dashboard content: widgets can adapt their internals to the
+         user-resized bento cell, starting with the net-worth trend chart. */
+      .trend-body { display:flex; flex-direction:column; min-height:0; height:100%; gap:.45rem; overflow:hidden; }
+      .trend-head { flex:0 0 auto; }
+      .trend-figure { flex:0 0 auto; line-height:1.05; }
+      .trend-standard { margin-top:.18rem; }
+      .trend-expanded { display:none; flex:0 0 auto; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.45rem; }
+      .trend-stat { min-width:0; border:1px solid rgba(244,244,245,.08); background:rgba(244,244,245,.025); padding:.38rem .45rem; }
+      .trend-stat span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .trend-chart { flex:1 1 auto; min-height:0; }
+      .w[data-widget="trend"][data-row-span="1"] .trend-body { gap:.25rem; justify-content:flex-end; }
+      .w[data-widget="trend"][data-row-span="1"] .trend-head { display:flex; align-items:baseline; justify-content:space-between; gap:.5rem; }
+      .w[data-widget="trend"][data-row-span="1"] .trend-figure { font-size:1.02rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .w[data-widget="trend"][data-col-span="1"][data-row-span="1"] .trend-head { display:block; }
+      .w[data-widget="trend"][data-col-span="1"][data-row-span="1"] .trend-standard,
+      .w[data-widget="trend"][data-row-span="1"] .trend-expanded { display:none; }
+      .w[data-widget="trend"][data-row-span="1"] .trend-chart { flex:0 0 54px; min-height:54px; }
+      .w[data-widget="trend"][data-row-span="1"] .trend-chart .tick,
+      .w[data-widget="trend"][data-row-span="1"] .trend-chart .domain { display:none; }
+      .w[data-widget="trend"][data-col-span="1"][data-row-span="1"] .trend-chart { flex-basis:58px; min-height:58px; }
+      .w[data-widget="trend"][data-col-span="1"][data-row-span="1"] .trend-chart svg { overflow:visible; }
+      .w[data-widget="trend"][data-row-span="2"] .trend-chart { flex-basis:0; min-height:118px; }
+      .w[data-widget="trend"][data-row-span="3"] .trend-chart { flex-basis:0; min-height:220px; margin-top:auto; }
+      .w[data-widget="trend"][data-col-span="2"] .trend-body,
+      .w[data-widget="trend"][data-col-span="3"] .trend-body,
+      .w[data-widget="trend"][data-col-span="4"] .trend-body { gap:.65rem; }
+      .w[data-widget="trend"][data-col-span="2"] .trend-figure,
+      .w[data-widget="trend"][data-col-span="3"] .trend-figure,
+      .w[data-widget="trend"][data-col-span="4"] .trend-figure { font-size:1.8rem; }
+      .w[data-widget="trend"][data-col-span="1"][data-row-span="3"] .trend-figure { font-size:1.55rem; }
+      .w[data-widget="trend"][data-col-span="2"][data-row-span="2"] .trend-expanded,
+      .w[data-widget="trend"][data-col-span="2"][data-row-span="3"] .trend-expanded,
+      .w[data-widget="trend"][data-col-span="3"][data-row-span="2"] .trend-expanded,
+      .w[data-widget="trend"][data-col-span="3"][data-row-span="3"] .trend-expanded,
+      .w[data-widget="trend"][data-col-span="4"][data-row-span="2"] .trend-expanded,
+      .w[data-widget="trend"][data-col-span="4"][data-row-span="3"] .trend-expanded { display:grid; }
+      .w[data-widget="trend"][data-col-span="2"][data-row-span="3"] .trend-body,
+      .w[data-widget="trend"][data-col-span="3"][data-row-span="3"] .trend-body,
+      .w[data-widget="trend"][data-col-span="4"][data-row-span="3"] .trend-body {
+        display:grid; grid-template-rows:auto auto minmax(0,1fr); align-content:stretch;
+      }
+
       /* Bento grid — square outlined cells with a small gap.
          One base cell unit; every row is exactly one unit so widgets integer-scale. */
       .bento { display:grid; --cell:152px; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap:10px; overflow-anchor:none; }
@@ -492,13 +534,13 @@
       .rlabel { min-width:128px; text-align:center; font-size:.8rem; }
 
       /* resize handles stay quiet until a tile is hovered or focused. */
-      .rz { position:absolute; z-index:3; opacity:0; pointer-events:none; border:0; padding:0; background:transparent; color:#d4d4d8; transition:opacity .12s ease, background .12s ease, color .12s ease; }
+      .rz { position:absolute; z-index:6; opacity:0; pointer-events:none; border:0; padding:0; background:transparent; color:#d4d4d8; transition:opacity .12s ease, background .12s ease, color .12s ease; }
       .w:hover .rz, .w:focus-within .rz, .w:focus-visible .rz { opacity:.9; pointer-events:auto; }
       .rz[data-dir="l"], .rz[data-dir="r"] { top:24px; bottom:8px; width:16px; cursor:ew-resize; }
       .rz[data-dir="l"] { left:0; }
       .rz[data-dir="r"] { right:0; }
       .rz[data-dir="t"], .rz[data-dir="b"] { left:34px; right:34px; height:16px; cursor:ns-resize; }
-      .rz[data-dir="t"] { top:0; }
+      .rz[data-dir="t"] { top:60px; }
       .rz[data-dir="b"] { bottom:0; }
       .rz::before { content:""; position:absolute; border-radius:999px; background:rgba(212,212,216,.62); box-shadow:0 0 0 1px rgba(244,244,245,.12), 0 6px 18px rgba(0,0,0,.28); }
       .rz[data-dir="l"]::before, .rz[data-dir="r"]::before { top:50%; width:3px; height:min(44px,42%); transform:translateY(-50%); }

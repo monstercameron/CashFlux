@@ -27,6 +27,23 @@
     } catch (e) {
       return;
     }
+    el.__cfChartSpecJSON = specJSON;
+    if (!el.__cfChartResizeObserver && typeof ResizeObserver !== "undefined") {
+      var resizeFrame = 0;
+      el.__cfChartResizeObserver = new ResizeObserver(function () {
+        if (resizeFrame) cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(function () {
+          resizeFrame = 0;
+          if (!el.isConnected) {
+            if (el.__cfChartResizeObserver) el.__cfChartResizeObserver.disconnect();
+            el.__cfChartResizeObserver = null;
+            return;
+          }
+          if (el.__cfChartSpecJSON) window.cashfluxRenderChart(el, el.__cfChartSpecJSON);
+        });
+      });
+      el.__cfChartResizeObserver.observe(el);
+    }
     el.innerHTML = "";
     var series = spec.series || [];
     if (!series.length) return;
@@ -51,7 +68,14 @@
       return;
     }
 
-    var m = { top: 8, right: 10, bottom: 20, left: 44 };
+    var hideX = spec.x && spec.x.format === "hidden";
+    var tiny = H < 96;
+    var narrow = W < 280;
+    var m = tiny
+      ? { top: 4, right: 4, bottom: 4, left: 4 }
+      : narrow
+        ? { top: 6, right: 6, bottom: 8, left: 34 }
+        : { top: 8, right: 10, bottom: 20, left: 44 };
     var iw = Math.max(10, W - m.left - m.right);
     var ih = Math.max(10, H - m.top - m.bottom);
     var g = svg.append("g").attr("transform", "translate(" + m.left + "," + m.top + ")");
@@ -63,6 +87,10 @@
     var xs = allPts.map(function (p) { return p.x; });
     var ys = allPts.map(function (p) { return p.y; });
     var x = d3.scaleLinear().domain([d3.min(xs), d3.max(xs)]).range([0, iw]);
+    var labelsByX = {};
+    allPts.forEach(function (p) {
+      if (p.label) labelsByX[p.x] = p.label;
+    });
     // Bars must grow from a 0 baseline; line/area trend charts should fill the
     // plot using the data's own range, else a net-worth line (~$350k on a 0–$400k
     // axis) flattens against the top with dead space below (C51).
@@ -82,14 +110,24 @@
       }
       return null;
     }
-    var xAxis = d3.axisBottom(x).ticks(4).tickSizeOuter(0);
+    var xAxis = d3.axisBottom(x).ticks(narrow ? 3 : 4).tickSizeOuter(0);
     var xf = tickFormatter(spec.x);
     if (xf) xAxis.tickFormat(xf);
-    var yAxis = d3.axisLeft(y).ticks(4).tickSizeOuter(0);
+    else if (Object.keys(labelsByX).length) {
+      xAxis.tickFormat(function (d) {
+        var nearest = Math.round(d);
+        return labelsByX[nearest] || "";
+      });
+    }
+    var yAxis = d3.axisLeft(y).ticks(tiny ? 0 : (narrow ? 3 : 4)).tickSizeOuter(0);
     var yf = tickFormatter(spec.y);
     if (yf) yAxis.tickFormat(yf);
-    g.append("g").attr("transform", "translate(0," + ih + ")").call(xAxis).call(styleAxis);
-    g.append("g").call(yAxis).call(styleAxis);
+    if (!hideX && !tiny && !narrow) {
+      g.append("g").attr("class", "x-axis").attr("transform", "translate(0," + ih + ")").call(xAxis).call(styleAxis);
+    }
+    if (!tiny) {
+      g.append("g").attr("class", "y-axis").call(yAxis).call(styleAxis);
+    }
 
     if (spec.kind === "bar") {
       var groupW = iw / Math.max(1, allPts.length / series.length);
@@ -150,6 +188,16 @@
           .transition().duration(600).ease(d3.easeCubicInOut).attr("stroke-dashoffset", 0);
       }
     });
+  };
+
+  window.cashfluxDisposeChart = function (el) {
+    if (!el) return;
+    if (el.__cfChartResizeObserver) {
+      el.__cfChartResizeObserver.disconnect();
+      el.__cfChartResizeObserver = null;
+    }
+    el.__cfChartSpecJSON = "";
+    el.innerHTML = "";
   };
 
   function renderDonut(svg, s, W, H, defColor) {
