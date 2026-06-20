@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -33,6 +34,18 @@ func Subscriptions() ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	pr := uistate.UsePrefs().Get()
+
+	// Drill from a detected subscription to its underlying charges: open
+	// Transactions searched for the payee, so the user can verify the detection
+	// (mirrors the Accounts/Budgets/Goals drill pattern, C30/C56).
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	viewCharges := func(payee string) {
+		f := uistate.TxFilter{Text: payee}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
 
 	subs, _ := subscriptions.Detect(app.Transactions(), rates, 2)
 	changes, _ := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3)
@@ -70,7 +83,7 @@ func Subscriptions() ui.Node {
 	rows := MapKeyed(subs,
 		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
 		func(s subscriptions.Subscription) ui.Node {
-			return ui.CreateElement(SubscriptionRow, subscriptionRowProps{Sub: s, Base: base, NextDate: pr.FormatDate(s.NextRenewal), OnRemind: remind})
+			return ui.CreateElement(SubscriptionRow, subscriptionRowProps{Sub: s, Base: base, NextDate: pr.FormatDate(s.NextRenewal), OnRemind: remind, OnDrill: viewCharges})
 		},
 	)
 
@@ -161,6 +174,7 @@ type subscriptionRowProps struct {
 	Base     string
 	NextDate string // pre-formatted next-renewal date
 	OnRemind func(subscriptions.Subscription)
+	OnDrill  func(payee string) // open Transactions searched for this subscription's payee
 }
 
 // SubscriptionRow renders one detected subscription with a "remind me to cancel"
@@ -169,10 +183,17 @@ type subscriptionRowProps struct {
 func SubscriptionRow(props subscriptionRowProps) ui.Node {
 	s := props.Sub
 	remind := ui.UseEvent(Prevent(func() { props.OnRemind(s) }))
+	drill := ui.UseEvent(Prevent(func() {
+		if props.OnDrill != nil {
+			props.OnDrill(s.Name)
+		}
+	}))
 	meta := subscriptionCadenceLabel(s.Cadence) + " · " + uistate.T("subs.next", props.NextDate)
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class("row-desc"), s.Name),
+			Button(Class("row-desc sub-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
+				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
+				s.Name),
 			Span(Class("row-meta"), meta),
 		),
 		// Only show the normalized "/mo" figure when it differs from the actual

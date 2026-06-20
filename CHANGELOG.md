@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Click a detected subscription to see its charges (C56).** A subscription's name is now a button that opens
+  Transactions searched for that payee, so you can verify the auto-detection against the underlying charges —
+  the same drill pattern as Budgets/Goals/Accounts (C30/C56). Covered by a new `subscriptions_drill_check` e2e.
 - **Reports ranked lists now show proportion bars (C55).** The spending-by-category, top-payees and biggest-expenses
   lists were plain name + amount rows. Each row now carries a thin bar sized to its share of the list's largest
   value, so the distribution is scannable at a glance instead of having to read every figure. Covered by a new

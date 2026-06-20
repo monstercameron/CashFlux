@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: subscription → charges drill-down (C56)
+
+- C56 item 2: a detected subscription should let you verify it against the real charges. Made the subscription
+  name a button that sets txFilter.Text to the payee and navigates to /transactions (same pattern as the
+  budget/goal/account drills; added router import). Inline-styled link (dotted underline). Chose this over the
+  "highest-value" confirm/ignore/add item because that needs new persistence (domain+store+state) — a bigger
+  bottom-up feature for later.
+- New subscriptions_drill_check.mjs clicks the first .sub-drill, asserts navigation to /transactions and that the
+  persisted tx-filter text equals the payee (landed on "Mortgage payment"). PASS. App wasm builds clean; gofmt
+  clean. Committed via git commit -- <paths>; sw.js parallel-dirty, left out; TODOS.md untouched.
+- C56 remaining: confirm/ignore/manual-add (needs persistence), price-change tone+icon, richer renewing-soon rows,
+  guided empty state. Next: C57 (Bills).
+
 ## 2026-06-20 - feat: proportion bars on reports ranked lists (C55)
 
 - C55 item 3 (the "god-tier" win, no-i18n/no-CSS so uncontested). The spending-by-category, top-payees and
