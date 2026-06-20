@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: cross-platform E2E suite runner for CI (run-stories.mjs)
+
+- Added e2e/run-stories.mjs: a Node, no-PowerShell runner so the whole browser suite can gate CI on Linux. It
+  builds the wasm (GOOS=js GOARCH=wasm), builds the serve.go static server to a native binary (so it can be
+  killed cleanly cross-platform — `go run` would leave an orphan child), starts it on :8099, polls until ready,
+  runs every e2e/*.test.mjs + *_check.mjs in fresh browsers, kills the server, deletes the temp binary, and
+  exits non-zero on any failure. Verified locally: 21 passed, 0 failed. The serve binary is gitignored.
+- CI wiring (NOT done here — ci.yml is the parallel session's territory; left untouched to avoid collision).
+  To add a browser-E2E job to .github/workflows/ci.yml (ubuntu-latest): actions/setup-go (go-version-file:
+  go.mod) + actions/setup-node, then `cd .tools && npm i` (or `npx playwright@<ver> install --with-deps
+  chromium`) so the createRequire(.tools/package.json) playwright resolves, then `node e2e/run-stories.mjs`.
+  Currently the suite is run locally (Windows: run-stories.ps1; any OS: run-stories.mjs).
+- Test infra only, no sw bump.
+- Next B16 journeys: sub-category rollup, bulk recategorize/clear, duplicate transaction, members set-default.
+
 ## 2026-06-20 - test: B16 story — account archive + restore
 
 - Twelfth journey story (e2e/story_account_archive.test.mjs): add an account, open its row's More-actions menu
