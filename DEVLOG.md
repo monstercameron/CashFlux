@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: "Can I afford it?" check on Planning (L8)
+
+- Third UI wiring tick. Targets check: en.go + internal/app + planning.go clean (only categories.go dirty —
+  isolated). Considered L9 backup-everything but it's download + file-picker heavy → hard to e2e reliably under the
+  wasm race, so deferred it. Took L8 affordability instead: the Planning forecast card already derives net worth +
+  this-month net cash flow, the exact inputs afford.CanAfford needs.
+- internal/screens/planning.go: new affordCard — amount + optional months + optional buffer → afford.CanAfford(amt,
+  net, monthlyNet, months, reserved); shows projected balance + free-to-spend stats and a verdict (fits / short by
+  $X with months-needed or never). Reuses ledger.NetWorth + ledger.PeriodTotals like the forecast card.
+- 13 planning.afford* i18n keys added surgically on the seriesTrim anchor (gofmt re-aligned the block).
+- Test snag worth noting: first e2e run failed asserting "Projected balance" via innerText — the stat label is
+  CSS-uppercased so innerText returns "PROJECTED BALANCE"; fixed by matching case-insensitively. The wiring itself
+  was correct from the start (debug showed the affordYes verdict rendering). afford_check.mjs (token amount → stat
+  breakdown; huge amount → shortfall) PASSED standalone twice. Committed by pathspec (4e8813c).
+- Next: remaining deferred UI is L9 backup-everything (palette action, accept harder verification) + L13 runway card
+  (bills is the other session's C57 — verify before touching); else pure reports. Gate each on clean targets.
+
 ## 2026-06-20 - fix: same-kind-only category reassign before delete (C63)
 
 - C63 item 1 (flagged correctness/data-integrity). The reassign-before-delete picker looped over ALL categories,

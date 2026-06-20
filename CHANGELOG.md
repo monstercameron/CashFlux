@@ -14,6 +14,12 @@ and every commit updates this file under `Unreleased`.
   e2e.
 
 ### Added
+- **"Can I afford it?" check on the Planning screen (L8).** A new Planning card answers an affordability question
+  from your own projected cash flow (deterministic, not an AI guess): enter a purchase amount, an optional "in N
+  months" horizon, and an optional buffer to reserve, and it runs the tested `afford` engine against today's net
+  worth and this month's net cash flow. It shows the projected balance and free-to-spend amount, then a verdict —
+  it fits, or short by $X with "affordable in about N months at this pace" (or that the cash flow won't cover it).
+  Covered by a new `afford_check` e2e.
 - **Members show a colored initial avatar (C62).** Each member row now leads with a small disc carrying the
   member's first initial, tinted with their chosen color — more scannable and personable than the bare swatch.
   Decorative (the name still follows as text), so it's `aria-hidden`. Covered by a new `members_avatar_check` e2e.
