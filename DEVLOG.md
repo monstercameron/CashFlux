@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L2 app state for the settle-up ledger
+
+- L2 step 3 (state). New internal/appstate/settle.go: SharedExpenses()/Settlements() accessors, validated
+  PutSharedExpense (needs id+payer+>=1 share) and RecordSettlement (needs two distinct members + positive
+  amount), their deletes, and SettleUp(currency) which maps the persisted domain records into settle.Expense/
+  Settlement, runs settle.Net + settle.Minimize, and returns (net map, minimal transfers). Separate file to keep
+  the big appstate.go (and the parallel session) untouched.
+- Tests (appstate/settle_test.go): persist a 3-way $90 split -> SettleUp gives priya +6000 / sam,lee -3000 and
+  two transfers to priya; record sam's $30 settlement -> sam nets 0 and only lee->priya $30 remains; plus
+  validation rejections. go test ./internal/appstate green; gofmt clean.
+- Next L2: the Split screen "Settle up" panel (save split + net list + per-transfer Record settlement), sample
+  members + shared expenses, and the e2e.
+
 ## 2026-06-20 - feat: L2 persist shared expenses + settlements (store round-trip)
 
 - L2 step 2 (persistence). Added domain.SharedExpense (ID, Desc, Date, PayerID, Shares []SharedExpenseShare{

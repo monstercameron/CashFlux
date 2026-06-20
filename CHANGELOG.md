@@ -41,6 +41,11 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **App state for the settle-up ledger (L2).** `appstate` gains `SharedExpenses()`/`Settlements()` accessors,
+  validated `PutSharedExpense`/`RecordSettlement` write actions (and their deletes), and a `SettleUp(currency)`
+  helper that builds the pure `settle` inputs from the persisted records and returns each member's net balance
+  plus the minimal set of transfers to zero everyone out. Unit-tested end to end (persist a 3-way split →
+  net + minimal transfers; record a settlement → the ledger re-balances), with validation rejections covered.
 - **Shared expenses + settlements are first-class persisted records (L2).** New `domain.SharedExpense` (a cost
   fronted by one member with per-member shares) and `domain.Settlement` (a payment squaring members up) are now
   stored in their own SQLite tables and carried in the exported `Dataset`, so the roommate settle-up ledger
