@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: L2 settle-up logic (pure, bottom-up)
+
+- Started L2 ("The Roommate Split"): the missing piece is a running "who owes whom -> settle up" across many
+  shared expenses (Split today only computes one expense's shares). Per SDLC, began with the pure logic.
+- Added internal/settle: Expense{Payer, Shares}, Settlement{From,To,Amount}, Transfer{From,To,Amount}.
+  Net(expenses, settlements, currency) credits each payer the full amount and debits each member their share,
+  then applies settlements (payer's debt toward zero, recipient's credit down); balances always sum to zero.
+  Minimize(net) is the classic greedy debt-simplification — pay the largest debtor's debt to the largest
+  creditor, at most n-1 transfers, deterministic (ties break by member ID). Simplify = Minimize(Net(...)).
+  SplitEqually(total, members) divides into shares that sum exactly to the total (remainder cents to the first
+  members in sorted order) so no minor units are lost or created. All integer-minor-unit math.
+- Table tests (settle_test.go): 3-way meal split + payer credit, a partial settlement squaring one member, a
+  fully-balanced group (0 transfers), all-zero net (empty), the largest-creditor-first ordering, and the
+  equal-split remainder. go test ./internal/settle green; gofmt clean.
+- Next L2: persist shared expenses + settlements in the store (export round-trip), appstate atoms + a
+  record-settlement action, and the Split screen "Settle up" panel; plus seed 2-3 sample members so Split/Settle
+  have real data out of the box.
+
 ## 2026-06-20 - feat: L1 "Cover…" overspent budget (state + UI + e2e)
 
 - Finished the L1 cover-overspending ritual on top of the pure budgeting.Transfer. Added

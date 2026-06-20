@@ -41,6 +41,14 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Settle-up logic for shared expenses (L2, bottom-up start).** A new pure `internal/settle` turns a set of
+  shared expenses (who paid + each member's share) and any recorded settlements into each member's **net
+  balance** (positive = the group owes them) and a **minimal set of "X pays Y $Z" transfers** that zero everyone
+  out (greedy largest-debtor-pays-largest-creditor, at most n−1 transfers, deterministic by member ID). All
+  arithmetic is on integer minor units, so no cents are lost or created; a `SplitEqually` helper divides a total
+  into shares that sum exactly to it (remainder cents handed to the first members in order). Table-tested:
+  three-way uneven shares, a partial settlement, a fully-balanced group (zero transfers), an already-settled net
+  (empty), and the equal-split remainder distribution.
 - **"Cover…" an overspent budget from the Budgets screen (L1).** An over-budget row now offers a **Cover…**
   action that opens a small inline form: pick a funding budget (each labelled with its remaining room), an
   amount prefilled to the exact overspend (with a one-tap "Full $X" button), and apply — moving budgeted money
