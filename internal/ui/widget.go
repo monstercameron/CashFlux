@@ -6,7 +6,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -125,18 +124,12 @@ func widget(props WidgetProps) uic.Node {
 	modeAtom := uistate.UseLayoutMode()
 	mode := modeAtom.Get()
 
-	// Only show the gear on tiles that actually have something to configure — a
-	// registered settings schema, an explicit custom OnGear, or (in the
-	// auto-importance layout mode) every tile, since importance is then settable
-	// per tile (C24). On the no-schema tiles in other modes the gear used to open
-	// an empty "no settings yet" panel, reading as broken (C21); render an inert,
-	// equal-width slot there instead so the header stays balanced.
-	var gear uic.Node
-	if props.OnGear != nil || widgetcfg.Has(props.ID) || mode == dashlayout.ModeAutoImportance {
-		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
-	} else {
-		gear = Span(Class("gear-inline"), Attr("aria-hidden", "true"), Style(map[string]string{"visibility": "hidden"}), Icon(icon.Settings, Class("w-4 h-4")))
-	}
+	// Every tile is configurable now — the settings panel always offers a
+	// per-tile color and an importance rank (plus any schema fields) — so the
+	// gear always shows. (It used to be hidden on no-schema tiles outside the
+	// auto-importance mode, when the panel could read as empty (C21); the
+	// per-widget color (B20) gives every tile a meaningful setting.)
+	gear := uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
 
 	dragSrc := uistate.UseDragSource()
 	dragPreview := uistate.UseDragPreview()
@@ -168,9 +161,21 @@ func widget(props WidgetProps) uic.Node {
 		cellClass += " drag" // dims the widget while it is being dragged
 	}
 	args := []any{Class(cellClass), Attr("data-widget", props.ID)}
-	if style := gridStyle(gridCol, gridRow); style != nil {
-		args = append(args, Style(style))
+	// Per-widget color (B20): if this tile has a saved accent, tint it with a
+	// colored top strip (an inset box-shadow, so it never collides with the cell
+	// border). The key is always set — to the color or "none" — because the
+	// renderer doesn't drop an omitted style key, so a cleared color must be
+	// written back explicitly to revert.
+	style := gridStyle(gridCol, gridRow)
+	if style == nil {
+		style = map[string]string{}
 	}
+	if accent := uistate.UseWidgetConfigs().Get().For(props.ID).Accent(); accent != "" {
+		style["box-shadow"] = "inset 0 3px 0 0 " + accent
+	} else {
+		style["box-shadow"] = "none"
+	}
+	args = append(args, Style(style))
 	if props.Draggable {
 		id := props.ID
 		args = append(args,

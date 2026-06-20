@@ -21,6 +21,11 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Per-widget colors (B20).** Each dashboard tile can now be tinted with its own accent: open the tile's
+  settings (every tile shows a gear now) and pick a "Tile color" — it paints a colored strip across the top of
+  that tile, stored per-widget and reversible with Clear. The color is validated (a bad hex is ignored) and
+  kept in the widget config under a reserved key, so it survives reloads and travels with the widget settings.
+  Verified end-to-end via Playwright (set tints the tile and persists; Clear reverts).
 - **Remove uploaded fonts (B20).** Each uploaded custom font now lists in the theme editor with a Remove
   button. Removing it drops the font from storage, clears its `@font-face`, and — if the active theme was using
   it — falls back to a curated font (Inter/Fraunces) so nothing points at a missing face. Verified end-to-end

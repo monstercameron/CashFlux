@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: per-widget colors — the last B20 sub-item
+
+- Closed B20's final approved item. Pure layer: a reserved `widgetcfg.AccentKey` ("_accent") + a validated
+  `Config.Accent()` accessor (hex-checked via internal/contrast), table-tested. The widget reads its own accent
+  by ID inside ui.widget() (no churn across the 20+ dashboard call sites) and paints a 3px inset top strip.
+- Two gotchas hit and fixed: (1) the shorthand Style() map does NOT apply CSS custom properties (only direct
+  setProperty does), so the first `--w-accent`/data-attr approach left the strip transparent — switched to an
+  inline `box-shadow` carrying the color directly; (2) the renderer does NOT drop an omitted style key on
+  re-render (a cleared color left a stale strip), so box-shadow is ALWAYS written (the color or "none").
+- Made the per-tile gear always show (it was hidden on no-schema tiles outside auto-importance mode): the
+  settings panel now always offers a meaningful control (Tile color) plus importance, so no tile's panel reads
+  as empty (the old C21 concern). Added a widgetColorRow (native color input + Clear) to widgetSettingsForm,
+  rendered for every tile.
+- Verified via Playwright (e2e/widget_color_check.mjs): opening a tile's gear and picking red paints an inset
+  red strip and persists _accent=#ff0000; Clear removes the strip and the stored key — no page errors. Bumped
+  sw cache v189→v190.
+- B20 is now FULLY complete (engine, editor, import/export, font upload+remove, banner upload+remove,
+  density/scale unify, icon weight, per-widget colors). The branding/theming + artifact-upload focus area is
+  done. Next: broader TODOS backlog (e.g. B21 Reports).
+
 ## 2026-06-19 - feat: per-font remove UI (B20 completion)
 
 - Closed the font-management gap: uploads could be added but not removed. The editor now lists each uploaded

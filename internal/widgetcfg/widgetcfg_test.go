@@ -2,6 +2,24 @@ package widgetcfg
 
 import "testing"
 
+func TestConfigAccent(t *testing.T) {
+	if got := (Config{}).Accent(); got != "" {
+		t.Errorf("no accent → %q, want empty", got)
+	}
+	if got := (Config{AccentKey: "#3344ff"}).Accent(); got != "#3344ff" {
+		t.Errorf("valid accent → %q, want #3344ff", got)
+	}
+	if got := (Config{AccentKey: "  #abc  "}).Accent(); got != "#abc" {
+		t.Errorf("trimmed short hex → %q, want #abc", got)
+	}
+	if got := (Config{AccentKey: "not-a-color"}).Accent(); got != "" {
+		t.Errorf("invalid accent → %q, want empty (rejected)", got)
+	}
+	if got := (Config{AccentKey: ""}).Accent(); got != "" {
+		t.Errorf("empty accent → %q, want empty", got)
+	}
+}
+
 func TestFieldStrFallback(t *testing.T) {
 	f := Field{Key: "k", Type: Select, Default: "a", Options: []Option{{Value: "a"}, {Value: "b"}}}
 	if got := f.Str(Config{}); got != "a" {

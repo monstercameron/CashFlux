@@ -67,17 +67,6 @@ type widgetSettingsFormProps struct {
 // with no schema yet show a friendly placeholder.
 func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 	cfgAtom := uistate.UseWidgetConfigs()
-	// Every tile can be ranked for the auto-importance layout mode, so the
-	// importance control always renders — which is also why a no-schema tile's
-	// panel is never empty (C21/C24).
-	importance := uic.CreateElement(importanceRow, importanceRowProps{ID: props.ID})
-	schema, ok := widgetcfg.SchemaFor(props.ID)
-	if !ok {
-		return Div(
-			Div(Class("set-label"), props.Title),
-			importance,
-		)
-	}
 	all := cfgAtom.Get()
 	cfg := all.For(props.ID)
 	set := func(key, val string) {
@@ -85,13 +74,60 @@ func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 		cfgAtom.Set(next)
 		uistate.PersistWidgetConfigs(next)
 	}
-	rows := make([]any, 0, len(schema.Fields)+2)
+	// Every tile can be ranked for the auto-importance layout mode and tinted with
+	// a per-widget accent color (B20), so both controls always render — a tile's
+	// panel is never empty (C21/C24).
+	importance := uic.CreateElement(importanceRow, importanceRowProps{ID: props.ID})
+	colorRow := uic.CreateElement(widgetColorRow, widgetColorRowProps{
+		Current: cfg.Accent(),
+		OnSet:   func(hex string) { set(widgetcfg.AccentKey, hex) },
+	})
+	schema, ok := widgetcfg.SchemaFor(props.ID)
+	if !ok {
+		return Div(
+			Div(Class("set-label"), props.Title),
+			colorRow,
+			importance,
+		)
+	}
+	rows := make([]any, 0, len(schema.Fields)+3)
 	rows = append(rows, Div(Class("set-label"), schema.Title))
 	for _, f := range schema.Fields {
 		rows = append(rows, uic.CreateElement(widgetFieldRow, widgetFieldRowProps{Field: f, Cfg: cfg, OnSet: set}))
 	}
-	rows = append(rows, importance)
+	rows = append(rows, colorRow, importance)
 	return Div(rows...)
+}
+
+type widgetColorRowProps struct {
+	Current string
+	OnSet   func(string)
+}
+
+// widgetColorRow lets the user tint this tile with an accent color (shown as a
+// colored top strip) or clear it back to the theme default. Own component so the
+// color input's change hook stays at a stable position.
+func widgetColorRow(props widgetColorRowProps) uic.Node {
+	on := uic.UseEvent(func(e uic.Event) {
+		if props.OnSet != nil {
+			props.OnSet(e.GetValue())
+		}
+	})
+	val := props.Current
+	if val == "" {
+		val = "#7c83ff"
+	}
+	return Div(Class("toggle-row"),
+		Span("Tile color"),
+		Div(Class("flex items-center gap-2"),
+			Input(Type("color"), Style(map[string]string{"width": "2rem", "height": "1.6rem", "padding": "0", "border": "none", "background": "none"}), Attr("aria-label", "Tile color"), Value(val), OnChange(on)),
+			If(props.Current != "", Button(Class("btn"), Type("button"), OnClick(func() {
+				if props.OnSet != nil {
+					props.OnSet("")
+				}
+			}), "Clear")),
+		),
+	)
 }
 
 type importanceRowProps struct {

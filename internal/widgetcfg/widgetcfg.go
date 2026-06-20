@@ -9,6 +9,9 @@ package widgetcfg
 import (
 	"sort"
 	"strconv"
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/contrast"
 )
 
 // FieldType is the kind of control a Field renders as.
@@ -60,6 +63,21 @@ func (s Schema) FieldByKey(key string) (Field, bool) {
 
 // Config holds a widget's setting values, keyed by field key, as strings.
 type Config map[string]string
+
+// AccentKey is the reserved Config key holding a widget's optional per-widget
+// accent color (a hex string). It is not a schema field — every widget can be
+// tinted — so it uses a leading underscore to stay clear of real field keys.
+const AccentKey = "_accent"
+
+// Accent returns the widget's per-widget accent color if one is set and is a
+// valid hex color, else "". The UI uses it to tint just this tile.
+func (c Config) Accent() string {
+	v := strings.TrimSpace(c[AccentKey])
+	if _, _, _, err := contrast.ParseHex(v); err != nil {
+		return ""
+	}
+	return v
+}
 
 // Str returns the field's value from c, falling back to the default when missing
 // or empty. For a Select, an unknown value also falls back to the default.
