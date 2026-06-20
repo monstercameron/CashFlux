@@ -22,7 +22,7 @@ and every commit updates this file under `Unreleased`.
   active column). Category and account sort by display name. The standalone Sort dropdown is gone. Every
   behavior is preserved — inline edit, duplicate, delete (+transfer pair), per-row select + bulk actions,
   dedupe notice, persisted filters, CSV export, the a11y live region — and the table collapses to stacked cards
-  on narrow screens. (Pagination control and the compact filter toolbar land next.)
+  on narrow screens. (The compact filter toolbar lands next.)
 - **One appearance system — density & display scale unified into the theme (B20).** Density and text size are
   now owned by the theme engine: `ApplyTheme` sets `data-density` (so the editor's density control is finally
   live) and `--ui-scale`, while `ApplyPrefs` no longer touches either (no more two systems fighting over the
@@ -37,6 +37,15 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Reusable `DataTable` component + ledger pagination bar (C47).** A new generic `internal/ui` `DataTable`
+  owns the table chrome — semantic `<table>`, click-to-sort column headers (with `aria-sort` + caret), and an
+  optional pagination footer — while each screen still renders its own body rows, so it can be reused across the
+  app (accounts, categories, etc.) instead of being hardcoded in the transactions screen. The transactions
+  ledger now consumes it and gains a real pagination bar: **Prev / Next** (disabled at the ends, aria-labelled),
+  a "1–50 of N" position label, and a **Rows per page** select (25 / 50 / 100 / All) — replacing the old
+  "Show more" button. The page and page size persist in the saved filter, the page clamps to range, and changing
+  any filter or sort resets to page 1. Backed by `internal/pagination` (window math) and verified via Playwright
+  (the pager renders "Prev · 1–50 of 57 · Next · Rows per page" with no console errors).
 - **Sortable-column logic for the ledger (C47, bottom-up start).** `internal/txnfilter` gains an explicit sort
   **direction** (`asc`/`desc`) and three new sort keys — **category** and **account** (name-aware via a new
   `ApplyWithLabels` that takes id→name maps) on top of date/amount/payee — with per-key default directions

@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -23,10 +24,6 @@ import (
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
-
-// txnPageSize is how many filtered transactions render per page before a
-// "Show more" reveals the next batch (C39 — keeps long ledgers responsive).
-const txnPageSize = 50
 
 // Transactions is the global ledger: add income/expense, list newest first, delete.
 func Transactions() ui.Node {
@@ -70,7 +67,6 @@ func Transactions() ui.Node {
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	customVals := ui.UseState(map[string]string{})
 	selected := ui.UseState(map[string]bool{})
-	visN := ui.UseState(txnPageSize) // how many filtered rows to render (paginated, C39)
 	bulkCat := ui.UseState("")
 	errMsg := ui.UseState("")
 	noticeAtom := uistate.UseNotice()
@@ -78,12 +74,17 @@ func Transactions() ui.Node {
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
 	setFilter := func(mut func(*uistate.TxFilter)) {
-		nf := filterAtom.Get()
+		prev := filterAtom.Get()
+		nf := prev
 		mut(&nf)
-		nf = nf.Normalize()
+		// A filter or sort change starts a new result set, so jump back to page 1;
+		// a pure page/size change keeps your spot.
+		nf = nf.ResetPageIfScopeChanged(prev).Normalize()
 		filterAtom.Set(nf)
 		uistate.PersistTxFilter(nf)
 	}
+	setPage := func(p int) { setFilter(func(x *uistate.TxFilter) { x.Page = p }) }
+	setPageSize := func(s int) { setFilter(func(x *uistate.TxFilter) { x.PageSize, x.Page = s, 1 }) }
 
 	onDesc := ui.UseEvent(func(v string) {
 		desc.Set(v)
@@ -481,14 +482,15 @@ func Transactions() ui.Node {
 	case len(shown) == 0:
 		listBody = P(Class("empty"), uistate.T("transactions.noMatch"))
 	default:
-		// Paginate: render only the first visN rows so a long ledger stays fast,
-		// with a "Show more" button to reveal the next page (C39).
-		page := shown
-		hidden := 0
-		if n := visN.Get(); len(shown) > n {
-			page = shown[:n]
-			hidden = len(shown) - n
+		// Paginate the filtered set to the persisted page/size (C47), so a long
+		// ledger renders one page at a time.
+		total := len(shown)
+		pageSize := f.PageSize
+		if pageSize == 0 {
+			pageSize = txnfilter.DefaultPageSize
 		}
+		curPage := pagination.Clamp(f.Page, total, pageSize)
+		page := pagination.Slice(shown, curPage, pageSize)
 		rows := MapKeyed(page,
 			func(t domain.Transaction) any { return t.ID },
 			func(t domain.Transaction) ui.Node {
@@ -500,24 +502,30 @@ func Transactions() ui.Node {
 				})
 			},
 		)
-		head := Tr(
-			Th(Attr("scope", "col"), Span(Class("sr-only"), "Select")),
-			ui.CreateElement(sortTh, sortThProps{Key: "date", Label: "Date", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
-			ui.CreateElement(sortTh, sortThProps{Key: "payee", Label: "Description", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
-			ui.CreateElement(sortTh, sortThProps{Key: "category", Label: "Category", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
-			ui.CreateElement(sortTh, sortThProps{Key: "account", Label: "Account", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
-			Th(Attr("scope", "col"), "Tags"),
-			ui.CreateElement(sortTh, sortThProps{Key: "amount", Label: "Amount", Active: f.Sort, Dir: f.Dir, OnSort: sortBy}),
-			Th(Attr("scope", "col"), "Cleared"),
-			Th(Attr("scope", "col"), "Actions"),
-		)
-		listBody = Div(
-			Table(Class("txn-table"), Thead(head), Tbody(rows)),
-			If(hidden > 0, Div(Class("flex justify-center py-1"),
-				Button(Class("btn"), Type("button"), OnClick(func() { visN.Set(visN.Get() + txnPageSize) }),
-					uistate.T("transactions.showMore", hidden)),
-			)),
-		)
+		listBody = uiw.DataTable(uiw.DataTableProps{
+			Class: "txn-table",
+			Columns: []uiw.Column{
+				{Head: Span(Class("sr-only"), "Select")},
+				{Label: "Date", SortKey: "date"},
+				{Label: "Description", SortKey: "payee"},
+				{Label: "Category", SortKey: "category"},
+				{Label: "Account", SortKey: "account"},
+				{Label: "Tags"},
+				{Label: "Amount", SortKey: "amount", Class: "td-amount"},
+				{Label: "Cleared"},
+				{Label: "Actions", Class: "td-actions"},
+			},
+			Body:       rows,
+			Sort:       f.Sort,
+			Dir:        f.Dir,
+			OnSort:     sortBy,
+			Page:       curPage,
+			Total:      total,
+			PageSize:   pageSize,
+			PageSizes:  txnfilter.PageSizes,
+			OnPage:     setPage,
+			OnPageSize: setPageSize,
+		})
 	}
 
 	filterAccOptions := []ui.Node{Option(Value(""), SelectedIf(f.Account == ""), uistate.T("transactions.allAccounts"))}
@@ -699,30 +707,5 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
 			Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 		),
-	)
-}
-
-// sortThProps configures one sortable column header.
-type sortThProps struct {
-	Key, Label, Active, Dir string
-	OnSort                  func(string)
-}
-
-// sortTh renders a sortable column header: a real <button> that sorts by Key (and
-// flips direction when already active), with a caret and aria-sort on the active
-// column. Its own component so the click hook stays stable across the header row.
-func sortTh(props sortThProps) ui.Node {
-	ariaSort, caret := "none", ""
-	if props.Active == props.Key {
-		if props.Dir == txnfilter.Asc {
-			ariaSort, caret = "ascending", " ▲"
-		} else {
-			ariaSort, caret = "descending", " ▼"
-		}
-	}
-	key := props.Key
-	on := ui.UseEvent(Prevent(func() { props.OnSort(key) }))
-	return Th(Attr("scope", "col"), Attr("aria-sort", ariaSort),
-		Button(Class("th-sort"), Type("button"), OnClick(on), props.Label+caret),
 	)
 }

@@ -3,6 +3,31 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C47 reusable DataTable + ledger pagination bar
+
+- Built the pagination bar (prev/next + "1–50 of N" + page-size select replacing the old visN "Show more"), and
+  on the user's note "make sure it's a reusable table component we can reuse across the app", extracted the whole
+  table+pager into a generic `internal/ui` `DataTable` instead of leaving it inline in transactions.go.
+- DataTable owns the *chrome*, the caller owns the *rows*: props are `Columns []Column{Label, SortKey, Class,
+  Head}`, a `Body any` (the caller's MapKeyed <tr> result — typed `any` so the []ui.Node slice flattens through
+  Tbody), the active `Sort`/`Dir` + `OnSort`, and optional pager fields (`Page/Total/PageSize/PageSizes` +
+  `OnPage`/`OnPageSize`; omit `OnPage` to render no footer). Two internal sub-components keep their hooks stable:
+  `dtHeader` (a plain <th> or a sortable header <button> with aria-sort + caret) and `dtPager` (prev/next
+  disabled at the ends, "from–to of total" via `pagination.Window`, and a Rows-per-page select of
+  `PageSizes` + an "All" option emitting `AllPageSize=-1`). So other screens (accounts/categories) can drop in a
+  sortable, paginated table without re-implementing the chrome.
+- transactions.go now just builds a `[]uiw.Column` and hands DataTable the rows + sort + pager callbacks; deleted
+  the local sortTh/txnPager components, the now-unused txnPageSize const, and the strconv import. `setFilter`
+  resets the page via ResetPageIfScopeChanged; `setPage`/`setPageSize` write the persisted filter.
+- CSS: the table still carries `txn-table` (so the existing table styles apply) plus the generic `data-table`
+  class; added `.data-pager` styles + a header right-align rule for the amount/actions columns. Bumped sw cache
+  v192->v193.
+- Verified: gofmt clean, wasm build green, full e2e suite 29/0 green, and a Playwright screenshot confirms the
+  table renders with the pager footer "Prev · 1–50 of 57 · Next · Rows per page · 25/50/100/All" and no console
+  errors (e2e/pager_shot.mjs, a one-off check like theme_shot.mjs).
+- Next C47: the header select-all checkbox, then the compact filter toolbar (search + Filters FlipPanel popover +
+  active-filter chips).
+
 ## 2026-06-20 - feat: C47 ledger table UI — semantic table + click-to-sort headers
 
 - First C47 UI commit (the big one). Rewrote the /transactions list in internal/screens/transactions.go from a
