@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Bills rows use a collision-proof key (C57).** The bills list keyed each row by `AccountID` alone; a composite
+  key (account + due date + name) removes the latent risk of two bills on one account colliding and a row being
+  silently dropped by the keyed-list diff.
 - **The Bills "Per year" figure is now cadence-correct (C57, correctness).** It was computed as the upcoming-total
   × 12, which mixed cadences — a one-off sum of differently-recurring items (monthly liabilities, weekly/quarterly/
   yearly recurring) multiplied by 12 misstated the annual cost. A new pure, table-tested `bills.AnnualAmounts`

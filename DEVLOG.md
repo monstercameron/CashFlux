@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: collision-proof Bills row key (C57)
+
+- C57 item 5. The bills MapKeyed keyed rows by r.Bill.AccountID. Switched to a composite (AccountID + DueDate +
+  Name). Honest note: today recurring-derived bills already use a "recurring:"+id AccountID and liabilities yield
+  one bill each, so keys don't actually collide yet — but AccountID-only is a latent footgun (a future where a
+  recurring links to a real account would drop a row), and a unique+stable composite is the correct key for a
+  diffed list. No behaviour change for the current unique-key case; wasm builds; gofmt clean.
+- Provably-safe one-liner over existing fields, so build-gated (no new e2e). Committed via git commit -- <paths>;
+  sw.js parallel-dirty, left out; TODOS.md untouched.
+- Next: C58 (Split).
+
 ## 2026-06-20 - feat: rule match-count + coverage preview UI (L15)
 
 - First wasm-UI wiring since the contention pivot. Checked the targets specifically: en.go/rules.go/bills_screen.go/

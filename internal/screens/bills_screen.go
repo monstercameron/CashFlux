@@ -84,7 +84,12 @@ func Bills() ui.Node {
 	}
 
 	rows := MapKeyed(billRows,
-		func(r billRowData) any { return r.Bill.AccountID },
+		// Composite key (account + due date + name): one account can yield more than
+		// one bill (a liability statement plus a recurring on the same account), so
+		// keying by AccountID alone would collide and silently drop a row (C57).
+		func(r billRowData) any {
+			return r.Bill.AccountID + "|" + r.Bill.DueDate.Format("2006-01-02") + "|" + r.Bill.Name
+		},
 		func(r billRowData) ui.Node {
 			return ui.CreateElement(BillRow, billRowProps{Data: r, OnRemind: remind})
 		},
