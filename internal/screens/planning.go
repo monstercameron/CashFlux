@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 	"github.com/monstercameron/CashFlux/internal/planning"
+	"github.com/monstercameron/CashFlux/internal/runway"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -60,6 +61,11 @@ func Planning() ui.Node {
 	onAfAmount := ui.UseEvent(func(v string) { afAmount.Set(v) })
 	onAfMonths := ui.UseEvent(func(v string) { afMonths.Set(v) })
 	onAfReserve := ui.UseEvent(func(v string) { afReserve.Set(v) })
+
+	// Cash runway: a daily projection of liquid balance against scheduled recurring
+	// cash flows, flagging the day it dips below a buffer (L13).
+	rwBuffer := ui.UseState("")
+	onRwBuffer := ui.UseEvent(func(v string) { rwBuffer.Set(v) })
 
 	// Recurring cash-flow management.
 	rev := ui.UseState(0)
@@ -343,6 +349,57 @@ func Planning() ui.Node {
 		)
 	}
 
+	// Cash runway (L13): project liquid balance over the next 60 days against the
+	// scheduled recurring cash flows (via internal/runway) and warn about the first
+	// day it dips below the buffer — short-term liquidity, distinct from the 12-month
+	// net-worth forecast above.
+	runwayCard := Fragment()
+	if app != nil {
+		recs := app.Recurring()
+		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		_, assets, _, _ := ledger.NetWorth(app.Accounts(), app.Transactions(), rates)
+		buffer, _ := money.ParseMinor(strings.TrimSpace(rwBuffer.Get()), currency.Decimals(base))
+		if buffer < 0 {
+			buffer = 0
+		}
+		const runwayDays = 60
+
+		var rwBody ui.Node = P(Class("muted"), uistate.T("planning.runwayEmpty"))
+		if len(recs) > 0 {
+			if proj, perr := runway.Project(assets.Amount, recs, time.Now(), runwayDays, buffer, rates); perr == nil {
+				lowTone := ""
+				if proj.MinBalance < 0 {
+					lowTone = "neg"
+				}
+				lowDate := time.Now().AddDate(0, 0, proj.MinDay).Format("Jan 2")
+				var verdict ui.Node
+				if proj.WillBreach() {
+					breachDate := time.Now().AddDate(0, 0, proj.BreachDay).Format("Jan 2")
+					verdict = P(Class("err"), Attr("role", "alert"), uistate.T("planning.runwayBreach", breachDate, fmtMoney(money.New(proj.BreachShortfall, base))))
+				} else {
+					verdict = P(Class("budget-sub font-display"), uistate.T("planning.runwaySafe", runwayDays))
+				}
+				rwBody = Div(
+					Div(Class("stat-grid"),
+						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(assets.Amount, base)), ""),
+						stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
+					),
+					verdict,
+					P(Class("muted"), uistate.T("planning.runwayLow", fmtMoney(money.New(proj.MinBalance, base)), lowDate)),
+				)
+			}
+		}
+
+		runwayCard = Section(Class("card"),
+			H2(Class("card-title"), uistate.T("planning.runwayTitle")),
+			P(Class("muted"), uistate.T("planning.runwayHint")),
+			Form(Class("form-grid"),
+				Input(Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("planning.runwayBufferPlaceholder", base)), Value(rwBuffer.Get()), Step("0.01"), OnInput(onRwBuffer)),
+			),
+			rwBody,
+		)
+	}
+
 	recurringCard := Fragment()
 	if app != nil {
 		cadenceOpts := []ui.Node{
@@ -607,6 +664,7 @@ func Planning() ui.Node {
 	return Div(
 		forecastCard,
 		affordCard,
+		runwayCard,
 		recurringCard,
 		plansCard,
 		debtCard,
