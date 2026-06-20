@@ -195,6 +195,9 @@ var english = Catalog{
 	"cmd.backupEverything":  "Back up everything (all workspaces)",
 	"backup.everythingDone": "Backed up every workspace to a file.",
 	"backup.everythingErr":  "Couldn't build the backup file.",
+	"cmd.restoreBackup":     "Restore from a backup file…",
+	"backup.restoreConfirm": "Restore from this backup? It replaces all current data on this device.",
+	"backup.restoreErr":     "That file isn't a valid CashFlux backup.",
 
 	// Passcode lock (B17)
 	"applock.unlockPrompt":      "Enter your passcode to unlock",

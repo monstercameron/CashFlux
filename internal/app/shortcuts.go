@@ -272,6 +272,7 @@ func buildPaletteCommands() []paletteCmd {
 		paletteCmd{label: uistate.T("settings.exportJSON"), keywords: []string{"export", "backup", "save", "download", "json"}, run: func() { exportJSON(paletteNotify) }},
 		paletteCmd{label: uistate.T("settings.exportCSV"), keywords: []string{"export", "csv", "spreadsheet", "download"}, run: func() { exportCSV(paletteNotify) }},
 		paletteCmd{label: uistate.T("cmd.backupEverything"), keywords: []string{"backup", "everything", "all", "migrate", "full", "export", "download"}, run: backupEverything},
+		paletteCmd{label: uistate.T("cmd.restoreBackup"), keywords: []string{"restore", "import", "backup", "recover", "migrate", "load"}, run: restoreFromBackup},
 	)
 	// Passcode lock (adaptive to current state).
 	if loadAppLock().Enabled {

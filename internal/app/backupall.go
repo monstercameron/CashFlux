@@ -82,3 +82,70 @@ func backupEverything() {
 	downloadBytes("cashflux-backup.json", "application/json", data)
 	paletteNotify(uistate.T("backup.everythingDone"), false)
 }
+
+// restoreFromBackup picks a full-backup JSON file, confirms the (destructive)
+// replace, writes its contents back into localStorage, and reloads so boot
+// re-hydrates the restored install (L9). It's the inverse of backupEverything.
+func restoreFromBackup() {
+	pickFile(".json", func(data []byte) {
+		env, err := backup.UnmarshalEnvelope(data)
+		if err != nil {
+			paletteNotify(uistate.T("backup.restoreErr"), true)
+			return
+		}
+		if !confirmAction(uistate.T("backup.restoreConfirm")) {
+			return
+		}
+		applyBackup(env)
+		reloadPage()
+	})
+}
+
+// applyBackup writes a restored envelope back into localStorage: the workspace
+// registry, the appearance side-state, and each workspace's dataset (the active
+// one into the canonical key, the rest into their blobs, by registry order). The
+// autosave is suspended first so the dying page can't write the old in-memory
+// dataset back over what we restore.
+func applyBackup(env backup.Envelope) {
+	suspendAutosave = true
+	if env.WorkspaceRegistry != "" {
+		lsSet(workspacesKey, env.WorkspaceRegistry)
+	}
+	restoreAppearance(env.Appearance)
+
+	r := loadRegistry()
+	if len(r.Workspaces) == 0 {
+		if len(env.Datasets) > 0 {
+			lsSet(datasetStoreKey, env.Datasets[0])
+		}
+		return
+	}
+	for i, w := range r.Workspaces {
+		if i >= len(env.Datasets) {
+			break
+		}
+		if w.ID == r.ActiveID {
+			lsSet(datasetStoreKey, env.Datasets[i])
+		} else {
+			saveBlob(w.ID, map[string]string{datasetStoreKey: env.Datasets[i]})
+		}
+	}
+}
+
+// restoreAppearance writes the device-local appearance keys, clearing any the
+// backup didn't carry so a restore is a faithful replacement, not a merge.
+func restoreAppearance(a backup.Appearance) {
+	setOrClear(themeKey, a.Theme)
+	setOrClear(fontsKey, a.Fonts)
+	setOrClear(bannerKey, a.Banner)
+	setOrClear(prefsKey, a.Prefs)
+}
+
+// setOrClear sets a localStorage key to val, or removes it when val is empty.
+func setOrClear(key, val string) {
+	if val != "" {
+		lsSet(key, val)
+		return
+	}
+	lsRemove(key)
+}
