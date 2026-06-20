@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Workspace reorder buttons use arrow icons (C46).** The switcher's move-up/move-down controls use
+  arrow-up/arrow-down glyphs (with aria-labels) instead of bare ↑/↓.
 - **Reports change-% arrows use colored icons (C46).** The ▲/▼ delta markers on report rows are now
   arrow-up/arrow-down glyphs that inherit the up/down tone color.
 - **Insights anomaly arrows use colored icons (C46).** The bare ↑/↓ direction markers on each spending

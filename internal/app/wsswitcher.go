@@ -209,8 +209,8 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 		return c
 	}
 	actions := []any{Class("flex items-center gap-2"),
-		Button(Class(moveCls(props.Index > 0)), Type("button"), Title(uistate.T("ws.moveUp")), OnClick(moveTo(props.Index-1)), "↑"),
-		Button(Class(moveCls(props.Index < props.Total-1)), Type("button"), Title(uistate.T("ws.moveDown")), OnClick(moveTo(props.Index+1)), "↓"),
+		Button(Class(moveCls(props.Index > 0)), Type("button"), Attr("aria-label", uistate.T("ws.moveUp")), Title(uistate.T("ws.moveUp")), OnClick(moveTo(props.Index-1)), ui.Icon(icon.ArrowUp, Class("w-4 h-4"))),
+		Button(Class(moveCls(props.Index < props.Total-1)), Type("button"), Attr("aria-label", uistate.T("ws.moveDown")), Title(uistate.T("ws.moveDown")), OnClick(moveTo(props.Index+1)), ui.Icon(icon.ArrowDown, Class("w-4 h-4"))),
 		ui.SwatchPicker(ui.SwatchPickerProps{Colors: workspacePalette, Selected: props.Color, OnSelect: pickColor}),
 		dataBtn(uistate.T("ws.rename"), false, rename),
 		dataBtn(uistate.T("ws.export"), false, func() { exportWorkspace(id) }),
