@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: visible labels on the goal forms (C51)
+
+- C51 labelling item: the add, inline-edit, and contribute goal forms were placeholder/aria-label only. Wrapped
+  every control in the shared labeledField helper (name, target, saved-so-far, owner, linked account, target date,
+  and the contribute amount). 4th screen reusing labeledField + the .labeled-field hook (accounts/budgets/goals).
+- New goals_labels_check.mjs: add form has >=5 .labeled-field with a visible "Name" label; opening a row's editor
+  shows >=4 labeled fields. PASS; goals_bar_tone_check still PASS. App wasm builds clean; gofmt clean.
+- sw.js parallel-dirty, left out. Committed by pathspec (goals.go, the new e2e, journals); TODOS.md untouched.
+- Next (C51): linked-goal → account drill-down (mirror the budget drill via nav), then C52 (To-do).
+
 ## 2026-06-20 - feat: L15 rule match-count preview + coverage (pure logic)
 
 - L15 gap: "Apply to existing" is blind (no count of what a rule will hit) and there's no rule-coverage signal.

@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Goal add / edit / contribute forms now have persistent visible labels (C51).** All three goal forms were
+  placeholder-only (name, target, saved-so-far, owner/linked selects, date, contribute amount), the same systemic
+  gap fixed for Accounts/Budgets. Each control is now wrapped in the shared `labeledField` helper. Covered by a new
+  `goals_labels_check` e2e.
+
 ### Changed
 - **Completed goals now read as done at a glance (C51).** A goal's progress bar was always the same flat accent
   colour even at 100%. A reached goal's bar now uses a brighter success tone, so finished goals stand out from
