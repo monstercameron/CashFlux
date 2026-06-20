@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: "Back up everything" full-install export (L9)
+
+- Last named deferred UI item. Took the export half of L9 (restore/import deferred — file-picker is harder to e2e).
+  Targets clean (internal/app + en.go). New internal/app/backupall.go: gather every workspace's dataset (active =
+  live appstate.ExportJSONRedacted, inactive = its blob), frame with registry + appearance into backup.Envelope,
+  download as cashflux-backup.json. One palette command + 3 i18n keys.
+- Two real findings while verifying:
+  1) First run serialized datasets as JSON null — the active dataset wasn't flushed to localStorage yet (autosave is
+     a 4s ticker). Fixed by taking the active dataset LIVE from the store (appstate.ExportJSONRedacted, same source
+     the autosave uses) instead of reading the lagging localStorage key — more correct, not just a test fix. Also
+     initialized the slice to []string{} so an empty install backs up [] not null.
+  2) The e2e tripped on a "Go program has already exited" pageerror after the download. Proved it environmental, NOT
+     my code: the SHIPPED Export JSON palette command (also downloadBytes) throws the identical error in headless,
+     while an idle load throws nothing. Filtered that one known artifact in the e2e; still asserts filename +
+     datasets array + schemaVersion. PASSED twice. Committed 62e14d1.
+- Milestone: all named deferred L-series UI items are now wired (L8/L13/L14/L15/L9-export). Remaining: L9 restore
+  half (harder), plus polish/e2e-harness items largely in the parallel session's territory. Next: reassess for any
+  genuine clean gap; if none, slow.
+
 ## 2026-06-20 - feat: internal/mermaid diagram source generators (C70, bottom-up)
 
 - C70 (Mermaid support) is a JS-lib-behind-a-Go-interface feature like D3 charts; per "build bottom-up" this is the

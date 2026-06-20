@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"Back up everything" full-install export (L9).** A new command-palette action exports the whole install — every
+  workspace's dataset, the workspace registry, and the device-local appearance side-state (theme/fonts/banner/prefs)
+  — into one versioned `cashflux-backup.json` via the pure `backup` envelope, so moving to a new device is lossless
+  rather than per-workspace. The active workspace's dataset is taken live so it's current even before the autosave
+  flushes. Find it as "Back up everything" (aliases backup/everything/migrate/full). Covered by a new
+  `backup_everything_check` e2e. (Restore/import is the file-picker half and lands separately.)
 - **Mermaid diagram source generators (C70, foundation).** New pure, table-tested `internal/mermaid`: a label
   `Escape` (collapses whitespace, single-quotes embedded quotes, entity-escapes `<`/`>` so comparison operators
   survive while no raw HTML tag can form), a `Flowchart` builder (box/round/diamond nodes + labelled edges), and
