@@ -48,6 +48,8 @@ func Run() {
 	// Register any uploaded custom fonts (@font-face) so a theme that selects one
 	// can use it from the first paint.
 	uistate.ApplyFonts(uistate.LoadFonts())
+	// Reflect the saved dashboard banner (gradient or uploaded image).
+	uistate.ApplyBanner(uistate.LoadBanner())
 
 	// Derive the URL sub-path the app is served under (e.g. "/CashFlux" on a
 	// GitHub Pages project site) from the <base href> index.html set, so routes

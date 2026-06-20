@@ -14,6 +14,12 @@ and every commit updates this file under `Unreleased`.
   via Playwright (switching the interface font changes the body's computed font-family).
 
 ### Added
+- **Dashboard banner (B20).** The theme editor gains a "Dashboard banner" section: pick a built-in gradient
+  (Aurora / Sunrise / Forest / Slate) or upload your own image (PNG/JPEG/WebP/GIF, ≤2 MB), with a one-click
+  remove. The chosen banner shows as a decorative full-width band above the dashboard bento grid, stored in its
+  own `cashflux:banner` slot and applied at boot. It's purely decorative (no essential text on it), so it can't
+  hurt legibility. Verified end-to-end via Playwright (preset activates the band, persists, removes cleanly;
+  screenshot confirms the band renders).
 - **Banner image logic (B20).** New pure `theme.Banner` (none / built-in gradient / uploaded image) with
   `CSS()` (the `background-image` value), built-in gradient presets (`BannerPresets`), and image-upload
   validation — `ValidateImageUpload` (PNG/JPEG/WebP/GIF up to 2 MB), `ValidImageMIME`, and `ImageMIMEForName`

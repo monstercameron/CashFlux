@@ -53,6 +53,35 @@ func themeEditor() uic.Node {
 			apply(next)
 		})
 	}
+
+	banner := uic.UseState(uistate.LoadBanner())
+	bannerMsg := uic.UseState("")
+	setBanner := func(b theme.Banner) {
+		uistate.PersistBanner(b)
+		uistate.ApplyBanner(b)
+		banner.Set(b)
+	}
+	uploadBanner := func() {
+		pickFileNamed(".png,.jpg,.jpeg,.webp,.gif", func(name, mime string, data []byte) {
+			if mime == "" {
+				mime = theme.ImageMIMEForName(name)
+			}
+			if errs := theme.ValidateImageUpload(mime, len(data)); len(errs) > 0 {
+				bannerMsg.Set(strings.Join(errs, " "))
+				return
+			}
+			bannerMsg.Set("")
+			setBanner(theme.ImageBanner(artifacts.DataURL(mime, data), name))
+		})
+	}
+	var bannerBtns []uic.Node
+	for _, p := range theme.BannerPresets() {
+		p := p
+		bannerBtns = append(bannerBtns, dataBtn(p.Name, false, func() {
+			bannerMsg.Set("")
+			setBanner(p)
+		}))
+	}
 	setColor := func(field, hex string) {
 		n := t
 		switch field {
@@ -181,6 +210,20 @@ func themeEditor() uic.Node {
 				apply(nt)
 			},
 		}),
+
+		Div(Class("set-label mt-2"), "Dashboard banner"),
+		P(Class("muted text-xs"), "A decorative band atop the dashboard. Choose a gradient or upload your own image."),
+		Div(Class("flex flex-wrap gap-2 py-1"), bannerBtns),
+		Div(Class("flex flex-wrap items-center gap-2 py-1"),
+			dataBtn("Upload image…", false, uploadBanner),
+			dataBtn("Remove banner", false, func() {
+				bannerMsg.Set("")
+				setBanner(theme.Banner{})
+			}),
+			Span(Class("muted text-xs"), "PNG, JPEG, WebP, or GIF · up to 2 MB"),
+		),
+		If(!banner.Get().None(), P(Class("muted text-xs"), "Showing: "+banner.Get().Name)),
+		If(bannerMsg.Get() != "", P(Class("text-xs"), Style(map[string]string{"color": "#d8716f"}), bannerMsg.Get())),
 
 		validationNode,
 

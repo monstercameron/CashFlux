@@ -125,40 +125,46 @@ func Dashboard() ui.Node {
 		}
 	}
 
-	return Div(Class("bento"),
-		dashboardHeaderCell(),
-		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
-			GridColumn: "1", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtMoney(net), figTone(net), nwSub, nwTone),
-		}),
-		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-income", Title: uistate.T("dashboard.income"), Draggable: true, Resizable: true,
-			GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtMoney(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
-		}),
-		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-spending", Title: uistate.T("dashboard.spending"), Draggable: true, Resizable: true,
-			GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtMoney(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
-		}),
-		uiw.Widget(uiw.WidgetProps{
-			ID: "kpi-liabilities", Title: uistate.T("dashboard.liabilities"), Draggable: true, Resizable: true,
-			GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-			Body: kpiBody(fmtMoney(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
-		}),
-		recentWidget(txns, widgetCfgs.For("recent")),
-		budgetsWidget(app, txns, rates, widgetCfgs.For("budgets")),
-		goalsWidget(app, widgetCfgs.For("goals")),
-		todoWidget(app, widgetCfgs.For("todo")),
-		accountsWidget(app, txns, widgetCfgs.For("accounts")),
-		netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")),
-		cashFlowWidget(txns, rates),
-		savingsRateWidget(income, expense, widgetCfgs.For("savings")),
-		spendingBreakdownWidget(app, txns, rates, start, end, widgetCfgs.For("breakdown")),
-		upcomingBillsWidget(app),
-		freshnessWidget(accounts, app.FreshnessWindows(), freshnessDismissals.Get(), remindToUpdate, dismissFreshness),
-		topHighlightWidget(txns, app.Categories(), rates),
+	return Fragment(
+		// Optional decorative banner band (B20) — shown only when the user picks a
+		// banner; driven entirely by CSS vars/attribute set by uistate.ApplyBanner,
+		// so it needs no state here. Decorative, hence aria-hidden.
+		Div(Class("app-banner"), Attr("aria-hidden", "true")),
+		Div(Class("bento"),
+			dashboardHeaderCell(),
+			uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
+				GridColumn: "1", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				Body: kpiBody(fmtMoney(net), figTone(net), nwSub, nwTone),
+			}),
+			uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-income", Title: uistate.T("dashboard.income"), Draggable: true, Resizable: true,
+				GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				Body: kpiBody(fmtMoney(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
+			}),
+			uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-spending", Title: uistate.T("dashboard.spending"), Draggable: true, Resizable: true,
+				GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				Body: kpiBody(fmtMoney(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
+			}),
+			uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-liabilities", Title: uistate.T("dashboard.liabilities"), Draggable: true, Resizable: true,
+				GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				Body: kpiBody(fmtMoney(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
+			}),
+			recentWidget(txns, widgetCfgs.For("recent")),
+			budgetsWidget(app, txns, rates, widgetCfgs.For("budgets")),
+			goalsWidget(app, widgetCfgs.For("goals")),
+			todoWidget(app, widgetCfgs.For("todo")),
+			accountsWidget(app, txns, widgetCfgs.For("accounts")),
+			netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")),
+			cashFlowWidget(txns, rates),
+			savingsRateWidget(income, expense, widgetCfgs.For("savings")),
+			spendingBreakdownWidget(app, txns, rates, start, end, widgetCfgs.For("breakdown")),
+			upcomingBillsWidget(app),
+			freshnessWidget(accounts, app.FreshnessWindows(), freshnessDismissals.Get(), remindToUpdate, dismissFreshness),
+			topHighlightWidget(txns, app.Categories(), rates),
+		),
 	)
 }
 

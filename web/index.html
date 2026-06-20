@@ -67,6 +67,19 @@
            renders if a chosen font fails to load. */
         --font-ui: Inter;
         --font-display: 'Fraunces';
+        /* Optional dashboard banner (B20). --banner-bg is the background image /
+           gradient; the band is shown only when data-banner="on". */
+        --banner-bg: none;
+      }
+
+      /* Dashboard banner band (B20): a decorative full-width header strip above
+         the bento grid. Collapsed (not rendered) unless a banner is chosen. */
+      .app-banner { display: none; }
+      :root[data-banner="on"] .app-banner {
+        display: block; height: 132px; margin-bottom: 1rem;
+        background-image: var(--banner-bg, none); background-size: cover; background-position: center;
+        border: 1px solid var(--border); border-radius: var(--radius);
+        box-shadow: inset 0 -44px 64px -34px rgba(0,0,0,0.55);
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; height: 100%; }

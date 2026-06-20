@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - feat: dashboard banner — store, band, editor controls (B20)
+
+- Wasm half of the banner: `internal/uistate/banner.go` — a `cashflux:banner` localStorage slot
+  (LoadBanner/PersistBanner) and `ApplyBanner`, which sets `--banner-bg` and toggles a root `data-banner`
+  attribute. The band itself is a static `.app-banner` div above the dashboard bento (wrapped the Dashboard
+  return in a Fragment), driven purely by CSS — so changing the banner in settings repaints with NO dashboard
+  re-render. index.html got the `.app-banner` rules (shown only under `:root[data-banner="on"]`, 132px,
+  cover/center, themed radius/border, a subtle inset bottom scrim) and a `--banner-bg: none` default.
+- Editor controls: gradient preset buttons (from theme.BannerPresets), Upload-image (pickFileNamed → MIME
+  fallback → ValidateImageUpload → artifacts.DataURL → setBanner), and Remove. Boot wiring in app.go after
+  ApplyFonts.
+- Verified with a new Playwright check (e2e/banner_check.mjs): picking the Aurora preset sets data-banner=on,
+  a gradient --banner-bg, a visible band, and persists; Remove turns it off — no page errors. Screenshot
+  (banner-dashboard.png) confirms the band renders cleanly atop the dashboard. Bumped sw cache v185→v186.
+- Branding/theming artifact-upload trio (fonts/images) is now done. Next: unify the legacy density/scale prefs
+  controls into the engine (remove the duplicate controls), then icon packs (B13).
+
 ## 2026-06-19 - feat: pure banner-image logic (B20, bottom-up)
 
 - Started the header/banner image feature SDLC-first. New `internal/theme/image.go`: image-upload validation
