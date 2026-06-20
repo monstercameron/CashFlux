@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: C69 immediate Paper unblock — light themes light the shell
+
+- Switched to the C-series at the user's request (L-series cleared), starting with C69. Verified first that no
+  other agent was on it: no dirty theming/shell files, zero recent theme/C68/C69 commits. Took the first SDLC step
+  (the immediate Paper unblock), which is pure-logic-first and avoids the protected shell files (index.html /
+  shell.go / dashboard.go) entirely.
+- Root cause (per the ticket): two appearance systems. ApplyTheme writes content CSS vars; a separate ApplyPrefs
+  sets data-theme, the ONLY trigger for the [data-theme="light"] override that re-skins the rail/header/bento.
+  Paper is the only light preset → light vars but no data-theme → light cards in a dark shell.
+- Fix in two atomic commits: (1) pure Theme.IsLight() = WCAG luminance of BgBase > 0.5 via the contrast pkg, new
+  file + 10 table cases (e393c39); (2) ApplyTheme sets data-theme from IsLight() alongside data-density (6e471ca).
+  Confirmed boot order (app.go: ApplyPrefs line 42 THEN ApplyTheme line 47) makes ApplyTheme authoritative, and the
+  prefs-derived default theme keeps existing dark/light users unchanged. uistate/theme.go is not protected; no
+  index.html/shell.go touched.
+- e2e theme_shell_skin_check.mjs: default boots data-theme=dark; inject a light-bgBase theme into localStorage,
+  reload, assert data-theme=light. PASSED twice. Deeper C69 steps (rewire Tailwind/design-system shell literals to
+  var(--…), kill the dual --accent writer, retire the override block) remain — they need index.html (protected/
+  contended), so coordinate or defer. Next: continue C-series per the user; check each ticket isn't taken first.
+
 ## 2026-06-20 - feat: category-tree Mermaid generator (C70 follow-on)
 
 - Continued C70's pure generator layer (C83 multi-select was the alternative but it's a breaking txnfilter change

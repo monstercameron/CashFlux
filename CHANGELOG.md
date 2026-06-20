@@ -42,6 +42,13 @@ and every commit updates this file under `Unreleased`.
   follow-up over this data.)
 
 ### Fixed
+- **Light themes now light the shell, not just the cards (C69).** The Paper preset set light content tokens but
+  the rail/header/dashboard stayed dark, because the `[data-theme="light"]` stylesheet override that re-skins the
+  shell only fires off the `data-theme` attribute — which the theme engine never set. New pure, table-tested
+  `Theme.IsLight()` (WCAG luminance of the base surface) lets `ApplyTheme` set `data-theme` from the theme's own
+  tokens, so any light theme lights the shell. This is the immediate Paper unblock; rewiring the hardcoded shell
+  literals to the engine's CSS vars and retiring the dual data-theme/`--accent` system are the later C69 steps.
+  Covered by a new `theme_shell_skin_check` e2e.
 - **Artifact upload/import failures are no longer silent (C66, reliability).** Both image upload and CSV import
   swallowed errors (`if err == nil`), so a failed save — very plausibly a localStorage-quota overflow, since the
   whole dataset is one blob — just made the file silently not appear. Both paths now surface the actual error in the
