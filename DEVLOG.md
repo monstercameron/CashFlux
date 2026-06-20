@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: B16 story — reconcile (toggle cleared)
+
+- Seventh journey story (e2e/story_txn_cleared.test.mjs): seed a txn, toggle its cleared status via the per-row
+  reconcile button (targeted by its title "Toggle reconciled (cleared) status"), and assert the cleared-status
+  filter excludes it under "not cleared" / includes it under "cleared", and the flag persists across reload.
+  domain.Transaction serializes Cleared with omitempty, so a not-cleared txn has no `cleared` key (undefined),
+  and a cleared one has `cleared:true` — the assertions handle both.
+- Robustness fix worth noting: the dataset autosave is a short ticker, and a fixed 2.5s wait raced it (the
+  toggle was correct in the UI + store but not yet flushed to localStorage when read). Switched to POLLING the
+  store (waitForTxn: re-read up to ~7s until the predicate holds) — the right pattern for any
+  "assert via persisted dataset after a mutation" story. Suite now 16 green. Test-only, no sw bump.
+
 ## 2026-06-19 - test: B16 story — transactions filter persistence
 
 - Sixth journey story (e2e/story_txn_filter.test.mjs): seed a uniquely described transaction, type it into the
