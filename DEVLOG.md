@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-19 - test: B16 story — transactions filter persistence
+
+- Sixth journey story (e2e/story_txn_filter.test.mjs): seed a uniquely described transaction, type it into the
+  ledger's search filter (input[type=search]), and assert the list narrows to exactly 1 row (counting
+  .rows .row-desc), the filter persists to cashflux:tx-filter (text === term), and after reload the search box
+  still holds the term AND the view stays narrowed to 1 — covering the B16 backlog's "filter ... persist across
+  reload". Suite now 15 green via run-stories.ps1. Test-only, no sw bump.
+- Next: reconcile/cleared toggle, members/categories reassign-on-delete, to-do toggle.
+
 ## 2026-06-19 - test: aggregating E2E suite runner (run-stories.ps1)
 
 - Tied the suite together: e2e/run-stories.ps1 builds wasm once, serves web/ on :8099, then runs every
