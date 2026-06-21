@@ -30,3 +30,4 @@
 *.log
 .DS_Store
 .vscode/
+.claude/
