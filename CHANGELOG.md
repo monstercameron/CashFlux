@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **`internal/attention` — urgency-ranking for the dashboard digest.** Pure package that takes the already-computed
+  dashboard signals (bills due soon, near/over budgets, stale balances, overdue & high-priority to-dos, the top
+  spending spike) and returns one severity-ordered, deduped, capped digest under a `Config` (per-source toggles, a
+  bills-due window, a max-items cap, and a minimum-severity floor). Soonest deadline wins within a severity, so an
+  overdue task outranks a bill due tomorrow. Fully table-tested; no `syscall/js`. Feeds the new "Needs attention"
+  widget.
+
 ### Fixed
 - **Chat deep links no longer trigger a full page reload (C90.2).** The in-app link interceptor now reads the
   anchor's parsed `origin`/`pathname`/`hash` instead of string-matching the raw `href`, so it also catches links

@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: dashboard "Needs attention" digest — pure ranking package
+
+- Approved plan: replace the dead full-width header cell (title + layout-mode select + reset) with a configurable,
+  responsive, resizable "Needs attention" widget (default 4×1) that surfaces the urgent/spicy signals; move the
+  layout manager into Settings.
+- Step 1 (this commit): `internal/attention` pure package. `Rank(Inputs, Config) []Item` pulls from enabled
+  sources only, drops below a severity floor, orders by severity then soonest deadline, caps at MaxItems. Severity
+  model: over-budget / bill due ≤2d / overdue task = Critical; near-budget / bill in-window / stale / high-priority
+  task = Warning; spending spike = Info. Items carry structured data (Kind/Amount/Days/Pct/Route/AnchorID), not
+  display strings, so the widget localizes at the edge. Table tests cover ordering, per-source toggles, the bills
+  window, the severity floor, the cap, and the calm empty case. Decision: an overdue task outranks a bill due
+  tomorrow (an overdue deadline is the soonest), confirmed in test.
+- Next: widgetcfg schema for "attention" + the responsive widget, then layout merge + Settings move.
+
 ## 2026-06-21 - fix: chat deep links caused a full page reload (absolute href)
 
 - Reported: clicking a chat deep link worked but did a full page reload. Root cause: the interceptor bailed
