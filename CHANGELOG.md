@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Insights chat: an editable system prompt (C82).** An "Edit prompt" button opens a flip-panel where you can
+  customize the assistant's persona/instructions (saved on-device). The live financial context and the data
+  tools are always injected automatically, so a custom prompt never loses them; "Reset to default" reverts.
 - **Insights chat now uses tools to answer from real data (C82).** The chat drives a bounded tool-calling loop:
   the model can call local, read-only finance tools and answer specific questions from the user's own figures
   instead of guessing. Tools: **spending_by_category** (resolves the category by name → totals it for a period),

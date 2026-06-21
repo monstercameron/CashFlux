@@ -122,6 +122,10 @@ func Insights() ui.Node {
 	convID := ui.UseState("")
 	convCreated := ui.UseState(time.Time{})
 	inited := ui.UseState(false)
+	// Editable system prompt (persona/instructions) — the live data context is always
+	// appended separately, so editing this never loses the user's figures/tools.
+	promptOpen := ui.UseState(false)
+	promptDraft := ui.UseState("")
 
 	// pinText saves an answer to the pinned-insights list. (Saving an answer as a
 	// To-do is no longer a UI button — it becomes an agent tool the model invokes
@@ -415,6 +419,27 @@ func Insights() ui.Node {
 
 	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
 	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
+	// System-prompt editor handlers.
+	onPromptInput := ui.UseEvent(func(v string) { promptDraft.Set(v) })
+	openPrompt := ui.UseEvent(Prevent(func() {
+		cur := strings.TrimSpace(uistate.LoadSystemPrompt())
+		if cur == "" {
+			cur = defaultChatSystemPrompt
+		}
+		promptDraft.Set(cur)
+		promptOpen.Set(true)
+	}))
+	resetPrompt := ui.UseEvent(Prevent(func() { promptDraft.Set(defaultChatSystemPrompt) }))
+	savePrompt := func() {
+		d := strings.TrimSpace(promptDraft.Get())
+		if d == "" || d == defaultChatSystemPrompt {
+			uistate.PersistSystemPrompt("") // fall back to the default
+		} else {
+			uistate.PersistSystemPrompt(d)
+		}
+		promptOpen.Set(false)
+	}
+	closePrompt := func() { promptOpen.Set(false) }
 	// Toggle the backend AI proxy on/off so the user can force the direct OpenAI
 	// provider (or back to the proxy) without leaving the chat.
 	prefsAtom := uistate.UsePrefs()
@@ -511,8 +536,10 @@ func Insights() ui.Node {
 	// switcher row is always present so its New-chat hook stays at a stable position).
 	convs := app.Conversations()
 	sort.Slice(convs, func(i, j int) bool { return convs[i].UpdatedAt.After(convs[j].UpdatedAt) })
+	pill := "inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] border border-black/10 hover:bg-black/[0.03]"
 	switcher := Div(Class("flex flex-wrap gap-2 mb-3 items-center"),
-		Button(Class("inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] border border-black/10 hover:bg-black/[0.03]"), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, Class("w-3.5 h-3.5")), Span(uistate.T("insights.newChat"))),
+		Button(Class(pill), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, Class("w-3.5 h-3.5")), Span(uistate.T("insights.newChat"))),
+		Button(Class(pill), Type("button"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, Class("w-3.5 h-3.5")), Span(uistate.T("insights.editPrompt"))),
 		MapKeyed(convs,
 			func(c domain.Conversation) any { return c.ID },
 			func(c domain.Conversation) ui.Node {
@@ -553,6 +580,20 @@ func Insights() ui.Node {
 			composer,
 			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 		),
+		// The editable system-prompt overlay (persona only; live data + tools are always
+		// injected automatically by buildMessages).
+		If(promptOpen.Get(), uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:   uistate.T("insights.promptTitle"),
+			Width:   "640px",
+			Height:  "520px",
+			OnSave:  savePrompt,
+			OnClose: closePrompt,
+			Back: Div(Class("flex flex-col gap-2"),
+				P(Class("muted text-[13px]"), uistate.T("insights.promptHint")),
+				Textarea(Class("field field-wide"), Attr("rows", "12"), Attr("aria-label", uistate.T("insights.promptTitle")), OnInput(onPromptInput), promptDraft.Get()),
+				Button(Class("btn self-start"), Type("button"), OnClick(resetPrompt), uistate.T("insights.promptReset")),
+			),
+		})),
 	)
 }
 

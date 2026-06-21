@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights chat editable system prompt (flip-panel)
+
+- Cam's ask: a button + flip modal to edit the system prompt. Added an "Edit prompt" pill in the switcher row
+  opening a `uiw.FlipPanel` with a textarea prefilled with the current/default persona, Save/Cancel + a "Reset to
+  default" button. Persona persists to `cashflux:chat-system-prompt` via new `uistate.PersistSystemPrompt`/
+  `LoadSystemPrompt`; saving the default text (or blank) clears the override. Crucially the live data-context
+  system message (aggregates + categories + tool directive) is ALWAYS appended after the persona in
+  buildMessages, so a custom prompt can't strip the figures/tools.
+- e2e `insights_chat_prompt_check.mjs`: open editor → prefilled with default → replace with a marker → Save →
+  asserts it persisted AND that the next request's leading system message is the custom prompt with the
+  "Live context" message still present. PASS. All three chat e2e suites green.
+
 ## 2026-06-20 - feat: Insights chat tool-calling loop + finance tools (C82 wiring)
 
 - "how much do I spend on groceries?" used to get "I don't have that info" — the chat only sent 4 aggregates.
