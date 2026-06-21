@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Insights conversation switcher — multiple saved chats (C82).** A switcher row with **New chat** and a pill
+  per saved conversation: tap to switch, × to delete. The live thread **auto-saves** to the store on every
+  message (and on delete/retry), titled from its first question; opening Insights **resumes the most recently
+  updated chat**. Deleting the open chat starts a fresh one.
 - **Insights conversations persist to the local store (C82).** New `domain.Conversation` + `domain.ChatMessage`
   types, a `conversations` SQLite table (one JSON row per chat, messages embedded), `SQLiteStore`
   Put/Get/List/Delete, lossless export/import wiring, and `appstate` `Conversations()`/`PutConversation()`/

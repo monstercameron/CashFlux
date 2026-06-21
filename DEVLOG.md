@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights conversation switcher (new/switch/delete chats, autosave)
+
+- Commit C of the chat-persistence work. The screen now tracks `convID`/`convCreated`/`inited`. A `persist`
+  helper upserts the thread as a `domain.Conversation` (lazily minting an id on the first message, title from
+  the first user line); it's driven by a `UseEffect` keyed on a thread signature (convID|len|lastID) so it
+  fires exactly when the thread's shape changes — add/delete/retry — not on every keystroke. A second one-time
+  `UseEffect` resumes the most-recently-updated conversation on mount. Switcher UI: an always-present row with a
+  New-chat button (stable hook) + a `ConversationPill` per saved chat (own component: tap title to `switchTo`,
+  × to `deleteConv`); deleting the open chat calls `newChat`. New i18n `newChat`/`deleteChat`.
+- Together with commits A/B this delivers Cam's asks: marked-rendered replies, copy/retry/delete-message,
+  pin, persisted multi-conversation chat with switching + deletion. STILL on the C82 list: the agent tool-loop
+  (gated read tools / affordability / save-as-task tool) + token streaming.
+- Gate: `GOOS=js GOARCH=wasm go build` green; gofmt clean; served via gwc on :8080.
+
 ## 2026-06-20 - feat: persist Insights conversations in the store (C82, data+store layer)
 
 - Bottom-up groundwork for Cam's "store the chats, switch between them, delete them". Domain: `Conversation`

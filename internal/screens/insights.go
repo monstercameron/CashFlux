@@ -4,6 +4,7 @@ package screens
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"syscall/js"
 	"time"
@@ -108,6 +109,11 @@ func Insights() ui.Node {
 		}
 		loading.Set(false)
 	})
+	// The conversation this thread belongs to ("" = a new, unsaved chat). convCreated
+	// preserves the original timestamp across saves; inited guards the one-time load.
+	convID := ui.UseState("")
+	convCreated := ui.UseState(time.Time{})
+	inited := ui.UseState(false)
 
 	// pinText saves an answer to the pinned-insights list. (Saving an answer as a
 	// To-do is no longer a UI button — it becomes an agent tool the model invokes
@@ -217,7 +223,103 @@ func Insights() ui.Node {
 			return out
 		})
 	}
+
+	// persist upserts the current thread as a conversation, creating one (and a fresh
+	// id + created stamp) on the first message. Title comes from the first user line.
+	persist := func(ts []chatTurn) {
+		cid := convID.Get()
+		if cid == "" {
+			if len(ts) == 0 {
+				return
+			}
+			cid = id.New()
+			convID.Set(cid)
+		}
+		created := convCreated.Get()
+		if created.IsZero() {
+			created = time.Now()
+			convCreated.Set(created)
+		}
+		msgs := make([]domain.ChatMessage, len(ts))
+		for i, t := range ts {
+			msgs[i] = domain.ChatMessage{ID: t.ID, Role: t.Role, Text: t.Text, Tokens: t.Usage.TotalTokens, CreatedAt: time.Now()}
+		}
+		_ = app.PutConversation(domain.Conversation{ID: cid, Title: conversationTitle(ts), Messages: msgs, CreatedAt: created, UpdatedAt: time.Now()})
+		bump()
+	}
+
+	// switchTo loads a saved conversation into the live thread.
+	switchTo := func(cid string) {
+		for _, c := range app.Conversations() {
+			if c.ID != cid {
+				continue
+			}
+			ts := make([]chatTurn, len(c.Messages))
+			for i, m := range c.Messages {
+				ts[i] = chatTurn{ID: m.ID, Role: m.Role, Text: m.Text, Usage: ai.Usage{TotalTokens: m.Tokens}}
+			}
+			turns.Set(ts)
+			convID.Set(cid)
+			convCreated.Set(c.CreatedAt)
+			input.Set("")
+			errMsg.Set("")
+			return
+		}
+	}
+
+	// newChat clears the thread for a fresh (unsaved) conversation.
+	newChat := func() {
+		turns.Set(nil)
+		convID.Set("")
+		convCreated.Set(time.Time{})
+		input.Set("")
+		errMsg.Set("")
+	}
+
+	// deleteConv removes a saved conversation; if it's the open one, start fresh.
+	deleteConv := func(cid string) {
+		_ = app.DeleteConversation(cid)
+		if convID.Get() == cid {
+			newChat()
+		}
+		bump()
+	}
+
+	// Persist whenever the thread's shape changes (message added/removed/redone).
+	cur := turns.Get()
+	persistSig := convID.Get() + "|" + strconv.Itoa(len(cur))
+	if n := len(cur); n > 0 {
+		persistSig += "|" + cur[n-1].ID
+	}
+	ui.UseEffect(func() func() {
+		if len(turns.Get()) > 0 || convID.Get() != "" {
+			persist(turns.Get())
+		}
+		return nil
+	}, persistSig)
+
+	// On first mount, resume the most recently updated conversation (if any).
+	ui.UseEffect(func() func() {
+		if inited.Get() {
+			return nil
+		}
+		inited.Set(true)
+		cs := app.Conversations()
+		newest := ""
+		var newestAt time.Time
+		for _, c := range cs {
+			if newest == "" || c.UpdatedAt.After(newestAt) {
+				newest, newestAt = c.ID, c.UpdatedAt
+			}
+		}
+		if newest != "" {
+			switchTo(newest)
+		}
+		return nil
+	}, "cf-insights-init")
+
 	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
+	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates)
 
@@ -296,10 +398,25 @@ func Insights() ui.Node {
 		)
 	}
 
+	// Conversation switcher: a "New chat" button plus a pill per saved chat (the
+	// switcher row is always present so its New-chat hook stays at a stable position).
+	convs := app.Conversations()
+	sort.Slice(convs, func(i, j int) bool { return convs[i].UpdatedAt.After(convs[j].UpdatedAt) })
+	switcher := Div(Class("flex flex-wrap gap-2 mb-3 items-center"),
+		Button(Class("inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] border border-black/10 hover:bg-black/[0.03]"), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, Class("w-3.5 h-3.5")), Span(uistate.T("insights.newChat"))),
+		MapKeyed(convs,
+			func(c domain.Conversation) any { return c.ID },
+			func(c domain.Conversation) ui.Node {
+				return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
+			},
+		),
+	)
+
 	return Div(
 		highlights,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("insights.chatTitle")),
+			switcher,
 			If(empty, P(Class("muted"), uistate.T("insights.chatHint"))),
 			If(!empty, thread),
 			chips,
@@ -307,6 +424,53 @@ func Insights() ui.Node {
 			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 		),
 		pinnedCard,
+	)
+}
+
+// conversationTitle derives a chat's title from its first user message (truncated),
+// falling back to a generic label for an empty thread.
+func conversationTitle(ts []chatTurn) string {
+	for _, t := range ts {
+		if t.Role != "user" {
+			continue
+		}
+		s := strings.TrimSpace(t.Text)
+		if s == "" {
+			continue
+		}
+		if r := []rune(s); len(r) > 40 {
+			s = strings.TrimSpace(string(r[:40])) + "…"
+		}
+		return s
+	}
+	return "New chat"
+}
+
+type convPillProps struct {
+	C        domain.Conversation
+	Active   bool
+	OnPick   func(string)
+	OnDelete func(string)
+}
+
+// ConversationPill is one chat in the switcher: tap the title to open it, the × to
+// delete it. Its own component so the pick/delete hooks stay stable across the list.
+func ConversationPill(p convPillProps) ui.Node {
+	pick := ui.UseEvent(Prevent(func() { p.OnPick(p.C.ID) }))
+	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.C.ID) }))
+	cls := "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] border "
+	if p.Active {
+		cls += "bg-sky-500/15 border-sky-500/40"
+	} else {
+		cls += "border-black/10 hover:bg-black/[0.03]"
+	}
+	title := strings.TrimSpace(p.C.Title)
+	if title == "" {
+		title = "Untitled chat"
+	}
+	return Div(Class(cls),
+		Button(Class("max-w-[160px] truncate text-left"), Type("button"), OnClick(pick), title),
+		Button(Class("text-faint opacity-60 hover:opacity-100"), Type("button"), Title(uistate.T("insights.deleteChat")), Attr("aria-label", uistate.T("insights.deleteChat")), OnClick(del), uiw.Icon(icon.Close, Class("w-3 h-3"))),
 	)
 }
 

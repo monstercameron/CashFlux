@@ -1007,6 +1007,8 @@ var english = Catalog{
 	"insights.copied":          "Copied",
 	"insights.retry":           "Retry",
 	"insights.deleteMsg":       "Delete message",
+	"insights.newChat":         "New chat",
+	"insights.deleteChat":      "Delete chat",
 	"insights.highlightsTitle": "Spending highlights",
 	"insights.highlightsHint":  "Categories that moved a lot versus your recent average — no AI needed.",
 	"insights.highlightUp":     "%s spending is up %d%% — %s this month vs about %s a month.",
