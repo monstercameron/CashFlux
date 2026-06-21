@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Insights conversations persist to the local store (C82).** New `domain.Conversation` + `domain.ChatMessage`
+  types, a `conversations` SQLite table (one JSON row per chat, messages embedded), `SQLiteStore`
+  Put/Get/List/Delete, lossless export/import wiring, and `appstate` `Conversations()`/`PutConversation()`/
+  `DeleteConversation()`. Table-tested (CRUD + export→import round-trip). The conversation-switcher UI consumes
+  this next.
+
 ### Changed
 - **Insights chat: message actions reworked (C82).** Assistant replies are now rendered with **marked**
   (vendored locally) sanitized by **DOMPurify** before becoming innerHTML — richer Markdown than the prior

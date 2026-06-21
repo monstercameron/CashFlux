@@ -271,6 +271,21 @@ func (s *SQLiteStore) ListSavedInsights() ([]domain.SavedInsight, error) {
 	return loadRows[domain.SavedInsight](s.db, "savedinsights")
 }
 
+// --- Conversations (saved Insights chats) ---
+
+func (s *SQLiteStore) PutConversation(c domain.Conversation) error {
+	return putJSON(s.db, "conversations", c.ID, c)
+}
+func (s *SQLiteStore) GetConversation(id string) (domain.Conversation, bool, error) {
+	return getJSON[domain.Conversation](s.db, "conversations", id)
+}
+func (s *SQLiteStore) DeleteConversation(id string) (bool, error) {
+	return deleteRow(s.db, "conversations", id)
+}
+func (s *SQLiteStore) ListConversations() ([]domain.Conversation, error) {
+	return loadRows[domain.Conversation](s.db, "conversations")
+}
+
 // --- Recurring cash flows (scheduled bills / income) ---
 
 func (s *SQLiteStore) PutRecurring(r domain.Recurring) error {

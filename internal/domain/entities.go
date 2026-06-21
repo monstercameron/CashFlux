@@ -227,6 +227,27 @@ type SavedInsight struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// ChatMessage is one turn in an Insights conversation. Role is "user" or
+// "assistant"; Tokens records the assistant reply's token usage (0 for user turns).
+type ChatMessage struct {
+	ID        string    `json:"id"`
+	Role      string    `json:"role"`
+	Text      string    `json:"text"`
+	Tokens    int       `json:"tokens,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// Conversation is a saved Insights chat: an ordered list of messages with a title
+// the user can return to, switch between, and delete. Messages are embedded so a
+// conversation round-trips as a single JSON row (and a single export entry).
+type Conversation struct {
+	ID        string        `json:"id"`
+	Title     string        `json:"title"`
+	Messages  []ChatMessage `json:"messages,omitempty"`
+	CreatedAt time.Time     `json:"createdAt"`
+	UpdatedAt time.Time     `json:"updatedAt"`
+}
+
 // DocumentKind is the source type of an imported document.
 type DocumentKind string
 

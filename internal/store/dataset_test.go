@@ -42,6 +42,8 @@ func sampleDataset() Dataset {
 			Status: domain.DocImported, Extracted: []domain.DocumentRow{{Date: "2026-06-01", Description: "Coffee", Amount: "-4.50", Category: "Food"}},
 		}},
 		SavedInsights: []domain.SavedInsight{{ID: "si1", Text: "You saved 18% this month.", CreatedAt: asOf}},
+		Conversations: []domain.Conversation{{ID: "cv1", Title: "Groceries", CreatedAt: asOf, UpdatedAt: asOf,
+			Messages: []domain.ChatMessage{{ID: "m1", Role: "user", Text: "How much on groceries?", CreatedAt: asOf}}}},
 		Recurring: []domain.Recurring{{
 			ID: "rec1", Label: "Salary", Amount: money.New(420000, "USD"), Cadence: domain.CadenceMonthly,
 			NextDue: asOf, AccountID: "a1", CategoryID: "c1",
@@ -148,6 +150,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if len(imported.SavedInsights) != 1 || imported.SavedInsights[0].Text != "You saved 18% this month." {
 		t.Errorf("saved insights lost: %+v", imported.SavedInsights)
+	}
+	if len(imported.Conversations) != 1 || imported.Conversations[0].Title != "Groceries" || len(imported.Conversations[0].Messages) != 1 {
+		t.Errorf("conversations lost: %+v", imported.Conversations)
 	}
 	if len(imported.Recurring) != 1 || imported.Recurring[0].Cadence != domain.CadenceMonthly || imported.Recurring[0].Amount.Amount != 420000 {
 		t.Errorf("recurring lost: %+v", imported.Recurring)

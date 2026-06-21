@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: persist Insights conversations in the store (C82, data+store layer)
+
+- Bottom-up groundwork for Cam's "store the chats, switch between them, delete them". Domain: `Conversation`
+  (id/title/messages/created/updated) + `ChatMessage` (id/role/text/tokens/created); messages embedded so a
+  chat is one JSON row + one export entry. Store: `conversations` table, generic Put/Get/List/Delete via the
+  existing JSON-row helpers, plus export `replaceRows` + import `loadRows`. appstate: `Conversations()`,
+  `PutConversation()` (id required, blank title → "Untitled chat"), `DeleteConversation()` (via the audited
+  `del` helper). Tests: store CRUD round-trip (incl. embedded messages + token count) and the dataset
+  export→import losslessness test extended with a conversation. `go test ./internal/store/...` +
+  domain/appstate green; gofmt clean.
+- NEXT (commit C): wire the Insights screen to persist the live `turns` into the current conversation, add a
+  conversation switcher (new chat / pick / delete), and load a chosen chat back into the thread.
+
 ## 2026-06-20 - feat: Insights chat message actions (marked render, copy, retry, delete)
 
 - Per direction on the chat bubbles: (1) Save-as-task button removed — it becomes an agent tool later. (2) Pin

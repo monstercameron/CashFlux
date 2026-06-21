@@ -53,6 +53,7 @@ type Dataset struct {
 	Rules          []rules.Rule               `json:"rules,omitempty"`
 	Documents      []domain.Document          `json:"documents,omitempty"`
 	SavedInsights  []domain.SavedInsight      `json:"savedInsights,omitempty"`
+	Conversations  []domain.Conversation      `json:"conversations,omitempty"`
 	Recurring      []domain.Recurring         `json:"recurring,omitempty"`
 	AllocProfiles  []domain.AllocationProfile `json:"allocProfiles,omitempty"`
 	Formulas       []domain.Formula           `json:"formulas,omitempty"`

@@ -152,6 +152,36 @@ func TestSavedInsightCRUD(t *testing.T) {
 	}
 }
 
+func TestConversationCRUD(t *testing.T) {
+	s := newStore(t)
+	c := domain.Conversation{
+		ID: "c1", Title: "Groceries", CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		Messages: []domain.ChatMessage{
+			{ID: "m1", Role: "user", Text: "How much on groceries?", CreatedAt: time.Now()},
+			{ID: "m2", Role: "assistant", Text: "About $420 last month.", Tokens: 37, CreatedAt: time.Now()},
+		},
+	}
+	if err := s.PutConversation(c); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, ok, err := s.GetConversation("c1")
+	if err != nil || !ok {
+		t.Fatalf("Get: ok=%v err=%v", ok, err)
+	}
+	if got.Title != "Groceries" || len(got.Messages) != 2 || got.Messages[1].Tokens != 37 {
+		t.Fatalf("round trip mismatch: %+v", got)
+	}
+	if list, _ := s.ListConversations(); len(list) != 1 {
+		t.Errorf("list len = %d, want 1", len(list))
+	}
+	if deleted, err := s.DeleteConversation("c1"); err != nil || !deleted {
+		t.Fatalf("delete: deleted=%v err=%v", deleted, err)
+	}
+	if _, ok, _ := s.GetConversation("c1"); ok {
+		t.Error("conversation still present after delete")
+	}
+}
+
 func TestRecurringCRUD(t *testing.T) {
 	s := newStore(t)
 	r := domain.Recurring{

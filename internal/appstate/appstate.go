@@ -756,6 +756,36 @@ func (a *App) DeleteSavedInsight(id string) error {
 	return a.del("saved insight", id, a.store.DeleteSavedInsight)
 }
 
+// Conversations returns every saved Insights chat (unordered; the caller sorts).
+func (a *App) Conversations() []domain.Conversation {
+	v, err := a.store.ListConversations()
+	if err != nil {
+		a.log.Error("list conversations", "err", err)
+		return nil
+	}
+	return v
+}
+
+// PutConversation saves (inserts or replaces) an Insights conversation. It needs
+// an ID; a blank title falls back to a generic label.
+func (a *App) PutConversation(c domain.Conversation) error {
+	if c.ID == "" {
+		return fmt.Errorf("appstate: conversation needs an id")
+	}
+	if strings.TrimSpace(c.Title) == "" {
+		c.Title = "Untitled chat"
+	}
+	if err := a.store.PutConversation(c); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteConversation removes a saved Insights chat.
+func (a *App) DeleteConversation(id string) error {
+	return a.del("conversation", id, a.store.DeleteConversation)
+}
+
 // PutRecurring saves a recurring cash flow. It needs an ID, a label, a currency
 // on the amount, and a cadence.
 func (a *App) PutRecurring(r domain.Recurring) error {

@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS customfielddefs (id TEXT PRIMARY KEY, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS rules        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS documents    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS savedinsights (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS recurring    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS allocprofiles (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS formulas     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -129,6 +130,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "savedinsights", ds.SavedInsights, func(s domain.SavedInsight) string { return s.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "conversations", ds.Conversations, func(c domain.Conversation) string { return c.ID }); err != nil {
+		return err
+	}
 	if err := replaceRows(tx, "recurring", ds.Recurring, func(r domain.Recurring) string { return r.ID }); err != nil {
 		return err
 	}
@@ -208,6 +212,9 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.SavedInsights, err = loadRows[domain.SavedInsight](s.db, "savedinsights"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.Conversations, err = loadRows[domain.Conversation](s.db, "conversations"); err != nil {
 		return Dataset{}, err
 	}
 	if ds.Recurring, err = loadRows[domain.Recurring](s.db, "recurring"); err != nil {
