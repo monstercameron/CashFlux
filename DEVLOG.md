@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - test: e2e for the Insights chat (mocked OpenAI), proves the pipeline
+
+- Cam reported the chat "doesn't work". Wrote `e2e/insights_chat_check.mjs` (Playwright; installed playwright +
+  chromium into `.tools/` to match the other e2e scripts). It plants a remembered key
+  (`cashflux:openai-key` + `cashflux:prefs {rememberAiKey:true}`, picked up by `hydrateAIKey` on reload),
+  intercepts `**/chat/completions` with a canned Markdown reply, navigates to Insights in-app (gwc has no
+  deep-link fallback — the rail item is `a[title="Insights"]`, no href), then drives a real send. Asserts: the
+  user bubble appears, the OpenAI endpoint is actually called with the question, the reply is **marked-rendered**
+  (`<h2>` + `<strong>$420</strong>`), Pin creates the Pinned-insights card, the chat autosaves into the
+  switcher, the request carries temperature 0.4 for the default (non-reasoning) model, and a 401 surfaces a
+  **visible `.err`** (not a silent failure). **All green.**
+- Conclusion: the send→provider→render→persist pipeline is correct with a valid key. So a real-world failure is
+  the OpenAI call itself — most likely a reasoning model (fixed: temperature now omitted) or backend routing
+  (new in-chat toggle) or a bad/absent key (which shows a red error under the composer). The error text is the
+  diagnostic.
+
 ## 2026-06-20 - fix/feat: Insights chat — reasoning-model temp, backend toggle, pins-above-chat
 
 - Cam: "chats don't seem to be working / is it using the openai provider?". Diagnosed the dual path: the chat
