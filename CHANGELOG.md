@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Muzak resume travels with your data (checkpoint-only DB persistence).** The music state (on/off, volume, track,
+  position) is now also mirrored into the dataset's `Settings.Music`, so it survives a localStorage wipe and rides
+  along with export/import and backups — on a fresh device the player resumes the saved track/volume. To avoid
+  re-serializing the whole dataset on every position tick, it's written only at **checkpoints** (track change,
+  pause, page close, toggle, volume release) via a Go↔JS bridge (`window.cashfluxMusicSave` → `appstate.PutMusicState`);
+  the high-frequency live position stays in localStorage. On boot, the dataset's music state seeds this device's
+  resume point when it has none. Covered by an e2e (checkpoints into the dataset; reseeds + resumes on a fresh
+  device).
 - **Background music ("muzak").** A low-volume looping ambient player, **on by default**, toggled from a
   speaker/mute icon in the top bar (next to + Add) and with a **volume slider + on/off in the Settings modal**.
   Ships an 8-track calming playlist (`web/audio/calm-01..08.mp3`). `web/muzak.js` has a proper `Playlist` data

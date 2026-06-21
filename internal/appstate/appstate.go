@@ -372,6 +372,26 @@ func (a *App) Settings() store.Settings {
 	return s
 }
 
+// MusicState returns the persisted background-music resume point, if one has been
+// checkpointed into the dataset.
+func (a *App) MusicState() (store.MusicState, bool) {
+	s := a.Settings()
+	if s.Music == nil {
+		return store.MusicState{}, false
+	}
+	return *s.Music, true
+}
+
+// PutMusicState checkpoints the background-music resume point into the dataset so
+// it travels with export/import and backups. Called at coarse moments (track
+// change, pause, page close, toggle) — never streamed — to avoid re-serializing
+// the whole dataset on every position tick.
+func (a *App) PutMusicState(m store.MusicState) error {
+	s := a.Settings()
+	s.Music = &m
+	return a.PutSettings(s)
+}
+
 func (a *App) logErr(entity string, err error) {
 	if err != nil {
 		a.log.Error("read failed", "entity", entity, "err", err)

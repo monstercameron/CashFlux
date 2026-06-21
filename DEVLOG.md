@@ -19,6 +19,16 @@ problems and fixes, and what's next.
   on change, so streaming the playback position into the dataset would re-serialize everything every few seconds.
   Kept the live position in localStorage; a dataset-backed (export/backup-travelling) music record would need to
   be checkpoint-only — pending decision.
+- Follow-up (user chose checkpoint-only DB persistence): added `store.MusicState` to `Settings` (additive, no
+  schema bump — Settings is a JSON blob) + `appstate.MusicState/PutMusicState`. A Go↔JS bridge
+  (`window.cashfluxMusicSave` → `checkpointMusic`) reads the live localStorage music keys and writes them to the
+  dataset only at coarse moments: muzak.js calls it on force-saves (track change / pause / pagehide), and the Go
+  toggle + volume-slider-release call it directly. `seedMusicFromDataset` (run after hydrate, BEFORE Mount — order
+  mattered: Mount triggered the player's init which wrote muzak-pos before the seed) copies the dataset's music
+  into localStorage on a device that has none, so an imported workspace resumes. Volume slider checkpoints only on
+  release (OnChange), not while dragging (OnInput), to avoid autosave churn. e2e `muzak_db_check`: toggling
+  checkpoints into the dataset; a fresh context seeded with the dataset (no muzak keys) resumes the saved track +
+  volume. SW v233.
 
 ## 2026-06-21 - feat: background music (muzak)
 

@@ -35,6 +35,9 @@ func Run() {
 	// workspace the user chose to open with (no reload needed pre-mount).
 	applyStartupWorkspace()
 	hydrateDataset()
+	// Seed this device's music resume point from the dataset (e.g. a just-imported
+	// workspace) BEFORE mounting, so the player reads the restored point on init.
+	seedMusicFromDataset()
 	hydrateAIKey()
 
 	// Apply saved appearance preferences (theme/accent/density) before mounting,
@@ -114,6 +117,9 @@ func Run() {
 	// Persist the dataset to localStorage so it survives a reload.
 	startDatasetAutosave()
 	startBackendSync()
+
+	// Expose the music checkpoint bridge (window.cashfluxMusicSave) for the JS player.
+	registerMusicBridge()
 
 	// Surface "while you were away" reminders (stale balances, bills due soon)
 	// once on load, deduped via the persisted delivered log (B19). Boot-safe.

@@ -73,7 +73,7 @@ func musicSettings() uic.Node {
 	enabled := uistate.UseMuzakEnabled()
 	vol := uistate.UseMuzakVolume()
 	pct := int(vol.Get()*100 + 0.5)
-	onVol := uic.UseEvent(func(e uic.Event) {
+	apply := func(e uic.Event) {
 		f, err := strconv.ParseFloat(strings.TrimSpace(e.GetValue()), 64)
 		if err != nil {
 			return
@@ -81,19 +81,23 @@ func musicSettings() uic.Node {
 		v := f / 100
 		vol.Set(v)
 		uistate.PersistMuzakVolume(v)
-	})
+	}
+	// Live while dragging (no DB write); checkpoint the dataset on release only, so
+	// dragging the slider doesn't re-serialize the whole dataset on every step.
+	onVol := uic.UseEvent(apply)
+	onVolCommit := uic.UseEvent(func(e uic.Event) { apply(e); checkpointMusic() })
 	return Div(
 		Div(Class("set-label"), uistate.T("settings.music")),
 		ui.ToggleRow(ui.ToggleRowProps{
 			Label:    uistate.T("settings.musicOn"),
 			On:       enabled.Get(),
-			OnChange: func(on bool) { enabled.Set(on); uistate.PersistMuzakEnabled(on) },
+			OnChange: func(on bool) { enabled.Set(on); uistate.PersistMuzakEnabled(on); checkpointMusic() },
 		}),
 		Div(Class("toggle-row"),
 			Span(uistate.T("settings.musicVolume")),
 			Input(Type("range"), Class("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
 				Attr("aria-label", uistate.T("settings.musicVolume")),
-				Value(strconv.Itoa(pct)), OnInput(onVol), OnChange(onVol)),
+				Value(strconv.Itoa(pct)), OnInput(onVol), OnChange(onVolCommit)),
 		),
 	)
 }

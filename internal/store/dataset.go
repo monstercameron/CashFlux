@@ -36,6 +36,18 @@ type Settings struct {
 	FreshnessOverrides map[string]int     `json:"freshnessOverrides,omitempty"`
 	BudgetMethodology  string             `json:"budgetMethodology,omitempty"` // budgeting.Methodology; empty = simple
 	PayoffBaseline     *PayoffBaseline    `json:"payoffBaseline,omitempty"`    // debt-payoff progress baseline (L5)
+	Music              *MusicState        `json:"music,omitempty"`             // background-music resume point (checkpointed)
+}
+
+// MusicState is the background music's durable resume point: the on/off choice,
+// volume, and the current track index + position. Checkpointed into the dataset
+// (not streamed) so it travels with export/import and backups and resumes on a
+// fresh device. The live, high-frequency position lives in localStorage.
+type MusicState struct {
+	Enabled  bool    `json:"enabled"`
+	Volume   float64 `json:"volume"`
+	Index    int     `json:"index"`
+	Position float64 `json:"position"`
 }
 
 // Dataset is the complete CashFlux dataset: every entity plus settings. It is

@@ -444,6 +444,7 @@ func MuzakToggle() uic.Node {
 		next := !enabledAtom.Get()
 		enabledAtom.Set(next)
 		uistate.PersistMuzakEnabled(next)
+		checkpointMusic() // mirror the on/off choice into the dataset
 	}
 
 	cls := "muzak-btn"

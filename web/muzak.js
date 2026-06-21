@@ -88,6 +88,11 @@
     if (!force && now - lastSave < 4000) return;
     lastSave = now;
     try { localStorage.setItem(POS_KEY, JSON.stringify({ i: pl.index, t: el.currentTime })); } catch (e) {}
+    // At coarse checkpoints, ask Go to mirror the state into the dataset so it
+    // travels with export/import + backups (not streamed — only on force).
+    if (force && typeof window.cashfluxMusicSave === "function") {
+      try { window.cashfluxMusicSave(); } catch (e) {}
+    }
   }
   function loadPos() {
     try {
