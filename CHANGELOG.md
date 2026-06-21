@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Insights chat read tools across more screens (C90.1).** Added `list_budgets`, `list_goals`, `list_tasks`,
+  `list_recurring` (upcoming bills), and `spending_breakdown` (top categories for a period) — so the chat can
+  answer about budgets, goals, to-dos, recurring/bills, and where the money went, from live data. Covered by the
+  tools e2e (now exercises 11 tools end-to-end).
 - **Insights chat: a fetch_webpage tool to read search results (C82).** `web_search` now also returns source
   URLs, and a new `fetch_webpage` tool reads a page's readable text (via the CORS-friendly Jina Reader) so the
   model can dig into a result instead of relying on the snippet.

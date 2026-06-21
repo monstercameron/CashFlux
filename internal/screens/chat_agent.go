@@ -62,6 +62,16 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 	txns := app.Transactions()
 	accounts := app.Accounts()
 	cats := app.Categories()
+	catByID := make(map[string]string, len(cats))
+	for _, c := range cats {
+		catByID[c.ID] = c.Name
+	}
+	catLabel := func(id string) string {
+		if n := catByID[id]; n != "" {
+			return n
+		}
+		return "uncategorized"
+	}
 	now := time.Now()
 	mStart, mEnd := dateutil.MonthRange(now)
 	lmStart, lmEnd := dateutil.MonthRange(dateutil.AddMonths(now, -1))
@@ -364,6 +374,122 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					body = string(r[:2500]) + "…"
 				}
 				return body
+			},
+		},
+		{
+			spec: ai.FunctionTool("list_budgets", "List the user's budgets with category, period, and limit.", json.RawMessage(`{"type":"object","properties":{}}`)),
+			run: func(json.RawMessage) string {
+				bs := app.Budgets()
+				if len(bs) == 0 {
+					return "No budgets set."
+				}
+				var b strings.Builder
+				for _, bd := range bs {
+					fmt.Fprintf(&b, "%s — %s, %s limit %s\n", bd.Name, catLabel(bd.CategoryID), string(bd.Period), fmtMoney(bd.Limit))
+				}
+				return strings.TrimRight(b.String(), "\n")
+			},
+		},
+		{
+			spec: ai.FunctionTool("list_goals", "List the user's savings goals with progress (current/target, percent, target date).", json.RawMessage(`{"type":"object","properties":{}}`)),
+			run: func(json.RawMessage) string {
+				gs := app.Goals()
+				if len(gs) == 0 {
+					return "No savings goals."
+				}
+				var b strings.Builder
+				for _, g := range gs {
+					pct := 0
+					if g.TargetAmount.Amount > 0 {
+						pct = int(float64(g.CurrentAmount.Amount) / float64(g.TargetAmount.Amount) * 100)
+					}
+					line := fmt.Sprintf("%s — %s of %s (%d%%)", g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount), pct)
+					if !g.TargetDate.IsZero() {
+						line += ", by " + g.TargetDate.Format("Jan 2, 2006")
+					}
+					b.WriteString(line + "\n")
+				}
+				return strings.TrimRight(b.String(), "\n")
+			},
+		},
+		{
+			spec: ai.FunctionTool("list_tasks", "List the user's to-do tasks (title, status, priority, due date).", json.RawMessage(`{"type":"object","properties":{}}`)),
+			run: func(json.RawMessage) string {
+				ts := app.Tasks()
+				if len(ts) == 0 {
+					return "No tasks."
+				}
+				var b strings.Builder
+				for _, t := range ts {
+					line := fmt.Sprintf("[%s] %s (%s priority)", string(t.Status), t.Title, string(t.Priority))
+					if !t.Due.IsZero() {
+						line += ", due " + t.Due.Format("Jan 2")
+					}
+					b.WriteString(line + "\n")
+				}
+				return strings.TrimRight(b.String(), "\n")
+			},
+		},
+		{
+			spec: ai.FunctionTool("list_recurring", "List recurring cash flows / upcoming bills (label, amount, cadence, next due date).", json.RawMessage(`{"type":"object","properties":{}}`)),
+			run: func(json.RawMessage) string {
+				rs := app.Recurring()
+				if len(rs) == 0 {
+					return "No recurring items or bills."
+				}
+				var b strings.Builder
+				for _, r := range rs {
+					fmt.Fprintf(&b, "%s — %s %s, next %s\n", r.Label, fmtMoney(r.Amount), string(r.Cadence), r.NextDue.Format("Jan 2, 2006"))
+				}
+				return strings.TrimRight(b.String(), "\n")
+			},
+		},
+		{
+			spec: ai.FunctionTool("spending_breakdown", "Top spending categories for a period (where the money went).", json.RawMessage(`{"type":"object","properties":{"period":{"type":"string","enum":["this_month","last_month","all"]},"limit":{"type":"integer"}}}`)),
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Period string `json:"period"`
+					Limit  int    `json:"limit"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				start, end, label := periodRange(a.Period)
+				sums := map[string]int64{}
+				for _, t := range txns {
+					if !t.IsExpense() {
+						continue
+					}
+					if !start.IsZero() && !dateutil.InRange(t.Date, start, end) {
+						continue
+					}
+					if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
+						sums[t.CategoryID] += conv.Amount
+					}
+				}
+				if len(sums) == 0 {
+					return "No spending in " + label + "."
+				}
+				type kv struct {
+					id  string
+					amt int64
+				}
+				rows := make([]kv, 0, len(sums))
+				for id, amt := range sums {
+					rows = append(rows, kv{id, amt})
+				}
+				sort.Slice(rows, func(i, j int) bool { return rows[i].amt > rows[j].amt })
+				limit := a.Limit
+				if limit <= 0 || limit > 15 {
+					limit = 8
+				}
+				if len(rows) > limit {
+					rows = rows[:limit]
+				}
+				var b strings.Builder
+				fmt.Fprintf(&b, "Top spending (%s):\n", label)
+				for _, r := range rows {
+					fmt.Fprintf(&b, "%s: %s\n", catLabel(r.id), fmtMoney(money.New(r.amt, base)))
+				}
+				return strings.TrimRight(b.String(), "\n")
 			},
 		},
 	}

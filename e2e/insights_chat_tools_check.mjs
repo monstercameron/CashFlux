@@ -44,6 +44,11 @@ try {
             toolCall("c4", "account_balances", {}),
             toolCall("c5", "list_transactions", { category: "Dining", limit: 5 }),
             toolCall("c6", "financial_summary", {}),
+            toolCall("c7", "list_budgets", {}),
+            toolCall("c8", "list_goals", {}),
+            toolCall("c9", "list_tasks", {}),
+            toolCall("c10", "list_recurring", {}),
+            toolCall("c11", "spending_breakdown", { period: "this_month" }),
           ] } }],
           usage: { total_tokens: 40 },
         }),
@@ -107,6 +112,11 @@ try {
   check("c4", /.+: .*\$/s, "account_balances");
   check("c5", /\[.+\]|No matching transactions/i, "list_transactions");
   check("c6", /Net worth .* savings rate/i, "financial_summary");
+  check("c7", /limit|No budgets/i, "list_budgets");
+  check("c8", /%|No savings goals/i, "list_goals");
+  check("c9", /\[.+\].+priority|No tasks/i, "list_tasks");
+  check("c10", /next |No recurring/i, "list_recurring");
+  check("c11", /Top spending|No spending/i, "spending_breakdown");
 
   // Spot-check the numbers are real (groceries had transactions in the sample).
   if (byCall.c1 && /Spent \$0\.00 on Groceries \(0 transactions/i.test(byCall.c1)) {
@@ -116,7 +126,7 @@ try {
   await page.screenshot({ path: path.join(__dirname, "insights-chat-tools.png") });
   if (errors.length) fail("page errors: " + errors.join(" | "));
   if (!process.exitCode) {
-    console.log("PASS: tool loop ran 6 tools against live data:");
+    console.log(`PASS: tool loop ran ${Object.keys(byCall).length} tools against live data:`);
     for (const [k, v] of Object.entries(byCall)) console.log(`  ${k}: ${v.replace(/\n/g, " | ").slice(0, 90)}`);
   }
 } finally {
