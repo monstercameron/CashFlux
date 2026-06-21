@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights — separate Explain/Q&A answer cards + expandable pins (C59)
+
+- C59 UX-review items, the two pure-UI gaps. (1) Explain and Q&A shared one `result` state, so each wiped the
+  other's answer. Split into `explainRes`/`qaRes` with their own usage, save-as-task, pin, and confirmation
+  states, each rendered in its own answer card; a shared `send` helper routes a reply into the given slot. The
+  `loading` flag is now a string ("", "explain", "qa") so only the running card shows busy/cancel and the other
+  action stays visible-but-disabled (single network slot). (2) `PinnedInsightRow` clamps text >140 runes to two
+  lines (`line-clamp-2`) with a Show more/less toggle it owns via its own `expanded` hook. New i18n keys
+  `insights.showMore`/`showLess`.
+- Reconciliation note: while scoping this I found the agentic AI stack (C81/C82/C89 — `internal/agent`,
+  `aitools`, `aicontext`, `aiprovider`, `responses`, `anthropic`, `aiprompt`) already exists, pure + tested.
+  The remaining C59/L8 items (richer Q&A via tools, affordability tool, streaming) are WIRING that stack into
+  the wasm/screen layer + a Responses transport — separate from these two self-contained UI fixes.
+- Gate: `GOOS=js GOARCH=wasm go build` green; gofmt clean. Served via the real `gwc dev` toolchain on :8080.
+
 ## 2026-06-20 - feat: subscription price-change rows get tone + arrow icon (C56/C46)
 
 - Another C56 item: price-change rows conveyed up vs down by wording only (priceUp/priceDown). Added color-plus-

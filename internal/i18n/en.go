@@ -998,6 +998,8 @@ var english = Catalog{
 	"insights.pinnedConfirm":   "Pinned.",
 	"insights.pinnedTitle":     "Pinned insights",
 	"insights.unpinTitle":      "Remove from pinned",
+	"insights.showMore":        "Show more",
+	"insights.showLess":        "Show less",
 	"insights.highlightsTitle": "Spending highlights",
 	"insights.highlightsHint":  "Categories that moved a lot versus your recent average — no AI needed.",
 	"insights.highlightUp":     "%s spending is up %d%% — %s this month vs about %s a month.",

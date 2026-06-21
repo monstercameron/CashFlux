@@ -1784,9 +1784,10 @@ spending-anomaly highlights card (tone + arrow icon, no key needed), AI **"Expla
 **Q&A**, **pin** + **save-as-task**, a cancel-while-thinking button, and a token/cost note for BYO-key users.
 It already handles several prior notes (C9 disabled Q&A preview with key hint; C27 answer saved to task notes,
 not the title; privacy — only 4 aggregates sent). **Buttons aren't oversized.** Remaining gaps:
-- [ ] **Explain and Q&A share one `result` slot.** Both write the same `result` state, so running one wipes
-      the other and the single "Answer" card shows only whichever ran last — you can't keep the monthly
-      narrative while also asking a question. Give them separate result areas (or a small history/thread).
+- [x] **Explain and Q&A share one `result` slot.** ~~Both write the same `result` state...~~ DONE: each now
+      has its OWN slot (`explainRes`/`qaRes` + per-slot usage, save, pin, and confirmations) rendered in its
+      own answer card, so the monthly narrative and a Q&A answer coexist. `loading` tracks which action is in
+      flight ("explain"/"qa") so only that card shows busy/cancel and the other stays usable but guarded.
 - [ ] **The "needs key" hint is a non-linking dead-end** (appears in both the Explain action and the Q&A box).
       Make it a single clear call-to-action linking to **Settings → AI**. Same dead-end pattern flagged on
       Allocate (**C54**); cross-link **C27** (AI setup).
@@ -1798,8 +1799,9 @@ not the title; privacy — only 4 aggregates sent). **Buttons aren't oversized.*
 - [ ] **No streaming / progressive output.** Answers pop in all at once after the callback; for longer
       responses, stream tokens into the answer card for better perceived speed (the `ai` layer already has the
       callback seam).
-- [ ] **Pinned-insight rows show full untruncated text** in `row-desc` — long insights make tall, unwieldy
-      rows. Truncate with expand-on-click. Cross-link **C39** (lists) if pins accumulate.
+- [x] **Pinned-insight rows show full untruncated text** in `row-desc`. DONE: rows over ~140 chars clamp to
+      two lines (`line-clamp-2`) with a **Show more / Show less** toggle (`PinnedInsightRow` owns its own
+      `expanded` state + toggle hook), keeping the list compact. Cross-link **C39** (lists) if pins accumulate.
 - [ ] **Verify** after changes: an explain narrative and a Q&A answer can coexist; the key hint routes to
       settings; the Q&A scope is clear (or richer); long answers stream; pinned rows stay compact.
 

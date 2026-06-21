@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Insights gives Explain and Q&A their own answer cards (C59).** They previously shared one result slot, so
+  asking a question wiped the "Explain my month" narrative and vice-versa. Each now has its own slot, token/cost
+  note, and Save-as-task / Pin actions, so both answers coexist; the in-flight action (`explain`/`qa`) is tracked
+  so only that card shows the busy/cancel state while the other stays guarded.
+- **Pinned insights clamp long text with a Show more/less toggle (C59).** Pinned rows over ~140 characters now
+  collapse to two lines (`line-clamp-2`) with an expand toggle instead of stretching the list; each row owns its
+  own expand state.
 - **Subscription price-change rows show tone + an arrow icon (C56/C46).** A price increase now renders red with an
   up arrow and a decrease green with a down arrow, instead of conveying direction by wording alone — color-plus-
   shape, matching the Reports trend markers. Covered by a new `subscriptions_price_tone_check` e2e.
