@@ -13,6 +13,12 @@ problems and fixes, and what's next.
   top bar; an effect keyed on the state calls init()+setEnabled() so JS stays in sync across nav/reload.
 - No tracks committed (user generates via Suno); the toggle works silently until MP3s are dropped in web/audio/.
   Provided Suno style metadata (5 calming tracks). SW v230. e2e `muzak_check` covers default-on/toggle/persist.
+- Follow-up: rebuilt muzak.js around three pieces — a `Playlist` data structure (list + cursor, advance/shuffle),
+  a `Fader` (cancelable rAF volume ramp), and a two-`<audio>` `Player` that crossfades tracks (overlap when the
+  active track nears its end, detected via timeupdate) and fades in/out on enable/disable. Edge cases: a single
+  track loops natively; tracks shorter than the crossfade fall back to a fade-on-ended; all-tracks-failed backs
+  off (error streak) instead of hammering 404s. Added `state()` for introspection. SW v231; e2e extended to assert
+  the playlist DS (size/volume/crossfade) and that `next()` advances the cursor.
 
 ## 2026-06-21 - feat: Widget Manager Phase 2 (tile styling + live preview)
 

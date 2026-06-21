@@ -27,6 +27,12 @@ try {
   if (!(await page.evaluate(() => !!window.cashfluxMuzak))) fail("the muzak JS controller did not load");
   if ((await page.evaluate(() => window.cashfluxMuzak.isEnabled())) !== true) fail("controller should start enabled");
 
+  // The internal playlist data structure is populated (default 3 tracks) at low volume.
+  const st = await page.evaluate(() => window.cashfluxMuzak.state());
+  if (st.size !== 3) fail(`playlist should hold the 3 default tracks, got size ${st.size}`);
+  if (!(st.volume > 0 && st.volume <= 0.2)) fail(`expected a low default volume, got ${st.volume}`);
+  if (!(st.crossfadeMs > 0)) fail("crossfade duration should be configured for track transitions");
+
   // Toggle off → button, controller, and storage all reflect it.
   await btn.click();
   await page.waitForTimeout(250);
@@ -41,6 +47,13 @@ try {
   const btn2 = page.locator(".muzak-btn").first();
   if ((await btn2.getAttribute("aria-pressed")) !== "false") fail("music should stay OFF after reload");
   if ((await page.evaluate(() => window.cashfluxMuzak.isEnabled())) !== false) fail("controller should stay disabled after reload");
+
+  // Playlist cursor advances on next() (checked while disabled, so no error cascade).
+  const before = await page.evaluate(() => window.cashfluxMuzak.state().index);
+  await page.evaluate(() => window.cashfluxMuzak.next());
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => window.cashfluxMuzak.state().index);
+  if (after !== (before + 1) % 3) fail(`next() did not advance the playlist cursor: ${before} -> ${after}`);
 
   // Toggle back on for a clean default.
   await btn2.click();
