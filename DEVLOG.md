@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: Insights chat composer stayed on-screen (bounded scrolling thread)
+
+- The composer scrolled off the bottom as the conversation grew (the whole page grew with the thread). Made the
+  thread a bounded internally-scrolling region (`#cf-chat-thread`, `overflow-y-auto max-h-[55vh]`), so the
+  composer sits just beneath it and never moves. Reworked `scrollChatToEnd` to scroll that container's scrollTop
+  (`scrollTo {top: scrollHeight, behavior:smooth}`) instead of `scrollIntoView` on a bottom anchor — only the
+  thread scrolls, the page doesn't jump. Removed the now-unused anchor. e2e still green.
+
 ## 2026-06-20 - feat: Insights chat UX — hover actions, delete-unravel, auto-scroll
 
 - Three asks: (1) per-message action icons hidden until the bubble is hovered/focused (`opacity-0

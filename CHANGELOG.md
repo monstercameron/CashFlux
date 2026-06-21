@@ -33,6 +33,10 @@ and every commit updates this file under `Unreleased`.
   this next.
 
 ### Changed
+- **Insights chat: the thread scrolls in a bounded region so the composer stays on screen (C82).** Previously a
+  long conversation grew the page and pushed the text input below the fold. The thread is now a bounded
+  (`max-h-[55vh]`), internally-scrolling region with the composer pinned beneath it; auto-scroll moves only that
+  container (never the page) to keep the newest message in view.
 - **Insights chat: actions hover-reveal, delete unravels the thread, auto-scroll to newest (C82).** The action
   icons under a message stay hidden until you hover (or focus) that message. Deleting a message now removes it
   **and every later turn** (a conversation is a chain, so a mid-thread delete would orphan the continuation).

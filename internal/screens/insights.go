@@ -389,9 +389,10 @@ func Insights() ui.Node {
 		return nil
 	}
 
-	// The conversation thread: user + assistant bubbles are each their own component
-	// (owning their action hooks per the no-hooks-in-loops rule).
-	thread := Div(Class("flex flex-col gap-3 mb-3"),
+	// The conversation thread scrolls inside a bounded region so the composer below it
+	// stays on screen no matter how long the conversation grows (the thread scrolls,
+	// the input doesn't move). Auto-scroll keeps the newest message in view.
+	thread := Div(Attr("id", "cf-chat-thread"), Class("flex flex-col gap-3 mb-3 overflow-y-auto max-h-[55vh] pr-1"),
 		MapKeyed(convo,
 			func(t chatTurn) any { return t.ID },
 			func(t chatTurn) ui.Node {
@@ -404,8 +405,6 @@ func Insights() ui.Node {
 		If(loading.Get(), Div(Class("flex justify-start"),
 			Div(Class("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2 text-[13px] text-faint"), uistate.T("insights.thinking")),
 		)),
-		// Scroll anchor: the auto-scroll effect brings this into view on new messages.
-		Div(Attr("id", "cf-chat-end")),
 	)
 
 	// Composer: the input row, or the key call-to-action when no key is set.
@@ -669,14 +668,15 @@ func reasoningModel(model string) bool {
 	return strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "gpt-5")
 }
 
-// scrollChatToEnd brings the thread's bottom anchor into view, so a newly spawned
-// bubble (or the "thinking" indicator) isn't left below the fold.
+// scrollChatToEnd scrolls the bounded thread container to its bottom (only the
+// container, never the page), so a newly spawned bubble or the "thinking" indicator
+// stays in view while the composer below stays put.
 func scrollChatToEnd() {
-	el := js.Global().Get("document").Call("getElementById", "cf-chat-end")
+	el := js.Global().Get("document").Call("getElementById", "cf-chat-thread")
 	if !el.Truthy() {
 		return
 	}
-	el.Call("scrollIntoView", js.ValueOf(map[string]any{"behavior": "smooth", "block": "end"}))
+	el.Call("scrollTo", js.ValueOf(map[string]any{"top": el.Get("scrollHeight"), "behavior": "smooth"}))
 }
 
 // copyText writes text to the system clipboard (best-effort, no-op if unavailable).
