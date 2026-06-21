@@ -55,6 +55,26 @@ func wireKeyboardShortcuts() {
 			toggleCommandPalette()
 			return nil
 		}
+		// Ctrl/Cmd+Z → undo; Ctrl/Cmd+Shift+Z → redo (C78). Placed before the
+		// editable-target guard so it works from a focused field, matching the
+		// browser convention.
+		if (evBool(e, "metaKey") || evBool(e, "ctrlKey")) && !evBool(e, "altKey") && e.Get("code").String() == "KeyZ" {
+			e.Call("preventDefault")
+			if evBool(e, "shiftKey") {
+				if redoLastChange() {
+					paletteNotify(uistate.T("cmd.redone"), false)
+				} else {
+					paletteNotify(uistate.T("cmd.nothingToRedo"), false)
+				}
+			} else {
+				if undoLastChange() {
+					paletteNotify(uistate.T("cmd.undone"), false)
+				} else {
+					paletteNotify(uistate.T("cmd.nothingToUndo"), false)
+				}
+			}
+			return nil
+		}
 		if isEditableTarget(doc) {
 			return nil
 		}
@@ -135,6 +155,8 @@ func helpHTML() string {
 		row("shortcuts.jump", "Alt + 1&ndash;9") +
 		row("shortcuts.add", "Alt + N") +
 		row("shortcuts.palette", "Ctrl/&#8984; + K") +
+		row("shortcuts.undo", "Ctrl/&#8984; + Z") +
+		row("shortcuts.redo", "Ctrl/&#8984; + Shift + Z") +
 		row("shortcuts.save", "Enter") +
 		row("shortcuts.close", "Esc") +
 		row("shortcuts.resize", "Shift + Arrows") +
@@ -230,8 +252,7 @@ var htmlEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"
 // paletteNotify posts a toast from a palette action (the data-action helpers take
 // a notify callback). The Notice atom is global, so this works outside a render.
 func paletteNotify(msg string, isErr bool) {
-	a := uistate.UseNotice()
-	a.Set(a.Get().With(msg, isErr))
+	uistate.PostNotice(msg, isErr)
 }
 
 // buildPaletteCommands enumerates the searchable commands: jump to any screen
@@ -252,6 +273,20 @@ func buildPaletteCommands() []paletteCmd {
 		paletteCmd{label: uistate.T("cmd.toggleTheme"), keywords: []string{"theme", "dark", "light", "appearance"}, run: toggleTheme},
 		paletteCmd{label: uistate.T("cmd.toggleSidebar"), keywords: []string{"sidebar", "rail", "collapse", "expand"}, run: toggleSidebar},
 		paletteCmd{label: uistate.T("shortcuts.title"), keywords: []string{"help", "keyboard", "shortcuts", "keys"}, run: toggleHelpOverlay},
+		paletteCmd{label: uistate.T("cmd.undo"), keywords: []string{"undo", "revert", "back"}, run: func() {
+			if undoLastChange() {
+				paletteNotify(uistate.T("cmd.undone"), false)
+			} else {
+				paletteNotify(uistate.T("cmd.nothingToUndo"), false)
+			}
+		}},
+		paletteCmd{label: uistate.T("cmd.redo"), keywords: []string{"redo", "forward", "repeat"}, run: func() {
+			if redoLastChange() {
+				paletteNotify(uistate.T("cmd.redone"), false)
+			} else {
+				paletteNotify(uistate.T("cmd.nothingToRedo"), false)
+			}
+		}},
 	)
 	// Workspace management straight from the palette.
 	reg := loadRegistry()

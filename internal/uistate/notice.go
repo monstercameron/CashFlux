@@ -17,8 +17,29 @@ const noticeAtomID = "app:notice"
 
 // UseNotice returns the shared toast-notice atom. The toast component subscribes
 // to it; any component can post to it via the Notice returned by With.
+//
+// Reading it also captures the atom into a package var so PostNotice can post a
+// toast from outside a component render (e.g. a global keyboard-shortcut handler).
 func UseNotice() state.Atom[Notice] {
-	return state.UseAtom(noticeAtomID, Notice{})
+	a := state.UseAtom(noticeAtomID, Notice{})
+	capturedNotice = a
+	noticeCaptured = true
+	return a
+}
+
+var (
+	capturedNotice state.Atom[Notice]
+	noticeCaptured bool
+)
+
+// PostNotice shows a toast from outside a component render — for global callbacks
+// (keyboard shortcuts, command-palette actions, undo/redo) that aren't running
+// inside a component and so can't call the UseNotice hook. It is a no-op until the
+// toast surface has rendered once (always true after first paint).
+func PostNotice(text string, isErr bool) {
+	if noticeCaptured {
+		capturedNotice.Set(capturedNotice.Get().With(text, isErr))
+	}
 }
 
 // With returns n advanced to show text (Seq bumped so the toast re-fires even

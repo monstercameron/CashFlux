@@ -30,6 +30,9 @@ func Todo() ui.Node {
 
 	rev := state.UseAtom("rev:tasks", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
+	// Re-render after a whole-dataset replacement (undo/redo, import, decrypt) so
+	// the list reflects external changes, not just this screen's own mutations.
+	_ = uistate.UseDataRevision().Get()
 
 	title := ui.UseState("")
 	priority := ui.UseState(string(domain.PriorityMedium))

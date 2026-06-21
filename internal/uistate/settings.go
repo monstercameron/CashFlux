@@ -40,6 +40,29 @@ const dataRevAtomID = "data:revision"
 // UseDataRevision returns the shared atom bumped whenever the whole dataset is
 // replaced (import, load-sample, wipe). Screens that read store data directly
 // read this too, so they re-render after a bulk data change.
+//
+// Reading it also captures the atom's get/set closures into a package var so that
+// BumpDataRevision can bump it from outside a component render (the hook itself
+// must run during render, but the captured closures are safe to call anywhere).
 func UseDataRevision() state.Atom[int] {
-	return state.UseAtom(dataRevAtomID, 0)
+	a := state.UseAtom(dataRevAtomID, 0)
+	capturedDataRev = a
+	dataRevCaptured = true
+	return a
+}
+
+var (
+	capturedDataRev state.Atom[int]
+	dataRevCaptured bool
+)
+
+// BumpDataRevision increments the shared data-revision atom from outside a render
+// — for global callbacks such as undo/redo or post-decrypt hydration that replace
+// the dataset without being inside a component. It is a no-op until at least one
+// component that reads UseDataRevision has rendered (always true after first paint,
+// since the dashboard reads it).
+func BumpDataRevision() {
+	if dataRevCaptured {
+		capturedDataRev.Set(capturedDataRev.Get() + 1)
+	}
 }

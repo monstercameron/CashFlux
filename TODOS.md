@@ -2204,6 +2204,13 @@ _Cross-links: **C52** (To-do review), **B11** (+Add flip modal), **categorytree*
 (delete integrity, real indentation), **C67** (collapsible subtrees), **B15** (labels/shape cues)._
 
 ### C73. Component-ization epic — port ad-hoc markup to reusable components + decompose super-components ★ (refactor/architecture, user-requested 2026-06-20)
+**DONE (2026-06-21):** Reusable primitives landed in `internal/ui/primitives.go` — `Card`, `FormField`,
+`IconButton` (own-hook, loop-safe), `EntityRow` (hookless, loop-safe), `StatGrid` — all matching the existing
+DOM classes so no CSS changes are needed; plus pure `internal/ui/classutil.go` `JoinClass` (table-tested).
+`internal/screens/members.go` ported to `uiw.Card` as the reference (e2e-smoke verified parity: three cards,
+rows, no panic). Remaining screens adopt the primitives incrementally per the documented port plan (one
+screen per commit) — the library + a proven port satisfy the epic's foundation.
+
 **Context.** A real component library already exists (`internal/ui`: `DataTable`, `FilterToolbar`, `FlipPanel`,
 `Widget`, `Chart`/`AreaChart`, `ProgressBar`, `Icon`, `Segmented`, `StepperPill`, `Toggle`, `ToggleRow`,
 `Swatch`, `SwatchPicker`; screen helpers `EmptyStateCTA`, `CustomFieldInput`, `stat()`). But it's **under-used**:
@@ -2267,6 +2274,14 @@ _Cross-links: **C47** (DataTable/FilterToolbar precedent), **C49–C65** (labell
 (collapsible/tree rows), **C69** (theme tokens), **B15** (a11y)._
 
 ### C74. Statement import engine — multi-format extraction + mapping + AI categorization + reminders ★ (feature, user-requested 2026-06-20)
+**DONE (2026-06-21, Tier 1):** Pure `internal/statement` package parses arbitrary delimited bank/card exports
+— delimiter auto-detect (comma/semicolon/tab/pipe), BOM/CRLF, quoted fields; `MapColumns` auto-maps headers
+by common bank labels (Date/Posting Date, Description/Memo/Payee, Amount, Debit/Credit/Withdrawal/Deposit,
+Balance); `Parse` normalises each row into signed minor units (parens/sign/symbol/DR-CR aware, 14 date
+layouts) collecting per-row errors instead of aborting. Wired into the Documents screen as an "Import a bank
+or card statement" card that feeds parsed drafts into the existing review → dedupe → import pipeline
+(`ImportReviewedDocumentRows`). e2e verifies auto-mapping, bad-row skip, signed amounts (+150000/−450), and
+dedupe on re-import. Deferred tiers (PDF text extraction, AI auto-categorization, import reminders) remain.
 **Why.** Import friction is the #1 adoption blocker. Today the CSV import (`appstate.ImportTransactionsCSV` →
 `store.TransactionsFromCSV`) is **fixed-schema** — it only accepts CashFlux's own column layout, which no real
 bank/card export matches. ~70% of the plumbing already exists (Documents screen **C60**: file pick + draft
@@ -2410,6 +2425,16 @@ top-level + rollup if subtasks land), **C21/C12/B12** (per-widget settings), **C
 **B2** (FLIP), **B15** (checkbox a11y), **C73** (DashTaskRow as a reusable row)._
 
 ### C78. Audit log + timeline undo/redo (diff-based change history) ★ (feature, user-requested 2026-06-20)
+**DONE (2026-06-21, undo/redo):** Diff-based undo built on the pure `internal/history` engine. New pure
+`internal/undosnap` converts the dataset export-JSON ↔ `history.Snapshot` (array entities exploded by id,
+scalars under `_meta:*`), table-tested incl. diff/apply round-trips. `internal/app/undo.go` captures an undo
+point automatically on every autosave write (`captureUndoPoint`, diff vs last snapshot — no per-write-path
+instrumentation), and applies inverse/forward change sets on undo/redo, re-hydrating via `ImportJSON` and
+bumping the shared data-revision so screens re-render. Wired to Ctrl+Z / Ctrl+Shift+Z (before the editable-
+target guard) and command-palette Undo/Redo, with help-overlay rows + i18n. Fixed a latent framework-misuse
+bug along the way: `paletteNotify`/data-revision now post from outside a render via captured-atom helpers
+(`uistate.PostNotice`, `uistate.BumpDataRevision`) instead of calling the `UseAtom` hook in a global callback.
+e2e verifies add-task → Ctrl+Z reverts end-to-end. (Full audit-log timeline UI remains a later tier.)
 **Design doc:** [`docs/DESIGN_AUDIT_UNDO_REDO.md`](./docs/DESIGN_AUDIT_UNDO_REDO.md) — read first; this is the condensed backlog.
 **Idea:** a persistent **audit system** ("what changed, when, by whom") + a traversable **timeline**
 powering **undo/redo** and point-in-time restore. Chosen approach is **diff-based** (not a command
@@ -3741,6 +3766,19 @@ This is the concrete proof behind the bundling action items above — target is 
 _Cross-links: B32 Cluster 1 (OWASP/security pass), B14/B21 (D3 offline), §3.3 (PWA offline), §0 (build/deploy)._
 
 ### C45. Security review — data-at-rest & SQL layer (in-memory SQLite + persistence) ★ (security research, user-requested 2026-06-18)
+**DONE (2026-06-21, encrypt-at-rest):** The autosaved dataset is now encrypted at rest, gated on the existing
+passcode lock. New pure `internal/cryptobox` defines the on-disk envelope (`\x00cf1\x00` marker + JSON:
+v/alg/salt/iv/cipher, base64), with `Marshal`/`Parse`/`IsEnvelope` (18 table tests). `internal/app/datasetcrypto.go`
+drives `crypto.subtle` (PBKDF2-SHA256 600k → AES-GCM-256; key non-extractable, never persisted). Wiring
+(`datasetcryptowire.go` + `persist.go`): when the lock is **active** and the session passcode is known, the
+autosave writes an envelope; with no passcode it stays plaintext (`IsEnvelope` O(4) check → zero-migration for
+existing data). Setting/removing a passcode triggers an immediate at-rest re-save (plaintext↔envelope
+migration). On boot an envelope defers hydration (autosave suppressed so it can't be clobbered) until the
+passcode gate is satisfied — `onAppUnlocked` decrypts + imports. **No lockout:** decrypt failure keeps the
+ciphertext and logs; the gate's "Forgot → wipe" remains the only destructive recovery. e2e verifies
+plaintext-without-passcode, envelope-at-rest-with-one, and reload→unlock→decrypt round-trip. (SQL layer was
+audited clean; B33 tracks the remaining hardening backlog.)
+
 **Scope:** how the in-memory SQLite store builds queries and how the dataset is persisted/loaded. Source-audited
 `internal/store/{crud,sqlitestore,manage}.go`, `internal/app/persist.go`, `internal/uistate/aikey.go`.
 

@@ -7,6 +7,31 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Undo / redo (Ctrl+Z / Ctrl+Shift+Z) (C78).** A diff-based change history over the whole dataset. Every
+  autosave write now captures an undo point automatically (diff vs the last snapshot — no per-write-path
+  instrumentation), built on the pure `internal/history` engine and a new pure `internal/undosnap` converter
+  (dataset export-JSON ↔ snapshot, table-tested). Undo/redo apply the inverse/forward change set, re-hydrate the
+  store, and re-render. Wired to Ctrl+Z / Ctrl+Shift+Z (works from a focused field) and command-palette
+  Undo/Redo, with help-overlay rows. Covered by an e2e (add task → Ctrl+Z reverts end-to-end).
+- **Encrypt dataset at rest (C45).** When a passcode lock is active, the autosaved dataset in localStorage is now
+  encrypted (AES-GCM-256, key derived from the passcode via PBKDF2-SHA256 600k; key never persisted). New pure
+  `internal/cryptobox` defines the on-disk envelope (marker + base64 salt/iv/cipher, 18 tests);
+  `internal/app/datasetcrypto.go` drives Web Crypto. With no passcode the data stays plaintext (zero migration);
+  setting/removing a passcode migrates the at-rest copy immediately. On boot an encrypted dataset defers
+  hydration until the passcode gate is satisfied, then decrypts. No lockout: decrypt failure keeps the
+  ciphertext; "Forgot → wipe" stays the only destructive recovery. Covered by an e2e (plaintext without a
+  passcode; envelope-at-rest with one; reload → unlock → decrypt round-trip).
+- **Bank/card statement import (C74).** A new "Import a bank or card statement" card on the Documents screen
+  parses statement exports in almost any delimited layout — delimiter auto-detect, BOM/CRLF, quoted fields, and
+  automatic column mapping (date/description/amount, or separate debit/credit) by common bank header labels.
+  Amounts normalise to signed minor units (parentheses/sign/symbol/DR-CR aware, many date layouts); unparseable
+  rows are skipped with per-row errors rather than aborting. Parsed rows flow into the existing review → dedupe →
+  import pipeline. Pure `internal/statement` package (8 tests) + e2e (auto-mapping, bad-row skip, signed amounts,
+  dedupe on re-import).
+- **Reusable UI primitives (C73).** `internal/ui/primitives.go` adds `Card`, `FormField`, `IconButton`
+  (loop-safe, owns its hook), `EntityRow` (hookless, loop-safe), and `StatGrid`, matching the existing DOM
+  classes so no CSS changes are needed; plus a pure `JoinClass` helper (`internal/ui/classutil.go`, tested).
+  `internal/screens/members.go` ported to `Card` as the reference; other screens adopt them incrementally.
 - **Muzak resume travels with your data (checkpoint-only DB persistence).** The music state (on/off, volume, track,
   position) is now also mirrored into the dataset's `Settings.Music`, so it survives a localStorage wipe and rides
   along with export/import and backups — on a fresh device the player resumes the saved track/volume. To avoid
@@ -71,6 +96,15 @@ and every commit updates this file under `Unreleased`.
   widget.
 
 ### Fixed
+- **Toasts/data-revision can post from global callbacks without a framework panic.** `paletteNotify` and the
+  data-revision bump previously called the `UseAtom`-based hooks (`UseNotice`/`UseDataRevision`) directly, which
+  panics ("GoUseAtom called outside component context") when invoked from a non-render callback (keyboard
+  shortcut, command-palette action). Added captured-atom helpers `uistate.PostNotice` and
+  `uistate.BumpDataRevision` and routed those callers through them. The Shell and the To-do screen now subscribe
+  to the data-revision atom so a whole-dataset replacement (undo/redo, decrypt-hydrate, import) re-renders.
+- **Offline service worker pins the vendored D3 (not the CDN URL).** Updated the deploy runtime test to assert
+  the SW caches the local `./d3.min.js` (matching the C44 no-CDN vendoring) instead of the old jsdelivr URL;
+  bumped the service-worker cache to `cashflux-v244`.
 - **Chat deep links no longer trigger a full page reload (C90.2).** The in-app link interceptor now reads the
   anchor's parsed `origin`/`pathname`/`hash` instead of string-matching the raw `href`, so it also catches links
   the model phrases as an absolute same-origin URL (`http://host/todo#id`) — previously those slipped past the

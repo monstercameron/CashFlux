@@ -50,6 +50,12 @@ func Shell(props ShellProps) uic.Node {
 	// initial Tab still reaches the skip link. This keeps SPA navigation from
 	// leaving focus stranded on the previous screen.
 	firstRender := uic.UseRef(true)
+	// Subscribe to the shared data-revision atom so a whole-dataset replacement that
+	// happens outside any screen — undo/redo, post-decrypt hydration, import — re-
+	// renders the active screen even when that screen doesn't read the revision
+	// itself. (Also captures the atom so uistate.BumpDataRevision can post from a
+	// global callback.)
+	_ = uistate.UseDataRevision().Get()
 	docTitle := props.Title + " · " + uistate.T("app.name")
 	uic.UseEffect(func() func() {
 		setDocumentTitle(docTitle)

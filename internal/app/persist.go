@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -39,6 +40,15 @@ func hydrateDataset() {
 	raw := ""
 	if v := ls.Call("getItem", datasetStoreKey); !v.IsNull() && !v.IsUndefined() {
 		raw = v.String()
+	}
+	// Encrypted-at-rest dataset (C45): defer hydration until the passcode gate is
+	// satisfied. We stash the ciphertext and leave the store empty; the autosave is
+	// held off (see save's pendingEnvelopeRaw guard) so it can't overwrite it, and
+	// onAppUnlocked decrypts + imports once the right passcode is entered.
+	if cryptobox.IsEnvelope([]byte(raw)) {
+		hadLocalDataset = true
+		pendingEnvelopeRaw = raw
+		return
 	}
 	seededBefore := false
 	if f := ls.Call("getItem", seededFlagKey); !f.IsNull() && !f.IsUndefined() && f.String() != "" {
@@ -108,6 +118,9 @@ func startDatasetAutosave() {
 		if suspendAutosave {
 			return // a workspace switch is rewriting storage; don't clobber it
 		}
+		if pendingEnvelopeRaw != "" {
+			return // an encrypted dataset is awaiting unlock — never overwrite it
+		}
 		// localStorage.setItem can throw (e.g. quota exceeded on a very large
 		// dataset), which surfaces as a Go panic — don't let it crash the app.
 		defer func() {
@@ -119,15 +132,58 @@ func startDatasetAutosave() {
 		if err != nil {
 			return
 		}
-		if s := string(data); s != last {
-			last = s
-			js.Global().Get("localStorage").Call("setItem", datasetStoreKey, s)
+		s := string(data)
+		if s == last {
+			return
+		}
+		captureUndoPoint() // record an undo point for this mutation (C78)
+		// afterWrite mirrors the post-save bookkeeping (backend push / first-save
+		// flag) shared by the plaintext and encrypted paths.
+		afterWrite := func() {
 			if hadLocalDataset {
 				pushActiveWorkspaceToBackend(data, time.Now().UTC())
 			} else {
 				hadLocalDataset = true
 			}
 		}
+		if datasetEncryptionActive() {
+			// Encrypt at rest (C45). Encryption is async; skip a tick if a prior one
+			// is still running. `last` advances only on a successful write, so a
+			// failed encrypt is retried on the next change.
+			if encSaving {
+				return
+			}
+			encSaving = true
+			plaintext := append([]byte(nil), data...)
+			target := s
+			encryptDataset(plaintext, activePasscode, func(env []byte, encErr error) {
+				encSaving = false
+				if encErr != nil {
+					app.Log().Error("dataset encrypt failed; not writing this tick", "err", encErr)
+					return
+				}
+				defer func() {
+					if r := recover(); r != nil {
+						app.Log().Error("encrypted dataset write failed", "err", r)
+					}
+				}()
+				js.Global().Get("localStorage").Call("setItem", datasetStoreKey, string(env))
+				last = target
+				afterWrite()
+			})
+			return
+		}
+		last = s
+		js.Global().Get("localStorage").Call("setItem", datasetStoreKey, s)
+		afterWrite()
+	}
+	// resaveDataset forces an immediate rewrite even when the dataset bytes are
+	// unchanged — used when the encryption mode flips (passcode set/removed) so the
+	// at-rest copy migrates plaintext↔envelope right away instead of waiting for the
+	// next edit (C45).
+	resaveDataset = func() {
+		last = ""
+		save()
 	}
 	cb := js.FuncOf(func(js.Value, []js.Value) any { save(); return nil })
 	js.Global().Call("addEventListener", "pagehide", cb)

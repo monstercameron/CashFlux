@@ -583,8 +583,10 @@ func TestReportExportDesignDocumentsOfflineSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read service worker: %v", err)
 	}
-	if !strings.Contains(string(sw), "https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js") {
-		t.Fatal("service worker does not pin/cache D3 7.9.0")
+	// D3 is vendored locally (C44) rather than loaded from a CDN, so the offline
+	// service worker pins the local copy in its core cache.
+	if !strings.Contains(string(sw), "./d3.min.js") {
+		t.Fatal("service worker does not pin/cache the vendored ./d3.min.js")
 	}
 }
 

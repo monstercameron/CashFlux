@@ -3,6 +3,33 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: final 4 C-series items (undo/redo, encrypt-at-rest, statement import, UI primitives)
+
+Closed the last four open C-series backlog items. Authored the isolated, testable cores via four parallel
+subagents (new files + native tests + wiring plans only, no shared-file edits), then integrated each serially
+to avoid collisions on the single wasm output and shared sources.
+
+- **C78 undo/redo.** Pure `internal/undosnap` (dataset JSON ↔ `history.Snapshot`) + `internal/app/undo.go`
+  capturing an undo point on every autosave write (diff vs last snapshot — captures every mutation regardless of
+  code path, no per-write instrumentation). Wired Ctrl+Z / Ctrl+Shift+Z + palette. Two real bugs surfaced via
+  e2e: (1) `paletteNotify`→`UseNotice()` panicked because the `UseAtom` hook can't run in a global keyboard
+  callback — fixed with captured-atom helpers `PostNotice`/`BumpDataRevision`; (2) data reverted in-store but the
+  To-do list didn't re-render — it (and the Shell) didn't subscribe to the data-revision atom; added the read.
+- **C45 encrypt-at-rest.** Rides the passcode lock. Pure `internal/cryptobox` envelope + `datasetcrypto.go`
+  (Web Crypto PBKDF2→AES-GCM). Key design choices for safety: encryption tied to an **active** lock (suspended →
+  plaintext, so reload never strands ciphertext behind a hidden gate); boot defers hydration on an envelope and
+  suppresses autosave so it can't clobber the ciphertext; set/remove passcode triggers an immediate at-rest
+  re-save (the autosave's `s == last` dedup otherwise left data plaintext until the next edit — a real gap caught
+  by the positive-path e2e). No lockout: decrypt failure keeps ciphertext; wipe stays the only recovery.
+- **C74 statement import.** Pure `internal/statement` (delimiter/column auto-detect, signed-or-debit/credit,
+  robust amount/date parsing, per-row errors). Wired into Documents as a parse card that reuses the existing
+  draft review → dedupe → import pipeline, so column-mapping is automatic and dedupe/edit come for free.
+- **C73 component-ization.** Landed `internal/ui/primitives.go` (`Card`/`FormField`/`IconButton`/`EntityRow`/
+  `StatGrid`, DOM-class-compatible) + pure `JoinClass`; ported `members.go` as the reference (e2e-smoke parity).
+
+All four covered by e2e (undo, statement, encrypt round-trip) or smoke (members); full `go test ./...` green;
+SW bumped to v244; the stale D3-CDN deploy test updated to assert the vendored `./d3.min.js`.
+
 ## 2026-06-21 - feat: muzak — 8 tracks, mute icon, Settings volume, resume
 
 - Renamed the user's Suno files to web/audio/calm-01..08.mp3 and listed all 8 in DEFAULT_TRACKS. Verified real
