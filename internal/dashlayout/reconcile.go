@@ -1,31 +1,42 @@
 package dashlayout
 
 // Reconcile merges a persisted item list against the current DefaultItems set so
-// a saved layout survives across releases: it keeps the user's items and order,
-// drops any ids that are no longer real widgets, and surfaces newly-introduced
-// default widgets at the top (in default order) rather than hiding them at the
-// bottom. Spans on kept items are preserved exactly as the user arranged them.
+// a saved layout survives across releases: it keeps the user's items, order, and
+// sizes, drops any ids that are no longer real widgets, and splices in any
+// newly-introduced default widgets near their intended slot — right after the
+// nearest earlier default that's already present (so a headline widget lands at
+// the top and a footer widget lands at the bottom, instead of all newcomers
+// piling up in one place).
 func Reconcile(saved []Item) []Item {
 	defs := DefaultItems()
-	known := make(map[string]bool, len(defs))
-	for _, d := range defs {
-		known[d.ID] = true
+	defOrder := make(map[string]int, len(defs))
+	for i, d := range defs {
+		defOrder[d.ID] = i
 	}
 
 	have := make(map[string]bool, len(saved))
-	kept := make([]Item, 0, len(saved))
+	result := make([]Item, 0, len(defs))
 	for _, s := range saved {
-		if known[s.ID] && !have[s.ID] {
-			kept = append(kept, s)
+		if _, known := defOrder[s.ID]; known && !have[s.ID] {
+			result = append(result, s)
 			have[s.ID] = true
 		}
 	}
 
-	var missing []Item
 	for _, d := range defs {
-		if !have[d.ID] {
-			missing = append(missing, d)
+		if have[d.ID] {
+			continue
 		}
+		// Insert after the last already-placed item whose default position precedes
+		// this one; if none does, it goes to the front.
+		insertAt := 0
+		for i, it := range result {
+			if doi, ok := defOrder[it.ID]; ok && doi < defOrder[d.ID] {
+				insertAt = i + 1
+			}
+		}
+		result = append(result[:insertAt], append([]Item{d}, result[insertAt:]...)...)
+		have[d.ID] = true
 	}
-	return append(missing, kept...)
+	return result
 }

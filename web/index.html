@@ -762,6 +762,28 @@
       .attention-item.is-warning { border-left:3px solid var(--warn,#d97706); }
       .attention-item.is-warning .attention-dot { color:var(--warn,#d97706); }
       .attention-item.is-info .attention-dot { color:var(--dim,#6b7280); }
+
+      /* Widget Manager: a toolbar card + the reusable sortable data table. */
+      .wm .card + .card { margin-top:14px; }
+      .wm-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; }
+      .wm-sep { width:1px; align-self:stretch; min-height:20px; background:var(--line,#e5e7eb); margin:0 .2rem; }
+      .wm-table { width:100%; }
+      .wm-table td { vertical-align:middle; }
+      .wm-name { font-weight:600; }
+      .wm-row.is-hidden .wm-name { color:var(--dim,#6b7280); text-decoration:line-through; }
+      .wm-row.is-hidden td:not(.wm-cell-name) { opacity:.55; }
+      .wm-col-vis { width:5.5rem; }
+      .wm-col-size { width:1%; white-space:nowrap; }
+      .wm-col-order { width:1%; white-space:nowrap; }
+      .wm-size { display:flex; align-items:center; gap:.4rem; }
+      .wm-size .rpill { --rpill-min:0; }
+      .wm-reorder { display:inline-flex; gap:.3rem; }
+      .wm-arrow { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+        border:1px solid var(--line,#e5e7eb); border-radius:8px; background:transparent; cursor:pointer;
+        color:inherit; line-height:1; transition:background .12s ease, border-color .12s ease; }
+      .wm-arrow:hover:not(:disabled) { background:color-mix(in srgb, var(--accent,#3b82f6) 8%, transparent);
+        border-color:color-mix(in srgb, var(--accent,#3b82f6) 35%, var(--line,#e5e7eb)); }
+      .wm-arrow:disabled { opacity:.35; cursor:not-allowed; }
     </style>
   </head>
   <body>

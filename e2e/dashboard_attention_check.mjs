@@ -45,22 +45,21 @@ try {
   if ((await page.locator(".attention-item").count()) !== 0) fail("turning all sources off should empty the digest");
   if (!(await page.evaluate(() => document.body.innerText.includes("All clear")))) fail("empty digest should show the 'All clear' message");
 
-  // 3) The dashboard layout manager now lives in Settings (mode select + Reset),
-  // not in a wasted dashboard header cell.
+  // 3) The dashboard layout manager now lives in the Widget Manager (mode + Reset),
+  // not in a wasted dashboard header cell nor in Settings.
   const page2 = await (await browser.newContext()).newPage();
   await page2.goto(BASE + "/", { waitUntil: "domcontentloaded" });
-  await page2.waitForSelector(".bento", { timeout: 60000 });
-  await page2.waitForTimeout(700);
-  await page2.locator("button.hh").first().click(); // the household card opens global Settings
-  await page2.waitForTimeout(700);
+  await page2.waitForSelector('nav[aria-label="Main navigation"] a[title]', { timeout: 60000 });
+  await page2.waitForTimeout(500);
+  await page2.locator('a[title="Widget manager"]').first().click();
+  await page2.waitForSelector(".wm-toolbar", { timeout: 10000 });
   const hasLayout = await page2.evaluate(() => {
-    const sectionLabel = [...document.querySelectorAll(".set-label")].some((e) => e.textContent.trim() === "Dashboard layout");
     const t = document.body.innerText;
-    return sectionLabel && t.includes("Reset layout") && t.includes("Custom layout");
+    return t.includes("Reset layout") && t.includes("Custom layout");
   });
-  if (!hasLayout) fail("Settings should contain the Dashboard layout controls (mode select + Reset)");
+  if (!hasLayout) fail("Widget Manager should contain the layout controls (mode select + Reset)");
 
-  if (!process.exitCode) console.log("PASS: attention widget is the top tile, its gear toggles which sources show, and the layout manager moved to Settings.");
+  if (!process.exitCode) console.log("PASS: attention widget is the top tile, its gear toggles which sources show, and the layout manager lives in the Widget Manager.");
 } finally {
   await browser.close();
 }

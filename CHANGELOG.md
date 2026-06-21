@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Widget Manager — Phase 1 (layout, visibility, reorder).** The `/widget-manager` page is now a working hub for
+  the dashboard's widgets, built on the reusable sortable `DataTable`: each widget is a row with a visibility
+  switch, width/height steppers, and reorder up/down; the toolbar holds the arrangement mode (Custom/Auto) +
+  Reset and bulk Show-all/Hide-all. New pure `widgetvis` set (instance-keyed) persists hidden widgets; the
+  dashboard now renders from the layout-items list and **skips hidden tiles** (reflowing the rest), so every
+  manager control is wired straight back into the dashboard. The dashboard layout controls moved here from
+  Settings, and the previously-unmanaged "Spending highlight" tile is now part of the layout. Covered by a new
+  e2e (hide removes the tile; resize + reorder persist) plus `widgetvis` unit tests.
+
+### Added (earlier)
 - **Widget builder & Widget manager pages (scaffolding).** Two new left-rail screens under Tools › Build —
   `/widget-builder` (widget creation) and `/widget-manager` (widget management) — registered in the screens
   registry with rail icons and i18n. Blank placeholder pages for now (routing + nav only); the composition engine

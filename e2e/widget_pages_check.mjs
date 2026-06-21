@@ -21,7 +21,7 @@ try {
 
   const pages = [
     { label: "Widget builder", route: "/widget-builder", text: "Widget creation is coming soon." },
-    { label: "Widget manager", route: "/widget-manager", text: "Widget management is coming soon." },
+    { label: "Widget manager", route: "/widget-manager", text: "Widgets" }, // manager is live now
   ];
   for (const pg of pages) {
     const link = page.locator(`a[title="${pg.label}"]`).first();

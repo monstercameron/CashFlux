@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: Widget Manager Phase 1 (layout + visibility, wired to dashboard)
+
+- Approved the full Widget Manager spec (styling/presets/multi-instance phased); this is Phase 1.
+- Pure `widgetvis.Set` (instance-keyed hidden set) + tests; `uistate.UseHiddenWidgets` atom (localStorage).
+- Tied back into the dashboard: refactored `Dashboard()` to build an id→render map and render from the
+  layout-items order, skipping hidden ids. `ui/widget.go` now filters hidden ids out before Pack so visible
+  tiles reflow into the gaps. Net: hiding/reordering/resizing in the manager reflects live (shared atoms).
+- Brought the previously-unmanaged "highlight" tile into `DefaultItems` (added to pack_test). Improved
+  `dashlayout.Reconcile` to splice a newly-managed widget in near its default slot (after the nearest earlier
+  present default) instead of forcing all newcomers to the top — so highlight lands at the bottom, attention at
+  the top.
+- UI: per the feedback ("looks janky"), rebuilt the manager on the reusable sortable `DataTable` instead of a
+  hand-rolled flex list — columns Widget/Visible/Size/Order (sortable; default sorts by layout order), bare
+  `Toggle` switches, W/H `StepperPill`s, boxed reorder arrows; refined CSS. Moved the layout mode/Reset controls
+  here from Settings (removed that section).
+- e2e `widget_manager_check`: hide → tile leaves the dashboard; resize + reorder persist to `cashflux:layout`.
+  Updated `dashboard_attention_check` (layout controls now in the manager) and `widget_pages_check` (manager no
+  longer blank). SW → v227. Next phase: full per-widget styling + custom titles + lock.
+
 ## 2026-06-21 - feat: scaffold Widget builder + Widget manager rail pages
 
 - Confirmed no existing "widget creation engine" TODO (closest is C32 custom-pages widget picker). Per request,

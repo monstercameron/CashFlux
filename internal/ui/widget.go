@@ -127,6 +127,19 @@ func widget(props WidgetProps) uic.Node {
 	modeAtom := uistate.UseLayoutMode()
 	mode := modeAtom.Get()
 
+	// Drop hidden widgets before packing so the visible tiles reflow into the gaps
+	// (the dashboard skips rendering hidden tiles; this keeps everyone else's
+	// placement correct). Visibility is owned by the Widget Manager.
+	if hidden := uistate.UseHiddenWidgets().Get(); len(hidden) > 0 {
+		kept := items[:0:0]
+		for _, it := range items {
+			if !hidden.IsHidden(it.ID) {
+				kept = append(kept, it)
+			}
+		}
+		items = kept
+	}
+
 	// Every tile is configurable now — the settings panel always offers a
 	// per-tile color and an importance rank (plus any schema fields) — so the
 	// gear always shows. (It used to be hidden on no-schema tiles outside the

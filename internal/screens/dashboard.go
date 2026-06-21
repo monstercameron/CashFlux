@@ -136,46 +136,78 @@ func Dashboard() ui.Node {
 	}
 
 	attnCol, attnRow := spanOf(layoutItems, "attention")
+	// Each tile is built lazily by id, then the dashboard renders them in the saved
+	// layout order, skipping any the user has hidden in the Widget Manager. This
+	// single id-keyed path is what the manager's visibility/order controls hook
+	// into (the widget shell still positions each tile from the layout atom).
+	renderers := map[string]func() ui.Node{
+		"attention": func() ui.Node {
+			return attentionWidget(app, txns, rates, start, end, freshnessDismissals.Get(), widgetCfgs.For("attention"), attnCol, attnRow)
+		},
+		"kpi-networth": func() ui.Node {
+			return uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
+				GridColumn: "1", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				Body: kpiBody(fmtMoney(net), figTone(net), nwSub, nwTone),
+			})
+		},
+		"kpi-income": func() ui.Node {
+			return uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-income", Title: uistate.T("dashboard.income"), Draggable: true, Resizable: true,
+				GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				Body: kpiBody(fmtMoney(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
+			})
+		},
+		"kpi-spending": func() ui.Node {
+			return uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-spending", Title: uistate.T("dashboard.spending"), Draggable: true, Resizable: true,
+				GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				Body: kpiBody(fmtMoney(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
+			})
+		},
+		"kpi-liabilities": func() ui.Node {
+			return uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-liabilities", Title: uistate.T("dashboard.liabilities"), Draggable: true, Resizable: true,
+				GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				Body: kpiBody(fmtMoney(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
+			})
+		},
+		"recent":   func() ui.Node { return recentWidget(txns, widgetCfgs.For("recent")) },
+		"budgets":  func() ui.Node { return budgetsWidget(app, txns, rates, widgetCfgs.For("budgets")) },
+		"goals":    func() ui.Node { return goalsWidget(app, widgetCfgs.For("goals")) },
+		"todo":     func() ui.Node { return todoWidget(app, widgetCfgs.For("todo")) },
+		"accounts": func() ui.Node { return accountsWidget(app, txns, widgetCfgs.For("accounts")) },
+		"trend":    func() ui.Node { return netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")) },
+		"cashflow": func() ui.Node { return cashFlowWidget(txns, rates) },
+		"savings":  func() ui.Node { return savingsRateWidget(income, expense, widgetCfgs.For("savings")) },
+		"breakdown": func() ui.Node {
+			return spendingBreakdownWidget(app, txns, rates, start, end, widgetCfgs.For("breakdown"))
+		},
+		"bills": func() ui.Node { return upcomingBillsWidget(app) },
+		"freshness": func() ui.Node {
+			return freshnessWidget(accounts, app.FreshnessWindows(), freshnessDismissals.Get(), remindToUpdate, dismissFreshness)
+		},
+		"highlight": func() ui.Node { return topHighlightWidget(txns, app.Categories(), rates) },
+	}
+
+	hidden := uistate.UseHiddenWidgets().Get()
+	tiles := make([]any, 0, len(layoutItems)+1)
+	tiles = append(tiles, Class("bento"))
+	for _, it := range layoutItems {
+		if hidden.IsHidden(it.ID) {
+			continue
+		}
+		if render, ok := renderers[it.ID]; ok {
+			tiles = append(tiles, render())
+		}
+	}
+
 	return Fragment(
 		// Optional decorative banner band (B20) — shown only when the user picks a
 		// banner; driven entirely by CSS vars/attribute set by uistate.ApplyBanner,
 		// so it needs no state here. Decorative, hence aria-hidden.
 		Div(Class("app-banner"), Attr("aria-hidden", "true")),
-		Div(Class("bento"),
-			attentionWidget(app, txns, rates, start, end, freshnessDismissals.Get(), widgetCfgs.For("attention"), attnCol, attnRow),
-			uiw.Widget(uiw.WidgetProps{
-				ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
-				GridColumn: "1", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-				Body: kpiBody(fmtMoney(net), figTone(net), nwSub, nwTone),
-			}),
-			uiw.Widget(uiw.WidgetProps{
-				ID: "kpi-income", Title: uistate.T("dashboard.income"), Draggable: true, Resizable: true,
-				GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-				Body: kpiBody(fmtMoney(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
-			}),
-			uiw.Widget(uiw.WidgetProps{
-				ID: "kpi-spending", Title: uistate.T("dashboard.spending"), Draggable: true, Resizable: true,
-				GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-				Body: kpiBody(fmtMoney(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
-			}),
-			uiw.Widget(uiw.WidgetProps{
-				ID: "kpi-liabilities", Title: uistate.T("dashboard.liabilities"), Draggable: true, Resizable: true,
-				GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
-				Body: kpiBody(fmtMoney(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
-			}),
-			recentWidget(txns, widgetCfgs.For("recent")),
-			budgetsWidget(app, txns, rates, widgetCfgs.For("budgets")),
-			goalsWidget(app, widgetCfgs.For("goals")),
-			todoWidget(app, widgetCfgs.For("todo")),
-			accountsWidget(app, txns, widgetCfgs.For("accounts")),
-			netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")),
-			cashFlowWidget(txns, rates),
-			savingsRateWidget(income, expense, widgetCfgs.For("savings")),
-			spendingBreakdownWidget(app, txns, rates, start, end, widgetCfgs.For("breakdown")),
-			upcomingBillsWidget(app),
-			freshnessWidget(accounts, app.FreshnessWindows(), freshnessDismissals.Get(), remindToUpdate, dismissFreshness),
-			topHighlightWidget(txns, app.Categories(), rates),
-		),
+		Div(tiles...),
 	)
 }
 
