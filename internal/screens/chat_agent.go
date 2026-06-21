@@ -54,7 +54,11 @@ type agentStep struct {
 // defaultChatSystemPrompt is the assistant's persona + tool-use instructions. The
 // user can override it from the chat's "Edit prompt" panel; the live data context is
 // always appended separately so a custom prompt never loses it.
-const defaultChatSystemPrompt = `You are CashFlux, a friendly, concise personal-finance assistant built into the user's own budgeting app. You can call tools to read the user's real, on-device figures — ALWAYS use a tool for any specific figure (a category total, an account balance, net worth, affordability) instead of guessing. If unsure which category a question means, call list_categories first. You may also COMBINE your own general knowledge (tax brackets, rates, formulas) with the calculator tool and the user's figures to ESTIMATE things the data doesn't directly contain (e.g. taxes) — never refuse; compute a clear estimate and state your assumptions. Use web_search for current or external facts (tax brackets, prices, rates). Use the calculator tool for any arithmetic. Never invent the user's own numbers. Answer in plain English as short Markdown. The user's money is private and never leaves their device except for these requests.`
+const defaultChatSystemPrompt = `You are CashFlux, a friendly, concise personal-finance assistant built into the user's own budgeting app. You can call tools to read the user's real, on-device figures — ALWAYS use a tool for any specific figure (a category total, an account balance, net worth, affordability) instead of guessing. If unsure which category a question means, call list_categories first. You may also COMBINE your own general knowledge (tax brackets, rates, formulas) with the calculator tool and the user's figures to ESTIMATE things the data doesn't directly contain (e.g. taxes) — never refuse; compute a clear estimate and state your assumptions. Use web_search for current or external facts, and the calculator for arithmetic. Never invent the user's own numbers.
+
+You can also CHANGE the user's data with tools (every change asks the user to approve first): add/complete tasks, record transactions, create accounts (assets and liabilities), transfer between accounts, set account balances, add goal contributions. Think in double-entry terms so net worth stays correct. Key rule: borrowing against an account (e.g. a 401(k) loan) is roughly NET-WORTH-NEUTRAL at the moment you borrow — model it as a new liability for the amount owed PLUS the cash you received (add_transfer or update_account_balance), not as a one-sided loss. When an event spans multiple accounts, plan the steps, do them in order, and tell the user what you changed. If a detail is missing, pick a sensible default and say so rather than refusing.
+
+Answer in plain English as short Markdown. The user's money is private and never leaves their device except for these requests.`
 
 // categoryNames returns a comma-separated list of the user's category names.
 func categoryNames(cats []domain.Category) string {
@@ -585,8 +589,8 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 		},
 		{
 			spec: ai.FunctionTool("add_transaction",
-				"Record a transaction. A negative amount is an expense, positive is income. Resolve account and category by name.",
-				json.RawMessage(`{"type":"object","properties":{"amount":{"type":"number","description":"major units; negative = expense"},"account":{"type":"string"},"category":{"type":"string"},"payee":{"type":"string"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["amount","account"]}`)),
+				"Record a transaction. A negative amount is an expense, positive is income. Resolve account and category by name. (description is optional — a sensible one is used if omitted.)",
+				json.RawMessage(`{"type":"object","properties":{"amount":{"type":"number","description":"major units; negative = expense"},"account":{"type":"string"},"category":{"type":"string"},"payee":{"type":"string"},"description":{"type":"string"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["amount","account"]}`)),
 			mutates: true,
 			preview: func(raw json.RawMessage) string {
 				var a struct {
@@ -599,11 +603,12 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 			},
 			run: func(raw json.RawMessage) string {
 				var a struct {
-					Amount   float64 `json:"amount"`
-					Account  string  `json:"account"`
-					Category string  `json:"category"`
-					Payee    string  `json:"payee"`
-					Date     string  `json:"date"`
+					Amount      float64 `json:"amount"`
+					Account     string  `json:"account"`
+					Category    string  `json:"category"`
+					Payee       string  `json:"payee"`
+					Description string  `json:"description"`
+					Date        string  `json:"date"`
 				}
 				if err := json.Unmarshal(raw, &a); err != nil {
 					return "Couldn't read the transaction details."
@@ -612,7 +617,20 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				if !ok {
 					return "No account matching “" + a.Account + "”."
 				}
-				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: money.New(int64(math.Round(a.Amount*100)), base), Payee: strings.TrimSpace(a.Payee), Date: now}
+				// Desc is required by validation; derive a sensible one so the model never
+				// has to ask the user for it.
+				desc := strings.TrimSpace(a.Description)
+				if desc == "" {
+					desc = strings.TrimSpace(a.Payee)
+				}
+				if desc == "" {
+					if a.Amount >= 0 {
+						desc = "Income"
+					} else {
+						desc = "Expense"
+					}
+				}
+				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: money.New(majorToMinor(a.Amount, acc.Currency), acc.Currency), Payee: strings.TrimSpace(a.Payee), Desc: desc, Date: now}
 				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
 					t.Date = d
 				}
@@ -661,7 +679,174 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				return "No goal matching “" + a.Goal + "”."
 			},
 		},
+		{
+			spec: ai.FunctionTool("add_account",
+				"Create an account: an ASSET (checking, savings, cash, investment) or a LIABILITY (loan, credit_card, mortgage, line_of_credit). Use a liability for money owed — e.g. a 401(k) loan. For a liability, `balance` is the amount owed (enter it positive). Optional liability fields: apr, credit_limit, min_payment.",
+				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"class":{"type":"string","enum":["asset","liability"]},"type":{"type":"string","description":"checking|savings|cash|investment|loan|credit_card|mortgage|line_of_credit"},"balance":{"type":"number","description":"opening balance in major units; for a liability the amount owed"},"apr":{"type":"number"},"credit_limit":{"type":"number"},"min_payment":{"type":"number"}},"required":["name","class"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Name    string  `json:"name"`
+					Class   string  `json:"class"`
+					Balance float64 `json:"balance"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				return fmt.Sprintf("Create a %s account “%s”%s", a.Class, strings.TrimSpace(a.Name), ifStr(a.Balance != 0, " ("+fmtMoney(money.New(majorToMinor(a.Balance, base), base))+")", ""))
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Name        string  `json:"name"`
+					Class       string  `json:"class"`
+					Type        string  `json:"type"`
+					Balance     float64 `json:"balance"`
+					APR         float64 `json:"apr"`
+					CreditLimit float64 `json:"credit_limit"`
+					MinPayment  float64 `json:"min_payment"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Name) == "" {
+					return "An account needs a name."
+				}
+				liability := strings.ToLower(strings.TrimSpace(a.Class)) == "liability"
+				acType := domain.TypeChecking
+				if liability {
+					acType = domain.TypeLoan
+				}
+				if a.Type != "" {
+					if cand := domain.AccountType(strings.ToLower(strings.TrimSpace(a.Type))); cand.Valid() {
+						acType = cand
+					}
+				}
+				cls := acType.Class() // keep class consistent with the resolved type
+				minor := majorToMinor(a.Balance, base)
+				if cls == domain.ClassLiability && minor > 0 {
+					minor = -minor // an owed amount is stored negative
+				}
+				acc := domain.Account{
+					ID: id.New(), Name: strings.TrimSpace(a.Name), OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+					Class: cls, Type: acType, Currency: base, OpeningBalance: money.New(minor, base), BalanceAsOf: now,
+				}
+				if cls == domain.ClassLiability {
+					if a.APR > 0 {
+						acc.InterestRateAPR = a.APR
+					}
+					if a.CreditLimit > 0 {
+						acc.CreditLimit = money.New(majorToMinor(a.CreditLimit, base), base)
+					}
+					if a.MinPayment > 0 {
+						acc.MinPayment = money.New(majorToMinor(a.MinPayment, base), base)
+					}
+				}
+				if err := app.PutAccount(acc); err != nil {
+					return "Couldn't create the account: " + err.Error()
+				}
+				return fmt.Sprintf("Created %s account “%s” with balance %s.", cls, acc.Name, fmtMoney(acc.OpeningBalance))
+			},
+		},
+		{
+			spec: ai.FunctionTool("add_transfer",
+				"Move money between two of the user's accounts (records a matched transfer). Use this for the cash side of events like a loan payout or moving funds. Resolve accounts by name.",
+				json.RawMessage(`{"type":"object","properties":{"from_account":{"type":"string"},"to_account":{"type":"string"},"amount":{"type":"number","description":"major units, positive"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["from_account","to_account","amount"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					From   string  `json:"from_account"`
+					To     string  `json:"to_account"`
+					Amount float64 `json:"amount"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				return fmt.Sprintf("Transfer %s from %s to %s", fmtMoney(money.New(majorToMinor(a.Amount, base), base)), a.From, a.To)
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					From   string  `json:"from_account"`
+					To     string  `json:"to_account"`
+					Amount float64 `json:"amount"`
+					Date   string  `json:"date"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil || a.Amount <= 0 {
+					return "A transfer needs both accounts and a positive amount."
+				}
+				from, ok1 := resolveAccount(a.From)
+				to, ok2 := resolveAccount(a.To)
+				if !ok1 {
+					return "No account matching “" + a.From + "”."
+				}
+				if !ok2 {
+					return "No account matching “" + a.To + "”."
+				}
+				if from.ID == to.ID {
+					return "The two accounts must be different."
+				}
+				when := now
+				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
+					when = d
+				}
+				fromMinor := majorToMinor(a.Amount, from.Currency)
+				fromMoney := money.New(fromMinor, from.Currency)
+				toMoney := money.New(majorToMinor(a.Amount, to.Currency), to.Currency)
+				if conv, err := rates.Convert(fromMoney.Abs(), to.Currency); err == nil {
+					toMoney = conv // honor FX across currencies
+				}
+				out := domain.Transaction{ID: id.New(), AccountID: from.ID, Amount: money.New(-fromMinor, from.Currency), TransferAccountID: to.ID, Date: when, Payee: to.Name, Desc: "Transfer to " + to.Name}
+				in := domain.Transaction{ID: id.New(), AccountID: to.ID, Amount: toMoney, TransferAccountID: from.ID, Date: when, Payee: from.Name, Desc: "Transfer from " + from.Name}
+				if err := app.PutTransaction(out); err != nil {
+					return "Couldn't record the transfer: " + err.Error()
+				}
+				if err := app.PutTransaction(in); err != nil {
+					return "Couldn't record the transfer: " + err.Error()
+				}
+				return fmt.Sprintf("Transferred %s from %s to %s.", fmtMoney(fromMoney), from.Name, to.Name)
+			},
+		},
+		{
+			spec: ai.FunctionTool("update_account_balance",
+				"Set an account's current balance (reconcile to a statement), by an adjusting entry. For a liability, `balance` is the amount still owed (enter it positive).",
+				json.RawMessage(`{"type":"object","properties":{"account":{"type":"string"},"balance":{"type":"number","description":"the new current balance in major units"}},"required":["account","balance"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Account string  `json:"account"`
+					Balance float64 `json:"balance"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				return fmt.Sprintf("Set %s balance to %s", a.Account, fmtMoney(money.New(majorToMinor(a.Balance, base), base)))
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Account string  `json:"account"`
+					Balance float64 `json:"balance"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Provide an account and a balance."
+				}
+				acc, ok := resolveAccount(a.Account)
+				if !ok {
+					return "No account matching “" + a.Account + "”."
+				}
+				target := majorToMinor(a.Balance, acc.Currency)
+				if acc.Class == domain.ClassLiability && target > 0 {
+					target = -target
+				}
+				cur, err := ledger.Balance(acc, txns)
+				if err != nil {
+					return "Couldn't read the current balance."
+				}
+				delta := target - cur.Amount
+				acc.OpeningBalance = money.New(acc.OpeningBalance.Amount+delta, acc.Currency)
+				acc.BalanceAsOf = now
+				if err := app.PutAccount(acc); err != nil {
+					return "Couldn't update the balance: " + err.Error()
+				}
+				return fmt.Sprintf("Set %s balance to %s (adjusted by %s).", acc.Name, fmtMoney(money.New(target, acc.Currency)), fmtMoney(money.New(delta, acc.Currency)))
+			},
+		},
 	}
+}
+
+// majorToMinor converts a major-unit amount (e.g. dollars) to minor units for a
+// currency, honoring its decimal places.
+func majorToMinor(major float64, cur string) int64 {
+	return int64(math.Round(major * math.Pow10(currency.Decimals(cur))))
 }
 
 // parseTaskPriority maps a string to a TaskPriority (default medium).

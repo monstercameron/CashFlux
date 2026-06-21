@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Insights chat account + transfer tools, modeled correctly (C90.2).** New `add_account` (assets and
+  **liabilities** — loans, credit cards, mortgages — with APR/credit-limit/min-payment; a liability balance is
+  the amount owed), `add_transfer` (matched two-leg transfer between accounts, FX-aware), and
+  `update_account_balance` (reconcile). The system prompt now guides multi-account events so net worth stays
+  correct — e.g. a 401(k) loan is treated as **net-worth-neutral** (a new liability *plus* the cash received),
+  not a one-sided loss. Also fixed `add_transaction`/transfers failing with "desc is required" (a description is
+  now always set, with an optional `description` arg) — the cause of the assistant getting stuck asking for one.
+  Covered by a new e2e (creates a liability that shows on Accounts; performs a transfer).
 - **Insights chat auto-names itself (C82).** Once a chat has a few exchanges (≥4 messages), it asks the model for
   a short 2-4 word title from the conversation and updates the switcher tab — once per chat, preserved across
   sessions (a `Named` flag stops autosave from re-deriving the title). Covered by an e2e.
