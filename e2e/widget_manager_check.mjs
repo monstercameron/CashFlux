@@ -67,6 +67,26 @@ try {
   if (await bentoHas("Recent transactions")) fail("hidden widget still renders on the dashboard");
   if (!(await bentoHas("Needs attention"))) fail("a visible widget went missing after hiding another");
 
+  // Styling sanity: the size controls are the compact bordered steppers (not the
+  // wide period pills), and the table is width-capped so rows don't stretch.
+  await page.locator('a[title="Widget manager"]').first().click();
+  await page.waitForSelector(".wm-row", { timeout: 10000 });
+  const styleOK = await page.evaluate(() => {
+    const table = document.querySelector(".wm-table");
+    const sizeCell = document.querySelector(".wm-row .wm-col-size");
+    const steps = document.querySelectorAll(".wm-row .wm-step").length;
+    const strayPill = document.querySelector(".wm-size .rpill"); // the old janky control
+    return {
+      tableW: table ? Math.round(table.getBoundingClientRect().width) : 0,
+      sizeW: sizeCell ? Math.round(sizeCell.getBoundingClientRect().width) : 0,
+      steps, strayPill: !!strayPill,
+    };
+  });
+  if (styleOK.strayPill) fail("size control is still the wide period pill (.rpill), not the compact stepper");
+  if (styleOK.steps === 0) fail("compact size steppers (.wm-step) are missing");
+  if (styleOK.tableW > 820) fail(`manager table is not width-capped (got ${styleOK.tableW}px) — rows will look stretched`);
+  if (styleOK.sizeW > 260) fail(`size column is too wide (${styleOK.sizeW}px) — controls look stretched`);
+
   if (!process.exitCode) console.log("PASS: manager hide removes the dashboard tile; resize + reorder persist to the layout.");
 } finally {
   await browser.close();

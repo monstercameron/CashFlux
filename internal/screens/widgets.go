@@ -226,18 +226,10 @@ func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 		),
 		Td(Class("wm-col-size"),
 			Div(Class("wm-size"),
-				uiw.StepperPill(uiw.StepperPillProps{
-					Label:     "W " + strconv.Itoa(col),
-					PrevLabel: uistate.T("widget.narrower"), NextLabel: uistate.T("widget.wider"),
-					OnPrev: func() { resize(col-1, row) },
-					OnNext: func() { resize(col+1, row) },
-				}),
-				uiw.StepperPill(uiw.StepperPillProps{
-					Label:     "H " + strconv.Itoa(row),
-					PrevLabel: uistate.T("widget.shorter"), NextLabel: uistate.T("widget.taller"),
-					OnPrev: func() { resize(col, row-1) },
-					OnNext: func() { resize(col, row+1) },
-				}),
+				wmStepper("W", col, uistate.T("widget.narrower"), uistate.T("widget.wider"),
+					func() { resize(col-1, row) }, func() { resize(col+1, row) }),
+				wmStepper("H", row, uistate.T("widget.shorter"), uistate.T("widget.taller"),
+					func() { resize(col, row-1) }, func() { resize(col, row+1) }),
 			),
 		),
 		Td(Class("wm-col-order"),
@@ -256,6 +248,16 @@ func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 					}), "↓"),
 			),
 		),
+	)
+}
+
+// wmStepper renders a compact bordered −/value/+ size control (e.g. "− W 4 +"),
+// far tighter than the full-width period StepperPill which looked stretched here.
+func wmStepper(axis string, value int, prevLabel, nextLabel string, onPrev, onNext func()) ui.Node {
+	return Div(Class("wm-step"),
+		Button(Class("wm-step-btn"), Type("button"), Attr("aria-label", prevLabel), OnClick(onPrev), "−"),
+		Span(Class("wm-step-val"), axis+" "+strconv.Itoa(value)),
+		Button(Class("wm-step-btn"), Type("button"), Attr("aria-label", nextLabel), OnClick(onNext), "+"),
 	)
 }
 

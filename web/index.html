@@ -767,23 +767,33 @@
       .wm .card + .card { margin-top:14px; }
       .wm-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; }
       .wm-sep { width:1px; align-self:stretch; min-height:20px; background:var(--line,#e5e7eb); margin:0 .2rem; }
-      .wm-table { width:100%; }
-      .wm-table td { vertical-align:middle; }
-      .wm-name { font-weight:600; }
-      .wm-row.is-hidden .wm-name { color:var(--dim,#6b7280); text-decoration:line-through; }
-      .wm-row.is-hidden td:not(.wm-cell-name) { opacity:.55; }
-      .wm-col-vis { width:5.5rem; }
+      .wm-table { width:100%; max-width:780px; }
+      .wm-table th, .wm-table td { vertical-align:middle; padding-top:.45rem; padding-bottom:.45rem; }
+      /* Keep the controls compact and grouped on the right; the name takes the slack. */
+      .wm-table th.wm-col-vis, .wm-table th.wm-col-size, .wm-table th.wm-col-order { text-align:center; }
+      .wm-col-vis { width:4.5rem; text-align:center; }
       .wm-col-size { width:1%; white-space:nowrap; }
       .wm-col-order { width:1%; white-space:nowrap; }
-      .wm-size { display:flex; align-items:center; gap:.4rem; }
-      .wm-size .rpill { --rpill-min:0; }
-      .wm-reorder { display:inline-flex; gap:.3rem; }
-      .wm-arrow { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+      .wm-name { font-weight:600; }
+      .wm-row.is-hidden .wm-name { color:var(--dim,#6b7280); text-decoration:line-through; }
+      .wm-row.is-hidden td:not(.wm-cell-name) { opacity:.5; }
+      .wm-col-vis .switch { margin:0 auto; }
+      .wm-size { display:inline-flex; align-items:center; gap:.5rem; }
+      .wm-step { display:inline-flex; align-items:stretch; border:1px solid var(--line,#e5e7eb); border-radius:8px; overflow:hidden; }
+      .wm-step-btn { width:26px; height:28px; border:0; background:transparent; cursor:pointer; color:inherit;
+        font-size:15px; line-height:1; display:inline-flex; align-items:center; justify-content:center;
+        transition:background .12s ease; }
+      .wm-step-btn:hover { background:color-mix(in srgb, var(--accent,#3b82f6) 10%, transparent); }
+      .wm-step-val { min-width:2.6rem; display:inline-flex; align-items:center; justify-content:center;
+        font-size:12px; color:var(--dim,#6b7280); border-left:1px solid var(--line,#e5e7eb);
+        border-right:1px solid var(--line,#e5e7eb); padding:0 .2rem; }
+      .wm-reorder { display:inline-flex; gap:.3rem; justify-content:center; }
+      .wm-arrow { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px;
         border:1px solid var(--line,#e5e7eb); border-radius:8px; background:transparent; cursor:pointer;
         color:inherit; line-height:1; transition:background .12s ease, border-color .12s ease; }
-      .wm-arrow:hover:not(:disabled) { background:color-mix(in srgb, var(--accent,#3b82f6) 8%, transparent);
+      .wm-arrow:hover:not(:disabled) { background:color-mix(in srgb, var(--accent,#3b82f6) 10%, transparent);
         border-color:color-mix(in srgb, var(--accent,#3b82f6) 35%, var(--line,#e5e7eb)); }
-      .wm-arrow:disabled { opacity:.35; cursor:not-allowed; }
+      .wm-arrow:disabled { opacity:.3; cursor:not-allowed; }
     </style>
   </head>
   <body>
