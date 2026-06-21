@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -817,9 +818,16 @@ func globalSettingsForm() uic.Node {
 		logBody,
 	)
 
+	about := Div(Class("set-about mt-5 pt-3 border-t border-line flex items-center justify-between text-faint text-[12px]"),
+		Span("CashFlux "+version.Label()),
+		A(Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/CHANGELOG.md"), Attr("target", "_blank"),
+			Attr("rel", "noopener noreferrer"), Class("hover:text-fg underline"), uistate.T("settings.changelog")),
+	)
+
 	return Div(
 		Div(Class("grid grid-cols-2 gap-x-7 content-start"), left, right),
 		debugLog,
+		about,
 	)
 }
 

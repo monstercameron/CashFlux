@@ -2463,11 +2463,10 @@ version.
 **Version source:** new `internal/version` package — `var Version = "0.1.0"` (a `var`, not `const`, so a
 release build can inject the git tag via `-ldflags "-X github.com/monstercameron/CashFlux/internal/version.Version=$(git describe --tags)"`; constant default when not injected). One source of truth.
 **Placement (locked 2026-06-20):**
-- [ ] **Primary — rail bottom**, a small muted `v0.1.0` line under the Household card
-      (`internal/app/shell.go` `HouseholdCard`, already `mt-auto` at the rail foot). Always visible,
-      unobtrusive (Slack/Linear/VS Code convention); anchors the rail footer.
-- [ ] **Secondary — Settings "About" footer** (global settings FlipPanel): "CashFlux v0.1.0" + link to
-      the changelog/GitHub releases. The canonical "where's the version?" spot + home for build info.
+- [x] **Primary — rail bottom**: `version.Label()` renders as a muted line at the rail foot
+      (`internal/app/shell.go`).
+- [x] **Secondary — Settings "About" footer**: "CashFlux v0.1.0" + a "What's new" link to the GitHub
+      CHANGELOG, at the bottom of the global settings form (`internal/app/settings.go`).
 - Both read `version.Version`. (Rejected: brand-header tooltip — too hidden; topbar — already busy.)
 **Nice tie-ins (agent-maintained project — worth it):** stamp `version.Version` into JSON exports
 (`Dataset`/export envelope) and the log ring, and include it in any bug-report/feedback surface so every
@@ -3608,9 +3607,11 @@ the current quarter (Apr–Jun) *contains* the current month (June), so quarterl
 monthly. (Week ≤ Month is fine.) So the **Quarter window is excluding transactions it should include** —
 a boundary/anchoring bug in the quarter period math (possibly the same UTC-vs-local boundary family as
 **C1**, or `period.Truncate`/`Range` for quarter mis-anchoring).
-- [ ] Verify `period` quarter range = [quarter-start 00:00, next-quarter-start) covering the whole
-      current month; assert with a table test (a June txn must be in Q2). Reconcile Budgets SPENT across
-      Week ⊆ Month ⊆ Quarter (each wider period ≥ the narrower).
+- [x] **Fixed:** the Budgets screen (`internal/screens/budgets.go`) anchors each budget's own cadence to
+      **today** when the viewed window contains now (else the window start), so a Monthly budget always shows
+      the current month under any containing view — Month/Quarter now agree (anomaly gone), and with C41 the
+      view always contains now. The dashboard Budgets widget already uses the current month. Period engine
+      quarter range was confirmed correct (#61).
 - **NARROWED (#61):** the shared **period engine is CORRECT** — the **Dashboard** shows Month spending
   $4,088 (14 txns) → **Quarter $12,030 (42 txns)** (Quarter > Month ✓, proper counts). So this anomaly is
   **isolated to the Budgets screen's SPENT-summary computation**, NOT `period`/`ledger.PeriodTotals`.
@@ -3632,11 +3633,10 @@ of the current window** and truncates to the new granularity. Since a window's s
 - Quarter→**Week** → "Mar 29 – Apr 4" (Q2's *first* week)
 - Week→**Quarter** → **"Q1 2026"** (that week starts Mar 29 → Q1, **not Q2**)
 → a few switches and you're in Q1/March instead of June.
-- [ ] **Fix:** on resolution change, re-anchor to the period **containing `now`** (this week/month/
-      quarter) — use `time.Now()`, **not the prior window's `from`**. (`period.SetResolution` currently
-      truncates the existing anchor, which is the window start.) Add a test: every Week/Month/Quarter
-      switch yields a window that **contains `now`**. _(Distinct from the engine itself, which is correct —
-      C40/#61.)_
+- [x] **Fixed:** `period.Window.SetResolution(r, now)` re-anchors to the single period **containing `now`**
+      via `NewWindow(r, now, …)` (not the prior window's `from`), so every Week/Month/Quarter switch lands on
+      the current period. Covered by `TestSetResolutionReanchorsToNow` (asserts each switch's range contains
+      `now`). _(Distinct from the engine itself, which is correct — C40/#61.)_
 - **Workaround confirmed (#64):** the **Jump-to → "This period" preset re-anchors correctly** — drifted
   "Mar 29 – Apr 4" → "This period" → **"Jun 14 – Jun 20"** (current week). So users can recover, but the
   switch still drifts (the bug), and the reset is **buried in a dropdown** — B10 envisioned a one-tap
