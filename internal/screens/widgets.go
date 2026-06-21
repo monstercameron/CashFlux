@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/widgetstyle"
 	"github.com/monstercameron/CashFlux/internal/widgetvis"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -148,6 +149,163 @@ func WidgetManager() ui.Node {
 				OnSort: onSort,
 			}),
 		),
+		Section(Class("card"),
+			H3(Class("card-title"), uistate.T("widgetManager.styleTitle")),
+			P(Class("text-dim t-body mb-3"), uistate.T("widgetManager.styleHint")),
+			ui.CreateElement(tileStyleEditor, struct{}{}),
+		),
+	)
+}
+
+// tileStyleEditor styles tiles: pick a target ("All widgets" for the global tile
+// default, or one widget to override it), tweak colors / font / weight / shape /
+// border / shadow, and watch a live preview tile. Saves to the same per-widget
+// config store the dashboard reads, so the real tiles update live.
+func tileStyleEditor(struct{}) ui.Node {
+	cfgAtom := uistate.UseWidgetConfigs()
+	all := cfgAtom.Get()
+	target := ui.UseState(widgetstyle.GlobalID)
+	tid := target.Get()
+	cfg := all.For(tid)
+
+	set := func(key, val string) {
+		next := all.WithField(tid, key, val)
+		cfgAtom.Set(next)
+		uistate.PersistWidgetConfigs(next)
+	}
+	reset := ui.UseEvent(func() {
+		next := all
+		for _, k := range widgetstyle.Keys {
+			next = next.WithField(tid, k, "")
+		}
+		cfgAtom.Set(next)
+		uistate.PersistWidgetConfigs(next)
+	})
+	onTarget := ui.UseEvent(func(e ui.Event) { target.Set(e.GetValue()) })
+
+	// Preview = the effective style: the global default, overlaid by this widget's
+	// overrides when a specific widget is selected.
+	eff := cfg
+	if tid != widgetstyle.GlobalID {
+		eff = widgetstyle.Effective(all.For(widgetstyle.GlobalID), cfg)
+	}
+	preview := widgetstyle.InlineStyle(eff)
+
+	targetOpts := []ui.Node{Option(Value(widgetstyle.GlobalID), SelectedIf(tid == widgetstyle.GlobalID), uistate.T("widgetManager.allWidgets"))}
+	for _, it := range uistate.UseLayoutItems().Get() {
+		targetOpts = append(targetOpts, Option(Value(it.ID), SelectedIf(tid == it.ID), widgetDisplayName(it.ID)))
+	}
+
+	color := func(label, key string) ui.Node {
+		return ui.CreateElement(styleColorRow, styleColorProps{Label: label, Value: cfg[key], OnSet: func(v string) { set(key, v) }})
+	}
+	sel := func(label, key string, opts []styleOpt) ui.Node {
+		return ui.CreateElement(styleSelectRow, styleSelectProps{Label: label, Value: cfg[key], Options: opts, OnSet: func(v string) { set(key, v) }})
+	}
+
+	return Div(Class("wm-style"),
+		Div(Class("wm-style-left"),
+			Div(Class("wm-style-row"),
+				Span(Class("wm-style-label"), uistate.T("widgetManager.styleTarget")),
+				Select(Class("set-input"), Attr("aria-label", uistate.T("widgetManager.styleTarget")), OnChange(onTarget), targetOpts),
+			),
+			Div(Class("wm-style-grid"),
+				color(uistate.T("widgetManager.styleBg"), widgetstyle.KeyBg),
+				color(uistate.T("widgetManager.styleText"), widgetstyle.KeyText),
+				color(uistate.T("widgetManager.styleBorderColor"), widgetstyle.KeyBorder),
+				color(uistate.T("widgetManager.styleAccent"), widgetstyle.KeyAccent),
+				sel(uistate.T("widgetManager.styleBorderW"), widgetstyle.KeyBorderW, borderWidthOpts()),
+				sel(uistate.T("widgetManager.styleRadius"), widgetstyle.KeyRadius, radiusOpts()),
+				sel(uistate.T("widgetManager.styleFont"), widgetstyle.KeyFont, fontOpts()),
+				sel(uistate.T("widgetManager.styleWeight"), widgetstyle.KeyWeight, weightOpts()),
+				sel(uistate.T("widgetManager.styleShadow"), widgetstyle.KeyShadow, shadowOpts()),
+			),
+			Button(Class("data-btn mt-3"), Type("button"), OnClick(reset), uistate.T("widgetManager.resetStyle")),
+		),
+		Div(Class("wm-style-preview"),
+			Span(Class("wm-preview-label"), uistate.T("widgetManager.preview")),
+			Div(Class("w wm-preview-tile"), Style(preview),
+				Div(Class("wh"), Span(Class("wtitle"), uistate.T("widgetManager.previewTitle"))),
+				Div(Class("wbody"),
+					Div(Class("font-display fig t-figure"), "$12,480"),
+					P(Class("t-caption text-dim mt-1"), uistate.T("widgetManager.previewSub")),
+				),
+			),
+		),
+	)
+}
+
+type styleOpt struct{ Value, Label string }
+
+func borderWidthOpts() []styleOpt {
+	return []styleOpt{{"", uistate.T("widgetManager.styleDefault")}, {"0", uistate.T("widgetManager.styleNone")}, {"1", "1px"}, {"2", "2px"}, {"3", "3px"}}
+}
+func radiusOpts() []styleOpt {
+	return []styleOpt{{"", uistate.T("widgetManager.styleDefault")}, {"0", uistate.T("widgetManager.shapeSquare")}, {"6", uistate.T("widgetManager.shapeSmall")}, {"10", uistate.T("widgetManager.shapeMedium")}, {"16", uistate.T("widgetManager.shapeLarge")}, {"24", uistate.T("widgetManager.shapeRound")}}
+}
+func fontOpts() []styleOpt {
+	return []styleOpt{{"", uistate.T("widgetManager.styleDefault")}, {"sans", uistate.T("widgetManager.fontSans")}, {"display", uistate.T("widgetManager.fontDisplay")}, {"mono", uistate.T("widgetManager.fontMono")}}
+}
+func weightOpts() []styleOpt {
+	return []styleOpt{{"", uistate.T("widgetManager.styleDefault")}, {"400", uistate.T("widgetManager.weightRegular")}, {"500", uistate.T("widgetManager.weightMedium")}, {"600", uistate.T("widgetManager.weightSemibold")}, {"700", uistate.T("widgetManager.weightBold")}}
+}
+func shadowOpts() []styleOpt {
+	return []styleOpt{{"", uistate.T("widgetManager.styleDefault")}, {"none", uistate.T("widgetManager.styleNone")}, {"soft", uistate.T("widgetManager.shadowSoft")}, {"strong", uistate.T("widgetManager.shadowStrong")}}
+}
+
+type styleColorProps struct {
+	Label string
+	Value string
+	OnSet func(string)
+}
+
+// styleColorRow is a labeled color picker with a clear-to-theme button. Its own
+// component so the color input's change hook stays at a stable position.
+func styleColorRow(p styleColorProps) ui.Node {
+	on := ui.UseEvent(func(e ui.Event) {
+		if p.OnSet != nil {
+			p.OnSet(e.GetValue())
+		}
+	})
+	val := p.Value
+	if val == "" {
+		val = "#888888"
+	}
+	return Div(Class("wm-style-row"),
+		Span(Class("wm-style-label"), p.Label),
+		Div(Class("wm-style-color"),
+			Input(Type("color"), Class("wm-color"), Value(val), Attr("aria-label", p.Label), OnChange(on)),
+			If(p.Value != "", Button(Class("wm-clear"), Type("button"), Attr("aria-label", uistate.T("widgetManager.clearStyle")), OnClick(func() {
+				if p.OnSet != nil {
+					p.OnSet("")
+				}
+			}), "×")),
+		),
+	)
+}
+
+type styleSelectProps struct {
+	Label   string
+	Value   string
+	Options []styleOpt
+	OnSet   func(string)
+}
+
+// styleSelectRow is a labeled select. Its own component so the select's change
+// hook stays at a stable position across the editor's fixed control set.
+func styleSelectRow(p styleSelectProps) ui.Node {
+	on := ui.UseEvent(func(e ui.Event) {
+		if p.OnSet != nil {
+			p.OnSet(e.GetValue())
+		}
+	})
+	opts := make([]ui.Node, 0, len(p.Options))
+	for _, o := range p.Options {
+		opts = append(opts, Option(Value(o.Value), SelectedIf(p.Value == o.Value), o.Label))
+	}
+	return Div(Class("wm-style-row"),
+		Span(Class("wm-style-label"), p.Label),
+		Select(Class("set-input wm-style-select"), Attr("aria-label", p.Label), OnChange(on), opts),
 	)
 }
 

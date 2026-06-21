@@ -794,6 +794,24 @@
       .wm-arrow:hover:not(:disabled) { background:color-mix(in srgb, var(--accent,#3b82f6) 10%, transparent);
         border-color:color-mix(in srgb, var(--accent,#3b82f6) 35%, var(--line,#e5e7eb)); }
       .wm-arrow:disabled { opacity:.3; cursor:not-allowed; }
+
+      /* Tile-style editor: controls on the left, a sticky live preview on the right. */
+      .wm-style { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:1.75rem; align-items:start; }
+      @media (max-width:820px){ .wm-style { grid-template-columns:1fr; } }
+      .wm-style-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem 1.25rem; margin-top:.75rem; }
+      @media (max-width:560px){ .wm-style-grid { grid-template-columns:1fr; } }
+      .wm-style-row { display:flex; align-items:center; justify-content:space-between; gap:.75rem; min-height:34px; }
+      .wm-style-label { font-size:13px; color:var(--dim,#6b7280); }
+      .wm-style-color { display:inline-flex; align-items:center; gap:.4rem; }
+      .wm-color { width:2rem; height:1.7rem; padding:0; border:1px solid var(--line,#e5e7eb); border-radius:6px; background:none; cursor:pointer; }
+      .wm-clear { width:1.4rem; height:1.4rem; border:1px solid var(--line,#e5e7eb); border-radius:5px; background:transparent;
+        cursor:pointer; color:var(--dim,#6b7280); line-height:1; font-size:13px; }
+      .wm-clear:hover { color:var(--down,#dc2626); border-color:var(--down,#dc2626); }
+      .wm-style-select { min-width:8.5rem; }
+      .wm-style-preview { position:sticky; top:1rem; display:flex; flex-direction:column; gap:.5rem; }
+      .wm-preview-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint,#9ca3af); }
+      /* The preview is a real tile shell so overrides read true; it isn't on the grid. */
+      .wm-preview-tile { position:static !important; min-height:120px; }
     </style>
   </head>
   <body>

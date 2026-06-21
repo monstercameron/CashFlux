@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Widget Manager — Phase 2 (tile styling with live preview).** A new "Tile style" editor on the Widget Manager
+  page lets you style tiles: pick **All widgets** for the global default or a single widget to override it, and set
+  **background, text, border color, accent, border width, corner radius, font, weight, and shadow** — with a **live
+  preview tile** that updates as you go and a **Reset to theme**. Per-widget overrides layer over the global tile
+  style, which layers over the app theme; only the fields you set are applied (everything else inherits). New pure
+  `widgetstyle` package resolves a config into inline tile CSS (tested); the dashboard tiles apply it live (reusing
+  the existing per-widget config store — global default under id `_all`). Per-widget accent now renders as a tinted
+  top strip composed with the chosen shadow. Covered by a new e2e (preview updates, the override reaches the
+  dashboard tiles, reset clears).
 - **Widget Manager — Phase 1 (layout, visibility, reorder).** The `/widget-manager` page is now a working hub for
   the dashboard's widgets, built on the reusable sortable `DataTable`: each widget is a row with a visibility
   switch, width/height steppers, and reorder up/down; the toolbar holds the arrangement mode (Custom/Auto) +

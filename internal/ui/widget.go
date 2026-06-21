@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/widgetstyle"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -187,18 +188,23 @@ func widget(props WidgetProps) uic.Node {
 		Attr("data-col-span", fmt.Sprintf("%d", colSpan)),
 		Attr("data-row-span", fmt.Sprintf("%d", rowSpan)),
 	}
-	// Per-widget color (B20): if this tile has a saved accent, tint it with a
-	// colored top strip (an inset box-shadow, so it never collides with the cell
-	// border). The key is always set — to the color or "none" — because the
-	// renderer doesn't drop an omitted style key, so a cleared color must be
-	// written back explicitly to revert.
+	// Per-widget styling: overlay this tile's effective style (the global "_all"
+	// default merged with any per-widget overrides — colors, font, weight, shape,
+	// border, shadow, accent) onto the grid placement. Only set fields are emitted,
+	// so anything left blank keeps the global theme value. Edited in the Widget
+	// Manager's tile-style editor.
 	style := gridStyle(gridCol, gridRow)
 	if style == nil {
 		style = map[string]string{}
 	}
-	if accent := uistate.UseWidgetConfigs().Get().For(props.ID).Accent(); accent != "" {
-		style["box-shadow"] = "inset 0 3px 0 0 " + accent
-	} else {
+	cfgs := uistate.UseWidgetConfigs().Get()
+	for k, v := range widgetstyle.InlineStyle(widgetstyle.Effective(cfgs.For(widgetstyle.GlobalID), cfgs.For(props.ID))) {
+		style[k] = v
+	}
+	// The renderer doesn't reset an omitted style key in place, so a cleared accent
+	// strip / shadow would linger; always write box-shadow (to "none" when unset) so
+	// removing the style reverts the tile.
+	if _, ok := style["box-shadow"]; !ok {
 		style["box-shadow"] = "none"
 	}
 	args = append(args, Style(style))

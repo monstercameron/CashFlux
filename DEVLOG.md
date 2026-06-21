@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: Widget Manager Phase 2 (tile styling + live preview)
+
+- Pure `widgetstyle` package: reserved config keys (_bg/_text/_border/_borderW/_radius/_font/_weight/_shadow plus
+  the existing _accent), `Effective(global, perWidget)` merge, and `InlineStyle(cfg)` → inline CSS (validates hex,
+  clamps px, rejects junk). Tested.
+- Storage reuses the per-widget widgetcfg store: global default under reserved id `_all`, per-widget under the
+  widget id. `ui/widget.go` overlays `InlineStyle(Effective(_all, id))` onto each tile, so changes apply live.
+- Editor on /widget-manager: target dropdown (All widgets + each widget), color pickers + selects, a Reset, and a
+  live preview tile (a real `.w` shell with the effective style) — two-column layout, sticky preview.
+- Two renderer gotchas hit + handled:
+  1. CSS custom properties don't survive the inline `Style()` path — `--accent` silently dropped. So accent is a
+     visible inset box-shadow top strip (composed with the drop-shadow) instead of a `--accent` re-tint.
+  2. The renderer doesn't reset an *omitted* style key in place, so a cleared accent lingered. widget.go always
+     writes box-shadow (`none` when unset) to guarantee revert — restoring the original B20 behavior.
+- e2e `widget_style_check` (preview updates → dashboard tiles override → reset clears); updated `widget_color_check`
+  for the strip behavior. SW v229. Next: custom titles + lock (still Phase 2 scope), then presets, then duplication.
+
 ## 2026-06-21 - feat: Widget Manager Phase 1 (layout + visibility, wired to dashboard)
 
 - Approved the full Widget Manager spec (styling/presets/multi-instance phased); this is Phase 1.
