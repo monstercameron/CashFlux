@@ -3691,14 +3691,12 @@ of the current window** and truncates to the new granularity. Since a window's s
   unchanged** despite `app/custompagesnav.go` existing — the created page isn't added to the nav list.
   (Selector caught "New page" in the same section, so the custom page is very likely genuinely unlisted.)
 
-### C44. CDN scripts lack SRI + Tailwind-CDN-in-production + offline dependency ★ (security/prod — OWASP A08, from B32) — ⚠️ D3 DONE; Tailwind is a build-pipeline task
+### C44. CDN scripts lack SRI + Tailwind-CDN-in-production + offline dependency ★ (security/prod — OWASP A08, from B32) — ✅ D3 DONE; Tailwind DEFERRED → C91
 **✅ DONE:** **D3 is now vendored locally** (`web/d3.min.js`, referenced as `./d3.min.js`, in the SW precache) —
-no third-party CDN, no SRI gap, works offline. **Tailwind CDN remains** and is the one external script: it is a
-**runtime JIT compiler**, so it can't be SRI-pinned, and compiling it to static CSS for production needs a
-dedicated Tailwind CLI build step. Critically, the app composes utility classes as **dynamic Go strings** (e.g.
-`"btn " + cls`), which Tailwind's static content-scanner would miss — so a naive compile would **break styling**.
-Doing it safely requires a CI build that scans `internal/**/*.go` **plus a safelist** for the dynamically-built
-classes; that's infra work (no toolchain in this env), deliberately not attempted to avoid shipping a broken UI.
+no third-party CDN, no SRI gap, works offline. **Tailwind CDN is intentionally deferred** (user decision
+2026-06-21): rather than a brittle static-compile (the app builds utility classes as dynamic Go strings the
+scanner would miss), we'll migrate to **gwc's typed CSS classes with Tailwind interop** once the framework is
+updated — tracked as **C91** (the final todo).
 **Verified live (`web/index.html`):** external CDN resources are loaded with **no Subresource Integrity**:
 `<script src="https://cdn.tailwindcss.com">` and `<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js">`
 have **no `integrity=` / `crossorigin`**; Google Fonts CSS likewise.
@@ -7194,3 +7192,24 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       Per-user request/token caps already gate usage; `CASHFLUX_SERVER_AI_BLOCKED_USER_IDS` now denies selected
       users before key load or upstream calls. `CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY` and
       `CASHFLUX_SERVER_AI_ALERT_TOKENS_PER_DAY` append audit alerts when daily warning lines are crossed.
+
+---
+
+### C91. Migrate Tailwind CDN → gwc typed CSS classes (Tailwind interop) ★ (prod/security, user-requested 2026-06-21) — FINAL TODO
+**Why:** the app currently loads **`https://cdn.tailwindcss.com`** at runtime — a JIT compiler that can't be
+SRI-pinned, depends on a third-party CDN, and won't work offline (OWASP A08; the last external script after D3
+was vendored in **C44**). A naive static `tailwindcss` compile is unsafe here because the UI composes utility
+classes as **dynamic Go strings** (e.g. `"btn " + cls`) that Tailwind's content-scanner would miss → broken
+styling.
+**Plan (do this LAST, once the framework is updated):**
+- [ ] **Pull the latest GoWebComponents** (`go get github.com/monstercameron/GoWebComponents@latest` → `go mod
+      tidy`, `GOOS=js GOARCH=wasm`); review its **typed CSS class** API + Tailwind interop.
+- [ ] Adopt gwc's **typed/compile-time CSS classes** so class usage is statically known (no opaque string
+      concatenation), making a real Tailwind build tractable and type-safe.
+- [ ] Stand up the **Tailwind build step** (CLI scanning the typed-class source) → emit a static `web/tailwind.css`;
+      replace the `cdn.tailwindcss.com` `<script>` with a local `<link>`; precache it in `web/sw.js`.
+- [ ] Port the inline `tailwind.config` (theme extend in `web/index.html`) into the build config; **safelist** any
+      remaining dynamic classes.
+- [ ] **Verify:** no external CDN scripts remain; offline load works; visual parity across screens/themes; bump SW.
+_Cross-links: **C44** (D3 vendored; this finishes the CDN-removal/offline goal), **C73** (component-ization pairs
+naturally with typed classes), **C69** (theming via tokens)._
