@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/spendsummary"
+	"github.com/monstercameron/CashFlux/internal/statement"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -68,6 +69,7 @@ func Documents() ui.Node {
 
 	rev := state.UseAtom("rev:documents", 0)
 	csvText := ui.UseState("")
+	stmtText := ui.UseState("")
 	msg := ui.UseState("")
 
 	accounts := app.Accounts()
@@ -85,6 +87,7 @@ func Documents() ui.Node {
 	receiptMerchant := ui.UseState("") // optional store name
 
 	onCsv := ui.UseEvent(func(v string) { csvText.Set(v) })
+	onStmt := ui.UseEvent(func(v string) { stmtText.Set(v) })
 	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
 	onReceiptTotal := ui.UseEvent(func(v string) { receiptTotal.Set(v) })
 	onReceiptMerchant := ui.UseEvent(func(v string) { receiptMerchant.Set(v) })
@@ -115,6 +118,47 @@ func Documents() ui.Node {
 			recordDocument(domain.DocCSV, "", nil)
 		}
 		msg.Set(uistate.T("documents.importedCsv", plural(n, "transaction")))
+		rev.Set(rev.Get() + 1)
+	}))
+
+	// parseStatement (C74) parses a pasted bank/credit-card statement in any common
+	// delimited format — varying column orders/labels, signed-amount or separate
+	// debit/credit columns — into draft rows. It guesses the column mapping
+	// automatically (statement.MapColumns) and feeds the result into the same review
+	// → dedupe → import pipeline the image/CSV paths use, so the user can edit, drop,
+	// and commit rows (duplicates are skipped on import). Per-row parse failures are
+	// reported, not fatal.
+	parseStatement := ui.UseEvent(Prevent(func() {
+		data := strings.TrimSpace(stmtText.Get())
+		if data == "" {
+			msg.Set(uistate.T("documents.stmtEmpty"))
+			return
+		}
+		// Parse amounts at the import account's currency precision.
+		dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
+		st, err := statement.Parse(data, dec)
+		if err != nil {
+			msg.Set(uistate.T("documents.stmtError", strings.TrimPrefix(err.Error(), "statement: ")))
+			return
+		}
+		rows := make([]extract.Row, 0, len(st.Rows))
+		for _, r := range st.Rows {
+			rows = append(rows, extract.Row{
+				Date:        r.Date.Format("2006-01-02"),
+				Description: r.Description,
+				Amount:      money.FormatMinor(r.Amount, dec),
+			})
+		}
+		if len(rows) == 0 {
+			msg.Set(uistate.T("documents.stmtNoneFound"))
+			return
+		}
+		draft.Set(rows)
+		if n := len(st.Errors); n > 0 {
+			msg.Set(uistate.T("documents.stmtParsedWithErrors", plural(len(rows), "row"), plural(n, "row")))
+		} else {
+			msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
+		}
 		rev.Set(rev.Get() + 1)
 	}))
 
@@ -408,6 +452,19 @@ func Documents() ui.Node {
 		draftBody,
 		summaryBody,
 		Section(Class("card"),
+			H2(Class("card-title"), uistate.T("documents.stmtTitle")),
+			P(Class("muted"), uistate.T("documents.stmtDesc")),
+			Form(OnSubmit(parseStatement),
+				Textarea(Class("field field-wide"), Attr("rows", "8"),
+					Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
+					OnInput(onStmt),
+				),
+				Div(Style(map[string]string{"margin-top": "0.6rem"}),
+					Button(Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
+				),
+			),
+		),
+		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("documents.csvTitle")),
 			P(Class("muted"), uistate.T("documents.csvDesc")),
 			Form(OnSubmit(importCSV),
@@ -584,6 +641,20 @@ func docStatusLabel(s domain.DocumentStatus) string {
 	default:
 		return uistate.T("documents.statusImported")
 	}
+}
+
+// reviewCurrencyFor returns the currency code to format/parse review amounts in:
+// the chosen import account's currency, falling back to the base currency, then
+// USD. Shared by the statement parser and the review list (C74).
+func reviewCurrencyFor(app *appstate.App, accounts []domain.Account, acctID string) string {
+	cur := app.Settings().BaseCurrency
+	if cur == "" {
+		cur = "USD"
+	}
+	if acc, ok := domain.AccountByID(accounts, acctID); ok && acc.Currency != "" {
+		cur = acc.Currency
+	}
+	return cur
 }
 
 // toDocumentRows maps reviewed extract rows to the persisted document-row shape.
