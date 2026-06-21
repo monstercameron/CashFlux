@@ -531,10 +531,22 @@ func Insights() ui.Node {
 	}, "cf-chat-history")
 
 	// Internal links inside an answer (e.g. "[Open it](/todo#id)") navigate in-app via
-	// the router and scroll to the linked item, instead of doing a full page load.
+	// the router and scroll to the linked item, instead of doing a full page load. The
+	// model may phrase the link as a relative ("/todo#id") OR an absolute same-origin URL
+	// ("http://host/todo#id"), so we read the anchor's parsed origin/pathname/hash rather
+	// than string-matching the raw href. Modifier- and middle-clicks keep their default
+	// (open-in-new-tab) behavior. Registered in the capture phase so it wins over the
+	// browser's default navigation regardless of any other listeners.
 	ui.UseEffect(func() func() {
 		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
 			ev := args[0]
+			if evTruthy(ev, "defaultPrevented") || evTruthy(ev, "metaKey") || evTruthy(ev, "ctrlKey") ||
+				evTruthy(ev, "shiftKey") || evTruthy(ev, "altKey") {
+				return nil
+			}
+			if b := ev.Get("button"); b.Type() == js.TypeNumber && b.Int() != 0 {
+				return nil // not a left-click
+			}
 			a := ev.Get("target")
 			for a.Truthy() && a.Get("tagName").String() != "A" {
 				a = a.Get("parentElement")
@@ -542,25 +554,26 @@ func Insights() ui.Node {
 			if !a.Truthy() || !a.Call("closest", ".insights-answer").Truthy() {
 				return nil
 			}
-			href := a.Call("getAttribute", "href")
-			if !href.Truthy() || !strings.HasPrefix(href.String(), "/") {
-				return nil // external links keep their default (new tab)
+			// Only same-origin links route in-app; external links keep their default.
+			loc := js.Global().Get("location")
+			if a.Get("origin").String() != loc.Get("origin").String() {
+				return nil
+			}
+			path := a.Get("pathname").String()
+			if path == "" || !strings.HasPrefix(path, "/") {
+				return nil
 			}
 			ev.Call("preventDefault")
-			path, frag := href.String(), ""
-			if i := strings.IndexByte(path, '#'); i >= 0 {
-				frag = path[i+1:]
-				path = path[:i]
-			}
+			frag := strings.TrimPrefix(a.Get("hash").String(), "#")
 			router.Navigate(path)
 			if frag != "" {
 				scrollToID(frag)
 			}
 			return nil
 		})
-		doc.Call("addEventListener", "click", cb)
+		doc.Call("addEventListener", "click", cb, true)
 		return func() {
-			doc.Call("removeEventListener", "click", cb)
+			doc.Call("removeEventListener", "click", cb, true)
 			cb.Release()
 		}
 	}, "cf-chat-links")
@@ -1018,6 +1031,14 @@ func scrollChatToEnd() {
 		return nil
 	})
 	js.Global().Call("setTimeout", cb, 80)
+}
+
+// evTruthy safely reads a boolean-ish property off a JS event, returning false when
+// the property is undefined (synthetic events may omit modifier-key fields) so a
+// missing field never panics like Value.Bool on undefined would.
+func evTruthy(ev js.Value, prop string) bool {
+	v := ev.Get(prop)
+	return v.Type() == js.TypeBoolean && v.Bool()
 }
 
 // scrollToID scrolls to (and briefly highlights) the element with the given id after

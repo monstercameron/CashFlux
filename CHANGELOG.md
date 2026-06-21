@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Chat deep links no longer trigger a full page reload (C90.2).** The in-app link interceptor now reads the
+  anchor's parsed `origin`/`pathname`/`hash` instead of string-matching the raw `href`, so it also catches links
+  the model phrases as an absolute same-origin URL (`http://host/todo#id`) — previously those slipped past the
+  `/`-prefix check and the browser did a full navigation (reloading the wasm and wiping in-memory state). It now
+  runs in the capture phase, ignores modifier/middle clicks (so cmd-click still opens a new tab), and guards
+  against undefined modifier fields. The e2e was extended to detect a real reload via a sentinel and to cover the
+  absolute-href case.
+
 ### Added
 - **Creation tools return a deep link, and chat links navigate in-app (C90.2).** Every creating tool
   (`add_task`, `add_transaction`, `add_account`, `add_transfer`, `add_goal_contribution`) now returns the new

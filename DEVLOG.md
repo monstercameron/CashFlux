@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - fix: chat deep links caused a full page reload (absolute href)
+
+- Reported: clicking a chat deep link worked but did a full page reload. Root cause: the interceptor bailed
+  unless the raw `href` started with `/`. The mock e2e always emitted the literal relative `/todo#id`, so it
+  never reproduced — but a real model paraphrases the link and can emit an absolute same-origin URL
+  (`http://host/todo#id`). That failed the `/`-prefix test, the handler returned, and the browser navigated for
+  real (reloading the wasm and wiping the in-memory store).
+- Fix: read the anchor's parsed `origin`/`pathname`/`hash` (normalizes relative + absolute same-origin) instead
+  of string-parsing the href; only intercept same-origin left-clicks without modifier keys; register in the
+  capture phase so we win over default navigation; `evTruthy` guards undefined modifier fields.
+- Extended the e2e to actually detect a reload: set a `window.__cfSentinel` before the click and assert it
+  survives (a reload wipes it), and run the whole flow twice — once with a relative href, once with an absolute
+  same-origin href. Both stay in-app now. Send/keyboard/write e2es re-run green (shared document listeners).
+
 ## 2026-06-21 - feat: creation tools return deep links + dedupe before creating
 
 - Each creating tool now returns the new entity's id wrapped in a Markdown deep link (`openLink(route, id)` →

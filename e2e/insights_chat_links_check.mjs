@@ -21,7 +21,7 @@ const tc = (id, n, a) => ({ id, type: "function", function: { name: n, arguments
 
 // run drives one add_task through approval; turn 2 echoes the tool result as the
 // answer (so the deep link renders in the bubble). Returns { ctx, page, result }.
-async function run(taskTitle) {
+async function run(taskTitle, absolute = false) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   let result = "";
@@ -32,9 +32,13 @@ async function run(taskTitle) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ finish_reason: "tool_calls", message: { role: "assistant", content: "", tool_calls: [tc("t1", "add_task", { title: taskTitle, priority: "medium" })] } }], usage: {} }) });
     } else {
       result = toolMsgs.map((m) => m.content).join(" ");
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ finish_reason: "stop", message: { role: "assistant", content: "Here you go — " + result } }], usage: {} }) });
+      // Mirror how a real model may paraphrase the link as an absolute same-origin URL.
+      const answer = absolute ? "Here you go — " + result.replace(/\]\(\/(todo[^)]*)\)/g, "](" + BASE + "/$1)") : "Here you go — " + result;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ finish_reason: "stop", message: { role: "assistant", content: answer } }], usage: {} }) });
     }
   });
+  page.__reloads = 0;
+  page.on("framenavigated", (f) => { if (f === page.mainFrame()) page.__reloads++; });
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#app *", { timeout: 60000 });
   await page.evaluate(() => {
@@ -59,19 +63,28 @@ async function run(taskTitle) {
 }
 
 try {
-  // 1) New task → link returned + clicking it navigates to /todo and jumps to the row.
-  {
-    const TITLE = "Research refinancing options e2e";
-    const { ctx, page, result } = await run(TITLE);
+  // 1) & 1b) New task → link returned + clicking it navigates IN-APP (no full reload)
+  // to /todo and jumps to the row. Run once with a relative href and once with an
+  // absolute same-origin href (how a real model may phrase it) — both must stay in-app.
+  for (const absolute of [false, true]) {
+    const TITLE = "Research refinancing options e2e" + (absolute ? " abs" : "");
+    const { ctx, page, result } = await run(TITLE, absolute);
     const m = result.match(/\/todo#([^)\s]+)/);
     if (!m) fail("add_task result has no /todo#<id> link: " + JSON.stringify(result));
     const id = m && m[1];
     const link = page.locator(".insights-answer a", { hasText: "Open it" }).first();
     if ((await link.count()) === 0) fail("the answer did not render an 'Open it' link");
+    if (absolute) {
+      const href = await link.getAttribute("href");
+      if (!/^https?:\/\//.test(href || "")) fail("expected an absolute href for the absolute scenario, got: " + href);
+    }
+    // A real full reload wipes this sentinel and re-boots the wasm (losing the in-memory task).
+    await page.evaluate(() => { window.__cfSentinel = 0xC45F; });
     await link.click();
     await page.waitForFunction(() => location.pathname.replace(/\/$/, "").endsWith("/todo"), { timeout: 5000 })
-      .catch(() => fail("clicking the link did not navigate to /todo"));
-    if (!(await page.evaluate((t) => document.body.innerText.includes(t), TITLE))) fail("the task is not on the To-do screen after navigating");
+      .catch(() => fail("clicking the link did not navigate to /todo" + (absolute ? " (absolute href)" : "")));
+    if ((await page.evaluate(() => window.__cfSentinel)) !== 0xC45F) fail("clicking the link caused a FULL PAGE RELOAD" + (absolute ? " (absolute href)" : ""));
+    if (!(await page.evaluate((t) => document.body.innerText.includes(t), TITLE))) fail("the task is not on the To-do screen after navigating (a reload would have wiped the in-memory store)");
     if (id) {
       await page.waitForSelector(`[id="${id}"]`, { timeout: 5000 })
         .catch(() => fail("the To-do row is missing the id anchor for jump-to-item"));
@@ -87,7 +100,7 @@ try {
     await ctx.close();
   }
 
-  if (!process.exitCode) console.log("PASS: creation returns a deep link that navigates in-app; dedupe blocks near-duplicates.");
+  if (!process.exitCode) console.log("PASS: deep link navigates in-app with NO full reload (relative + absolute hrefs); dedupe blocks near-duplicates.");
 } finally {
   await browser.close();
 }
