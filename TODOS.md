@@ -1410,7 +1410,7 @@ icon pass above, add small characterful touches that make the app feel richer:
 _All of these are local SVG/CSS (no CDN per C44), inherit theme color (B20), and stay decorative+`aria-hidden`
 with text labels intact for a11y. Build behind the C46 `internal/ui/icon` helper once it exists._
 
-### C47. Transactions: redesign the ledger as a paginated, sortable table with a cleaner filter UI ★ (UX, user-requested 2026-06-20)
+### C47. Transactions: redesign the ledger as a paginated, sortable table with a cleaner filter UI ★ (UX, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: `transactions.go` uses `ui.DataTable` with sortable columns (aria-sort + caret) + full pagination)
 **Reviewed live** (`gwc probe` against the running dev server at `http://127.0.0.1:8080`; the SPA boots
 clean at `/` — 200, no console errors — but a direct hit on `/transactions` still 404s, confirming B1)
 **plus the authoritative render code** (`internal/screens/transactions.go`). What ships today:
@@ -1878,7 +1878,7 @@ reassign-before-delete** flow that protects accounts/budgets/goals/transactions 
 - [ ] **Verify** after changes: name labelled; reassign select labelled and focused on open; rows don't wrap
       on mobile; member avatars render with the member color.
 
-### C63. Categories: UX review — solid tree CRUD; reassign-kind bug + em-dash nesting + no usage count ★ (UX review loop, user-requested 2026-06-20)
+### C63. Categories: UX review — solid tree CRUD; reassign-kind bug + em-dash nesting + no usage count ★ (UX review loop, user-requested 2026-06-20) — ✅ reassign-kind bug FIXED (verified 2026-06-21: `categories.go` filters reassign targets to same-kind only)
 **Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
 render code (`internal/screens/categories.go`). **Verdict:** a solid, complete screen — add (name / kind /
 parent / color), separate **Expense** and **Income** groups with **tree nesting**, inline edit (incl.
@@ -2012,7 +2012,7 @@ search (**C68**) — they're complementary, not either/or. Build bottom-up.
 _Cross-links: **B7** (registry-driven membership), **B8** (drag-reorder), **C15/C20** (collapse), **C32** (My
 pages), **C46** (chevron/group icons), **C68** (search is the speed path to this browse path)._
 
-### C68. Rail command palette (⌘K) + optional inline filter ★ (UX, user-requested 2026-06-20)
+### C68. Rail command palette (⌘K) + optional inline filter ★ (UX, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: `shortcuts.go` wires Ctrl/Cmd+K → `toggleCommandPalette`; `buildPaletteCommands` + `renderPalette` with keyboard nav)
 **Context.** At ~20+ destinations, type-to-find beats scan-and-click for repeat/power users and is keyboard-/
 a11y-first. This is the **speed** path that complements the collapsible/nested rail (**C67**, the browse path) —
 search **flattens past nesting** so users never expand a group to reach something. Build bottom-up.
@@ -2481,7 +2481,7 @@ overrides the default; i18n if the label is more than the bare version string.
 _Cross-links: **C75** (notifications/feedback can carry version), `CHANGELOG.md` (the link target),
 **C45/C44** (a known version aids security/prod diagnostics)._
 
-### C81. Multi-provider AI inference (OpenAI/Claude/Cerebras/OpenRouter/DeepSeek/GLM/Kimi) ★ (feature, user-requested 2026-06-20)
+### C81. Multi-provider AI inference (OpenAI/Claude/Cerebras/OpenRouter/DeepSeek/GLM/Kimi) ★ (feature, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: `internal/aiprovider` registry (OpenAI/OpenRouter/Anthropic) + `internal/anthropic` Messages dialect; handles DialectOpenAI + DialectAnthropic)
 **Design doc:** [`docs/DESIGN_AI_PROVIDERS.md`](./docs/DESIGN_AI_PROVIDERS.md) — read first; this is the condensed backlog.
 **Key finding:** the AI layer is **already ~80% provider-agnostic** — `postCompletions(apiKey, **baseURL**,
 …)` (`internal/ai/transport.go`) already takes baseURL; `internal/ai/ai.go` shaping is pure/isolated.
@@ -3883,7 +3883,7 @@ on-device persistence.
 - _Recommendation order for home use:_ **B19 notifications → bills calendar → reports → B17 lock →
   receipt attachments → sync (largest).**
 
-### C39. Long lists aren't paginated/virtualized — Transactions especially ★ (UX/perf — user-asked 2026-06-18)
+### C39. Long lists aren't paginated/virtualized — Transactions especially ★ (UX/perf — user-asked 2026-06-18) — ✅ DONE (verified 2026-06-21: `transactions.go` uses `pagination.Clamp/Slice` + `txnfilter.PageSizes`; reusable `ui.DataTable` pager)
 **Audited (verified live):** the **Transactions ledger renders a long flat list with NO pagination,
 load-more, or virtualization** — `57 transactions shown`, no page/next controls anywhere. With the
 current 57-row sample it's already a long scroll; at hundreds/thousands of transactions this is a real
