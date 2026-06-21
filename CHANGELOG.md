@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Insights chat: a fetch_webpage tool to read search results (C82).** `web_search` now also returns source
+  URLs, and a new `fetch_webpage` tool reads a page's readable text (via the CORS-friendly Jina Reader) so the
+  model can dig into a result instead of relying on the snippet.
 - **Insights chat: a web_search tool + a prompt that estimates (C82).** The chat can now look up current/external
   facts (tax brackets, rates, prices) via a `web_search` tool (keyless DuckDuckGo Instant-Answer by default) and
   combine them with the calculator + the user's figures to **estimate** things the data doesn't directly contain
@@ -60,6 +63,9 @@ and every commit updates this file under `Unreleased`.
   this next.
 
 ### Changed
+- **Pinned insights render as Markdown, collapsed to 3 lines (C82).** Pinned insights are now marked-rendered
+  (matching the chat bubbles) and clamped to three lines with a Show more/less toggle, so a long saved insight
+  stays a compact quick-reference and expands on demand.
 - **Insights chat: the thread scrolls in a bounded region so the composer stays on screen (C82).** Previously a
   long conversation grew the page and pushed the text input below the fold. The thread is now a bounded
   (`max-h-[55vh]`), internally-scrolling region with the composer pinned beneath it; auto-scroll moves only that

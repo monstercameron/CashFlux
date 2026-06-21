@@ -331,6 +331,41 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				return summarizeDDG(a.Query, body)
 			},
 		},
+		{
+			spec: ai.FunctionTool("fetch_webpage",
+				"Fetch a web page by URL and return its readable text content. Use a URL from web_search results to read the full details.",
+				json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}`)),
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					URL string `json:"url"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Could not read the URL."
+				}
+				target := strings.TrimSpace(a.URL)
+				if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
+					return "Please provide a full http(s) URL."
+				}
+				// Jina Reader returns clean, CORS-accessible readable text for any page.
+				reader := "https://r.jina.ai/" + target
+				var headers map[string]any
+				if k := strings.TrimSpace(uistate.LoadWebSearchKey()); k != "" {
+					headers = map[string]any{"Authorization": "Bearer " + k}
+				}
+				body, ok := blockingFetchText(reader, headers)
+				if !ok {
+					return "Couldn't fetch that page (it may block reading)."
+				}
+				body = strings.TrimSpace(body)
+				if body == "" {
+					return "The page returned no readable text."
+				}
+				if r := []rune(body); len(r) > 2500 {
+					body = string(r[:2500]) + "…"
+				}
+				return body
+			},
+		},
 	}
 }
 
@@ -364,36 +399,49 @@ func blockingFetchText(u string, headers map[string]any) (string, bool) {
 func summarizeDDG(query, body string) string {
 	var d struct {
 		AbstractText  string `json:"AbstractText"`
+		AbstractURL   string `json:"AbstractURL"`
 		Answer        string `json:"Answer"`
 		Definition    string `json:"Definition"`
 		RelatedTopics []struct {
-			Text string `json:"Text"`
+			Text     string `json:"Text"`
+			FirstURL string `json:"FirstURL"`
 		} `json:"RelatedTopics"`
 	}
 	if err := json.Unmarshal([]byte(body), &d); err != nil {
 		return "Web search returned no usable summary for: " + query
 	}
 	parts := make([]string, 0, 4)
+	urls := make([]string, 0, 4)
 	add := func(s string) {
 		if s = strings.TrimSpace(s); s != "" {
 			parts = append(parts, s)
 		}
 	}
+	addURL := func(u string) {
+		if u = strings.TrimSpace(u); u != "" && len(urls) < 4 {
+			urls = append(urls, u)
+		}
+	}
 	add(d.Answer)
 	add(d.AbstractText)
 	add(d.Definition)
+	addURL(d.AbstractURL)
 	for _, rt := range d.RelatedTopics {
-		if len(parts) >= 4 {
-			break
+		if len(parts) < 4 {
+			add(rt.Text)
 		}
-		add(rt.Text)
+		addURL(rt.FirstURL)
 	}
-	if len(parts) == 0 {
+	if len(parts) == 0 && len(urls) == 0 {
 		return "No direct answer found for: " + query + ". Use your own knowledge to estimate and state assumptions."
 	}
 	out := strings.Join(parts, " ")
 	if r := []rune(out); len(r) > 700 {
 		out = string(r[:700]) + "…"
 	}
-	return "Web search — " + out
+	res := "Web search — " + out
+	if len(urls) > 0 {
+		res += "\nSources (use fetch_webpage to read): " + strings.Join(urls, ", ")
+	}
+	return res
 }

@@ -807,19 +807,28 @@ type pinnedInsightRowProps struct {
 	OnDelete func(string)
 }
 
-// PinnedInsightRow renders one pinned insight with its date and a remove button.
-// Long insights are clamped to two lines with a Show more/less toggle so the list
-// stays compact (C59). It owns its own click handlers (per the no-hooks-in-loops
-// rule).
+// PinnedInsightRow renders one pinned insight as Markdown (via marked) with its
+// date and a remove button. Long insights are clamped to three lines with a Show
+// more/less toggle so the list stays compact. It owns its own hooks (per the
+// no-hooks-in-loops rule).
 func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 	p := props.Insight
 	expanded := ui.UseState(false)
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(p.ID) }))
 	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
-	long := len([]rune(p.Text)) > 140
-	descClass := "row-desc"
+	mdID := "cf-pin-" + p.ID
+	// Render the Markdown after mount / when expanded toggles (the vdom would clear
+	// the innerHTML on a self re-render otherwise).
+	sig := mdID
+	if expanded.Get() {
+		sig += "|x"
+	}
+	ui.UseEffect(func() func() { renderMarkdown(mdID, p.Text); return nil }, sig)
+
+	long := len([]rune(p.Text)) > 140 || strings.Contains(p.Text, "\n")
+	descClass := "insights-answer text-[13.5px]"
 	if long && !expanded.Get() {
-		descClass += " line-clamp-2"
+		descClass += " line-clamp-3"
 	}
 	moreLabel := uistate.T("insights.showMore")
 	if expanded.Get() {
@@ -827,7 +836,7 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 	}
 	return Div(Class("row"),
 		Div(Class("row-main"),
-			Span(Class(descClass), p.Text),
+			Div(Attr("id", mdID), Class(descClass)),
 			If(long, Button(Class("btn-link text-[11px] mt-1 self-start"), Type("button"), OnClick(toggle), moreLabel)),
 			Span(Class("row-meta"), p.CreatedAt.Format("Jan 2, 2006")),
 		),

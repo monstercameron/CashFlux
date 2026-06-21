@@ -99,7 +99,7 @@ try {
   }
 
   // The assistant reply should render the canned Markdown via marked (an <h2> + <strong>).
-  const answer = page.locator(".insights-answer").last();
+  const answer = page.locator("#cf-chat-thread .insights-answer").last();
   await answer.waitFor({ timeout: 8000 });
   await page.waitForTimeout(400);
   const html = await answer.innerHTML();
@@ -149,20 +149,20 @@ try {
   ).catch(() => fail("[resume] user message did not appear"));
   // The key assertion: the first send of a resumed session must reach OpenAI and reply.
   await page.waitForFunction(
-    (n) => window.__noassert || document.querySelectorAll(".insights-answer").length >= 2,
+    (n) => window.__noassert || document.querySelectorAll("#cf-chat-thread .insights-answer").length >= 2,
     {},
     {}
   ).catch(() => {});
   await page.waitForTimeout(2500);
   if (aiCalls <= beforeCalls) fail("[resume] the initial chat after reload did NOT call OpenAI (this is the bug)");
-  const answers = await page.locator(".insights-answer").count();
+  const answers = await page.locator("#cf-chat-thread .insights-answer").count();
   if (answers < 2) fail(`[resume] expected a new assistant reply after reload, got ${answers} answer bubbles`);
 
   // Deleting a message unravels the thread from that point: delete the resumed-session
   // user turn ("And on dining?") and everything after it should go, leaving the first
   // exchange.
   {
-    const before = await page.locator(".insights-answer").count();
+    const before = await page.locator("#cf-chat-thread .insights-answer").count();
     if (before < 2) fail("[delete] expected >=2 replies before delete, got " + before);
     // Hover the user bubble to reveal its actions, then click ITS delete (×).
     const userBubble = page.locator(".group", { hasText: "And on dining?" }).last();
@@ -173,7 +173,7 @@ try {
     if (stillDining) fail("[delete] the deleted message is still in the thread");
     const stillGroceries = await page.evaluate(() => document.body.innerText.includes("How much did I spend on groceries?"));
     if (!stillGroceries) fail("[delete] unraveled too far — the earlier exchange was removed");
-    const after = await page.locator(".insights-answer").count();
+    const after = await page.locator("#cf-chat-thread .insights-answer").count();
     if (after !== 1) fail(`[delete] expected 1 reply left after unraveling, got ${after}`);
   }
 
