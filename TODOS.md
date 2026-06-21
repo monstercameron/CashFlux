@@ -1989,7 +1989,12 @@ autosaved blob and custom-page Image/Table widgets reference them by id). **Butt
 - [ ] **Verify** after changes: a failed/oversized upload tells the user why; the storage meter warns near the
       limit; both cards have titles; deleting an in-use artifact warns; CSV previews + items can be renamed.
 
-### C67. Rail navigation v2 — collapsible + nested groups ★ (UX, user-requested 2026-06-20)
+### C67. Rail navigation v2 — collapsible + nested groups ★ (UX, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
+**✅ DONE:** rail collapse was already done; now the **Tools group nests into collapsible sub-sections** (Plan &
+analyze / Bills & recurring / Data & import / Build) driven by the registry's `SubGroup`. `toolGroupHeader`
+(chevron + `aria-expanded`) toggles each section; collapse state persists via `uistate.UseCollapsedToolGroups`
+(localStorage). Sub-headers carry `rail-section` so they hide in the collapsed icon-rail. e2e
+`rail_subgroups_check` covers grouping + collapse/expand + persistence.
 **Context.** The rail is registry-driven (`screens.All()` → `Route.Group`; rendered in `internal/app/shell.go`),
 so all 20 screens already appear and a new one can't be dropped (B7). The problem is **length**: Primary (6) +
 **Tools (11)** + System (3) + My pages + Settings card is a long flat scroll. Existing behaviors to preserve:

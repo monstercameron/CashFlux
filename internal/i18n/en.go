@@ -154,7 +154,11 @@ var english = Catalog{
 	"rail.myPages": "My pages",
 	"rail.newPage": "New page",
 	"rail.system":  "System",
-	"rail.tools":   "Tools",
+	"rail.tools":    "Tools",
+	"rail.subPlan":  "Plan & analyze",
+	"rail.subBills": "Bills & recurring",
+	"rail.subData":  "Data & import",
+	"rail.subBuild": "Build",
 
 	// Screen subtitles (page-heading sublines; keys referenced from the screens registry)
 	"screen.dashboardSub":      "Your money at a glance",

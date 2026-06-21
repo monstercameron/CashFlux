@@ -81,9 +81,10 @@ func Shell(props ShellProps) uic.Node {
 
 // railItem is one primary navigation entry: an i18n label key, route, and icon.
 type railItem struct {
-	Key  string // i18n key, resolved via uistate.T at render
-	Path string
-	Icon icon.Name
+	Key      string // i18n key, resolved via uistate.T at render
+	Path     string
+	Icon     icon.Name
+	SubGroup string // Tools sub-section (C67); "" for Primary/System
 }
 
 // railMeta maps a route path to its rail presentation: the i18n label key and the
@@ -130,9 +131,9 @@ func navGroup(group string) []railItem {
 			continue
 		}
 		if meta, ok := railMeta[r.Path]; ok {
-			items = append(items, railItem{Key: meta.Key, Path: r.Path, Icon: meta.Icon})
+			items = append(items, railItem{Key: meta.Key, Path: r.Path, Icon: meta.Icon, SubGroup: r.SubGroup})
 		} else {
-			items = append(items, railItem{Key: r.Label, Path: r.Path, Icon: icon.Page})
+			items = append(items, railItem{Key: r.Label, Path: r.Path, Icon: icon.Page, SubGroup: r.SubGroup})
 		}
 	}
 	return items
@@ -147,6 +148,47 @@ func toolsNav() []railItem { return navGroup(screens.GroupTools) }
 
 // systemNav is the "System" group: the household-configuration screens.
 func systemNav() []railItem { return navGroup(screens.GroupSystem) }
+
+// toolSubGroupLabel resolves a Tools sub-group id to its display label.
+func toolSubGroupLabel(sg string) string {
+	switch sg {
+	case screens.SubGroupPlan:
+		return uistate.T("rail.subPlan")
+	case screens.SubGroupBills:
+		return uistate.T("rail.subBills")
+	case screens.SubGroupData:
+		return uistate.T("rail.subData")
+	case screens.SubGroupBuild:
+		return uistate.T("rail.subBuild")
+	}
+	return sg
+}
+
+type toolGroupHeaderProps struct {
+	Label     string
+	Collapsed bool
+	OnToggle  func()
+}
+
+// toolGroupHeader is a collapsible Tools sub-section header: a small label with a
+// chevron that toggles its section. Its own component so the click hook stays at a
+// stable position across the sub-group list (C67).
+func toolGroupHeader(props toolGroupHeaderProps) uic.Node {
+	chev := icon.ChevronDown
+	if props.Collapsed {
+		chev = icon.ChevronRight
+	}
+	return Button(Class("rail-subhead rail-section flex items-center gap-1.5 w-full px-3 pt-3 pb-1 text-[11px] uppercase tracking-[0.08em] text-faint hover:text-fg"),
+		Type("button"), Attr("aria-expanded", fmt.Sprintf("%v", !props.Collapsed)),
+		OnClick(func() {
+			if props.OnToggle != nil {
+				props.OnToggle()
+			}
+		}),
+		ui.Icon(chev, Class("w-3 h-3")),
+		Span(props.Label),
+	)
+}
 
 // railHeader renders a small uppercase section label inside the rail. The
 // rail-section class lets the collapsed/mobile rules hide just these labels
@@ -216,6 +258,51 @@ func Sidebar(props sidebarProps) uic.Node {
 			visibleTools = append(visibleTools, it)
 		}
 	}
+	// Tools sub-sections (C67): group the Tools items by SubGroup into collapsible
+	// accordion sections, in the registry's display order.
+	collapsedGroups := uistate.UseCollapsedToolGroups()
+	collapsed := collapsedGroups.Get()
+	setCollapsed := func(sg string, val bool) {
+		next := map[string]bool{}
+		for k, v := range collapsed {
+			next[k] = v
+		}
+		next[sg] = val
+		collapsedGroups.Set(next)
+		uistate.PersistCollapsedToolGroups(next)
+	}
+	toolsByGroup := map[string][]railItem{}
+	for _, it := range visibleTools {
+		toolsByGroup[it.SubGroup] = append(toolsByGroup[it.SubGroup], it)
+	}
+	var toolNodes []any
+	if len(visibleTools) > 0 {
+		toolNodes = append(toolNodes, railHeader(uistate.T("rail.tools")))
+		for _, sg := range screens.ToolsSubGroups {
+			sg := sg
+			items := toolsByGroup[sg]
+			if len(items) == 0 {
+				continue
+			}
+			isCollapsed := collapsed[sg]
+			toolNodes = append(toolNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
+				Label:     toolSubGroupLabel(sg),
+				Collapsed: isCollapsed,
+				OnToggle:  func() { setCollapsed(sg, !isCollapsed) },
+			}))
+			if !isCollapsed {
+				toolNodes = append(toolNodes, MapKeyed(items,
+					func(it railItem) any { return it.Path },
+					func(it railItem) uic.Node {
+						return uic.CreateElement(navItem, navItemProps{
+							Label: uistate.T(it.Key), Path: it.Path, Icon: it.Icon, Active: current == it.Path,
+						})
+					},
+				))
+			}
+		}
+	}
+
 	var visibleSystem []railItem
 	for _, it := range systemNav() {
 		if !hidden.IsHidden(it.Path) {
@@ -244,18 +331,7 @@ func Sidebar(props sidebarProps) uic.Node {
 					})
 				},
 			),
-			If(len(visibleTools) > 0, railHeader(uistate.T("rail.tools"))),
-			MapKeyed(visibleTools,
-				func(it railItem) any { return it.Path },
-				func(it railItem) uic.Node {
-					return uic.CreateElement(navItem, navItemProps{
-						Label:  uistate.T(it.Key),
-						Path:   it.Path,
-						Icon:   it.Icon,
-						Active: current == it.Path,
-					})
-				},
-			),
+			Fragment(toolNodes...),
 			If(len(visibleSystem) > 0, railHeader(uistate.T("rail.system"))),
 			MapKeyed(visibleSystem,
 				func(it railItem) any { return it.Path },
