@@ -3,6 +3,28 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights chat tool-calling loop + finance tools (C82 wiring)
+
+- "how much do I spend on groceries?" used to get "I don't have that info" — the chat only sent 4 aggregates.
+  Now it drives a real tool-calling loop. Pure layer: re-added `internal/ai` OpenAI tool-call wire types
+  (`Tool`/`ToolCall`/`BuildToolRequest`/`ParseChat`/`WantsTools`/`ToolResultMessage`, `Message` gained
+  `ToolCalls`/`ToolCallID`/`Name`), table-tested; refactored `postCompletions` to a raw-bytes `onSuccess` core so
+  `SendChat` (content) and the new `SendChatTools` (full message) share the fetch+retry machinery.
+- wasm layer (`chat_agent.go`): `buildChatTools` exposes read-only tools bound to live data —
+  spending_by_category (name→ID resolution, since txnfilter matches by ID), list_transactions, list_members,
+  account_balances, financial_summary, check_affordability (afford engine), and calculator (sandboxed `formula`
+  engine over finance vars). The loop (`run` in insights.go) runs in a goroutine, blocking on a channel per turn
+  (Go wasm cooperative scheduling lets the fetch callback resume it), with a shared `done` channel so Cancel
+  unblocks it; not via `agent.Run` because `agent.Message` can't carry OpenAI `tool_calls` (lossy for the wire
+  protocol). Strong system prompt: persona (user-overridable, stored at `cashflux:chat-system-prompt`) + a live
+  context message (aggregates + category names + "call a tool for any specific number"). Backend-proxy path
+  falls back to a plain reply (no proxy tool support yet).
+- e2e `insights_chat_tools_check.mjs`: first model turn requests all six tools at once; the loop executes them
+  against the sample data and feeds results back; the test asserts each tool result in the follow-up request
+  body. PASS with real numbers (Groceries $10,980/48 txns, calculator income-spending=474, real members/
+  balances/transactions/net worth). Existing send/resume/error e2e still green.
+- NEXT: the "edit your system prompt" flip-modal + button (Cam's ask); richer tools as needed.
+
 ## 2026-06-20 - fix: Insights chat composer stayed on-screen (bounded scrolling thread)
 
 - The composer scrolled off the bottom as the conversation grew (the whole page grew with the thread). Made the

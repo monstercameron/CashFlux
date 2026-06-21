@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"encoding/json"
 	"sort"
 	"strconv"
 	"strings"
@@ -142,13 +143,23 @@ func Insights() ui.Node {
 		bump()
 	}
 
-	// buildMessages turns the conversation so far into an OpenAI message list, led by
-	// the assistant's instructions and the bounded financial context (aggregates only;
-	// richer detail comes from gated tools, C82 wiring).
+	// buildMessages assembles the OpenAI message list: the (optionally user-edited)
+	// persona/instructions prompt, then a live data-context system message (aggregates
+	// + the user's category names + a directive to call tools for any specific figure),
+	// then the conversation so far.
 	buildMessages := func(hist []chatTurn) []ai.Message {
+		persona := strings.TrimSpace(uistate.LoadSystemPrompt())
+		if persona == "" {
+			persona = defaultChatSystemPrompt
+		}
+		ctx := "Live context — " + aiCtx.Line()
+		if names := categoryNames(app.Categories()); names != "" {
+			ctx += " The user's categories: " + names + "."
+		}
+		ctx += " For any specific number (a category total, an account balance, affordability), CALL A TOOL — never guess or say you lack the data."
 		msgs := []ai.Message{
-			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant for CashFlux. Answer from the provided context; if it isn't enough to answer precisely, say what's missing. Plain English, no jargon."},
-			{Role: ai.RoleSystem, Content: "Context — " + aiCtx.Line()},
+			{Role: ai.RoleSystem, Content: persona},
+			{Role: ai.RoleSystem, Content: ctx},
 		}
 		for _, t := range hist {
 			role := ai.RoleUser
@@ -160,26 +171,86 @@ func Insights() ui.Node {
 		return msgs
 	}
 
-	// run sends the conversation `hist` to the model and appends the assistant's reply.
+	// sendTools dispatches one model turn: the direct OpenAI path advertises tools; the
+	// backend proxy path doesn't support tools yet, so it falls back to a plain reply.
+	sendTools := func(messages []ai.Message, tools []ai.Tool, onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
+		if useBackendAI {
+			return ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, chatTemp,
+				func(content string, u ai.Usage) { onResult(ai.Message{Role: ai.RoleAssistant, Content: content}, u) }, onErr)
+		}
+		return ai.SendChatTools(key, ai.DefaultBaseURL, model, messages, chatTemp, tools, onResult, onErr)
+	}
+
+	// run drives the bounded tool-calling loop: ask the model; if it requests tools,
+	// execute them locally and feed the results back; repeat until it answers (or a
+	// step cap is hit). It runs in a goroutine, blocking on a channel per turn (Go
+	// wasm schedules cooperatively, so the fetch callback resumes it). Turns are set
+	// deterministically to the sent history + reply (the stale-base fix), and a shared
+	// done channel lets Cancel unblock the loop.
 	run := func(hist []chatTurn) {
 		errMsg.Set("")
 		loading.Set(true)
-		messages := buildMessages(hist)
-		// Set turns deterministically to the sent history + the reply, rather than a
-		// functional Update: under the state churn of an init-effect resume + autosave,
-		// the functional updater can read a stale base and drop the user turn/reply.
-		// Sending is disabled while in flight, so `hist` is the authoritative thread.
-		onResult := func(content string, u ai.Usage) {
+		tools := buildChatTools(app, base, rates)
+		specs := make([]ai.Tool, len(tools))
+		handlers := make(map[string]func(json.RawMessage) string, len(tools))
+		for i, t := range tools {
+			specs[i] = t.spec
+			handlers[t.spec.Function.Name] = t.run
+		}
+		msgs := buildMessages(hist)
+		done := make(chan struct{})
+		doneClosed := false
+		closeDone := func() {
+			if !doneClosed {
+				doneClosed = true
+				close(done)
+			}
+		}
+		cancelFn.Set(closeDone)
+		var total ai.Usage
+
+		go func() {
+			for step := 0; step < 6; step++ {
+				ch := make(chan agentStep, 1)
+				fc := sendTools(msgs, specs,
+					func(m ai.Message, u ai.Usage) { ch <- agentStep{msg: m, usage: u} },
+					func(e string) { ch <- agentStep{err: e} })
+				cancelFn.Set(func() { fc(); closeDone() })
+
+				var r agentStep
+				select {
+				case r = <-ch:
+				case <-done:
+					loading.Set(false)
+					return
+				}
+				if r.err != "" {
+					loading.Set(false)
+					errMsg.Set(r.err)
+					return
+				}
+				total.PromptTokens += r.usage.PromptTokens
+				total.CompletionTokens += r.usage.CompletionTokens
+				total.TotalTokens += r.usage.TotalTokens
+
+				if !ai.WantsTools(r.msg) {
+					loading.Set(false)
+					reply := chatTurn{ID: id.New(), Role: "assistant", Text: r.msg.Content, Usage: total}
+					turns.Set(append(append([]chatTurn{}, hist...), reply))
+					return
+				}
+				msgs = append(msgs, r.msg)
+				for _, tc := range r.msg.ToolCalls {
+					out := "tool unavailable"
+					if h := handlers[tc.Function.Name]; h != nil {
+						out = h(json.RawMessage(tc.Function.Arguments))
+					}
+					msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, out))
+				}
+			}
 			loading.Set(false)
-			reply := chatTurn{ID: id.New(), Role: "assistant", Text: content, Usage: u}
-			turns.Set(append(append([]chatTurn{}, hist...), reply))
-		}
-		onErr := func(e string) { loading.Set(false); errMsg.Set(e) }
-		if useBackendAI {
-			cancelFn.Set(ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, chatTemp, onResult, onErr))
-		} else {
-			cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, chatTemp, onResult, onErr))
-		}
+			errMsg.Set(uistate.T("insights.tooManySteps"))
+		}()
 	}
 
 	// sendText posts a user turn, then runs the model on the new history.

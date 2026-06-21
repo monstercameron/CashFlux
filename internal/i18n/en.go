@@ -1009,6 +1009,7 @@ var english = Catalog{
 	"insights.deleteMsg":       "Delete message",
 	"insights.newChat":         "New chat",
 	"insights.deleteChat":      "Delete chat",
+	"insights.tooManySteps":    "I couldn't finish that — too many steps. Try rephrasing.",
 	"insights.usingOpenAI":     "Using OpenAI directly.",
 	"insights.usingBackend":    "Using the backend AI proxy.",
 	"insights.useOpenAI":       "Use OpenAI directly",

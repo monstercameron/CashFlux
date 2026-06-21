@@ -19,12 +19,18 @@ const (
 	RoleSystem    = "system"
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
+	RoleTool      = "tool"
 )
 
-// Message is one chat message.
+// Message is one chat message. ToolCalls is set on an assistant turn that asks to
+// run tools; ToolCallID and Name are set on a role:"tool" message returning a tool's
+// result (see ToolResultMessage).
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	Name       string     `json:"name,omitempty"`
 }
 
 // ChatRequest is an OpenAI chat-completions request body.

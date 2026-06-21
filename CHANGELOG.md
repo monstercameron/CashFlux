@@ -6,6 +6,19 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Insights chat now uses tools to answer from real data (C82).** The chat drives a bounded tool-calling loop:
+  the model can call local, read-only finance tools and answer specific questions from the user's own figures
+  instead of guessing. Tools: **spending_by_category** (resolves the category by name → totals it for a period),
+  **list_transactions**, **list_members**, **account_balances**, **financial_summary**, **check_affordability**
+  (backed by the `afford` engine), and a **calculator** over a finance expression (`net_worth`, `assets`,
+  `liabilities`, `income`, `spending`, `net_cashflow`) via the sandboxed `formula` engine. The system prompt now
+  injects the live aggregates + the user's category names and directs the model to call a tool for any specific
+  number. New pure `ai` tool-call wire types (`BuildToolRequest`/`ParseChat`/`ToolResultMessage`, table-tested)
+  and an `ai.SendChatTools` transport. The backend-proxy path falls back to a plain (toolless) reply until the
+  proxy supports tools. Covered by a new e2e that runs all six tools against the sample dataset and verifies each
+  result, plus the existing send/resume/error e2e.
+
 ### Fixed
 - **Insights chat: the first message after reopening a saved chat now works.** Reopening Insights resumes the
   most recent conversation; the first send into a resumed chat appeared to do nothing (the request was made but

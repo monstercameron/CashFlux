@@ -24,7 +24,41 @@ func SendChat(apiKey, baseURL, model string, messages []Message, temperature flo
 		onError(err.Error())
 		return noopCancel
 	}
-	return postCompletions(apiKey, baseURL, body, onResult, onError)
+	return postCompletions(apiKey, baseURL, body, parseContent(onResult, onError), onError)
+}
+
+// parseContent adapts a content+usage onResult to the raw-bytes onSuccess that
+// postCompletions expects, parsing the assistant's text via ParseResponse.
+func parseContent(onResult func(string, Usage), onError func(string)) func([]byte) {
+	return func(data []byte) {
+		content, err := ParseResponse(data)
+		if err != nil {
+			onError(err.Error())
+			return
+		}
+		onResult(content, ParseUsage(data))
+	}
+}
+
+// SendChatTools posts a chat-completions request that advertises the given tools,
+// so the model may answer directly or ask to run one or more of them. On success it
+// calls onResult with the assistant's full Message (its content and/or tool_calls)
+// and the call's token usage; the caller drives the tool loop. Same async contract
+// as SendChat; returns a cancel function.
+func SendChatTools(apiKey, baseURL, model string, messages []Message, temperature float64, tools []Tool, onResult func(Message, Usage), onError func(string)) func() {
+	body, err := BuildToolRequest(model, messages, temperature, tools)
+	if err != nil {
+		onError(err.Error())
+		return noopCancel
+	}
+	return postCompletions(apiKey, baseURL, body, func(data []byte) {
+		msg, _, _, err := ParseChat(data)
+		if err != nil {
+			onError(err.Error())
+			return
+		}
+		onResult(msg, ParseUsage(data))
+	}, onError)
 }
 
 // SendVisionChat posts a multimodal chat-completions request (a system prompt, a
@@ -36,7 +70,7 @@ func SendVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL str
 		onError(err.Error())
 		return noopCancel
 	}
-	return postCompletions(apiKey, baseURL, body, onResult, onError)
+	return postCompletions(apiKey, baseURL, body, parseContent(onResult, onError), onError)
 }
 
 // SendStructuredVisionChat is SendVisionChat that additionally constrains the
@@ -49,7 +83,7 @@ func SendStructuredVisionChat(apiKey, baseURL, model, systemPrompt, userText, im
 		onError(err.Error())
 		return noopCancel
 	}
-	return postCompletions(apiKey, baseURL, body, onResult, onError)
+	return postCompletions(apiKey, baseURL, body, parseContent(onResult, onError), onError)
 }
 
 // postCompletions sends a prebuilt request body to the chat-completions endpoint
@@ -59,7 +93,7 @@ func SendStructuredVisionChat(apiKey, baseURL, model, systemPrompt, userText, im
 // IsRetryable / RetryDelayMS), giving up with the last error after MaxRetries.
 // It returns a cancel function: calling it aborts the in-flight fetch via an
 // AbortController, clears any pending retry timer, and suppresses the callbacks.
-func postCompletions(apiKey, baseURL string, body []byte, onResult func(string, Usage), onError func(string)) func() {
+func postCompletions(apiKey, baseURL string, body []byte, onSuccess func([]byte), onError func(string)) func() {
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}
@@ -133,12 +167,7 @@ func postCompletions(apiKey, baseURL string, body []byte, onResult func(string, 
 			case status >= 400:
 				retryOrFail(status, ErrorMessage(status, data))
 			default:
-				content, err := ParseResponse(data)
-				if err != nil {
-					onError(err.Error())
-				} else {
-					onResult(content, ParseUsage(data))
-				}
+				onSuccess(data)
 			}
 			return nil
 		})
