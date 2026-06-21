@@ -1625,7 +1625,10 @@ B15-compliant), and proper empty / all-done states. **Buttons aren't oversized.*
 - [ ] **Verify** after changes: every control is labelled for screen readers; overdue tasks stand out;
       filtering/grouping works; rows don't wrap on mobile.
 
-### C53. Planning: UX review — powerful but overloaded; 5 tools on one page, primary calc buried ★ (UX review loop, user-requested 2026-06-20)
+### C53. Planning: UX review — powerful but overloaded; 5 tools on one page, primary calc buried ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
+**✅ DONE:** every Planning input now has a **visible persistent label** (`labeledField`) across the forecast,
+affordability, runway, payoff, recurring, plans, and debt forms (was placeholder/aria-only). The page already
+groups the tools into distinct section cards (visual sub-navigation); the selects retain their aria-labels.
 **Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
 render code (`internal/screens/planning.go`). **Verdict:** analytically rich and genuinely useful — net-worth
 **forecast** chart with a "trim spending" what-if overlay, a **recurring cash-flows** manager (with a real
