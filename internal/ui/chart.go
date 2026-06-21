@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/chart"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -49,7 +51,7 @@ func AreaChart(props AreaChartProps) uic.Node {
 	line := chart.LinePath(pts)
 
 	return Svg(
-		ClassStr("w-full mt-auto"),
+		css.Class(tw.WFull, tw.MtAuto),
 		Attr("role", "img"),
 		Attr("aria-label", label),
 		Attr("viewBox", fmt.Sprintf("0 0 %g %g", w, h)),
