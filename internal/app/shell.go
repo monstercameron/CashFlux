@@ -118,7 +118,7 @@ var railMeta = map[string]struct {
 	"/members":        {"nav.members", icon.Users},
 	"/categories":     {"nav.categories", icon.Tag},
 	"/rules":          {"nav.rules", icon.Tag},
-	"/notifications":  {"nav.notifications", icon.AlertCircle},
+	"/notifications":  {"nav.notifications", icon.Bell},
 }
 
 // navGroup builds the rail items for one screen group, in registry order. The
@@ -494,9 +494,34 @@ func TopBar(props topBarProps) uic.Node {
 		),
 		Div(Class("topbar-controls ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
+			uic.CreateElement(NotifyBell),
 			uic.CreateElement(MuzakToggle),
 			uic.CreateElement(AddMenu),
 		),
+	)
+}
+
+// NotifyBell is the top-bar bell that opens the Notification Center, with a count
+// badge for unread items. The persisted feed drives the badge; clicking routes to
+// /notifications (which marks everything read).
+func NotifyBell() uic.Node {
+	feed := uistate.UseNotifyFeed().Get()
+	unread := uistate.UnreadNotifyCount(feed)
+	nav := router.UseNavigate()
+	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/notifications")) })
+	badge := Fragment()
+	if unread > 0 {
+		label := fmt.Sprintf("%d", unread)
+		if unread > 9 {
+			label = "9+"
+		}
+		badge = Span(Class("notify-badge"), label)
+	}
+	return Button(Class("muzak-btn relative"), Type("button"),
+		Attr("title", uistate.T("nav.notifications")), Attr("aria-label", uistate.T("nav.notifications")),
+		OnClick(open),
+		ui.Icon(icon.Bell, Class("w-[18px] h-[18px]")),
+		badge,
 	)
 }
 
