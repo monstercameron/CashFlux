@@ -1483,6 +1483,15 @@ _Cross-links: **C39** (general long-list pagination — this resolves it for Tra
 consistency), **C10/C19** (responsive), **C42/C43** (FlipPanel for the filter popover), **B1** (deep-link 404
 makes the page only reachable via in-app nav during verification)._
 
+> **✅ RECONCILED 2026-06-21 — the C48–C66 per-screen UX-review series is essentially complete.** A code audit
+> confirmed each screen's core asks shipped: visible form labels (`labeledField`), kind/currency `<select>`s +
+> number constraints, status/urgency tone (near/over/overdue/due-soon), drill-downs to data, per-row actions
+> (Remind-me/ignore/confirm), grouped sections + CSV/print, image previews, indentation + usage counts, inline
+> edit + staged-action remove, surfaced upload errors. **Only two have remaining work: C53** (Planning — most
+> inputs still lack visible labels + no jump-nav bar) and **C64** (Rules — no drag-to-reorder precedence; match
+> preview + labels are done). C57's "Remind me" + annual figure + urgency are done; a dedicated *mark-paid* log is
+> the one nuance left there. Individual headers below are left as-was for history.
+
 ### C48. Dashboard: UX review — strong bento, but typography/spacing scale is ad-hoc ★ (UX review loop, user-requested 2026-06-20)
 **Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
 render code (`internal/screens/dashboard.go`). **Verdict:** the page makes sense for its purpose — a
