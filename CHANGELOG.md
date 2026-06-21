@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Insights chat: message actions reworked (C82).** Assistant replies are now rendered with **marked**
+  (vendored locally) sanitized by **DOMPurify** before becoming innerHTML — richer Markdown than the prior
+  inline renderer. Each reply gets **Copy** (to clipboard) and **Delete**, plus **Retry** on the latest reply
+  (re-answers the last prompt). User messages can be **deleted** too (hover to reveal). **Pin** stays. The
+  per-message **Save-as-task button is removed** — saving to To-do will become an agent tool the model invokes
+  when asked. New `copy` icon; `marked`/`DOMPurify` added to the service-worker precache.
 - **Insights is now a chat interface (C82 wiring, supersedes the C59 two-card layout).** The Explain/Q&A cards
   are replaced by a conversation thread: user bubbles, Markdown assistant bubbles each with Save-as-task / Pin
   and a token/cost note, a sticky composer, and starter-question chips that send on tap. The whole history is

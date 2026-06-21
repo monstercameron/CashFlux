@@ -767,6 +767,12 @@
     <script src="./mermaid.min.js"></script>
     <script src="./mermaid.js"></script>
 
+    <!-- Markdown rendering for Insights chat (vendored locally, no CDN, C44):
+         marked parses Markdown, DOMPurify sanitizes the result before it's set
+         as innerHTML, so model-authored text can't inject active markup. -->
+    <script src="./marked.min.js"></script>
+    <script src="./purify.min.js"></script>
+
     <script src="./wasm_exec.js"></script>
     <script>
       (function () {

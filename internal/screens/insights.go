@@ -5,6 +5,7 @@ package screens
 import (
 	"sort"
 	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
@@ -108,23 +109,9 @@ func Insights() ui.Node {
 		loading.Set(false)
 	})
 
-	// saveTask writes an answer to the To-do list; the full answer always lives in the
-	// notes, never the title (C27). pinText saves it to the pinned-insights list.
-	saveTask := func(text string) bool {
-		text = strings.TrimSpace(text)
-		if text == "" {
-			return false
-		}
-		t := domain.Task{
-			ID: id.New(), Title: uistate.T("insights.aiTaskTitle"), Notes: text,
-			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceAI,
-		}
-		if err := app.PutTask(t); err != nil {
-			errMsg.Set(err.Error())
-			return false
-		}
-		return true
-	}
+	// pinText saves an answer to the pinned-insights list. (Saving an answer as a
+	// To-do is no longer a UI button — it becomes an agent tool the model invokes
+	// when the user asks, C82.)
 	pinText := func(text string) bool {
 		text = strings.TrimSpace(text)
 		if text == "" {
@@ -160,19 +147,8 @@ func Insights() ui.Node {
 		return msgs
 	}
 
-	// sendText posts a user turn and routes the assistant's reply into a new turn.
-	sendText := func(text string) {
-		text = strings.TrimSpace(text)
-		if text == "" || loading.Get() {
-			return
-		}
-		if key == "" && !useBackendAI {
-			errMsg.Set(uistate.T("insights.needKey"))
-			return
-		}
-		hist := append(append([]chatTurn{}, turns.Get()...), chatTurn{ID: id.New(), Role: "user", Text: text})
-		turns.Set(hist)
-		input.Set("")
+	// run sends the conversation `hist` to the model and appends the assistant's reply.
+	run := func(hist []chatTurn) {
 		errMsg.Set("")
 		loading.Set(true)
 		messages := buildMessages(hist)
@@ -188,6 +164,58 @@ func Insights() ui.Node {
 		} else {
 			cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4, onResult, onErr))
 		}
+	}
+
+	// sendText posts a user turn, then runs the model on the new history.
+	sendText := func(text string) {
+		text = strings.TrimSpace(text)
+		if text == "" || loading.Get() {
+			return
+		}
+		if key == "" && !useBackendAI {
+			errMsg.Set(uistate.T("insights.needKey"))
+			return
+		}
+		hist := append(append([]chatTurn{}, turns.Get()...), chatTurn{ID: id.New(), Role: "user", Text: text})
+		turns.Set(hist)
+		input.Set("")
+		run(hist)
+	}
+
+	// resendLast re-answers the latest user prompt: drop any trailing assistant
+	// reply, then run again (the "redo" action).
+	resendLast := func() {
+		if loading.Get() {
+			return
+		}
+		if key == "" && !useBackendAI {
+			errMsg.Set(uistate.T("insights.needKey"))
+			return
+		}
+		cur := turns.Get()
+		i := len(cur)
+		for i > 0 && cur[i-1].Role == "assistant" {
+			i--
+		}
+		if i == 0 {
+			return
+		}
+		hist := append([]chatTurn{}, cur[:i]...)
+		turns.Set(hist)
+		run(hist)
+	}
+
+	// deleteTurn removes a single message (user or assistant) from the thread.
+	deleteTurn := func(tid string) {
+		turns.Update(func(cur []chatTurn) []chatTurn {
+			out := make([]chatTurn, 0, len(cur))
+			for _, t := range cur {
+				if t.ID != tid {
+					out = append(out, t)
+				}
+			}
+			return out
+		})
 	}
 	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
 
@@ -212,18 +240,26 @@ func Insights() ui.Node {
 	convo := turns.Get()
 	empty := len(convo) == 0
 
-	// The conversation thread: user bubbles right, assistant bubbles (their own
-	// component, owning the save/pin hooks per the no-hooks-in-loops rule) left.
+	// Retry is offered only on the latest assistant reply (and not mid-request).
+	lastAsstID := ""
+	if n := len(convo); n > 0 && convo[n-1].Role == "assistant" {
+		lastAsstID = convo[n-1].ID
+	}
+
+	// The conversation thread: user + assistant bubbles are each their own component
+	// (owning their action hooks per the no-hooks-in-loops rule).
 	thread := Div(Class("flex flex-col gap-3 mb-3"),
 		MapKeyed(convo,
 			func(t chatTurn) any { return t.ID },
 			func(t chatTurn) ui.Node {
 				if t.Role == "user" {
-					return Div(Class("flex justify-end"),
-						Div(Class("max-w-[85%] rounded-2xl bg-sky-500/10 px-3.5 py-2 text-[14px] whitespace-pre-wrap"), t.Text),
-					)
+					return ui.CreateElement(UserBubble, userBubbleProps{ID: t.ID, Text: t.Text, OnDelete: deleteTurn})
 				}
-				return ui.CreateElement(AssistantBubble, asstBubbleProps{Text: t.Text, Usage: t.Usage, Model: model, OnSave: saveTask, OnPin: pinText})
+				var onRetry func()
+				if t.ID == lastAsstID && !loading.Get() {
+					onRetry = resendLast
+				}
+				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model, OnPin: pinText, OnDelete: deleteTurn, OnRetry: onRetry})
 			},
 		),
 		If(loading.Get(), Div(Class("flex justify-start"),
@@ -282,31 +318,67 @@ type chatTurn struct {
 	Usage ai.Usage
 }
 
-type asstBubbleProps struct {
-	Text   string
-	Usage  ai.Usage
-	Model  string
-	OnSave func(string) bool
-	OnPin  func(string) bool
+type userBubbleProps struct {
+	ID       string
+	Text     string
+	OnDelete func(string)
 }
 
-// AssistantBubble renders one assistant message as Markdown with per-message
-// Save-as-task / Pin actions and a token/cost note. The model emits Markdown,
-// rendered as rich text; the framework's Markdown is GFM-aware and drops active
-// URL schemes (javascript:/data:), so model text can't smuggle an executable
-// href; links open safely in a new tab. Its own component so the action hooks
-// stay stable across the message list (no hooks in loops).
+// UserBubble renders one user message with a delete action revealed on hover. Its
+// own component so the delete hook stays stable across the list (no hooks in loops).
+func UserBubble(p userBubbleProps) ui.Node {
+	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.ID) }))
+	return Div(Class("flex justify-end group"),
+		Div(Class("flex items-start gap-1.5 max-w-[85%]"),
+			Button(Class("shrink-0 mt-1 text-faint opacity-0 group-hover:opacity-70 hover:!opacity-100"), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, Class("w-3.5 h-3.5"))),
+			Div(Class("rounded-2xl bg-sky-500/10 px-3.5 py-2 text-[14px] whitespace-pre-wrap"), p.Text),
+		),
+	)
+}
+
+type asstBubbleProps struct {
+	ID       string
+	Text     string
+	Usage    ai.Usage
+	Model    string
+	OnPin    func(string) bool
+	OnDelete func(string)
+	OnRetry  func() // non-nil only on the latest assistant turn
+}
+
+// AssistantBubble renders one assistant message as Markdown (via the vendored
+// marked + DOMPurify, set as sanitized innerHTML by the effect below) with Copy,
+// Pin, Retry (latest only), and Delete actions plus a token/cost note. Its own
+// component so the action + effect hooks stay stable across the list (no hooks in
+// loops).
 func AssistantBubble(p asstBubbleProps) ui.Node {
-	saved := ui.UseState(false)
 	pinned := ui.UseState(false)
-	save := ui.UseEvent(Prevent(func() {
-		if p.OnSave(p.Text) {
-			saved.Set(true)
-		}
-	}))
+	copied := ui.UseState(false)
+	mdID := "cf-md-" + p.ID
+	// Render the Markdown after mount and whenever the text changes (streaming-ready).
+	// The signature also folds in the local action toggles so the effect re-fills the
+	// innerHTML after a self re-render (pin/copy) that the vdom would otherwise clear.
+	sig := p.Text
+	if pinned.Get() {
+		sig += "|p"
+	}
+	if copied.Get() {
+		sig += "|c"
+	}
+	ui.UseEffect(func() func() { renderMarkdown(mdID, p.Text); return nil }, sig)
 	pin := ui.UseEvent(Prevent(func() {
 		if p.OnPin(p.Text) {
 			pinned.Set(true)
+		}
+	}))
+	copyEvt := ui.UseEvent(Prevent(func() {
+		copyText(p.Text)
+		copied.Set(true)
+	}))
+	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.ID) }))
+	retryEvt := ui.UseEvent(Prevent(func() {
+		if p.OnRetry != nil {
+			p.OnRetry()
 		}
 	}))
 	var note ui.Node = Fragment()
@@ -317,22 +389,55 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 		}
 		note = P(Class("text-faint text-[11px] mt-2"), txt)
 	}
+	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
 	return Div(Class("flex justify-start"),
 		Div(Class("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2.5"),
-			Div(Class("md insights-answer text-[14px]"), Markdown(p.Text, MarkdownRenderOptions{LinkTarget: "_blank", LinkRel: "noopener noreferrer"})),
-			Div(Class("flex flex-wrap gap-2 items-center mt-2"),
-				IfElse(saved.Get(),
-					Span(Class("muted text-[12px]"), uistate.T("insights.savedToTodo")),
-					Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(save), uistate.T("insights.saveTask")),
+			// marked fills this element via the effect above.
+			Div(Attr("id", mdID), Class("md insights-answer text-[14px]")),
+			Div(Class("flex flex-wrap gap-3 items-center mt-2"),
+				IfElse(copied.Get(),
+					Span(Class("text-faint text-[12px]"), uistate.T("insights.copied")),
+					Button(Class(actBtn), Type("button"), Title(uistate.T("insights.copy")), Attr("aria-label", uistate.T("insights.copy")), OnClick(copyEvt), uiw.Icon(icon.Copy, Class("w-4 h-4"))),
 				),
 				IfElse(pinned.Get(),
-					Span(Class("muted text-[12px]"), uistate.T("insights.pinnedConfirm")),
-					Button(Class("btn"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
+					Span(Class("text-faint text-[12px]"), uistate.T("insights.pinnedConfirm")),
+					Button(Class(actBtn+" gap-1 text-[12px]"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
 				),
+				If(p.OnRetry != nil, Button(Class(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, Class("w-4 h-4")))),
+				Button(Class(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 			),
 			note,
 		),
 	)
+}
+
+// renderMarkdown sets the element's sanitized, Markdown-rendered HTML using the
+// vendored marked + DOMPurify globals; falls back to the raw text when absent.
+func renderMarkdown(elemID, mdText string) {
+	doc := js.Global().Get("document")
+	el := doc.Call("getElementById", elemID)
+	if !el.Truthy() {
+		return
+	}
+	html := mdText
+	if m := js.Global().Get("marked"); m.Truthy() {
+		html = m.Call("parse", mdText).String()
+	}
+	if dp := js.Global().Get("DOMPurify"); dp.Truthy() {
+		html = dp.Call("sanitize", html).String()
+	}
+	el.Set("innerHTML", html)
+}
+
+// copyText writes text to the system clipboard (best-effort, no-op if unavailable).
+func copyText(text string) {
+	nav := js.Global().Get("navigator")
+	if !nav.Truthy() {
+		return
+	}
+	if cb := nav.Get("clipboard"); cb.Truthy() {
+		cb.Call("writeText", text)
+	}
 }
 
 type pinnedInsightRowProps struct {

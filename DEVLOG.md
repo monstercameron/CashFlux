@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights chat message actions (marked render, copy, retry, delete)
+
+- Per direction on the chat bubbles: (1) Save-as-task button removed — it becomes an agent tool later. (2) Pin
+  kept. (3) Added Retry (redo) on the latest assistant reply: `resendLast` trims trailing assistant turns and
+  re-runs the model on the remaining history; refactored the send path into a shared `run(hist)`. (4) Added
+  Copy-to-clipboard (`navigator.clipboard.writeText` via syscall/js) with a "Copied" confirmation. (5) Per-
+  message Delete for both user and assistant turns (`deleteTurn` filters by id); user bubbles became their own
+  `UserBubble` component so the delete hook stays stable. (6) Markdown now rendered via vendored **marked** +
+  **DOMPurify** (sanitized innerHTML set by a `UseEffect` keyed on text+toggles so a self re-render doesn't
+  blank it) instead of the framework renderer — `web/marked.min.js`/`web/purify.min.js` vendored (no CDN, C44),
+  wired in index.html before wasm_exec and added to the sw.js precache (CACHE v221). New `icon.Copy`; i18n
+  `copy`/`copied`/`retry`/`deleteMsg`.
+- NEXT (Cam's follow-up, separate bottom-up commits): persist chats in the SQLite store (a `Conversation` +
+  messages domain type, store + appstate + export/import + tests), then a conversation switcher UI (new/switch/
+  delete chat). The in-memory `turns` state becomes the live view over a persisted conversation.
+- Gate: `GOOS=js GOARCH=wasm go build` green; gofmt clean; served via gwc on :8080.
+
 ## 2026-06-20 - feat: Insights becomes a chat interface (C82 wasm/UI wiring)
 
 - Per direction, the Insights screen is now a chat, not Explain/Q&A buttons. The two-card layout (just shipped
