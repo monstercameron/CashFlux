@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix/feat: Insights chat — reasoning-model temp, backend toggle, pins-above-chat
+
+- Cam: "chats don't seem to be working / is it using the openai provider?". Diagnosed the dual path: the chat
+  uses the direct OpenAI provider (settings key+model via `ai.SendChat`) unless `pr.BackendActive()` (a
+  configured + enabled backend) routes it to the grpc AI proxy. Two fixes/affordances: (1) the model picker
+  offers `o4-mini (reasoning)`, and reasoning models reject a non-default temperature on /chat/completions —
+  `reasoningModel()` now detects o1/o3/o4/gpt-5* and sends temperature 0 (dropped by omitempty → API default),
+  so a reasoning model no longer silently 400s. (2) Added an in-chat backend toggle (shown only when a backend
+  is configured): flips `BackendDisabled` via the prefs atom + `PersistPrefs`, so the user can force the direct
+  OpenAI provider (the likely cause of "not using openai"). New i18n usingOpenAI/usingBackend/useOpenAI/useBackend.
+- UX: moved the pinned-insights card ABOVE the chat (quick references up top; the conversation thread below has
+  room to grow).
+- Gate: `GOOS=js GOARCH=wasm go build` green; gofmt clean; served via gwc on :8080.
+
 ## 2026-06-20 - feat: Insights conversation switcher (new/switch/delete chats, autosave)
 
 - Commit C of the chat-persistence work. The screen now tracks `convID`/`convCreated`/`inited`. A `persist`

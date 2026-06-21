@@ -6,7 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Insights chat works with reasoning models.** o-series / gpt-5.x models reject a custom temperature on
+  /chat/completions; the chat now omits temperature for them (mild 0.4 for other models), so the configured
+  OpenAI model no longer silently errors.
+
 ### Added
+- **Insights: backend-vs-OpenAI mode toggle.** When a backend is configured, a one-line toggle in the chat
+  lets you switch between the **backend AI proxy** and the **direct OpenAI provider** without leaving the
+  screen (writes the `BackendDisabled` pref). With no backend configured the chat always uses OpenAI directly.
 - **Insights conversation switcher — multiple saved chats (C82).** A switcher row with **New chat** and a pill
   per saved conversation: tap to switch, × to delete. The live thread **auto-saves** to the store on every
   message (and on delete/retry), titled from its first question; opening Insights **resumes the most recently

@@ -42,6 +42,13 @@ func Insights() ui.Node {
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
+	// Reasoning models (o-series, gpt-5.x) reject a non-default temperature on
+	// /chat/completions, so omit it (0 is dropped by omitempty) for them; other
+	// models get a mild 0.4. This keeps the chat working whatever model is picked.
+	chatTemp := 0.4
+	if reasoningModel(model) {
+		chatTemp = 0
+	}
 	base := settings.BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -166,9 +173,9 @@ func Insights() ui.Node {
 		}
 		onErr := func(e string) { loading.Set(false); errMsg.Set(e) }
 		if useBackendAI {
-			cancelFn.Set(ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, 0.4, onResult, onErr))
+			cancelFn.Set(ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, chatTemp, onResult, onErr))
 		} else {
-			cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4, onResult, onErr))
+			cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, chatTemp, onResult, onErr))
 		}
 	}
 
@@ -320,6 +327,15 @@ func Insights() ui.Node {
 
 	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
 	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
+	// Toggle the backend AI proxy on/off so the user can force the direct OpenAI
+	// provider (or back to the proxy) without leaving the chat.
+	prefsAtom := uistate.UsePrefs()
+	toggleBackend := ui.UseEvent(Prevent(func() {
+		p := prefsAtom.Get()
+		p.BackendDisabled = !p.BackendDisabled
+		prefsAtom.Set(p)
+		uistate.PersistPrefs(p)
+	}))
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates)
 
@@ -412,18 +428,38 @@ func Insights() ui.Node {
 		),
 	)
 
+	// Backend/OpenAI mode toggle — only meaningful when a backend is configured;
+	// otherwise the chat always uses the direct OpenAI provider.
+	backendConfigured := strings.TrimSpace(pr.ServerURL) != "" && strings.TrimSpace(pr.ServerToken) != ""
+	backendToggle := Fragment()
+	if backendConfigured {
+		label := uistate.T("insights.usingOpenAI")
+		action := uistate.T("insights.useBackend")
+		if useBackendAI {
+			label = uistate.T("insights.usingBackend")
+			action = uistate.T("insights.useOpenAI")
+		}
+		backendToggle = Div(Class("flex items-center gap-2 mb-2 text-[12px] text-faint"),
+			Span(label),
+			Button(Class("underline hover:opacity-100"), Type("button"), OnClick(toggleBackend), action),
+		)
+	}
+
 	return Div(
 		highlights,
+		// Pinned insights sit ABOVE the chat as quick references, so the conversation
+		// thread below has room to grow.
+		pinnedCard,
 		Section(Class("card"),
 			H2(Class("card-title"), uistate.T("insights.chatTitle")),
 			switcher,
+			backendToggle,
 			If(empty, P(Class("muted"), uistate.T("insights.chatHint"))),
 			If(!empty, thread),
 			chips,
 			composer,
 			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 		),
-		pinnedCard,
 	)
 }
 
@@ -591,6 +627,13 @@ func renderMarkdown(elemID, mdText string) {
 		html = dp.Call("sanitize", html).String()
 	}
 	el.Set("innerHTML", html)
+}
+
+// reasoningModel reports whether a model id is an OpenAI reasoning model (o-series
+// or gpt-5.x), which reject a custom temperature on /chat/completions.
+func reasoningModel(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "gpt-5")
 }
 
 // copyText writes text to the system clipboard (best-effort, no-op if unavailable).
