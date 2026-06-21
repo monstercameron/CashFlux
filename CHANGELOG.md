@@ -54,6 +54,9 @@ and every commit updates this file under `Unreleased`.
   result, plus the existing send/resume/error e2e.
 
 ### Fixed
+- **Insights chat: Send / Enter no longer risks reloading the page.** The composer is no longer a `<form>` —
+  Send is a plain button and Enter is handled by the keydown listener (Shift+Enter is ignored) — so there's no
+  native submit that could trigger a full page reload. Service-worker cache bumped to evict any stale shell.
 - **Insights chat: on load, the thread starts at the latest message.** Reopening a saved chat left the thread
   scrolled to the top — the auto-scroll fired before each bubble's Markdown filled in, so the container had no
   height yet. The scroll is now deferred until after layout, landing on the most recent message.

@@ -476,6 +476,11 @@ func Insights() ui.Node {
 				input.Set(v)
 			}
 			k := ev.Get("key").String()
+			if k == "Enter" && !ev.Get("shiftKey").Bool() {
+				ev.Call("preventDefault")
+				sendText(input.Get())
+				return nil
+			}
 			if k != "ArrowUp" && k != "ArrowDown" {
 				return nil
 			}
@@ -659,13 +664,13 @@ func Insights() ui.Node {
 	if key == "" && !useBackendAI {
 		composer = keyHintNode()
 	} else {
-		composer = Form(Class("mt-1"), OnSubmit(onSubmit),
-			Div(Class("flex gap-2 items-center"),
-				Input(Attr("id", "cf-chat-input"), Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
-				IfElse(loading.Get(),
-					Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
-					Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("submit"), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.send"))),
-				),
+		// A plain Div (not a Form) so there is no native submit that could reload the
+		// page; Send is a button and Enter is handled by the keydown listener.
+		composer = Div(Class("mt-1 flex gap-2 items-center"),
+			Input(Attr("id", "cf-chat-input"), Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
+			IfElse(loading.Get(),
+				Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
+				Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.send"))),
 			),
 		)
 	}
