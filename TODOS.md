@@ -2315,7 +2315,14 @@ critical (overlapping statement periods) → lean on `dedupe` (hash date+amount+
 _Cross-links: **C60** (Documents — the home), **C64** (rules categorization), **C56** (richer history → better
 subscription detection), **C45/B17** (privacy — local vs AI), **C44** (no CDN/bundle), Recurring/Bills (cadence)._
 
-### C75. Notifications/reminders — finish B19 Phase A surfaces (center + rules page + browser wiring) ★ (feature, user-requested 2026-06-20)
+### C75. Notifications/reminders — finish B19 Phase A surfaces (center + rules page + browser wiring) ★ (feature, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
+**✅ DONE:** **Notification Center** screen + `/notifications` rail entry (System group): the catch-up engine now
+records each surfaced notification into a persisted feed (`uistate.UseNotifyFeed`, capped, dedup'd); the center
+lists them newest-first, marks them read on open, and clears. **Browser channel wired** — `postBrowserNotifications`
+requests permission and posts OS notifications for emitted items when enabled, gated by a **Settings →
+Notifications → "Browser notifications"** toggle (`uistate.BrowserNotifyEnabled`). e2e `notifications_check`.
+(A full per-rule editor — toggle/channels/quiet-hours per `notify.Rule` — remains as later polish; the browser
+opt-in covers the main channel control.)
 **Context (code-verified).** The reminder/notification **engine already exists** — pure `internal/notify`
 (rules: per-event enable/channels/threshold/quiet-hours/frequency-cap, dedupe/delivered-log, catch-up math;
 events: bill-due, budget-threshold, goal-milestone, stale-balance, large-transaction, digest, backup-due) +

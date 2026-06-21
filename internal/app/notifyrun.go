@@ -67,6 +67,14 @@ func runNotifyCatchUp() {
 		return
 	}
 
+	// Record each notification in the persisted Notification Center feed (C75).
+	feed := make([]uistate.FeedItem, len(out))
+	for i, n := range out {
+		feed[i] = uistate.FeedItem{ID: n.ID, Title: n.Title, Body: n.Body, At: n.At.Unix()}
+	}
+	uistate.PrependNotifyFeed(feed)
+	postBrowserNotifications(out)
+
 	// One unobtrusive summary toast: the single reminder's title, or a count.
 	msg := out[0].Title
 	if len(out) > 1 {
@@ -74,6 +82,39 @@ func runNotifyCatchUp() {
 	}
 	notice := uistate.UseNotice()
 	notice.Set(notice.Get().With(msg, false))
+}
+
+// postBrowserNotifications posts OS/browser notifications for the emitted items
+// when the user has enabled them and granted permission (C75 browser channel).
+func postBrowserNotifications(out []notify.Notification) {
+	if !uistate.BrowserNotifyEnabled() {
+		return
+	}
+	N := js.Global().Get("Notification")
+	if !N.Truthy() {
+		return
+	}
+	post := func() {
+		for _, n := range out {
+			N.New(n.Title, map[string]any{"body": n.Body, "tag": n.DedupeKey})
+		}
+	}
+	switch N.Get("permission").String() {
+	case "granted":
+		post()
+	case "denied":
+		return
+	default:
+		var cb js.Func
+		cb = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			cb.Release()
+			if len(args) > 0 && args[0].String() == "granted" {
+				post()
+			}
+			return nil
+		})
+		N.Call("requestPermission").Call("then", cb)
+	}
 }
 
 // weeklyDigestCandidates emits a once-per-ISO-week summary of the previous

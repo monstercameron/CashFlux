@@ -5,6 +5,7 @@ package app
 import (
 	"strconv"
 	"strings"
+	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backendauth"
@@ -66,6 +67,29 @@ type widgetSettingsFormProps struct {
 // widget's registered widgetcfg.Schema generically (toggle/number/select),
 // bound to the persisted WidgetConfigs atom so changes survive reloads. Widgets
 // with no schema yet show a friendly placeholder.
+// notifySettings is the Settings-modal toggle for OS/browser notifications (C75):
+// flipping it on records the opt-in and requests permission; the catch-up runner
+// then posts browser notifications in addition to the in-app feed.
+func notifySettings() uic.Node {
+	on := uic.UseState(uistate.BrowserNotifyEnabled())
+	return Div(
+		Div(Class("set-label"), uistate.T("settings.notifyTitle")),
+		ui.ToggleRow(ui.ToggleRowProps{
+			Label: uistate.T("settings.notifyBrowser"),
+			On:    on.Get(),
+			OnChange: func(v bool) {
+				on.Set(v)
+				uistate.SetBrowserNotifyEnabled(v)
+				if v {
+					if N := js.Global().Get("Notification"); N.Truthy() && N.Get("permission").String() == "default" {
+						N.Call("requestPermission")
+					}
+				}
+			},
+		}),
+	)
+}
+
 // musicSettings is the Settings-modal control group for the background music: an
 // on/off toggle and a volume slider. It writes the shared muzak atoms (the same
 // ones the top-bar speaker button uses), so changes apply live and persist. Its
@@ -627,6 +651,7 @@ func globalSettingsForm() uic.Node {
 		Div(Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(Class("text-faint text-[12px]"), uistate.T("settings.freshnessHint")),
 		Div(freshnessRows),
+		uic.CreateElement(notifySettings),
 		uic.CreateElement(musicSettings),
 	)
 

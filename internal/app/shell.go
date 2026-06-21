@@ -118,6 +118,7 @@ var railMeta = map[string]struct {
 	"/members":        {"nav.members", icon.Users},
 	"/categories":     {"nav.categories", icon.Tag},
 	"/rules":          {"nav.rules", icon.Tag},
+	"/notifications":  {"nav.notifications", icon.AlertCircle},
 }
 
 // navGroup builds the rail items for one screen group, in registry order. The
