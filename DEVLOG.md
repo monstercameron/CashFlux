@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: background music (muzak)
+
+- `web/muzak.js`: a tiny ambient player — Audio element, looping playlist (DEFAULT_TRACKS = calm-01..03.mp3 in
+  web/audio/), volume 0.12, advance-on-end, skip-on-error. Autoplay is blocked until a gesture, so a rejected
+  play() arms a one-shot pointer/key listener that starts then. Exposes window.cashfluxMuzak (init/setEnabled/
+  setVolume/isEnabled/next).
+- Go side: `uistate.UseMuzakEnabled` (localStorage `cashflux:muzak`, default ON) + `MuzakToggle` ♪ button in the
+  top bar; an effect keyed on the state calls init()+setEnabled() so JS stays in sync across nav/reload.
+- No tracks committed (user generates via Suno); the toggle works silently until MP3s are dropped in web/audio/.
+  Provided Suno style metadata (5 calming tracks). SW v230. e2e `muzak_check` covers default-on/toggle/persist.
+
 ## 2026-06-21 - feat: Widget Manager Phase 2 (tile styling + live preview)
 
 - Pure `widgetstyle` package: reserved config keys (_bg/_text/_border/_borderW/_radius/_font/_weight/_shadow plus
