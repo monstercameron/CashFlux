@@ -93,11 +93,13 @@ func restoreFromBackup() {
 			paletteNotify(uistate.T("backup.restoreErr"), true)
 			return
 		}
-		if !confirmAction(uistate.T("backup.restoreConfirm")) {
-			return
-		}
-		applyBackup(env)
-		reloadPage()
+		confirmModal(uistate.T("backup.restoreConfirm"), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			applyBackup(env)
+			reloadPage()
+		})
 	})
 }
 

@@ -826,6 +826,17 @@
         background:transparent; border:0; cursor:pointer; color:var(--dim,#6b7280); font-size:15px; line-height:1; }
       .dash-check[aria-checked="true"] { color:var(--up,#16a34a); }
       .dash-check:hover { color:var(--accent,#3b82f6); }
+      /* In-app modal dialogs (C42) — replaces native prompt/confirm/alert. */
+      .cf-dialog-backdrop { position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; padding:1rem; }
+      .cf-dialog-scrim { position:absolute; inset:0; background:rgba(0,0,0,.45); }
+      .cf-dialog { position:relative; z-index:1; width:min(28rem,100%); background:var(--bg-card,#fff);
+        border:1px solid var(--line,#e5e7eb); border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.3); padding:1.25rem 1.25rem 1rem; }
+      .cf-dialog-title { font-family:var(--font-display),'Fraunces',serif; font-size:1.05rem; font-weight:600; margin:0 0 .35rem; }
+      .cf-dialog-msg { color:var(--text,inherit); margin:0 0 .9rem; line-height:1.5; }
+      .cf-dialog-input { width:100%; margin-bottom:1rem; }
+      .cf-dialog-actions { display:flex; justify-content:flex-end; gap:.5rem; }
+      .btn-danger { background:var(--down,#dc2626); border-color:var(--down,#dc2626); color:#fff; }
+      .btn-danger:hover { filter:brightness(1.05); }
     </style>
   </head>
   <body>

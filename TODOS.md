@@ -3805,7 +3805,15 @@ overlays · `1000`/`1001` app-lock gate/overlay.
   artifact** (that subline shows the month, not the stepper's week range); the stepper label is ground
   truth → drift persists. 0 console errors.
 
-### C42. Replace native browser popups (prompt/confirm/alert) with the FlipPanel modal system ★ (user-asked 2026-06-18)
+### C42. Replace native browser popups (prompt/confirm/alert) with the FlipPanel modal system ★ (user-asked 2026-06-18) — ✅ DONE (2026-06-21)
+**✅ DONE:** added an in-app dialog system — `uistate.DialogRequest` atom + `uistate.ConfirmModal`/`PromptModal`
+helpers, rendered by a `DialogHost` (mounted in the shell) with `role=dialog`/`aria-modal`, Enter-confirm /
+Esc-or-backdrop-cancel, focus-in, and a destructive-tinted confirm. Converted every in-app site: custom-page
+new/rename/delete, workspace new/dup/rename/delete, palette new-workspace, plus settings wipe + backup restore;
+`alert()` notices now route to the existing toast (`paletteNotify`). Goals "Contribute" already uses an inline
+form. The only native confirm left is the pre-Shell **lock-gate forgot-passcode** (the DialogHost isn't mounted
+there — documented exception). e2e `dialog_check` verifies the modal opens/cancels/confirms with **no native
+dialog ever firing**.
 **Want:** every browser-native popup/modal should instead use the **`ui.FlipPanel`** modal + animation
 that Settings uses (lift-to-center, `rotateY`, dim/blur backdrop), with **full a11y + keyboard support**.
 **Canonical system to standardize on:** `ui.FlipPanel` (`internal/ui/flippanel.go`) driven by atoms

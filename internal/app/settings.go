@@ -1028,19 +1028,21 @@ func loadSample(onChange func(), notify func(string, bool)) {
 
 // wipeData clears all data after a confirmation, then refreshes.
 func wipeData(onChange func(), notify func(string, bool)) {
-	if !confirmAction(uistate.T("settings.wipeConfirm")) {
-		return
-	}
-	app := appstate.Default
-	if app == nil {
-		return
-	}
-	if err := app.Wipe(); err != nil {
-		notify(uistate.T("settings.wipeErr", err.Error()), true)
-		return
-	}
-	onChange()
-	notify(uistate.T("settings.wiped"), false)
+	confirmModal(uistate.T("settings.wipeConfirm"), true, func(ok bool) {
+		if !ok {
+			return
+		}
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.Wipe(); err != nil {
+			notify(uistate.T("settings.wipeErr", err.Error()), true)
+			return
+		}
+		onChange()
+		notify(uistate.T("settings.wiped"), false)
+	})
 }
 
 // dataBtnProps configures a data-action button.

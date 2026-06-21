@@ -4,7 +4,6 @@ package app
 
 import (
 	"strings"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui"
@@ -64,14 +63,18 @@ func WorkspaceSwitcher() uic.Node {
 	}
 
 	onNew := func() {
-		if n := promptName(uistate.T("ws.newPrompt"), uistate.T("ws.newDefault")); n != "" {
-			createWorkspace(n)
-		}
+		promptModal(uistate.T("ws.newPrompt"), uistate.T("ws.newDefault"), func(n string) {
+			if n != "" {
+				createWorkspace(n)
+			}
+		})
 	}
 	onDup := func() {
-		if n := promptName(uistate.T("ws.dupPrompt"), active.Name+" copy"); n != "" {
-			duplicateWorkspace(n)
-		}
+		promptModal(uistate.T("ws.dupPrompt"), active.Name+" copy", func(n string) {
+			if n != "" {
+				duplicateWorkspace(n)
+			}
+		})
 	}
 
 	// In the collapsed rail (58px) a full-width labelled button doesn't fit, so the
@@ -170,20 +173,24 @@ type wsManageRowProps struct {
 func wsManageRow(props wsManageRowProps) uic.Node {
 	id, onChange := props.ID, props.OnChange
 	rename := func() {
-		if n := promptName(uistate.T("ws.renamePrompt"), props.Name); n != "" {
-			renameWorkspace(id, n)
-			if onChange != nil {
-				onChange()
+		promptModal(uistate.T("ws.renamePrompt"), props.Name, func(n string) {
+			if n != "" {
+				renameWorkspace(id, n)
+				if onChange != nil {
+					onChange()
+				}
 			}
-		}
+		})
 	}
 	del := func() {
-		if confirmAction(uistate.T("ws.deleteConfirm")) {
-			deleteWorkspace(id) // reloads when deleting the active one
-			if onChange != nil {
-				onChange()
+		confirmModal(uistate.T("ws.deleteConfirm"), true, func(ok bool) {
+			if ok {
+				deleteWorkspace(id) // reloads when deleting the active one
+				if onChange != nil {
+					onChange()
+				}
 			}
-		}
+		})
 	}
 	pickColor := func(c string) {
 		setWorkspaceColor(id, c)
@@ -246,7 +253,7 @@ func workspacesSection(onChange func()) uic.Node {
 	importWS := func() {
 		pickFile(".json", func(data []byte) {
 			if !importWorkspace(data) {
-				js.Global().Call("alert", uistate.T("ws.importErr"))
+				paletteNotify(uistate.T("ws.importErr"), true)
 			}
 		})
 	}
@@ -286,13 +293,4 @@ func wsStartupSelect(props wsStartupSelectProps) uic.Node {
 		Span(Class("text-xs text-faint"), uistate.T("ws.startupLabel")),
 		Select(Class("set-input"), Title(uistate.T("ws.startupLabel")), OnChange(onSel), opts),
 	)
-}
-
-// promptName shows a browser prompt and returns the trimmed entry ("" on cancel).
-func promptName(message, def string) string {
-	v := js.Global().Call("prompt", message, def)
-	if v.IsNull() || v.IsUndefined() {
-		return ""
-	}
-	return strings.TrimSpace(v.String())
 }

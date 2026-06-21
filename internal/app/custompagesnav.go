@@ -3,7 +3,6 @@
 package app
 
 import (
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -74,39 +73,41 @@ func CustomPagesNav() uic.Node {
 	}
 
 	create := func() {
-		name := promptName(uistate.T("pages.newPrompt"), uistate.T("pages.newDefault"))
-		if name == "" {
-			return
-		}
-		p := domain.CustomPage{
-			ID:        id.New(),
-			Slug:      pages.UniqueSlug(name, all, ""),
-			Name:      name,
-			Icon:      "page",
-			Order:     pages.NextOrder(all),
-			CreatedAt: time.Now(),
-		}
-		if err := app.PutCustomPage(p); err != nil {
-			return
-		}
-		nav.Navigate(uistate.RoutePath("/p/" + p.Slug))
+		promptModal(uistate.T("pages.newPrompt"), uistate.T("pages.newDefault"), func(name string) {
+			if name == "" {
+				return
+			}
+			p := domain.CustomPage{
+				ID:        id.New(),
+				Slug:      pages.UniqueSlug(name, all, ""),
+				Name:      name,
+				Icon:      "page",
+				Order:     pages.NextOrder(all),
+				CreatedAt: time.Now(),
+			}
+			if err := app.PutCustomPage(p); err != nil {
+				return
+			}
+			nav.Navigate(uistate.RoutePath("/p/" + p.Slug))
+		})
 	}
 
 	rename := func(p domain.CustomPage) {
-		name := promptName(uistate.T("pages.renamePrompt"), p.Name)
-		if name == "" || name == p.Name {
-			return
-		}
-		p.Name = name
-		p.Slug = pages.UniqueSlug(name, all, p.ID)
-		if err := app.PutCustomPage(p); err != nil {
-			return
-		}
-		// The slug may have changed; if we're viewing this page, follow it.
-		if current == uistate.RoutePath("/p/"+p.Slug) || current != uistate.RoutePath("/") {
-			nav.Navigate(uistate.RoutePath("/p/" + p.Slug))
-		}
-		bump()
+		promptModal(uistate.T("pages.renamePrompt"), p.Name, func(name string) {
+			if name == "" || name == p.Name {
+				return
+			}
+			p.Name = name
+			p.Slug = pages.UniqueSlug(name, all, p.ID)
+			if err := app.PutCustomPage(p); err != nil {
+				return
+			}
+			// The slug may have changed; if we're viewing this page, follow it.
+			if current == uistate.RoutePath("/p/"+p.Slug) || current != uistate.RoutePath("/") {
+				nav.Navigate(uistate.RoutePath("/p/" + p.Slug))
+			}
+			bump()
+		})
 	}
 
 	toggleHide := func(p domain.CustomPage) {
@@ -118,17 +119,19 @@ func CustomPagesNav() uic.Node {
 	}
 
 	del := func(p domain.CustomPage) {
-		if !confirmDialog(uistate.T("pages.deleteConfirm")) {
-			return
-		}
-		if err := app.DeleteCustomPage(p.ID); err != nil {
-			return
-		}
-		if current == uistate.RoutePath("/p/"+p.Slug) {
-			nav.Navigate(uistate.RoutePath("/"))
-		} else {
-			bump()
-		}
+		confirmModal(uistate.T("pages.deleteConfirm"), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := app.DeleteCustomPage(p.ID); err != nil {
+				return
+			}
+			if current == uistate.RoutePath("/p/"+p.Slug) {
+				nav.Navigate(uistate.RoutePath("/"))
+			} else {
+				bump()
+			}
+		})
 	}
 
 	rows := make([]uic.Node, 0, len(visible))
@@ -263,9 +266,4 @@ func customPageRow(props customPageRowProps) uic.Node {
 			OnClick(func() { open.Set(!open.Get()) }), ui.Icon(icon.MoreH, Class("w-4 h-4"))),
 		menu,
 	)
-}
-
-// confirmDialog shows a native confirm and reports the user's choice.
-func confirmDialog(message string) bool {
-	return js.Global().Call("confirm", message).Bool()
 }

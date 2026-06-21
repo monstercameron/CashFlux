@@ -26,9 +26,9 @@ import (
 const defaultBackendURL = "http://127.0.0.1:8081"
 
 type backendVersionResponse struct {
-	APIVersion          string `json:"apiVersion"`
-	MinClientAPIVersion string `json:"minClientApiVersion"`
-	AuthMode            string `json:"authMode"`
+	APIVersion          string   `json:"apiVersion"`
+	MinClientAPIVersion string   `json:"minClientApiVersion"`
+	AuthMode            string   `json:"authMode"`
 	AuthProviders       []string `json:"authProviders"`
 }
 

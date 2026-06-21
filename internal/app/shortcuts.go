@@ -264,15 +264,17 @@ func buildPaletteCommands() []paletteCmd {
 	}
 	cmds = append(cmds,
 		paletteCmd{label: uistate.T("cmd.newWorkspace"), run: func() {
-			if n := promptName(uistate.T("ws.newPrompt"), uistate.T("ws.newDefault")); n != "" {
-				createWorkspace(n)
-			}
+			promptModal(uistate.T("ws.newPrompt"), uistate.T("ws.newDefault"), func(n string) {
+				if n != "" {
+					createWorkspace(n)
+				}
+			})
 		}},
 		paletteCmd{label: uistate.T("cmd.exportWorkspace"), run: func() { exportWorkspace(loadRegistry().ActiveID) }},
 		paletteCmd{label: uistate.T("ws.import"), run: func() {
 			pickFile(".json", func(data []byte) {
 				if !importWorkspace(data) {
-					js.Global().Call("alert", uistate.T("ws.importErr"))
+					paletteNotify(uistate.T("ws.importErr"), true)
 				}
 			})
 		}},
@@ -290,7 +292,7 @@ func buildPaletteCommands() []paletteCmd {
 			paletteCmd{label: uistate.T("applock.cmdChange"), keywords: []string{"passcode", "password", "change", "security"}, run: setPasscodeFlow},
 			paletteCmd{label: uistate.T("applock.cmdRemove"), keywords: []string{"passcode", "password", "remove", "disable", "security"}, run: func() {
 				disableAppLock()
-				js.Global().Call("alert", uistate.T("applock.removed"))
+				paletteNotify(uistate.T("applock.removed"), false)
 			}},
 		)
 	} else {

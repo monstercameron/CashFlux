@@ -201,7 +201,9 @@ func buildAppLockGate(doc js.Value) {
 	// Forgot passcode → wipe & reset. The gate is a soft, unencrypted deterrent,
 	// so erasing local data is the only honest recovery from a lost passcode.
 	forgotCb := js.FuncOf(func(js.Value, []js.Value) any {
-		if confirmAction(uistate.T("applock.forgotConfirm")) {
+		// Exception to C42: the lock gate is pre-Shell imperative DOM, so the in-app
+		// DialogHost isn't mounted here — a native confirm is the only option.
+		if js.Global().Call("confirm", uistate.T("applock.forgotConfirm")).Bool() {
 			wipeAllLocalData()
 			reloadPage()
 		}

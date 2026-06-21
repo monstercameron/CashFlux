@@ -251,6 +251,7 @@ var english = Catalog{
 	"action.save":    "Save",
 	"action.cancel":  "Cancel",
 	"action.delete":  "Delete",
+	"action.confirm": "Confirm",
 	"action.edit":    "Edit",
 	"action.close":   "Close",
 	"action.dismiss": "Dismiss",

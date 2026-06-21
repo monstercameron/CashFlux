@@ -28,12 +28,6 @@ func downloadBytes(filename, mime string, data []byte) {
 	doc.Get("body").Call("removeChild", a)
 }
 
-// confirmAction shows a native confirm dialog and reports whether the user
-// accepted — used to guard destructive actions like wiping all data.
-func confirmAction(message string) bool {
-	return js.Global().Get("window").Call("confirm", message).Bool()
-}
-
 // pickFile opens the OS file picker and reads the chosen file's bytes, invoking
 // onLoad with them. accept is a file-input accept string (e.g. ".json"). The js
 // callbacks are released once the read completes.

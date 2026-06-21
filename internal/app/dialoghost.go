@@ -1,0 +1,139 @@
+//go:build js && wasm
+
+package app
+
+import (
+	"syscall/js"
+
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/ui"
+)
+
+// In-app modal dialogs that replace the native window.prompt/confirm/alert (C42):
+// accessible, themed, keyboard-operable (Enter confirms, Esc/backdrop cancels).
+// The DialogHost (mounted once in the shell) renders the pending request and
+// captures its atom into uistate; the helpers below (and uistate.Prompt/ConfirmModal
+// for the screens package) open one.
+
+const dialogInputID = "cf-dialog-input"
+
+// confirmModal / promptModal are app-package aliases for the shared uistate helpers.
+func confirmModal(message string, destructive bool, onResult func(bool)) {
+	uistate.ConfirmModal(message, destructive, onResult)
+}
+func promptModal(message, def string, onResult func(string)) {
+	uistate.PromptModal(message, def, onResult)
+}
+
+func dialogInputValue() string {
+	el := js.Global().Get("document").Call("getElementById", dialogInputID)
+	if !el.Truthy() {
+		return ""
+	}
+	return el.Get("value").String()
+}
+
+// DialogHost renders the pending modal dialog. It always returns a stable root
+// element (empty when no dialog is open) so the framework has an anchor to update,
+// and calls its hooks unconditionally (hook order must be stable across renders).
+func DialogHost() uic.Node {
+	d := uistate.UseDialog()
+	uistate.CaptureDialog(d)
+	req := d.Get()
+	open := req != nil
+
+	finish := func(ok bool) {
+		if req == nil {
+			return
+		}
+		val := ""
+		if ok && req.Kind == uistate.DialogPrompt {
+			val = dialogInputValue()
+		}
+		d.Set(nil)
+		if req.OnResult != nil {
+			req.OnResult(ok, val)
+		}
+	}
+
+	// While a dialog is open: Enter confirms, Escape cancels, and focus moves in.
+	// Re-runs when the open state or request changes; a no-op while closed.
+	openSig := "closed"
+	if open {
+		openSig = string(req.Kind) + ":" + req.Message
+	}
+	uic.UseEffect(func() func() {
+		if !open {
+			return nil
+		}
+		doc := js.Global().Get("document")
+		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			e := args[0]
+			switch e.Get("key").String() {
+			case "Enter":
+				if req.Kind == uistate.DialogPrompt {
+					e.Call("preventDefault")
+				}
+				finish(true)
+			case "Escape":
+				finish(false)
+			}
+			return nil
+		})
+		doc.Call("addEventListener", "keydown", cb)
+		focusID := "cf-dialog-confirm"
+		if req.Kind == uistate.DialogPrompt {
+			focusID = dialogInputID
+		}
+		var fcb js.Func
+		fcb = js.FuncOf(func(js.Value, []js.Value) any {
+			fcb.Release()
+			if el := doc.Call("getElementById", focusID); el.Truthy() {
+				el.Call("focus")
+				if req.Kind == uistate.DialogPrompt {
+					el.Call("select")
+				}
+			}
+			return nil
+		})
+		js.Global().Call("setTimeout", fcb, 30)
+		return func() { doc.Call("removeEventListener", "keydown", cb); cb.Release() }
+	}, openSig)
+
+	if !open {
+		return Div(Class("cf-dialog-root"))
+	}
+
+	confirmLabel := req.ConfirmLabel
+	if confirmLabel == "" {
+		if req.Kind == uistate.DialogPrompt {
+			confirmLabel = uistate.T("action.save")
+		} else {
+			confirmLabel = uistate.T("action.confirm")
+		}
+	}
+	confirmCls := "btn btn-primary"
+	if req.Destructive {
+		confirmCls = "btn btn-danger"
+	}
+
+	panel := Div(Class("cf-dialog"),
+		If(req.Title != "", H3(Class("cf-dialog-title"), req.Title)),
+		P(Class("cf-dialog-msg"), req.Message),
+		If(req.Kind == uistate.DialogPrompt,
+			Input(Class("set-input cf-dialog-input"), Attr("id", dialogInputID), Type("text"),
+				Attr("aria-label", req.Message), Value(req.Default))),
+		Div(Class("cf-dialog-actions"),
+			Button(Class("btn"), Type("button"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
+			Button(Class(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),
+		),
+	)
+	// Scrim is a sibling of the panel so clicking the panel never bubbles a cancel.
+	return Div(Class("cf-dialog-root"),
+		Div(Class("cf-dialog-backdrop"), Attr("role", "dialog"), Attr("aria-modal", "true"),
+			Div(Class("cf-dialog-scrim"), OnClick(func() { finish(false) })),
+			panel,
+		),
+	)
+}
