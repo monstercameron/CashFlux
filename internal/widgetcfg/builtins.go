@@ -39,6 +39,11 @@ func init() {
 		Title:    "To-do",
 		Fields: []Field{
 			{Key: "count", Label: "Tasks to show", Type: Number, Default: "3", Min: 1, Max: 10},
+			{Key: "sort", Label: "Order", Type: Select, Default: "smart", Options: []Option{
+				{Value: "smart", Label: "Smart"}, {Value: "priority", Label: "Priority"},
+				{Value: "az", Label: "A–Z"}, {Value: "due", Label: "Due date"},
+			}},
+			{Key: "showCompleted", Label: "Show completed", Type: Toggle, Default: "false"},
 		},
 	})
 	register(Schema{

@@ -1335,7 +1335,7 @@ Budgets, Goals, To-do, Planning, Allocate, Insights, Documents, Customize, Membe
 Rules). Screenshots + rendered text are in `.review-screenshots/` (git-ignore this). Items are
 ordered correctness-first, then cross-cutting chrome, then per-screen polish.
 
-### C46. Iconography pass — add a consistent glyph system across all screens ★ (UX/visual, user-requested 2026-06-18)
+### C46. Iconography pass — add a consistent glyph system across all screens ★ (UX/visual, user-requested 2026-06-18) — ✅ DONE (verified 2026-06-21: `internal/icon` curated registry; rail nav, KPI/named tiles via `widgetIcon`, status/trend glyphs all use `icon.Icon`)
 **Surveyed live (all 11 routes, content inventory via harness).** Today the app **mixes ad-hoc Unicode glyphs**
 (`▾` dropdown, `‹ ›` period stepper, `⚙` settings, `✕` close, `⋯` overflow, `↑` insight trend, `+ Add`) and
 otherwise relies on **text-only** labels; real SVGs appear **only in charts** (svgTotal≈21, nearly all D3). The
@@ -1777,7 +1777,7 @@ aren't oversized** and the amount/weight inputs are aria-labelled. Gaps:
 - [ ] **Verify** after changes: a split can attach to a transaction and the settle-up persists; member rows
       align cleanly; select-all + summary work; the no-members state guides to Members.
 
-### C59. Insights: UX review — strong AI screen; shared-result collision + thin Q&A context ★ (UX review loop, user-requested 2026-06-20)
+### C59. Insights: UX review — strong AI screen; shared-result collision + thin Q&A context ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: `insights.go` is a full agentic chat — streaming, separate pinned slots, line-clamp-3, needs-key CTA to Settings)
 **Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
 render code (`internal/screens/insights.go`). **Verdict:** one of the better-built screens — an **offline**
 spending-anomaly highlights card (tone + arrow icon, no key needed), AI **"Explain my month"**, free-form
@@ -2037,7 +2037,7 @@ search **flattens past nesting** so users never expand a group to reach somethin
 _Cross-links: **C67** (browse path), **B7** (registry source), **C32** (custom pages), **C36/B15** (keyboard/
 a11y), **C43/C42** (overlay/FlipPanel + z-index/stacking)._
 
-### C69. Theming engine doesn't reach the shell (rail / header / dashboard); Paper (light) is broken ★ (bug, user-reported 2026-06-20)
+### C69. Theming engine doesn't reach the shell (rail / header / dashboard); Paper (light) is broken ★ (bug, user-reported 2026-06-20) — ✅ DONE (verified 2026-06-21: `uistate/theme.go` sets `data-theme`; `web/index.html` has a full `[data-theme="light"]` token block for shell surfaces/scrollbars)
 **Root cause (source-verified).** There are **two disconnected appearance systems**: (1) the **theme engine**
 (`internal/theme` + `uistate/theme.go:ApplyTheme`) writes CSS vars (`--bg`, `--bg-card`, `--text`, `--accent`,
 `--up`, `--down`, `--radius`, `--font-*`, `--ui-scale`) + `data-density` — these only repaint the **var-based
@@ -2084,7 +2084,7 @@ rail/header/bento. Paper is the canary exposing the shell-hardcoding bug. **Seco
 _Cross-links: **B20** (appearance engine origin), the rail (**C67/C68**), **C25** (density tokens), **C46**
 (icons inherit `currentColor`), **B15** (contrast/AA), **C44** (no CDN — Tailwind config is local)._
 
-### C70. Mermaid diagram support — `ui.Mermaid` + `internal/mermaid` generators ★ (feature, user-requested 2026-06-20)
+### C70. Mermaid diagram support — `ui.Mermaid` + `internal/mermaid` generators ★ (feature, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: `internal/mermaid` pure generators + `internal/ui/mermaidview.go` `ui.Mermaid` with the `cashfluxRenderMermaid` shim)
 **Why.** Relationship/flow visuals the D3 line/area charts can't do (graphs, trees, sankeys). Slots into the
 existing JS-lib-behind-a-Go-interface pattern (B13 icons, B14 D3: `web/chart.js` + `uiw.Chart` over the pure
 `chartspec`). Build bottom-up.
@@ -2111,7 +2111,7 @@ existing JS-lib-behind-a-Go-interface pattern (B13 icons, B14 D3: `web/chart.js`
 _Cross-links: **B13/B14** (lib-behind-Go-interface), **C44** (no CDN/offline), **C45** (XSS), **C69** (theme
 tokens), **C65** (workflows), **C66/C32** (custom-page widgets/artifacts)._
 
-### C71. Markdown rendering (marked + syntax highlighting) — `ui.Markdown` ★ (feature, later effort, user-requested 2026-06-20)
+### C71. Markdown rendering (marked + syntax highlighting) — `ui.Markdown` ★ (feature, later effort, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: vendored marked + DOMPurify; `insights.go renderMarkdown` for chat/pins, `custompage.go` Markdown render)
 **Why (later).** Several surfaces emit/store Markdown that's currently shown as plain text — notably **AI
 answers** (Insights renders `P(result.Get())` raw, **C59**), task/transaction **notes**, and a future
 custom-page **text/note widget**. Render Markdown (lists, bold, headings, tables, code) via **marked**, with
@@ -2329,7 +2329,12 @@ extraction/categorization (C60). The `FlipPanel` modal is only used for Settings
 _Cross-links: **C54/C59/C64/C60** (the inline affordances it unifies), **C74** (import categorization),
 **C71** (markdown render), **C70**-style lib pattern, **C73** (reusable component), **B15** (a11y)._
 
-### C77. Dashboard To-do widget — show-completed setting + sort + inline checkboxes ★ (UX, user-requested 2026-06-20)
+### C77. Dashboard To-do widget — show-completed setting + sort + inline checkboxes ★ (UX, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
+**✅ DONE:** `tasksort.OrderBy(mode)` (Smart/Priority/A–Z/Due) added + table-tested; the `todo` widget schema
+gained `sort` + `showCompleted` (kept `count`); `todoWidget` rebuilt with a `dashTaskRow` component (inline
+`role=checkbox` complete toggle → `app.PutTask` + bump `UseDataRevision`; title click → `/todo`), overdue-first
+ordering with warn tone, a "N left · M done" progress line, and a "+N more →" footer. e2e
+`dashboard_todo_widget_check` covers progress + inline complete (count updates) + drill-in.
 **Context (code-verified).** `todoWidget` (`internal/screens/dashboard.go`) shows **open tasks only**, capped
 at a configurable `count`, in **raw storage order** (it doesn't use `tasksort`), with a priority dot and
 **read-only** rows. Three asks, all mapping onto existing infra (the per-widget gear/flip-panel `widgetcfg`
@@ -2399,7 +2404,7 @@ _Cross-links: **C42** (replace native popups — confirms restore should use Fli
 **C75** (notifications — audit feeds an activity feed), **C73** (timeline rows as reusable components),
 `docs/GOWEBCOMPONENTS_GAPS.md` G5 (the revision-atom re-render gap the commit seam can standardize)._
 
-### C79. One global "+ Add" menu for all entities (remove per-page add sections; each type opens a modal) ★ (UX, user-requested 2026-06-20)
+### C79. One global "+ Add" menu for all entities (remove per-page add sections; each type opens a modal) ★ (UX, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: `app/addmenu.go` is the single top-bar +Add menu routing to entity screens; no per-screen inline add sections)
 **Idea:** there is **ONE** add surface — the topbar **`+ Add ▾`** menu (`internal/app/addmenu.go`).
 Every addable entity is a menu item that opens that type's **FlipPanel modal in place** (no navigation).
 **Remove the inline add `Section(Class("card"))` from every rail page** so each page leads with its
@@ -2516,7 +2521,7 @@ _Cross-links: **C45** (security — keys at rest/redaction), **C44** (prod harde
 key testing), `docs/DESIGN_AI_PROVIDERS.md`. Touches `internal/ai/*`, `internal/store` (Settings +
 migration), `internal/app/settings.go`, `internal/backendrpc` (proxy)._
 
-### C82. Agentic tool-calling harness (in-house, on the provider abstraction) ★ (feature, user-requested 2026-06-20)
+### C82. Agentic tool-calling harness (in-house, on the provider abstraction) ★ (feature, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: `screens/chat_agent.go` agent loop + `ai.SendChatTools` drive OpenAI function-calling turns)
 **Design doc:** [`docs/DESIGN_AI_PROVIDERS.md`](./docs/DESIGN_AI_PROVIDERS.md) §9 — read first.
 **Finding:** no off-the-shelf Go agent framework fits `GOOS=js GOARCH=wasm` + local-first
 (langchaingo/eino/genkit/swarmgo are server-oriented, heavy deps, wasm-unproven; vendor SDKs don't
@@ -2551,7 +2556,7 @@ preserved; render a **step transcript** (explainability rule).
 **C76** (AI modal/approval surface), **C75** (notifications), `internal/workflow` (agent can author
 workflows/rules), `internal/formula` (sandboxed compute tool)._
 
-### C90. Agentic tool coverage — let the chat read + act on the WHOLE app ★ (feature, user-requested 2026-06-20)
+### C90. Agentic tool coverage — let the chat read + act on the WHOLE app ★ (feature, user-requested 2026-06-20) — ✅ MOSTLY DONE (verified 2026-06-21: read tools list_* + write tools add_task/complete_task/add_transaction/add_account/add_transfer/update_account_balance with approval gating, dedupe, deep links; broader write groups + MCP server remain)
 The Insights chat now drives a tool-calling loop (C82 wiring) with read + utility tools
 (`spending_by_category`, `list_transactions`, `list_members`, `account_balances`, `financial_summary`,
 `check_affordability`, `calculator`, `web_search`, `fetch_webpage`). **Goal:** expose a tool for every
@@ -3404,7 +3409,7 @@ results are summarized here so the backlog doesn't bloat.
     accumulates test writes — reset (Wipe) between automated runs. Also worth confirming "Wipe data"
     clears the durable store fully (it did clear + persist-empty across reload in #41).
 
-### C30. Dashboard tiles aren't clickable to drill into their data screen ★ (UX — user-reported 2026-06-18)
+### C30. Dashboard tiles aren't clickable to drill into their data screen ★ (UX — user-reported 2026-06-18) — ✅ DONE (verified 2026-06-21: `ui/widget.go` `widgetRoute`/`viewTitle` make each tile title a clickable button that `router.Navigate`s to the tile's screen)
 **Reported:** no quick way to click a dashboard tile and jump to that data's screen to manipulate it.
 **Confirmed (verified live):** clicking the body of every tile tested (recent, budgets, accounts,
 net-worth KPI, trend) **does nothing** — `navigated=false`, URL unchanged. The tiles have **no
@@ -3440,7 +3445,7 @@ navigation behavior.)
   complaint ("can't collapse / icons don't show / no button") is now **fully addressed**. _Remaining
   C20 nicety (optional): an on-panel collapse affordance vs. the top-bar toggle._
 
-### C31. Left rail shows a scrollbar when content overflows — hide it but keep scrollability ★ (UX — user-reported 2026-06-18)
+### C31. Left rail shows a scrollbar when content overflows — hide it but keep scrollability ★ (UX — user-reported 2026-06-18) — ✅ DONE (verified 2026-06-21: `web/index.html` `aside.rail nav { scrollbar-width:none }` + `::-webkit-scrollbar{display:none}`, scroll preserved)
 **Reported:** the rail content is long enough to scroll, but a visible scrollbar isn't wanted.
 **Confirmed (verified live, 760px-tall viewport):** the rail `<nav class="flex-1 overflow-y-auto">`
 overflows (**scrollHeight 707 > clientHeight 583**) with default `scrollbar-width:auto` — so a native
@@ -3465,7 +3470,7 @@ actively scrolling**). The rail will overflow more as "My pages"/custom pages gr
       keeps it); ensure Tab-focusing an off-screen nav item still scrolls it into view; respect
       `prefers-reduced-motion` for any fade transition. Don't set `overflow:hidden` (that would trap items).
 
-### C32. Custom pages ("My pages / New page") are scaffolded but incomplete ★ (UX)
+### C32. Custom pages ("My pages / New page") are scaffolded but incomplete ★ (UX) — ✅ DONE (verified 2026-06-21: `app/custompagesnav.go` lists "My pages" in the rail with drag-reorder; `screens/custompage.go` renders each page's bento with an add-widget toolbar)
 **Found (verified live, #45):** "New page" exists and works partway — it prompts "Name your new page",
 creates a route **`/p/{slug}`**, sets the breadcrumb ("Dashboard › My Test Page"), and shows an
 empty-state "This page is empty. Add a widget to get started." But:
@@ -3481,7 +3486,7 @@ empty-state "This page is empty. Add a widget to get started." But:
   _Note: pairs with the user's earlier ask that the dashboard grid be the template for custom pages — the
   page shell + routing exist; the grid reuse + widget-add + nav-listing are the missing pieces._
 
-### C34. Header top-bar shows a scrollbar (`overflow:auto`) when controls overflow ★ (UX — user-reported 2026-06-18)
+### C34. Header top-bar shows a scrollbar (`overflow:auto`) when controls overflow ★ (UX — user-reported 2026-06-18) — ✅ DONE (verified 2026-06-21: `.topbar` uses `flex-wrap:wrap` + `row-gap`, controls wrap instead of scrolling)
 **Reported:** the header section with the date pickers has a scroll bar. **Confirmed (verified live):**
 the top bar (`div.topbar.h-14`) has **`overflow-x:auto` AND `overflow-y:auto`**. When the resolution
 control + date pickers + "+ Add" exceed the bar width (e.g. ~**1100px** window, especially in **Custom
@@ -3735,7 +3740,7 @@ silently stops** and unsaved data is lost on reload. - [ ] Detect quota failure 
 pairs well with the encrypted-snapshot work.
 _Cross-links: B17 (app lock / encryption / recovery), C44 (XSS surface ↔ CDN supply-chain), B32 Cluster (CIA/OWASP)._
 
-### C43. "+ Add" menu z-index broken — trapped in the sticky topbar's stacking context ★ (bug — user-reported 2026-06-18)
+### C43. "+ Add" menu z-index broken — trapped in the sticky topbar's stacking context ★ (bug — user-reported 2026-06-18) — ✅ DONE (verified 2026-06-21: `addmenu.go` popover + `.add-menu z-index:50` over a `z-index:40` backdrop; not clipped)
 **Reported:** the add button's z-index is broken. **Root cause (verified live):** `.add-menu` is
 **`z-index:50`**, but its **stacking ancestor is `.topbar` (`position:sticky; z-index:20`)** — a sticky
 element with a z-index forms a **stacking context**, so the menu's z-50 is **clamped to the topbar's z-20

@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/tasksort"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
@@ -692,48 +693,164 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.
 // configurable, default 3), dot-toned by priority (high = amber, others =
 // dim/faint).
 func todoWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
-	count := 3
+	count, sortMode, showCompleted := 3, tasksort.ModeSmart, false
 	if sch, ok := widgetcfg.SchemaFor("todo"); ok {
 		if f, ok := sch.FieldByKey("count"); ok {
 			count = f.Int(cfg)
 		}
-	}
-	var open []domain.Task
-	for _, t := range app.Tasks() {
-		if t.Status == domain.StatusOpen {
-			open = append(open, t)
+		if f, ok := sch.FieldByKey("sort"); ok {
+			sortMode = tasksort.ParseMode(f.Str(cfg))
+		}
+		if f, ok := sch.FieldByKey("showCompleted"); ok {
+			showCompleted = f.Bool(cfg)
 		}
 	}
-	var body ui.Node
-	if len(open) == 0 {
-		body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "Nothing to do — nice.", Label: uistate.T("dashboard.addTodo"), Path: "/todo"})
-	} else {
-		if len(open) > count {
-			open = open[:count]
+
+	all := app.Tasks()
+	var openTasks, doneTasks []domain.Task
+	for _, t := range all {
+		if t.Status == domain.StatusDone {
+			doneTasks = append(doneTasks, t)
+		} else {
+			openTasks = append(openTasks, t)
 		}
-		rows := make([]ui.Node, 0, len(open))
-		for _, t := range open {
-			// Distinguish priority by shape as well as color (▲/●/○), and give the
-			// marker an accessible name — so it doesn't rely on color alone and
-			// isn't a silent glyph to screen readers.
-			dotTone, dot, prio := "text-faint", "○", "Low priority"
-			switch t.Priority {
-			case domain.PriorityHigh:
-				dotTone, dot, prio = "text-warn", "▲", "High priority"
-			case domain.PriorityMedium:
-				dotTone, dot, prio = "text-dim", "●", "Medium priority"
-			}
-			rows = append(rows, Div(Class("flex gap-2 items-center"),
-				Span(Class(dotTone), Attr("title", prio), Attr("aria-label", prio), dot),
-				Span(t.Title),
-			))
-		}
-		body = Div(Class("t-body space-y-2"), rows)
 	}
+	// Overdue first, then the chosen order — an overdue cue belongs at the top (C52).
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	overdue := func(t domain.Task) bool { return !t.Due.IsZero() && t.Due.Before(today) }
+	ordered := tasksort.OrderBy(openTasks, sortMode)
+	var od, rest []domain.Task
+	for _, t := range ordered {
+		if overdue(t) {
+			od = append(od, t)
+		} else {
+			rest = append(rest, t)
+		}
+	}
+	openOrdered := append(od, rest...)
+
+	if len(openOrdered) == 0 && !(showCompleted && len(doneTasks) > 0) {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: "todo", Title: uistate.T("nav.todo"), Draggable: true, Resizable: true, GridColumn: "2", GridRow: "5",
+			Body: ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "Nothing to do — nice.", Label: uistate.T("dashboard.addTodo"), Path: "/todo"}),
+		})
+	}
+
+	shown := openOrdered
+	truncated := 0
+	if len(shown) > count {
+		truncated = len(shown) - count
+		shown = shown[:count]
+	}
+
+	rows := make([]ui.Node, 0, len(shown)+len(doneTasks)+2)
+	for _, t := range shown {
+		rows = append(rows, ui.CreateElement(dashTaskRow, dashTaskRowProps{Task: t, Overdue: overdue(t)}))
+	}
+	if showCompleted {
+		done := tasksort.OrderBy(doneTasks, sortMode)
+		if len(done) > count {
+			done = done[:count]
+		}
+		for _, t := range done {
+			rows = append(rows, ui.CreateElement(dashTaskRow, dashTaskRowProps{Task: t}))
+		}
+	}
+	if truncated > 0 {
+		rows = append(rows, ui.CreateElement(todoMoreLink, todoMoreProps{N: truncated}))
+	}
+
+	progress := uistate.T("dashboard.todoProgress", len(openOrdered), len(doneTasks))
+	body := Div(
+		P(Class("t-caption text-dim mb-2"), progress),
+		Div(Class("t-body space-y-1.5"), rows),
+	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "todo", Title: uistate.T("nav.todo"), Draggable: true, Resizable: true, GridColumn: "2", GridRow: "5",
 		Body: body,
 	})
+}
+
+type dashTaskRowProps struct {
+	Task    domain.Task
+	Overdue bool
+}
+
+// dashTaskRow renders one dashboard To-do row with an inline complete checkbox and
+// a title that drills into /todo. Its own component so the toggle/nav hooks stay
+// at stable positions across the list (the On* loop gotcha). Toggling completion
+// writes the task and bumps the data revision (content change, not layout — the
+// bento FLIP signature is undisturbed).
+func dashTaskRow(props dashTaskRowProps) ui.Node {
+	t := props.Task
+	nav := router.UseNavigate()
+	app := appstate.Default
+	rev := uistate.UseDataRevision()
+	done := t.Status == domain.StatusDone
+
+	toggle := ui.UseEvent(func() {
+		if app == nil {
+			return
+		}
+		nt := t
+		if done {
+			nt.Status = domain.StatusOpen
+		} else {
+			nt.Status = domain.StatusDone
+		}
+		if err := app.PutTask(nt); err == nil {
+			rev.Set(rev.Get() + 1)
+		}
+	})
+	openTodo := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/todo")) })
+
+	dotTone, dot, prio := "text-faint", "○", "Low priority"
+	switch t.Priority {
+	case domain.PriorityHigh:
+		dotTone, dot, prio = "text-warn", "▲", "High priority"
+	case domain.PriorityMedium:
+		dotTone, dot, prio = "text-dim", "●", "Medium priority"
+	}
+	titleCls := "flex-1 text-left truncate"
+	if done {
+		titleCls += " line-through text-faint"
+	} else if props.Overdue {
+		titleCls += " text-down"
+	}
+	checkLabel := uistate.T("dashboard.todoComplete", t.Title)
+	return Div(Class("flex gap-2 items-center"),
+		Button(Class("dash-check"), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", boolStr(done)),
+			Attr("aria-label", checkLabel), Attr("title", checkLabel), OnClick(toggle),
+			Text(checkGlyph(done))),
+		Span(Class(dotTone), Attr("title", prio), Attr("aria-label", prio), dot),
+		Button(Class(titleCls), Type("button"), OnClick(openTodo), t.Title),
+	)
+}
+
+func checkGlyph(done bool) string {
+	if done {
+		return "☑"
+	}
+	return "☐"
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+type todoMoreProps struct{ N int }
+
+// todoMoreLink is the "+N more →" footer linking to the full To-do screen (no
+// silent truncation). Its own component for a stable nav hook.
+func todoMoreLink(props todoMoreProps) ui.Node {
+	nav := router.UseNavigate()
+	open := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/todo")) })
+	return Button(Class("t-caption text-dim hover:text-fg mt-1"), Type("button"), OnClick(open),
+		uistate.T("dashboard.todoMore", props.N))
 }
 
 // goalsWidget is the 1×1 Goals widget: one goal's progress (% + saved / target)
