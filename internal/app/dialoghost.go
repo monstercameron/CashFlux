@@ -78,6 +78,27 @@ func DialogHost() uic.Node {
 				finish(true)
 			case "Escape":
 				finish(false)
+			case "Tab":
+				// Focus trap (WCAG 2.4.3): cycle focus among the dialog's controls so
+				// Tab/Shift+Tab can't escape the modal.
+				focusables := js.Global().Get("document").Call("querySelectorAll",
+					".cf-dialog button, .cf-dialog input, .cf-dialog [tabindex]")
+				n := focusables.Get("length").Int()
+				if n == 0 {
+					return nil
+				}
+				first := focusables.Index(0)
+				last := focusables.Index(n - 1)
+				activeEl := js.Global().Get("document").Get("activeElement")
+				if e.Get("shiftKey").Bool() {
+					if activeEl.Equal(first) {
+						e.Call("preventDefault")
+						last.Call("focus")
+					}
+				} else if activeEl.Equal(last) {
+					e.Call("preventDefault")
+					first.Call("focus")
+				}
 			}
 			return nil
 		})
