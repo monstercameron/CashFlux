@@ -1111,6 +1111,9 @@ var english = Catalog{
 	"todo.toggle":           "Toggle complete",
 	"todo.editTitle":        "Edit task",
 	"todo.deleteTitle":      "Delete task",
+	"todo.addSub":           "+ Sub",
+	"todo.addSubTitle":      "Add a sub-task",
+	"todo.subtaskPrompt":    "New sub-task",
 
 	// Custom pages
 	"pages.notFound":       "That page doesn't exist. It may have been deleted.",

@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
+	"github.com/monstercameron/CashFlux/internal/tasktree"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -90,11 +92,31 @@ func Todo() ui.Node {
 		bump()
 	}
 	deleteTask := func(taskID string) {
+		// Cascade: deleting a task removes its whole sub-tree (C72).
+		for _, d := range tasktree.Descendants(tasks, taskID) {
+			_ = app.DeleteTask(d)
+		}
 		if err := app.DeleteTask(taskID); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		bump()
+	}
+	addSub := func(parentID string) {
+		uistate.PromptModal(uistate.T("todo.subtaskPrompt"), "", func(name string) {
+			if name == "" {
+				return
+			}
+			t := domain.Task{
+				ID: id.New(), Title: name, ParentID: parentID,
+				Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceManual,
+			}
+			if err := app.PutTask(t); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			bump()
+		})
 	}
 	saveTask := func(taskID, newTitle, prio, dueStr, newNotes string) {
 		t, ok := byID[taskID]
@@ -146,22 +168,25 @@ func Todo() ui.Node {
 		errText("todo-err", errMsg.Get()),
 	)
 
-	// Order + filter for display (open first, soonest due, then title) lives in
-	// the pure, tested internal/tasksort package.
-	tasks = tasksort.Order(tasks)
-	shown := tasksort.Visible(tasks, hideDone.Get())
+	// Order + filter, then nest into the parent/child tree (C72). hide-done filters
+	// first so a done parent's open child surfaces as a root (tasktree handles it).
+	visible := tasksort.Visible(tasks, hideDone.Get())
+	nodes := tasktree.Flatten(visible)
 
 	var listBody ui.Node
 	switch {
 	case len(tasks) == 0:
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("todo.empty"), CTALabel: uistate.T("todo.addFirst"), FocusID: "task-add"})
-	case len(shown) == 0:
+	case len(nodes) == 0:
 		listBody = P(Class("empty"), uistate.T("todo.allDone"))
 	default:
-		rows := MapKeyed(shown,
-			func(t domain.Task) any { return t.ID },
-			func(t domain.Task) ui.Node {
-				return ui.CreateElement(TaskRow, taskRowProps{Task: t, OnToggle: toggleTask, OnDelete: deleteTask, OnSave: saveTask})
+		rows := MapKeyed(nodes,
+			func(n tasktree.Node) any { return n.Task.ID },
+			func(n tasktree.Node) ui.Node {
+				return ui.CreateElement(TaskRow, taskRowProps{
+					Task: n.Task, Depth: n.Depth,
+					OnToggle: toggleTask, OnDelete: deleteTask, OnSave: saveTask, OnAddSub: addSub,
+				})
 			},
 		)
 		listBody = Div(Class("rows"), rows)
@@ -186,9 +211,11 @@ func Todo() ui.Node {
 
 type taskRowProps struct {
 	Task     domain.Task
+	Depth    int // nesting depth (0 = top level) → indentation (C72)
 	OnToggle func(string)
 	OnDelete func(string)
 	OnSave   func(id, title, priority, due, notes string)
+	OnAddSub func(parentID string)
 }
 
 // TaskRow renders one task with complete/edit/delete. It can be edited inline
@@ -203,6 +230,11 @@ func TaskRow(props taskRowProps) ui.Node {
 
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t.ID) }))
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
+	addSub := ui.UseEvent(Prevent(func() {
+		if props.OnAddSub != nil {
+			props.OnAddSub(t.ID)
+		}
+	}))
 	pr := uistate.UsePrefs().Get()
 	editing := ui.UseState(false)
 	titleS := ui.UseState(t.Title)
@@ -284,15 +316,24 @@ func TaskRow(props taskRowProps) ui.Node {
 		meta = append(meta, Span(Class("row-meta"), t.Notes))
 	}
 
-	return Div(Class(rowClass), Attr("id", t.ID),
+	if props.Depth > 0 {
+		rowClass += " subtask"
+	}
+	rowArgs := []any{Class(rowClass), Attr("id", t.ID)}
+	if props.Depth > 0 {
+		rowArgs = append(rowArgs, Style(map[string]string{"margin-left": strconv.Itoa(props.Depth*22) + "px"}))
+	}
+	rowArgs = append(rowArgs,
 		Button(Class("check"), Type("button"), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), t.Title),
 			Div(Class("task-meta"), meta),
 		),
+		Button(Class("btn"), Type("button"), Title(uistate.T("todo.addSubTitle")), OnClick(addSub), uistate.T("todo.addSub")),
 		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
 		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 	)
+	return Div(rowArgs...)
 }
 
 func priorityMeta(p domain.TaskPriority) (label, class string) {

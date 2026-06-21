@@ -421,6 +421,7 @@ type Task struct {
 	Due         time.Time      `json:"due,omitempty"`
 	Status      TaskStatus     `json:"status"`
 	Priority    TaskPriority   `json:"priority"`
+	ParentID    string         `json:"parentId,omitempty"` // parent task for nested sub-tasks (C72)
 	RelatedType RelatedType    `json:"relatedType,omitempty"`
 	RelatedID   string         `json:"relatedId,omitempty"`
 	MemberID    string         `json:"memberId,omitempty"`

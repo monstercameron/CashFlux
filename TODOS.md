@@ -2159,7 +2159,11 @@ custom-page **text/note widget**. Render Markdown (lists, bold, headings, tables
 _Cross-links: **C70** (same lib pattern/bundling), **C44** (no CDN), **C45** (sanitize/XSS), **C59** (AI
 answers), **C69** (theme), **C66/C32** (custom-page widgets)._
 
-### C72. To-do v2 — add-in-modal + nested sub-tasks (CRUD, x-deep) ★ (feature, user-requested 2026-06-20)
+### C72. To-do v2 — add-in-modal + nested sub-tasks (CRUD, x-deep) ★ (feature, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
+**✅ DONE:** `domain.Task` gained `ParentID`; new pure `internal/tasktree` (`Flatten` → depth-tagged render order,
+`Descendants` for cascade) — table-tested (depth-first, orphan-as-root, cycle-safe). To-do screen renders the
+nested tree with indentation, a per-row **"+ Sub"** that opens the in-app prompt modal to create a child, and
+**cascade delete** (removing a task removes its whole sub-tree). e2e `todo_nesting_check`.
 **Context.** Today the To-do screen (`internal/screens/todo.go`, reviewed in **C52**) puts an always-visible
 add-form card above the list, and tasks are flat (`domain.Task` has no parent). Two asks: reclaim the page for
 the list by moving "Add task" into the flip modal, and let tasks nest as sub-tasks any number of levels deep.
