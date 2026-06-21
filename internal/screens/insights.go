@@ -457,59 +457,78 @@ func Insights() ui.Node {
 	}
 	ui.UseEffect(func() func() { scrollChatToEnd(); return nil }, scrollSig)
 
-	// onKey handles the composer's keyboard: Enter sends (Shift+Enter ignored), Up/Down
-	// cycle prior messages (shell-style). Handled via the framework's event system (an
-	// OnKeyDown prop), so state changes re-render cleanly — a raw DOM listener that set
-	// the value directly desynced the vdom and broke later clicks.
-	onKey := ui.UseEvent(func(e ui.KeyboardEvent) {
-		k := e.GetKey()
-		if k == "Enter" && !e.JSValue().Get("shiftKey").Bool() {
-			e.PreventDefault()
-			sendText(input.Get())
-			return
+	// Composer keyboard: Enter sends (Shift+Enter ignored), Up/Down cycle prior messages
+	// (shell-style). A raw document keydown listener (so it gets NATIVE events — the
+	// framework's OnKeyDown dispatched a synthetic keydown that crashed the app's global
+	// shortcut listener). To avoid the vdom desync that broke later clicks, when it sets
+	// the input it ALSO dispatches a native 'input' event so the framework's OnInput
+	// syncs the bound state, keeping the DOM and vdom in agreement.
+	doc := js.Global().Get("document")
+	ui.UseEffect(func() func() {
+		setVal := func(target js.Value, v string) {
+			target.Set("value", v)
+			ev := js.Global().Get("Event").New("input", map[string]any{"bubbles": true})
+			target.Call("dispatchEvent", ev)
 		}
-		if k != "ArrowUp" && k != "ArrowDown" {
-			// Any other key while not navigating leaves history mode (e.g. the user is
-			// editing the text), so the next Up starts from the newest again.
-			if len(k) == 1 || k == "Backspace" || k == "Delete" {
-				histIdx.Set(-1)
+		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			ev := args[0]
+			target := ev.Get("target")
+			if !target.Truthy() || target.Get("id").String() != "cf-chat-input" {
+				return nil
 			}
-			return
-		}
-		msgs := make([]string, 0)
-		for _, t := range turns.Get() {
-			if t.Role == "user" {
-				msgs = append(msgs, t.Text)
+			k := ev.Get("key").String()
+			if k == "Enter" && !ev.Get("shiftKey").Bool() {
+				ev.Call("preventDefault")
+				sendText(input.Get())
+				return nil
 			}
-		}
-		if len(msgs) == 0 {
-			return
-		}
-		e.PreventDefault()
-		idx := histIdx.Get()
-		if k == "ArrowUp" {
-			if idx == -1 {
-				histDraft.Set(input.Get())
-				idx = len(msgs) - 1
-			} else if idx > 0 {
-				idx--
+			if k != "ArrowUp" && k != "ArrowDown" {
+				if len(k) == 1 || k == "Backspace" || k == "Delete" {
+					histIdx.Set(-1) // editing leaves history mode
+				}
+				return nil
 			}
-			histIdx.Set(idx)
-			input.Set(msgs[idx])
-		} else { // ArrowDown
-			if idx == -1 {
-				return
+			msgs := make([]string, 0)
+			for _, t := range turns.Get() {
+				if t.Role == "user" {
+					msgs = append(msgs, t.Text)
+				}
 			}
-			idx++
-			if idx >= len(msgs) {
-				histIdx.Set(-1)
-				input.Set(histDraft.Get())
-			} else {
+			if len(msgs) == 0 {
+				return nil
+			}
+			ev.Call("preventDefault")
+			idx := histIdx.Get()
+			if k == "ArrowUp" {
+				if idx == -1 {
+					histDraft.Set(input.Get())
+					idx = len(msgs) - 1
+				} else if idx > 0 {
+					idx--
+				}
 				histIdx.Set(idx)
-				input.Set(msgs[idx])
+				setVal(target, msgs[idx])
+			} else { // ArrowDown
+				if idx == -1 {
+					return nil
+				}
+				idx++
+				if idx >= len(msgs) {
+					histIdx.Set(-1)
+					setVal(target, histDraft.Get())
+				} else {
+					histIdx.Set(idx)
+					setVal(target, msgs[idx])
+				}
 			}
+			return nil
+		})
+		doc.Call("addEventListener", "keydown", cb)
+		return func() {
+			doc.Call("removeEventListener", "keydown", cb)
+			cb.Release()
 		}
-	})
+	}, "cf-chat-history")
 
 	// Once a chat has a few exchanges (>=4 messages), generate a short AI title for it
 	// (once) and update the switcher tab. Skips conversations already AI-named.
@@ -652,7 +671,7 @@ func Insights() ui.Node {
 		// A plain Div (not a Form) so there is no native submit that could reload the
 		// page; Send is a button and Enter is handled by the keydown listener.
 		composer = Div(Class("mt-1 flex gap-2 items-center"),
-			Input(Attr("id", "cf-chat-input"), Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput), OnKeyDown(onKey)),
+			Input(Attr("id", "cf-chat-input"), Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
 			IfElse(loading.Get(),
 				Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
 				Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.send"))),

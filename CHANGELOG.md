@@ -54,6 +54,13 @@ and every commit updates this file under `Unreleased`.
   result, plus the existing send/resume/error e2e.
 
 ### Fixed
+- **Crash on keydown after the chat-history change.** The composer's `OnKeyDown` prop dispatched a synthetic
+  keydown event that lacked modifier properties; the app's global keyboard-shortcut listener then called
+  `Value.Bool()` on an undefined `metaKey`, which **panicked and exited the whole Go program** — after which
+  nothing in the app worked. Reverted to a raw document keydown listener (native events only) that dispatches a
+  native `input` event to keep the framework state in sync (so clicks still work after cycling), and hardened the
+  global shortcut listener to read modifier flags defensively. Covered by a new e2e that dispatches a malformed
+  keydown and asserts the app doesn't crash.
 - **Insights chat: Send and Enter work after cycling messages with the arrow keys.** The Up/Down history was a
   raw DOM keydown listener that set the input value directly, which desynced the framework's vdom and broke the
   next click/Enter. It now uses the framework's `OnKeyDown` (Enter sends, Up/Down cycle, typing exits history),

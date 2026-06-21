@@ -47,8 +47,10 @@ func wireKeyboardShortcuts() {
 			closeCommandPalette()
 			return nil
 		}
-		// Cmd/Ctrl+K toggles the command palette (works even from a field).
-		if (e.Get("metaKey").Bool() || e.Get("ctrlKey").Bool()) && !e.Get("altKey").Bool() && e.Get("code").String() == "KeyK" {
+		// Cmd/Ctrl+K toggles the command palette (works even from a field). Read modifier
+		// flags defensively — a synthetic keydown can lack them, and Value.Bool() on an
+		// undefined value panics (which would crash the whole app).
+		if (evBool(e, "metaKey") || evBool(e, "ctrlKey")) && !evBool(e, "altKey") && e.Get("code").String() == "KeyK" {
 			e.Call("preventDefault")
 			toggleCommandPalette()
 			return nil
@@ -62,7 +64,7 @@ func wireKeyboardShortcuts() {
 			toggleHelpOverlay()
 			return nil
 		}
-		if !e.Get("altKey").Bool() || e.Get("ctrlKey").Bool() || e.Get("metaKey").Bool() {
+		if !evBool(e, "altKey") || evBool(e, "ctrlKey") || evBool(e, "metaKey") {
 			return nil
 		}
 		code := e.Get("code").String()
@@ -88,6 +90,13 @@ func wireKeyboardShortcuts() {
 		return nil
 	})
 	doc.Call("addEventListener", "keydown", onKeyDown)
+}
+
+// evBool safely reads a boolean property off an event, returning false when it's
+// missing/undefined (Value.Bool() panics on a non-boolean value).
+func evBool(e js.Value, prop string) bool {
+	v := e.Get(prop)
+	return v.Type() == js.TypeBoolean && v.Bool()
 }
 
 // isEditableTarget reports whether focus is in a text input, so a shortcut chord
