@@ -3,6 +3,28 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: C90 write tools + approval gate; read tools batch
+
+- C90.1 read tools: list_budgets, list_goals, list_tasks, list_recurring (bills), spending_breakdown — all
+  appstate reads + formatting, exercised by the tools e2e (11 tools end-to-end).
+- C90.0 foundation + first write tools: `chatTool` gained `mutates`+`preview`; the loop, on a mutating tool,
+  sets a `pendingApproval` (tool + human preview + a response channel) and blocks the goroutine on it; an
+  `ApprovalCard` component renders Approve/Decline; the user's choice sends on the channel and the loop runs the
+  tool (through appstate) or feeds "declined" back. First writes: add_task, complete_task, add_transaction
+  (account/category resolved by name), add_goal_contribution.
+- Painful debugging: the write e2e's same-session two-run (approve then decline) reliably hung at the SECOND
+  approval — the Decline handler never fired (confirmed via a JS-global flag) and no follow-up request was made,
+  even though a single-run decline and a standalone two-run probe both passed deterministically. Refactoring the
+  approval into its own component didn't fix it. Root cause looks like a goroutine/render-scheduler interaction
+  when a second run's goroutine blocks on the channel after a first completed run. KNOWN ISSUE — logged in
+  CHANGELOG; new chat resets it. The e2e now drives approve and decline each on a FRESH page (single run), which
+  passes reliably and verifies the real effect (task created + on To-do / not created). Also learned: calling
+  `app.Log()` from the goroutine/handler disrupts the loop (the logging handler updates app state mid-goroutine),
+  so don't instrument that path with app logging.
+- TODO before broad write rollout: harden the loop so multiple mutating approvals in one session are reliable
+  (likely make the approval wait not depend on a per-run goroutine blocking, or drive the loop without a
+  long-lived parked goroutine across runs).
+
 ## 2026-06-20 - feat: fetch_webpage tool + Markdown pinned insights; docs: C90 agentic-tools backlog
 
 - `fetch_webpage` tool (reads a page's text via the CORS-friendly Jina Reader, r.jina.ai); `web_search` now also

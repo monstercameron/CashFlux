@@ -126,6 +126,8 @@ func Insights() ui.Node {
 	// appended separately, so editing this never loses the user's figures/tools.
 	promptOpen := ui.UseState(false)
 	promptDraft := ui.UseState("")
+	// A mutating tool awaiting the user's approval in the thread (nil = none pending).
+	pendingApproval := ui.UseState((*approvalReq)(nil))
 
 	// pinText saves an answer to the pinned-insights list. (Saving an answer as a
 	// To-do is no longer a UI button — it becomes an agent tool the model invokes
@@ -196,10 +198,10 @@ func Insights() ui.Node {
 		loading.Set(true)
 		tools := buildChatTools(app, base, rates)
 		specs := make([]ai.Tool, len(tools))
-		handlers := make(map[string]func(json.RawMessage) string, len(tools))
+		byName := make(map[string]chatTool, len(tools))
 		for i, t := range tools {
 			specs[i] = t.spec
-			handlers[t.spec.Function.Name] = t.run
+			byName[t.spec.Function.Name] = t
 		}
 		msgs := buildMessages(hist)
 		done := make(chan struct{})
@@ -245,9 +247,32 @@ func Insights() ui.Node {
 				}
 				msgs = append(msgs, r.msg)
 				for _, tc := range r.msg.ToolCalls {
+					args := json.RawMessage(tc.Function.Arguments)
 					out := "tool unavailable"
-					if h := handlers[tc.Function.Name]; h != nil {
-						out = h(json.RawMessage(tc.Function.Arguments))
+					if tool, ok := byName[tc.Function.Name]; ok {
+						// Mutating tools pause for the user's approval in the thread.
+						if tool.mutates {
+							preview := tc.Function.Name
+							if tool.preview != nil {
+								preview = tool.preview(args)
+							}
+							resp := make(chan bool, 1)
+							pendingApproval.Set(&approvalReq{tool: tc.Function.Name, preview: preview, resp: resp})
+							var approved bool
+							select {
+							case approved = <-resp:
+							case <-done:
+								pendingApproval.Set(nil)
+								loading.Set(false)
+								return
+							}
+							pendingApproval.Set(nil)
+							if !approved {
+								msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, "The user declined this change."))
+								continue
+							}
+						}
+						out = tool.run(args)
 					}
 					msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, out))
 				}
@@ -565,6 +590,11 @@ func Insights() ui.Node {
 		)
 	}
 
+	approvalPreview := ""
+	if pa := pendingApproval.Get(); pa != nil {
+		approvalPreview = pa.preview
+	}
+
 	return Div(
 		highlights,
 		// Pinned insights sit ABOVE the chat as quick references, so the conversation
@@ -576,6 +606,14 @@ func Insights() ui.Node {
 			backendToggle,
 			If(empty, P(Class("muted"), uistate.T("insights.chatHint"))),
 			If(!empty, thread),
+			// Approval card: a mutating tool is paused waiting for the user's yes/no. Its
+			// own component so the Approve/Decline handlers re-attach cleanly each time
+			// it mounts (the no-On*-in-conditional rule).
+			If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
+				Preview:   approvalPreview,
+				OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
+				OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
+			})),
 			chips,
 			composer,
 			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
@@ -848,6 +886,34 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 			Span(Class("row-meta"), p.CreatedAt.Format("Jan 2, 2006")),
 		),
 		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("insights.unpinTitle")), Title(uistate.T("insights.unpinTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+	)
+}
+
+// respondApproval sends the user's yes/no to a pending mutating tool (no-op if none).
+func respondApproval(pa *approvalReq, ok bool) {
+	if pa != nil {
+		pa.resp <- ok
+	}
+}
+
+type approvalCardProps struct {
+	Preview   string
+	OnApprove func()
+	OnDecline func()
+}
+
+// ApprovalCard asks the user to approve or decline a pending mutating tool. Its own
+// component so its action hooks re-attach cleanly each time it mounts.
+func ApprovalCard(p approvalCardProps) ui.Node {
+	approve := ui.UseEvent(Prevent(func() { p.OnApprove() }))
+	decline := ui.UseEvent(Prevent(func() { p.OnDecline() }))
+	return Div(Class("rounded-xl border border-amber-400/50 bg-amber-400/10 px-3.5 py-2.5 mb-2 text-[13px]"),
+		P(Class("font-semibold"), uistate.T("insights.approveTitle")),
+		P(Class("mt-1"), p.Preview),
+		Div(Class("flex gap-2 mt-2"),
+			Button(Class("btn btn-primary"), Type("button"), OnClick(approve), uistate.T("insights.approve")),
+			Button(Class("btn"), Type("button"), OnClick(decline), uistate.T("insights.decline")),
+		),
 	)
 }
 

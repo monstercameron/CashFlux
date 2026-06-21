@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/formula"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -26,10 +27,20 @@ import (
 
 // chatTool pairs an OpenAI tool spec (what the model sees) with its handler (what
 // runs locally when the model calls it). Handlers return a short plain-text result
-// fed back to the model; they read only aggregates from the user's own data.
+// fed back to the model. Read tools read the user's data; mutating tools change it
+// and require user approval first (preview describes the change for the approval card).
 type chatTool struct {
-	spec ai.Tool
-	run  func(args json.RawMessage) string
+	spec    ai.Tool
+	run     func(args json.RawMessage) string
+	mutates bool
+	preview func(args json.RawMessage) string
+}
+
+// approvalReq is a pending mutating tool awaiting the user's yes/no in the chat.
+type approvalReq struct {
+	tool    string
+	preview string
+	resp    chan bool
 }
 
 // agentStep is one model turn delivered to the tool loop over a channel: either a
@@ -99,6 +110,20 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 			ns = append(ns, c.Name)
 		}
 		return strings.Join(ns, ", ")
+	}
+	resolveAccount := func(name string) (domain.Account, bool) {
+		q := strings.ToLower(strings.TrimSpace(name))
+		for _, ac := range accounts {
+			if strings.ToLower(ac.Name) == q {
+				return ac, true
+			}
+		}
+		for _, ac := range accounts {
+			if q != "" && strings.Contains(strings.ToLower(ac.Name), q) {
+				return ac, true
+			}
+		}
+		return domain.Account{}, false
 	}
 	periodRange := func(p string) (time.Time, time.Time, string) {
 		switch p {
@@ -492,7 +517,171 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				return strings.TrimRight(b.String(), "\n")
 			},
 		},
+
+		// --- Write tools (mutates: require the user's approval before running) ---
+		{
+			spec: ai.FunctionTool("add_task",
+				"Add a to-do task for the user.",
+				json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"},"notes":{"type":"string"},"priority":{"type":"string","enum":["low","medium","high"]},"due":{"type":"string","description":"YYYY-MM-DD"}},"required":["title"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Title string `json:"title"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				return "Add a to-do: “" + strings.TrimSpace(a.Title) + "”"
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Title    string `json:"title"`
+					Notes    string `json:"notes"`
+					Priority string `json:"priority"`
+					Due      string `json:"due"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Title) == "" {
+					return "A task needs a title."
+				}
+				t := domain.Task{ID: id.New(), Title: strings.TrimSpace(a.Title), Notes: a.Notes, Status: domain.StatusOpen, Priority: parseTaskPriority(a.Priority), Source: domain.SourceAI}
+				if d, err := dateutil.ParseDate(a.Due); err == nil && a.Due != "" {
+					t.Due = d
+				}
+				if err := app.PutTask(t); err != nil {
+					return "Couldn't add the task: " + err.Error()
+				}
+				return "Added to-do: " + t.Title
+			},
+		},
+		{
+			spec: ai.FunctionTool("complete_task",
+				"Mark a to-do task done, found by (part of) its title.",
+				json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Title string `json:"title"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				return "Mark done: the to-do matching “" + strings.TrimSpace(a.Title) + "”"
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Title string `json:"title"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Title) == "" {
+					return "Which task? Provide its title."
+				}
+				q := strings.ToLower(strings.TrimSpace(a.Title))
+				for _, t := range app.Tasks() {
+					if strings.Contains(strings.ToLower(t.Title), q) {
+						t.Status = domain.StatusDone
+						if err := app.PutTask(t); err != nil {
+							return "Couldn't update the task: " + err.Error()
+						}
+						return "Marked done: " + t.Title
+					}
+				}
+				return "No to-do matching “" + a.Title + "”."
+			},
+		},
+		{
+			spec: ai.FunctionTool("add_transaction",
+				"Record a transaction. A negative amount is an expense, positive is income. Resolve account and category by name.",
+				json.RawMessage(`{"type":"object","properties":{"amount":{"type":"number","description":"major units; negative = expense"},"account":{"type":"string"},"category":{"type":"string"},"payee":{"type":"string"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["amount","account"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Amount  float64 `json:"amount"`
+					Account string  `json:"account"`
+					Payee   string  `json:"payee"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				return fmt.Sprintf("Record %s in %s%s", fmtMoney(money.New(int64(math.Round(a.Amount*100)), base)), a.Account, ifStr(a.Payee != "", " — "+a.Payee, ""))
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Amount   float64 `json:"amount"`
+					Account  string  `json:"account"`
+					Category string  `json:"category"`
+					Payee    string  `json:"payee"`
+					Date     string  `json:"date"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Couldn't read the transaction details."
+				}
+				acc, ok := resolveAccount(a.Account)
+				if !ok {
+					return "No account matching “" + a.Account + "”."
+				}
+				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: money.New(int64(math.Round(a.Amount*100)), base), Payee: strings.TrimSpace(a.Payee), Date: now}
+				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
+					t.Date = d
+				}
+				if a.Category != "" {
+					if c, ok := resolveCategory(a.Category); ok {
+						t.CategoryID = c.ID
+					}
+				}
+				if err := app.PutTransaction(t); err != nil {
+					return "Couldn't record the transaction: " + err.Error()
+				}
+				return fmt.Sprintf("Recorded %s in %s.", fmtMoney(t.Amount), acc.Name)
+			},
+		},
+		{
+			spec: ai.FunctionTool("add_goal_contribution",
+				"Add money toward a savings goal, found by (part of) its name.",
+				json.RawMessage(`{"type":"object","properties":{"goal":{"type":"string"},"amount":{"type":"number","description":"major units"}},"required":["goal","amount"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Goal   string  `json:"goal"`
+					Amount float64 `json:"amount"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				return fmt.Sprintf("Add %s toward the “%s” goal", fmtMoney(money.New(int64(math.Round(a.Amount*100)), base)), a.Goal)
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Goal   string  `json:"goal"`
+					Amount float64 `json:"amount"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil || a.Amount == 0 {
+					return "Provide a goal and a non-zero amount."
+				}
+				q := strings.ToLower(strings.TrimSpace(a.Goal))
+				for _, g := range app.Goals() {
+					if strings.Contains(strings.ToLower(g.Name), q) {
+						g.CurrentAmount = money.New(g.CurrentAmount.Amount+int64(math.Round(a.Amount*100)), g.CurrentAmount.Currency)
+						if err := app.PutGoal(g); err != nil {
+							return "Couldn't update the goal: " + err.Error()
+						}
+						return fmt.Sprintf("Added %s to “%s” — now %s of %s.", fmtMoney(money.New(int64(math.Round(a.Amount*100)), base)), g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount))
+					}
+				}
+				return "No goal matching “" + a.Goal + "”."
+			},
+		},
 	}
+}
+
+// parseTaskPriority maps a string to a TaskPriority (default medium).
+func parseTaskPriority(s string) domain.TaskPriority {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "low":
+		return domain.PriorityLow
+	case "high":
+		return domain.PriorityHigh
+	default:
+		return domain.PriorityMedium
+	}
+}
+
+// ifStr returns a when cond, else b.
+func ifStr(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
 }
 
 // blockingFetchText performs a GET and returns the response body, blocking the

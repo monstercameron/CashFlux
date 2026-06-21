@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Insights chat can now make changes, with approval (C90.0 + first write tools).** Mutating tools pause the
+  agent loop and show an **approval card** in the thread (preview of the change + Approve/Decline) before running;
+  reads never prompt. First write tools: **add_task**, **complete_task**, **add_transaction** (resolves account/
+  category by name), and **add_goal_contribution**. Approving runs the change through `appstate`; declining feeds
+  "declined" back to the model. Covered by an e2e (approve creates the task → shows on To-do; decline makes no
+  change). _Known issue: a second mutating approval within the same chat session can hang (goroutine-scheduling
+  interaction); starting a new chat resets it — to be fixed before broad write-tool rollout._
 - **Insights chat read tools across more screens (C90.1).** Added `list_budgets`, `list_goals`, `list_tasks`,
   `list_recurring` (upcoming bills), and `spending_breakdown` (top categories for a period) — so the chat can
   answer about budgets, goals, to-dos, recurring/bills, and where the money went, from live data. Covered by the
