@@ -2,7 +2,7 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v223";
+const CACHE = "cashflux-v224";
 const CORE = [
   "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm", "./manifest.webmanifest",
   "./chart.js", "./flip.js", "./mermaid.min.js", "./mermaid.js",
@@ -37,7 +37,7 @@ self.addEventListener("fetch", (event) => {
   // is the SW side of deep-link refresh (the static 404.html covers first load).
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then((resp) => {
           if (resp.ok) {
             if (new URL(req.url).origin === self.location.origin) {
@@ -53,10 +53,14 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Same-origin assets are fetched with no-store so the SW never returns a stale
+  // copy from the browser's HTTP cache (otherwise a rebuilt main.wasm wouldn't load
+  // even though the SW is "network-first"). Cross-origin passes through normally.
+  const sameOrigin = new URL(req.url).origin === self.location.origin;
   event.respondWith(
-    fetch(req)
+    fetch(req, sameOrigin ? { cache: "no-store" } : undefined)
       .then((resp) => {
-        if (resp.ok && new URL(req.url).origin === self.location.origin) {
+        if (resp.ok && sameOrigin) {
           const copy = resp.clone();
           caches.open(CACHE).then((c) => c.put(req, copy));
         }
