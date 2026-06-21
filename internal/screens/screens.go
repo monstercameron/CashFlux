@@ -68,6 +68,8 @@ func All() []Route {
 		{Path: "/customize", Label: "nav.customize", Title: "nav.customize", Subtitle: "screen.customizeSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: Customize},
 		{Path: "/artifacts", Label: "nav.artifacts", Title: "nav.artifacts", Subtitle: "screen.artifactsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupData, View: Artifacts},
 		{Path: "/workflows", Label: "nav.workflows", Title: "nav.workflows", Subtitle: "screen.workflowsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: Workflows},
+		{Path: "/widget-builder", Label: "nav.widgetBuilder", Title: "nav.widgetBuilder", Subtitle: "screen.widgetBuilderSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: WidgetBuilder},
+		{Path: "/widget-manager", Label: "nav.widgetManager", Title: "nav.widgetManager", Subtitle: "screen.widgetManagerSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: WidgetManager},
 		{Path: "/members", Label: "nav.members", Title: "nav.members", Subtitle: "screen.membersSub", Phase: 1, Group: GroupSystem, View: Members},
 		{Path: "/categories", Label: "nav.categories", Title: "nav.categories", Subtitle: "screen.categoriesSub", Phase: 1, Group: GroupSystem, View: Categories},
 		{Path: "/rules", Label: "nav.rules", Title: "nav.rules", Subtitle: "screen.rulesSub", Phase: 2, Group: GroupSystem, View: Rules},

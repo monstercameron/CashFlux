@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: scaffold Widget builder + Widget manager rail pages
+
+- Confirmed no existing "widget creation engine" TODO (closest is C32 custom-pages widget picker). Per request,
+  added two blank rail pages as the home for that future work: `WidgetBuilder` (/widget-builder) and
+  `WidgetManager` (/widget-manager) in `internal/screens/widgets.go`, each a placeholder card.
+- Registry-driven wiring: two new `screens.All()` routes in Tools › Build (beside Customize/Workflows), rail
+  icons in `app.railMeta` (PlusCircle / Dashboard), and i18n keys (nav + screen subtitle + placeholder). No other
+  changes — the screens registry is the single source of truth, so the rail picks them up automatically.
+- e2e `widget_pages_check`: both rail entries present, navigate to their routes, render their placeholders.
+
 ## 2026-06-21 - feat: dashboard "Needs attention" digest — pure ranking package
 
 - Approved plan: replace the dead full-width header cell (title + layout-mode select + reset) with a configurable,

@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Widget builder & Widget manager pages (scaffolding).** Two new left-rail screens under Tools › Build —
+  `/widget-builder` (widget creation) and `/widget-manager` (widget management) — registered in the screens
+  registry with rail icons and i18n. Blank placeholder pages for now (routing + nav only); the composition engine
+  lands later. Covered by an e2e (both appear in the rail and render).
+
 ### Changed
 - **The dashboard's dead header cell is now a configurable "Needs attention" widget.** The full-width top cell
   used to hold only a title and the layout manager; it's replaced by a real draggable/resizable widget (default
