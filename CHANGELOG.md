@@ -26,6 +26,10 @@ and every commit updates this file under `Unreleased`.
   this next.
 
 ### Changed
+- **Insights chat: action icons moved below the bubble; Retry on the last message either side (C82).** Copy /
+  Pin / Retry / Delete now sit in a row *under* each message rather than inside it. Retry is offered on the
+  latest message whether it's the assistant's reply or **your own message** — so a turn that errored with no
+  reply can still be re-sent.
 - **Insights chat: message actions reworked (C82).** Assistant replies are now rendered with **marked**
   (vendored locally) sanitized by **DOMPurify** before becoming innerHTML — richer Markdown than the prior
   inline renderer. Each reply gets **Copy** (to clipboard) and **Delete**, plus **Retry** on the latest reply

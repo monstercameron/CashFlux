@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights chat — actions below the bubble + retry on the last user message
+
+- Moved Copy/Pin/Retry/Delete out of the message bubble into a row UNDER it (both bubbles became flex-col, user
+  right-aligned / assistant left). Retry is now offered on the latest message whether it's the assistant reply
+  OR the user's own message (`retryFor(lastID)` → `resendLast`, which re-answers the last user prompt regardless
+  of trailing role) — so a turn that errored with no reply can still be re-sent. `UserBubble` gained `OnRetry`.
+- e2e `insights_chat_check.mjs` re-run after the layout change: still green (selectors are role/text-based).
+  (Note to self: gwc -root web is a file-watcher dev server — rebuild + refresh, no restart needed.)
+
 ## 2026-06-20 - test: e2e for the Insights chat (mocked OpenAI), proves the pipeline
 
 - Cam reported the chat "doesn't work". Wrote `e2e/insights_chat_check.mjs` (Playwright; installed playwright +

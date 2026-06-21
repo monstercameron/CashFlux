@@ -358,10 +358,18 @@ func Insights() ui.Node {
 	convo := turns.Get()
 	empty := len(convo) == 0
 
-	// Retry is offered only on the latest assistant reply (and not mid-request).
-	lastAsstID := ""
-	if n := len(convo); n > 0 && convo[n-1].Role == "assistant" {
-		lastAsstID = convo[n-1].ID
+	// Retry is offered on the latest message (user or assistant) when idle, so a
+	// failed turn with no reply can still be re-sent. resendLast re-answers the last
+	// user prompt either way.
+	lastID := ""
+	if n := len(convo); n > 0 {
+		lastID = convo[n-1].ID
+	}
+	retryFor := func(tid string) func() {
+		if tid == lastID && !loading.Get() {
+			return resendLast
+		}
+		return nil
 	}
 
 	// The conversation thread: user + assistant bubbles are each their own component
@@ -371,13 +379,9 @@ func Insights() ui.Node {
 			func(t chatTurn) any { return t.ID },
 			func(t chatTurn) ui.Node {
 				if t.Role == "user" {
-					return ui.CreateElement(UserBubble, userBubbleProps{ID: t.ID, Text: t.Text, OnDelete: deleteTurn})
+					return ui.CreateElement(UserBubble, userBubbleProps{ID: t.ID, Text: t.Text, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
 				}
-				var onRetry func()
-				if t.ID == lastAsstID && !loading.Get() {
-					onRetry = resendLast
-				}
-				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model, OnPin: pinText, OnDelete: deleteTurn, OnRetry: onRetry})
+				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
 			},
 		),
 		If(loading.Get(), Div(Class("flex justify-start"),
@@ -522,16 +526,25 @@ type userBubbleProps struct {
 	ID       string
 	Text     string
 	OnDelete func(string)
+	OnRetry  func() // non-nil only on the latest message
 }
 
-// UserBubble renders one user message with a delete action revealed on hover. Its
-// own component so the delete hook stays stable across the list (no hooks in loops).
+// UserBubble renders one user message with its actions (Retry on the latest, Delete)
+// in a row UNDER the bubble. Its own component so the action hooks stay stable across
+// the list (no hooks in loops).
 func UserBubble(p userBubbleProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.ID) }))
-	return Div(Class("flex justify-end group"),
-		Div(Class("flex items-start gap-1.5 max-w-[85%]"),
-			Button(Class("shrink-0 mt-1 text-faint opacity-0 group-hover:opacity-70 hover:!opacity-100"), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, Class("w-3.5 h-3.5"))),
-			Div(Class("rounded-2xl bg-sky-500/10 px-3.5 py-2 text-[14px] whitespace-pre-wrap"), p.Text),
+	retryEvt := ui.UseEvent(Prevent(func() {
+		if p.OnRetry != nil {
+			p.OnRetry()
+		}
+	}))
+	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
+	return Div(Class("flex flex-col items-end group"),
+		Div(Class("max-w-[85%] rounded-2xl bg-sky-500/10 px-3.5 py-2 text-[14px] whitespace-pre-wrap"), p.Text),
+		Div(Class("flex gap-3 items-center mt-1 px-1"),
+			If(p.OnRetry != nil, Button(Class(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, Class("w-4 h-4")))),
+			Button(Class(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 		),
 	)
 }
@@ -590,24 +603,25 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 		note = P(Class("text-faint text-[11px] mt-2"), txt)
 	}
 	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
-	return Div(Class("flex justify-start"),
+	return Div(Class("flex flex-col items-start"),
 		Div(Class("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2.5"),
 			// marked fills this element via the effect above.
 			Div(Attr("id", mdID), Class("md insights-answer text-[14px]")),
-			Div(Class("flex flex-wrap gap-3 items-center mt-2"),
-				IfElse(copied.Get(),
-					Span(Class("text-faint text-[12px]"), uistate.T("insights.copied")),
-					Button(Class(actBtn), Type("button"), Title(uistate.T("insights.copy")), Attr("aria-label", uistate.T("insights.copy")), OnClick(copyEvt), uiw.Icon(icon.Copy, Class("w-4 h-4"))),
-				),
-				IfElse(pinned.Get(),
-					Span(Class("text-faint text-[12px]"), uistate.T("insights.pinnedConfirm")),
-					Button(Class(actBtn+" gap-1 text-[12px]"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
-				),
-				If(p.OnRetry != nil, Button(Class(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, Class("w-4 h-4")))),
-				Button(Class(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
-			),
-			note,
 		),
+		// Actions sit UNDER the bubble.
+		Div(Class("flex flex-wrap gap-3 items-center mt-1 px-1"),
+			IfElse(copied.Get(),
+				Span(Class("text-faint text-[12px]"), uistate.T("insights.copied")),
+				Button(Class(actBtn), Type("button"), Title(uistate.T("insights.copy")), Attr("aria-label", uistate.T("insights.copy")), OnClick(copyEvt), uiw.Icon(icon.Copy, Class("w-4 h-4"))),
+			),
+			IfElse(pinned.Get(),
+				Span(Class("text-faint text-[12px]"), uistate.T("insights.pinnedConfirm")),
+				Button(Class(actBtn+" gap-1 text-[12px]"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
+			),
+			If(p.OnRetry != nil, Button(Class(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, Class("w-4 h-4")))),
+			Button(Class(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		),
+		note,
 	)
 }
 
