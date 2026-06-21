@@ -554,13 +554,16 @@ func Insights() ui.Node {
 			if !a.Truthy() || !a.Call("closest", ".insights-answer").Truthy() {
 				return nil
 			}
-			// Only same-origin links route in-app; external links keep their default.
+			// Route in-app when the link is same-origin OR points at a known app route
+			// (a deep link to one of our screens is meant for us even if the model
+			// phrased it with a different host). Anything else keeps its default.
 			loc := js.Global().Get("location")
-			if a.Get("origin").String() != loc.Get("origin").String() {
-				return nil
-			}
 			path := a.Get("pathname").String()
 			if path == "" || !strings.HasPrefix(path, "/") {
+				return nil
+			}
+			sameOrigin := a.Get("origin").String() == loc.Get("origin").String()
+			if !sameOrigin && !isAppRoutePath(path) {
 				return nil
 			}
 			ev.Call("preventDefault")
@@ -1031,6 +1034,29 @@ func scrollChatToEnd() {
 		return nil
 	})
 	js.Global().Call("setTimeout", cb, 80)
+}
+
+// isAppRoutePath reports whether a raw URL pathname (possibly host-prefixed by the
+// route base) resolves to one of the app's registered screens, so a chat deep link
+// is recognized as in-app even when phrased with an unexpected host. Custom pages
+// (/p/:slug) and the root count as app routes.
+func isAppRoutePath(rawPath string) bool {
+	lp := uistate.LogicalPath(rawPath)
+	if lp == "" || lp == "/" || strings.HasPrefix(lp, "/p/") {
+		return true
+	}
+	seg := lp
+	if rest := strings.TrimPrefix(lp, "/"); rest != "" {
+		if i := strings.IndexByte(rest, '/'); i >= 0 {
+			seg = "/" + rest[:i]
+		}
+	}
+	for _, r := range All() {
+		if r.Path == lp || r.Path == seg {
+			return true
+		}
+	}
+	return false
 }
 
 // evTruthy safely reads a boolean-ish property off a JS event, returning false when

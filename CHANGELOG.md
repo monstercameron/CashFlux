@@ -10,10 +10,12 @@ and every commit updates this file under `Unreleased`.
 - **Chat deep links no longer trigger a full page reload (C90.2).** The in-app link interceptor now reads the
   anchor's parsed `origin`/`pathname`/`hash` instead of string-matching the raw `href`, so it also catches links
   the model phrases as an absolute same-origin URL (`http://host/todo#id`) — previously those slipped past the
-  `/`-prefix check and the browser did a full navigation (reloading the wasm and wiping in-memory state). It now
-  runs in the capture phase, ignores modifier/middle clicks (so cmd-click still opens a new tab), and guards
-  against undefined modifier fields. The e2e was extended to detect a real reload via a sentinel and to cover the
-  absolute-href case.
+  `/`-prefix check and the browser did a full navigation (which, given the gwc deep-link 404 → SW shell fallback,
+  reloads the whole app and wipes in-memory state). It now also recognizes links to any known app route even when
+  phrased with a different host (`isAppRoutePath`), runs in the capture phase, ignores modifier/middle clicks (so
+  cmd-click still opens a new tab), and guards against undefined modifier fields. Bumped the service-worker cache
+  to `v225` so already-open clients drop any stale shell and pick up the fix. The e2e detects a real reload via a
+  window sentinel and exercises relative, absolute-same-origin, and cross-host hrefs.
 
 ### Added
 - **Creation tools return a deep link, and chat links navigate in-app (C90.2).** Every creating tool

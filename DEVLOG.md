@@ -14,8 +14,15 @@ problems and fixes, and what's next.
   of string-parsing the href; only intercept same-origin left-clicks without modifier keys; register in the
   capture phase so we win over default navigation; `evTruthy` guards undefined modifier fields.
 - Extended the e2e to actually detect a reload: set a `window.__cfSentinel` before the click and assert it
-  survives (a reload wipes it), and run the whole flow twice — once with a relative href, once with an absolute
-  same-origin href. Both stay in-app now. Send/keyboard/write e2es re-run green (shared document listeners).
+  survives (a reload wipes it), and run the whole flow three times — relative, absolute-same-origin, and
+  cross-host hrefs. All stay in-app now. Send/keyboard/write e2es re-run green (shared document listeners).
+- Follow-up (user reported it still reloaded): verified the dev server serves the fixed wasm (hash matched the
+  local build) and isolated the interceptor against the real wasm by injecting a bubble + clicking — no reload.
+  So the live code is correct; a stale service-worker shell in an already-open client was the remaining suspect.
+  Belt-and-suspenders: added `isAppRoutePath` (intercept links to any registered screen even on a foreign host,
+  built from `screens.All()` via `LogicalPath`) and bumped the SW cache to `v225` so open clients refresh. Note
+  for future me: a real navigation to any route hard-reloads because the gwc dev server 404s deep links and the
+  SW serves the app shell — so the interceptor must catch *every* in-app link shape.
 
 ## 2026-06-21 - feat: creation tools return deep links + dedupe before creating
 
