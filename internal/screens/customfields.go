@@ -11,7 +11,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -47,7 +49,7 @@ var cfTypes = []struct {
 func CustomFieldsManager() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:customfields", 0)
@@ -109,20 +111,20 @@ func CustomFieldsManager() ui.Node {
 
 	isChoice := ftype.Get() == string(customfields.TypeSelect)
 
-	form := Section(ClassStr("card"),
-		H2(ClassStr("card-title"), uistate.T("cf.addTitle")),
-		P(ClassStr("muted"), uistate.T("cf.addDesc")),
-		Form(ClassStr("form-grid"), OnSubmit(add),
-			Select(ClassStr("field"), OnChange(onEntity), entityOptions),
-			Input(append([]any{ClassStr("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
-			Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
-			Select(ClassStr("field"), OnChange(onType), typeOptions),
-			If(isChoice, Input(ClassStr("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
-			Select(ClassStr("field"), OnChange(onRequired),
+	form := Section(css.Class("card"),
+		H2(css.Class("card-title"), uistate.T("cf.addTitle")),
+		P(css.Class("muted"), uistate.T("cf.addDesc")),
+		Form(css.Class("form-grid"), OnSubmit(add),
+			Select(css.Class("field"), OnChange(onEntity), entityOptions),
+			Input(append([]any{css.Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
+			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
+			Select(css.Class("field"), OnChange(onType), typeOptions),
+			If(isChoice, Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
+			Select(css.Class("field"), OnChange(onRequired),
 				Option(Value("no"), SelectedIf(required.Get() == "no"), uistate.T("cf.optional")),
 				Option(Value("yes"), SelectedIf(required.Get() == "yes"), uistate.T("cf.required")),
 			),
-			Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
 		),
 		errText("cf-err", errMsg.Get()),
 	)
@@ -144,15 +146,15 @@ func CustomFieldsManager() ui.Node {
 			return ui.CreateElement(CustomFieldRow, customFieldRowProps{Def: d, OnDelete: deleteDef})
 		}
 		keyOf := func(d customfields.Def) any { return d.ID }
-		sections = append(sections, Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T(e.Key)),
-			Div(ClassStr("rows"), MapKeyed(rows, keyOf, renderRow)),
+		sections = append(sections, Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T(e.Key)),
+			Div(css.Class("rows"), MapKeyed(rows, keyOf, renderRow)),
 		))
 	}
 
 	list := ui.Node(nil)
 	if len(sections) == 0 {
-		list = Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("cf.empty")))
+		list = Section(css.Class("card"), P(css.Class("empty"), uistate.T("cf.empty")))
 	} else {
 		list = Fragment(sections...)
 	}
@@ -186,11 +188,11 @@ func CustomFieldRow(props customFieldRowProps) ui.Node {
 	if props.Def.Type == customfields.TypeSelect && len(props.Def.Options) > 0 {
 		meta += " · " + strings.Join(props.Def.Options, ", ")
 	}
-	return Div(ClassStr("row"),
-		Div(ClassStr("row-main"),
-			Span(ClassStr("row-desc"), props.Def.Label),
-			Span(ClassStr("row-meta"), props.Def.Key+" — "+meta),
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), props.Def.Label),
+			Span(css.Class("row-meta"), props.Def.Key+" — "+meta),
 		),
-		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("cf.deleteTitle")), Title(uistate.T("cf.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("cf.deleteTitle")), Title(uistate.T("cf.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }

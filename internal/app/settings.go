@@ -18,9 +18,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/i18n"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -73,7 +75,7 @@ type widgetSettingsFormProps struct {
 func notifySettings() uic.Node {
 	on := uic.UseState(uistate.BrowserNotifyEnabled())
 	return Div(
-		Div(ClassStr("set-label"), uistate.T("settings.notifyTitle")),
+		Div(css.Class("set-label"), uistate.T("settings.notifyTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{
 			Label: uistate.T("settings.notifyBrowser"),
 			On:    on.Get(),
@@ -112,15 +114,15 @@ func musicSettings() uic.Node {
 	onVol := uic.UseEvent(apply)
 	onVolCommit := uic.UseEvent(func(e uic.Event) { apply(e); checkpointMusic() })
 	return Div(
-		Div(ClassStr("set-label"), uistate.T("settings.music")),
+		Div(css.Class("set-label"), uistate.T("settings.music")),
 		ui.ToggleRow(ui.ToggleRowProps{
 			Label:    uistate.T("settings.musicOn"),
 			On:       enabled.Get(),
 			OnChange: func(on bool) { enabled.Set(on); uistate.PersistMuzakEnabled(on); checkpointMusic() },
 		}),
-		Div(ClassStr("toggle-row"),
+		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.musicVolume")),
-			Input(Type("range"), ClassStr("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
+			Input(Type("range"), css.Class("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
 				Attr("aria-label", uistate.T("settings.musicVolume")),
 				Value(strconv.Itoa(pct)), OnInput(onVol), OnChange(onVolCommit)),
 		),
@@ -147,13 +149,13 @@ func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 	schema, ok := widgetcfg.SchemaFor(props.ID)
 	if !ok {
 		return Div(
-			Div(ClassStr("set-label"), props.Title),
+			Div(css.Class("set-label"), props.Title),
 			colorRow,
 			importance,
 		)
 	}
 	rows := make([]any, 0, len(schema.Fields)+3)
-	rows = append(rows, Div(ClassStr("set-label"), schema.Title))
+	rows = append(rows, Div(css.Class("set-label"), schema.Title))
 	for _, f := range schema.Fields {
 		rows = append(rows, uic.CreateElement(widgetFieldRow, widgetFieldRowProps{Field: f, Cfg: cfg, OnSet: set}))
 	}
@@ -179,11 +181,11 @@ func widgetColorRow(props widgetColorRowProps) uic.Node {
 	if val == "" {
 		val = "#7c83ff"
 	}
-	return Div(ClassStr("toggle-row"),
+	return Div(css.Class("toggle-row"),
 		Span("Tile color"),
-		Div(ClassStr("flex items-center gap-2"),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Input(Type("color"), Style(map[string]string{"width": "2rem", "height": "1.6rem", "padding": "0", "border": "none", "background": "none"}), Attr("aria-label", "Tile color"), Value(val), OnChange(on)),
-			If(props.Current != "", Button(ClassStr("btn"), Type("button"), OnClick(func() {
+			If(props.Current != "", Button(css.Class("btn"), Type("button"), OnClick(func() {
 				if props.OnSet != nil {
 					props.OnSet("")
 				}
@@ -224,11 +226,11 @@ func importanceRow(props importanceRowProps) uic.Node {
 		itemsAtom.Set(next)
 		uistate.PersistItems(next)
 	})
-	opts := []any{ClassStr("set-input"), Title(uistate.T("widget.importance")), OnChange(on)}
+	opts := []any{css.Class("set-input"), Title(uistate.T("widget.importance")), OnChange(on)}
 	for _, lvl := range importanceLevels {
 		opts = append(opts, Option(Value(strconv.Itoa(lvl.Value)), SelectedIf(cur == lvl.Value), uistate.T(lvl.Label)))
 	}
-	return Div(ClassStr("toggle-row"), Span(uistate.T("widget.importance")), Select(opts...))
+	return Div(css.Class("toggle-row"), Span(uistate.T("widget.importance")), Select(opts...))
 }
 
 type widgetFieldRowProps struct {
@@ -254,19 +256,19 @@ func widgetFieldRow(props widgetFieldRowProps) uic.Node {
 		if f.Unit != "" {
 			label += " (" + f.Unit + ")"
 		}
-		return Div(ClassStr("toggle-row"),
+		return Div(css.Class("toggle-row"),
 			Span(label),
-			Input(ClassStr("rate-in"), Type("number"), Value(strconv.Itoa(f.Int(props.Cfg))), OnInput(on)),
+			Input(css.Class("rate-in"), Type("number"), Value(strconv.Itoa(f.Int(props.Cfg))), OnInput(on)),
 		)
 	case widgetcfg.Select:
 		on := uic.UseEvent(func(e uic.Event) { props.OnSet(f.Key, e.GetValue()) })
 		cur := f.Str(props.Cfg)
 		opts := make([]any, 0, len(f.Options)+2)
-		opts = append(opts, ClassStr("set-input"), OnChange(on))
+		opts = append(opts, css.Class("set-input"), OnChange(on))
 		for _, o := range f.Options {
 			opts = append(opts, Option(Value(o.Value), SelectedIf(cur == o.Value), o.Label))
 		}
-		return Div(ClassStr("toggle-row"), Span(f.Label), Select(opts...))
+		return Div(css.Class("toggle-row"), Span(f.Label), Select(opts...))
 	default:
 		return Fragment()
 	}
@@ -300,10 +302,10 @@ func freshnessRow(props freshnessRowProps) uic.Node {
 		n, _ := strconv.Atoi(strings.TrimSpace(v))
 		props.OnSet(props.TypeKey, n)
 	})
-	return Div(ClassStr("rate-row"),
+	return Div(css.Class("rate-row"),
 		Span(Style(map[string]string{"width": "110px"}), props.Label),
-		Input(ClassStr("rate-in"), Type("number"), Value(strconv.Itoa(props.Days)), OnInput(on)),
-		Span(ClassStr("text-faint"), uistate.T("settings.freshNever")),
+		Input(css.Class("rate-in"), Type("number"), Value(strconv.Itoa(props.Days)), OnInput(on)),
+		Span(css.Class(tw.TextFaint), uistate.T("settings.freshNever")),
 	)
 }
 
@@ -466,7 +468,7 @@ func globalSettingsForm() uic.Node {
 	for _, m := range members {
 		memberChips = append(memberChips, memberChip(m))
 	}
-	memberChips = append(memberChips, Button(ClassStr("member-add"), Type("button"), OnClick(goManageMembers), uistate.T("settings.addMember")))
+	memberChips = append(memberChips, Button(css.Class("member-add"), Type("button"), OnClick(goManageMembers), uistate.T("settings.addMember")))
 
 	pr := prefsAtom.Get().Normalize()
 	serverMode := uic.UseState(string(pr.ServerMode))
@@ -631,25 +633,25 @@ func globalSettingsForm() uic.Node {
 	}
 
 	left := Div(
-		Div(ClassStr("set-label"), uistate.T("settings.householdMembers")),
-		Div(ClassStr("flex flex-wrap gap-2 py-1"), memberChips),
-		Div(ClassStr("set-label"), uistate.T("settings.baseCurrency")),
-		Select(ClassStr("set-input"), Attr("aria-label", uistate.T("settings.baseCurrency")), Title(uistate.T("settings.baseCurrency")), OnChange(onBase), baseCurrencyOptions(base)),
-		Div(ClassStr("set-label"), uistate.T("settings.budgetMethod")),
-		Select(ClassStr("set-input"), Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
+		Div(css.Class("set-label"), uistate.T("settings.householdMembers")),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), memberChips),
+		Div(css.Class("set-label"), uistate.T("settings.baseCurrency")),
+		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.baseCurrency")), Title(uistate.T("settings.baseCurrency")), OnChange(onBase), baseCurrencyOptions(base)),
+		Div(css.Class("set-label"), uistate.T("settings.budgetMethod")),
+		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
 			Option(Value(string(budgeting.MethodSimple)), SelectedIf(curMethod == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
 			Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(curMethod == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
 			Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(curMethod == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
 		),
-		P(ClassStr("text-faint text-[12px]"), uistate.T("settings.budgetMethodNote")),
-		Div(ClassStr("set-label"), uistate.T("settings.exchangeRates")),
-		If(len(fxRows) == 0, P(ClassStr("text-faint text-[12px]"), uistate.T("settings.noRates"))),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.budgetMethodNote")),
+		Div(css.Class("set-label"), uistate.T("settings.exchangeRates")),
+		If(len(fxRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
 		Div(fxRows),
-		Div(ClassStr("set-label"), uistate.T("settings.screens")),
-		P(ClassStr("text-faint text-[12px]"), uistate.T("settings.screensHint")),
+		Div(css.Class("set-label"), uistate.T("settings.screens")),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.screensHint")),
 		Div(screenToggles),
-		Div(ClassStr("set-label"), uistate.T("settings.freshnessTitle")),
-		P(ClassStr("text-faint text-[12px]"), uistate.T("settings.freshnessHint")),
+		Div(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
 		Div(freshnessRows),
 		uic.CreateElement(notifySettings),
 		uic.CreateElement(musicSettings),
@@ -662,10 +664,10 @@ func globalSettingsForm() uic.Node {
 	}
 
 	right := Div(
-		Div(ClassStr("set-label"), uistate.T("settings.aiTitle")),
+		Div(css.Class("set-label"), uistate.T("settings.aiTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
-		Input(ClassStr("set-input mt-[0.45rem]"), Type("password"), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(aiKey.Get()), OnInput(onKey)),
-		If(strings.TrimSpace(aiKey.Get()) == "", P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.aiNoKey"))),
+		Input(css.Class("set-input", tw.Mt045), Type("password"), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(aiKey.Get()), OnInput(onKey)),
+		If(strings.TrimSpace(aiKey.Get()) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: pr.RememberAIKey, OnChange: func(v bool) {
 			p := prefsAtom.Get()
 			p.RememberAIKey = v
@@ -676,16 +678,16 @@ func globalSettingsForm() uic.Node {
 				uistate.ClearAIKey()
 			}
 		}}),
-		P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.rememberKeyNote")),
-		Div(ClassStr("set-label"), uistate.T("settings.webSearchTitle")),
-		Input(ClassStr("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.webSearchTitle")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(wsKey.Get()), OnInput(onWsKey)),
-		P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.webSearchHint")),
-		Div(ClassStr("set-label"), uistate.T("settings.backendTitle")),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
+		Div(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
+		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchTitle")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(wsKey.Get()), OnInput(onWsKey)),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
+		Div(css.Class("set-label"), uistate.T("settings.backendTitle")),
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable
 		// backend never throws websocket errors the user can't dismiss.
 		ui.ToggleRow(ui.ToggleRowProps{Label: "Connect to a backend (sync + AI proxy)", On: backendOn.Get(), OnChange: onBackendToggle}),
-		If(!backendOn.Get(), P(ClassStr("text-faint text-[12px] mt-1"), "Backend off — the app stays fully local; no sync or proxy connections are made.")),
+		If(!backendOn.Get(), P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), "Backend off — the app stays fully local; no sync or proxy connections are made.")),
 		If(backendOn.Get(), Fragment(
 			ui.Segmented(ui.SegmentedProps{
 				Label: uistate.T("settings.serverMode"),
@@ -696,27 +698,27 @@ func globalSettingsForm() uic.Node {
 				Selected: serverMode.Get(),
 				OnSelect: onServerMode,
 			}),
-			Input(ClassStr("set-input mt-[0.45rem]"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
-			If(showTokenAuth, Input(ClassStr("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken))),
+			Input(css.Class("set-input", tw.Mt045), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
+			If(showTokenAuth, Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken))),
 		)),
-		If(cloudSelected, P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.backendNote"))),
-		If(!cloudSelected, P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.selfHostedNote"))),
-		P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.authMode", authDiscovery.AuthMode)),
-		P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.syncStatus", syncStatusLabel())),
-		Div(ClassStr("flex flex-wrap gap-2 mt-[0.45rem]"),
-			If(showGoogleOAuth, Button(ClassStr("btn"), Type("button"), OnClick(signInGoogle), uistate.T("settings.signInGoogle"))),
-			If(showGitHubOAuth, Button(ClassStr("btn"), Type("button"), OnClick(signInGitHub), uistate.T("settings.signInGitHub"))),
-			If(strings.TrimSpace(serverToken.Get()) != "", Button(ClassStr("btn"), Type("button"), OnClick(signOut), uistate.T("settings.signOut"))),
-			Button(ClassStr("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
-			Button(ClassStr("btn"), Type("button"), OnClick(syncNow), uistate.T("settings.syncNow")),
-			Button(ClassStr("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
-			A(ClassStr("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
+		If(cloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.backendNote"))),
+		If(!cloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.selfHostedNote"))),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.authMode", authDiscovery.AuthMode)),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.syncStatus", syncStatusLabel())),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
+			If(showGoogleOAuth, Button(css.Class("btn"), Type("button"), OnClick(signInGoogle), uistate.T("settings.signInGoogle"))),
+			If(showGitHubOAuth, Button(css.Class("btn"), Type("button"), OnClick(signInGitHub), uistate.T("settings.signInGitHub"))),
+			If(strings.TrimSpace(serverToken.Get()) != "", Button(css.Class("btn"), Type("button"), OnClick(signOut), uistate.T("settings.signOut"))),
+			Button(css.Class("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
+			Button(css.Class("btn"), Type("button"), OnClick(syncNow), uistate.T("settings.syncNow")),
+			Button(css.Class("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
+			A(css.Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
 		If(cloudSelected, Fragment(
-			Div(ClassStr("set-label"), uistate.T("settings.cloudPlanTitle")),
-			P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.cloudPlanNote")),
-			Div(ClassStr("text-[18px] font-semibold mt-[0.45rem]"), cloudPrice),
-			P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.cloudTrialNote")),
+			Div(css.Class("set-label"), uistate.T("settings.cloudPlanTitle")),
+			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPlanNote")),
+			Div(css.Class(tw.Text18, tw.FontSemibold, tw.Mt045), cloudPrice),
+			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrialNote")),
 			ui.Segmented(ui.SegmentedProps{
 				Label: uistate.T("settings.cloudPlanBilling"),
 				Options: []ui.SegOption{
@@ -726,13 +728,13 @@ func globalSettingsForm() uic.Node {
 				Selected: billingInterval.Get(),
 				OnSelect: func(v string) { billingInterval.Set(v) },
 			}),
-			Div(ClassStr("flex flex-wrap gap-2 mt-[0.45rem]"),
-				Button(ClassStr("btn btn-primary"), Type("button"), OnClick(startCheckout), uistate.T("settings.cloudSubscribe")),
-				Button(ClassStr("btn"), Type("button"), OnClick(openPortal), uistate.T("settings.manageSub")),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
+				Button(css.Class("btn btn-primary"), Type("button"), OnClick(startCheckout), uistate.T("settings.cloudSubscribe")),
+				Button(css.Class("btn"), Type("button"), OnClick(openPortal), uistate.T("settings.manageSub")),
 			),
-			P(ClassStr("text-faint text-[12px] mt-1"), uistate.T("settings.cloudTrustLine")),
+			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrustLine")),
 		)),
-		Select(ClassStr("set-input mt-[0.45rem]"), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
+		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
 			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
 			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),
 			Option(Value("gpt-4.1-mini"), SelectedIf(curModel == "gpt-4.1-mini"), "GPT-4.1 mini"),
@@ -740,7 +742,7 @@ func globalSettingsForm() uic.Node {
 			Option(Value("gpt-4.1"), SelectedIf(curModel == "gpt-4.1"), "GPT-4.1"),
 			Option(Value("o4-mini"), SelectedIf(curModel == "o4-mini"), "o4-mini (reasoning)"),
 		),
-		Div(ClassStr("set-label"), uistate.T("settings.appearance")),
+		Div(css.Class("set-label"), uistate.T("settings.appearance")),
 		ui.Segmented(ui.SegmentedProps{
 			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")}, {Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")}, {Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")}},
 			Selected: string(pr.Theme),
@@ -750,7 +752,7 @@ func globalSettingsForm() uic.Node {
 				savePrefs(p)
 			},
 		}),
-		Div(ClassStr("toggle-row"),
+		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.accent")),
 			ui.SwatchPicker(ui.SwatchPickerProps{
 				Colors:   []string{"#2e8b57", "#cfa14e", "#7c83ff", "#d8716f"},
@@ -766,8 +768,8 @@ func globalSettingsForm() uic.Node {
 		// Density and display scale moved into the theme editor below — the theme
 		// engine is now the single source of truth for both (B20 unify).
 		uic.CreateElement(themeEditor),
-		Div(ClassStr("set-label"), uistate.T("settings.preferences")),
-		Div(ClassStr("toggle-row"),
+		Div(css.Class("set-label"), uistate.T("settings.preferences")),
+		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.weekStart")),
 			ui.Segmented(ui.SegmentedProps{
 				Options:  []ui.SegOption{{Value: string(prefs.WeekSunday), Label: uistate.T("settings.sunday")}, {Value: string(prefs.WeekMonday), Label: uistate.T("settings.monday")}},
@@ -779,36 +781,36 @@ func globalSettingsForm() uic.Node {
 				},
 			}),
 		),
-		Select(ClassStr("set-input mt-[0.45rem]"), Attr("aria-label", uistate.T("settings.dateFormat")), Title(uistate.T("settings.dateFormat")), OnChange(onDateStyle),
+		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.dateFormat")), Title(uistate.T("settings.dateFormat")), OnChange(onDateStyle),
 			Option(Value(string(prefs.DateISO)), SelectedIf(pr.DateStyle == prefs.DateISO), "2026-06-05  (ISO)"),
 			Option(Value(string(prefs.DateUS)), SelectedIf(pr.DateStyle == prefs.DateUS), "06/05/2026  (US)"),
 			Option(Value(string(prefs.DateEU)), SelectedIf(pr.DateStyle == prefs.DateEU), "05/06/2026  (European)"),
 			Option(Value(string(prefs.DateLong)), SelectedIf(pr.DateStyle == prefs.DateLong), "Jun 5, 2026  (Long)"),
 		),
-		Div(ClassStr("set-label"), uistate.T("settings.data")),
-		Div(ClassStr("flex flex-wrap gap-2 py-1"),
+		Div(css.Class("set-label"), uistate.T("settings.data")),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportJSON"), false, func() { exportJSON(notify) }),
 			dataBtn(uistate.T("settings.exportCSV"), false, func() { exportCSV(notify) }),
 			dataBtn(uistate.T("settings.import"), false, func() { importJSON(bump, notify) }),
 			dataBtn(uistate.T("settings.loadSample"), false, func() { loadSample(bump, notify) }),
 			dataBtn(uistate.T("settings.wipe"), true, func() { wipeData(bump, notify) }),
 		),
-		Div(ClassStr("set-label"), uistate.T("settings.backupCadence")),
-		P(ClassStr("muted text-xs"), uistate.T("settings.backupCadenceHint")),
-		Select(ClassStr("set-input"), Attr("aria-label", uistate.T("settings.backupCadence")), Title(uistate.T("settings.backupCadence")), OnChange(onBackupCadence),
+		Div(css.Class("set-label"), uistate.T("settings.backupCadence")),
+		P(css.Class("muted", tw.TextXs), uistate.T("settings.backupCadenceHint")),
+		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.backupCadence")), Title(uistate.T("settings.backupCadence")), OnChange(onBackupCadence),
 			Option(Value("monthly"), SelectedIf(loadBackupCadence() == backup.Monthly), uistate.T("settings.cadenceMonthly")),
 			Option(Value("weekly"), SelectedIf(loadBackupCadence() == backup.Weekly), uistate.T("settings.cadenceWeekly")),
 			Option(Value("off"), SelectedIf(loadBackupCadence() == backup.Off), uistate.T("settings.cadenceOff")),
 		),
-		Div(ClassStr("set-label"), uistate.T("ws.section")),
-		P(ClassStr("muted text-xs"), uistate.T("ws.sectionHint")),
+		Div(css.Class("set-label"), uistate.T("ws.section")),
+		P(css.Class("muted", tw.TextXs), uistate.T("ws.sectionHint")),
 		workspacesSection(bump),
-		Div(ClassStr("set-label"), uistate.T("applock.section")),
-		P(ClassStr("muted text-xs"), uistate.T("applock.sectionHint")),
+		Div(css.Class("set-label"), uistate.T("applock.section")),
+		P(css.Class("muted", tw.TextXs), uistate.T("applock.sectionHint")),
 		appLockSection(bump),
-		Div(ClassStr("set-label"), uistate.T("settings.languages")),
-		Select(ClassStr("set-input"), Attr("aria-label", uistate.T("settings.language")), Title(uistate.T("settings.language")), OnChange(onLang), langOptions),
-		Div(ClassStr("flex flex-wrap gap-2 py-1"),
+		Div(css.Class("set-label"), uistate.T("settings.languages")),
+		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.language")), Title(uistate.T("settings.language")), OnChange(onLang), langOptions),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportLangs"), false, func() { exportLanguages(notify) }),
 			dataBtn(uistate.T("settings.importLangs"), false, func() { importLanguages(notify) }),
 		),
@@ -817,7 +819,7 @@ func globalSettingsForm() uic.Node {
 	// Debug log viewer (moved here from the old /settings screen): the last entries
 	// of the in-app log ring, newest first, with a refresh.
 	_ = logRev.Get() // re-render when refreshed
-	var logBody uic.Node = P(ClassStr("empty"), uistate.T("settings.noLog"))
+	var logBody uic.Node = P(css.Class("empty"), uistate.T("settings.noLog"))
 	if app := appstate.Default; app != nil {
 		entries := app.LogRing().Entries()
 		if n := len(entries); n > 0 {
@@ -825,32 +827,32 @@ func globalSettingsForm() uic.Node {
 			rows := make([]uic.Node, 0, maxShown)
 			for i := n - 1; i >= 0 && len(rows) < maxShown; i-- {
 				e := entries[i]
-				rows = append(rows, Div(ClassStr("row"),
-					Div(ClassStr("row-main"),
-						Span(ClassStr("row-desc"), e.Message),
-						Span(ClassStr("row-meta"), e.Level.String()),
+				rows = append(rows, Div(css.Class("row"),
+					Div(css.Class("row-main"),
+						Span(css.Class("row-desc"), e.Message),
+						Span(css.Class("row-meta"), e.Level.String()),
 					),
 				))
 			}
-			logBody = Div(ClassStr("rows"), rows)
+			logBody = Div(css.Class("rows"), rows)
 		}
 	}
-	debugLog := Div(ClassStr("mt-5"),
-		Div(ClassStr("flex items-center justify-between"),
-			Div(ClassStr("set-label"), uistate.T("settings.debugLog")),
+	debugLog := Div(css.Class(tw.Mt5),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
+			Div(css.Class("set-label"), uistate.T("settings.debugLog")),
 			dataBtn(uistate.T("settings.refresh"), false, refreshLog),
 		),
 		logBody,
 	)
 
-	about := Div(ClassStr("set-about mt-5 pt-3 border-t border-line flex items-center justify-between text-faint text-[12px]"),
+	about := Div(css.Class("set-about", tw.Mt5, tw.Pt3, tw.BorderT, tw.BorderLine, tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.TextFaint, tw.Text12),
 		Span("CashFlux "+version.Label()),
 		A(Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/CHANGELOG.md"), Attr("target", "_blank"),
-			Attr("rel", "noopener noreferrer"), ClassStr("hover:text-fg underline"), uistate.T("settings.changelog")),
+			Attr("rel", "noopener noreferrer"), css.Class(tw.HoverTextFg, tw.Underline), uistate.T("settings.changelog")),
 	)
 
 	return Div(
-		Div(ClassStr("grid grid-cols-2 gap-x-7 content-start"), left, right),
+		Div(css.Class(tw.Grid, tw.GridCols2, tw.GapX7, tw.ContentStart), left, right),
 		debugLog,
 		about,
 	)
@@ -886,9 +888,9 @@ func accentContrastNote(accent string, theme prefs.Theme) uic.Node {
 		}
 	}
 	if contrast.PassesAA(worst, true) {
-		return Span(ClassStr("muted text-xs"), uistate.T("settings.accentContrastOk", worst))
+		return Span(css.Class("muted", tw.TextXs), uistate.T("settings.accentContrastOk", worst))
 	}
-	return Span(ClassStr("text-xs"), Style(map[string]string{"color": "var(--danger)"}),
+	return Span(css.Class(tw.TextXs), Style(map[string]string{"color": "var(--danger)"}),
 		uistate.T("settings.accentContrastLow", worst))
 }
 
@@ -907,7 +909,7 @@ func memberChip(m domain.Member) uic.Node {
 	if color == "" {
 		color = "#7c83ff"
 	}
-	return Span(ClassStr("member-chip"),
+	return Span(css.Class("member-chip"),
 		Span(Style(map[string]string{"width": "9px", "height": "9px", "border-radius": "50%", "background": color})),
 		m.Name,
 	)
@@ -956,11 +958,11 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 	if props.Rate > 0 {
 		val = strconv.FormatFloat(props.Rate, 'f', -1, 64)
 	}
-	return Div(ClassStr("rate-row"),
+	return Div(css.Class("rate-row"),
 		Span(Style(map[string]string{"width": "40px"}), props.Code),
-		Span(ClassStr("text-faint"), uistate.T("settings.fxRateLabel", props.Code)),
-		Input(ClassStr("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Value(val), OnChange(on)),
-		Span(ClassStr("text-faint"), props.Base),
+		Span(css.Class(tw.TextFaint), uistate.T("settings.fxRateLabel", props.Code)),
+		Input(css.Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Value(val), OnChange(on)),
+		Span(css.Class(tw.TextFaint), props.Base),
 	)
 }
 
@@ -1084,7 +1086,7 @@ func dataBtn(label string, danger bool, onClick func()) uic.Node {
 }
 
 func dataButton(props dataBtnProps) uic.Node {
-	args := []any{ClassStr("data-btn"), Type("button")}
+	args := []any{css.Class("data-btn"), Type("button")}
 	if props.Danger {
 		args = append(args, Style(map[string]string{"color": "#d8716f", "border-color": "#5a2a2a"}))
 	}

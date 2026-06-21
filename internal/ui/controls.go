@@ -4,7 +4,9 @@ package ui
 
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -61,7 +63,7 @@ func segmented(props SegmentedProps) uic.Node {
 		next := (i + delta + len(options)) % len(options)
 		onSelect(options[next].Value)
 	}
-	args := []any{ClassStr("seg"), Attr("role", "radiogroup"), OnKeyDown(func(e uic.KeyboardEvent) {
+	args := []any{css.Class("seg"), Attr("role", "radiogroup"), OnKeyDown(func(e uic.KeyboardEvent) {
 		switch e.GetKey() {
 		case "ArrowLeft", "ArrowUp":
 			e.PreventDefault()
@@ -155,18 +157,18 @@ func stepperPill(props StepperPillProps) uic.Node {
 	if nextLabel == "" {
 		nextLabel = "Next"
 	}
-	return Div(ClassStr("rpill"),
-		Button(ClassStr("rstep"), Type("button"), Attr("aria-label", prevLabel), OnClick(func() {
+	return Div(css.Class("rpill"),
+		Button(css.Class("rstep"), Type("button"), Attr("aria-label", prevLabel), OnClick(func() {
 			if onPrev != nil {
 				onPrev()
 			}
-		}), Icon(icon.ChevronLeft, ClassStr("w-4 h-4"))),
-		Span(ClassStr("rlabel fig"), props.Label),
-		Button(ClassStr("rstep"), Type("button"), Attr("aria-label", nextLabel), OnClick(func() {
+		}), Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4))),
+		Span(css.Class("rlabel fig"), props.Label),
+		Button(css.Class("rstep"), Type("button"), Attr("aria-label", nextLabel), OnClick(func() {
 			if onNext != nil {
 				onNext()
 			}
-		}), Icon(icon.ChevronRight, ClassStr("w-4 h-4"))),
+		}), Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))),
 	)
 }
 
@@ -228,7 +230,7 @@ type ToggleRowProps struct {
 func ToggleRow(props ToggleRowProps) uic.Node { return uic.CreateElement(toggleRow, props) }
 
 func toggleRow(props ToggleRowProps) uic.Node {
-	return Div(ClassStr("toggle-row"),
+	return Div(css.Class("toggle-row"),
 		Span(props.Label),
 		Toggle(ToggleProps{On: props.On, OnChange: props.OnChange, Label: props.Label}),
 	)
@@ -324,7 +326,7 @@ func swatchPicker(props SwatchPickerProps) uic.Node {
 		}
 		onSelect(colors[(i+delta+len(colors))%len(colors)])
 	}
-	return Div(ClassStr("flex gap-2 items-center"), Attr("role", "radiogroup"), Attr("aria-label", uistate.T("a11y.accentColor")),
+	return Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), Attr("role", "radiogroup"), Attr("aria-label", uistate.T("a11y.accentColor")),
 		OnKeyDown(func(e uic.KeyboardEvent) {
 			switch e.GetKey() {
 			case "ArrowLeft", "ArrowUp":

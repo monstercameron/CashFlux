@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -28,5 +29,5 @@ func errAttrs(errID, msg string) []any {
 // rendering nothing when msg is blank — the drop-in replacement for the previous
 // inline If(msg != "", P(ClassStr("err"), …)) pattern.
 func errText(errID, msg string) ui.Node {
-	return If(msg != "", P(ClassStr("err"), Attr("role", "alert"), Attr("id", errID), msg))
+	return If(msg != "", P(css.Class("err"), Attr("role", "alert"), Attr("id", errID), msg))
 }

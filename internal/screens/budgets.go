@@ -18,7 +18,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -30,7 +32,7 @@ import (
 func Budgets() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:budgets", 0)
@@ -184,7 +186,7 @@ func Budgets() ui.Node {
 
 	var formCard ui.Node
 	if len(expenseCats) == 0 {
-		formCard = Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("budgets.needCategory")))
+		formCard = Section(css.Class("card"), P(css.Class("empty"), uistate.T("budgets.needCategory")))
 	} else {
 		catOptions := make([]ui.Node, 0, len(expenseCats))
 		for _, c := range expenseCats {
@@ -195,31 +197,31 @@ func Budgets() ui.Node {
 		// one-tap "use this" that fills the limit field (D6/budget hygiene).
 		suggestRates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 		suggestion, _ := budgeting.SuggestLimit(catID.Get(), app.Transactions(), time.Now(), 6, suggestRates)
-		formCard = Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("budgets.add")),
-			Form(ClassStr("form-grid"), OnSubmit(add),
+		formCard = Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("budgets.add")),
+			Form(css.Class("form-grid"), OnSubmit(add),
 				labeledField(uistate.T("common.name"),
-					Input(append([]any{ClassStr("field"), Attr("id", "budget-add"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...)),
+					Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...)),
 				labeledField(uistate.T("budgets.categoryLabel"),
-					Select(ClassStr("field"), Attr("aria-label", uistate.T("budgets.categoryLabel")), OnChange(onCat), catOptions)),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.categoryLabel")), OnChange(onCat), catOptions)),
 				labeledField(uistate.T("common.owner"),
-					Select(ClassStr("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
 				labeledField(uistate.T("budgets.period"),
-					Select(ClassStr("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get()))),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get()))),
 				labeledField(uistate.T("budgets.limitLabel"),
-					Input(ClassStr("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
-				Label(ClassStr("field flex items-center gap-2"),
+					Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
+				Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
 					Span(uistate.T("budgets.rollover")),
 				),
 				MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 			),
-			If(suggestion > 0, Div(ClassStr("flex items-center gap-2 mt-2"),
-				Span(ClassStr("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
-				Button(ClassStr("btn"), Type("button"), OnClick(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }), uistate.T("budgets.useSuggest")),
+			If(suggestion > 0, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
+				Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
+				Button(css.Class("btn"), Type("button"), OnClick(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }), uistate.T("budgets.useSuggest")),
 			)),
 			errText("budget-err", errMsg.Get()),
 		)
@@ -295,14 +297,14 @@ func Budgets() ui.Node {
 		toAssign := budgeting.ToAssign(income.Amount, totalLimit)
 		switch {
 		case toAssign > 0:
-			assignBanner = P(ClassStr("budget-sub font-display"), uistate.T("budgets.toAssign", fmtMoney(money.New(toAssign, base))))
+			assignBanner = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.toAssign", fmtMoney(money.New(toAssign, base))))
 		case toAssign == 0:
-			assignBanner = P(ClassStr("budget-sub font-display"), uistate.T("budgets.allAssigned"))
+			assignBanner = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.allAssigned"))
 		default:
-			assignBanner = P(ClassStr("budget-sub font-display text-down"), uistate.T("budgets.overAssigned", fmtMoney(money.New(-toAssign, base))))
+			assignBanner = P(css.Class("budget-sub", tw.FontDisplay, tw.TextDown), uistate.T("budgets.overAssigned", fmtMoney(money.New(-toAssign, base))))
 		}
 	case budgeting.MethodEnvelope:
-		assignBanner = P(ClassStr("budget-sub font-display"), uistate.T("budgets.envelopeNote"))
+		assignBanner = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.envelopeNote"))
 		for _, b := range budgets {
 			if av, err := budgeting.EnvelopeAvailable(b, txns, anchor, weekStart, rates, categorytree.Descendants(cats, b.CategoryID)); err == nil {
 				envAvail[b.ID] = fmtMoney(av)
@@ -340,17 +342,17 @@ func Budgets() ui.Node {
 
 	return Div(
 		formCard,
-		If(len(statuses) > 0, Div(ClassStr("stat-grid"),
+		If(len(statuses) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("budgets.spent"), fmtMoney(money.New(totalSpent, base)), "neg"),
 			stat(uistate.T("budgets.budgeted"), fmtMoney(money.New(totalLimit, base)), ""),
 			stat(uistate.T("budgets.left"), fmtMoney(money.New(totalLimit-totalSpent, base)), accentFor(money.New(totalLimit-totalSpent, base))),
 		)),
-		Section(ClassStr("card"),
-			Div(ClassStr("budget-head"),
-				H2(ClassStr("card-title"), uistate.T("nav.budgets")),
+		Section(css.Class("card"),
+			Div(css.Class("budget-head"),
+				H2(css.Class("card-title"), uistate.T("nav.budgets")),
 			),
 			assignBanner,
-			If(overCount > 0 || nearCount > 0, P(ClassStr("budget-sub"), uistate.T("budgets.overNear", overCount, nearCount))),
+			If(overCount > 0 || nearCount > 0, P(css.Class("budget-sub"), uistate.T("budgets.overNear", overCount, nearCount))),
 			listBody,
 		),
 	)
@@ -506,22 +508,22 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}, editKey)
 
 	if editing.Get() {
-		return Div(ClassStr("budget"),
-			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
+		return Div(css.Class("budget"),
+			Form(css.Class("form-grid"), OnSubmit(saveEdit),
 				labeledField(uistate.T("common.name"),
-					Input(ClassStr("field"), Attr("id", "budget-edit-"+s.Budget.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
+					Input(css.Class("field"), Attr("id", "budget-edit-"+s.Budget.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
 				labeledField(uistate.T("budgets.limitLabel"),
-					Input(ClassStr("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
+					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
 				labeledField(uistate.T("budgets.period"),
-					Select(ClassStr("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(periodS.Get()))),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(periodS.Get()))),
 				labeledField(uistate.T("common.owner"),
-					Select(ClassStr("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
-				Label(ClassStr("field flex items-center gap-2"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
+				Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
 					Span(uistate.T("budgets.rollover")),
 				),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -560,7 +562,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// budget by period end, shown only while the period is still in progress.
 	var paceLine ui.Node = Fragment()
 	if props.PaceOver != "" {
-		paceLine = Span(ClassStr("budget-sub text-down"), uistate.T("budgets.paceOver", props.PaceOver))
+		paceLine = Span(css.Class("budget-sub", tw.TextDown), uistate.T("budgets.paceOver", props.PaceOver))
 	}
 
 	var rolloverLine ui.Node = Fragment()
@@ -579,7 +581,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	hasSource := firstSource() != ""
 	var coverBtn ui.Node = Fragment()
 	if isOver && hasSource && !covering.Get() {
-		coverBtn = Button(ClassStr("btn"), Type("button"), Title("Move money from another budget to cover this overspend"), OnClick(startCover), "Cover…")
+		coverBtn = Button(css.Class("btn"), Type("button"), Title("Move money from another budget to cover this overspend"), OnClick(startCover), "Cover…")
 	}
 	var coverForm ui.Node = Fragment()
 	if covering.Get() {
@@ -592,35 +594,35 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 		var coverErrLine ui.Node = Fragment()
 		if coverErr.Get() != "" {
-			coverErrLine = P(ClassStr("budget-sub text-down"), coverErr.Get())
+			coverErrLine = P(css.Class("budget-sub", tw.TextDown), coverErr.Get())
 		}
-		coverForm = Div(ClassStr("cover-form"),
-			Span(ClassStr("budget-sub"), "Cover the "+props.CoverShortfall+" over by moving money from another budget:"),
-			Form(ClassStr("form-grid"), OnSubmit(submitCover),
-				Select(ClassStr("field"), Attr("aria-label", "Cover from budget"), OnChange(onCoverFrom), srcOpts),
-				Input(ClassStr("field"), Type("number"), Attr("aria-label", "Amount to move"), Placeholder("Amount"), Value(coverAmt.Get()), Step("0.01"), OnInput(onCoverAmt)),
-				Button(ClassStr("btn"), Type("button"), Title("Use the full overspend amount"), OnClick(fullCover), "Full "+props.CoverShortfall),
-				Button(ClassStr("btn btn-primary"), Type("submit"), "Cover"),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelCover), uistate.T("action.cancel")),
+		coverForm = Div(css.Class("cover-form"),
+			Span(css.Class("budget-sub"), "Cover the "+props.CoverShortfall+" over by moving money from another budget:"),
+			Form(css.Class("form-grid"), OnSubmit(submitCover),
+				Select(css.Class("field"), Attr("aria-label", "Cover from budget"), OnChange(onCoverFrom), srcOpts),
+				Input(css.Class("field"), Type("number"), Attr("aria-label", "Amount to move"), Placeholder("Amount"), Value(coverAmt.Get()), Step("0.01"), OnInput(onCoverAmt)),
+				Button(css.Class("btn"), Type("button"), Title("Use the full overspend amount"), OnClick(fullCover), "Full "+props.CoverShortfall),
+				Button(css.Class("btn btn-primary"), Type("submit"), "Cover"),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelCover), uistate.T("action.cancel")),
 			),
 			coverErrLine,
 		)
 	}
 
-	return Div(ClassStr("budget"),
-		Div(ClassStr("budget-head"),
+	return Div(css.Class("budget"),
+		Div(css.Class("budget-head"),
 			IfElse(s.Budget.CategoryID != "",
-				Button(ClassStr("row-desc budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
+				Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
 					Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
 					title),
-				Span(ClassStr("row-desc"), title)),
-			Span(ClassStr("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
+				Span(css.Class("row-desc"), title)),
+			Span(css.Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
 			coverBtn,
-			Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-			Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
-		Div(ClassStr("bar"), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-		Span(ClassStr("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
+		Div(css.Class("bar"), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
+		Span(css.Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
 		paceLine,
 		rolloverLine,
 		envLine,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -37,7 +38,7 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 
 	switch d.Type {
 	case customfields.TypeBool:
-		return Select(ClassStr("field"), Title(label), OnChange(onSel),
+		return Select(css.Class("field"), Title(label), OnChange(onSel),
 			Option(Value(""), SelectedIf(props.Value == ""), label+"…"),
 			Option(Value("true"), SelectedIf(props.Value == "true"), uistate.T("cf.yes")),
 			Option(Value("false"), SelectedIf(props.Value == "false"), uistate.T("cf.no")),
@@ -47,13 +48,13 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 		for _, o := range d.Options {
 			opts = append(opts, Option(Value(o), SelectedIf(props.Value == o), o))
 		}
-		return Select(ClassStr("field"), Title(label), OnChange(onSel), opts)
+		return Select(css.Class("field"), Title(label), OnChange(onSel), opts)
 	case customfields.TypeNumber:
-		return Input(ClassStr("field"), Type("number"), Step("any"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
+		return Input(css.Class("field"), Type("number"), Step("any"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
 	case customfields.TypeDate:
-		return Input(ClassStr("field"), Type("date"), Title(label), Value(props.Value), OnInput(onText))
+		return Input(css.Class("field"), Type("date"), Title(label), Value(props.Value), OnInput(onText))
 	default: // text
-		return Input(ClassStr("field"), Type("text"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
+		return Input(css.Class("field"), Type("text"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
 	}
 }
 

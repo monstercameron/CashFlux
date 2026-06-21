@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -39,9 +41,9 @@ func NotificationCenter() ui.Node {
 	})
 
 	if len(feed) == 0 {
-		return Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("nav.notifications")),
-			P(ClassStr("empty"), uistate.T("notifications.empty")),
+		return Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("nav.notifications")),
+			P(css.Class("empty"), uistate.T("notifications.empty")),
 		)
 	}
 
@@ -49,20 +51,20 @@ func NotificationCenter() ui.Node {
 	rows := make([]ui.Node, 0, len(feed))
 	for _, it := range feed {
 		when := time.Unix(it.At, 0)
-		rows = append(rows, Div(ClassStr("row"),
-			Div(ClassStr("row-main"),
-				Span(ClassStr("row-desc"), it.Title),
-				If(it.Body != "", Span(ClassStr("row-meta"), it.Body)),
+		rows = append(rows, Div(css.Class("row"),
+			Div(css.Class("row-main"),
+				Span(css.Class("row-desc"), it.Title),
+				If(it.Body != "", Span(css.Class("row-meta"), it.Body)),
 			),
-			Span(ClassStr("row-meta text-faint"), pr.FormatDate(when)),
+			Span(css.Class("row-meta", tw.TextFaint), pr.FormatDate(when)),
 		))
 	}
 
-	return Section(ClassStr("card"),
-		Div(ClassStr("budget-head"),
-			H2(ClassStr("card-title"), uistate.T("nav.notifications")),
-			Button(ClassStr("btn"), Type("button"), OnClick(clearAll), uistate.T("notifications.clearAll")),
+	return Section(css.Class("card"),
+		Div(css.Class("budget-head"),
+			H2(css.Class("card-title"), uistate.T("nav.notifications")),
+			Button(css.Class("btn"), Type("button"), OnClick(clearAll), uistate.T("notifications.clearAll")),
 		),
-		Div(ClassStr("rows"), rows),
+		Div(css.Class("rows"), rows),
 	)
 }

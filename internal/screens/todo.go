@@ -15,7 +15,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/tasktree"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -25,7 +27,7 @@ import (
 func Todo() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:tasks", 0)
@@ -157,16 +159,16 @@ func Todo() ui.Node {
 		Option(Value(string(domain.PriorityLow)), SelectedIf(priority.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 	}
 
-	form := Section(ClassStr("card"),
-		H2(ClassStr("card-title"), uistate.T("todo.addTitle")),
-		Form(ClassStr("form-grid"), OnSubmit(add),
-			Input(append([]any{ClassStr("field field-wide"), Attr("id", "task-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
+	form := Section(css.Class("card"),
+		H2(css.Class("card-title"), uistate.T("todo.addTitle")),
+		Form(css.Class("form-grid"), OnSubmit(add),
+			Input(append([]any{css.Class("field field-wide"), Attr("id", "task-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
 			labeledField("Priority",
-				Select(ClassStr("field"), Attr("aria-label", "Priority"), OnChange(onPriority), prioOptions)),
+				Select(css.Class("field"), Attr("aria-label", "Priority"), OnChange(onPriority), prioOptions)),
 			labeledField("Due date",
-				Input(ClassStr("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueStr.Get()), OnInput(onDue))),
-			Input(ClassStr("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
-			Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+				Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueStr.Get()), OnInput(onDue))),
+			Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		errText("todo-err", errMsg.Get()),
 	)
@@ -181,7 +183,7 @@ func Todo() ui.Node {
 	case len(tasks) == 0:
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("todo.empty"), CTALabel: uistate.T("todo.addFirst"), FocusID: "task-add"})
 	case len(nodes) == 0:
-		listBody = P(ClassStr("empty"), uistate.T("todo.allDone"))
+		listBody = P(css.Class("empty"), uistate.T("todo.allDone"))
 	default:
 		rows := MapKeyed(nodes,
 			func(n tasktree.Node) any { return n.Task.ID },
@@ -192,7 +194,7 @@ func Todo() ui.Node {
 				})
 			},
 		)
-		listBody = Div(ClassStr("rows"), rows)
+		listBody = Div(css.Class("rows"), rows)
 	}
 
 	hideLabel := uistate.T("todo.hideDone")
@@ -202,10 +204,10 @@ func Todo() ui.Node {
 
 	return Div(
 		form,
-		Section(ClassStr("card"),
-			Div(ClassStr("budget-head"),
-				H2(ClassStr("card-title"), uistate.T("todo.listTitle")),
-				Button(ClassStr("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
+		Section(css.Class("card"),
+			Div(css.Class("budget-head"),
+				H2(css.Class("card-title"), uistate.T("todo.listTitle")),
+				Button(css.Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
 			),
 			listBody,
 		),
@@ -274,20 +276,20 @@ func TaskRow(props taskRowProps) ui.Node {
 	}, editKey)
 
 	if editing.Get() {
-		return Div(ClassStr("row"),
-			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
-				Input(ClassStr("field field-wide"), Attr("id", "task-edit-"+t.ID), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
+		return Div(css.Class("row"),
+			Form(css.Class("form-grid"), OnSubmit(saveEdit),
+				Input(css.Class("field field-wide"), Attr("id", "task-edit-"+t.ID), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
 				labeledField("Priority",
-					Select(ClassStr("field"), Attr("aria-label", "Priority"), OnChange(onPrio),
+					Select(css.Class("field"), Attr("aria-label", "Priority"), OnChange(onPrio),
 						Option(Value(string(domain.PriorityHigh)), SelectedIf(prioS.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
 						Option(Value(string(domain.PriorityMedium)), SelectedIf(prioS.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
 						Option(Value(string(domain.PriorityLow)), SelectedIf(prioS.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 					)),
 				labeledField("Due date",
-					Input(ClassStr("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueS.Get()), OnInput(onDue))),
-				Input(ClassStr("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+					Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueS.Get()), OnInput(onDue))),
+				Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -316,7 +318,7 @@ func TaskRow(props taskRowProps) ui.Node {
 		meta = append(meta, Span(ClassStr(dueCls), dueText))
 	}
 	if t.Notes != "" {
-		meta = append(meta, Span(ClassStr("row-meta"), t.Notes))
+		meta = append(meta, Span(css.Class("row-meta"), t.Notes))
 	}
 
 	if props.Depth > 0 {
@@ -327,14 +329,14 @@ func TaskRow(props taskRowProps) ui.Node {
 		rowArgs = append(rowArgs, Style(map[string]string{"margin-left": strconv.Itoa(props.Depth*22) + "px"}))
 	}
 	rowArgs = append(rowArgs,
-		Button(ClassStr("check"), Type("button"), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
-		Div(ClassStr("row-main"),
-			Span(ClassStr("row-desc"), t.Title),
-			Div(ClassStr("task-meta"), meta),
+		Button(css.Class("check"), Type("button"), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), t.Title),
+			Div(css.Class("task-meta"), meta),
 		),
-		Button(ClassStr("btn"), Type("button"), Title(uistate.T("todo.addSubTitle")), OnClick(addSub), uistate.T("todo.addSub")),
-		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+		Button(css.Class("btn"), Type("button"), Title(uistate.T("todo.addSubTitle")), OnClick(addSub), uistate.T("todo.addSub")),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 	return Div(rowArgs...)
 }

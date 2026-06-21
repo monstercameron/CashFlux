@@ -6,7 +6,9 @@ import (
 	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -25,7 +27,7 @@ func appLockSection(onChange func()) uic.Node {
 				status = fmt.Sprintf(uistate.T("applock.statusOnAuto"), c.AutoLockMinutes)
 			}
 		}
-		actions := []any{ClassStr("flex flex-wrap gap-2 py-1")}
+		actions := []any{css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)}
 		if active {
 			actions = append(actions, dataBtn(uistate.T("applock.cmdLock"), false, showAppLockGate))
 		}
@@ -38,8 +40,8 @@ func appLockSection(onChange func()) uic.Node {
 				}
 			}),
 		)
-		return Div(ClassStr("flex flex-col gap-1"),
-			P(ClassStr("muted text-xs"), status),
+		return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+			P(css.Class("muted", tw.TextXs), status),
 			ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("applock.toggleActive"), On: active, OnChange: func(v bool) {
 				setLockSuspended(!v)
 				if onChange != nil {
@@ -61,9 +63,9 @@ func appLockSection(onChange func()) uic.Node {
 			}}),
 		)
 	}
-	return Div(ClassStr("flex flex-col gap-1"),
-		P(ClassStr("muted text-xs"), uistate.T("applock.statusOff")),
-		Span(ClassStr("flex flex-wrap gap-2 py-1"),
+	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+		P(css.Class("muted", tw.TextXs), uistate.T("applock.statusOff")),
+		Span(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("applock.cmdSet"), false, func() { showAppLockSetup(onChange) }),
 		),
 	)

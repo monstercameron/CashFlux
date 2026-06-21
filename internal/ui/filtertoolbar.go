@@ -5,6 +5,7 @@ package ui
 import (
 	"strconv"
 
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -54,11 +55,11 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	onSearch := uic.UseEvent(props.OnSearch)
 	n := len(props.Chips)
 
-	trigger := Button(ClassStr("btn filters-trigger"), Type("button"),
+	trigger := Button(css.Class("btn filters-trigger"), Type("button"),
 		Attr("aria-haspopup", "dialog"), Title(props.FiltersTitle),
 		OnClick(func() { open.Set(true) }),
 		props.FiltersLabel,
-		If(n > 0, Span(ClassStr("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
+		If(n > 0, Span(css.Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
 	)
 
 	chips := MapKeyed(props.Chips,
@@ -71,15 +72,15 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	)
 
 	return Div(
-		Div(ClassStr("filter-toolbar"),
-			Input(ClassStr("field filter-search"), Type("search"),
+		Div(css.Class("filter-toolbar"),
+			Input(css.Class("field filter-search"), Type("search"),
 				Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
 				Value(props.Search), OnInput(onSearch)),
 			trigger,
 			props.Actions,
 		),
-		If(n > 0, Div(ClassStr("filter-chips"), chips,
-			Button(ClassStr("btn-link chip-clear-all"), Type("button"),
+		If(n > 0, Div(css.Class("filter-chips"), chips,
+			Button(css.Class("btn-link chip-clear-all"), Type("button"),
 				OnClick(func() {
 					if props.OnClearAll != nil {
 						props.OnClearAll()
@@ -108,9 +109,9 @@ type filterChipProps struct {
 }
 
 func filterChip(props filterChipProps) uic.Node {
-	return Span(ClassStr("filter-chip"),
-		Span(ClassStr("chip-text"), props.Label),
-		Button(ClassStr("chip-x"), Type("button"), Attr("aria-label", props.RemoveLabel),
+	return Span(css.Class("filter-chip"),
+		Span(css.Class("chip-text"), props.Label),
+		Button(css.Class("chip-x"), Type("button"), Attr("aria-label", props.RemoveLabel),
 			OnClick(func() {
 				if props.OnRemove != nil {
 					props.OnRemove(props.Key)

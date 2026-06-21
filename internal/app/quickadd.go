@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -117,8 +118,8 @@ func QuickAddHost() uic.Node {
 		catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
 	}
 
-	body := Div(ClassStr("form-grid"),
-		Select(ClassStr("field"), Attr("title", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts),
+	body := Div(css.Class("form-grid"),
+		Select(css.Class("field"), Attr("title", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts),
 		ui.Segmented(ui.SegmentedProps{
 			Label: uistate.T("quickAdd.kind"),
 			Options: []ui.SegOption{
@@ -128,10 +129,10 @@ func QuickAddHost() uic.Node {
 			Selected: kind.Get(),
 			OnSelect: func(v string) { kind.Set(v) },
 		}),
-		Input(ClassStr("field"), Type("number"), Attr("title", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
-		Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)),
-		Select(ClassStr("field"), Attr("title", uistate.T("quickAdd.category")), OnChange(onCat), catOpts),
-		Input(ClassStr("field"), Type("date"), Attr("title", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate)),
+		Input(css.Class("field"), Type("number"), Attr("title", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
+		Input(css.Class("field"), Type("text"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)),
+		Select(css.Class("field"), Attr("title", uistate.T("quickAdd.category")), OnChange(onCat), catOpts),
+		Input(css.Class("field"), Type("date"), Attr("title", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate)),
 	)
 
 	return ui.FlipPanel(ui.FlipPanelProps{

@@ -13,7 +13,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/mermaid"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -25,7 +27,7 @@ import (
 func Categories() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:categories", 0)
@@ -150,14 +152,14 @@ func Categories() ui.Node {
 		parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentID.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
 	}
 
-	form := Section(ClassStr("card"),
-		H2(ClassStr("card-title"), uistate.T("categories.add")),
-		Form(ClassStr("form-grid"), OnSubmit(add),
-			Input(append([]any{ClassStr("field"), Attr("id", "cat-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
-			Select(ClassStr("field"), Attr("aria-label", "Category type"), OnChange(onKind), kindOptions),
-			Select(ClassStr("field"), Attr("aria-label", "Parent category (optional)"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
-			Input(ClassStr("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(color.Get()), OnInput(onColor)),
-			Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+	form := Section(css.Class("card"),
+		H2(css.Class("card-title"), uistate.T("categories.add")),
+		Form(css.Class("form-grid"), OnSubmit(add),
+			Input(append([]any{css.Class("field"), Attr("id", "cat-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
+			Select(css.Class("field"), Attr("aria-label", "Category type"), OnChange(onKind), kindOptions),
+			Select(css.Class("field"), Attr("aria-label", "Parent category (optional)"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
+			Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(color.Get()), OnInput(onColor)),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		errText("cat-err", errMsg.Get()),
 	)
@@ -214,13 +216,13 @@ func Categories() ui.Node {
 			}
 			opts = append(opts, Option(Value(c.ID), SelectedIf(reassignTo.Get() == c.ID), c.Name))
 		}
-		reassignPanel = Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("common.reassignTitle")),
-			P(ClassStr("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
-			Form(ClassStr("form-grid"), OnSubmit(confirmReassign),
-				Select(ClassStr("field"), Attr("aria-label", uistate.T("common.reassignTitle")), OnChange(onReassignTo), opts),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
+		reassignPanel = Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("common.reassignTitle")),
+			P(css.Class("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
+			Form(css.Class("form-grid"), OnSubmit(confirmReassign),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("common.reassignTitle")), OnChange(onReassignTo), opts),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -228,17 +230,17 @@ func Categories() ui.Node {
 	return Div(
 		form,
 		reassignPanel,
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("categories.expenseTitle")),
-			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), FocusID: "cat-add"}), Div(ClassStr("rows"), MapKeyed(categorytree.Flatten(expenseList), flatKey, renderFlat))),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("categories.expenseTitle")),
+			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), FocusID: "cat-add"}), Div(css.Class("rows"), MapKeyed(categorytree.Flatten(expenseList), flatKey, renderFlat))),
 		),
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("categories.incomeTitle")),
-			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), FocusID: "cat-add"}), Div(ClassStr("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("categories.incomeTitle")),
+			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), FocusID: "cat-add"}), Div(css.Class("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
 		),
 		// Visual category map: the hierarchy as a Mermaid graph (C70/C63 tree view).
-		If(len(cats) > 0, Section(ClassStr("card"),
-			H2(ClassStr("card-title"), "Category map"),
+		If(len(cats) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), "Category map"),
 			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.FromCategories(cats), Label: "Category hierarchy diagram"}),
 		)),
 	)
@@ -322,17 +324,17 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		for _, f := range categorytree.Flatten(sameKind) {
 			parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentS.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
 		}
-		return Div(ClassStr("row"),
-			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
-				Input(ClassStr("field"), Attr("id", "cat-edit-"+c.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
-				Select(ClassStr("field"), Attr("aria-label", "Category type"), OnChange(onKind),
+		return Div(css.Class("row"),
+			Form(css.Class("form-grid"), OnSubmit(saveEdit),
+				Input(css.Class("field"), Attr("id", "cat-edit-"+c.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
+				Select(css.Class("field"), Attr("aria-label", "Category type"), OnChange(onKind),
 					Option(Value(string(domain.KindExpense)), SelectedIf(kindS.Get() == string(domain.KindExpense)), uistate.T("category.expense")),
 					Option(Value(string(domain.KindIncome)), SelectedIf(kindS.Get() == string(domain.KindIncome)), uistate.T("category.income")),
 				),
-				Select(ClassStr("field"), Attr("aria-label", "Parent category"), Title(uistate.T("categories.parent")), OnChange(onParent), parentOpts),
-				Input(ClassStr("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(colorS.Get()), OnInput(onColor)),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				Select(css.Class("field"), Attr("aria-label", "Parent category"), Title(uistate.T("categories.parent")), OnChange(onParent), parentOpts),
+				Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(colorS.Get()), OnInput(onColor)),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -349,23 +351,23 @@ func CategoryRow(props categoryRowProps) ui.Node {
 	if c.Kind == domain.KindIncome {
 		kindLabel = uistate.T("category.income")
 	}
-	return Div(ClassStr("row"),
-		Span(ClassStr("cat-swatch"), Style(map[string]string{"background": catColor(c.Color)})),
-		Div(ClassStr("row-main"),
-			Span(ClassStr("row-desc"), Style(descStyle), c.Name),
-			Span(ClassStr("row-meta"),
+	return Div(css.Class("row"),
+		Span(css.Class("cat-swatch"), Style(map[string]string{"background": catColor(c.Color)})),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), Style(descStyle), c.Name),
+			Span(css.Class("row-meta"),
 				Text(kindLabel),
 				Text(" · "),
 				// Per-row usage (C63): show how many transactions are filed under
 				// this category, and drill into Transactions filtered by it when
 				// there are any (matches the Accounts/Members drill pattern).
 				IfElse(props.TxnCount > 0,
-					Button(ClassStr("btn-link cat-usage"), Type("button"), Title("View these transactions"), OnClick(view), Text(plural(props.TxnCount, "transaction"))),
-					Span(ClassStr("text-faint"), Text("No transactions"))),
+					Button(css.Class("btn-link cat-usage"), Type("button"), Title("View these transactions"), OnClick(view), Text(plural(props.TxnCount, "transaction"))),
+					Span(css.Class(tw.TextFaint), Text("No transactions"))),
 			),
 		),
-		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("categories.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("categories.deleteTitle")), Title(uistate.T("categories.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("categories.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("categories.deleteTitle")), Title(uistate.T("categories.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }
 

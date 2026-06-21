@@ -6,6 +6,7 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -123,7 +124,7 @@ func DialogHost() uic.Node {
 	}, openSig)
 
 	if !open {
-		return Div(ClassStr("cf-dialog-root"))
+		return Div(css.Class("cf-dialog-root"))
 	}
 
 	confirmLabel := req.ConfirmLabel
@@ -139,21 +140,21 @@ func DialogHost() uic.Node {
 		confirmCls = "btn btn-danger"
 	}
 
-	panel := Div(ClassStr("cf-dialog"),
-		If(req.Title != "", H3(ClassStr("cf-dialog-title"), req.Title)),
-		P(ClassStr("cf-dialog-msg"), req.Message),
+	panel := Div(css.Class("cf-dialog"),
+		If(req.Title != "", H3(css.Class("cf-dialog-title"), req.Title)),
+		P(css.Class("cf-dialog-msg"), req.Message),
 		If(req.Kind == uistate.DialogPrompt,
-			Input(ClassStr("set-input cf-dialog-input"), Attr("id", dialogInputID), Type("text"),
+			Input(css.Class("set-input cf-dialog-input"), Attr("id", dialogInputID), Type("text"),
 				Attr("aria-label", req.Message), Value(req.Default))),
-		Div(ClassStr("cf-dialog-actions"),
-			Button(ClassStr("btn"), Type("button"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
+		Div(css.Class("cf-dialog-actions"),
+			Button(css.Class("btn"), Type("button"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
 			Button(ClassStr(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),
 		),
 	)
 	// Scrim is a sibling of the panel so clicking the panel never bubbles a cancel.
-	return Div(ClassStr("cf-dialog-root"),
-		Div(ClassStr("cf-dialog-backdrop"), Attr("role", "dialog"), Attr("aria-modal", "true"),
-			Div(ClassStr("cf-dialog-scrim"), OnClick(func() { finish(false) })),
+	return Div(css.Class("cf-dialog-root"),
+		Div(css.Class("cf-dialog-backdrop"), Attr("role", "dialog"), Attr("aria-modal", "true"),
+			Div(css.Class("cf-dialog-scrim"), OnClick(func() { finish(false) })),
 			panel,
 		),
 	)

@@ -10,7 +10,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/theme"
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -193,47 +195,47 @@ func themeEditor() uic.Node {
 	}
 	var validationNode uic.Node
 	if len(warnings) > 0 {
-		validationNode = Div(ClassStr("mt-2"),
-			P(ClassStr("text-xs"), Style(map[string]string{"color": "#d8716f"}), "Some tokens may be hard to read:"),
-			Ul(ClassStr("text-xs muted"), Style(map[string]string{"margin": "0.25rem 0 0", "padding-left": "1.1rem"}), warnings),
+		validationNode = Div(css.Class(tw.Mt2),
+			P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), "Some tokens may be hard to read:"),
+			Ul(css.Class("muted", tw.TextXs), Style(map[string]string{"margin": "0.25rem 0 0", "padding-left": "1.1rem"}), warnings),
 		)
 	} else {
-		validationNode = P(ClassStr("muted text-xs mt-2"), "Looks good — all text meets the contrast guideline.")
+		validationNode = P(css.Class("muted", tw.TextXs, tw.Mt2), "Looks good — all text meets the contrast guideline.")
 	}
 
 	scalePct := strconv.Itoa(int(t.Scale*100 + 0.5))
 
-	return Div(ClassStr("theme-editor"),
-		Div(ClassStr("set-label"), "Theme"),
-		P(ClassStr("muted text-xs"), "Start from a preset, then fine-tune any color, the corner radius, the text size, and the fonts. Changes apply instantly."),
-		Div(ClassStr("flex flex-wrap gap-2 py-1"), presetBtns),
+	return Div(css.Class("theme-editor"),
+		Div(css.Class("set-label"), "Theme"),
+		P(css.Class("muted", tw.TextXs), "Start from a preset, then fine-tune any color, the corner radius, the text size, and the fonts. Changes apply instantly."),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), presetBtns),
 
-		Div(ClassStr("set-label mt-2"), "Colors"),
-		Div(ClassStr("grid grid-cols-2 gap-2"), colorFields),
+		Div(css.Class("set-label", tw.Mt2), "Colors"),
+		Div(css.Class(tw.Grid, tw.GridCols2, tw.Gap2), colorFields),
 
-		Div(ClassStr("set-label mt-2"), "Shape & type"),
-		Div(ClassStr("toggle-row"),
+		Div(css.Class("set-label", tw.Mt2), "Shape & type"),
+		Div(css.Class("toggle-row"),
 			Span("Corner radius"),
-			Input(ClassStr("set-input"), Style(map[string]string{"width": "5.5rem"}), Type("number"), Attr("min", "0"), Attr("max", "48"), Attr("step", "1"), Attr("aria-label", "Corner radius in pixels"), Value(strconv.Itoa(t.Radius)), OnChange(onRadius)),
+			Input(css.Class("set-input"), Style(map[string]string{"width": "5.5rem"}), Type("number"), Attr("min", "0"), Attr("max", "48"), Attr("step", "1"), Attr("aria-label", "Corner radius in pixels"), Value(strconv.Itoa(t.Radius)), OnChange(onRadius)),
 		),
-		Div(ClassStr("toggle-row"),
+		Div(css.Class("toggle-row"),
 			Span("Text size"),
-			Input(ClassStr("set-input"), Style(map[string]string{"width": "5.5rem"}), Type("number"), Attr("min", "70"), Attr("max", "200"), Attr("step", "5"), Attr("aria-label", "Text size percent"), Value(scalePct), OnChange(onScale)),
+			Input(css.Class("set-input"), Style(map[string]string{"width": "5.5rem"}), Type("number"), Attr("min", "70"), Attr("max", "200"), Attr("step", "5"), Attr("aria-label", "Text size percent"), Value(scalePct), OnChange(onScale)),
 		),
-		Div(ClassStr("toggle-row"),
+		Div(css.Class("toggle-row"),
 			Span("Interface font"),
-			Select(ClassStr("set-input"), Attr("aria-label", "Interface font"), OnChange(onFontUI), fontOptions(t.FontUI, fonts.Get())),
+			Select(css.Class("set-input"), Attr("aria-label", "Interface font"), OnChange(onFontUI), fontOptions(t.FontUI, fonts.Get())),
 		),
-		Div(ClassStr("toggle-row"),
+		Div(css.Class("toggle-row"),
 			Span("Heading font"),
-			Select(ClassStr("set-input"), Attr("aria-label", "Heading font"), OnChange(onFontDisplay), fontOptions(t.FontDisplay, fonts.Get())),
+			Select(css.Class("set-input"), Attr("aria-label", "Heading font"), OnChange(onFontDisplay), fontOptions(t.FontDisplay, fonts.Get())),
 		),
-		Div(ClassStr("flex flex-wrap items-center gap-2 py-1"),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Py1),
 			dataBtn("Upload font…", false, uploadFont),
-			Span(ClassStr("muted text-xs"), "WOFF2, WOFF, TTF, or OTF · up to 1 MB"),
+			Span(css.Class("muted", tw.TextXs), "WOFF2, WOFF, TTF, or OTF · up to 1 MB"),
 		),
-		If(fontMsg.Get() != "", P(ClassStr("text-xs"), Style(map[string]string{"color": "#d8716f"}), fontMsg.Get())),
-		If(len(fontRows) > 0, Div(ClassStr("flex flex-col gap-1 py-1"), fontRows)),
+		If(fontMsg.Get() != "", P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), fontMsg.Get())),
+		If(len(fontRows) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Py1), fontRows)),
 		ui.Segmented(ui.SegmentedProps{
 			Options:  []ui.SegOption{{Value: string(theme.Comfortable), Label: "Comfortable"}, {Value: string(theme.Compact), Label: "Compact"}},
 			Selected: string(t.Density),
@@ -243,7 +245,7 @@ func themeEditor() uic.Node {
 				apply(nt)
 			},
 		}),
-		Div(ClassStr("toggle-row"),
+		Div(css.Class("toggle-row"),
 			Span("Icon weight"),
 			ui.Segmented(ui.SegmentedProps{
 				Options:  []ui.SegOption{{Value: "1.2", Label: "Thin"}, {Value: "1.6", Label: "Regular"}, {Value: "2.2", Label: "Bold"}},
@@ -258,23 +260,23 @@ func themeEditor() uic.Node {
 			}),
 		),
 
-		Div(ClassStr("set-label mt-2"), "Dashboard banner"),
-		P(ClassStr("muted text-xs"), "A decorative band atop the dashboard. Choose a gradient or upload your own image."),
-		Div(ClassStr("flex flex-wrap gap-2 py-1"), bannerBtns),
-		Div(ClassStr("flex flex-wrap items-center gap-2 py-1"),
+		Div(css.Class("set-label", tw.Mt2), "Dashboard banner"),
+		P(css.Class("muted", tw.TextXs), "A decorative band atop the dashboard. Choose a gradient or upload your own image."),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), bannerBtns),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Py1),
 			dataBtn("Upload image…", false, uploadBanner),
 			dataBtn("Remove banner", false, func() {
 				bannerMsg.Set("")
 				setBanner(theme.Banner{})
 			}),
-			Span(ClassStr("muted text-xs"), "PNG, JPEG, WebP, or GIF · up to 2 MB"),
+			Span(css.Class("muted", tw.TextXs), "PNG, JPEG, WebP, or GIF · up to 2 MB"),
 		),
-		If(!banner.Get().None(), P(ClassStr("muted text-xs"), "Showing: "+banner.Get().Name)),
-		If(bannerMsg.Get() != "", P(ClassStr("text-xs"), Style(map[string]string{"color": "#d8716f"}), bannerMsg.Get())),
+		If(!banner.Get().None(), P(css.Class("muted", tw.TextXs), "Showing: "+banner.Get().Name)),
+		If(bannerMsg.Get() != "", P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), bannerMsg.Get())),
 
 		validationNode,
 
-		Div(ClassStr("flex flex-wrap gap-2 py-1 mt-2"),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1, tw.Mt2),
 			dataBtn("Export theme", false, func() {
 				if b, err := t.ToJSON(); err == nil {
 					downloadBytes("cashflux-theme.json", "application/json", b)
@@ -296,7 +298,7 @@ func themeEditor() uic.Node {
 				apply(uistate.DefaultTheme())
 			}),
 		),
-		If(importMsg.Get() != "", P(ClassStr("text-xs mt-1"), Style(map[string]string{"color": "#d8716f"}), importMsg.Get())),
+		If(importMsg.Get() != "", P(css.Class(tw.TextXs, tw.Mt1), Style(map[string]string{"color": "#d8716f"}), importMsg.Get())),
 	)
 }
 
@@ -357,7 +359,7 @@ type themePresetBtnProps struct {
 // themePresetBtn applies a built-in preset when clicked. Own component so its
 // click hook is stable even though presets render in a loop.
 func themePresetBtn(props themePresetBtnProps) uic.Node {
-	return Button(ClassStr("btn"), Type("button"),
+	return Button(css.Class("btn"), Type("button"),
 		Title("Use the "+props.Theme.Name+" preset"),
 		OnClick(func() {
 			if props.OnPick != nil {
@@ -377,9 +379,9 @@ type themeFontRowProps struct {
 // themeFontRow lists one uploaded custom font with a remove button. Own component
 // so each remove hook stays stable across the list.
 func themeFontRow(props themeFontRowProps) uic.Node {
-	return Div(ClassStr("flex items-center justify-between gap-2 text-xs"),
-		Span(ClassStr("muted truncate"), props.Family),
-		Button(ClassStr("btn inline-flex items-center gap-1"), Type("button"),
+	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.TextXs),
+		Span(css.Class("muted", tw.Truncate), props.Family),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
 			Attr("aria-label", "Remove "+props.Family),
 			Title("Remove "+props.Family),
 			OnClick(func() {
@@ -387,7 +389,7 @@ func themeFontRow(props themeFontRowProps) uic.Node {
 					props.OnRemove(props.Family)
 				}
 			}),
-			ui.Icon(icon.Close, ClassStr("w-3.5 h-3.5 shrink-0")),
+			ui.Icon(icon.Close, css.Class("shrink-0", tw.W35, tw.H35)),
 			Span("Remove"),
 		),
 	)
@@ -413,8 +415,8 @@ func themeColorField(props themeColorFieldProps) uic.Node {
 	if val == "" {
 		val = "#000000"
 	}
-	return Label(ClassStr("flex items-center gap-2 text-xs"),
+	return Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.TextXs),
 		Input(Type("color"), Style(map[string]string{"width": "2rem", "height": "1.6rem", "padding": "0", "border": "none", "background": "none"}), Attr("aria-label", props.Label), Value(val), OnChange(on)),
-		Span(ClassStr("muted"), props.Label),
+		Span(css.Class("muted"), props.Label),
 	)
 }

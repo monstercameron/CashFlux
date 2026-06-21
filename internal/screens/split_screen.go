@@ -16,7 +16,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/split"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -28,7 +30,7 @@ import (
 func Split() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -177,9 +179,9 @@ func Split() ui.Node {
 			if mid == payer {
 				continue
 			}
-			owes = append(owes, Div(ClassStr("row"),
-				Span(ClassStr("row-desc"), uistate.T("split.owes", nameByID[mid], nameByID[payer])),
-				Span(ClassStr("budget-amount"), fmtMoney(money.New(shareByID[mid], base))),
+			owes = append(owes, Div(css.Class("row"),
+				Span(css.Class("row-desc"), uistate.T("split.owes", nameByID[mid], nameByID[payer])),
+				Span(css.Class("budget-amount"), fmtMoney(money.New(shareByID[mid], base))),
 			))
 			transfers = append(transfers, split.Transfer{From: mid, To: payer, Amount: shareByID[mid]})
 		}
@@ -198,8 +200,8 @@ func Split() ui.Node {
 			label = m.Name + " owes " + fmtMoney(bal.Neg())
 			amtCls = "budget-amount text-down"
 		}
-		netRows = append(netRows, Div(ClassStr("row"),
-			Span(ClassStr("row-desc"), label),
+		netRows = append(netRows, Div(css.Class("row"),
+			Span(css.Class("row-desc"), label),
 			Span(ClassStr(amtCls), fmtMoney(bal.Abs())),
 		))
 	}
@@ -213,9 +215,9 @@ func Split() ui.Node {
 
 	var memberBody ui.Node
 	if len(members) == 0 {
-		memberBody = P(ClassStr("empty"), uistate.T("split.noMembers"))
+		memberBody = P(css.Class("empty"), uistate.T("split.noMembers"))
 	} else {
-		memberBody = Div(ClassStr("rows"), memberRows)
+		memberBody = Div(css.Class("rows"), memberRows)
 	}
 
 	// Summary so the math is legible at a glance: amount, how many share it, and the
@@ -224,7 +226,7 @@ func Split() ui.Node {
 	var splitSummary ui.Node = Fragment()
 	if n := len(ids); n > 0 && amt > 0 {
 		if weighted.Get() {
-			splitSummary = P(ClassStr("muted"), fmt.Sprintf("%s split among %d (weighted)", fmtMoney(money.New(amt, base)), n))
+			splitSummary = P(css.Class("muted"), fmt.Sprintf("%s split among %d (weighted)", fmtMoney(money.New(amt, base)), n))
 		} else {
 			each := amt / int64(n)
 			rem := amt - each*int64(n)
@@ -232,39 +234,39 @@ func Split() ui.Node {
 			if rem > 0 {
 				s += fmt.Sprintf(" (+%s remainder to the first)", fmtMoney(money.New(rem, base)))
 			}
-			splitSummary = P(ClassStr("muted"), s)
+			splitSummary = P(css.Class("muted"), s)
 		}
 	}
 	// Select-all / clear for households with several members.
 	var memberControls ui.Node = Fragment()
 	if len(members) > 1 {
-		memberControls = Div(ClassStr("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
-			Button(ClassStr("btn"), Type("button"), OnClick(selectAll), "Select all"),
-			Button(ClassStr("btn"), Type("button"), OnClick(clearAll), "Clear"),
+		memberControls = Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
+			Button(css.Class("btn"), Type("button"), OnClick(selectAll), "Select all"),
+			Button(css.Class("btn"), Type("button"), OnClick(clearAll), "Clear"),
 		)
 	}
 
 	return Div(
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("nav.split")),
-			P(ClassStr("muted"), uistate.T("split.hint")),
-			Div(ClassStr("form-grid"),
-				Input(ClassStr("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
-				Input(ClassStr("field"), Type("text"), Attr("aria-label", "What was it for? (optional)"), Placeholder("What was it for? (optional)"), Value(descS.Get()), OnInput(onDesc)),
-				Select(ClassStr("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("nav.split")),
+			P(css.Class("muted"), uistate.T("split.hint")),
+			Div(css.Class("form-grid"),
+				Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
+				Input(css.Class("field"), Type("text"), Attr("aria-label", "What was it for? (optional)"), Placeholder("What was it for? (optional)"), Value(descS.Get()), OnInput(onDesc)),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
 			),
 			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),
 			errText("split-err", errS.Get()),
 		),
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("split.members")),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("split.members")),
 			memberControls,
 			memberBody,
 			splitSummary,
 		),
-		If(len(owes) > 0, Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("split.settleUp")),
-			Div(ClassStr("rows"), owes),
+		If(len(owes) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("split.settleUp")),
+			Div(css.Class("rows"), owes),
 			// Who-owes-whom as a Mermaid digraph (C70): debtor → payer, labelled.
 			uiw.Mermaid(uiw.MermaidProps{
 				Source: mermaid.FromSettleUp(transfers,
@@ -273,24 +275,24 @@ func Split() ui.Node {
 				Label: "Who owes whom",
 				Class: "mt-2",
 			}),
-			Div(ClassStr("flex flex-wrap gap-2 py-1"),
-				Button(ClassStr("btn btn-primary"), Type("button"), Title("Save this split to the settle-up ledger below"), OnClick(saveSplit), "Save split"),
-				Button(ClassStr("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+				Button(css.Class("btn btn-primary"), Type("button"), Title("Save this split to the settle-up ledger below"), OnClick(saveSplit), "Save split"),
+				Button(css.Class("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
 					nm := func(id string) string { return nameByID[id] }
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 					downloadBytes("settle-up.csv", "text/csv", split.CSV(transfers, nm, csvAmount))
 				}), uistate.T("split.downloadCsv")),
 			),
 		)),
-		If(len(net) > 0, Section(ClassStr("card"),
-			H2(ClassStr("card-title"), "Settle up"),
-			P(ClassStr("muted"), "Running balance across every saved split."),
-			Div(ClassStr("rows"), netRows),
+		If(len(net) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), "Settle up"),
+			P(css.Class("muted"), "Running balance across every saved split."),
+			Div(css.Class("rows"), netRows),
 			If(len(netRows) > 0 && len(ledgerRows) > 0, Div(
-				P(ClassStr("budget-sub"), "Simplest way to square up:"),
-				Div(ClassStr("rows"), ledgerRows),
+				P(css.Class("budget-sub"), "Simplest way to square up:"),
+				Div(css.Class("rows"), ledgerRows),
 			)),
-			If(len(netRows) == 0, P(ClassStr("muted"), "All settled up — nobody owes anybody.")),
+			If(len(netRows) == 0, P(css.Class("muted"), "All settled up — nobody owes anybody.")),
 		)),
 	)
 }
@@ -308,10 +310,10 @@ type settleTransferRowProps struct {
 // ledger can list many rows safely.
 func settleTransferRow(props settleTransferRowProps) ui.Node {
 	onRec := ui.UseEvent(Prevent(func() { props.OnRecord(props.From, props.To, props.AmountRaw) }))
-	return Div(ClassStr("row"),
-		Span(ClassStr("row-desc"), props.FromName+" pays "+props.ToName),
-		Span(ClassStr("budget-amount"), props.Amount),
-		Button(ClassStr("btn"), Type("button"), Title("Record this payment as settled"), OnClick(onRec), "Record settlement"),
+	return Div(css.Class("row"),
+		Span(css.Class("row-desc"), props.FromName+" pays "+props.ToName),
+		Span(css.Class("budget-amount"), props.Amount),
+		Button(css.Class("btn"), Type("button"), Title("Record this payment as settled"), OnClick(onRec), "Record settlement"),
 	)
 }
 
@@ -335,14 +337,14 @@ func SplitMemberRow(props splitMemberRowProps) ui.Node {
 
 	weightField := Fragment()
 	if props.Weighted && props.On {
-		weightField = Input(ClassStr("field"), Type("number"), Attr("aria-label", uistate.T("split.weight")),
+		weightField = Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.weight")),
 			Placeholder(uistate.T("split.weight")), Value(props.Weight), Step("1"), OnInput(onWeight))
 	}
 	share := Fragment()
 	if props.Share != "" {
-		share = Span(ClassStr("budget-amount"), props.Share)
+		share = Span(css.Class("budget-amount"), props.Share)
 	}
-	return Div(ClassStr("row"),
+	return Div(css.Class("row"),
 		uiw.ToggleRow(uiw.ToggleRowProps{Label: m.Name, On: props.On, OnChange: func(bool) { props.OnToggle(m.ID) }}),
 		weightField,
 		share,

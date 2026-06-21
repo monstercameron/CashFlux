@@ -5,6 +5,8 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -33,7 +35,7 @@ type emptyCTAProps struct {
 func EmptyStateCTA(props emptyCTAProps) ui.Node {
 	onClick := ui.UseEvent(Prevent(func() { focusByID(props.FocusID) }))
 	if props.FocusID == "" {
-		return P(ClassStr("empty"), props.Message)
+		return P(css.Class("empty"), props.Message)
 	}
 	// A muted glyph above the first-run message makes an otherwise-blank panel feel
 	// intentional and inviting (C46).
@@ -41,9 +43,9 @@ func EmptyStateCTA(props emptyCTAProps) ui.Node {
 	if !glyph.Valid() {
 		glyph = icon.Box
 	}
-	return Div(ClassStr("empty-cta"),
-		uiw.Icon(glyph, ClassStr("w-8 h-8 text-faint")),
-		P(ClassStr("empty"), props.Message),
-		Button(ClassStr("btn btn-primary"), Type("button"), OnClick(onClick), props.CTALabel),
+	return Div(css.Class("empty-cta"),
+		uiw.Icon(glyph, css.Class(tw.W8, tw.H8, tw.TextFaint)),
+		P(css.Class("empty"), props.Message),
+		Button(css.Class("btn btn-primary"), Type("button"), OnClick(onClick), props.CTALabel),
 	)
 }

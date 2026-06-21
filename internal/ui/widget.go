@@ -8,8 +8,10 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetstyle"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -380,11 +382,11 @@ func widget(props WidgetProps) uic.Node {
 	// A leading glyph makes KPI tiles scannable by shape (C46); decorative, so it
 	// sits beside the (still-clickable) title rather than inside the link.
 	if ic := widgetIcon(props.ID); ic.Valid() {
-		titleNode = Span(ClassStr("inline-flex items-center gap-1.5 min-w-0"), Icon(ic, ClassStr("w-4 h-4 shrink-0 text-dim")), titleNode)
+		titleNode = Span(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.MinW0), Icon(ic, css.Class("shrink-0", tw.W4, tw.H4, tw.TextDim)), titleNode)
 	}
 	args = append(args,
-		Div(ClassStr("wh"),
-			Span(ClassStr("grip"), Attr("aria-hidden", "true"), "⠿"), // decorative drag grip
+		Div(css.Class("wh"),
+			Span(css.Class("grip"), Attr("aria-hidden", "true"), "⠿"), // decorative drag grip
 			titleNode,
 			gear,
 		),
@@ -473,7 +475,7 @@ type viewTitleProps struct {
 func viewTitle(props viewTitleProps) uic.Node {
 	route := props.Route
 	return Button(
-		ClassStr("wh-title"),
+		css.Class("wh-title"),
 		Type("button"),
 		Attr("title", uistate.T("widget.open")),
 		Attr("aria-label", uistate.T("widget.openNamed", props.Title)),
@@ -491,7 +493,7 @@ type gearButtonProps struct {
 func gearButton(props gearButtonProps) uic.Node {
 	onClick := props.OnClick
 	return Button(
-		ClassStr("gear-inline"),
+		css.Class("gear-inline"),
 		Type("button"),
 		Attr("title", uistate.T("widget.settings")),
 		Attr("aria-label", uistate.T("widget.settings")), // icon-only button → explicit name (B15)
@@ -500,6 +502,6 @@ func gearButton(props gearButtonProps) uic.Node {
 				onClick()
 			}
 		}),
-		Icon(icon.Settings, ClassStr("w-4 h-4")),
+		Icon(icon.Settings, css.Class(tw.W4, tw.H4)),
 	)
 }

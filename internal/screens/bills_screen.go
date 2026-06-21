@@ -13,7 +13,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -25,7 +27,7 @@ import (
 func Bills() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -110,9 +112,9 @@ func Bills() ui.Node {
 
 	var body ui.Node
 	if len(billRows) == 0 {
-		body = P(ClassStr("empty"), uistate.T("bills.empty"))
+		body = P(css.Class("empty"), uistate.T("bills.empty"))
 	} else {
-		body = Div(ClassStr("rows"), rows)
+		body = Div(css.Class("rows"), rows)
 	}
 
 	nextDue := "—"
@@ -121,17 +123,17 @@ func Bills() ui.Node {
 	}
 
 	return Div(
-		If(len(upcoming) > 0, Div(ClassStr("stat-grid"),
+		If(len(upcoming) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("bills.totalDue"), fmtMoney(money.New(total, base)), "neg"),
 			stat(uistate.T("bills.annualCost"), fmtMoney(money.New(annual, base)), ""),
 			stat(uistate.T("bills.count"), fmt.Sprintf("%d", len(upcoming)), ""),
 			stat(uistate.T("bills.nextDue"), nextDue, ""),
 		)),
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("nav.bills")),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("nav.bills")),
 			body,
-			If(len(upcoming) > 0, Div(ClassStr("flex flex-wrap gap-2 py-1"),
-				Button(ClassStr("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
+			If(len(upcoming) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+				Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
 					csvAmount := func(m money.Money) string {
 						c, err := rates.Convert(m, base)
 						if err != nil {
@@ -143,8 +145,8 @@ func Bills() ui.Node {
 				}), uistate.T("bills.downloadCsv")),
 			)),
 		),
-		If(len(upcoming) > 0, Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("bills.calendar", monthLabel(now))),
+		If(len(upcoming) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("bills.calendar", monthLabel(now))),
 			billsCalendar(bills.MonthCalendar(upcoming, now.Year(), now.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
 		)),
 	)
@@ -157,10 +159,10 @@ func monthLabel(t time.Time) string { return t.Format("January 2006") }
 // dimming out-of-month days, outlining today, and dotting days with bills due.
 func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time) ui.Node {
 	todayKey := now.Format("2006-01-02")
-	args := []any{ClassStr("cal-grid")}
+	args := []any{css.Class("cal-grid")}
 	for i := 0; i < 7; i++ {
 		wd := time.Weekday((int(weekStart) + i) % 7)
-		args = append(args, Div(ClassStr("cal-head"), wd.String()[:3]))
+		args = append(args, Div(css.Class("cal-head"), wd.String()[:3]))
 	}
 	for _, week := range grid {
 		for _, day := range week {
@@ -177,10 +179,10 @@ func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.
 				for _, b := range day.Bills[1:] {
 					names += ", " + b.Name
 				}
-				dot = Span(ClassStr("cal-dot"), Attr("title", names))
+				dot = Span(css.Class("cal-dot"), Attr("title", names))
 			}
 			args = append(args, Div(ClassStr(cls),
-				Span(ClassStr("cal-day"), strconv.Itoa(day.Date.Day())),
+				Span(css.Class("cal-day"), strconv.Itoa(day.Date.Day())),
 				dot,
 			))
 		}
@@ -219,14 +221,14 @@ func BillRow(props billRowProps) ui.Node {
 	if t := billUrgencyTone(d.Bill.DaysUntil); t != "" {
 		metaCls += " " + t
 	}
-	return Div(ClassStr("row"),
-		Div(ClassStr("row-main"),
-			Span(ClassStr("row-desc"), d.Bill.Name),
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), d.Bill.Name),
 			Span(ClassStr(metaCls), meta),
 		),
-		Span(ClassStr("budget-amount"), fmtMoney(d.Shown)),
-		Button(ClassStr("btn btn-primary"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
-		Button(ClassStr("btn"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
+		Span(css.Class("budget-amount"), fmtMoney(d.Shown)),
+		Button(css.Class("btn btn-primary"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
+		Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
 	)
 }
 

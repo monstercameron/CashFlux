@@ -4,6 +4,8 @@ package ui
 
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -27,15 +29,15 @@ type CardProps struct {
 // It matches the Section(ClassStr("card"), H2(ClassStr("card-title"), …), …) pattern
 // repeated across screens so callers need only supply title and body.
 func Card(props CardProps) uic.Node {
-	args := []any{ClassStr("card")}
+	args := []any{css.Class("card")}
 	if props.Title != "" {
 		if props.HeaderAction != nil {
-			args = append(args, Div(ClassStr("card-header"),
-				H2(ClassStr("card-title"), props.Title),
+			args = append(args, Div(css.Class("card-header"),
+				H2(css.Class("card-title"), props.Title),
 				props.HeaderAction,
 			))
 		} else {
-			args = append(args, H2(ClassStr("card-title"), props.Title))
+			args = append(args, H2(css.Class("card-title"), props.Title))
 		}
 	}
 	if props.Body != nil {
@@ -53,8 +55,8 @@ func Card(props CardProps) uic.Node {
 // The <label> element associates the caption with the control for a11y; callers
 // should put an id on the control and pass a matching htmlFor when needed.
 func FormField(label string, control uic.Node) uic.Node {
-	return Label(ClassStr("labeled-field"),
-		Span(ClassStr("t-caption text-dim"), label),
+	return Label(css.Class("labeled-field"),
+		Span(css.Class("t-caption", tw.TextDim), label),
 		control,
 	)
 }
@@ -104,7 +106,7 @@ func iconButton(props IconButtonProps) uic.Node {
 				onClick()
 			}
 		}),
-		Icon(props.Icon, ClassStr("w-4 h-4")),
+		Icon(props.Icon, css.Class(tw.W4, tw.H4)),
 	)
 }
 
@@ -134,13 +136,13 @@ type EntityRowProps struct {
 // EntityRow owns no click hooks itself — all interactivity is passed as pre-built
 // action nodes — so it is safe to call directly inside a variable-length loop.
 func EntityRow(props EntityRowProps) uic.Node {
-	mainArgs := []any{ClassStr("row-main")}
-	mainArgs = append(mainArgs, Span(ClassStr("row-desc"), props.Title))
+	mainArgs := []any{css.Class("row-main")}
+	mainArgs = append(mainArgs, Span(css.Class("row-desc"), props.Title))
 	for _, m := range props.Meta {
-		mainArgs = append(mainArgs, Span(ClassStr("row-meta"), m))
+		mainArgs = append(mainArgs, Span(css.Class("row-meta"), m))
 	}
 
-	rowArgs := []any{ClassStr("row")}
+	rowArgs := []any{css.Class("row")}
 	if props.Leading != nil {
 		rowArgs = append(rowArgs, props.Leading)
 	}
@@ -174,10 +176,10 @@ func StatGrid(stats []Stat) uic.Node {
 		if s.Tone != "" {
 			valueCls += " " + s.Tone
 		}
-		children = append(children, Div(ClassStr("stat"),
-			Div(ClassStr("stat-label"), s.Label),
+		children = append(children, Div(css.Class("stat"),
+			Div(css.Class("stat-label"), s.Label),
 			Div(ClassStr(valueCls), s.Value),
 		))
 	}
-	return Div(append([]any{ClassStr("stat-grid")}, children...)...)
+	return Div(append([]any{css.Class("stat-grid")}, children...)...)
 }

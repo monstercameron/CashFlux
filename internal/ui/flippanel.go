@@ -6,6 +6,8 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -178,39 +180,39 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	var foot uic.Node
 	if props.CloseOnly {
 		// Nothing to save: a single Close button (no Cancel/Save pair).
-		foot = Div(ClassStr("set-foot"),
-			Button(ClassStr("set-btn save"), Type("button"), OnClick(save), "Close"),
+		foot = Div(css.Class("set-foot"),
+			Button(css.Class("set-btn save"), Type("button"), OnClick(save), "Close"),
 		)
 	} else {
-		foot = Div(ClassStr("set-foot"),
-			Button(ClassStr("set-btn cancel"), Type("button"), OnClick(cancel), "Cancel"),
-			Button(ClassStr("set-btn save"), Type("button"), OnClick(save), "Save"),
+		foot = Div(css.Class("set-foot"),
+			Button(css.Class("set-btn cancel"), Type("button"), OnClick(cancel), "Cancel"),
+			Button(css.Class("set-btn save"), Type("button"), OnClick(save), "Save"),
 		)
 	}
 
 	return Div(ClassStr(backdropCls),
-		Div(ClassStr("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
+		Div(css.Class("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
 			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-label", props.Title),
 			Div(ClassStr(innerCls),
 				// Front face — a neutral card briefly seen during the flip.
-				Div(ClassStr("flip-face"),
-					Div(ClassStr("wh"), Span(ClassStr("grip"), "⠿"), H3(props.Title)),
+				Div(css.Class("flip-face"),
+					Div(css.Class("wh"), Span(css.Class("grip"), "⠿"), H3(props.Title)),
 				),
 				// Back face — the settings panel.
-				Div(ClassStr("flip-face flip-back"),
-					Div(ClassStr("set-h"),
+				Div(css.Class("flip-face flip-back"),
+					Div(css.Class("set-h"),
 						Span(Style(map[string]string{"width": "1.5rem"})), // balance the close button so the title centers
 						H3(props.Title),
-						Button(ClassStr("set-close"), Type("button"), Attr("title", "Close"),
+						Button(css.Class("set-close"), Type("button"), Attr("title", "Close"),
 							OnClick(func() {
 								if onClose != nil {
 									onClose()
 								}
 							}),
-							Icon(icon.Close, ClassStr("w-4 h-4")),
+							Icon(icon.Close, css.Class(tw.W4, tw.H4)),
 						),
 					),
-					Div(ClassStr("set-body"), props.Back),
+					Div(css.Class("set-body"), props.Back),
 					foot,
 				),
 			),

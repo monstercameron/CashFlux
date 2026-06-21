@@ -5,7 +5,9 @@ package app
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -30,17 +32,17 @@ func AddMenu() uic.Node {
 	// item builds one menu row. Called a fixed number of times at stable
 	// positions (not a variable-length loop), so the OnClick hooks are stable.
 	item := func(labelKey string, ic icon.Name, onSelect func()) uic.Node {
-		return Button(ClassStr("add-item flex items-center gap-2.5"), Type("button"), Attr("role", "menuitem"),
+		return Button(css.Class("add-item", tw.Flex, tw.ItemsCenter, tw.Gap25), Type("button"), Attr("role", "menuitem"),
 			OnClick(func() {
 				closeMenu()
 				onSelect()
 			}),
-			ui.Icon(ic, ClassStr("w-4 h-4 shrink-0")),
+			ui.Icon(ic, css.Class("shrink-0", tw.W4, tw.H4)),
 			Span(uistate.T(labelKey)),
 		)
 	}
-	return Div(ClassStr("add-wrap"),
-		Button(ClassStr("px-3 py-1.5 rounded-[4px] border border-line text-fg hover:bg-hover"),
+	return Div(css.Class("add-wrap"),
+		Button(css.Class(tw.Px3, tw.Py15, tw.Rounded4, tw.Border, tw.BorderLine, tw.TextFg, tw.HoverBgHover),
 			Attr("title", uistate.T("topbar.add")),
 			Attr("aria-haspopup", "menu"),
 			OnClick(func() { open.Set(!open.Get()) }),

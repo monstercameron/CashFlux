@@ -6,7 +6,9 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -73,15 +75,15 @@ func Toast() uic.Node {
 	if n.Text == "" {
 		// Idle: an empty, visually-hidden live region stays in the DOM so the next
 		// post is announced (a region inserted together with its text often isn't).
-		return Div(ClassStr("sr-only"), Attr("role", role), Attr("aria-live", live))
+		return Div(css.Class(tw.SrOnly), Attr("role", role), Attr("aria-live", live))
 	}
 	cls := "toast"
 	if n.Err {
 		cls += " toast-err"
 	}
 	return Div(ClassStr(cls), Attr("role", role), Attr("aria-live", live),
-		Span(ClassStr("toast-msg"), n.Text),
-		Button(ClassStr("toast-x"), Attr("type", "button"), Attr("title", "Dismiss"), Attr("aria-label", "Dismiss"),
+		Span(css.Class("toast-msg"), n.Text),
+		Button(css.Class("toast-x"), Attr("type", "button"), Attr("title", "Dismiss"), Attr("aria-label", "Dismiss"),
 			OnClick(func() { atom.Set(n.Cleared()) }), "×"),
 	)
 }

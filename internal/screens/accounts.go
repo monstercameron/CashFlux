@@ -21,7 +21,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -33,7 +35,7 @@ import (
 func Accounts() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
 	// Revision atom: bumping it after a mutation re-renders this screen.
@@ -239,43 +241,43 @@ func Accounts() ui.Node {
 	}
 
 	isLiab := domain.AccountType(accType.Get()).Class() == domain.ClassLiability
-	form := Section(ClassStr("card"),
-		H2(ClassStr("card-title"), uistate.T("accounts.addTitle")),
-		Form(ClassStr("form-grid"), OnSubmit(add),
+	form := Section(css.Class("card"),
+		H2(css.Class("card-title"), uistate.T("accounts.addTitle")),
+		Form(css.Class("form-grid"), OnSubmit(add),
 			labeledField(uistate.T("common.name"),
-				Input(append([]any{ClassStr("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("acct-err", errMsg.Get())...)...)),
+				Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("acct-err", errMsg.Get())...)...)),
 			labeledField(uistate.T("accounts.typeLabel"),
-				Select(ClassStr("field"), Attr("aria-label", uistate.T("accounts.typeLabel")), OnChange(onType), typeOptions)),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("accounts.typeLabel")), OnChange(onType), typeOptions)),
 			labeledField(uistate.T("common.owner"),
-				Select(ClassStr("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
 			labeledField(uistate.T("accounts.currency"),
-				Select(ClassStr("field"), Attr("aria-label", uistate.T("accounts.currency")), OnChange(onCurr), currencyOptions(app, curr.Get()))),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("accounts.currency")), OnChange(onCurr), currencyOptions(app, curr.Get()))),
 			labeledField(uistate.T("accounts.openingBalance"),
-				Input(ClassStr("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
 			If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
-				Input(ClassStr("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit)))),
+				Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit)))),
 			If(isLiab, labeledField(uistate.T("accounts.apr"),
-				Input(ClassStr("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Value(apr.Get()), Step("0.01"), OnInput(onApr)))),
+				Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Value(apr.Get()), Step("0.01"), OnInput(onApr)))),
 			If(isLiab, labeledField(uistate.T("accounts.minPayment"),
-				Input(ClassStr("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minPayment.Get()), Step("0.01"), OnInput(onMinPayment)))),
+				Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minPayment.Get()), Step("0.01"), OnInput(onMinPayment)))),
 			If(isLiab, labeledField(uistate.T("accounts.dueDay"),
-				Input(ClassStr("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueDay.Get()), OnInput(onDueDay)))),
+				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueDay.Get()), OnInput(onDueDay)))),
 			If(isLiab, labeledField(uistate.T("accounts.lender"),
-				Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lender.Get()), OnInput(onLender)))),
-			If(!isLiab, Button(ClassStr("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
+				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lender.Get()), OnInput(onLender)))),
+			If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
 				IfElse(advOpen.Get(), Text("Hide advanced fields"), Text("Show advanced fields")))),
 			If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
-				Input(ClassStr("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn)))),
+				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn)))),
 			If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
-				Input(ClassStr("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity)))),
+				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity)))),
 			If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.stability"),
-				Input(ClassStr("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability)))),
+				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability)))),
 			If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.lockUntil"),
-				Input(ClassStr("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), Value(lockUntil.Get()), OnInput(onLockUntil)))),
+				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), Value(lockUntil.Get()), OnInput(onLockUntil)))),
 			MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),
-			Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("accounts.addTitle")),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("accounts.addTitle")),
 		),
 		errText("acct-err", errMsg.Get()),
 	)
@@ -373,34 +375,34 @@ func Accounts() ui.Node {
 	keyOf := func(ac domain.Account) any { return ac.ID }
 
 	return Div(
-		If(len(accounts) == 0, Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("accounts.welcomeTitle")),
-			P(ClassStr("muted"), uistate.T("accounts.welcomeDesc")),
-			Button(ClassStr("btn btn-primary"), Type("button"), OnClick(loadSample), uistate.T("accounts.loadSample")),
+		If(len(accounts) == 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("accounts.welcomeTitle")),
+			P(css.Class("muted"), uistate.T("accounts.welcomeDesc")),
+			Button(css.Class("btn btn-primary"), Type("button"), OnClick(loadSample), uistate.T("accounts.loadSample")),
 		)),
-		Div(ClassStr("stat-grid"),
+		Div(css.Class("stat-grid"),
 			stat(uistate.T("dashboard.netWorth"), fmtMoney(net), accentFor(net)),
 			stat(uistate.T("accounts.assets"), fmtMoney(assets), "pos"),
 			stat(uistate.T("dashboard.liabilities"), fmtMoney(liabilities), "neg"),
 		),
-		If(len(nw.MissingCurrencies) > 0, P(ClassStr("err"), Attr("role", "alert"),
+		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
 			"Net worth excludes "+plural(len(nw.ExcludedAccounts), "account")+" — no exchange rate for "+strings.Join(nw.MissingCurrencies, ", ")+". Add it in Settings to include them.")),
 		If(staleCount > 0, Div(Style(map[string]string{"margin-bottom": "0.6rem"}),
-			Button(ClassStr("btn"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
+			Button(css.Class("btn"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
 				Text(uistate.T("accounts.markAll", plural(staleCount, "account")))),
 		)),
 		form,
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("accounts.assets")),
-			IfElse(len(assetList) == 0, P(ClassStr("empty"), uistate.T("accounts.noAssets")), Div(ClassStr("rows"), MapKeyed(assetList, keyOf, renderRow))),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("accounts.assets")),
+			IfElse(len(assetList) == 0, P(css.Class("empty"), uistate.T("accounts.noAssets")), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
 		),
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("dashboard.liabilities")),
-			IfElse(len(liabList) == 0, P(ClassStr("empty"), uistate.T("accounts.noLiabilities")), Div(ClassStr("rows"), MapKeyed(liabList, keyOf, renderRow))),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("dashboard.liabilities")),
+			IfElse(len(liabList) == 0, P(css.Class("empty"), uistate.T("accounts.noLiabilities")), Div(css.Class("rows"), MapKeyed(liabList, keyOf, renderRow))),
 		),
-		If(len(archivedList) > 0, Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("accounts.archived")),
-			Div(ClassStr("rows"), MapKeyed(archivedList, keyOf, renderRow)),
+		If(len(archivedList) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("accounts.archived")),
+			Div(css.Class("rows"), MapKeyed(archivedList, keyOf, renderRow)),
 		)),
 	)
 }
@@ -410,9 +412,9 @@ func Accounts() ui.Node {
 // The wrapping <label> also associates the text with the control for a11y. Styled
 // inline (stacked text-over-control) to avoid a stylesheet dependency.
 func labeledField(label string, control ui.Node) ui.Node {
-	return Label(ClassStr("labeled-field"),
+	return Label(css.Class("labeled-field"),
 		Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
-		Span(ClassStr("t-caption text-dim"), label),
+		Span(css.Class("t-caption", tw.TextDim), label),
 		control,
 	)
 }
@@ -636,45 +638,45 @@ func AccountRow(props accountRowProps) ui.Node {
 	}, fmt.Sprintf("%t-%t", editing.Get(), settingBal.Get()))
 
 	if settingBal.Get() {
-		return Div(ClassStr("row-edit"),
-			Form(ClassStr("form-grid"), OnSubmit(doSetBal),
+		return Div(css.Class("row-edit"),
+			Form(css.Class("form-grid"), OnSubmit(doSetBal),
 				labeledField(uistate.T("accounts.setBalanceAmount"),
-					Input(ClassStr("field"), Attr("id", "acct-setbal-"+a.ID), Type("number"), Placeholder(uistate.T("accounts.setBalanceAmount")), Value(setBalAmtS.Get()), Step("0.01"), OnInput(onSetBalAmt))),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelSetBal), uistate.T("action.cancel")),
+					Input(css.Class("field"), Attr("id", "acct-setbal-"+a.ID), Type("number"), Placeholder(uistate.T("accounts.setBalanceAmount")), Value(setBalAmtS.Get()), Step("0.01"), OnInput(onSetBalAmt))),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelSetBal), uistate.T("action.cancel")),
 			),
 		)
 	}
 	if editing.Get() {
 		isLiab := a.Class == domain.ClassLiability
-		return Div(ClassStr("row-edit"),
-			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
+		return Div(css.Class("row-edit"),
+			Form(css.Class("form-grid"), OnSubmit(saveEdit),
 				labeledField(uistate.T("common.name"),
-					Input(ClassStr("field"), Attr("id", "acct-edit-"+a.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
+					Input(css.Class("field"), Attr("id", "acct-edit-"+a.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
 				labeledField(uistate.T("common.owner"),
-					Select(ClassStr("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
 				labeledField(uistate.T("accounts.openingBalance"),
-					Input(ClassStr("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal))),
+					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal))),
 				If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
-					Input(ClassStr("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(climS.Get()), Step("0.01"), OnInput(onClim)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(climS.Get()), Step("0.01"), OnInput(onClim)))),
 				If(isLiab, labeledField(uistate.T("accounts.apr"),
-					Input(ClassStr("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Value(aprS.Get()), Step("0.01"), OnInput(onApr)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Value(aprS.Get()), Step("0.01"), OnInput(onApr)))),
 				If(isLiab, labeledField(uistate.T("accounts.minPayment"),
-					Input(ClassStr("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minpS.Get()), Step("0.01"), OnInput(onMinp)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minpS.Get()), Step("0.01"), OnInput(onMinp)))),
 				If(isLiab, labeledField(uistate.T("accounts.dueDay"),
-					Input(ClassStr("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueS.Get()), OnInput(onDue)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueS.Get()), OnInput(onDue)))),
 				If(isLiab, labeledField(uistate.T("accounts.lender"),
-					Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender)))),
+					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender)))),
 				If(!isLiab, labeledField(uistate.T("accounts.expReturn"),
-					Input(ClassStr("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),
+					Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),
 				If(!isLiab, labeledField(uistate.T("accounts.liquidity"),
-					Input(ClassStr("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq)))),
 				If(!isLiab, labeledField(uistate.T("accounts.stability"),
-					Input(ClassStr("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
 				If(!isLiab, labeledField(uistate.T("accounts.lockUntilEdit"),
-					Input(ClassStr("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock)))),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock)))),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -691,27 +693,27 @@ func AccountRow(props accountRowProps) ui.Node {
 	if !menuOpen.Get() {
 		menuHidden = " hidden-menu"
 	}
-	return Div(ClassStr("row"),
-		Div(ClassStr("row-main"),
-			Span(ClassStr("row-desc"), a.Name,
-				If(props.Stale, Span(ClassStr("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("accounts.stale"))),
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), a.Name,
+				If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("accounts.stale"))),
 			),
-			Span(ClassStr("row-meta"), meta),
+			Span(css.Class("row-meta"), meta),
 		),
 		Span(ClassStr(amountClass(props.Balance)), fmtMoney(props.Balance)),
 		// Primary actions inline; everything else in the ⋯ menu.
-		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("nav.transactions"))),
-		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-		Div(ClassStr("add-wrap"),
-			Button(ClassStr("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), OnClick(toggleMenu), uiw.Icon(icon.MoreH, ClassStr("w-4 h-4"))),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		Div(css.Class("add-wrap"),
+			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-				If(!a.Archived, Button(ClassStr("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),
-				If(!a.Archived, Button(ClassStr("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
-				Button(ClassStr("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
+				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),
+				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
 			),
 		),
-		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }
 

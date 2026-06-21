@@ -6,6 +6,7 @@
 package screens
 
 import (
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -78,8 +79,8 @@ func All() []Route {
 }
 
 func stat(label, value, accent string) ui.Node {
-	return Div(ClassStr("stat"),
-		Div(ClassStr("stat-label"), label),
+	return Div(css.Class("stat"),
+		Div(css.Class("stat-label"), label),
 		Div(ClassStr("stat-value "+accent), value),
 	)
 }

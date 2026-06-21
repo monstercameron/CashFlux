@@ -13,8 +13,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/version"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -71,12 +73,12 @@ func Shell(props ShellProps) uic.Node {
 	// deep-link refreshes resolve assets, but that also makes a bare "#main" resolve
 	// against the base (navigating to the root). Anchoring it to the live path keeps
 	// "skip to content" an in-page jump on every route.
-	return Div(ClassStr("flex h-screen overflow-hidden bg-base text-fg font-sans"),
-		A(ClassStr("skip-link"), Attr("href", uistate.RoutePath(props.ActivePath)+"#main"), uistate.T("a11y.skipToContent")),
+	return Div(css.Class(tw.Flex, tw.HScreen, tw.OverflowHidden, tw.BgBase, tw.TextFg, tw.FontSans),
+		A(css.Class("skip-link"), Attr("href", uistate.RoutePath(props.ActivePath)+"#main"), uistate.T("a11y.skipToContent")),
 		uic.CreateElement(Sidebar, sidebarProps{ActivePath: props.ActivePath}),
-		Main(ClassStr("cf-scroll flex-1 min-w-0 overflow-y-auto"), Attr("id", "main"), Attr("tabindex", "-1"),
+		Main(css.Class("cf-scroll", tw.Flex1, tw.MinW0, tw.OverflowYAuto), Attr("id", "main"), Attr("tabindex", "-1"),
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
-			Div(ClassStr("p-[10px]"), uic.CreateElement(props.View)),
+			Div(css.Class(tw.P10px), uic.CreateElement(props.View)),
 		),
 		uic.CreateElement(SettingsHost),
 		uic.CreateElement(QuickAddHost),
@@ -185,14 +187,14 @@ func toolGroupHeader(props toolGroupHeaderProps) uic.Node {
 	if props.Collapsed {
 		chev = icon.ChevronRight
 	}
-	return Button(ClassStr("rail-subhead rail-section flex items-center gap-1.5 w-full px-3 pt-3 pb-1 text-[11px] uppercase tracking-[0.08em] text-faint hover:text-fg"),
+	return Button(css.Class("rail-subhead rail-section", tw.Flex, tw.ItemsCenter, tw.Gap15, tw.WFull, tw.Px3, tw.Pt3, tw.Pb1, tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint, tw.HoverTextFg),
 		Type("button"), Attr("aria-expanded", fmt.Sprintf("%v", !props.Collapsed)),
 		OnClick(func() {
 			if props.OnToggle != nil {
 				props.OnToggle()
 			}
 		}),
-		ui.Icon(chev, ClassStr("w-3 h-3")),
+		ui.Icon(chev, css.Class(tw.W3, tw.H3)),
 		Span(props.Label),
 	)
 }
@@ -201,7 +203,7 @@ func toolGroupHeader(props toolGroupHeaderProps) uic.Node {
 // rail-section class lets the collapsed/mobile rules hide just these labels
 // (not the nav items, which the framework also wraps in a <div>) — see C15.
 func railHeader(label string) uic.Node {
-	return Div(ClassStr("rail-section px-3 pt-4 pb-1 text-[11px] uppercase tracking-[0.08em] text-faint"), label)
+	return Div(css.Class("rail-section", tw.Px3, tw.Pt4, tw.Pb1, tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), label)
 }
 
 // Sidebar renders the left rail: brand header, primary navigation, the user's
@@ -336,12 +338,12 @@ func Sidebar(props sidebarProps) uic.Node {
 		}
 	}
 	return Aside(ClassStr(cls),
-		Div(ClassStr("railhead h-14 flex items-center gap-2.5 px-5 border-b border-line"),
-			Span(ClassStr("grid place-items-center w-7 h-7 rounded bg-fg text-base font-display font-semibold text-[13px] shrink-0"), "C"),
-			Span(ClassStr("brand-name font-display text-lg font-semibold tracking-tight"), uistate.T("app.name")),
+		Div(css.Class("railhead", tw.H14, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.Px5, tw.BorderB, tw.BorderLine),
+			Span(css.Class("shrink-0", tw.Grid, tw.PlaceItemsCenter, tw.W7, tw.H7, tw.Rounded, tw.BgFg, tw.TextBase, tw.FontDisplay, tw.FontSemibold, tw.Text13), "C"),
+			Span(css.Class("brand-name", tw.FontDisplay, tw.TextLg, tw.FontSemibold, tw.TrackingTight), uistate.T("app.name")),
 		),
 		uic.CreateElement(WorkspaceSwitcher),
-		Nav(ClassStr("flex-1 overflow-y-auto p-3 flex flex-col gap-0.5 text-dim text-[13.5px]"), Attr("aria-label", uistate.T("nav.primaryLabel")),
+		Nav(css.Class(tw.Flex1, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
 			MapKeyed(visibleNav,
 				func(it railItem) any { return it.Path },
 				func(it railItem) uic.Node {
@@ -449,20 +451,20 @@ func HouseholdCard() uic.Node {
 	}
 	// The household card plus a small muted version line anchored at the rail foot
 	// (mt-auto on the wrapper). One source of truth: internal/version (C80).
-	return Div(ClassStr("mt-auto"),
+	return Div(css.Class(tw.MtAuto),
 		Button(
-			ClassStr("hh m-3 p-3 rounded-[4px] border border-line flex items-center gap-2.5 text-left hover:bg-hover w-full"),
+			css.Class("hh", tw.M3, tw.P3, tw.Rounded4, tw.Border, tw.BorderLine, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextLeft, tw.HoverBgHover, tw.WFull),
 			// Tooltip/accessible name — keeps the "Settings" affordance (the gear icon
 			// signals it visually) without repeating it in the visible summary line.
 			Title(name+" · "+summary+" · "+uistate.T("household.settings")),
 			OnClick(func() { settings.Set(uistate.Global()) }),
-			ui.Icon(icon.Settings, ClassStr("w-4 h-4 shrink-0 text-dim")),
-			Span(ClassStr("hh-text leading-tight"),
-				Span(ClassStr("font-display text-[14px] font-medium block"), name),
-				Span(ClassStr("text-xs text-faint block"), summary),
+			ui.Icon(icon.Settings, css.Class("shrink-0", tw.W4, tw.H4, tw.TextDim)),
+			Span(css.Class("hh-text", tw.LeadingTight),
+				Span(css.Class(tw.FontDisplay, tw.Text14, tw.FontMedium, tw.Block), name),
+				Span(css.Class(tw.TextXs, tw.TextFaint, tw.Block), summary),
 			),
 		),
-		Span(ClassStr("app-version text-faint text-[11px] block text-center pb-2"),
+		Span(css.Class("app-version", tw.TextFaint, tw.Text11, tw.Block, tw.TextCenter, tw.Pb2),
 			Attr("title", "CashFlux "+version.Label()), version.Label()),
 	)
 }
@@ -490,23 +492,23 @@ func TopBar(props topBarProps) uic.Node {
 	periodAware := map[string]bool{
 		"/": true, "/transactions": true, "/budgets": true, "/planning": true, "/insights": true,
 	}[curPath]
-	return Div(ClassStr("topbar border-b border-line flex flex-wrap items-center px-6 gap-3 sticky top-0 bg-base z-20"),
-		Button(ClassStr("menu-btn w-7 h-7 -ml-1"), Attr("title", uistate.T("topbar.menu")),
+	return Div(css.Class("topbar", tw.BorderB, tw.BorderLine, tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Px6, tw.Gap3, tw.Sticky, tw.Top0, tw.BgBase, tw.Z20),
+		Button(css.Class("menu-btn", tw.W7, tw.H7, tw.MlN1), Attr("title", uistate.T("topbar.menu")),
 			OnClick(func() {
 				next := !collapsed.Get()
 				collapsed.Set(next)
 				uistate.PersistRailCollapsed(next) // remember the choice across reloads (C20)
 			}),
-			ui.Icon(icon.Menu, ClassStr("w-5 h-5")),
+			ui.Icon(icon.Menu, css.Class(tw.W5, tw.H5)),
 		),
-		Nav(ClassStr("flex items-center gap-2 font-display min-w-0"), Attr("aria-label", uistate.T("topbar.breadcrumb")),
-			If(!onDashboard, Button(ClassStr("text-dim hover:text-fg text-[15px]"), Type("button"), Attr("title", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))),
-			If(!onDashboard, Span(ClassStr("text-faint"), "›")),
+		Nav(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FontDisplay, tw.MinW0), Attr("aria-label", uistate.T("topbar.breadcrumb")),
+			If(!onDashboard, Button(css.Class(tw.TextDim, tw.HoverTextFg, tw.Text15), Type("button"), Attr("title", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))),
+			If(!onDashboard, Span(css.Class(tw.TextFaint), "›")),
 			// The current page's title is the screen's single <h1> — so every screen
 			// has exactly one top-level heading for screen-reader heading navigation.
-			H1(ClassStr("text-lg font-semibold truncate"), Attr("aria-current", "page"), props.Title),
+			H1(css.Class(tw.TextLg, tw.FontSemibold, tw.Truncate), Attr("aria-current", "page"), props.Title),
 		),
-		Div(ClassStr("topbar-controls ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
+		Div(css.Class("topbar-controls", tw.MlAuto, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextDim, tw.Text13),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(MuzakToggle),
@@ -529,12 +531,12 @@ func NotifyBell() uic.Node {
 		if unread > 9 {
 			label = "9+"
 		}
-		badge = Span(ClassStr("notify-badge"), label)
+		badge = Span(css.Class("notify-badge"), label)
 	}
-	return Button(ClassStr("muzak-btn relative"), Type("button"),
+	return Button(css.Class("muzak-btn", tw.Relative), Type("button"),
 		Attr("title", uistate.T("nav.notifications")), Attr("aria-label", uistate.T("nav.notifications")),
 		OnClick(open),
-		ui.Icon(icon.Bell, ClassStr("w-[18px] h-[18px]")),
+		ui.Icon(icon.Bell, css.Class(tw.W18px, tw.H18px)),
 		badge,
 	)
 }
@@ -577,7 +579,7 @@ func MuzakToggle() uic.Node {
 		Attr("aria-label", uistate.T(titleKey)),
 		Attr("aria-pressed", fmt.Sprintf("%v", enabled)),
 		OnClick(toggle),
-		ui.Icon(glyph, ClassStr("w-[18px] h-[18px]")),
+		ui.Icon(glyph, css.Class(tw.W18px, tw.H18px)),
 	)
 }
 
@@ -614,7 +616,7 @@ func ResolutionControl() uic.Node {
 
 	var stepper uic.Node
 	if rangeMode.Get() {
-		stepper = Span(ClassStr("flex items-center gap-2.5"),
+		stepper = Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap25),
 			ui.StepperPill(ui.StepperPillProps{
 				Label:     w.FromLabel(),
 				OnPrev:    func() { atom.Set(w.StepFrom(-1)) },
@@ -622,7 +624,7 @@ func ResolutionControl() uic.Node {
 				PrevLabel: uistate.T("resolution.fromEarlier"),
 				NextLabel: uistate.T("resolution.fromLater"),
 			}),
-			Span(ClassStr("text-faint"), "–"),
+			Span(css.Class(tw.TextFaint), "–"),
 			ui.StepperPill(ui.StepperPillProps{
 				Label:     w.ToLabel(),
 				OnPrev:    func() { atom.Set(w.StepTo(-1)) },
@@ -646,7 +648,7 @@ func ResolutionControl() uic.Node {
 		rangeLabel = uistate.T("resolution.singlePeriod")
 	}
 
-	return Span(ClassStr("reso-control flex items-center gap-2.5"),
+	return Span(css.Class("reso-control", tw.Flex, tw.ItemsCenter, tw.Gap25),
 		ui.Segmented(ui.SegmentedProps{
 			Options: []ui.SegOption{
 				{Value: string(period.Week), Label: "Week"},
@@ -660,7 +662,7 @@ func ResolutionControl() uic.Node {
 				atom.Set(w.SetResolution(r, time.Now()))
 			},
 		}),
-		Select(ClassStr("rstep text-[12px]"), Attr("aria-label", uistate.T("resolution.jumpTo")), Attr("title", uistate.T("resolution.jumpTo")), OnChange(onPreset),
+		Select(css.Class("rstep", tw.Text12), Attr("aria-label", uistate.T("resolution.jumpTo")), Attr("title", uistate.T("resolution.jumpTo")), OnChange(onPreset),
 			Option(Value(""), SelectedIf(true), uistate.T("resolution.jumpTo")),
 			Option(Value("this"), uistate.T("resolution.presetThis")),
 			Option(Value("last"), uistate.T("resolution.presetLast")),
@@ -668,11 +670,11 @@ func ResolutionControl() uic.Node {
 			Option(Value("ytd"), uistate.T("resolution.presetYTD")),
 		),
 		stepper,
-		If(!isCurrent, Button(ClassStr("px-2 py-1 text-dim hover:text-fg text-[12px]"), Type("button"),
+		If(!isCurrent, Button(css.Class(tw.Px2, tw.Py1, tw.TextDim, tw.HoverTextFg, tw.Text12), Type("button"),
 			Attr("title", uistate.T("resolution.thisPeriodTitle")),
 			OnClick(func() { atom.Set(period.NewWindow(w.Res, time.Now(), w.WeekStart)) }),
 			uistate.T("resolution.thisPeriod"))),
-		Button(ClassStr("px-2 py-1 text-faint hover:text-fg text-[12px]"), Type("button"),
+		Button(css.Class(tw.Px2, tw.Py1, tw.TextFaint, tw.HoverTextFg, tw.Text12), Type("button"),
 			OnClick(func() {
 				if rangeMode.Get() {
 					// Leaving range mode collapses back to a single period.

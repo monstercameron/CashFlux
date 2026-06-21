@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/monstercameron/CashFlux/internal/pagination"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -97,7 +98,7 @@ func dtHeader(props dtHeaderProps) ui.Node {
 	key := c.SortKey
 	on := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnSort(key) })
 	args = append(args, Attr("aria-sort", ariaSort),
-		Button(ClassStr("th-sort"), Type("button"), OnClick(on), c.Label+caret))
+		Button(css.Class("th-sort"), Type("button"), OnClick(on), c.Label+caret))
 	return Th(args...)
 }
 
@@ -127,23 +128,23 @@ func dtPager(props dtPagerProps) ui.Node {
 	}
 	sizeOpts = append(sizeOpts, Option(Value(strconv.Itoa(AllPageSize)), SelectedIf(props.PageSize < 0), "All"))
 
-	prevArgs := []any{ClassStr("btn"), Type("button"), Attr("aria-label", "Previous page"), OnClick(onPrev)}
+	prevArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", "Previous page"), OnClick(onPrev)}
 	if props.Page <= 1 {
 		prevArgs = append(prevArgs, Attr("disabled", "disabled"))
 	}
 	prevArgs = append(prevArgs, "Prev")
-	nextArgs := []any{ClassStr("btn"), Type("button"), Attr("aria-label", "Next page"), OnClick(onNext)}
+	nextArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", "Next page"), OnClick(onNext)}
 	if props.Page >= totalPages {
 		nextArgs = append(nextArgs, Attr("disabled", "disabled"))
 	}
 	nextArgs = append(nextArgs, "Next")
 
 	pos := strconv.Itoa(from) + "–" + strconv.Itoa(to) + " of " + strconv.Itoa(props.Total)
-	return Div(ClassStr("data-pager"),
+	return Div(css.Class("data-pager"),
 		Button(prevArgs...),
-		Span(ClassStr("muted data-pos"), pos),
+		Span(css.Class("muted data-pos"), pos),
 		Button(nextArgs...),
-		Span(ClassStr("muted data-pager-label"), "Rows per page"),
-		Select(ClassStr("field"), Attr("aria-label", "Rows per page"), OnChange(onSize), sizeOpts),
+		Span(css.Class("muted data-pager-label"), "Rows per page"),
+		Select(css.Class("field"), Attr("aria-label", "Rows per page"), OnChange(onSize), sizeOpts),
 	)
 }

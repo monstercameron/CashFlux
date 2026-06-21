@@ -21,7 +21,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -32,7 +34,7 @@ import (
 func Insights() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
 	settings := app.Settings()
@@ -95,8 +97,8 @@ func Insights() ui.Node {
 	// use so the two placements get independent button nodes.
 	keyHintNode := func() ui.Node {
 		return Div(
-			P(ClassStr("muted"), uistate.T("insights.keyHint")),
-			Button(ClassStr("btn"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
+			P(css.Class("muted"), uistate.T("insights.keyHint")),
+			Button(css.Class("btn"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
 		)
 	}
 
@@ -668,9 +670,9 @@ func Insights() ui.Node {
 	sort.Slice(pins, func(i, j int) bool { return pins[i].CreatedAt.After(pins[j].CreatedAt) })
 	pinnedCard := Fragment()
 	if len(pins) > 0 {
-		pinnedCard = Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("insights.pinnedTitle")),
-			Div(ClassStr("rows"), MapKeyed(pins,
+		pinnedCard = Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("insights.pinnedTitle")),
+			Div(css.Class("rows"), MapKeyed(pins,
 				func(p domain.SavedInsight) any { return p.ID },
 				func(p domain.SavedInsight) ui.Node {
 					return ui.CreateElement(PinnedInsightRow, pinnedInsightRowProps{Insight: p, OnDelete: deletePinned})
@@ -699,7 +701,7 @@ func Insights() ui.Node {
 	// The conversation thread scrolls inside a bounded region so the composer below it
 	// stays on screen no matter how long the conversation grows (the thread scrolls,
 	// the input doesn't move). Auto-scroll keeps the newest message in view.
-	thread := Div(Attr("id", "cf-chat-thread"), ClassStr("flex flex-col gap-3 mb-3 overflow-y-auto max-h-[55vh] pr-1"),
+	thread := Div(Attr("id", "cf-chat-thread"), css.Class(tw.Flex, tw.FlexCol, tw.Gap3, tw.Mb3, tw.OverflowYAuto, tw.MaxH55vh, tw.Pr1),
 		MapKeyed(convo,
 			func(t chatTurn) any { return t.ID },
 			func(t chatTurn) ui.Node {
@@ -709,8 +711,8 @@ func Insights() ui.Node {
 				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
 			},
 		),
-		If(loading.Get(), Div(ClassStr("flex justify-start"),
-			Div(ClassStr("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2 text-[13px] text-faint"), uistate.T("insights.thinking")),
+		If(loading.Get(), Div(css.Class(tw.Flex, tw.JustifyStart),
+			Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py2, tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
 		)),
 	)
 
@@ -721,11 +723,11 @@ func Insights() ui.Node {
 	} else {
 		// A plain Div (not a Form) so there is no native submit that could reload the
 		// page; Send is a button and Enter is handled by the keydown listener.
-		composer = Div(ClassStr("mt-1 flex gap-2 items-center"),
-			Input(Attr("id", "cf-chat-input"), ClassStr("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
+		composer = Div(css.Class(tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
+			Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
 			IfElse(loading.Get(),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
-				Button(ClassStr("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("insights.send"))),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
+				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("insights.send"))),
 			),
 		)
 	}
@@ -733,7 +735,7 @@ func Insights() ui.Node {
 	// Starter chips seed an empty thread; tapping one sends it (L8).
 	chips := Fragment()
 	if empty && (key != "" || useBackendAI) && len(starters) > 0 {
-		chips = Div(ClassStr("flex flex-wrap gap-2 mb-2"),
+		chips = Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb2),
 			MapKeyed(starters,
 				func(q string) any { return q },
 				func(q string) ui.Node {
@@ -748,9 +750,9 @@ func Insights() ui.Node {
 	convs := app.Conversations()
 	sort.Slice(convs, func(i, j int) bool { return convs[i].UpdatedAt.After(convs[j].UpdatedAt) })
 	pill := "inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] border border-black/10 hover:bg-black/[0.03]"
-	switcher := Div(ClassStr("flex flex-wrap gap-2 mb-3 items-center"),
-		Button(ClassStr(pill), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, ClassStr("w-3.5 h-3.5")), Span(uistate.T("insights.newChat"))),
-		Button(ClassStr(pill), Type("button"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, ClassStr("w-3.5 h-3.5")), Span(uistate.T("insights.editPrompt"))),
+	switcher := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb3, tw.ItemsCenter),
+		Button(ClassStr(pill), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
+		Button(ClassStr(pill), Type("button"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
 		MapKeyed(convs,
 			func(c domain.Conversation) any { return c.ID },
 			func(c domain.Conversation) ui.Node {
@@ -770,9 +772,9 @@ func Insights() ui.Node {
 			label = uistate.T("insights.usingBackend")
 			action = uistate.T("insights.useOpenAI")
 		}
-		backendToggle = Div(ClassStr("flex items-center gap-2 mb-2 text-[12px] text-faint"),
+		backendToggle = Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb2, tw.Text12, tw.TextFaint),
 			Span(label),
-			Button(ClassStr("underline hover:opacity-100"), Type("button"), OnClick(toggleBackend), action),
+			Button(css.Class(tw.Underline, tw.HoverOpacity100), Type("button"), OnClick(toggleBackend), action),
 		)
 	}
 
@@ -786,11 +788,11 @@ func Insights() ui.Node {
 		// Pinned insights sit ABOVE the chat as quick references, so the conversation
 		// thread below has room to grow.
 		pinnedCard,
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("insights.chatTitle")),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("insights.chatTitle")),
 			switcher,
 			backendToggle,
-			If(empty, P(ClassStr("muted"), uistate.T("insights.chatHint"))),
+			If(empty, P(css.Class("muted"), uistate.T("insights.chatHint"))),
 			If(!empty, thread),
 			// Approval card: a mutating tool is paused waiting for the user's yes/no. Its
 			// own component so the Approve/Decline handlers re-attach cleanly each time
@@ -802,7 +804,7 @@ func Insights() ui.Node {
 			})),
 			chips,
 			composer,
-			If(errMsg.Get() != "", P(ClassStr("err"), Attr("role", "alert"), errMsg.Get())),
+			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 		),
 		// The editable system-prompt overlay (persona only; live data + tools are always
 		// injected automatically by buildMessages).
@@ -812,10 +814,10 @@ func Insights() ui.Node {
 			Height:  "520px",
 			OnSave:  savePrompt,
 			OnClose: closePrompt,
-			Back: Div(ClassStr("flex flex-col gap-2"),
-				P(ClassStr("muted text-[13px]"), uistate.T("insights.promptHint")),
-				Textarea(ClassStr("field field-wide"), Attr("rows", "12"), Attr("aria-label", uistate.T("insights.promptTitle")), OnInput(onPromptInput), promptDraft.Get()),
-				Button(ClassStr("btn self-start"), Type("button"), OnClick(resetPrompt), uistate.T("insights.promptReset")),
+			Back: Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
+				P(css.Class("muted", tw.Text13), uistate.T("insights.promptHint")),
+				Textarea(css.Class("field field-wide"), Attr("rows", "12"), Attr("aria-label", uistate.T("insights.promptTitle")), OnInput(onPromptInput), promptDraft.Get()),
+				Button(css.Class("btn", tw.SelfStart), Type("button"), OnClick(resetPrompt), uistate.T("insights.promptReset")),
 			),
 		})),
 	)
@@ -877,8 +879,8 @@ func ConversationPill(p convPillProps) ui.Node {
 		title = "Untitled chat"
 	}
 	return Div(ClassStr(cls),
-		Button(ClassStr("max-w-[160px] truncate text-left"), Type("button"), OnClick(pick), title),
-		Button(ClassStr("text-faint opacity-60 hover:opacity-100"), Type("button"), Title(uistate.T("insights.deleteChat")), Attr("aria-label", uistate.T("insights.deleteChat")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-3 h-3"))),
+		Button(css.Class(tw.MaxW160, tw.Truncate, tw.TextLeft), Type("button"), OnClick(pick), title),
+		Button(css.Class(tw.TextFaint, tw.Opacity60, tw.HoverOpacity100), Type("button"), Title(uistate.T("insights.deleteChat")), Attr("aria-label", uistate.T("insights.deleteChat")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3))),
 	)
 }
 
@@ -908,11 +910,11 @@ func UserBubble(p userBubbleProps) ui.Node {
 		}
 	}))
 	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
-	return Div(ClassStr("flex flex-col items-end group"),
-		Div(ClassStr("max-w-[85%] rounded-2xl bg-sky-500/10 px-3.5 py-2 text-[14px] whitespace-pre-wrap"), p.Text),
-		Div(ClassStr("flex gap-3 items-center mt-1 px-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 motion-safe:transition-opacity"),
-			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, ClassStr("w-4 h-4")))),
-			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+	return Div(css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsEnd),
+		Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgSky10, tw.Px35, tw.Py2, tw.Text14, tw.WhitespacePreWrap), p.Text),
+		Div(css.Class(tw.Flex, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1, tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity),
+			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
+			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 	)
 }
@@ -968,26 +970,26 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 		if cost, ok := ai.EstimateCostUSD(p.Model, p.Usage); ok {
 			txt = uistate.T("insights.usageCost", p.Usage.TotalTokens, ai.FormatCostUSD(cost))
 		}
-		note = P(ClassStr("text-faint text-[11px] mt-2"), txt)
+		note = P(css.Class(tw.TextFaint, tw.Text11, tw.Mt2), txt)
 	}
 	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
-	return Div(ClassStr("flex flex-col items-start group"),
-		Div(ClassStr("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2.5"),
+	return Div(css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsStart),
+		Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py25),
 			// marked fills this element via the effect above.
-			Div(Attr("id", mdID), ClassStr("md insights-answer text-[14px]")),
+			Div(Attr("id", mdID), css.Class("md insights-answer", tw.Text14)),
 		),
 		// Actions sit UNDER the bubble, revealed when the bubble is hovered/focused.
-		Div(ClassStr("flex flex-wrap gap-3 items-center mt-1 px-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 motion-safe:transition-opacity"),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1, tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity),
 			IfElse(copied.Get(),
-				Span(ClassStr("text-faint text-[12px]"), uistate.T("insights.copied")),
-				Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.copy")), Attr("aria-label", uistate.T("insights.copy")), OnClick(copyEvt), uiw.Icon(icon.Copy, ClassStr("w-4 h-4"))),
+				Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("insights.copied")),
+				Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.copy")), Attr("aria-label", uistate.T("insights.copy")), OnClick(copyEvt), uiw.Icon(icon.Copy, css.Class(tw.W4, tw.H4))),
 			),
 			IfElse(pinned.Get(),
-				Span(ClassStr("text-faint text-[12px]"), uistate.T("insights.pinnedConfirm")),
+				Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("insights.pinnedConfirm")),
 				Button(ClassStr(actBtn+" gap-1 text-[12px]"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
 			),
-			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, ClassStr("w-4 h-4")))),
-			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
+			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		note,
 	)
@@ -1129,13 +1131,13 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 	if expanded.Get() {
 		moreLabel = uistate.T("insights.showLess")
 	}
-	return Div(ClassStr("row"),
-		Div(ClassStr("row-main"),
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
 			Div(Attr("id", mdID), ClassStr(descClass)),
-			If(long, Button(ClassStr("btn-link text-[11px] mt-1 self-start"), Type("button"), OnClick(toggle), moreLabel)),
-			Span(ClassStr("row-meta"), p.CreatedAt.Format("Jan 2, 2006")),
+			If(long, Button(css.Class("btn-link", tw.Text11, tw.Mt1, tw.SelfStart), Type("button"), OnClick(toggle), moreLabel)),
+			Span(css.Class("row-meta"), p.CreatedAt.Format("Jan 2, 2006")),
 		),
-		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("insights.unpinTitle")), Title(uistate.T("insights.unpinTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("insights.unpinTitle")), Title(uistate.T("insights.unpinTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }
 
@@ -1157,12 +1159,12 @@ type approvalCardProps struct {
 func ApprovalCard(p approvalCardProps) ui.Node {
 	approve := ui.UseEvent(Prevent(func() { p.OnApprove() }))
 	decline := ui.UseEvent(Prevent(func() { p.OnDecline() }))
-	return Div(ClassStr("rounded-xl border border-amber-400/50 bg-amber-400/10 px-3.5 py-2.5 mb-2 text-[13px]"),
-		P(ClassStr("font-semibold"), uistate.T("insights.approveTitle")),
-		P(ClassStr("mt-1"), p.Preview),
-		Div(ClassStr("flex gap-2 mt-2"),
-			Button(ClassStr("btn btn-primary"), Type("button"), OnClick(approve), uistate.T("insights.approve")),
-			Button(ClassStr("btn"), Type("button"), OnClick(decline), uistate.T("insights.decline")),
+	return Div(css.Class(tw.RoundedXl, tw.Border, tw.BorderAmber50, tw.BgAmber10, tw.Px35, tw.Py25, tw.Mb2, tw.Text13),
+		P(css.Class(tw.FontSemibold), uistate.T("insights.approveTitle")),
+		P(css.Class(tw.Mt1), p.Preview),
+		Div(css.Class(tw.Flex, tw.Gap2, tw.Mt2),
+			Button(css.Class("btn btn-primary"), Type("button"), OnClick(approve), uistate.T("insights.approve")),
+			Button(css.Class("btn"), Type("button"), OnClick(decline), uistate.T("insights.decline")),
 		),
 	)
 }
@@ -1176,7 +1178,7 @@ type suggestChipProps struct {
 // component so the click handler's hook stays stable across the chip list.
 func suggestChip(props suggestChipProps) ui.Node {
 	q, onPick := props.Q, props.OnPick
-	return Button(ClassStr("btn chip-suggest"), Type("button"), OnClick(func() { onPick(q) }), q)
+	return Button(css.Class("btn chip-suggest"), Type("button"), OnClick(func() { onPick(q) }), q)
 }
 
 // spendingHighlights renders an offline "what changed" card: it detects
@@ -1192,16 +1194,16 @@ func spendingHighlights(txns []domain.Transaction, categories []domain.Category,
 
 	rows := make([]ui.Node, 0, len(anomalies))
 	for _, a := range anomalies {
-		rows = append(rows, P(ClassStr("insight-row"),
-			Span(ClassStr("insight-dot "+highlightTone(a)), uiw.Icon(highlightArrow(a), ClassStr("w-4 h-4"))),
+		rows = append(rows, P(css.Class("insight-row"),
+			Span(ClassStr("insight-dot "+highlightTone(a)), uiw.Icon(highlightArrow(a), css.Class(tw.W4, tw.H4))),
 			Span(highlightText(a, base)),
 		))
 	}
 
-	return Section(ClassStr("card"),
-		H2(ClassStr("card-title"), uistate.T("insights.highlightsTitle")),
-		P(ClassStr("muted"), uistate.T("insights.highlightsHint")),
-		Div(ClassStr("insight-list"), rows),
+	return Section(css.Class("card"),
+		H2(css.Class("card-title"), uistate.T("insights.highlightsTitle")),
+		P(css.Class("muted"), uistate.T("insights.highlightsHint")),
+		Div(css.Class("insight-list"), rows),
 	)
 }
 

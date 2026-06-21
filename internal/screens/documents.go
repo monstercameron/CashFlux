@@ -21,7 +21,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/statement"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -64,7 +66,7 @@ const visionExtractionSchema = `{
 func Documents() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
+		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:documents", 0)
@@ -339,44 +341,44 @@ func Documents() ui.Node {
 			var remainderLine ui.Node
 			switch {
 			case reconciled:
-				remainderLine = P(ClassStr("muted"), "Lines add up to the total — ready to import as one transaction.")
+				remainderLine = P(css.Class("muted"), "Lines add up to the total — ready to import as one transaction.")
 			case residErr != nil:
-				remainderLine = P(ClassStr("err"), Attr("role", "alert"), "Check the amounts — one couldn't be read as a number.")
+				remainderLine = P(css.Class("err"), Attr("role", "alert"), "Check the amounts — one couldn't be read as a number.")
 			default:
 				off := resid
 				if off < 0 {
 					off = -off
 				}
-				remainderLine = P(ClassStr("err"), Attr("role", "alert"), "Lines are off from the total by "+fmtMoney(money.New(off, recCur))+" — adjust the lines or the total to import.")
+				remainderLine = P(css.Class("err"), Attr("role", "alert"), "Lines are off from the total by "+fmtMoney(money.New(off, recCur))+" — adjust the lines or the total to import.")
 			}
-			importBtn := []any{ClassStr("btn btn-primary"), Type("submit")}
+			importBtn := []any{css.Class("btn btn-primary"), Type("submit")}
 			if !reconciled {
 				importBtn = append(importBtn, Attr("disabled", "disabled"))
 			}
 			importBtn = append(importBtn, "Import receipt")
 			footer = Div(
-				Div(ClassStr("form-grid"),
-					Input(ClassStr("field"), Type("text"), Attr("aria-label", "Store name (optional)"), Placeholder("Store name (optional)"), Value(receiptMerchant.Get()), OnInput(onReceiptMerchant)),
-					Input(ClassStr("field"), Type("text"), Attr("aria-label", "Receipt total"), Placeholder("Receipt total"), Value(receiptTotal.Get()), OnInput(onReceiptTotal)),
+				Div(css.Class("form-grid"),
+					Input(css.Class("field"), Type("text"), Attr("aria-label", "Store name (optional)"), Placeholder("Store name (optional)"), Value(receiptMerchant.Get()), OnInput(onReceiptMerchant)),
+					Input(css.Class("field"), Type("text"), Attr("aria-label", "Receipt total"), Placeholder("Receipt total"), Value(receiptTotal.Get()), OnInput(onReceiptTotal)),
 				),
 				remainderLine,
-				Form(ClassStr("form-grid"), OnSubmit(importReceipt),
-					Select(ClassStr("field"), Attr("aria-label", "Import into account"), OnChange(onAcct), acctOptions),
+				Form(css.Class("form-grid"), OnSubmit(importReceipt),
+					Select(css.Class("field"), Attr("aria-label", "Import into account"), OnChange(onAcct), acctOptions),
 					Button(importBtn...),
 				),
 			)
 		} else {
-			footer = Form(ClassStr("form-grid"), OnSubmit(importDraft),
-				Select(ClassStr("field"), Attr("aria-label", "Import into account"), OnChange(onAcct), acctOptions),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
+			footer = Form(css.Class("form-grid"), OnSubmit(importDraft),
+				Select(css.Class("field"), Attr("aria-label", "Import into account"), OnChange(onAcct), acctOptions),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
 			)
 		}
 
-		draftBody = Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("documents.reviewTitle", plural(len(rows), "transaction"))),
-			P(ClassStr("muted"), uistate.T("documents.reviewDesc")),
+		draftBody = Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("documents.reviewTitle", plural(len(rows), "transaction"))),
+			P(css.Class("muted"), uistate.T("documents.reviewDesc")),
 			toggle,
-			Div(ClassStr("rows"), items),
+			Div(css.Class("rows"), items),
 			footer,
 		)
 	}
@@ -400,17 +402,17 @@ func Documents() ui.Node {
 			if label == "" {
 				label = uistate.T("documents.summaryUndated")
 			}
-			sumRows = append(sumRows, Div(ClassStr("row"),
-				Span(ClassStr("row-desc"), label),
-				Span(ClassStr("muted"), plural(m.Count, "row")),
-				Span(ClassStr("amount fig"), uistate.T("documents.summaryOutIn",
+			sumRows = append(sumRows, Div(css.Class("row"),
+				Span(css.Class("row-desc"), label),
+				Span(css.Class("muted"), plural(m.Count, "row")),
+				Span(css.Class("amount fig"), uistate.T("documents.summaryOutIn",
 					fmtMoney(money.New(m.Out, cur)), fmtMoney(money.New(m.In, cur)), fmtMoney(money.New(m.Net(), cur)))),
 			))
 		}
-		summaryBody = Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("documents.summaryTitle")),
-			P(ClassStr("muted"), uistate.T("documents.summaryDesc")),
-			Div(ClassStr("rows"), sumRows),
+		summaryBody = Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("documents.summaryTitle")),
+			P(css.Class("muted"), uistate.T("documents.summaryDesc")),
+			Div(css.Class("rows"), sumRows),
 		)
 	}
 
@@ -421,11 +423,11 @@ func Documents() ui.Node {
 	}
 	docs := app.Documents()
 	sort.Slice(docs, func(i, j int) bool { return docs[i].UploadedAt.After(docs[j].UploadedAt) })
-	historyCard := Section(ClassStr("card"),
-		H2(ClassStr("card-title"), uistate.T("documents.historyTitle")),
+	historyCard := Section(css.Class("card"),
+		H2(css.Class("card-title"), uistate.T("documents.historyTitle")),
 		IfElse(len(docs) == 0,
-			P(ClassStr("empty"), uistate.T("documents.historyEmpty")),
-			Div(ClassStr("rows"), MapKeyed(docs,
+			P(css.Class("empty"), uistate.T("documents.historyEmpty")),
+			Div(css.Class("rows"), MapKeyed(docs,
 				func(d domain.Document) any { return d.ID },
 				func(d domain.Document) ui.Node {
 					name := ""
@@ -439,44 +441,44 @@ func Documents() ui.Node {
 	)
 
 	return Div(
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("documents.imageTitle")),
-			P(ClassStr("muted"), uistate.T("documents.imageDesc")),
-			Div(ClassStr("flex flex-wrap gap-2 items-center"),
-				Button(ClassStr("btn"), Type("button"), OnClick(chooseImage), uistate.T("documents.chooseImage")),
-				If(imageURL.Get() != "", Span(ClassStr("muted"), uistate.T("documents.imageReady"))),
-				Button(ClassStr("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), OnClick(readAI), uiw.Icon(icon.Sparkles, ClassStr("w-4 h-4 shrink-0")), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("documents.imageTitle")),
+			P(css.Class("muted"), uistate.T("documents.imageDesc")),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+				Button(css.Class("btn"), Type("button"), OnClick(chooseImage), uistate.T("documents.chooseImage")),
+				If(imageURL.Get() != "", Span(css.Class("muted"), uistate.T("documents.imageReady"))),
+				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(readAI), uiw.Icon(icon.Sparkles, css.Class("shrink-0", tw.W4, tw.H4)), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
 			),
-			If(aiErr.Get() != "", P(ClassStr("err"), Attr("role", "alert"), aiErr.Get())),
+			If(aiErr.Get() != "", P(css.Class("err"), Attr("role", "alert"), aiErr.Get())),
 		),
 		draftBody,
 		summaryBody,
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("documents.stmtTitle")),
-			P(ClassStr("muted"), uistate.T("documents.stmtDesc")),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("documents.stmtTitle")),
+			P(css.Class("muted"), uistate.T("documents.stmtDesc")),
 			Form(OnSubmit(parseStatement),
-				Textarea(ClassStr("field field-wide"), Attr("rows", "8"),
+				Textarea(css.Class("field field-wide"), Attr("rows", "8"),
 					Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
 					OnInput(onStmt),
 				),
 				Div(Style(map[string]string{"margin-top": "0.6rem"}),
-					Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
+					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
 				),
 			),
 		),
-		Section(ClassStr("card"),
-			H2(ClassStr("card-title"), uistate.T("documents.csvTitle")),
-			P(ClassStr("muted"), uistate.T("documents.csvDesc")),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("documents.csvTitle")),
+			P(css.Class("muted"), uistate.T("documents.csvDesc")),
 			Form(OnSubmit(importCSV),
-				Textarea(ClassStr("field field-wide"), Attr("rows", "8"),
+				Textarea(css.Class("field field-wide"), Attr("rows", "8"),
 					Placeholder("date,payee,amount,account\n2026-06-01,Salary,4200.00,Checking\n2026-06-02,Groceries,-86.40,Checking"),
 					OnInput(onCsv),
 				),
 				Div(Style(map[string]string{"margin-top": "0.6rem"}),
-					Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
+					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
 				),
 			),
-			If(msg.Get() != "", P(ClassStr("muted"), msg.Get())),
+			If(msg.Get() != "", P(css.Class("muted"), msg.Get())),
 		),
 		historyCard,
 	)
@@ -555,17 +557,17 @@ func DraftRow(props draftRowProps) ui.Node {
 	}, editKey)
 
 	if editing.Get() {
-		return Div(ClassStr("row"),
-			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
-				Input(ClassStr("field"), Attr("id", draftFieldID), Type("date"), Value(dateS.Get()), OnInput(onDate)),
-				Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
-				Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), Value(amtS.Get()), OnInput(onAmt)),
+		return Div(css.Class("row"),
+			Form(css.Class("form-grid"), OnSubmit(saveEdit),
+				Input(css.Class("field"), Attr("id", draftFieldID), Type("date"), Value(dateS.Get()), OnInput(onDate)),
+				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
+				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), Value(amtS.Get()), OnInput(onAmt)),
 				// Category is a select of existing categories (plus the AI's extracted
 				// value when it doesn't match one) so editing can't introduce an
 				// orphan/typo category on import (C60).
-				Select(ClassStr("field"), Attr("aria-label", uistate.T("documents.categoryPlaceholder")), OnChange(onCat), draftCategoryOptions(props.Categories, catS.Get())),
-				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("documents.categoryPlaceholder")), OnChange(onCat), draftCategoryOptions(props.Categories, catS.Get())),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -583,14 +585,14 @@ func DraftRow(props draftRowProps) ui.Node {
 			amtText = fmtMoney(money.New(minor, props.Currency))
 		}
 	}
-	return Div(ClassStr("row"),
-		Div(ClassStr("row-main"),
-			Span(ClassStr("row-desc"), textutil.FirstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
-			Span(ClassStr("row-meta"), meta),
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), textutil.FirstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
+			Span(css.Class("row-meta"), meta),
 		),
-		Span(ClassStr("amount fig"), amtText),
-		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+		Span(css.Class("amount fig"), amtText),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }
 
@@ -612,12 +614,12 @@ func DocHistoryRow(props docHistoryRowProps) ui.Node {
 	if props.AccountName != "" {
 		meta += " · " + props.AccountName
 	}
-	return Div(ClassStr("row"),
-		Div(ClassStr("row-main"),
-			Span(ClassStr("row-desc"), textutil.FirstNonEmpty(d.Filename, docKindLabel(d.Kind))),
-			Span(ClassStr("row-meta"), meta),
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), textutil.FirstNonEmpty(d.Filename, docKindLabel(d.Kind))),
+			Span(css.Class("row-meta"), meta),
 		),
-		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.deleteHistTitle")), Title(uistate.T("documents.deleteHistTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.deleteHistTitle")), Title(uistate.T("documents.deleteHistTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }
 

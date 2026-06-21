@@ -7,8 +7,10 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
+	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
@@ -40,7 +42,7 @@ func wsColorDot(color string) uic.Node {
 	if c == "" {
 		c = "#6c6c72"
 	}
-	return Span(ClassStr("inline-block w-2.5 h-2.5 rounded-full shrink-0"),
+	return Span(css.Class("shrink-0", tw.InlineBlock, tw.W25, tw.H25, tw.RoundedFull),
 		Style(map[string]string{"background-color": c}))
 }
 
@@ -87,38 +89,38 @@ func WorkspaceSwitcher() uic.Node {
 	menu := Fragment()
 	if open.Get() {
 		menu = Div(ClassStr(menuCls),
-			Div(ClassStr("flex flex-col gap-0.5"), rows),
-			Div(ClassStr("border-t border-line my-2 pt-2")),
-			Button(ClassStr("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onNew), uistate.T("ws.new")),
-			Button(ClassStr("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onDup), uistate.T("ws.duplicate")),
+			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap05), rows),
+			Div(css.Class(tw.BorderT, tw.BorderLine, tw.My2, tw.Pt2)),
+			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"), OnClick(onNew), uistate.T("ws.new")),
+			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"), OnClick(onDup), uistate.T("ws.duplicate")),
 		)
 	}
 
 	if collapsed {
 		// Tint the glyph's border with the workspace color so the active context is
 		// recognizable even in the icon-only rail.
-		glyph := []any{ClassStr("w-9 h-9 grid place-items-center rounded-[4px] border border-line text-[13px] font-medium hover:bg-hover"),
+		glyph := []any{css.Class(tw.W9, tw.H9, tw.Grid, tw.PlaceItemsCenter, tw.Rounded4, tw.Border, tw.BorderLine, tw.Text13, tw.FontMedium, tw.HoverBgHover),
 			Type("button"), Title(active.Name + " · " + uistate.T("ws.switch")),
 			OnClick(func() { open.Set(!open.Get()) }),
 			workspaceInitial(active.Name)}
 		if active.Color != "" {
 			glyph = append(glyph, Style(map[string]string{"border-color": active.Color}))
 		}
-		return Div(ClassStr("ws-switch relative mx-auto mt-3 w-9"),
+		return Div(css.Class("ws-switch", tw.Relative, tw.MxAuto, tw.Mt3, tw.W9),
 			Button(glyph...),
 			menu,
 		)
 	}
 
-	return Div(ClassStr("ws-switch relative mx-3 mt-3"),
-		Button(ClassStr("w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[4px] border border-line text-[13px] hover:bg-hover"),
+	return Div(css.Class("ws-switch", tw.Relative, tw.Mx3, tw.Mt3),
+		Button(css.Class(tw.WFull, tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.Px3, tw.Py2, tw.Rounded4, tw.Border, tw.BorderLine, tw.Text13, tw.HoverBgHover),
 			Type("button"), Title(uistate.T("ws.switch")),
 			OnClick(func() { open.Set(!open.Get()) }),
-			Span(ClassStr("flex items-center gap-2 min-w-0"),
+			Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.MinW0),
 				wsColorDot(active.Color),
-				Span(ClassStr("truncate"), active.Name),
+				Span(css.Class(tw.Truncate), active.Name),
 			),
-			ui.Icon(icon.ChevronDown, ClassStr("w-4 h-4 text-faint shrink-0")),
+			ui.Icon(icon.ChevronDown, css.Class("shrink-0", tw.W4, tw.H4, tw.TextFaint)),
 		),
 		menu,
 	)
@@ -150,11 +152,11 @@ func wsMenuItem(props wsMenuItemProps) uic.Node {
 	}
 	return Button(ClassStr(cls), Type("button"),
 		OnClick(func() { switchWorkspace(id) }),
-		Span(ClassStr("flex items-center gap-2 min-w-0"),
+		Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.MinW0),
 			wsColorDot(props.Color),
-			Span(ClassStr("truncate"), props.Name),
+			Span(css.Class(tw.Truncate), props.Name),
 		),
-		If(props.Active, Span(ClassStr("text-up"), "✓")),
+		If(props.Active, Span(css.Class(tw.TextUp), "✓")),
 	)
 }
 
@@ -215,9 +217,9 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 		}
 		return c
 	}
-	actions := []any{ClassStr("flex items-center gap-2"),
-		Button(ClassStr(moveCls(props.Index > 0)), Type("button"), Attr("aria-label", uistate.T("ws.moveUp")), Title(uistate.T("ws.moveUp")), OnClick(moveTo(props.Index-1)), ui.Icon(icon.ArrowUp, ClassStr("w-4 h-4"))),
-		Button(ClassStr(moveCls(props.Index < props.Total-1)), Type("button"), Attr("aria-label", uistate.T("ws.moveDown")), Title(uistate.T("ws.moveDown")), OnClick(moveTo(props.Index+1)), ui.Icon(icon.ArrowDown, ClassStr("w-4 h-4"))),
+	actions := []any{css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+		Button(ClassStr(moveCls(props.Index > 0)), Type("button"), Attr("aria-label", uistate.T("ws.moveUp")), Title(uistate.T("ws.moveUp")), OnClick(moveTo(props.Index-1)), ui.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4))),
+		Button(ClassStr(moveCls(props.Index < props.Total-1)), Type("button"), Attr("aria-label", uistate.T("ws.moveDown")), Title(uistate.T("ws.moveDown")), OnClick(moveTo(props.Index+1)), ui.Icon(icon.ArrowDown, css.Class(tw.W4, tw.H4))),
 		ui.SwatchPicker(ui.SwatchPickerProps{Colors: workspacePalette, Selected: props.Color, OnSelect: pickColor}),
 		dataBtn(uistate.T("ws.rename"), false, rename),
 		dataBtn(uistate.T("ws.export"), false, func() { exportWorkspace(id) }),
@@ -225,11 +227,11 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 	if props.CanDelete {
 		actions = append(actions, dataBtn(uistate.T("ws.delete"), true, del))
 	}
-	return Div(ClassStr("flex items-center justify-between gap-2 py-1"),
-		Span(ClassStr("flex items-center gap-2 min-w-0"),
+	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.Py1),
+		Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.MinW0),
 			wsColorDot(props.Color),
-			Span(ClassStr("truncate"), props.Name),
-			If(props.Active, Span(ClassStr("text-xs text-up"), uistate.T("ws.active"))),
+			Span(css.Class(tw.Truncate), props.Name),
+			If(props.Active, Span(css.Class(tw.TextXs, tw.TextUp), uistate.T("ws.active"))),
 		),
 		Span(actions...),
 	)
@@ -257,12 +259,12 @@ func workspacesSection(onChange func()) uic.Node {
 			}
 		})
 	}
-	return Div(ClassStr("flex flex-col"),
+	return Div(css.Class(tw.Flex, tw.FlexCol),
 		uic.CreateElement(wsStartupSelect, wsStartupSelectProps{
 			Workspaces: r.Workspaces, StartupID: r.StartupID, OnChange: onChange,
 		}),
 		rows,
-		Div(ClassStr("flex flex-wrap gap-2 py-1"),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("ws.import"), false, importWS),
 		),
 	)
@@ -289,8 +291,8 @@ func wsStartupSelect(props wsStartupSelectProps) uic.Node {
 	for _, w := range props.Workspaces {
 		opts = append(opts, Option(Value(w.ID), SelectedIf(props.StartupID == w.ID), w.Name))
 	}
-	return Div(ClassStr("flex flex-col gap-1 py-1"),
-		Span(ClassStr("text-xs text-faint"), uistate.T("ws.startupLabel")),
-		Select(ClassStr("set-input"), Title(uistate.T("ws.startupLabel")), OnChange(onSel), opts),
+	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Py1),
+		Span(css.Class(tw.TextXs, tw.TextFaint), uistate.T("ws.startupLabel")),
+		Select(css.Class("set-input"), Title(uistate.T("ws.startupLabel")), OnChange(onSel), opts),
 	)
 }
