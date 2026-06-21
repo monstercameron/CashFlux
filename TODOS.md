@@ -2552,6 +2552,68 @@ preserved; render a **step transcript** (explainability rule).
 **C76** (AI modal/approval surface), **C75** (notifications), `internal/workflow` (agent can author
 workflows/rules), `internal/formula` (sandboxed compute tool)._
 
+### C90. Agentic tool coverage — let the chat read + act on the WHOLE app ★ (feature, user-requested 2026-06-20)
+The Insights chat now drives a tool-calling loop (C82 wiring) with read + utility tools
+(`spending_by_category`, `list_transactions`, `list_members`, `account_balances`, `financial_summary`,
+`check_affordability`, `calculator`, `web_search`, `fetch_webpage`). **Goal:** expose a tool for every
+rail/page/setting so the agent can answer about and *operate* the entire app — read everything, and make
+audited, reversible changes. Build per the SDLC: pure where possible, tools bound to `appstate` (the single
+validated seam), each write through **C78 audit/undo** as `actor="agent"`. **One tool group per commit, each
+with an e2e** (mock the tool_call → assert the appstate effect / request body, like the existing chat e2es).
+
+**C90.0 Foundations (do first — the safety + UX rails every write tool needs):**
+- [ ] **Write-tool seam:** a small registry where each tool declares name/desc/JSON-schema/handler + a
+      `mutates` flag + a `destructive` flag. All writes route through `appstate` (validation) and are recorded by
+      C78 (`actor="agent"`, one-`⌘Z` reversible, in the activity timeline).
+- [ ] **In-chat approval surface (C76):** before a `mutates` tool runs, render a confirmation card in the thread
+      showing a human-readable preview (what will change); the user confirms/cancels. `destructive`/bulk tools
+      always require it; reads never do. Auto-approve toggle for power users (off by default).
+- [ ] **Capability gate + plan-only fallback:** when the model can't call tools, the agent answers read-only and
+      *describes* the change it would make instead of doing it.
+- [ ] **Privacy/scope gate:** reuse `aicontext.Tier` — which tools are advertised (and how much each returns)
+      follows the user's chosen data-sharing tier.
+- [ ] **Tool/step transcript:** show each tool call in the thread ("📊 checked spending by category…"),
+      collapsible, so actions are explainable (determinism rule).
+
+**C90.1 Read tools — finish the surface (extend the existing read set):**
+- [ ] `list_accounts` (class/type/currency/balance/utilization/stale), `list_budgets` (period + near/over health
+      + pace), `list_goals` (progress/pace/linked acct), `list_tasks` (to-do: status/priority/due),
+      `category_tree` (sub-categories + rollups), `list_rules`, `list_recurring` + `upcoming_bills`,
+      `list_subscriptions` (+ price-change alerts), `list_plans` (what-if), `payoff_plan` (debt snowball/
+      avalanche), `net_worth_forecast`, `list_allocation_profiles`, `get_report` (income/spend/net, savings rate,
+      cash runway, top payees, biggest expenses, by-member, spend-by-category vs last period), `net_worth_trend`,
+      `list_custom_pages`/`list_custom_fields`, `list_workflows`, `who_owes_whom` (Split), `get_fx_rates`,
+      `get_preferences`.
+
+**C90.2 Write/action tools — one group per screen (each gated + audited):**
+- [ ] **Transactions:** `add_transaction`, `add_transfer`, `edit_transaction`, `delete_transaction`,
+      `recategorize` (single + bulk), `clear`/`reconcile`, `add_tag`.
+- [ ] **Accounts:** `add_account`, `edit_account`, `archive`/`restore`, `update_balance` (reconcile),
+      `mark_updated`.
+- [ ] **Budgets:** `add_budget`/`edit_budget`/`delete_budget` (period/owner/rollover).
+- [ ] **Goals:** `add_goal`/`edit_goal`/`delete_goal`, `add_contribution`, `link_account`.
+- [ ] **To-do:** `add_task`/`complete_task`/`edit_task`/`delete_task` (+ create-from-insight as a tool — replaces
+      the old Save-as-task button).
+- [ ] **Categories:** `add_category`/`edit_category`/`delete_category` (reassign-on-delete), sub-categories.
+- [ ] **Members:** `add_member`/`edit_member`/`delete_member` (reassign), `set_default`, `assign_owner`.
+- [ ] **Rules:** `add_rule`/`edit_rule`/`delete_rule`; `suggest_rules` from history.
+- [ ] **Recurring & Bills:** `add_recurring`/`edit_recurring`/`delete_recurring`; `mark_bill_paid`.
+- [ ] **Subscriptions:** `confirm_subscription`/`ignore_subscription`.
+- [ ] **Planning:** `create_plan` (what-if), `set_debt_strategy`/`set_extra_payment`, `run_forecast`.
+- [ ] **Allocate:** `set_allocation_profile`, `allocate_amount` (rank + distribute new money).
+- [ ] **Split:** `add_shared_expense`, `settle_up`.
+- [ ] **Documents:** `import_csv`, `import_receipt` (vision), `commit_reviewed_rows`.
+- [ ] **Customize:** `create_custom_field`, `create_custom_page`/widget, `save_formula`.
+- [ ] **Workflows:** `create_workflow`/`edit_workflow`/`run_workflow` (trigger → condition → actions, dry-run).
+- [ ] **Insights:** `save_insight_as_task`, `pin_insight`.
+- [ ] **Settings/Preferences:** `set_base_currency`, `set_fx_rate`, `set_theme`/`accent`/`density`/`scale`,
+      `set_week_start`/`date_format`, `set_module_visibility`, `set_freshness_override`, `set_budget_methodology`.
+- [ ] **App actions:** `navigate_to(screen)` (take the user to a page / entity drill-down), `export_json`/`csv`,
+      `import_json`, `load_sample`, `wipe_data` (destructive — always confirm).
+
+**C90.3 Later:** expose this same registry as an **MCP server** over the self-host backend (the C82 stretch) so
+external agents (Claude Code, etc.) can drive CashFlux with the same gated, audited tools.
+
 ### C1. Dashboard "Income" shows $0.00 despite a $4,200 salary in-period ★ (correctness)
 **Symptom:** with sample data, the Dashboard Income KPI reads **$0.00 · 0 deposits** for Jun 2026,
 but `tx-1` Salary (+$4,200, income, cleared, **2026-06-01**) is clearly in June. Spending ($1,800.75,

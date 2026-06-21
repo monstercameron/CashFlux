@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: fetch_webpage tool + Markdown pinned insights; docs: C90 agentic-tools backlog
+
+- `fetch_webpage` tool (reads a page's text via the CORS-friendly Jina Reader, r.jina.ai); `web_search` now also
+  returns source URLs so the model can pick one to fetch. Pinned insights are now marked-rendered (own
+  `#cf-pin-<id>` container + effect) and clamped to 3 lines with a Show more/less toggle. Fixed an e2e selector:
+  pinned rows now share `.insights-answer`, so the chat-reply assertions scope to `#cf-chat-thread`.
+- Mapped the whole app surface (rails/pages/settings + ~45 appstate Put/Delete/action methods) and wrote
+  **TODOS C90 — agentic tool coverage**: foundations (write-tool seam through C78 audit/undo, in-chat approval
+  card for mutations, capability/privacy gates, tool transcript), the remaining read tools, and write/action
+  tools for every screen (transactions/accounts/budgets/goals/todo/categories/members/rules/recurring/
+  subscriptions/planning/allocate/split/documents/customize/workflows/insights/settings/app-actions), plus the
+  MCP-server stretch. One tool group per commit, each with an e2e — the model that's working for the read tools.
+
 ## 2026-06-20 - feat: Insights chat web_search tool + settings search key + estimate-don't-refuse prompt
 
 - Cam: "why can't the model search the web for the brackets and use the calculator?" Added a `web_search` tool:
