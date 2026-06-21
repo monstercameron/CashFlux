@@ -708,6 +708,35 @@
       .grip { cursor:grab; color:#4f4f55; }
       .wbody { padding:0 .7rem .7rem; flex:1; min-height:0; }
       .kpi { padding:.95rem 1rem; }
+
+      /* Insights chat: style the marked-rendered Markdown (Tailwind's preflight
+         strips default heading/list/spacing styles, so the assistant's replies would
+         otherwise look like flat text). Theme-agnostic greys work in light + dark. */
+      .insights-answer { font-size:14px; line-height:1.55; word-wrap:break-word; overflow-wrap:anywhere; }
+      .insights-answer > :first-child { margin-top:0; }
+      .insights-answer > :last-child { margin-bottom:0; }
+      .insights-answer p { margin:.5rem 0; }
+      .insights-answer h1,.insights-answer h2,.insights-answer h3,.insights-answer h4 { font-family:var(--font-display),'Fraunces',serif; font-weight:600; line-height:1.25; margin:.9rem 0 .35rem; }
+      .insights-answer h1 { font-size:1.25rem; }
+      .insights-answer h2 { font-size:1.1rem; }
+      .insights-answer h3 { font-size:1rem; }
+      .insights-answer h4 { font-size:.95rem; }
+      .insights-answer ul,.insights-answer ol { margin:.5rem 0; padding-left:1.25rem; }
+      .insights-answer ul { list-style:disc; }
+      .insights-answer ol { list-style:decimal; }
+      .insights-answer li { margin:.2rem 0; }
+      .insights-answer li > ul,.insights-answer li > ol { margin:.15rem 0; }
+      .insights-answer strong { font-weight:700; }
+      .insights-answer em { font-style:italic; }
+      .insights-answer a { color:var(--accent,#3b82f6); text-decoration:underline; text-underline-offset:2px; }
+      .insights-answer code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.85em; background:rgba(120,120,130,.16); padding:.1em .35em; border-radius:4px; }
+      .insights-answer pre { background:rgba(120,120,130,.16); padding:.7rem .85rem; border-radius:8px; overflow-x:auto; margin:.6rem 0; }
+      .insights-answer pre code { background:none; padding:0; font-size:.82em; }
+      .insights-answer blockquote { border-left:3px solid var(--accent,#3b82f6); margin:.6rem 0; padding:.1rem .8rem; opacity:.85; }
+      .insights-answer hr { border:0; border-top:1px solid rgba(120,120,130,.3); margin:.8rem 0; }
+      .insights-answer table { border-collapse:collapse; margin:.6rem 0; font-size:.9em; }
+      .insights-answer th,.insights-answer td { border:1px solid rgba(120,120,130,.3); padding:.3rem .55rem; text-align:left; }
+      .insights-answer th { background:rgba(120,120,130,.12); font-weight:600; }
     </style>
   </head>
   <body>

@@ -23,6 +23,11 @@ and every commit updates this file under `Unreleased`.
   result, plus the existing send/resume/error e2e.
 
 ### Fixed
+- **Insights chat: assistant Markdown replies are now styled.** The replies were converted to HTML (marked +
+  DOMPurify) but Tailwind's preflight reset stripped heading sizes, list bullets, and spacing, so they looked
+  like flat text. Added a theme-agnostic prose stylesheet for `.insights-answer` (headings, lists, bold/italic,
+  links, inline/block code, blockquotes, tables, rules) that works in light and dark; service-worker cache
+  bumped so a stale cached shell refreshes.
 - **Insights chat: the first message after reopening a saved chat now works.** Reopening Insights resumes the
   most recent conversation; the first send into a resumed chat appeared to do nothing (the request was made but
   the reply never showed). Cause: under the state churn of the resume + autosave, the assistant turn was
