@@ -20,8 +20,8 @@ import (
 
 // Bills lists upcoming payments derived from liability accounts' due-day and
 // minimum payment (B22): each bill's next due date, how soon it's due, and the
-// amount, soonest first, with the total due up top. Read-only over the pure
-// bills core; the month calendar and mark-paid come next.
+// amount, soonest first, with the total due up top, a month calendar, and a
+// per-bill "Mark paid" that logs a payment transaction (C57).
 func Bills() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -60,6 +60,19 @@ func Bills() ui.Node {
 		}
 		notice.Set(notice.Get().With(uistate.T("bills.reminderAdded", b.Name), false))
 	}
+	rev := uistate.UseDataRevision()
+	markPaid := func(b bills.Bill) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.RecordBillPayment(b.AccountID, b.Name, b.Amount); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		notice.Set(notice.Get().With(uistate.T("bills.paidLogged", b.Name), false))
+		rev.Set(rev.Get() + 1)
+	}
 
 	var total int64
 	billRows := make([]billRowData, 0, len(upcoming))
@@ -91,7 +104,7 @@ func Bills() ui.Node {
 			return r.Bill.AccountID + "|" + r.Bill.DueDate.Format("2006-01-02") + "|" + r.Bill.Name
 		},
 		func(r billRowData) ui.Node {
-			return ui.CreateElement(BillRow, billRowProps{Data: r, OnRemind: remind})
+			return ui.CreateElement(BillRow, billRowProps{Data: r, OnRemind: remind, OnMarkPaid: markPaid})
 		},
 	)
 
@@ -183,8 +196,9 @@ type billRowData struct {
 }
 
 type billRowProps struct {
-	Data     billRowData
-	OnRemind func(b bills.Bill, shown money.Money, dueLabel string)
+	Data       billRowData
+	OnRemind   func(b bills.Bill, shown money.Money, dueLabel string)
+	OnMarkPaid func(b bills.Bill)
 }
 
 // BillRow renders one upcoming bill with a "remind me" action. It owns its click
@@ -192,6 +206,11 @@ type billRowProps struct {
 func BillRow(props billRowProps) ui.Node {
 	d := props.Data
 	remind := ui.UseEvent(Prevent(func() { props.OnRemind(d.Bill, d.Shown, d.DueLabel) }))
+	markPaid := ui.UseEvent(Prevent(func() {
+		if props.OnMarkPaid != nil {
+			props.OnMarkPaid(d.Bill)
+		}
+	}))
 	meta := d.DueLabel + " · " + daysUntilLabel(d.Bill.DaysUntil)
 	// Urgency tone so an imminent bill stands out at a glance (C57): danger when
 	// due today/past, warn within three days. The "due today / in N days" wording
@@ -206,6 +225,7 @@ func BillRow(props billRowProps) ui.Node {
 			Span(Class(metaCls), meta),
 		),
 		Span(Class("budget-amount"), fmtMoney(d.Shown)),
+		Button(Class("btn btn-primary"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
 		Button(Class("btn"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
 	)
 }

@@ -853,6 +853,39 @@ func (a *App) PutRecurring(r domain.Recurring) error {
 	return nil
 }
 
+// RecordBillPayment logs a payment for an upcoming bill (C57), dated today. For a
+// liability-account bill (accountID is a real account), it posts a positive
+// transaction that reduces the owed balance. For a recurring bill (accountID is
+// "recurring:<id>"), it posts the recurring's amount to its account/category and
+// advances the recurring's NextDue so it's no longer shown as due.
+func (a *App) RecordBillPayment(accountID, name string, amount money.Money) error {
+	now := time.Now()
+	if rid, ok := strings.CutPrefix(accountID, "recurring:"); ok {
+		for _, r := range a.Recurring() {
+			if r.ID != rid {
+				continue
+			}
+			if r.AccountID == "" {
+				return fmt.Errorf("appstate: recurring %q has no account to post to", r.Label)
+			}
+			t := domain.Transaction{
+				ID: id.New(), AccountID: r.AccountID, CategoryID: r.CategoryID,
+				Amount: r.Amount, Date: now, Payee: r.Label, Desc: r.Label,
+			}
+			if err := a.PutTransaction(t); err != nil {
+				return err
+			}
+			return a.PutRecurring(r.Advance())
+		}
+		return fmt.Errorf("appstate: recurring bill not found")
+	}
+	t := domain.Transaction{
+		ID: id.New(), AccountID: accountID, Amount: amount, Date: now,
+		Payee: name, Desc: "Bill payment: " + name,
+	}
+	return a.PutTransaction(t)
+}
+
 // DeleteRecurring removes a recurring cash flow.
 func (a *App) DeleteRecurring(id string) error {
 	return a.del("recurring", id, a.store.DeleteRecurring)

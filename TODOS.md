@@ -1733,7 +1733,12 @@ and CSV export. **Buttons aren't oversized.** The gaps are about user control an
 - [ ] **Verify** after changes: subscriptions can be confirmed/ignored/added and the choice persists; rows
       drill into their charges; price changes show tone+icon; renewing-soon rows are actionable.
 
-### C57. Bills: UX review — clean calendar, but no mark-paid, no urgency tone, + a suspect "annual" figure ★ (UX review loop, user-requested 2026-06-20)
+### C57. Bills: UX review — clean calendar, but no mark-paid, no urgency tone, + a suspect "annual" figure ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
+**✅ DONE:** annual figure (cadence-correct `bills.AnnualAmounts`), urgency tone, and **mark-paid** all shipped.
+`appstate.RecordBillPayment` logs a payment dated today: for a liability-account bill a positive transaction
+reducing the owed balance; for a recurring bill it posts to the recurring's account/category and advances its
+NextDue. Per-row "Mark paid" button + toast; bumps the data revision so the list refreshes. e2e
+`bills_markpaid_check`.
 **Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
 render code (`internal/screens/bills_screen.go`). **Verdict:** a tidy, purpose-fit screen — derives upcoming
 bills from liability due-day + minimum payment and recurring items (`bills.UpcomingAll`), a stat grid
