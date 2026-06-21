@@ -77,6 +77,9 @@ and every commit updates this file under `Unreleased`.
   this next.
 
 ### Changed
+- **Insights composer: Up/Down cycles your previous messages (C82).** Shell-style history — Arrow Up walks back
+  through your prior messages in the chat, Down walks forward, and going past the newest restores your in-progress
+  draft. Covered by an e2e.
 - **Pinned insights render as Markdown, collapsed to 3 lines (C82).** Pinned insights are now marked-rendered
   (matching the chat bubbles) and clamped to three lines with a Show more/less toggle, so a long saved insight
   stays a compact quick-reference and expands on demand.

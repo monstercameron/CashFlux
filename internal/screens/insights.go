@@ -104,7 +104,11 @@ func Insights() ui.Node {
 	// conversation thread the user types into, answered from their own figures.
 	turns := ui.UseState([]chatTurn{})
 	input := ui.UseState("")
-	onInput := ui.UseEvent(func(v string) { input.Set(v) })
+	// Shell-style input history: histIdx is the cycle position over prior user messages
+	// with Up/Down (-1 = not cycling); histDraft preserves the in-progress draft.
+	histIdx := ui.UseState(-1)
+	histDraft := ui.UseState("")
+	onInput := ui.UseEvent(func(v string) { input.Set(v); histIdx.Set(-1) })
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
 	rev := ui.UseState(0)
@@ -295,6 +299,7 @@ func Insights() ui.Node {
 		hist := append(append([]chatTurn{}, turns.Get()...), chatTurn{ID: id.New(), Role: "user", Text: text})
 		turns.Set(hist)
 		input.Set("")
+		histIdx.Set(-1)
 		run(hist)
 	}
 
@@ -442,6 +447,70 @@ func Insights() ui.Node {
 	}
 	ui.UseEffect(func() func() { scrollChatToEnd(); return nil }, scrollSig)
 
+	// Up/Down in the composer cycles through the user's previous messages (shell-style).
+	// The listener lives on document (stable across input re-renders) and acts only when
+	// the chat input is the event target; state accessors are stable so it reads/writes
+	// live values.
+	doc := js.Global().Get("document")
+	ui.UseEffect(func() func() {
+		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			ev := args[0]
+			target := ev.Get("target")
+			if !target.Truthy() || target.Get("id").String() != "cf-chat-input" {
+				return nil
+			}
+			// setVal updates the DOM input (immediate — a raw listener's state Set doesn't
+			// trigger a framework re-render) and the bound state (so Send uses it).
+			setVal := func(v string) {
+				target.Set("value", v)
+				input.Set(v)
+			}
+			k := ev.Get("key").String()
+			if k != "ArrowUp" && k != "ArrowDown" {
+				return nil
+			}
+			msgs := make([]string, 0)
+			for _, t := range turns.Get() {
+				if t.Role == "user" {
+					msgs = append(msgs, t.Text)
+				}
+			}
+			if len(msgs) == 0 {
+				return nil
+			}
+			ev.Call("preventDefault")
+			idx := histIdx.Get()
+			if k == "ArrowUp" {
+				if idx == -1 {
+					histDraft.Set(input.Get())
+					idx = len(msgs) - 1
+				} else if idx > 0 {
+					idx--
+				}
+				histIdx.Set(idx)
+				setVal(msgs[idx])
+			} else { // ArrowDown
+				if idx == -1 {
+					return nil
+				}
+				idx++
+				if idx >= len(msgs) {
+					histIdx.Set(-1)
+					setVal(histDraft.Get())
+				} else {
+					histIdx.Set(idx)
+					setVal(msgs[idx])
+				}
+			}
+			return nil
+		})
+		doc.Call("addEventListener", "keydown", cb)
+		return func() {
+			doc.Call("removeEventListener", "keydown", cb)
+			cb.Release()
+		}
+	}, "cf-chat-history")
+
 	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
 	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
 	// System-prompt editor handlers.
@@ -535,7 +604,7 @@ func Insights() ui.Node {
 	} else {
 		composer = Form(Class("mt-1"), OnSubmit(onSubmit),
 			Div(Class("flex gap-2 items-center"),
-				Input(Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
+				Input(Attr("id", "cf-chat-input"), Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
 				IfElse(loading.Get(),
 					Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
 					Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("submit"), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.send"))),
