@@ -54,6 +54,11 @@ and every commit updates this file under `Unreleased`.
   result, plus the existing send/resume/error e2e.
 
 ### Fixed
+- **Insights chat: Send and Enter work after cycling messages with the arrow keys.** The Up/Down history was a
+  raw DOM keydown listener that set the input value directly, which desynced the framework's vdom and broke the
+  next click/Enter. It now uses the framework's `OnKeyDown` (Enter sends, Up/Down cycle, typing exits history),
+  so state updates re-render cleanly and Send/Enter keep working. Covered by an e2e (cycle → Send and cycle →
+  Enter both send).
 - **Insights chat: Send / Enter no longer risks reloading the page.** The composer is no longer a `<form>` —
   Send is a plain button and Enter is handled by the keydown listener (Shift+Enter is ignored) — so there's no
   native submit that could trigger a full page reload. Service-worker cache bumped to evict any stale shell.

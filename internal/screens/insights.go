@@ -110,7 +110,7 @@ func Insights() ui.Node {
 	histDraft := ui.UseState("")
 	// Conversation id whose AI title generation has been attempted (once per chat).
 	namingDone := ui.UseState("")
-	onInput := ui.UseEvent(func(v string) { input.Set(v); histIdx.Set(-1) })
+	onInput := ui.UseEvent(func(v string) { input.Set(v) })
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
 	rev := ui.UseState(0)
@@ -457,74 +457,59 @@ func Insights() ui.Node {
 	}
 	ui.UseEffect(func() func() { scrollChatToEnd(); return nil }, scrollSig)
 
-	// Up/Down in the composer cycles through the user's previous messages (shell-style).
-	// The listener lives on document (stable across input re-renders) and acts only when
-	// the chat input is the event target; state accessors are stable so it reads/writes
-	// live values.
-	doc := js.Global().Get("document")
-	ui.UseEffect(func() func() {
-		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			ev := args[0]
-			target := ev.Get("target")
-			if !target.Truthy() || target.Get("id").String() != "cf-chat-input" {
-				return nil
-			}
-			// setVal updates the DOM input (immediate — a raw listener's state Set doesn't
-			// trigger a framework re-render) and the bound state (so Send uses it).
-			setVal := func(v string) {
-				target.Set("value", v)
-				input.Set(v)
-			}
-			k := ev.Get("key").String()
-			if k == "Enter" && !ev.Get("shiftKey").Bool() {
-				ev.Call("preventDefault")
-				sendText(input.Get())
-				return nil
-			}
-			if k != "ArrowUp" && k != "ArrowDown" {
-				return nil
-			}
-			msgs := make([]string, 0)
-			for _, t := range turns.Get() {
-				if t.Role == "user" {
-					msgs = append(msgs, t.Text)
-				}
-			}
-			if len(msgs) == 0 {
-				return nil
-			}
-			ev.Call("preventDefault")
-			idx := histIdx.Get()
-			if k == "ArrowUp" {
-				if idx == -1 {
-					histDraft.Set(input.Get())
-					idx = len(msgs) - 1
-				} else if idx > 0 {
-					idx--
-				}
-				histIdx.Set(idx)
-				setVal(msgs[idx])
-			} else { // ArrowDown
-				if idx == -1 {
-					return nil
-				}
-				idx++
-				if idx >= len(msgs) {
-					histIdx.Set(-1)
-					setVal(histDraft.Get())
-				} else {
-					histIdx.Set(idx)
-					setVal(msgs[idx])
-				}
-			}
-			return nil
-		})
-		doc.Call("addEventListener", "keydown", cb)
-		return func() {
-			doc.Call("removeEventListener", "keydown", cb)
-			cb.Release()
+	// onKey handles the composer's keyboard: Enter sends (Shift+Enter ignored), Up/Down
+	// cycle prior messages (shell-style). Handled via the framework's event system (an
+	// OnKeyDown prop), so state changes re-render cleanly — a raw DOM listener that set
+	// the value directly desynced the vdom and broke later clicks.
+	onKey := ui.UseEvent(func(e ui.KeyboardEvent) {
+		k := e.GetKey()
+		if k == "Enter" && !e.JSValue().Get("shiftKey").Bool() {
+			e.PreventDefault()
+			sendText(input.Get())
+			return
 		}
-	}, "cf-chat-history")
+		if k != "ArrowUp" && k != "ArrowDown" {
+			// Any other key while not navigating leaves history mode (e.g. the user is
+			// editing the text), so the next Up starts from the newest again.
+			if len(k) == 1 || k == "Backspace" || k == "Delete" {
+				histIdx.Set(-1)
+			}
+			return
+		}
+		msgs := make([]string, 0)
+		for _, t := range turns.Get() {
+			if t.Role == "user" {
+				msgs = append(msgs, t.Text)
+			}
+		}
+		if len(msgs) == 0 {
+			return
+		}
+		e.PreventDefault()
+		idx := histIdx.Get()
+		if k == "ArrowUp" {
+			if idx == -1 {
+				histDraft.Set(input.Get())
+				idx = len(msgs) - 1
+			} else if idx > 0 {
+				idx--
+			}
+			histIdx.Set(idx)
+			input.Set(msgs[idx])
+		} else { // ArrowDown
+			if idx == -1 {
+				return
+			}
+			idx++
+			if idx >= len(msgs) {
+				histIdx.Set(-1)
+				input.Set(histDraft.Get())
+			} else {
+				histIdx.Set(idx)
+				input.Set(msgs[idx])
+			}
+		}
+	})
 
 	// Once a chat has a few exchanges (>=4 messages), generate a short AI title for it
 	// (once) and update the switcher tab. Skips conversations already AI-named.
@@ -667,7 +652,7 @@ func Insights() ui.Node {
 		// A plain Div (not a Form) so there is no native submit that could reload the
 		// page; Send is a button and Enter is handled by the keydown listener.
 		composer = Div(Class("mt-1 flex gap-2 items-center"),
-			Input(Attr("id", "cf-chat-input"), Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
+			Input(Attr("id", "cf-chat-input"), Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput), OnKeyDown(onKey)),
 			IfElse(loading.Get(),
 				Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
 				Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.send"))),

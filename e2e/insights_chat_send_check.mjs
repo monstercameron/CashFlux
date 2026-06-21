@@ -64,6 +64,24 @@ try {
   await page.waitForTimeout(300);
   if ((await input.inputValue()) === "") fail("[shift+enter] should not send/clear");
 
+  // 4) Cam's bug: after using Up to select a past prompt, Send (click) must still work.
+  await input.fill("");
+  await input.press("ArrowUp"); // most recent = "second via click"
+  if ((await input.inputValue()) !== "second via click") fail("[after-cycle] ArrowUp should load the past message");
+  await card.getByRole("button", { name: "Send" }).first().click();
+  await page.waitForFunction(() => document.querySelector("#cf-chat-input")?.value === "", { timeout: 5000 })
+    .catch(() => fail("[after-cycle] clicking Send after cycling did not send (input never cleared)"));
+
+  // 5) And Enter must still work after cycling.
+  await input.focus();
+  await page.waitForTimeout(500);
+  await input.press("ArrowUp");
+  await page.waitForFunction(() => (document.querySelector("#cf-chat-input")?.value || "") !== "", { timeout: 4000 })
+    .catch(() => fail("[after-cycle] ArrowUp produced no value"));
+  await input.press("Enter");
+  await page.waitForFunction(() => document.querySelector("#cf-chat-input")?.value === "", { timeout: 5000 })
+    .catch(() => fail("[after-cycle] Enter after cycling did not send (input never cleared)"));
+
   await page.waitForTimeout(400);
   if (navs !== 0) fail(`the page navigated/reloaded ${navs} time(s) — composer must not submit a form`);
   if (errors.length) fail("page errors: " + errors.join(" | "));
