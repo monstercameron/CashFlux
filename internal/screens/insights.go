@@ -108,6 +108,8 @@ func Insights() ui.Node {
 	// with Up/Down (-1 = not cycling); histDraft preserves the in-progress draft.
 	histIdx := ui.UseState(-1)
 	histDraft := ui.UseState("")
+	// Conversation id whose AI title generation has been attempted (once per chat).
+	namingDone := ui.UseState("")
 	onInput := ui.UseEvent(func(v string) { input.Set(v); histIdx.Set(-1) })
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
@@ -365,7 +367,15 @@ func Insights() ui.Node {
 		for i, t := range ts {
 			msgs[i] = domain.ChatMessage{ID: t.ID, Role: t.Role, Text: t.Text, Tokens: t.Usage.TotalTokens, CreatedAt: time.Now()}
 		}
-		_ = app.PutConversation(domain.Conversation{ID: cid, Title: conversationTitle(ts), Messages: msgs, CreatedAt: created, UpdatedAt: time.Now()})
+		// Keep an AI-generated name once set, rather than re-deriving from the first line.
+		title, named := conversationTitle(ts), false
+		for _, c := range app.Conversations() {
+			if c.ID == cid && c.Named {
+				title, named = c.Title, true
+				break
+			}
+		}
+		_ = app.PutConversation(domain.Conversation{ID: cid, Title: title, Named: named, Messages: msgs, CreatedAt: created, UpdatedAt: time.Now()})
 		bump()
 	}
 
@@ -510,6 +520,53 @@ func Insights() ui.Node {
 			cb.Release()
 		}
 	}, "cf-chat-history")
+
+	// Once a chat has a few exchanges (>=4 messages), generate a short AI title for it
+	// (once) and update the switcher tab. Skips conversations already AI-named.
+	namingSig := convID.Get() + "|" + strconv.Itoa(len(turns.Get()))
+	ui.UseEffect(func() func() {
+		ts := turns.Get()
+		cid := convID.Get()
+		if cid == "" || len(ts) < 4 || (key == "" && !useBackendAI) || namingDone.Get() == cid {
+			return nil
+		}
+		for _, c := range app.Conversations() {
+			if c.ID == cid && c.Named {
+				namingDone.Set(cid)
+				return nil
+			}
+		}
+		namingDone.Set(cid) // attempt only once per chat
+		var b strings.Builder
+		for _, t := range ts {
+			b.WriteString(t.Role + ": " + t.Text + "\n")
+		}
+		messages := []ai.Message{
+			{Role: ai.RoleSystem, Content: "Give a very short, 2-4 word title for this personal-finance chat. Reply with ONLY the title — no quotes, no punctuation, no preamble."},
+			{Role: ai.RoleUser, Content: b.String()},
+		}
+		onName := func(content string, _ ai.Usage) {
+			name := cleanChatTitle(content)
+			if name == "" {
+				return
+			}
+			for _, c := range app.Conversations() {
+				if c.ID == cid {
+					c.Title, c.Named = name, true
+					_ = app.PutConversation(c)
+					bump()
+					return
+				}
+			}
+		}
+		noErr := func(string) {}
+		if useBackendAI {
+			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, 0, onName, noErr)
+		} else {
+			ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0, onName, noErr)
+		}
+		return nil
+	}, namingSig)
 
 	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
 	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
@@ -721,6 +778,20 @@ func conversationTitle(ts []chatTurn) string {
 		return s
 	}
 	return "New chat"
+}
+
+// cleanChatTitle normalizes an AI-suggested chat title: first line, no surrounding
+// quotes/punctuation, capped length.
+func cleanChatTitle(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
+		s = s[:i]
+	}
+	s = strings.TrimSpace(strings.Trim(strings.TrimSpace(s), "\"'`.*#"))
+	if r := []rune(s); len(r) > 40 {
+		s = strings.TrimSpace(string(r[:40]))
+	}
+	return s
 }
 
 type convPillProps struct {

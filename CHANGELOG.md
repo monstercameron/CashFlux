@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Insights chat auto-names itself (C82).** Once a chat has a few exchanges (≥4 messages), it asks the model for
+  a short 2-4 word title from the conversation and updates the switcher tab — once per chat, preserved across
+  sessions (a `Named` flag stops autosave from re-deriving the title). Covered by an e2e.
 - **Insights chat can now make changes, with approval (C90.0 + first write tools).** Mutating tools pause the
   agent loop and show an **approval card** in the thread (preview of the change + Approve/Decline) before running;
   reads never prompt. First write tools: **add_task**, **complete_task**, **add_transaction** (resolves account/

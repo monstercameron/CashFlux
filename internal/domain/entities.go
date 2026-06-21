@@ -243,6 +243,7 @@ type ChatMessage struct {
 type Conversation struct {
 	ID        string        `json:"id"`
 	Title     string        `json:"title"`
+	Named     bool          `json:"named,omitempty"` // title was AI-generated; don't auto-derive over it
 	Messages  []ChatMessage `json:"messages,omitempty"`
 	CreatedAt time.Time     `json:"createdAt"`
 	UpdatedAt time.Time     `json:"updatedAt"`
