@@ -335,6 +335,13 @@ func globalSettingsForm() uic.Node {
 			_ = a.PutSettings(s)
 		}
 	})
+	// Optional web-search API key for the chat's web_search tool (paid/higher-limit
+	// access); kept on-device in its own localStorage entry.
+	wsKey := uic.UseState(uistate.LoadWebSearchKey())
+	onWsKey := uic.UseEvent(func(v string) {
+		wsKey.Set(v)
+		uistate.PersistWebSearchKey(v)
+	})
 	curMethod := budgeting.MethodSimple
 	if a := appstate.Default; a != nil {
 		curMethod = budgeting.ParseMethodology(a.Settings().BudgetMethodology)
@@ -606,6 +613,9 @@ func globalSettingsForm() uic.Node {
 			}
 		}}),
 		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.rememberKeyNote")),
+		Div(Class("set-label"), uistate.T("settings.webSearchTitle")),
+		Input(Class("set-input mt-[0.45rem]"), Type("password"), Attr("aria-label", uistate.T("settings.webSearchTitle")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(wsKey.Get()), OnInput(onWsKey)),
+		P(Class("text-faint text-[12px] mt-1"), uistate.T("settings.webSearchHint")),
 		Div(Class("set-label"), uistate.T("settings.backendTitle")),
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable

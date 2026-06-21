@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights chat web_search tool + settings search key + estimate-don't-refuse prompt
+
+- Cam: "why can't the model search the web for the brackets and use the calculator?" Added a `web_search` tool:
+  the handler does a blocking `fetch` (in the loop goroutine — Go wasm resumes it on the JS callback) to the
+  keyless DuckDuckGo Instant-Answer API and summarizes Answer/Abstract/Definition/related topics. Strengthened
+  the default prompt to COMBINE general knowledge (tax brackets/formulas) + the calculator + the user's figures
+  to estimate (e.g. taxes), stating assumptions, instead of refusing; use web_search for current facts and the
+  calculator for arithmetic. Then Cam asked for a paid-access key: added an optional web-search API key field in
+  the Settings AI section (own localStorage entry `cashflux:websearch-key` via `uistate.PersistWebSearchKey`/
+  `LoadWebSearchKey`), sent as a Bearer header on the search request when set; `blockingFetchText` now takes
+  headers.
+- e2e `insights_chat_websearch_check.mjs`: model asks web_search(tax brackets)+calculator(income*12); the loop
+  fetches DDG (mocked) and computes; asserts both tool results in the follow-up request ("37%", income*12=45300).
+  Test gotcha: the cross-origin search fetch is service-worker-originated, so `page.route` couldn't intercept it
+  — the test runs in a context with `serviceWorkers:'block'`. (Confirms the product fetch works: against real
+  DDG it returned a live, if empty-for-that-query, response.) All four chat e2e suites green.
+
 ## 2026-06-20 - feat: Insights chat editable system prompt (flip-panel)
 
 - Cam's ask: a button + flip modal to edit the system prompt. Added an "Edit prompt" pill in the switcher row

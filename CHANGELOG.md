@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Insights chat: a web_search tool + a prompt that estimates (C82).** The chat can now look up current/external
+  facts (tax brackets, rates, prices) via a `web_search` tool (keyless DuckDuckGo Instant-Answer by default) and
+  combine them with the calculator + the user's figures to **estimate** things the data doesn't directly contain
+  (e.g. taxes) instead of refusing. Settings gains an optional **web-search API key** field (kept on-device) for
+  paid/higher-limit access, sent only with search requests. Covered by an e2e that runs web_search + calculator
+  end-to-end.
 - **Insights chat: an editable system prompt (C82).** An "Edit prompt" button opens a flip-panel where you can
   customize the assistant's persona/instructions (saved on-device). The live financial context and the data
   tools are always injected automatically, so a custom prompt never loses them; "Reset to default" reverts.

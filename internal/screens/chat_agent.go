@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
 	"sort"
 	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/afford"
@@ -19,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 // chatTool pairs an OpenAI tool spec (what the model sees) with its handler (what
@@ -40,7 +43,7 @@ type agentStep struct {
 // defaultChatSystemPrompt is the assistant's persona + tool-use instructions. The
 // user can override it from the chat's "Edit prompt" panel; the live data context is
 // always appended separately so a custom prompt never loses it.
-const defaultChatSystemPrompt = `You are CashFlux, a friendly, concise personal-finance assistant built into the user's own budgeting app. You can call tools to read the user's real, on-device figures — ALWAYS use a tool for any specific question (a category total, an account balance, net worth, whether they can afford something) instead of guessing or claiming you don't have the data. If you're unsure which category a question means, call list_categories first. Never invent numbers. Answer in plain English as short Markdown. The user's money is private and never leaves their device except for this request.`
+const defaultChatSystemPrompt = `You are CashFlux, a friendly, concise personal-finance assistant built into the user's own budgeting app. You can call tools to read the user's real, on-device figures — ALWAYS use a tool for any specific figure (a category total, an account balance, net worth, affordability) instead of guessing. If unsure which category a question means, call list_categories first. You may also COMBINE your own general knowledge (tax brackets, rates, formulas) with the calculator tool and the user's figures to ESTIMATE things the data doesn't directly contain (e.g. taxes) — never refuse; compute a clear estimate and state your assumptions. Use web_search for current or external facts (tax brackets, prices, rates). Use the calculator tool for any arithmetic. Never invent the user's own numbers. Answer in plain English as short Markdown. The user's money is private and never leaves their device except for these requests.`
 
 // categoryNames returns a comma-separated list of the user's category names.
 func categoryNames(cats []domain.Category) string {
@@ -305,5 +308,92 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				return "Members: " + strings.Join(ns, ", ")
 			},
 		},
+		{
+			spec: ai.FunctionTool("web_search",
+				"Search the web for current or external facts (tax brackets, rates, prices, definitions). Returns a short summary. The query is sent to a public search engine; do not include the user's private financial details in it.",
+				json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}`)),
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Query string `json:"query"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Query) == "" {
+					return "Empty search query."
+				}
+				u := "https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1&t=cashflux&q=" + url.QueryEscape(a.Query)
+				var headers map[string]any
+				if k := strings.TrimSpace(uistate.LoadWebSearchKey()); k != "" {
+					headers = map[string]any{"Authorization": "Bearer " + k}
+				}
+				body, ok := blockingFetchText(u, headers)
+				if !ok {
+					return "Web search is unavailable (offline or blocked)."
+				}
+				return summarizeDDG(a.Query, body)
+			},
+		},
 	}
+}
+
+// blockingFetchText performs a GET and returns the response body, blocking the
+// calling goroutine until it resolves. Safe inside the tool loop's goroutine: Go
+// wasm schedules cooperatively, so the JS fetch callback resumes this goroutine.
+func blockingFetchText(u string, headers map[string]any) (string, bool) {
+	type res struct {
+		body string
+		ok   bool
+	}
+	rc := make(chan res, 1)
+	var onResp, onText, onErr js.Func
+	rel := func() { onResp.Release(); onText.Release(); onErr.Release() }
+	onResp = js.FuncOf(func(_ js.Value, a []js.Value) any { return a[0].Call("text") })
+	onText = js.FuncOf(func(_ js.Value, a []js.Value) any { rc <- res{a[0].String(), true}; return nil })
+	onErr = js.FuncOf(func(_ js.Value, a []js.Value) any { rc <- res{"", false}; return nil })
+	opts := map[string]any{}
+	if len(headers) > 0 {
+		opts["headers"] = headers
+	}
+	js.Global().Call("fetch", u, opts).Call("then", onResp).Call("then", onText).Call("catch", onErr)
+	r := <-rc
+	rel()
+	return r.body, r.ok
+}
+
+// summarizeDDG turns a DuckDuckGo Instant-Answer JSON body into a short text
+// summary (answer/abstract/definition + a few related topics), or a clear
+// "nothing found" note keyed to the query.
+func summarizeDDG(query, body string) string {
+	var d struct {
+		AbstractText  string `json:"AbstractText"`
+		Answer        string `json:"Answer"`
+		Definition    string `json:"Definition"`
+		RelatedTopics []struct {
+			Text string `json:"Text"`
+		} `json:"RelatedTopics"`
+	}
+	if err := json.Unmarshal([]byte(body), &d); err != nil {
+		return "Web search returned no usable summary for: " + query
+	}
+	parts := make([]string, 0, 4)
+	add := func(s string) {
+		if s = strings.TrimSpace(s); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	add(d.Answer)
+	add(d.AbstractText)
+	add(d.Definition)
+	for _, rt := range d.RelatedTopics {
+		if len(parts) >= 4 {
+			break
+		}
+		add(rt.Text)
+	}
+	if len(parts) == 0 {
+		return "No direct answer found for: " + query + ". Use your own knowledge to estimate and state assumptions."
+	}
+	out := strings.Join(parts, " ")
+	if r := []rune(out); len(r) > 700 {
+		out = string(r[:700]) + "…"
+	}
+	return "Web search — " + out
 }
