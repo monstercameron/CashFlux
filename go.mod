@@ -4,12 +4,13 @@ go 1.26.0
 
 require (
 	github.com/monstercameron/GoGRPCBridge v0.0.19
-	github.com/monstercameron/GoWebComponents v1.1.1-0.20260618120835-bfe3011d7f39
+	github.com/monstercameron/GoWebComponents v1.1.1-0.20260621010857-935d73b0cd3a
 	github.com/ncruces/go-sqlite3 v0.35.0
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.39.0
 	go.opentelemetry.io/otel/sdk v1.39.0
 	google.golang.org/grpc v1.79.3
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -35,5 +36,4 @@ require (
 	golang.org/x/text v0.38.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 )

@@ -123,7 +123,7 @@ func DialogHost() uic.Node {
 	}, openSig)
 
 	if !open {
-		return Div(Class("cf-dialog-root"))
+		return Div(ClassStr("cf-dialog-root"))
 	}
 
 	confirmLabel := req.ConfirmLabel
@@ -139,21 +139,21 @@ func DialogHost() uic.Node {
 		confirmCls = "btn btn-danger"
 	}
 
-	panel := Div(Class("cf-dialog"),
-		If(req.Title != "", H3(Class("cf-dialog-title"), req.Title)),
-		P(Class("cf-dialog-msg"), req.Message),
+	panel := Div(ClassStr("cf-dialog"),
+		If(req.Title != "", H3(ClassStr("cf-dialog-title"), req.Title)),
+		P(ClassStr("cf-dialog-msg"), req.Message),
 		If(req.Kind == uistate.DialogPrompt,
-			Input(Class("set-input cf-dialog-input"), Attr("id", dialogInputID), Type("text"),
+			Input(ClassStr("set-input cf-dialog-input"), Attr("id", dialogInputID), Type("text"),
 				Attr("aria-label", req.Message), Value(req.Default))),
-		Div(Class("cf-dialog-actions"),
-			Button(Class("btn"), Type("button"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
-			Button(Class(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),
+		Div(ClassStr("cf-dialog-actions"),
+			Button(ClassStr("btn"), Type("button"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
+			Button(ClassStr(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),
 		),
 	)
 	// Scrim is a sibling of the panel so clicking the panel never bubbles a cancel.
-	return Div(Class("cf-dialog-root"),
-		Div(Class("cf-dialog-backdrop"), Attr("role", "dialog"), Attr("aria-modal", "true"),
-			Div(Class("cf-dialog-scrim"), OnClick(func() { finish(false) })),
+	return Div(ClassStr("cf-dialog-root"),
+		Div(ClassStr("cf-dialog-backdrop"), Attr("role", "dialog"), Attr("aria-modal", "true"),
+			Div(ClassStr("cf-dialog-scrim"), OnClick(func() { finish(false) })),
 			panel,
 		),
 	)

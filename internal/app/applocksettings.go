@@ -25,7 +25,7 @@ func appLockSection(onChange func()) uic.Node {
 				status = fmt.Sprintf(uistate.T("applock.statusOnAuto"), c.AutoLockMinutes)
 			}
 		}
-		actions := []any{Class("flex flex-wrap gap-2 py-1")}
+		actions := []any{ClassStr("flex flex-wrap gap-2 py-1")}
 		if active {
 			actions = append(actions, dataBtn(uistate.T("applock.cmdLock"), false, showAppLockGate))
 		}
@@ -38,8 +38,8 @@ func appLockSection(onChange func()) uic.Node {
 				}
 			}),
 		)
-		return Div(Class("flex flex-col gap-1"),
-			P(Class("muted text-xs"), status),
+		return Div(ClassStr("flex flex-col gap-1"),
+			P(ClassStr("muted text-xs"), status),
 			ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("applock.toggleActive"), On: active, OnChange: func(v bool) {
 				setLockSuspended(!v)
 				if onChange != nil {
@@ -61,9 +61,9 @@ func appLockSection(onChange func()) uic.Node {
 			}}),
 		)
 	}
-	return Div(Class("flex flex-col gap-1"),
-		P(Class("muted text-xs"), uistate.T("applock.statusOff")),
-		Span(Class("flex flex-wrap gap-2 py-1"),
+	return Div(ClassStr("flex flex-col gap-1"),
+		P(ClassStr("muted text-xs"), uistate.T("applock.statusOff")),
+		Span(ClassStr("flex flex-wrap gap-2 py-1"),
 			dataBtn(uistate.T("applock.cmdSet"), false, func() { showAppLockSetup(onChange) }),
 		),
 	)

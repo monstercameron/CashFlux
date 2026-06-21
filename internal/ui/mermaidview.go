@@ -57,7 +57,7 @@ func mermaidView(props MermaidProps) uic.Node {
 	}
 	return Div(
 		Attr("id", id),
-		Class(cls),
+		ClassStr(cls),
 		Attr("role", "img"),
 		Attr("aria-label", props.Label),
 	)

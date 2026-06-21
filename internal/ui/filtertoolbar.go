@@ -54,11 +54,11 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	onSearch := uic.UseEvent(props.OnSearch)
 	n := len(props.Chips)
 
-	trigger := Button(Class("btn filters-trigger"), Type("button"),
+	trigger := Button(ClassStr("btn filters-trigger"), Type("button"),
 		Attr("aria-haspopup", "dialog"), Title(props.FiltersTitle),
 		OnClick(func() { open.Set(true) }),
 		props.FiltersLabel,
-		If(n > 0, Span(Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
+		If(n > 0, Span(ClassStr("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
 	)
 
 	chips := MapKeyed(props.Chips,
@@ -71,15 +71,15 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	)
 
 	return Div(
-		Div(Class("filter-toolbar"),
-			Input(Class("field filter-search"), Type("search"),
+		Div(ClassStr("filter-toolbar"),
+			Input(ClassStr("field filter-search"), Type("search"),
 				Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
 				Value(props.Search), OnInput(onSearch)),
 			trigger,
 			props.Actions,
 		),
-		If(n > 0, Div(Class("filter-chips"), chips,
-			Button(Class("btn-link chip-clear-all"), Type("button"),
+		If(n > 0, Div(ClassStr("filter-chips"), chips,
+			Button(ClassStr("btn-link chip-clear-all"), Type("button"),
 				OnClick(func() {
 					if props.OnClearAll != nil {
 						props.OnClearAll()
@@ -108,9 +108,9 @@ type filterChipProps struct {
 }
 
 func filterChip(props filterChipProps) uic.Node {
-	return Span(Class("filter-chip"),
-		Span(Class("chip-text"), props.Label),
-		Button(Class("chip-x"), Type("button"), Attr("aria-label", props.RemoveLabel),
+	return Span(ClassStr("filter-chip"),
+		Span(ClassStr("chip-text"), props.Label),
+		Button(ClassStr("chip-x"), Type("button"), Attr("aria-label", props.RemoveLabel),
 			OnClick(func() {
 				if props.OnRemove != nil {
 					props.OnRemove(props.Key)

@@ -41,11 +41,11 @@ type pageCtx struct {
 func CustomPage(slug string) ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 	page, ok := pages.BySlug(app.CustomPages(), slug)
 	if !ok {
-		return Section(Class("card"), P(Class("empty"), uistate.T("pages.notFound")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("pages.notFound")))
 	}
 
 	// A version counter forces a re-render after a mutation (add/delete/resize/
@@ -116,7 +116,7 @@ func CustomPage(slug string) ui.Node {
 	if len(page.Widgets) == 0 {
 		return Div(
 			toolbar,
-			Section(Class("card"), P(Class("empty"), uistate.T("pages.empty"))),
+			Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("pages.empty"))),
 		)
 	}
 
@@ -150,7 +150,7 @@ func CustomPage(slug string) ui.Node {
 
 	return Div(
 		toolbar,
-		Div(Class("bento"), tiles),
+		Div(ClassStr("bento"), tiles),
 	)
 }
 
@@ -200,7 +200,7 @@ func customTile(props customTileProps) ui.Node {
 	}
 
 	// The header doubles as the drag handle for reordering.
-	header := Div(Class("wh"),
+	header := Div(ClassStr("wh"),
 		Attr("draggable", "true"),
 		OnDragStart(func() {
 			if props.OnDragStart != nil {
@@ -213,24 +213,24 @@ func customTile(props customTileProps) ui.Node {
 				props.OnDrop()
 			}
 		})),
-		Span(Class("grip cursor-grab"), "⠿"),
+		Span(ClassStr("grip cursor-grab"), "⠿"),
 		H3(title),
-		Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeWidth")),
+		Button(ClassStr("gear-inline"), Type("button"), Title(uistate.T("pages.resizeWidth")),
 			OnClick(func() {
 				if props.OnResizeW != nil {
 					props.OnResizeW()
 				}
 			}), "↔"),
-		Button(Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeHeight")),
+		Button(ClassStr("gear-inline"), Type("button"), Title(uistate.T("pages.resizeHeight")),
 			OnClick(func() {
 				if props.OnResizeH != nil {
 					props.OnResizeH()
 				}
 			}), "↕"),
-		Button(Class("gear-inline"), Type("button"), Attr("aria-label", uistate.T("pages.editWidget")), Title(uistate.T("pages.editWidget")),
-			OnClick(func() { editing.Set(!editing.Get()) }), uiw.Icon(icon.Pencil, Class("w-4 h-4"))),
-		Button(Class("gear-inline"), Type("button"), Attr("aria-label", uistate.T("pages.deleteWidget")), Title(uistate.T("pages.deleteWidget")),
-			OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Button(ClassStr("gear-inline"), Type("button"), Attr("aria-label", uistate.T("pages.editWidget")), Title(uistate.T("pages.editWidget")),
+			OnClick(func() { editing.Set(!editing.Get()) }), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4"))),
+		Button(ClassStr("gear-inline"), Type("button"), Attr("aria-label", uistate.T("pages.deleteWidget")), Title(uistate.T("pages.deleteWidget")),
+			OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 
 	var body ui.Node
@@ -248,10 +248,10 @@ func customTile(props customTileProps) ui.Node {
 		body = widgetBody(w, props.Ctx)
 	}
 
-	return Div(Class("w"),
+	return Div(ClassStr("w"),
 		Attr("style", "grid-column:"+props.GridColumn+";grid-row:"+props.GridRow),
 		header,
-		Div(Class("wbody"), body),
+		Div(ClassStr("wbody"), body),
 	)
 }
 
@@ -360,9 +360,9 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 	var bindCtl ui.Node
 	switch w.Type {
 	case widgetspec.TypeKPI:
-		bindCtl = Div(Class("flex flex-col gap-1"),
-			Input(Class("field"), Attr("placeholder", uistate.T("pages.kpiFormula")), Value(expr.Get()), OnInput(onExpr)),
-			Select(Class("field"), OnChange(onFormat),
+		bindCtl = Div(ClassStr("flex flex-col gap-1"),
+			Input(ClassStr("field"), Attr("placeholder", uistate.T("pages.kpiFormula")), Value(expr.Get()), OnInput(onExpr)),
+			Select(ClassStr("field"), OnChange(onFormat),
 				Option(Value("number"), SelectedIf(format.Get() == "number"), "number"),
 				Option(Value("percent"), SelectedIf(format.Get() == "percent"), "percent"),
 				Option(Value("currency"), SelectedIf(format.Get() == "currency"), "currency"),
@@ -373,9 +373,9 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 		for _, d := range widgetspec.ListSources() {
 			opts = append(opts, Option(Value(d.Type), SelectedIf(source.Get() == d.Type), d.Label))
 		}
-		bindCtl = Select(Class("field"), OnChange(onSource), opts)
+		bindCtl = Select(ClassStr("field"), OnChange(onSource), opts)
 	case widgetspec.TypeText:
-		bindCtl = Input(Class("field"), Attr("placeholder", uistate.T("pages.textContent")), Value(text.Get()), OnInput(onText))
+		bindCtl = Input(ClassStr("field"), Attr("placeholder", uistate.T("pages.textContent")), Value(text.Get()), OnInput(onText))
 	case widgetspec.TypeImage, widgetspec.TypeTable:
 		opts := []ui.Node{Option(Value(""), uistate.T("pages.chooseArtifact"))}
 		if appstate.Default != nil {
@@ -389,17 +389,17 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 				opts = append(opts, Option(Value(a.ID), SelectedIf(artifact.Get() == a.ID), a.Name))
 			}
 		}
-		bindCtl = Select(Class("field"), OnChange(onArtifact), opts)
+		bindCtl = Select(ClassStr("field"), OnChange(onArtifact), opts)
 	default:
-		bindCtl = P(Class("muted"), uistate.T("pages.chartDefault"))
+		bindCtl = P(ClassStr("muted"), uistate.T("pages.chartDefault"))
 	}
 
-	return Div(Class("flex flex-col gap-2"),
-		Input(Class("field"), Attr("id", "widget-edit-"+w.ID), Attr("placeholder", uistate.T("pages.widgetTitle")), Value(title.Get()), OnInput(onTitle)),
+	return Div(ClassStr("flex flex-col gap-2"),
+		Input(ClassStr("field"), Attr("id", "widget-edit-"+w.ID), Attr("placeholder", uistate.T("pages.widgetTitle")), Value(title.Get()), OnInput(onTitle)),
 		bindCtl,
-		Div(Class("flex gap-2"),
-			Button(Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("action.save")),
-			Button(Class("btn"), Type("button"), OnClick(func() {
+		Div(ClassStr("flex gap-2"),
+			Button(ClassStr("btn btn-primary"), Type("button"), OnClick(save), uistate.T("action.save")),
+			Button(ClassStr("btn"), Type("button"), OnClick(func() {
 				if props.OnDone != nil {
 					props.OnDone()
 				}
@@ -424,7 +424,7 @@ func widgetBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	case widgetspec.TypeTable:
 		return cpTableBody(w, ctx)
 	default:
-		return P(Class("empty"), uistate.T("pages.unknownWidget"))
+		return P(ClassStr("empty"), uistate.T("pages.unknownWidget"))
 	}
 }
 
@@ -432,21 +432,21 @@ func widgetBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 func cpImageBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	art, ok := findArtifact(ctx.App.Artifacts(), w.Binding.ArtifactID)
 	if !ok || art.Kind != artifacts.KindImage || len(art.Bytes) == 0 {
-		return P(Class("empty"), uistate.T("pages.pickArtifact"))
+		return P(ClassStr("empty"), uistate.T("pages.pickArtifact"))
 	}
 	return Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)),
-		Attr("alt", art.Name), Class("max-w-full max-h-full object-contain m-auto"))
+		Attr("alt", art.Name), ClassStr("max-w-full max-h-full object-contain m-auto"))
 }
 
 // cpTableBody renders a dataset artifact (columns + first rows) bound by ID.
 func cpTableBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	art, ok := findArtifact(ctx.App.Artifacts(), w.Binding.ArtifactID)
 	if !ok || len(art.Columns) == 0 {
-		return P(Class("empty"), uistate.T("pages.pickArtifact"))
+		return P(ClassStr("empty"), uistate.T("pages.pickArtifact"))
 	}
 	head := make([]ui.Node, 0, len(art.Columns))
 	for _, c := range art.Columns {
-		head = append(head, Th(Class("text-left pr-3 text-faint font-medium"), c))
+		head = append(head, Th(ClassStr("text-left pr-3 text-faint font-medium"), c))
 	}
 	bodyRows := make([]ui.Node, 0)
 	for i, r := range art.Rows {
@@ -455,11 +455,11 @@ func cpTableBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 		}
 		cells := make([]ui.Node, 0, len(r))
 		for _, cell := range r {
-			cells = append(cells, Td(Class("pr-3 py-0.5 truncate"), cell))
+			cells = append(cells, Td(ClassStr("pr-3 py-0.5 truncate"), cell))
 		}
 		bodyRows = append(bodyRows, Tr(cells))
 	}
-	return Table(Class("w-full text-[12px] fig"),
+	return Table(ClassStr("w-full text-[12px] fig"),
 		Thead(Tr(head)),
 		Tbody(bodyRows),
 	)
@@ -479,10 +479,10 @@ func findArtifact(arts []domain.Artifact, id string) (domain.Artifact, bool) {
 func cpKPIBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	val, err := widgetspec.EvalKPI(w.Binding.Expr, ctx.Vars)
 	if err != nil {
-		return P(Class("err"), Attr("role", "alert"), err.Error())
+		return P(ClassStr("err"), Attr("role", "alert"), err.Error())
 	}
-	return Div(Class("flex flex-col justify-center h-full"),
-		Div(Class("font-display fig text-[28px]"), widgetdata.KPIText(val, w.Config["format"], ctx.Base)),
+	return Div(ClassStr("flex flex-col justify-center h-full"),
+		Div(ClassStr("font-display fig text-[28px]"), widgetdata.KPIText(val, w.Config["format"], ctx.Base)),
 	)
 }
 
@@ -495,19 +495,19 @@ func listBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 		Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(), Rates: ctx.Rates,
 	}, widgetdata.DefaultListRows)
 	if !ok {
-		return P(Class("empty"), uistate.T("pages.pickSource"))
+		return P(ClassStr("empty"), uistate.T("pages.pickSource"))
 	}
 	if len(rows) == 0 {
-		return P(Class("empty"), uistate.T("pages.noData"))
+		return P(ClassStr("empty"), uistate.T("pages.noData"))
 	}
 	nodes := make([]ui.Node, 0, len(rows))
 	for _, r := range rows {
-		nodes = append(nodes, Div(Class("row"),
-			Span(Class("row-desc truncate"), r.Label),
-			Span(Class("amount fig"), r.Value),
+		nodes = append(nodes, Div(ClassStr("row"),
+			Span(ClassStr("row-desc truncate"), r.Label),
+			Span(ClassStr("amount fig"), r.Value),
 		))
 	}
-	return Div(Class("rows"), nodes)
+	return Div(ClassStr("rows"), nodes)
 }
 
 // chartBody renders the net-worth trend over the last six months — a sensible
@@ -543,9 +543,9 @@ func chartBody(ctx pageCtx) ui.Node {
 func textBody(w domain.PageWidget) ui.Node {
 	t := w.Config["text"]
 	if t == "" {
-		return P(Class("empty"), uistate.T("pages.emptyText"))
+		return P(ClassStr("empty"), uistate.T("pages.emptyText"))
 	}
-	return Div(Class("md md-widget muted"),
+	return Div(ClassStr("md md-widget muted"),
 		Markdown(t, MarkdownRenderOptions{LinkTarget: "_blank", LinkRel: "noopener noreferrer"}))
 }
 
@@ -657,8 +657,8 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 	}
 
 	if !open.Get() {
-		return Div(Class("mb-3"),
-			Button(Class("btn btn-primary"), Type("button"), OnClick(func() { open.Set(true) }),
+		return Div(ClassStr("mb-3"),
+			Button(ClassStr("btn btn-primary"), Type("button"), OnClick(func() { open.Set(true) }),
 				uistate.T("pages.addWidget")),
 		)
 	}
@@ -673,16 +673,16 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 	var bindControl ui.Node
 	switch wtype.Get() {
 	case widgetspec.TypeKPI:
-		bindControl = Input(Class("field"), Attr("placeholder", uistate.T("pages.kpiFormula")),
+		bindControl = Input(ClassStr("field"), Attr("placeholder", uistate.T("pages.kpiFormula")),
 			Value(bind.Get()), OnInput(onBind))
 	case widgetspec.TypeList:
 		srcOpts := make([]ui.Node, 0)
 		for _, d := range widgetspec.ListSources() {
 			srcOpts = append(srcOpts, Option(Value(d.Type), SelectedIf(bind.Get() == d.Type), d.Label))
 		}
-		bindControl = Select(Class("field"), OnChange(onBind), srcOpts)
+		bindControl = Select(ClassStr("field"), OnChange(onBind), srcOpts)
 	case widgetspec.TypeText:
-		bindControl = Input(Class("field"), Attr("placeholder", uistate.T("pages.textContent")),
+		bindControl = Input(ClassStr("field"), Attr("placeholder", uistate.T("pages.textContent")),
 			Value(bind.Get()), OnInput(onBind))
 	case widgetspec.TypeImage, widgetspec.TypeTable:
 		arts := appstate.Default.Artifacts()
@@ -697,21 +697,21 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 			}
 			artOpts = append(artOpts, Option(Value(a.ID), SelectedIf(bind.Get() == a.ID), a.Name))
 		}
-		bindControl = Select(Class("field"), OnChange(onBind), artOpts)
+		bindControl = Select(ClassStr("field"), OnChange(onBind), artOpts)
 	default: // Chart needs no binding in Phase B
-		bindControl = P(Class("muted"), uistate.T("pages.chartDefault"))
+		bindControl = P(ClassStr("muted"), uistate.T("pages.chartDefault"))
 	}
 
-	return Section(Class("card mb-3"),
-		Div(Class("form-grid"),
-			Select(Class("field"), OnChange(onType), typeOpts),
-			Input(Class("field"), Attr("placeholder", uistate.T("pages.widgetTitle")),
+	return Section(ClassStr("card mb-3"),
+		Div(ClassStr("form-grid"),
+			Select(ClassStr("field"), OnChange(onType), typeOpts),
+			Input(ClassStr("field"), Attr("placeholder", uistate.T("pages.widgetTitle")),
 				Value(title.Get()), OnInput(onTitle)),
 			bindControl,
 		),
-		Div(Class("flex gap-2 mt-2"),
-			Button(Class("btn btn-primary"), Type("button"), OnClick(addWidget), uistate.T("action.add")),
-			Button(Class("btn"), Type("button"), OnClick(func() { open.Set(false) }), uistate.T("action.cancel")),
+		Div(ClassStr("flex gap-2 mt-2"),
+			Button(ClassStr("btn btn-primary"), Type("button"), OnClick(addWidget), uistate.T("action.add")),
+			Button(ClassStr("btn"), Type("button"), OnClick(func() { open.Set(false) }), uistate.T("action.cancel")),
 		),
 	)
 }

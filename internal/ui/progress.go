@@ -35,7 +35,7 @@ func ProgressBar(props ProgressBarProps) uic.Node {
 	if props.Class != "" {
 		track += " " + props.Class
 	}
-	return Div(Class(track),
-		Div(Class("h-full "+tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", w)})),
+	return Div(ClassStr(track),
+		Div(ClassStr("h-full "+tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", w)})),
 	)
 }

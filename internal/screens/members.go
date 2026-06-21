@@ -26,7 +26,7 @@ import (
 func Members() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:members", 0)
@@ -191,15 +191,15 @@ func Members() ui.Node {
 	ownerRows := make([]ui.Node, 0, len(members)+1)
 	for _, m := range members {
 		v := ownerDisp(m.ID)
-		ownerRows = append(ownerRows, Div(Class("row"),
-			Span(Class("row-desc"), m.Name),
-			Span(Class(accentFor(v)), fmtMoney(v)),
+		ownerRows = append(ownerRows, Div(ClassStr("row"),
+			Span(ClassStr("row-desc"), m.Name),
+			Span(ClassStr(accentFor(v)), fmtMoney(v)),
 		))
 	}
 	grp := ownerDisp(domain.GroupOwnerID)
-	ownerRows = append(ownerRows, Div(Class("row"),
-		Span(Class("row-desc"), uistate.T("owner.group")),
-		Span(Class(accentFor(grp)), fmtMoney(grp)),
+	ownerRows = append(ownerRows, Div(ClassStr("row"),
+		Span(ClassStr("row-desc"), uistate.T("owner.group")),
+		Span(ClassStr(accentFor(grp)), fmtMoney(grp)),
 	))
 
 	// Reassign-before-delete panel, shown when a member who owns entities is deleted.
@@ -217,11 +217,11 @@ func Members() ui.Node {
 		reassignPanel = uiw.Card(uiw.CardProps{
 			Title: uistate.T("members.reassignTitle"),
 			Body: Fragment(
-				P(Class("muted"), uistate.T("members.reassignDesc", targetName, ownedCount(rid))),
-				Form(Class("form-grid"), OnSubmit(confirmReassign),
-					Select(Class("field"), OnChange(onReassignTo), opts),
-					Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.moveAndDelete")),
-					Button(Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
+				P(ClassStr("muted"), uistate.T("members.reassignDesc", targetName, ownedCount(rid))),
+				Form(ClassStr("form-grid"), OnSubmit(confirmReassign),
+					Select(ClassStr("field"), OnChange(onReassignTo), opts),
+					Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("members.moveAndDelete")),
+					Button(ClassStr("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 				),
 			),
 		})
@@ -231,13 +231,13 @@ func Members() ui.Node {
 		uiw.Card(uiw.CardProps{
 			Title: uistate.T("members.add"),
 			Body: Fragment(
-				Form(Class("form-grid"), OnSubmit(add),
-					Input(append([]any{Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
-					Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
+				Form(ClassStr("form-grid"), OnSubmit(add),
+					Input(append([]any{ClassStr("field"), Attr("id", "member-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
+					Input(ClassStr("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
 					MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 						return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 					}),
-					Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.add")),
+					Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("members.add")),
 				),
 				errText("member-err", errMsg.Get()),
 			),
@@ -245,11 +245,11 @@ func Members() ui.Node {
 		reassignPanel,
 		uiw.Card(uiw.CardProps{
 			Title: uistate.T("members.listTitle"),
-			Body:  IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), FocusID: "member-add"}), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),
+			Body:  IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), FocusID: "member-add"}), Div(ClassStr("rows"), MapKeyed(members, keyOf, renderRow))),
 		}),
 		If(len(members) > 0, uiw.Card(uiw.CardProps{
 			Title: uistate.T("members.netWorthTitle"),
-			Body:  Div(Class("rows"), ownerRows),
+			Body:  Div(ClassStr("rows"), ownerRows),
 		})),
 	)
 }
@@ -267,7 +267,7 @@ func memberAvatar(name, color string) ui.Node {
 	if strings.TrimSpace(bg) == "" {
 		bg = "var(--border)"
 	}
-	return Span(Class("member-avatar"), Attr("aria-hidden", "true"),
+	return Span(ClassStr("member-avatar"), Attr("aria-hidden", "true"),
 		Style(map[string]string{
 			"display": "inline-flex", "align-items": "center", "justify-content": "center",
 			"width": "1.5rem", "height": "1.5rem", "border-radius": "50%",
@@ -327,12 +327,12 @@ func MemberRow(props memberRowProps) ui.Node {
 	}, editKey)
 
 	if editing.Get() {
-		return Div(Class("row"),
-			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName)),
-				Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(colorS.Get()), OnInput(onColor)),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+		return Div(ClassStr("row"),
+			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
+				Input(ClassStr("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(ClassStr("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(colorS.Get()), OnInput(onColor)),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -341,20 +341,20 @@ func MemberRow(props memberRowProps) ui.Node {
 	if m.IsDefault {
 		meta = uistate.T("members.roleDefault")
 	}
-	return Div(Class("row"),
-		Div(Class("row-main"),
-			Span(Class("row-desc"),
+	return Div(ClassStr("row"),
+		Div(ClassStr("row-main"),
+			Span(ClassStr("row-desc"),
 				memberAvatar(m.Name, color),
 				m.Name,
 			),
-			Span(Class("row-meta"), meta),
+			Span(ClassStr("row-meta"), meta),
 		),
 		IfElse(m.IsDefault,
-			Span(Class("badge badge-soon"), uistate.T("members.defaultBadge")),
-			Button(Class("btn"), Type("button"), Title(uistate.T("members.makeDefaultTitle")), OnClick(mkDefault), uistate.T("members.makeDefault")),
+			Span(ClassStr("badge badge-soon"), uistate.T("members.defaultBadge")),
+			Button(ClassStr("btn"), Type("button"), Title(uistate.T("members.makeDefaultTitle")), OnClick(mkDefault), uistate.T("members.makeDefault")),
 		),
-		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("members.viewTitle")), OnClick(view), uiw.Icon(icon.List, Class("w-4 h-4 shrink-0")), Span(uistate.T("nav.transactions"))),
-		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("members.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("members.deleteTitle")), Title(uistate.T("members.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("members.viewTitle")), OnClick(view), uiw.Icon(icon.List, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("nav.transactions"))),
+		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("members.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("members.deleteTitle")), Title(uistate.T("members.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 }

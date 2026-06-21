@@ -27,7 +27,7 @@ import (
 func Artifacts() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 	rev := ui.UseState(0)
 	_ = rev.Get()
@@ -81,23 +81,23 @@ func Artifacts() ui.Node {
 	for _, a := range list {
 		rows = append(rows, ui.CreateElement(artifactRow, artifactRowProps{Artifact: a, Refresh: refresh}))
 	}
-	listBody := P(Class("empty"), uistate.T("artifacts.empty"))
+	listBody := P(ClassStr("empty"), uistate.T("artifacts.empty"))
 	if len(rows) > 0 {
-		listBody = Div(Class("rows"), rows)
+		listBody = Div(ClassStr("rows"), rows)
 	}
 
 	// Storage meter: total serialized dataset size (what hits localStorage).
 	total := app.DatasetBytes()
 
 	return Div(
-		Section(Class("card"),
-			Div(Class("flex gap-2 flex-wrap"),
-				Button(Class("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
-				Button(Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
+		Section(ClassStr("card"),
+			Div(ClassStr("flex gap-2 flex-wrap"),
+				Button(ClassStr("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
+				Button(ClassStr("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
 			),
-			P(Class("muted mt-2"), uistate.T("artifacts.storage", artifacts.HumanSize(total))),
+			P(ClassStr("muted mt-2"), uistate.T("artifacts.storage", artifacts.HumanSize(total))),
 		),
-		Section(Class("card"), listBody),
+		Section(ClassStr("card"), listBody),
 	)
 }
 
@@ -121,21 +121,21 @@ func artifactRow(props artifactRowProps) ui.Node {
 	var preview ui.Node = Fragment()
 	if a.Kind == artifacts.KindImage && len(a.Bytes) > 0 {
 		preview = Img(Attr("src", artifacts.DataURL(a.MIME, a.Bytes)), Attr("alt", a.Name),
-			Class("w-10 h-10 object-cover rounded mr-2"))
+			ClassStr("w-10 h-10 object-cover rounded mr-2"))
 	}
 	meta := a.Kind
 	if len(a.Rows) > 0 {
 		meta = a.Kind + " · " + itoaPct0(len(a.Rows)) + " rows"
 	}
-	return Div(Class("row"),
-		Div(Class("row-main flex items-center"),
+	return Div(ClassStr("row"),
+		Div(ClassStr("row-main flex items-center"),
 			preview,
 			Div(
-				Div(Class("row-desc"), a.Name),
-				Div(Class("row-meta"), meta+" · "+artifacts.HumanSize(a.Size)),
+				Div(ClassStr("row-desc"), a.Name),
+				Div(ClassStr("row-meta"), meta+" · "+artifacts.HumanSize(a.Size)),
 			),
 		),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 }
 

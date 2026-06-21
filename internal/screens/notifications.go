@@ -39,9 +39,9 @@ func NotificationCenter() ui.Node {
 	})
 
 	if len(feed) == 0 {
-		return Section(Class("card"),
-			H2(Class("card-title"), uistate.T("nav.notifications")),
-			P(Class("empty"), uistate.T("notifications.empty")),
+		return Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("nav.notifications")),
+			P(ClassStr("empty"), uistate.T("notifications.empty")),
 		)
 	}
 
@@ -49,20 +49,20 @@ func NotificationCenter() ui.Node {
 	rows := make([]ui.Node, 0, len(feed))
 	for _, it := range feed {
 		when := time.Unix(it.At, 0)
-		rows = append(rows, Div(Class("row"),
-			Div(Class("row-main"),
-				Span(Class("row-desc"), it.Title),
-				If(it.Body != "", Span(Class("row-meta"), it.Body)),
+		rows = append(rows, Div(ClassStr("row"),
+			Div(ClassStr("row-main"),
+				Span(ClassStr("row-desc"), it.Title),
+				If(it.Body != "", Span(ClassStr("row-meta"), it.Body)),
 			),
-			Span(Class("row-meta text-faint"), pr.FormatDate(when)),
+			Span(ClassStr("row-meta text-faint"), pr.FormatDate(when)),
 		))
 	}
 
-	return Section(Class("card"),
-		Div(Class("budget-head"),
-			H2(Class("card-title"), uistate.T("nav.notifications")),
-			Button(Class("btn"), Type("button"), OnClick(clearAll), uistate.T("notifications.clearAll")),
+	return Section(ClassStr("card"),
+		Div(ClassStr("budget-head"),
+			H2(ClassStr("card-title"), uistate.T("nav.notifications")),
+			Button(ClassStr("btn"), Type("button"), OnClick(clearAll), uistate.T("notifications.clearAll")),
 		),
-		Div(Class("rows"), rows),
+		Div(ClassStr("rows"), rows),
 	)
 }

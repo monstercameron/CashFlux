@@ -55,20 +55,20 @@ func AllocRow(props allocRowProps) ui.Node {
 		scorePct = 100
 	}
 	scoreLabel := uistate.T("allocate.scoreLabel", float64(scorePct))
-	return Div(Class("budget"),
-		Div(Class("budget-head"),
-			Span(Class("row-desc"), r.Candidate.Name),
-			Span(Class("budget-amount fig"), headRight),
-			Button(Class("btn"), Type("button"), Title(uistate.T("allocate.excludeTitle")), OnClick(excl), uistate.T("allocate.exclude")),
+	return Div(ClassStr("budget"),
+		Div(ClassStr("budget-head"),
+			Span(ClassStr("row-desc"), r.Candidate.Name),
+			Span(ClassStr("budget-amount fig"), headRight),
+			Button(ClassStr("btn"), Type("button"), Title(uistate.T("allocate.excludeTitle")), OnClick(excl), uistate.T("allocate.exclude")),
 		),
 		// The score is shown once — in the head (headRight) and as this labelled
 		// progress bar (C54). The breakdown is its own sub-line below, so no manual
 		// separator span is needed.
-		Div(Class("bar"), Attr("role", "progressbar"), Attr("aria-label", scoreLabel),
+		Div(ClassStr("bar"), Attr("role", "progressbar"), Attr("aria-label", scoreLabel),
 			Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-valuenow", strconv.Itoa(scorePct)),
-			Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", scorePct))),
+			Div(ClassStr("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", scorePct))),
 		),
-		Span(Class("budget-sub"), uistate.T("allocate.breakdown",
+		Span(ClassStr("budget-sub"), uistate.T("allocate.breakdown",
 			r.Breakdown.Returns*100, r.Breakdown.Stability*100, r.Breakdown.Liquidity*100, note)),
 	)
 }
@@ -81,9 +81,9 @@ type excludedChipProps struct {
 // ExcludedChip is one excluded destination with a Restore action.
 func ExcludedChip(props excludedChipProps) ui.Node {
 	restore := ui.UseEvent(Prevent(func() { props.OnRestore(props.ID) }))
-	return Div(Class("row"),
-		Span(Class("row-desc"), props.Name),
-		Button(Class("btn"), Type("button"), Title(uistate.T("allocate.restoreTitle")), OnClick(restore), uistate.T("allocate.restore")),
+	return Div(ClassStr("row"),
+		Span(ClassStr("row-desc"), props.Name),
+		Button(ClassStr("btn"), Type("button"), Title(uistate.T("allocate.restoreTitle")), OnClick(restore), uistate.T("allocate.restore")),
 	)
 }
 
@@ -118,7 +118,7 @@ func allocProfiles() map[string]allocate.Weights {
 func Allocate() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 
 	profile := ui.UseState("balanced")
@@ -357,11 +357,11 @@ func Allocate() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(ranked) == 0 && hiddenZero:
-		listBody = P(Class("empty"), uistate.T("allocate.setAttributes"))
+		listBody = P(ClassStr("empty"), uistate.T("allocate.setAttributes"))
 	case len(ranked) == 0 && len(excludedRows) == 0:
-		listBody = P(Class("empty"), uistate.T("allocate.emptyNoCandidates"))
+		listBody = P(ClassStr("empty"), uistate.T("allocate.emptyNoCandidates"))
 	case len(ranked) == 0:
-		listBody = P(Class("empty"), uistate.T("allocate.allExcluded"))
+		listBody = P(ClassStr("empty"), uistate.T("allocate.allExcluded"))
 	default:
 		listBody = Div(MapKeyed(ranked,
 			func(r allocate.Ranked) any { return r.Candidate.ID },
@@ -378,11 +378,11 @@ func Allocate() ui.Node {
 	}
 
 	return Div(
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("allocate.profileTitle")),
-			P(Class("muted"), uistate.T("allocate.profileDesc")),
-			Form(Class("form-grid"),
-				Select(Class("field"), OnChange(onProfile),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("allocate.profileTitle")),
+			P(ClassStr("muted"), uistate.T("allocate.profileDesc")),
+			Form(ClassStr("form-grid"),
+				Select(ClassStr("field"), OnChange(onProfile),
 					Option(Value("balanced"), SelectedIf(profile.Get() == "balanced"), uistate.T("allocate.balanced")),
 					Option(Value("returns"), SelectedIf(profile.Get() == "returns"), uistate.T("allocate.maxReturns")),
 					Option(Value("safety"), SelectedIf(profile.Get() == "safety"), uistate.T("allocate.safety")),
@@ -390,45 +390,45 @@ func Allocate() ui.Node {
 					Option(Value("goals"), SelectedIf(profile.Get() == "goals"), uistate.T("allocate.goals")),
 					savedOpts,
 				),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("allocate.reservePlaceholder")), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve)),
-				Input(Class("field"), Type("number"), Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)), Value(maxPerStr.Get()), Step("0.01"), OnInput(onMaxPer)),
+				Input(ClassStr("field"), Type("number"), Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
+				Input(ClassStr("field"), Type("number"), Placeholder(uistate.T("allocate.reservePlaceholder")), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve)),
+				Input(ClassStr("field"), Type("number"), Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)), Value(maxPerStr.Get()), Step("0.01"), OnInput(onMaxPer)),
 			),
-			P(Class("set-label"), uistate.T("allocate.weightsTitle")),
-			Form(Class("form-grid"),
-				Label(Class("flex flex-col gap-1"), Span(Class("muted text-[11px]"), uistate.T("allocate.wReturns")),
-					Input(Class("field"), Type("number"), Value(wReturns.Get()), Step("0.5"), OnInput(onWReturns))),
-				Label(Class("flex flex-col gap-1"), Span(Class("muted text-[11px]"), uistate.T("allocate.wStability")),
-					Input(Class("field"), Type("number"), Value(wStability.Get()), Step("0.5"), OnInput(onWStability))),
-				Label(Class("flex flex-col gap-1"), Span(Class("muted text-[11px]"), uistate.T("allocate.wLiquidity")),
-					Input(Class("field"), Type("number"), Value(wLiquidity.Get()), Step("0.5"), OnInput(onWLiquidity))),
-				Label(Class("flex flex-col gap-1"), Span(Class("muted text-[11px]"), uistate.T("allocate.wDebt")),
-					Input(Class("field"), Type("number"), Value(wDebt.Get()), Step("0.5"), OnInput(onWDebt))),
-				Label(Class("flex flex-col gap-1"), Span(Class("muted text-[11px]"), uistate.T("allocate.wGoal")),
-					Input(Class("field"), Type("number"), Value(wGoal.Get()), Step("0.5"), OnInput(onWGoal))),
+			P(ClassStr("set-label"), uistate.T("allocate.weightsTitle")),
+			Form(ClassStr("form-grid"),
+				Label(ClassStr("flex flex-col gap-1"), Span(ClassStr("muted text-[11px]"), uistate.T("allocate.wReturns")),
+					Input(ClassStr("field"), Type("number"), Value(wReturns.Get()), Step("0.5"), OnInput(onWReturns))),
+				Label(ClassStr("flex flex-col gap-1"), Span(ClassStr("muted text-[11px]"), uistate.T("allocate.wStability")),
+					Input(ClassStr("field"), Type("number"), Value(wStability.Get()), Step("0.5"), OnInput(onWStability))),
+				Label(ClassStr("flex flex-col gap-1"), Span(ClassStr("muted text-[11px]"), uistate.T("allocate.wLiquidity")),
+					Input(ClassStr("field"), Type("number"), Value(wLiquidity.Get()), Step("0.5"), OnInput(onWLiquidity))),
+				Label(ClassStr("flex flex-col gap-1"), Span(ClassStr("muted text-[11px]"), uistate.T("allocate.wDebt")),
+					Input(ClassStr("field"), Type("number"), Value(wDebt.Get()), Step("0.5"), OnInput(onWDebt))),
+				Label(ClassStr("flex flex-col gap-1"), Span(ClassStr("muted text-[11px]"), uistate.T("allocate.wGoal")),
+					Input(ClassStr("field"), Type("number"), Value(wGoal.Get()), Step("0.5"), OnInput(onWGoal))),
 			),
-			Form(Class("form-grid"), OnSubmit(saveProfile),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("allocate.profileNamePlaceholder")), Value(profName.Get()), OnInput(onProfName)),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("allocate.saveProfile")),
-				If(strings.HasPrefix(profile.Get(), "saved:"), Button(Class("btn"), Type("button"), OnClick(deleteProfile), uistate.T("allocate.deleteProfile"))),
+			Form(ClassStr("form-grid"), OnSubmit(saveProfile),
+				Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("allocate.profileNamePlaceholder")), Value(profName.Get()), OnInput(onProfName)),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("allocate.saveProfile")),
+				If(strings.HasPrefix(profile.Get(), "saved:"), Button(ClassStr("btn"), Type("button"), OnClick(deleteProfile), uistate.T("allocate.deleteProfile"))),
 			),
-			If(profMsg.Get() != "", P(Class("muted"), profMsg.Get())),
-			If(totalMinor > 0 && remainder > 0, P(Class("muted"), uistate.T("allocate.keptBack", fmtMoney(money.New(remainder, base))))),
+			If(profMsg.Get() != "", P(ClassStr("muted"), profMsg.Get())),
+			If(totalMinor > 0 && remainder > 0, P(ClassStr("muted"), uistate.T("allocate.keptBack", fmtMoney(money.New(remainder, base))))),
 		),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("allocate.suggestionsTitle")),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("allocate.suggestionsTitle")),
 			listBody,
 		),
-		If(len(excludedRows) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("allocate.excludedTitle")),
-			P(Class("muted"), uistate.T("allocate.excludedDesc")),
-			Div(Class("rows"), excludedRows),
+		If(len(excludedRows) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("allocate.excludedTitle")),
+			P(ClassStr("muted"), uistate.T("allocate.excludedDesc")),
+			Div(ClassStr("rows"), excludedRows),
 		)),
-		If(len(ranked) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("allocate.whyTitle")),
-			Button(Class("btn"), Type("button"), OnClick(explain), IfElse(aiLoading.Get(), Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAI")))),
-			If(aiErr.Get() != "", P(Class("err"), Attr("role", "alert"), aiErr.Get())),
-			If(aiResult.Get() != "", P(Class("muted"), aiResult.Get())),
+		If(len(ranked) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("allocate.whyTitle")),
+			Button(ClassStr("btn"), Type("button"), OnClick(explain), IfElse(aiLoading.Get(), Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAI")))),
+			If(aiErr.Get() != "", P(ClassStr("err"), Attr("role", "alert"), aiErr.Get())),
+			If(aiResult.Get() != "", P(ClassStr("muted"), aiResult.Get())),
 		)),
 	)
 }

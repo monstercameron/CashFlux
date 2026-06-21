@@ -71,7 +71,7 @@ func chartD3(props ChartProps) uic.Node {
 	}
 	return Div(
 		Attr("id", id),
-		Class(cls),
+		ClassStr(cls),
 		Attr("role", "img"),
 		Attr("aria-label", props.Label),
 		Style(map[string]string{"width": "100%", "height": h}),

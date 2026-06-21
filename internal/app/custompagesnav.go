@@ -165,10 +165,10 @@ func CustomPagesNav() uic.Node {
 	// "New page" is a non-navigating action, so it's a plain styled row (navItem
 	// only navigates) matching the muted nav styling.
 	newPage := A(
-		Class("nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer text-faint"),
+		ClassStr("nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer text-faint"),
 		Title(uistate.T("rail.newPage")),
 		OnClick(create),
-		ui.Icon(icon.Plus, Class("w-4 h-4 shrink-0")),
+		ui.Icon(icon.Plus, ClassStr("w-4 h-4 shrink-0")),
 		Span(uistate.T("rail.newPage")),
 	)
 
@@ -185,7 +185,7 @@ func CustomPagesNav() uic.Node {
 				OnDelete: func() { del(p) },
 			}))
 		}
-		hiddenSection = Div(Class("flex flex-col gap-0.5"),
+		hiddenSection = Div(ClassStr("flex flex-col gap-0.5"),
 			railHeader(uistate.T("pages.hiddenSection")),
 			hrows,
 		)
@@ -194,7 +194,7 @@ func CustomPagesNav() uic.Node {
 	// A single root Div (not a bare Fragment) so the section renders inline at its
 	// position among the other rail groups; a Fragment of mixed children doesn't
 	// preserve sibling order next to the MapKeyed groups.
-	body := []any{Class("flex flex-col gap-0.5"),
+	body := []any{ClassStr("flex flex-col gap-0.5"),
 		uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
 			Label: uistate.T("rail.myPages"), Collapsed: myPagesCollapsed, OnToggle: toggleMyPages,
 		}),
@@ -236,10 +236,10 @@ func customPageRow(props customPageRowProps) uic.Node {
 		cls = "nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer text-faint min-w-0 flex-1"
 	}
 
-	link := A(Class(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }))
+	link := A(ClassStr(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }))
 	if props.OnDragStart != nil {
 		onStart, onDrop := props.OnDragStart, props.OnDrop
-		link = A(Class(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }),
+		link = A(ClassStr(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }),
 			Attr("draggable", "true"),
 			OnDragStart(func() {
 				if onStart != nil {
@@ -252,13 +252,13 @@ func customPageRow(props customPageRowProps) uic.Node {
 					onDrop()
 				}
 			})),
-			ui.Icon(icon.Page, Class("w-4 h-4 shrink-0")),
-			Span(Class("truncate"), p.Name),
+			ui.Icon(icon.Page, ClassStr("w-4 h-4 shrink-0")),
+			Span(ClassStr("truncate"), p.Name),
 		)
 	} else {
-		link = A(Class(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }),
-			ui.Icon(icon.Page, Class("w-4 h-4 shrink-0")),
-			Span(Class("truncate"), p.Name),
+		link = A(ClassStr(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }),
+			ui.Icon(icon.Page, ClassStr("w-4 h-4 shrink-0")),
+			Span(ClassStr("truncate"), p.Name),
 		)
 	}
 
@@ -269,21 +269,21 @@ func customPageRow(props customPageRowProps) uic.Node {
 
 	var menu uic.Node = Fragment()
 	if open.Get() {
-		menu = Div(Class("absolute right-1 top-full mt-1 z-30 min-w-[150px] rounded-[4px] border border-line bg-base p-1 text-[13px] shadow-lg flex flex-col gap-0.5"),
-			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"),
+		menu = Div(ClassStr("absolute right-1 top-full mt-1 z-30 min-w-[150px] rounded-[4px] border border-line bg-base p-1 text-[13px] shadow-lg flex flex-col gap-0.5"),
+			Button(ClassStr("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"),
 				OnClick(func() { open.Set(false); props.OnRename() }), uistate.T("pages.rename")),
-			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"),
+			Button(ClassStr("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"),
 				OnClick(func() { open.Set(false); props.OnHide() }), hideLabel),
-			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover text-down"), Type("button"),
+			Button(ClassStr("w-full text-left px-2 py-1.5 rounded hover:bg-hover text-down"), Type("button"),
 				OnClick(func() { open.Set(false); props.OnDelete() }), uistate.T("pages.delete")),
 		)
 	}
 
-	return Div(Class("relative flex items-center"),
+	return Div(ClassStr("relative flex items-center"),
 		link,
-		Button(Class("rail-section shrink-0 px-1.5 py-1 text-faint hover:text-fg"), Type("button"),
+		Button(ClassStr("rail-section shrink-0 px-1.5 py-1 text-faint hover:text-fg"), Type("button"),
 			Title(uistate.T("pages.menu")),
-			OnClick(func() { open.Set(!open.Get()) }), ui.Icon(icon.MoreH, Class("w-4 h-4"))),
+			OnClick(func() { open.Set(!open.Get()) }), ui.Icon(icon.MoreH, ClassStr("w-4 h-4"))),
 		menu,
 	)
 }

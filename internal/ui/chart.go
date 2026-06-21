@@ -49,7 +49,7 @@ func AreaChart(props AreaChartProps) uic.Node {
 	line := chart.LinePath(pts)
 
 	return Svg(
-		Class("w-full mt-auto"),
+		ClassStr("w-full mt-auto"),
 		Attr("role", "img"),
 		Attr("aria-label", label),
 		Attr("viewBox", fmt.Sprintf("0 0 %g %g", w, h)),

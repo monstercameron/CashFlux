@@ -47,7 +47,7 @@ var cfTypes = []struct {
 func CustomFieldsManager() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:customfields", 0)
@@ -109,20 +109,20 @@ func CustomFieldsManager() ui.Node {
 
 	isChoice := ftype.Get() == string(customfields.TypeSelect)
 
-	form := Section(Class("card"),
-		H2(Class("card-title"), uistate.T("cf.addTitle")),
-		P(Class("muted"), uistate.T("cf.addDesc")),
-		Form(Class("form-grid"), OnSubmit(add),
-			Select(Class("field"), OnChange(onEntity), entityOptions),
-			Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
-			Input(Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
-			Select(Class("field"), OnChange(onType), typeOptions),
-			If(isChoice, Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
-			Select(Class("field"), OnChange(onRequired),
+	form := Section(ClassStr("card"),
+		H2(ClassStr("card-title"), uistate.T("cf.addTitle")),
+		P(ClassStr("muted"), uistate.T("cf.addDesc")),
+		Form(ClassStr("form-grid"), OnSubmit(add),
+			Select(ClassStr("field"), OnChange(onEntity), entityOptions),
+			Input(append([]any{ClassStr("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
+			Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
+			Select(ClassStr("field"), OnChange(onType), typeOptions),
+			If(isChoice, Input(ClassStr("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
+			Select(ClassStr("field"), OnChange(onRequired),
 				Option(Value("no"), SelectedIf(required.Get() == "no"), uistate.T("cf.optional")),
 				Option(Value("yes"), SelectedIf(required.Get() == "yes"), uistate.T("cf.required")),
 			),
-			Button(Class("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
+			Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
 		),
 		errText("cf-err", errMsg.Get()),
 	)
@@ -144,15 +144,15 @@ func CustomFieldsManager() ui.Node {
 			return ui.CreateElement(CustomFieldRow, customFieldRowProps{Def: d, OnDelete: deleteDef})
 		}
 		keyOf := func(d customfields.Def) any { return d.ID }
-		sections = append(sections, Section(Class("card"),
-			H2(Class("card-title"), uistate.T(e.Key)),
-			Div(Class("rows"), MapKeyed(rows, keyOf, renderRow)),
+		sections = append(sections, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T(e.Key)),
+			Div(ClassStr("rows"), MapKeyed(rows, keyOf, renderRow)),
 		))
 	}
 
 	list := ui.Node(nil)
 	if len(sections) == 0 {
-		list = Section(Class("card"), P(Class("empty"), uistate.T("cf.empty")))
+		list = Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("cf.empty")))
 	} else {
 		list = Fragment(sections...)
 	}
@@ -186,11 +186,11 @@ func CustomFieldRow(props customFieldRowProps) ui.Node {
 	if props.Def.Type == customfields.TypeSelect && len(props.Def.Options) > 0 {
 		meta += " · " + strings.Join(props.Def.Options, ", ")
 	}
-	return Div(Class("row"),
-		Div(Class("row-main"),
-			Span(Class("row-desc"), props.Def.Label),
-			Span(Class("row-meta"), props.Def.Key+" — "+meta),
+	return Div(ClassStr("row"),
+		Div(ClassStr("row-main"),
+			Span(ClassStr("row-desc"), props.Def.Label),
+			Span(ClassStr("row-meta"), props.Def.Key+" — "+meta),
 		),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("cf.deleteTitle")), Title(uistate.T("cf.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("cf.deleteTitle")), Title(uistate.T("cf.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 }

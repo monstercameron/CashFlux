@@ -26,7 +26,7 @@ import (
 func Rules() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:rules", 0)
@@ -109,16 +109,16 @@ func Rules() ui.Node {
 		liveCount = rules.Rule{Match: liveMatch}.MatchCount(texts)
 	}
 
-	form := Section(Class("card"),
-		H2(Class("card-title"), uistate.T("rules.add")),
-		P(Class("muted"), uistate.T("rules.hint")),
-		Form(Class("form-grid"), OnSubmit(add),
-			Input(append([]any{Class("field"), Attr("id", "rule-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
-			Select(Class("field"), OnChange(onCategory), categoryOptions(cats, categoryID.Get())),
-			Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
-			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+	form := Section(ClassStr("card"),
+		H2(ClassStr("card-title"), uistate.T("rules.add")),
+		P(ClassStr("muted"), uistate.T("rules.hint")),
+		Form(ClassStr("form-grid"), OnSubmit(add),
+			Input(append([]any{ClassStr("field"), Attr("id", "rule-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
+			Select(ClassStr("field"), OnChange(onCategory), categoryOptions(cats, categoryID.Get())),
+			Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
+			Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
-		If(liveMatch != "" && len(texts) > 0, P(Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))),
+		If(liveMatch != "" && len(texts) > 0, P(ClassStr("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))),
 		errText("rule-err", errMsg.Get()),
 	)
 
@@ -177,7 +177,7 @@ func Rules() ui.Node {
 
 	list := IfElse(len(rs) == 0,
 		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), FocusID: "rule-add"}),
-		Div(Class("rows"), MapKeyed(rs,
+		Div(ClassStr("rows"), MapKeyed(rs,
 			func(r rules.Rule) any { return r.ID },
 			func(r rules.Rule) ui.Node {
 				rid := r.ID
@@ -206,10 +206,10 @@ func Rules() ui.Node {
 	suggestions := rulesuggest.Suggest(app.Transactions(), rs, 3)
 	suggestCard := Fragment()
 	if len(suggestions) > 0 {
-		suggestCard = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("rules.suggestedTitle")),
-			P(Class("muted"), uistate.T("rules.suggestedHint")),
-			Div(Class("rows"), MapKeyed(suggestions,
+		suggestCard = Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("rules.suggestedTitle")),
+			P(ClassStr("muted"), uistate.T("rules.suggestedHint")),
+			Div(ClassStr("rows"), MapKeyed(suggestions,
 				func(s rulesuggest.Suggestion) any { return s.Rule.Match },
 				func(s rulesuggest.Suggestion) ui.Node {
 					return ui.CreateElement(SuggestionRow, suggestionRowProps{
@@ -223,18 +223,18 @@ func Rules() ui.Node {
 	return Div(
 		form,
 		suggestCard,
-		Section(Class("card"),
-			Div(Class("flex items-center justify-between"),
-				H2(Class("card-title"), uistate.T("rules.listTitle")),
-				If(len(rs) > 0, Button(Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
+		Section(ClassStr("card"),
+			Div(ClassStr("flex items-center justify-between"),
+				H2(ClassStr("card-title"), uistate.T("rules.listTitle")),
+				If(len(rs) > 0, Button(ClassStr("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
 			),
-			If(len(rs) > 0 && hasTxns, P(Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
+			If(len(rs) > 0 && hasTxns, P(ClassStr("muted"), uistate.T("rules.coverage", covered, len(texts)))),
 			list,
 		),
 		// Precedence chain: first match wins, top to bottom; shadowed rules flagged (C70/C64).
-		If(len(rs) > 1, Section(Class("card"),
-			H2(Class("card-title"), "Rule order"),
-			P(Class("muted"), "First match wins, top to bottom."),
+		If(len(rs) > 1, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), "Rule order"),
+			P(ClassStr("muted"), "First match wins, top to bottom."),
 			uiw.Mermaid(uiw.MermaidProps{
 				Source: mermaid.FromRules(rs, func(id string) string { return catName[id] }),
 				Label:  "Rule precedence chain",
@@ -282,12 +282,12 @@ func SuggestionRow(props suggestionRowProps) ui.Node {
 	if cat == "" {
 		cat = uistate.T("rules.unknownCategory")
 	}
-	return Div(Class("row"),
-		Div(Class("row-main"),
-			Span(Class("row-desc"), uistate.T("rules.suggestionDesc", s.Rule.Match, cat)),
-			Span(Class("row-meta"), uistate.T("rules.suggestionMeta", s.Total)),
+	return Div(ClassStr("row"),
+		Div(ClassStr("row-main"),
+			Span(ClassStr("row-desc"), uistate.T("rules.suggestionDesc", s.Rule.Match, cat)),
+			Span(ClassStr("row-meta"), uistate.T("rules.suggestionMeta", s.Total)),
 		),
-		Button(Class("btn btn-primary"), Type("button"), Title(uistate.T("rules.acceptTitle")), OnClick(add), uistate.T("rules.accept")),
+		Button(ClassStr("btn btn-primary"), Type("button"), Title(uistate.T("rules.acceptTitle")), OnClick(add), uistate.T("rules.accept")),
 	)
 }
 
@@ -341,13 +341,13 @@ func RuleRow(props ruleRowProps) ui.Node {
 	}, editKey)
 
 	if editing.Get() {
-		return Div(Class("row"),
-			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch)),
-				Select(Class("field"), OnChange(onCat), categoryOptions(props.Categories, catS.Get())),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags)),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+		return Div(ClassStr("row"),
+			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
+				Input(ClassStr("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch)),
+				Select(ClassStr("field"), OnChange(onCat), categoryOptions(props.Categories, catS.Get())),
+				Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags)),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -360,7 +360,7 @@ func RuleRow(props ruleRowProps) ui.Node {
 	if len(r.SetTags) > 0 {
 		meta += " · " + strings.Join(r.SetTags, ", ")
 	}
-	return Div(Class("row"), Attr("draggable", "true"),
+	return Div(ClassStr("row"), Attr("draggable", "true"),
 		OnDragStart(func() {
 			if props.OnDragStart != nil {
 				props.OnDragStart()
@@ -372,14 +372,14 @@ func RuleRow(props ruleRowProps) ui.Node {
 				props.OnDrop()
 			}
 		})),
-		Span(Class("rule-grip"), Attr("aria-hidden", "true"), Title(uistate.T("rules.dragTitle")), uiw.Icon(icon.MoreH, Class("w-4 h-4"))),
-		Div(Class("row-main"),
-			Span(Class("row-desc"), uistate.T("rules.matchLabel", r.Match)),
-			Span(Class("row-meta"), meta),
-			If(props.ShowMatchCount, Span(Class("row-meta"), uistate.T("rules.matchCountMeta", plural(props.MatchCount, "transaction")))),
-			If(props.Warning != "", Span(Class("row-meta text-warn"), props.Warning)),
+		Span(ClassStr("rule-grip"), Attr("aria-hidden", "true"), Title(uistate.T("rules.dragTitle")), uiw.Icon(icon.MoreH, ClassStr("w-4 h-4"))),
+		Div(ClassStr("row-main"),
+			Span(ClassStr("row-desc"), uistate.T("rules.matchLabel", r.Match)),
+			Span(ClassStr("row-meta"), meta),
+			If(props.ShowMatchCount, Span(ClassStr("row-meta"), uistate.T("rules.matchCountMeta", plural(props.MatchCount, "transaction")))),
+			If(props.Warning != "", Span(ClassStr("row-meta text-warn"), props.Warning)),
 		),
-		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("rules.deleteTitle")), Title(uistate.T("rules.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("rules.deleteTitle")), Title(uistate.T("rules.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 }

@@ -33,7 +33,7 @@ type emptyCTAProps struct {
 func EmptyStateCTA(props emptyCTAProps) ui.Node {
 	onClick := ui.UseEvent(Prevent(func() { focusByID(props.FocusID) }))
 	if props.FocusID == "" {
-		return P(Class("empty"), props.Message)
+		return P(ClassStr("empty"), props.Message)
 	}
 	// A muted glyph above the first-run message makes an otherwise-blank panel feel
 	// intentional and inviting (C46).
@@ -41,9 +41,9 @@ func EmptyStateCTA(props emptyCTAProps) ui.Node {
 	if !glyph.Valid() {
 		glyph = icon.Box
 	}
-	return Div(Class("empty-cta"),
-		uiw.Icon(glyph, Class("w-8 h-8 text-faint")),
-		P(Class("empty"), props.Message),
-		Button(Class("btn btn-primary"), Type("button"), OnClick(onClick), props.CTALabel),
+	return Div(ClassStr("empty-cta"),
+		uiw.Icon(glyph, ClassStr("w-8 h-8 text-faint")),
+		P(ClassStr("empty"), props.Message),
+		Button(ClassStr("btn btn-primary"), Type("button"), OnClick(onClick), props.CTALabel),
 	)
 }

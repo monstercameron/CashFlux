@@ -37,7 +37,7 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 
 	switch d.Type {
 	case customfields.TypeBool:
-		return Select(Class("field"), Title(label), OnChange(onSel),
+		return Select(ClassStr("field"), Title(label), OnChange(onSel),
 			Option(Value(""), SelectedIf(props.Value == ""), label+"…"),
 			Option(Value("true"), SelectedIf(props.Value == "true"), uistate.T("cf.yes")),
 			Option(Value("false"), SelectedIf(props.Value == "false"), uistate.T("cf.no")),
@@ -47,13 +47,13 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 		for _, o := range d.Options {
 			opts = append(opts, Option(Value(o), SelectedIf(props.Value == o), o))
 		}
-		return Select(Class("field"), Title(label), OnChange(onSel), opts)
+		return Select(ClassStr("field"), Title(label), OnChange(onSel), opts)
 	case customfields.TypeNumber:
-		return Input(Class("field"), Type("number"), Step("any"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
+		return Input(ClassStr("field"), Type("number"), Step("any"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
 	case customfields.TypeDate:
-		return Input(Class("field"), Type("date"), Title(label), Value(props.Value), OnInput(onText))
+		return Input(ClassStr("field"), Type("date"), Title(label), Value(props.Value), OnInput(onText))
 	default: // text
-		return Input(Class("field"), Type("text"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
+		return Input(ClassStr("field"), Type("text"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
 	}
 }
 

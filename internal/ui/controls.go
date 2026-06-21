@@ -61,7 +61,7 @@ func segmented(props SegmentedProps) uic.Node {
 		next := (i + delta + len(options)) % len(options)
 		onSelect(options[next].Value)
 	}
-	args := []any{Class("seg"), Attr("role", "radiogroup"), OnKeyDown(func(e uic.KeyboardEvent) {
+	args := []any{ClassStr("seg"), Attr("role", "radiogroup"), OnKeyDown(func(e uic.KeyboardEvent) {
 		switch e.GetKey() {
 		case "ArrowLeft", "ArrowUp":
 			e.PreventDefault()
@@ -116,7 +116,7 @@ func segButton(props segButtonProps) uic.Node {
 		tabidx = "0"
 	}
 	return Button(
-		Class(cls),
+		ClassStr(cls),
 		Type("button"),
 		Attr("role", "radio"),
 		Attr("aria-checked", checked),
@@ -155,18 +155,18 @@ func stepperPill(props StepperPillProps) uic.Node {
 	if nextLabel == "" {
 		nextLabel = "Next"
 	}
-	return Div(Class("rpill"),
-		Button(Class("rstep"), Type("button"), Attr("aria-label", prevLabel), OnClick(func() {
+	return Div(ClassStr("rpill"),
+		Button(ClassStr("rstep"), Type("button"), Attr("aria-label", prevLabel), OnClick(func() {
 			if onPrev != nil {
 				onPrev()
 			}
-		}), Icon(icon.ChevronLeft, Class("w-4 h-4"))),
-		Span(Class("rlabel fig"), props.Label),
-		Button(Class("rstep"), Type("button"), Attr("aria-label", nextLabel), OnClick(func() {
+		}), Icon(icon.ChevronLeft, ClassStr("w-4 h-4"))),
+		Span(ClassStr("rlabel fig"), props.Label),
+		Button(ClassStr("rstep"), Type("button"), Attr("aria-label", nextLabel), OnClick(func() {
 			if onNext != nil {
 				onNext()
 			}
-		}), Icon(icon.ChevronRight, Class("w-4 h-4"))),
+		}), Icon(icon.ChevronRight, ClassStr("w-4 h-4"))),
 	)
 }
 
@@ -197,7 +197,7 @@ func toggle(props ToggleProps) uic.Node {
 		}
 	}
 	args := []any{
-		Class(cls),
+		ClassStr(cls),
 		Attr("role", "switch"),
 		Attr("aria-checked", checked),
 		Attr("tabindex", "0"), // focusable: it's a div, so it needs this to be reachable
@@ -228,7 +228,7 @@ type ToggleRowProps struct {
 func ToggleRow(props ToggleRowProps) uic.Node { return uic.CreateElement(toggleRow, props) }
 
 func toggleRow(props ToggleRowProps) uic.Node {
-	return Div(Class("toggle-row"),
+	return Div(ClassStr("toggle-row"),
 		Span(props.Label),
 		Toggle(ToggleProps{On: props.On, OnChange: props.OnChange, Label: props.Label}),
 	)
@@ -265,7 +265,7 @@ func swatch(props SwatchProps) uic.Node {
 		tabidx = "0" // roving tabindex: one Tab stop, arrows move within the group
 	}
 	return Div(
-		Class(cls),
+		ClassStr(cls),
 		Attr("role", "radio"),
 		Attr("aria-checked", checked),
 		Attr("aria-label", props.Color),
@@ -324,7 +324,7 @@ func swatchPicker(props SwatchPickerProps) uic.Node {
 		}
 		onSelect(colors[(i+delta+len(colors))%len(colors)])
 	}
-	return Div(Class("flex gap-2 items-center"), Attr("role", "radiogroup"), Attr("aria-label", uistate.T("a11y.accentColor")),
+	return Div(ClassStr("flex gap-2 items-center"), Attr("role", "radiogroup"), Attr("aria-label", uistate.T("a11y.accentColor")),
 		OnKeyDown(func(e uic.KeyboardEvent) {
 			switch e.GetKey() {
 			case "ArrowLeft", "ArrowUp":

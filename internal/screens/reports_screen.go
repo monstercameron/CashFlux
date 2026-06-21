@@ -45,7 +45,7 @@ func accentForRunway(months int) string {
 func Reports() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -164,7 +164,7 @@ func Reports() ui.Node {
 		if pct > 100 {
 			pct = 100
 		}
-		return Div(Class("share-bar"), Style(map[string]string{"height": "4px", "max-width": "260px", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+		return Div(ClassStr("share-bar"), Style(map[string]string{"height": "4px", "max-width": "260px", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
 			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
 	}
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
@@ -177,7 +177,7 @@ func Reports() ui.Node {
 		if a.Direction != insights.Up {
 			continue
 		}
-		anomalyNodes = append(anomalyNodes, P(Class("muted"), uistate.T("reports.anomaly", a.Category, a.PctChange)))
+		anomalyNodes = append(anomalyNodes, P(ClassStr("muted"), uistate.T("reports.anomaly", a.Category, a.PctChange)))
 		if len(anomalyNodes) >= 3 {
 			break
 		}
@@ -207,20 +207,20 @@ func Reports() ui.Node {
 			if pct < 0 {
 				pct = -pct
 			}
-			delta = Span(Class("row-meta inline-flex items-center gap-1 "+tone), uiw.Icon(arrow, Class("w-3.5 h-3.5 shrink-0")), Text(fmt.Sprintf("%d%%", pct)))
+			delta = Span(ClassStr("row-meta inline-flex items-center gap-1 "+tone), uiw.Icon(arrow, ClassStr("w-3.5 h-3.5 shrink-0")), Text(fmt.Sprintf("%d%%", pct)))
 		}
-		rowNodes = append(rowNodes, Div(Class("row"),
-			Div(Class("row-main"), Span(Class("row-desc"), nameOf(r.CategoryID)), shareBar(r.Amount, maxCat)),
+		rowNodes = append(rowNodes, Div(ClassStr("row"),
+			Div(ClassStr("row-main"), Span(ClassStr("row-desc"), nameOf(r.CategoryID)), shareBar(r.Amount, maxCat)),
 			delta,
-			Span(Class("budget-amount"), fmtMinor(r.Amount)),
+			Span(ClassStr("budget-amount"), fmtMinor(r.Amount)),
 		))
 	}
 
 	var catBody ui.Node
 	if len(rowNodes) == 0 {
-		catBody = P(Class("empty"), uistate.T("reports.empty"))
+		catBody = P(ClassStr("empty"), uistate.T("reports.empty"))
 	} else {
-		catBody = Div(Class("rows"), rowNodes)
+		catBody = Div(ClassStr("rows"), rowNodes)
 	}
 
 	// Top payees: where the money went by merchant/description this period.
@@ -237,9 +237,9 @@ func Reports() ui.Node {
 		if name == "" {
 			name = uistate.T("reports.noPayee")
 		}
-		payeeNodes = append(payeeNodes, Div(Class("row"),
-			Div(Class("row-main"), Span(Class("row-desc"), name), shareBar(p.Amount, maxPayee)),
-			Span(Class("budget-amount"), fmtMinor(p.Amount)),
+		payeeNodes = append(payeeNodes, Div(ClassStr("row"),
+			Div(ClassStr("row-main"), Span(ClassStr("row-desc"), name), shareBar(p.Amount, maxPayee)),
+			Span(ClassStr("budget-amount"), fmtMinor(p.Amount)),
 		))
 	}
 
@@ -257,13 +257,13 @@ func Reports() ui.Node {
 		if desc == "" {
 			desc = nameOf(e.CategoryID)
 		}
-		largestNodes = append(largestNodes, Div(Class("row"),
-			Div(Class("row-main"),
-				Span(Class("row-desc"), desc),
-				Span(Class("row-meta"), pr.FormatDate(e.Date)),
+		largestNodes = append(largestNodes, Div(ClassStr("row"),
+			Div(ClassStr("row-main"),
+				Span(ClassStr("row-desc"), desc),
+				Span(ClassStr("row-meta"), pr.FormatDate(e.Date)),
 				shareBar(e.Amount, maxExp),
 			),
-			Span(Class("budget-amount"), fmtMinor(e.Amount)),
+			Span(ClassStr("budget-amount"), fmtMinor(e.Amount)),
 		))
 	}
 
@@ -279,9 +279,9 @@ func Reports() ui.Node {
 		if name == "" {
 			name = uistate.T("reports.noMember")
 		}
-		memberNodes = append(memberNodes, Div(Class("row"),
-			Div(Class("row-main"), Span(Class("row-desc"), name)),
-			Span(Class("budget-amount"), fmtMinor(ms.Amount)),
+		memberNodes = append(memberNodes, Div(ClassStr("row"),
+			Div(ClassStr("row-main"), Span(ClassStr("row-desc"), name)),
+			Span(ClassStr("budget-amount"), fmtMinor(ms.Amount)),
 		))
 	}
 
@@ -293,12 +293,12 @@ func Reports() ui.Node {
 		if desc == "" {
 			desc = nameOf(e.CategoryID)
 		}
-		bigIncomeNodes = append(bigIncomeNodes, Div(Class("row"),
-			Div(Class("row-main"),
-				Span(Class("row-desc"), desc),
-				Span(Class("row-meta"), pr.FormatDate(e.Date)),
+		bigIncomeNodes = append(bigIncomeNodes, Div(ClassStr("row"),
+			Div(ClassStr("row-main"),
+				Span(ClassStr("row-desc"), desc),
+				Span(ClassStr("row-meta"), pr.FormatDate(e.Date)),
 			),
-			Span(Class("budget-amount"), fmtMinor(e.Amount)),
+			Span(ClassStr("budget-amount"), fmtMinor(e.Amount)),
 		))
 	}
 
@@ -309,9 +309,9 @@ func Reports() ui.Node {
 		if r.Amount == 0 {
 			continue
 		}
-		incomeNodes = append(incomeNodes, Div(Class("row"),
-			Div(Class("row-main"), Span(Class("row-desc"), nameOf(r.CategoryID))),
-			Span(Class("budget-amount"), fmtMinor(r.Amount)),
+		incomeNodes = append(incomeNodes, Div(ClassStr("row"),
+			Div(ClassStr("row-main"), Span(ClassStr("row-desc"), nameOf(r.CategoryID))),
+			Span(ClassStr("budget-amount"), fmtMinor(r.Amount)),
 		))
 	}
 
@@ -338,7 +338,7 @@ func Reports() ui.Node {
 	}
 
 	return Div(
-		Div(Class("stat-grid"),
+		Div(ClassStr("stat-grid"),
 			stat(uistate.T("dashboard.income"), fmtMoney(money.New(flow.Income, base)), "pos"),
 			stat(uistate.T("dashboard.spending"), fmtMoney(money.New(flow.Expense, base)), "neg"),
 			stat(uistate.T("reports.net"), fmtMoney(net), accentFor(net)),
@@ -346,55 +346,55 @@ func Reports() ui.Node {
 			If(burn > 0, stat(uistate.T("reports.runway"), uistate.T("reports.runwayMonths", runway.Months), accentForRunway(runway.Months))),
 			If(noSpendDays > 0, stat(uistate.T("reports.noSpendDays"), fmt.Sprintf("%d", noSpendDays), "pos")),
 		),
-		If(spendTrend != "", P(Class("muted"), spendTrend)),
-		If(spendStats.Count > 0, P(Class("muted"), uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))),
-		If(len(anomalyNodes) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("reports.headsUp")),
+		If(spendTrend != "", P(ClassStr("muted"), spendTrend)),
+		If(spendStats.Count > 0, P(ClassStr("muted"), uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))),
+		If(len(anomalyNodes) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("reports.headsUp")),
 			Div(anomalyNodes),
 		)),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("reports.byCategory")),
-			P(Class("muted"), narrative),
-			If(weekdayPeakLine != "", P(Class("muted"), weekdayPeakLine)),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("reports.byCategory")),
+			P(ClassStr("muted"), narrative),
+			If(weekdayPeakLine != "", P(ClassStr("muted"), weekdayPeakLine)),
 			catBody,
-			If(len(rowNodes) > 0, Div(Class("flex flex-wrap gap-2 py-1"),
-				Button(Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+			If(len(rowNodes) > 0, Div(ClassStr("flex flex-wrap gap-2 py-1"),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 					downloadBytes("spending-by-category.csv", "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
 				}), uistate.T("reports.downloadCsv")),
 			)),
 		),
-		If(len(moneyFlows) > 1, Section(Class("card"),
-			H2(Class("card-title"), "Money flow"),
+		If(len(moneyFlows) > 1, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), "Money flow"),
 			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow"}),
 		)),
-		If(len(bigIncomeNodes) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("reports.biggestDeposits")),
-			Div(Class("rows"), bigIncomeNodes),
+		If(len(bigIncomeNodes) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("reports.biggestDeposits")),
+			Div(ClassStr("rows"), bigIncomeNodes),
 		)),
-		If(len(incomeNodes) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("reports.incomeBySource")),
-			Div(Class("rows"), incomeNodes),
-			Div(Class("flex flex-wrap gap-2 py-1"),
-				Button(Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+		If(len(incomeNodes) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("reports.incomeBySource")),
+			Div(ClassStr("rows"), incomeNodes),
+			Div(ClassStr("flex flex-wrap gap-2 py-1"),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 					downloadBytes("income-by-source.csv", "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
 				}), uistate.T("reports.downloadCsv")),
 			),
 		)),
-		If(len(payeeNodes) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("reports.topPayees")),
-			Div(Class("rows"), payeeNodes),
+		If(len(payeeNodes) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("reports.topPayees")),
+			Div(ClassStr("rows"), payeeNodes),
 		)),
-		If(len(largestNodes) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("reports.biggestExpenses")),
-			Div(Class("rows"), largestNodes),
+		If(len(largestNodes) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("reports.biggestExpenses")),
+			Div(ClassStr("rows"), largestNodes),
 		)),
-		If(len(memberSpend) > 1, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("reports.byMember")),
-			Div(Class("rows"), memberNodes),
-			Div(Class("flex flex-wrap gap-2 py-1"),
-				Button(Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+		If(len(memberSpend) > 1, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("reports.byMember")),
+			Div(ClassStr("rows"), memberNodes),
+			Div(ClassStr("flex flex-wrap gap-2 py-1"),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 					nm := func(id string) string {
 						if n := memberName[id]; n != "" {
@@ -406,27 +406,27 @@ func Reports() ui.Node {
 				}), uistate.T("reports.downloadCsv")),
 			),
 		)),
-		If(len(netSeries) >= 2, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("dashboard.cashFlow")),
-			P(Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+		If(len(netSeries) >= 2, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("dashboard.cashFlow")),
+			P(ClassStr("muted"), uistate.T("reports.trendHint", trendBuckets)),
 			uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow")}),
 		)),
-		If(len(accounts) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("dashboard.netWorth")),
-			Div(Class("stat-grid"),
+		If(len(accounts) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("dashboard.netWorth")),
+			Div(ClassStr("stat-grid"),
 				stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
 				stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
 				stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
 				If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
 			),
 		)),
-		If(len(nw) >= 2, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("dashboard.netWorthTrend")),
+		If(len(nw) >= 2, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("dashboard.netWorthTrend")),
 			uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend")}),
 		)),
-		If(len(srSeries) >= 2, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("reports.savingsTrend")),
-			P(Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+		If(len(srSeries) >= 2, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("reports.savingsTrend")),
+			P(ClassStr("muted"), uistate.T("reports.trendHint", trendBuckets)),
 			uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
 		)),
 	)

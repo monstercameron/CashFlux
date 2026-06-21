@@ -40,7 +40,7 @@ func wsColorDot(color string) uic.Node {
 	if c == "" {
 		c = "#6c6c72"
 	}
-	return Span(Class("inline-block w-2.5 h-2.5 rounded-full shrink-0"),
+	return Span(ClassStr("inline-block w-2.5 h-2.5 rounded-full shrink-0"),
 		Style(map[string]string{"background-color": c}))
 }
 
@@ -86,39 +86,39 @@ func WorkspaceSwitcher() uic.Node {
 	}
 	menu := Fragment()
 	if open.Get() {
-		menu = Div(Class(menuCls),
-			Div(Class("flex flex-col gap-0.5"), rows),
-			Div(Class("border-t border-line my-2 pt-2")),
-			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onNew), uistate.T("ws.new")),
-			Button(Class("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onDup), uistate.T("ws.duplicate")),
+		menu = Div(ClassStr(menuCls),
+			Div(ClassStr("flex flex-col gap-0.5"), rows),
+			Div(ClassStr("border-t border-line my-2 pt-2")),
+			Button(ClassStr("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onNew), uistate.T("ws.new")),
+			Button(ClassStr("w-full text-left px-2 py-1.5 rounded hover:bg-hover"), Type("button"), OnClick(onDup), uistate.T("ws.duplicate")),
 		)
 	}
 
 	if collapsed {
 		// Tint the glyph's border with the workspace color so the active context is
 		// recognizable even in the icon-only rail.
-		glyph := []any{Class("w-9 h-9 grid place-items-center rounded-[4px] border border-line text-[13px] font-medium hover:bg-hover"),
+		glyph := []any{ClassStr("w-9 h-9 grid place-items-center rounded-[4px] border border-line text-[13px] font-medium hover:bg-hover"),
 			Type("button"), Title(active.Name + " · " + uistate.T("ws.switch")),
 			OnClick(func() { open.Set(!open.Get()) }),
 			workspaceInitial(active.Name)}
 		if active.Color != "" {
 			glyph = append(glyph, Style(map[string]string{"border-color": active.Color}))
 		}
-		return Div(Class("ws-switch relative mx-auto mt-3 w-9"),
+		return Div(ClassStr("ws-switch relative mx-auto mt-3 w-9"),
 			Button(glyph...),
 			menu,
 		)
 	}
 
-	return Div(Class("ws-switch relative mx-3 mt-3"),
-		Button(Class("w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[4px] border border-line text-[13px] hover:bg-hover"),
+	return Div(ClassStr("ws-switch relative mx-3 mt-3"),
+		Button(ClassStr("w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[4px] border border-line text-[13px] hover:bg-hover"),
 			Type("button"), Title(uistate.T("ws.switch")),
 			OnClick(func() { open.Set(!open.Get()) }),
-			Span(Class("flex items-center gap-2 min-w-0"),
+			Span(ClassStr("flex items-center gap-2 min-w-0"),
 				wsColorDot(active.Color),
-				Span(Class("truncate"), active.Name),
+				Span(ClassStr("truncate"), active.Name),
 			),
-			ui.Icon(icon.ChevronDown, Class("w-4 h-4 text-faint shrink-0")),
+			ui.Icon(icon.ChevronDown, ClassStr("w-4 h-4 text-faint shrink-0")),
 		),
 		menu,
 	)
@@ -148,13 +148,13 @@ func wsMenuItem(props wsMenuItemProps) uic.Node {
 	if props.Active {
 		cls += " bg-hover text-fg font-medium"
 	}
-	return Button(Class(cls), Type("button"),
+	return Button(ClassStr(cls), Type("button"),
 		OnClick(func() { switchWorkspace(id) }),
-		Span(Class("flex items-center gap-2 min-w-0"),
+		Span(ClassStr("flex items-center gap-2 min-w-0"),
 			wsColorDot(props.Color),
-			Span(Class("truncate"), props.Name),
+			Span(ClassStr("truncate"), props.Name),
 		),
-		If(props.Active, Span(Class("text-up"), "✓")),
+		If(props.Active, Span(ClassStr("text-up"), "✓")),
 	)
 }
 
@@ -215,9 +215,9 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 		}
 		return c
 	}
-	actions := []any{Class("flex items-center gap-2"),
-		Button(Class(moveCls(props.Index > 0)), Type("button"), Attr("aria-label", uistate.T("ws.moveUp")), Title(uistate.T("ws.moveUp")), OnClick(moveTo(props.Index-1)), ui.Icon(icon.ArrowUp, Class("w-4 h-4"))),
-		Button(Class(moveCls(props.Index < props.Total-1)), Type("button"), Attr("aria-label", uistate.T("ws.moveDown")), Title(uistate.T("ws.moveDown")), OnClick(moveTo(props.Index+1)), ui.Icon(icon.ArrowDown, Class("w-4 h-4"))),
+	actions := []any{ClassStr("flex items-center gap-2"),
+		Button(ClassStr(moveCls(props.Index > 0)), Type("button"), Attr("aria-label", uistate.T("ws.moveUp")), Title(uistate.T("ws.moveUp")), OnClick(moveTo(props.Index-1)), ui.Icon(icon.ArrowUp, ClassStr("w-4 h-4"))),
+		Button(ClassStr(moveCls(props.Index < props.Total-1)), Type("button"), Attr("aria-label", uistate.T("ws.moveDown")), Title(uistate.T("ws.moveDown")), OnClick(moveTo(props.Index+1)), ui.Icon(icon.ArrowDown, ClassStr("w-4 h-4"))),
 		ui.SwatchPicker(ui.SwatchPickerProps{Colors: workspacePalette, Selected: props.Color, OnSelect: pickColor}),
 		dataBtn(uistate.T("ws.rename"), false, rename),
 		dataBtn(uistate.T("ws.export"), false, func() { exportWorkspace(id) }),
@@ -225,11 +225,11 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 	if props.CanDelete {
 		actions = append(actions, dataBtn(uistate.T("ws.delete"), true, del))
 	}
-	return Div(Class("flex items-center justify-between gap-2 py-1"),
-		Span(Class("flex items-center gap-2 min-w-0"),
+	return Div(ClassStr("flex items-center justify-between gap-2 py-1"),
+		Span(ClassStr("flex items-center gap-2 min-w-0"),
 			wsColorDot(props.Color),
-			Span(Class("truncate"), props.Name),
-			If(props.Active, Span(Class("text-xs text-up"), uistate.T("ws.active"))),
+			Span(ClassStr("truncate"), props.Name),
+			If(props.Active, Span(ClassStr("text-xs text-up"), uistate.T("ws.active"))),
 		),
 		Span(actions...),
 	)
@@ -257,12 +257,12 @@ func workspacesSection(onChange func()) uic.Node {
 			}
 		})
 	}
-	return Div(Class("flex flex-col"),
+	return Div(ClassStr("flex flex-col"),
 		uic.CreateElement(wsStartupSelect, wsStartupSelectProps{
 			Workspaces: r.Workspaces, StartupID: r.StartupID, OnChange: onChange,
 		}),
 		rows,
-		Div(Class("flex flex-wrap gap-2 py-1"),
+		Div(ClassStr("flex flex-wrap gap-2 py-1"),
 			dataBtn(uistate.T("ws.import"), false, importWS),
 		),
 	)
@@ -289,8 +289,8 @@ func wsStartupSelect(props wsStartupSelectProps) uic.Node {
 	for _, w := range props.Workspaces {
 		opts = append(opts, Option(Value(w.ID), SelectedIf(props.StartupID == w.ID), w.Name))
 	}
-	return Div(Class("flex flex-col gap-1 py-1"),
-		Span(Class("text-xs text-faint"), uistate.T("ws.startupLabel")),
-		Select(Class("set-input"), Title(uistate.T("ws.startupLabel")), OnChange(onSel), opts),
+	return Div(ClassStr("flex flex-col gap-1 py-1"),
+		Span(ClassStr("text-xs text-faint"), uistate.T("ws.startupLabel")),
+		Select(ClassStr("set-input"), Title(uistate.T("ws.startupLabel")), OnChange(onSel), opts),
 	)
 }

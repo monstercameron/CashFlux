@@ -178,39 +178,39 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	var foot uic.Node
 	if props.CloseOnly {
 		// Nothing to save: a single Close button (no Cancel/Save pair).
-		foot = Div(Class("set-foot"),
-			Button(Class("set-btn save"), Type("button"), OnClick(save), "Close"),
+		foot = Div(ClassStr("set-foot"),
+			Button(ClassStr("set-btn save"), Type("button"), OnClick(save), "Close"),
 		)
 	} else {
-		foot = Div(Class("set-foot"),
-			Button(Class("set-btn cancel"), Type("button"), OnClick(cancel), "Cancel"),
-			Button(Class("set-btn save"), Type("button"), OnClick(save), "Save"),
+		foot = Div(ClassStr("set-foot"),
+			Button(ClassStr("set-btn cancel"), Type("button"), OnClick(cancel), "Cancel"),
+			Button(ClassStr("set-btn save"), Type("button"), OnClick(save), "Save"),
 		)
 	}
 
-	return Div(Class(backdropCls),
-		Div(Class("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
+	return Div(ClassStr(backdropCls),
+		Div(ClassStr("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
 			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-label", props.Title),
-			Div(Class(innerCls),
+			Div(ClassStr(innerCls),
 				// Front face — a neutral card briefly seen during the flip.
-				Div(Class("flip-face"),
-					Div(Class("wh"), Span(Class("grip"), "⠿"), H3(props.Title)),
+				Div(ClassStr("flip-face"),
+					Div(ClassStr("wh"), Span(ClassStr("grip"), "⠿"), H3(props.Title)),
 				),
 				// Back face — the settings panel.
-				Div(Class("flip-face flip-back"),
-					Div(Class("set-h"),
+				Div(ClassStr("flip-face flip-back"),
+					Div(ClassStr("set-h"),
 						Span(Style(map[string]string{"width": "1.5rem"})), // balance the close button so the title centers
 						H3(props.Title),
-						Button(Class("set-close"), Type("button"), Attr("title", "Close"),
+						Button(ClassStr("set-close"), Type("button"), Attr("title", "Close"),
 							OnClick(func() {
 								if onClose != nil {
 									onClose()
 								}
 							}),
-							Icon(icon.Close, Class("w-4 h-4")),
+							Icon(icon.Close, ClassStr("w-4 h-4")),
 						),
 					),
-					Div(Class("set-body"), props.Back),
+					Div(ClassStr("set-body"), props.Back),
 					foot,
 				),
 			),

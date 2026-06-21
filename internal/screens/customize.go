@@ -30,7 +30,7 @@ import (
 func Customize() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 
 	accounts := app.Accounts()
@@ -102,12 +102,12 @@ func Customize() ui.Node {
 	var resultBody ui.Node
 	switch e := strings.TrimSpace(expr.Get()); {
 	case e == "":
-		resultBody = P(Class("muted"), uistate.T("customize.formulaHint"))
+		resultBody = P(ClassStr("muted"), uistate.T("customize.formulaHint"))
 	default:
 		if val, err := formula.Eval(e, formula.Env{Vars: vars}); err != nil {
-			resultBody = P(Class("err"), Attr("role", "alert"), err.Error())
+			resultBody = P(ClassStr("err"), Attr("role", "alert"), err.Error())
 		} else {
-			resultBody = Div(Class("stat-value"), formatFormulaValue(val))
+			resultBody = Div(ClassStr("stat-value"), formatFormulaValue(val))
 		}
 	}
 
@@ -119,41 +119,41 @@ func Customize() ui.Node {
 	sort.Strings(names)
 	varRows := make([]ui.Node, 0, len(names))
 	for _, k := range names {
-		varRows = append(varRows, Div(Class("row"),
-			Span(Class("row-desc"), k),
-			Span(Class("amount fig"), groupThousands(vars[k])),
+		varRows = append(varRows, Div(ClassStr("row"),
+			Span(ClassStr("row-desc"), k),
+			Span(ClassStr("amount fig"), groupThousands(vars[k])),
 		))
 	}
 
 	return Div(
 		CustomFieldsManager(),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("customize.calcTitle")),
-			P(Class("muted"), uistate.T("customize.calcDesc")),
-			Form(Class("form-grid"),
-				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("customize.calcTitle")),
+			P(ClassStr("muted"), uistate.T("customize.calcDesc")),
+			Form(ClassStr("form-grid"),
+				Input(ClassStr("field field-wide"), Type("text"), Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
 			),
-			Div(Class("flex flex-wrap gap-2 mt-2 items-center"),
-				Span(Class("muted"), uistate.T("customize.try")),
-				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round((income - expense) / income * 100)") }), uistate.T("customize.exSavings")),
-				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round(expense / income * 100)") }), uistate.T("customize.exSpending")),
-				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("net_worth + liabilities") }), uistate.T("customize.exGross")),
-				Button(Class("data-btn"), Type("button"), OnClick(func() { expr.Set("if(expense > income, 1, 0)") }), uistate.T("customize.exOverBudget")),
+			Div(ClassStr("flex flex-wrap gap-2 mt-2 items-center"),
+				Span(ClassStr("muted"), uistate.T("customize.try")),
+				Button(ClassStr("data-btn"), Type("button"), OnClick(func() { expr.Set("round((income - expense) / income * 100)") }), uistate.T("customize.exSavings")),
+				Button(ClassStr("data-btn"), Type("button"), OnClick(func() { expr.Set("round(expense / income * 100)") }), uistate.T("customize.exSpending")),
+				Button(ClassStr("data-btn"), Type("button"), OnClick(func() { expr.Set("net_worth + liabilities") }), uistate.T("customize.exGross")),
+				Button(ClassStr("data-btn"), Type("button"), OnClick(func() { expr.Set("if(expense > income, 1, 0)") }), uistate.T("customize.exOverBudget")),
 			),
-			Form(Class("form-grid mt-2"), OnSubmit(saveFormula),
-				Input(Class("field"), Type("text"), Placeholder(uistate.T("customize.savePlaceholder")), Value(fName.Get()), OnInput(onFName)),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("customize.save")),
+			Form(ClassStr("form-grid mt-2"), OnSubmit(saveFormula),
+				Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("customize.savePlaceholder")), Value(fName.Get()), OnInput(onFName)),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("customize.save")),
 			),
-			If(fMsg.Get() != "", P(Class("muted"), fMsg.Get())),
+			If(fMsg.Get() != "", P(ClassStr("muted"), fMsg.Get())),
 		),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("customize.resultTitle")),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("customize.resultTitle")),
 			resultBody,
 		),
 		savedFormulasCard(app.Formulas(), vars, loadFormula, deleteFormula),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("customize.varsTitle")),
-			Div(Class("rows"), varRows),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("customize.varsTitle")),
+			Div(ClassStr("rows"), varRows),
 		),
 	)
 }
@@ -171,9 +171,9 @@ func savedFormulasCard(formulas []domain.Formula, vars map[string]float64, onLoa
 			Formula: f, Result: evalFormulaDisplay(f.Expr, vars), OnLoad: onLoad, OnDelete: onDelete,
 		}))
 	}
-	return Section(Class("card"),
-		H2(Class("card-title"), uistate.T("customize.savedTitle")),
-		Div(Class("rows"), rows),
+	return Section(ClassStr("card"),
+		H2(ClassStr("card-title"), uistate.T("customize.savedTitle")),
+		Div(ClassStr("rows"), rows),
 	)
 }
 
@@ -201,14 +201,14 @@ func SavedFormulaRow(props savedFormulaRowProps) ui.Node {
 	f := props.Formula
 	load := ui.UseEvent(Prevent(func() { props.OnLoad(f.Expr) }))
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(f.ID) }))
-	return Div(Class("row"),
-		Div(Class("row-main"),
-			Span(Class("row-desc"), f.Name),
-			Span(Class("row-meta"), f.Expr),
+	return Div(ClassStr("row"),
+		Div(ClassStr("row-main"),
+			Span(ClassStr("row-desc"), f.Name),
+			Span(ClassStr("row-meta"), f.Expr),
 		),
-		Span(Class("amount fig"), props.Result),
-		Button(Class("btn"), Type("button"), Title(uistate.T("customize.loadTitle")), OnClick(load), uistate.T("customize.load")),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("customize.deleteTitle")), Title(uistate.T("customize.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Span(ClassStr("amount fig"), props.Result),
+		Button(ClassStr("btn"), Type("button"), Title(uistate.T("customize.loadTitle")), OnClick(load), uistate.T("customize.load")),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("customize.deleteTitle")), Title(uistate.T("customize.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 }
 

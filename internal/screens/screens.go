@@ -78,8 +78,8 @@ func All() []Route {
 }
 
 func stat(label, value, accent string) ui.Node {
-	return Div(Class("stat"),
-		Div(Class("stat-label"), label),
-		Div(Class("stat-value "+accent), value),
+	return Div(ClassStr("stat"),
+		Div(ClassStr("stat-label"), label),
+		Div(ClassStr("stat-value "+accent), value),
 	)
 }

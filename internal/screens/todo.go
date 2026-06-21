@@ -25,7 +25,7 @@ import (
 func Todo() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:tasks", 0)
@@ -157,16 +157,16 @@ func Todo() ui.Node {
 		Option(Value(string(domain.PriorityLow)), SelectedIf(priority.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 	}
 
-	form := Section(Class("card"),
-		H2(Class("card-title"), uistate.T("todo.addTitle")),
-		Form(Class("form-grid"), OnSubmit(add),
-			Input(append([]any{Class("field field-wide"), Attr("id", "task-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
+	form := Section(ClassStr("card"),
+		H2(ClassStr("card-title"), uistate.T("todo.addTitle")),
+		Form(ClassStr("form-grid"), OnSubmit(add),
+			Input(append([]any{ClassStr("field field-wide"), Attr("id", "task-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
 			labeledField("Priority",
-				Select(Class("field"), Attr("aria-label", "Priority"), OnChange(onPriority), prioOptions)),
+				Select(ClassStr("field"), Attr("aria-label", "Priority"), OnChange(onPriority), prioOptions)),
 			labeledField("Due date",
-				Input(Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueStr.Get()), OnInput(onDue))),
-			Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
-			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+				Input(ClassStr("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueStr.Get()), OnInput(onDue))),
+			Input(ClassStr("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
+			Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		errText("todo-err", errMsg.Get()),
 	)
@@ -181,7 +181,7 @@ func Todo() ui.Node {
 	case len(tasks) == 0:
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("todo.empty"), CTALabel: uistate.T("todo.addFirst"), FocusID: "task-add"})
 	case len(nodes) == 0:
-		listBody = P(Class("empty"), uistate.T("todo.allDone"))
+		listBody = P(ClassStr("empty"), uistate.T("todo.allDone"))
 	default:
 		rows := MapKeyed(nodes,
 			func(n tasktree.Node) any { return n.Task.ID },
@@ -192,7 +192,7 @@ func Todo() ui.Node {
 				})
 			},
 		)
-		listBody = Div(Class("rows"), rows)
+		listBody = Div(ClassStr("rows"), rows)
 	}
 
 	hideLabel := uistate.T("todo.hideDone")
@@ -202,10 +202,10 @@ func Todo() ui.Node {
 
 	return Div(
 		form,
-		Section(Class("card"),
-			Div(Class("budget-head"),
-				H2(Class("card-title"), uistate.T("todo.listTitle")),
-				Button(Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
+		Section(ClassStr("card"),
+			Div(ClassStr("budget-head"),
+				H2(ClassStr("card-title"), uistate.T("todo.listTitle")),
+				Button(ClassStr("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
 			),
 			listBody,
 		),
@@ -274,20 +274,20 @@ func TaskRow(props taskRowProps) ui.Node {
 	}, editKey)
 
 	if editing.Get() {
-		return Div(Class("row"),
-			Form(Class("form-grid"), OnSubmit(saveEdit),
-				Input(Class("field field-wide"), Attr("id", "task-edit-"+t.ID), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
+		return Div(ClassStr("row"),
+			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
+				Input(ClassStr("field field-wide"), Attr("id", "task-edit-"+t.ID), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
 				labeledField("Priority",
-					Select(Class("field"), Attr("aria-label", "Priority"), OnChange(onPrio),
+					Select(ClassStr("field"), Attr("aria-label", "Priority"), OnChange(onPrio),
 						Option(Value(string(domain.PriorityHigh)), SelectedIf(prioS.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
 						Option(Value(string(domain.PriorityMedium)), SelectedIf(prioS.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
 						Option(Value(string(domain.PriorityLow)), SelectedIf(prioS.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 					)),
 				labeledField("Due date",
-					Input(Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueS.Get()), OnInput(onDue))),
-				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+					Input(ClassStr("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueS.Get()), OnInput(onDue))),
+				Input(ClassStr("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -305,7 +305,7 @@ func TaskRow(props taskRowProps) ui.Node {
 	// tone plus an explicit "overdue" word (colour + text, not colour alone — B15)
 	// so a past-due task is actionable at a glance (C52).
 	overdue := !done && !t.Due.IsZero() && dateutil.FormatDate(t.Due) < dateutil.FormatDate(time.Now())
-	meta := []ui.Node{Span(Class("badge badge-prio "+pclass), plabel)}
+	meta := []ui.Node{Span(ClassStr("badge badge-prio "+pclass), plabel)}
 	if !t.Due.IsZero() {
 		dueText := uistate.T("todo.due") + " " + pr.FormatDate(t.Due)
 		dueCls := "row-meta"
@@ -313,28 +313,28 @@ func TaskRow(props taskRowProps) ui.Node {
 			dueText += " · overdue"
 			dueCls = "row-meta text-down"
 		}
-		meta = append(meta, Span(Class(dueCls), dueText))
+		meta = append(meta, Span(ClassStr(dueCls), dueText))
 	}
 	if t.Notes != "" {
-		meta = append(meta, Span(Class("row-meta"), t.Notes))
+		meta = append(meta, Span(ClassStr("row-meta"), t.Notes))
 	}
 
 	if props.Depth > 0 {
 		rowClass += " subtask"
 	}
-	rowArgs := []any{Class(rowClass), Attr("id", t.ID)}
+	rowArgs := []any{ClassStr(rowClass), Attr("id", t.ID)}
 	if props.Depth > 0 {
 		rowArgs = append(rowArgs, Style(map[string]string{"margin-left": strconv.Itoa(props.Depth*22) + "px"}))
 	}
 	rowArgs = append(rowArgs,
-		Button(Class("check"), Type("button"), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
-		Div(Class("row-main"),
-			Span(Class("row-desc"), t.Title),
-			Div(Class("task-meta"), meta),
+		Button(ClassStr("check"), Type("button"), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
+		Div(ClassStr("row-main"),
+			Span(ClassStr("row-desc"), t.Title),
+			Div(ClassStr("task-meta"), meta),
 		),
-		Button(Class("btn"), Type("button"), Title(uistate.T("todo.addSubTitle")), OnClick(addSub), uistate.T("todo.addSub")),
-		Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Button(ClassStr("btn"), Type("button"), Title(uistate.T("todo.addSubTitle")), OnClick(addSub), uistate.T("todo.addSub")),
+		Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 	return Div(rowArgs...)
 }

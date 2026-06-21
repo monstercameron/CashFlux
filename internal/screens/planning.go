@@ -203,26 +203,26 @@ func Planning() ui.Node {
 	var resultBody ui.Node
 	switch {
 	case strings.TrimSpace(balStr.Get()) == "" || strings.TrimSpace(payStr.Get()) == "":
-		resultBody = P(Class("muted"), uistate.T("planning.payoffHint"))
+		resultBody = P(ClassStr("muted"), uistate.T("planning.payoffHint"))
 	default:
 		bal, errB := money.ParseMinor(strings.TrimSpace(balStr.Get()), currency.Decimals(base))
 		pay, errP := money.ParseMinor(strings.TrimSpace(payStr.Get()), currency.Decimals(base))
 		apr, errA := strconv.ParseFloat(strings.TrimSpace(aprStr.Get()), 64)
 		switch {
 		case errB != nil || errP != nil || errA != nil:
-			resultBody = P(Class("err"), Attr("role", "alert"), uistate.T("planning.invalidNumbers"))
+			resultBody = P(ClassStr("err"), Attr("role", "alert"), uistate.T("planning.invalidNumbers"))
 		default:
 			if r, ok := payoff.Project(bal, apr, pay); ok {
 				extraNote := Fragment()
 				if extra, eerr := money.ParseMinor(strings.TrimSpace(extraStr.Get()), currency.Decimals(base)); eerr == nil && extra > 0 {
 					if r2, ok2 := payoff.Project(bal, apr, pay+extra); ok2 {
-						extraNote = P(Class("muted"), uistate.T("planning.extraNote",
+						extraNote = P(ClassStr("muted"), uistate.T("planning.extraNote",
 							fmtMoney(money.New(extra, base)), r.Months-r2.Months, fmtMoney(money.New(r.TotalInterest-r2.TotalInterest, base)),
 						))
 					}
 				}
 				resultBody = Div(
-					Div(Class("stat-grid"),
+					Div(ClassStr("stat-grid"),
 						stat(uistate.T("planning.months"), fmt.Sprintf("%d", r.Months), ""),
 						stat(uistate.T("planning.totalInterest"), fmtMoney(money.New(r.TotalInterest, base)), "neg"),
 						stat(uistate.T("planning.totalPaid"), fmtMoney(money.New(r.TotalPaid, base)), ""),
@@ -231,7 +231,7 @@ func Planning() ui.Node {
 				)
 			} else {
 				min := payoff.MinimumViablePayment(bal, apr)
-				resultBody = P(Class("err"), Attr("role", "alert"), uistate.T("planning.paymentTooLowMin", fmtMoney(money.New(min, base))))
+				resultBody = P(ClassStr("err"), Attr("role", "alert"), uistate.T("planning.paymentTooLowMin", fmtMoney(money.New(min, base))))
 			}
 		}
 	}
@@ -274,7 +274,7 @@ func Planning() ui.Node {
 			series2 := forecast.Project(net.Amount, []forecast.Recurring{{Monthly: monthlyNet + trim}}, nil, 12)
 			chartSeries = append(chartSeries, chartspec.Series{Name: uistate.T("planning.seriesTrim"), Color: "#cfa14e", Points: toPoints(series2)})
 			end2 := series2[len(series2)-1]
-			trimNote = P(Class("muted"), uistate.T("planning.trimNote",
+			trimNote = P(ClassStr("muted"), uistate.T("planning.trimNote",
 				fmtMoney(money.New(trim, base)), fmtMoney(money.New(end2, base)), fmtMoney(money.New(end2-series[len(series)-1], base))))
 		}
 		spec := chartspec.Spec{
@@ -283,12 +283,12 @@ func Planning() ui.Node {
 			Y:      chartspec.Axis{Format: yFmt},
 			Legend: len(chartSeries) > 1,
 		}
-		forecastCard = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("planning.forecastTitle")),
-			P(Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
+		forecastCard = Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("planning.forecastTitle")),
+			P(ClassStr("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
 			uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
-			Form(Class("form-grid"),
-				labeledField(uistate.T("planning.trimPlaceholder", base), Input(Class("field"), Type("number"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim))),
+			Form(ClassStr("form-grid"),
+				labeledField(uistate.T("planning.trimPlaceholder", base), Input(ClassStr("field"), Type("number"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim))),
 			),
 			trimNote,
 		)
@@ -307,7 +307,7 @@ func Planning() ui.Node {
 		income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
 		monthlyNet := income.Amount - expense.Amount
 
-		var afBody ui.Node = P(Class("muted"), uistate.T("planning.affordEnter"))
+		var afBody ui.Node = P(ClassStr("muted"), uistate.T("planning.affordEnter"))
 		if amt, aerr := money.ParseMinor(strings.TrimSpace(afAmount.Get()), currency.Decimals(base)); aerr == nil && amt > 0 {
 			months, _ := strconv.Atoi(strings.TrimSpace(afMonths.Get()))
 			reserved, _ := money.ParseMinor(strings.TrimSpace(afReserve.Get()), currency.Decimals(base))
@@ -317,19 +317,19 @@ func Planning() ui.Node {
 			res := afford.CanAfford(amt, net.Amount, monthlyNet, months, reserved)
 			var verdict ui.Node
 			if res.Affordable {
-				verdict = P(Class("budget-sub font-display"), uistate.T("planning.affordYes"))
+				verdict = P(ClassStr("budget-sub font-display"), uistate.T("planning.affordYes"))
 			} else {
 				when := uistate.T("planning.affordNever")
 				if res.MonthsNeeded > 0 {
 					when = uistate.T("planning.affordWhen", plural(res.MonthsNeeded, "month"))
 				}
 				verdict = Div(
-					P(Class("err"), Attr("role", "alert"), uistate.T("planning.affordShort", fmtMoney(money.New(res.Shortfall, base)))),
-					P(Class("muted"), when),
+					P(ClassStr("err"), Attr("role", "alert"), uistate.T("planning.affordShort", fmtMoney(money.New(res.Shortfall, base)))),
+					P(ClassStr("muted"), when),
 				)
 			}
 			afBody = Div(
-				Div(Class("stat-grid"),
+				Div(ClassStr("stat-grid"),
 					stat(uistate.T("planning.affordProjected"), fmtMoney(money.New(res.ProjectedBalance, base)), ""),
 					stat(uistate.T("planning.affordAvailable"), fmtMoney(money.New(res.Available, base)), ""),
 				),
@@ -337,13 +337,13 @@ func Planning() ui.Node {
 			)
 		}
 
-		affordCard = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("planning.affordTitle")),
-			P(Class("muted"), uistate.T("planning.affordHint")),
-			Form(Class("form-grid"),
-				labeledField(uistate.T("planning.affordAmountPlaceholder", base), Input(Class("field"), Type("number"), Attr("min", "0"), Value(afAmount.Get()), Step("0.01"), OnInput(onAfAmount))),
-				labeledField(uistate.T("planning.affordMonthsPlaceholder"), Input(Class("field"), Type("number"), Attr("min", "0"), Value(afMonths.Get()), Step("1"), OnInput(onAfMonths))),
-				labeledField(uistate.T("planning.affordReservePlaceholder", base), Input(Class("field"), Type("number"), Attr("min", "0"), Value(afReserve.Get()), Step("0.01"), OnInput(onAfReserve))),
+		affordCard = Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("planning.affordTitle")),
+			P(ClassStr("muted"), uistate.T("planning.affordHint")),
+			Form(ClassStr("form-grid"),
+				labeledField(uistate.T("planning.affordAmountPlaceholder", base), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(afAmount.Get()), Step("0.01"), OnInput(onAfAmount))),
+				labeledField(uistate.T("planning.affordMonthsPlaceholder"), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(afMonths.Get()), Step("1"), OnInput(onAfMonths))),
+				labeledField(uistate.T("planning.affordReservePlaceholder", base), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(afReserve.Get()), Step("0.01"), OnInput(onAfReserve))),
 			),
 			afBody,
 		)
@@ -364,7 +364,7 @@ func Planning() ui.Node {
 		}
 		const runwayDays = 60
 
-		var rwBody ui.Node = P(Class("muted"), uistate.T("planning.runwayEmpty"))
+		var rwBody ui.Node = P(ClassStr("muted"), uistate.T("planning.runwayEmpty"))
 		if len(recs) > 0 {
 			if proj, perr := runway.Project(assets.Amount, recs, time.Now(), runwayDays, buffer, rates); perr == nil {
 				lowTone := ""
@@ -375,26 +375,26 @@ func Planning() ui.Node {
 				var verdict ui.Node
 				if proj.WillBreach() {
 					breachDate := time.Now().AddDate(0, 0, proj.BreachDay).Format("Jan 2")
-					verdict = P(Class("err"), Attr("role", "alert"), uistate.T("planning.runwayBreach", breachDate, fmtMoney(money.New(proj.BreachShortfall, base))))
+					verdict = P(ClassStr("err"), Attr("role", "alert"), uistate.T("planning.runwayBreach", breachDate, fmtMoney(money.New(proj.BreachShortfall, base))))
 				} else {
-					verdict = P(Class("budget-sub font-display"), uistate.T("planning.runwaySafe", runwayDays))
+					verdict = P(ClassStr("budget-sub font-display"), uistate.T("planning.runwaySafe", runwayDays))
 				}
 				rwBody = Div(
-					Div(Class("stat-grid"),
+					Div(ClassStr("stat-grid"),
 						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(assets.Amount, base)), ""),
 						stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
 					),
 					verdict,
-					P(Class("muted"), uistate.T("planning.runwayLow", fmtMoney(money.New(proj.MinBalance, base)), lowDate)),
+					P(ClassStr("muted"), uistate.T("planning.runwayLow", fmtMoney(money.New(proj.MinBalance, base)), lowDate)),
 				)
 			}
 		}
 
-		runwayCard = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("planning.runwayTitle")),
-			P(Class("muted"), uistate.T("planning.runwayHint")),
-			Form(Class("form-grid"),
-				labeledField(uistate.T("planning.runwayBufferPlaceholder", base), Input(Class("field"), Type("number"), Attr("min", "0"), Value(rwBuffer.Get()), Step("0.01"), OnInput(onRwBuffer))),
+		runwayCard = Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("planning.runwayTitle")),
+			P(ClassStr("muted"), uistate.T("planning.runwayHint")),
+			Form(ClassStr("form-grid"),
+				labeledField(uistate.T("planning.runwayBufferPlaceholder", base), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(rwBuffer.Get()), Step("0.01"), OnInput(onRwBuffer))),
 			),
 			rwBody,
 		)
@@ -423,35 +423,35 @@ func Planning() ui.Node {
 		}
 		totalNote := Fragment()
 		if len(recs) > 0 {
-			totalNote = P(Class("muted"), uistate.T("recurring.monthlyTotal", fmtMoney(money.New(monthlyTotal, base))))
+			totalNote = P(ClassStr("muted"), uistate.T("recurring.monthlyTotal", fmtMoney(money.New(monthlyTotal, base))))
 		}
 		list := IfElse(len(recs) == 0,
-			P(Class("empty"), uistate.T("recurring.empty")),
-			Div(Class("rows"), MapKeyed(recs,
+			P(ClassStr("empty"), uistate.T("recurring.empty")),
+			Div(ClassStr("rows"), MapKeyed(recs,
 				func(r domain.Recurring) any { return r.ID },
 				func(r domain.Recurring) ui.Node {
 					return ui.CreateElement(RecurringRow, recurringRowProps{Recurring: r, OnDelete: deleteRecurring})
 				},
 			)),
 		)
-		recurringCard = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("recurring.title")),
-			P(Class("muted"), uistate.T("recurring.hint")),
-			Form(Class("form-grid"), OnSubmit(addRecurring),
-				Input(append([]any{Class("field"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)}, errAttrs("refi-err", rErr.Get())...)...),
-				labeledField(uistate.T("recurring.amountPlaceholder", base), Input(Class("field"), Type("number"), Value(rAmount.Get()), Step("0.01"), OnInput(onRAmount))),
-				Select(Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), Title(uistate.T("recurring.cadence")), OnChange(onRCadence), cadenceOpts),
-				Select(Class("field"), Attr("aria-label", uistate.T("recurring.account")), Title(uistate.T("recurring.account")), OnChange(onRAccount), acctOpts),
-				Select(Class("field"), Attr("aria-label", uistate.T("recurring.category")), Title(uistate.T("recurring.category")), OnChange(onRCategory), catOpts),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
+		recurringCard = Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("recurring.title")),
+			P(ClassStr("muted"), uistate.T("recurring.hint")),
+			Form(ClassStr("form-grid"), OnSubmit(addRecurring),
+				Input(append([]any{ClassStr("field"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)}, errAttrs("refi-err", rErr.Get())...)...),
+				labeledField(uistate.T("recurring.amountPlaceholder", base), Input(ClassStr("field"), Type("number"), Value(rAmount.Get()), Step("0.01"), OnInput(onRAmount))),
+				Select(ClassStr("field"), Attr("aria-label", uistate.T("recurring.cadence")), Title(uistate.T("recurring.cadence")), OnChange(onRCadence), cadenceOpts),
+				Select(ClassStr("field"), Attr("aria-label", uistate.T("recurring.account")), Title(uistate.T("recurring.account")), OnChange(onRAccount), acctOpts),
+				Select(ClassStr("field"), Attr("aria-label", uistate.T("recurring.category")), Title(uistate.T("recurring.category")), OnChange(onRCategory), catOpts),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
 			),
 			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
 			errText("refi-err", rErr.Get()),
 			totalNote,
 			list,
-			Div(Class("flex items-center gap-2 mt-2"),
-				Button(Class("btn"), Type("button"), Title(uistate.T("recurring.postDueTitle")), OnClick(postDue), uistate.T("recurring.postDue")),
-				If(postMsg.Get() != "", Span(Class("muted"), postMsg.Get())),
+			Div(ClassStr("flex items-center gap-2 mt-2"),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("recurring.postDueTitle")), OnClick(postDue), uistate.T("recurring.postDue")),
+				If(postMsg.Get() != "", Span(ClassStr("muted"), postMsg.Get())),
 			),
 		)
 	}
@@ -460,25 +460,25 @@ func Planning() ui.Node {
 	if app != nil {
 		plans := app.Plans()
 		list := IfElse(len(plans) == 0,
-			P(Class("empty"), uistate.T("plans.empty")),
-			Div(Class("rows"), MapKeyed(plans,
+			P(ClassStr("empty"), uistate.T("plans.empty")),
+			Div(ClassStr("rows"), MapKeyed(plans,
 				func(p domain.Plan) any { return p.ID },
 				func(p domain.Plan) ui.Node {
 					return ui.CreateElement(PlanRow, planRowProps{Plan: p, Base: base, OnDelete: deletePlan})
 				},
 			)),
 		)
-		plansCard = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("plans.title")),
-			P(Class("muted"), uistate.T("plans.hint")),
-			Form(Class("form-grid"), OnSubmit(addPlan),
-				Input(append([]any{Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
-				labeledField(uistate.T("plans.horizonPlaceholder"), Input(Class("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon))),
-				labeledField(uistate.T("plans.startPlaceholder", base), Input(Class("field"), Type("number"), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart))),
-				labeledField(uistate.T("plans.monthlyPlaceholder", base), Input(Class("field"), Type("number"), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly))),
-				labeledField(uistate.T("plans.onceAmtPlaceholder", base), Input(Class("field"), Type("number"), Value(plOnceAmt.Get()), Step("0.01"), OnInput(onPlOnceAmt))),
-				labeledField(uistate.T("plans.onceMonthPlaceholder"), Input(Class("field"), Type("number"), Attr("min", "1"), Attr("max", plHorizon.Get()), Value(plOnceMonth.Get()), Step("1"), OnInput(onPlOnceMonth))),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("plans.add")),
+		plansCard = Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("plans.title")),
+			P(ClassStr("muted"), uistate.T("plans.hint")),
+			Form(ClassStr("form-grid"), OnSubmit(addPlan),
+				Input(append([]any{ClassStr("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
+				labeledField(uistate.T("plans.horizonPlaceholder"), Input(ClassStr("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon))),
+				labeledField(uistate.T("plans.startPlaceholder", base), Input(ClassStr("field"), Type("number"), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart))),
+				labeledField(uistate.T("plans.monthlyPlaceholder", base), Input(ClassStr("field"), Type("number"), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly))),
+				labeledField(uistate.T("plans.onceAmtPlaceholder", base), Input(ClassStr("field"), Type("number"), Value(plOnceAmt.Get()), Step("0.01"), OnInput(onPlOnceAmt))),
+				labeledField(uistate.T("plans.onceMonthPlaceholder"), Input(ClassStr("field"), Type("number"), Attr("min", "1"), Attr("max", plHorizon.Get()), Value(plOnceMonth.Get()), Step("1"), OnInput(onPlOnceMonth))),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("plans.add")),
 			),
 			errText("plan-err", plErr.Get()),
 			list,
@@ -524,14 +524,14 @@ func Planning() ui.Node {
 				w = 100
 			}
 			progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
-				P(Class("budget-sub font-display"), "Paid off "+fmtMoney(money.New(prog.PaidOff, base))+" of "+fmtMoney(money.New(prog.Baseline, base))+" ("+strconv.Itoa(prog.Percent)+"%) since "+since.Format("Jan 2, 2006")+"."),
-				Div(Class("bar"), Div(Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", w)))),
-				Button(Class("btn"), Type("button"), Style(map[string]string{"margin-top": "0.4rem"}), OnClick(func() { _ = app.ClearPayoffTracking(); rev.Set(rev.Get() + 1) }), "Reset progress"),
+				P(ClassStr("budget-sub font-display"), "Paid off "+fmtMoney(money.New(prog.PaidOff, base))+" of "+fmtMoney(money.New(prog.Baseline, base))+" ("+strconv.Itoa(prog.Percent)+"%) since "+since.Format("Jan 2, 2006")+"."),
+				Div(ClassStr("bar"), Div(ClassStr("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", w)))),
+				Button(ClassStr("btn"), Type("button"), Style(map[string]string{"margin-top": "0.4rem"}), OnClick(func() { _ = app.ClearPayoffTracking(); rev.Set(rev.Get() + 1) }), "Reset progress"),
 			)
 		} else if len(debts) > 0 {
 			owed := currentOwed
 			progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
-				Button(Class("btn"), Type("button"), Title("Snapshot today's balances to track how much you pay off over time"),
+				Button(ClassStr("btn"), Type("button"), Title("Snapshot today's balances to track how much you pay off over time"),
 					OnClick(func() { _ = app.StartPayoffTracking(owed, base); rev.Set(rev.Get() + 1) }), "Start tracking progress"),
 			)
 		}
@@ -559,7 +559,7 @@ func Planning() ui.Node {
 		var body ui.Node
 		switch {
 		case len(debts) == 0:
-			body = P(Class("empty"), uistate.T("planning.debtStrategyEmpty"))
+			body = P(ClassStr("empty"), uistate.T("planning.debtStrategyEmpty"))
 		default:
 			extra, _ := money.ParseMinor(strings.TrimSpace(dsExtra.Get()), currency.Decimals(base))
 			if extra < 0 {
@@ -568,17 +568,17 @@ func Planning() ui.Node {
 			snow, okS := payoff.BuildPlan(debts, extra, payoff.Snowball)
 			aval, okA := payoff.BuildPlan(debts, extra, payoff.Avalanche)
 			if !okS || !okA {
-				body = P(Class("err"), Attr("role", "alert"), uistate.T("planning.strategyNotViable"))
+				body = P(ClassStr("err"), Attr("role", "alert"), uistate.T("planning.strategyNotViable"))
 			} else {
 				rec := Fragment()
 				if saved := snow.TotalInterest - aval.TotalInterest; saved > 0 {
-					rec = P(Class("muted"), uistate.T("planning.strategyRecommend", fmtMoney(money.New(saved, base))))
+					rec = P(ClassStr("muted"), uistate.T("planning.strategyRecommend", fmtMoney(money.New(saved, base))))
 				}
 				// When the two strategies are truly identical (typically at $0 extra,
 				// or a single debt) the side-by-side is meaningless — explain why (L5).
 				explain := Fragment()
 				if snow.Months == aval.Months && snow.TotalInterest == aval.TotalInterest {
-					explain = P(Class("budget-sub"), "Snowball and avalanche match here — add an extra monthly amount above to see them diverge.")
+					explain = P(ClassStr("budget-sub"), "Snowball and avalanche match here — add an extra monthly amount above to see them diverge.")
 				}
 				// A calendar debt-free date reads better than a bare month count
 				// (L5), plus a "cleared by <month>" beside each debt in the order.
@@ -615,7 +615,7 @@ func Planning() ui.Node {
 						yFmt = "$.2~s"
 					}
 					burnChart = Div(Style(map[string]string{"margin-top": "0.6rem"}),
-						P(Class("budget-sub"), "Balance burn-down to zero:"),
+						P(ClassStr("budget-sub"), "Balance burn-down to zero:"),
 						uiw.Chart(uiw.ChartProps{
 							Spec:   chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{{Name: "Remaining balance", Points: burnPts}}, Y: chartspec.Axis{Format: yFmt}},
 							Height: "150px",
@@ -624,30 +624,30 @@ func Planning() ui.Node {
 					)
 				}
 				body = Div(
-					Div(Class("stat-grid"),
+					Div(ClassStr("stat-grid"),
 						stat(uistate.T("planning.snowball"), uistate.T("planning.strategyMonths", snow.Months), ""),
 						stat(uistate.T("planning.avalanche"), uistate.T("planning.strategyMonths", aval.Months), ""),
 					),
-					P(Class("budget-sub font-display"), "Debt-free by "+snowDate+" (snowball) · "+avalDate+" (avalanche)."),
-					P(Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.snowball"), fmtMoney(money.New(snow.TotalInterest, base)))),
-					P(Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.avalanche"), fmtMoney(money.New(aval.TotalInterest, base)))),
-					P(Class("muted"), "Payoff order: "+strings.Join(orderParts, " → ")),
+					P(ClassStr("budget-sub font-display"), "Debt-free by "+snowDate+" (snowball) · "+avalDate+" (avalanche)."),
+					P(ClassStr("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.snowball"), fmtMoney(money.New(snow.TotalInterest, base)))),
+					P(ClassStr("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.avalanche"), fmtMoney(money.New(aval.TotalInterest, base)))),
+					P(ClassStr("muted"), "Payoff order: "+strings.Join(orderParts, " → ")),
 					rec,
 					explain,
 					burnChart,
 				)
 			}
 		}
-		debtCard = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("planning.debtStrategyTitle")),
-			P(Class("muted"), uistate.T("planning.debtStrategyHint")),
-			Form(Class("form-grid"),
-				labeledField(uistate.T("planning.debtStrategyExtra", base), Input(Class("field"), Type("number"), Attr("min", "0"), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra))),
+		debtCard = Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("planning.debtStrategyTitle")),
+			P(ClassStr("muted"), uistate.T("planning.debtStrategyHint")),
+			Form(ClassStr("form-grid"),
+				labeledField(uistate.T("planning.debtStrategyExtra", base), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra))),
 			),
 			If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 0 && payoff.SuggestedExtra(debts) > 0,
-				Div(Class("flex items-center gap-2 mt-2"),
-					Span(Class("muted"), "At $0 extra the strategies tie."),
-					Button(Class("btn"), Type("button"), Title("Fill a sensible extra to compare snowball vs avalanche"),
+				Div(ClassStr("flex items-center gap-2 mt-2"),
+					Span(ClassStr("muted"), "At $0 extra the strategies tie."),
+					Button(ClassStr("btn"), Type("button"), Title("Fill a sensible extra to compare snowball vs avalanche"),
 						OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
 						"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo"),
 				),
@@ -655,7 +655,7 @@ func Planning() ui.Node {
 			body,
 			progressNode,
 			If(len(includeToggles) > 0, Div(Style(map[string]string{"margin-top": "0.6rem"}),
-				P(Class("budget-sub"), "Include in payoff plan (a mortgage is excluded by default):"),
+				P(ClassStr("budget-sub"), "Include in payoff plan (a mortgage is excluded by default):"),
 				Div(includeToggles),
 			)),
 		)
@@ -668,18 +668,18 @@ func Planning() ui.Node {
 		recurringCard,
 		plansCard,
 		debtCard,
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("planning.payoffTitle")),
-			P(Class("muted"), uistate.T("planning.payoffDesc")),
-			Form(Class("form-grid"),
-				labeledField(uistate.T("planning.balancePlaceholder", base), Input(Class("field"), Type("number"), Attr("min", "0"), Value(balStr.Get()), Step("0.01"), OnInput(onBal))),
-				labeledField(uistate.T("planning.aprPlaceholder"), Input(Class("field"), Type("number"), Attr("min", "0"), Value(aprStr.Get()), Step("0.01"), OnInput(onApr))),
-				labeledField(uistate.T("planning.paymentPlaceholder", base), Input(Class("field"), Type("number"), Attr("min", "0"), Value(payStr.Get()), Step("0.01"), OnInput(onPay))),
-				labeledField(uistate.T("planning.extraPlaceholder", base), Input(Class("field"), Type("number"), Attr("min", "0"), Value(extraStr.Get()), Step("0.01"), OnInput(onExtra))),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("planning.payoffTitle")),
+			P(ClassStr("muted"), uistate.T("planning.payoffDesc")),
+			Form(ClassStr("form-grid"),
+				labeledField(uistate.T("planning.balancePlaceholder", base), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(balStr.Get()), Step("0.01"), OnInput(onBal))),
+				labeledField(uistate.T("planning.aprPlaceholder"), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(aprStr.Get()), Step("0.01"), OnInput(onApr))),
+				labeledField(uistate.T("planning.paymentPlaceholder", base), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(payStr.Get()), Step("0.01"), OnInput(onPay))),
+				labeledField(uistate.T("planning.extraPlaceholder", base), Input(ClassStr("field"), Type("number"), Attr("min", "0"), Value(extraStr.Get()), Step("0.01"), OnInput(onExtra))),
 			),
 		),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("planning.projectionTitle")),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("planning.projectionTitle")),
 			resultBody,
 		),
 	)
@@ -696,13 +696,13 @@ func RecurringRow(props recurringRowProps) ui.Node {
 	r := props.Recurring
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
 	meta := cadenceLabel(r.Cadence) + " · " + uistate.T("recurring.nextDue", r.NextDue.Format("Jan 2, 2006"))
-	return Div(Class("row"),
-		Div(Class("row-main"),
-			Span(Class("row-desc"), r.Label),
-			Span(Class("row-meta"), meta),
+	return Div(ClassStr("row"),
+		Div(ClassStr("row-main"),
+			Span(ClassStr("row-desc"), r.Label),
+			Span(ClassStr("row-meta"), meta),
 		),
-		Span(Class(amountClass(r.Amount)), fmtMoney(r.Amount)),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("recurring.deleteTitle")), Title(uistate.T("recurring.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Span(ClassStr(amountClass(r.Amount)), fmtMoney(r.Amount)),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("recurring.deleteTitle")), Title(uistate.T("recurring.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 }
 
@@ -734,17 +734,17 @@ func PlanRow(props planRowProps) ui.Node {
 		stroke = "#d8716f"
 	}
 
-	return Div(Class("row"),
-		Div(Class("row-main"),
-			Span(Class("row-desc"), p.Name),
-			Span(Class("row-meta"), meta),
+	return Div(ClassStr("row"),
+		Div(ClassStr("row-main"),
+			Span(ClassStr("row-desc"), p.Name),
+			Span(ClassStr("row-meta"), meta),
 		),
 		If(len(vals) > 1, uiw.AreaChart(uiw.AreaChartProps{
 			Values: vals, Stroke: stroke, GradientID: "cf-plan-" + p.ID,
 			Width: 120, Height: 28, Label: uistate.T("plans.chartLabel", fmtMoney(end)),
 		})),
-		Span(Class("amount fig "+figTone(end)), uistate.T("plans.projected", fmtMoney(end))),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("plans.deleteTitle")), Title(uistate.T("plans.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+		Span(ClassStr("amount fig "+figTone(end)), uistate.T("plans.projected", fmtMoney(end))),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("plans.deleteTitle")), Title(uistate.T("plans.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 	)
 }
 

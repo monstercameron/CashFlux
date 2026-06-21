@@ -29,7 +29,7 @@ import (
 func Goals() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:goals", 0)
@@ -195,25 +195,25 @@ func Goals() ui.Node {
 	}
 	linkOptions := goalAccountOptions(accounts, linkAcct.Get())
 
-	form := Section(Class("card"),
-		H2(Class("card-title"), uistate.T("goals.add")),
-		Form(Class("form-grid"), OnSubmit(add),
+	form := Section(ClassStr("card"),
+		H2(ClassStr("card-title"), uistate.T("goals.add")),
+		Form(ClassStr("form-grid"), OnSubmit(add),
 			labeledField(uistate.T("common.name"),
-				Input(append([]any{Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...)),
+				Input(append([]any{ClassStr("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...)),
 			labeledField(uistate.T("goals.targetLabel"),
-				Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget))),
+				Input(ClassStr("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget))),
 			labeledField(uistate.T("goals.savedSoFar"),
-				Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent))),
+				Input(ClassStr("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent))),
 			labeledField(uistate.T("goals.owner"),
-				Select(Class("field"), Attr("aria-label", uistate.T("goals.owner")), OnChange(onOwner), ownerOptions)),
+				Select(ClassStr("field"), Attr("aria-label", uistate.T("goals.owner")), OnChange(onOwner), ownerOptions)),
 			labeledField(uistate.T("goals.linkedOptional"),
-				Select(Class("field"), Attr("aria-label", uistate.T("goals.linkedOptional")), Title(uistate.T("goals.linkedOptional")), OnChange(onLinkAcct), linkOptions)),
+				Select(ClassStr("field"), Attr("aria-label", uistate.T("goals.linkedOptional")), Title(uistate.T("goals.linkedOptional")), OnChange(onLinkAcct), linkOptions)),
 			labeledField(uistate.T("goals.dateLabel"),
-				Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateStr.Get()), OnInput(onDate))),
+				Input(ClassStr("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateStr.Get()), OnInput(onDate))),
 			MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),
-			Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+			Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		errText("goal-err", errMsg.Get()),
 	)
@@ -269,13 +269,13 @@ func Goals() ui.Node {
 
 	return Div(
 		form,
-		If(len(goals) > 0, Div(Class("stat-grid"),
+		If(len(goals) > 0, Div(ClassStr("stat-grid"),
 			stat(uistate.T("goals.savedSoFar"), fmtMoney(money.New(savedTotal, base)), "pos"),
 			stat(uistate.T("goals.totalTarget"), fmtMoney(money.New(targetTotal, base)), ""),
 			stat(uistate.T("goals.overallProgress"), fmt.Sprintf("%d%%", overallPct), ""),
 		)),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("nav.goals")),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("nav.goals")),
 			listBody,
 		),
 	)
@@ -390,31 +390,31 @@ func GoalRow(props goalRowProps) ui.Node {
 	}, fmt.Sprintf("%t-%t", editing.Get(), contributing.Get()))
 
 	if contributing.Get() {
-		return Div(Class("budget"),
-			Div(Class("budget-head"), Span(Class("row-desc"), g.Name)),
-			Form(Class("form-grid"), OnSubmit(doContribute),
+		return Div(ClassStr("budget"),
+			Div(ClassStr("budget-head"), Span(ClassStr("row-desc"), g.Name)),
+			Form(ClassStr("form-grid"), OnSubmit(doContribute),
 				labeledField(uistate.T("goals.contributeAmount"),
-					Input(Class("field"), Attr("id", "goal-contrib-"+g.ID), Type("number"), Placeholder(uistate.T("goals.contributeAmount")), Value(contribAmtS.Get()), Step("0.01"), OnInput(onContribAmt))),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("goals.contribute")),
-				Button(Class("btn"), Type("button"), OnClick(cancelContribute), uistate.T("action.cancel")),
+					Input(ClassStr("field"), Attr("id", "goal-contrib-"+g.ID), Type("number"), Placeholder(uistate.T("goals.contributeAmount")), Value(contribAmtS.Get()), Step("0.01"), OnInput(onContribAmt))),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("goals.contribute")),
+				Button(ClassStr("btn"), Type("button"), OnClick(cancelContribute), uistate.T("action.cancel")),
 			),
 		)
 	}
 	if editing.Get() {
-		return Div(Class("budget"),
-			Form(Class("form-grid"), OnSubmit(saveEdit),
+		return Div(ClassStr("budget"),
+			Form(ClassStr("form-grid"), OnSubmit(saveEdit),
 				labeledField(uistate.T("common.name"),
-					Input(Class("field"), Attr("id", "goal-edit-"+g.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
+					Input(ClassStr("field"), Attr("id", "goal-edit-"+g.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
 				labeledField(uistate.T("goals.targetLabel"),
-					Input(Class("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget))),
+					Input(ClassStr("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget))),
 				labeledField(uistate.T("goals.dateLabel"),
-					Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateS.Get()), OnInput(onDate))),
+					Input(ClassStr("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateS.Get()), OnInput(onDate))),
 				labeledField(uistate.T("goals.owner"),
-					Select(Class("field"), Attr("aria-label", uistate.T("goals.owner")), Title(uistate.T("goals.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
+					Select(ClassStr("field"), Attr("aria-label", uistate.T("goals.owner")), Title(uistate.T("goals.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
 				labeledField(uistate.T("goals.linked"),
-					Select(Class("field"), Attr("aria-label", uistate.T("goals.linked")), Title(uistate.T("goals.linked")), OnChange(onAcct), goalAccountOptions(props.Accounts, acctS.Get()))),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+					Select(ClassStr("field"), Attr("aria-label", uistate.T("goals.linked")), Title(uistate.T("goals.linked")), OnChange(onAcct), goalAccountOptions(props.Accounts, acctS.Get()))),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
@@ -440,23 +440,23 @@ func GoalRow(props goalRowProps) ui.Node {
 	linkedName := accountName(props.Accounts, g.AccountID)
 	var linkedLine ui.Node = Fragment()
 	if linkedName != "" {
-		linkedLine = Span(Class("budget-sub"),
-			Button(Class("budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drillAcct),
+		linkedLine = Span(ClassStr("budget-sub"),
+			Button(ClassStr("budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drillAcct),
 				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
 				uistate.T("goals.linkedSuffix", linkedName)),
 		)
 	}
 
-	return Div(Class("budget"),
-		Div(Class("budget-head"),
-			Span(Class("row-desc"), g.Name),
-			Span(Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
-			Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, Class("w-4 h-4 shrink-0")), Span(uistate.T("goals.contribute"))),
-			Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
-			Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+	return Div(ClassStr("budget"),
+		Div(ClassStr("budget-head"),
+			Span(ClassStr("row-desc"), g.Name),
+			Span(ClassStr("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
+			Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("goals.contribute"))),
+			Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit"))),
+			Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 		),
-		Div(Class("bar"), Div(Class("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
-		Span(Class("budget-sub"), sub),
+		Div(ClassStr("bar"), Div(ClassStr("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
+		Span(ClassStr("budget-sub"), sub),
 		linkedLine,
 	)
 }

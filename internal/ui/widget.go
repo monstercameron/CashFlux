@@ -183,7 +183,7 @@ func widget(props WidgetProps) uic.Node {
 		cellClass += " drag" // dims the widget while it is being dragged
 	}
 	args := []any{
-		Class(cellClass),
+		ClassStr(cellClass),
 		Attr("data-widget", props.ID),
 		Attr("data-col-span", fmt.Sprintf("%d", colSpan)),
 		Attr("data-row-span", fmt.Sprintf("%d", rowSpan)),
@@ -380,15 +380,15 @@ func widget(props WidgetProps) uic.Node {
 	// A leading glyph makes KPI tiles scannable by shape (C46); decorative, so it
 	// sits beside the (still-clickable) title rather than inside the link.
 	if ic := widgetIcon(props.ID); ic.Valid() {
-		titleNode = Span(Class("inline-flex items-center gap-1.5 min-w-0"), Icon(ic, Class("w-4 h-4 shrink-0 text-dim")), titleNode)
+		titleNode = Span(ClassStr("inline-flex items-center gap-1.5 min-w-0"), Icon(ic, ClassStr("w-4 h-4 shrink-0 text-dim")), titleNode)
 	}
 	args = append(args,
-		Div(Class("wh"),
-			Span(Class("grip"), Attr("aria-hidden", "true"), "⠿"), // decorative drag grip
+		Div(ClassStr("wh"),
+			Span(ClassStr("grip"), Attr("aria-hidden", "true"), "⠿"), // decorative drag grip
 			titleNode,
 			gear,
 		),
-		Div(Class(bodyClass), props.Body),
+		Div(ClassStr(bodyClass), props.Body),
 	)
 	if props.Resizable {
 		id := props.ID
@@ -411,7 +411,7 @@ func widget(props WidgetProps) uic.Node {
 				cls += " off"
 			}
 			return Button(
-				Class(cls),
+				ClassStr(cls),
 				Type("button"),
 				Attr("data-dir", dir),
 				Attr("title", label),
@@ -473,7 +473,7 @@ type viewTitleProps struct {
 func viewTitle(props viewTitleProps) uic.Node {
 	route := props.Route
 	return Button(
-		Class("wh-title"),
+		ClassStr("wh-title"),
 		Type("button"),
 		Attr("title", uistate.T("widget.open")),
 		Attr("aria-label", uistate.T("widget.openNamed", props.Title)),
@@ -491,7 +491,7 @@ type gearButtonProps struct {
 func gearButton(props gearButtonProps) uic.Node {
 	onClick := props.OnClick
 	return Button(
-		Class("gear-inline"),
+		ClassStr("gear-inline"),
 		Type("button"),
 		Attr("title", uistate.T("widget.settings")),
 		Attr("aria-label", uistate.T("widget.settings")), // icon-only button → explicit name (B15)
@@ -500,6 +500,6 @@ func gearButton(props gearButtonProps) uic.Node {
 				onClick()
 			}
 		}),
-		Icon(icon.Settings, Class("w-4 h-4")),
+		Icon(icon.Settings, ClassStr("w-4 h-4")),
 	)
 }

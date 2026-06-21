@@ -28,7 +28,7 @@ import (
 func Subscriptions() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -91,9 +91,9 @@ func Subscriptions() ui.Node {
 
 	var body ui.Node
 	if len(subs) == 0 {
-		body = P(Class("empty"), uistate.T("subs.empty"))
+		body = P(ClassStr("empty"), uistate.T("subs.empty"))
 	} else {
-		body = Div(Class("rows"), rows)
+		body = Div(ClassStr("rows"), rows)
 	}
 
 	// Price-change rows have no per-row interactive elements, so they render
@@ -115,14 +115,14 @@ func Subscriptions() ui.Node {
 			if c.Increased() {
 				key, tone, arrow = "subs.priceUp", "text-down", icon.ArrowUp
 			}
-			return Div(Class("row"),
-				Div(Class("row-main"),
-					Span(Class("row-desc"), c.Name),
-					Span(Class("row-meta inline-flex items-center gap-1 "+tone),
-						uiw.Icon(arrow, Class("w-3.5 h-3.5 shrink-0")),
+			return Div(ClassStr("row"),
+				Div(ClassStr("row-main"),
+					Span(ClassStr("row-desc"), c.Name),
+					Span(ClassStr("row-meta inline-flex items-center gap-1 "+tone),
+						uiw.Icon(arrow, ClassStr("w-3.5 h-3.5 shrink-0")),
 						Text(uistate.T(key, delta, pctStr, date))),
 				),
-				Span(Class("budget-amount"), fmtMoney(money.New(c.NewAmount, base))),
+				Span(ClassStr("budget-amount"), fmtMoney(money.New(c.NewAmount, base))),
 			)
 		},
 	)
@@ -137,37 +137,37 @@ func Subscriptions() ui.Node {
 	}
 
 	return Div(
-		If(len(subs) > 0, Div(Class("stat-grid"),
+		If(len(subs) > 0, Div(ClassStr("stat-grid"),
 			stat(uistate.T("subs.monthlyBurden"), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base)), "neg"),
 			stat(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
 			stat(uistate.T("subs.count"), fmt.Sprintf("%d", len(subs)), ""),
 			shareStat,
 		)),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("nav.subscriptions")),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("nav.subscriptions")),
 			body,
-			If(len(subs) > 0, Div(Class("flex flex-wrap gap-2 py-1"),
-				Button(Class("btn"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")), OnClick(func() {
+			If(len(subs) > 0, Div(ClassStr("flex flex-wrap gap-2 py-1"),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")), OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 					downloadBytes("subscriptions.csv", "text/csv", subscriptions.CSV(subs, csvAmount))
 				}), uistate.T("subs.downloadCsv")),
 			)),
 		),
-		If(len(changes) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("subs.priceChangesTitle")),
-			Div(Class("rows"), changeRows),
+		If(len(changes) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("subs.priceChangesTitle")),
+			Div(ClassStr("rows"), changeRows),
 		)),
-		If(len(soon) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("subs.renewingSoon")),
-			Div(Class("rows"), MapKeyed(soon,
+		If(len(soon) > 0, Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("subs.renewingSoon")),
+			Div(ClassStr("rows"), MapKeyed(soon,
 				func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
 				func(s subscriptions.Subscription) ui.Node {
-					return Div(Class("row"),
-						Div(Class("row-main"),
-							Span(Class("row-desc"), s.Name),
-							Span(Class("row-meta"), pr.FormatDate(s.NextRenewal)),
+					return Div(ClassStr("row"),
+						Div(ClassStr("row-main"),
+							Span(ClassStr("row-desc"), s.Name),
+							Span(ClassStr("row-meta"), pr.FormatDate(s.NextRenewal)),
 						),
-						Span(Class("budget-amount"), fmtMoney(money.New(s.Amount, base))),
+						Span(ClassStr("budget-amount"), fmtMoney(money.New(s.Amount, base))),
 					)
 				},
 			)),
@@ -195,20 +195,20 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 		}
 	}))
 	meta := subscriptionCadenceLabel(s.Cadence) + " · " + uistate.T("subs.next", props.NextDate)
-	return Div(Class("row"),
-		Div(Class("row-main"),
-			Button(Class("row-desc sub-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
+	return Div(ClassStr("row"),
+		Div(ClassStr("row-main"),
+			Button(ClassStr("row-desc sub-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
 				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
 				s.Name),
-			Span(Class("row-meta"), meta),
+			Span(ClassStr("row-meta"), meta),
 		),
 		// Only show the normalized "/mo" figure when it differs from the actual
 		// charge (i.e. weekly/yearly). For monthly subs they're identical, so
 		// showing both reads as a duplicated amount (C56).
 		If(s.Cadence != subscriptions.CadenceMonthly,
-			Span(Class("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base))))),
-		Span(Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),
-		Button(Class("btn"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
+			Span(ClassStr("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base))))),
+		Span(ClassStr("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),
+		Button(ClassStr("btn"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
 	)
 }
 

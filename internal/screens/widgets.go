@@ -20,9 +20,9 @@ import (
 // composing a dashboard widget from a data source, transform, and visualization.
 // Blank for now — routing + rail entry only.
 func WidgetBuilder() ui.Node {
-	return Section(Class("card"),
-		H3(Class("card-title"), uistate.T("widgetBuilder.title")),
-		P(Class("empty"), uistate.T("widgetBuilder.empty")),
+	return Section(ClassStr("card"),
+		H3(ClassStr("card-title"), uistate.T("widgetBuilder.title")),
+		P(ClassStr("empty"), uistate.T("widgetBuilder.empty")),
 	)
 }
 
@@ -122,19 +122,19 @@ func WidgetManager() ui.Node {
 		},
 	)
 
-	return Div(Class("wm"),
-		Section(Class("card"),
-			H3(Class("card-title"), uistate.T("widgetManager.layoutTitle")),
-			P(Class("text-dim t-body mb-3"), uistate.T("widgetManager.layoutHint")),
-			Div(Class("wm-toolbar"),
+	return Div(ClassStr("wm"),
+		Section(ClassStr("card"),
+			H3(ClassStr("card-title"), uistate.T("widgetManager.layoutTitle")),
+			P(ClassStr("text-dim t-body mb-3"), uistate.T("widgetManager.layoutHint")),
+			Div(ClassStr("wm-toolbar"),
 				DashboardLayoutControls(),
-				Span(Class("wm-sep"), Attr("aria-hidden", "true")),
-				Button(Class("data-btn"), Type("button"), OnClick(showAll), uistate.T("widgetManager.showAll")),
-				Button(Class("data-btn"), Type("button"), OnClick(hideAll), uistate.T("widgetManager.hideAll")),
+				Span(ClassStr("wm-sep"), Attr("aria-hidden", "true")),
+				Button(ClassStr("data-btn"), Type("button"), OnClick(showAll), uistate.T("widgetManager.showAll")),
+				Button(ClassStr("data-btn"), Type("button"), OnClick(hideAll), uistate.T("widgetManager.hideAll")),
 			),
 		),
-		Section(Class("card"),
-			H3(Class("card-title"), uistate.T("widgetManager.widgetsTitle")),
+		Section(ClassStr("card"),
+			H3(ClassStr("card-title"), uistate.T("widgetManager.widgetsTitle")),
 			uiw.DataTable(uiw.DataTableProps{
 				Class: "wm-table",
 				Columns: []uiw.Column{
@@ -149,9 +149,9 @@ func WidgetManager() ui.Node {
 				OnSort: onSort,
 			}),
 		),
-		Section(Class("card"),
-			H3(Class("card-title"), uistate.T("widgetManager.styleTitle")),
-			P(Class("text-dim t-body mb-3"), uistate.T("widgetManager.styleHint")),
+		Section(ClassStr("card"),
+			H3(ClassStr("card-title"), uistate.T("widgetManager.styleTitle")),
+			P(ClassStr("text-dim t-body mb-3"), uistate.T("widgetManager.styleHint")),
 			ui.CreateElement(tileStyleEditor, struct{}{}),
 		),
 	)
@@ -203,13 +203,13 @@ func tileStyleEditor(struct{}) ui.Node {
 		return ui.CreateElement(styleSelectRow, styleSelectProps{Label: label, Value: cfg[key], Options: opts, OnSet: func(v string) { set(key, v) }})
 	}
 
-	return Div(Class("wm-style"),
-		Div(Class("wm-style-left"),
-			Div(Class("wm-style-row"),
-				Span(Class("wm-style-label"), uistate.T("widgetManager.styleTarget")),
-				Select(Class("set-input"), Attr("aria-label", uistate.T("widgetManager.styleTarget")), OnChange(onTarget), targetOpts),
+	return Div(ClassStr("wm-style"),
+		Div(ClassStr("wm-style-left"),
+			Div(ClassStr("wm-style-row"),
+				Span(ClassStr("wm-style-label"), uistate.T("widgetManager.styleTarget")),
+				Select(ClassStr("set-input"), Attr("aria-label", uistate.T("widgetManager.styleTarget")), OnChange(onTarget), targetOpts),
 			),
-			Div(Class("wm-style-grid"),
+			Div(ClassStr("wm-style-grid"),
 				color(uistate.T("widgetManager.styleBg"), widgetstyle.KeyBg),
 				color(uistate.T("widgetManager.styleText"), widgetstyle.KeyText),
 				color(uistate.T("widgetManager.styleBorderColor"), widgetstyle.KeyBorder),
@@ -220,15 +220,15 @@ func tileStyleEditor(struct{}) ui.Node {
 				sel(uistate.T("widgetManager.styleWeight"), widgetstyle.KeyWeight, weightOpts()),
 				sel(uistate.T("widgetManager.styleShadow"), widgetstyle.KeyShadow, shadowOpts()),
 			),
-			Button(Class("data-btn mt-3"), Type("button"), OnClick(reset), uistate.T("widgetManager.resetStyle")),
+			Button(ClassStr("data-btn mt-3"), Type("button"), OnClick(reset), uistate.T("widgetManager.resetStyle")),
 		),
-		Div(Class("wm-style-preview"),
-			Span(Class("wm-preview-label"), uistate.T("widgetManager.preview")),
-			Div(Class("w wm-preview-tile"), Style(preview),
-				Div(Class("wh"), Span(Class("wtitle"), uistate.T("widgetManager.previewTitle"))),
-				Div(Class("wbody"),
-					Div(Class("font-display fig t-figure"), "$12,480"),
-					P(Class("t-caption text-dim mt-1"), uistate.T("widgetManager.previewSub")),
+		Div(ClassStr("wm-style-preview"),
+			Span(ClassStr("wm-preview-label"), uistate.T("widgetManager.preview")),
+			Div(ClassStr("w wm-preview-tile"), Style(preview),
+				Div(ClassStr("wh"), Span(ClassStr("wtitle"), uistate.T("widgetManager.previewTitle"))),
+				Div(ClassStr("wbody"),
+					Div(ClassStr("font-display fig t-figure"), "$12,480"),
+					P(ClassStr("t-caption text-dim mt-1"), uistate.T("widgetManager.previewSub")),
 				),
 			),
 		),
@@ -271,11 +271,11 @@ func styleColorRow(p styleColorProps) ui.Node {
 	if val == "" {
 		val = "#888888"
 	}
-	return Div(Class("wm-style-row"),
-		Span(Class("wm-style-label"), p.Label),
-		Div(Class("wm-style-color"),
-			Input(Type("color"), Class("wm-color"), Value(val), Attr("aria-label", p.Label), OnChange(on)),
-			If(p.Value != "", Button(Class("wm-clear"), Type("button"), Attr("aria-label", uistate.T("widgetManager.clearStyle")), OnClick(func() {
+	return Div(ClassStr("wm-style-row"),
+		Span(ClassStr("wm-style-label"), p.Label),
+		Div(ClassStr("wm-style-color"),
+			Input(Type("color"), ClassStr("wm-color"), Value(val), Attr("aria-label", p.Label), OnChange(on)),
+			If(p.Value != "", Button(ClassStr("wm-clear"), Type("button"), Attr("aria-label", uistate.T("widgetManager.clearStyle")), OnClick(func() {
 				if p.OnSet != nil {
 					p.OnSet("")
 				}
@@ -303,9 +303,9 @@ func styleSelectRow(p styleSelectProps) ui.Node {
 	for _, o := range p.Options {
 		opts = append(opts, Option(Value(o.Value), SelectedIf(p.Value == o.Value), o.Label))
 	}
-	return Div(Class("wm-style-row"),
-		Span(Class("wm-style-label"), p.Label),
-		Select(Class("set-input wm-style-select"), Attr("aria-label", p.Label), OnChange(on), opts),
+	return Div(ClassStr("wm-style-row"),
+		Span(ClassStr("wm-style-label"), p.Label),
+		Select(ClassStr("set-input wm-style-select"), Attr("aria-label", p.Label), OnChange(on), opts),
 	)
 }
 
@@ -369,9 +369,9 @@ func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 		rowClass += " is-hidden"
 	}
 
-	return Tr(Class(rowClass),
-		Td(Class("wm-cell-name"), Span(Class(nameClass), widgetDisplayName(it.ID))),
-		Td(Class("wm-col-vis"),
+	return Tr(ClassStr(rowClass),
+		Td(ClassStr("wm-cell-name"), Span(ClassStr(nameClass), widgetDisplayName(it.ID))),
+		Td(ClassStr("wm-col-vis"),
 			uiw.Toggle(uiw.ToggleProps{
 				On:    !props.Hidden,
 				Label: uistate.T("widgetManager.visible"),
@@ -382,23 +382,23 @@ func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 				},
 			}),
 		),
-		Td(Class("wm-col-size"),
-			Div(Class("wm-size"),
+		Td(ClassStr("wm-col-size"),
+			Div(ClassStr("wm-size"),
 				wmStepper("W", col, uistate.T("widget.narrower"), uistate.T("widget.wider"),
 					func() { resize(col-1, row) }, func() { resize(col+1, row) }),
 				wmStepper("H", row, uistate.T("widget.shorter"), uistate.T("widget.taller"),
 					func() { resize(col, row-1) }, func() { resize(col, row+1) }),
 			),
 		),
-		Td(Class("wm-col-order"),
-			Div(Class("wm-reorder"),
-				Button(Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveUp")),
+		Td(ClassStr("wm-col-order"),
+			Div(ClassStr("wm-reorder"),
+				Button(ClassStr("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveUp")),
 					DisabledIf(props.Index == 0), OnClick(func() {
 						if props.OnUp != nil {
 							props.OnUp()
 						}
 					}), "↑"),
-				Button(Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveDown")),
+				Button(ClassStr("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveDown")),
 					DisabledIf(props.Index >= props.Total-1), OnClick(func() {
 						if props.OnDown != nil {
 							props.OnDown()
@@ -412,10 +412,10 @@ func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 // wmStepper renders a compact bordered −/value/+ size control (e.g. "− W 4 +"),
 // far tighter than the full-width period StepperPill which looked stretched here.
 func wmStepper(axis string, value int, prevLabel, nextLabel string, onPrev, onNext func()) ui.Node {
-	return Div(Class("wm-step"),
-		Button(Class("wm-step-btn"), Type("button"), Attr("aria-label", prevLabel), OnClick(onPrev), "−"),
-		Span(Class("wm-step-val"), axis+" "+strconv.Itoa(value)),
-		Button(Class("wm-step-btn"), Type("button"), Attr("aria-label", nextLabel), OnClick(onNext), "+"),
+	return Div(ClassStr("wm-step"),
+		Button(ClassStr("wm-step-btn"), Type("button"), Attr("aria-label", prevLabel), OnClick(onPrev), "−"),
+		Span(ClassStr("wm-step-val"), axis+" "+strconv.Itoa(value)),
+		Button(ClassStr("wm-step-btn"), Type("button"), Attr("aria-label", nextLabel), OnClick(onNext), "+"),
 	)
 }
 

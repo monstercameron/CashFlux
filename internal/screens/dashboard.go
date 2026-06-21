@@ -37,7 +37,7 @@ import (
 func Dashboard() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Div(Class("bento"), Div(Class("w"), Div(Class("wbody"), P(Class("empty"), uistate.T("common.notReady")))))
+		return Div(ClassStr("bento"), Div(ClassStr("w"), Div(ClassStr("wbody"), P(ClassStr("empty"), uistate.T("common.notReady")))))
 	}
 	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
 
@@ -193,7 +193,7 @@ func Dashboard() ui.Node {
 
 	hidden := uistate.UseHiddenWidgets().Get()
 	tiles := make([]any, 0, len(layoutItems)+1)
-	tiles = append(tiles, Class("bento"))
+	tiles = append(tiles, ClassStr("bento"))
 	for _, it := range layoutItems {
 		if hidden.IsHidden(it.ID) {
 			continue
@@ -207,7 +207,7 @@ func Dashboard() ui.Node {
 		// Optional decorative banner band (B20) — shown only when the user picks a
 		// banner; driven entirely by CSS vars/attribute set by uistate.ApplyBanner,
 		// so it needs no state here. Decorative, hence aria-hidden.
-		Div(Class("app-banner"), Attr("aria-hidden", "true")),
+		Div(ClassStr("app-banner"), Attr("aria-hidden", "true")),
 		Div(tiles...),
 	)
 }
@@ -220,21 +220,21 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismi
 	stale := freshness.VisibleStaleAccounts(accounts, windows, dismissals, now)
 	var body ui.Node
 	if len(stale) == 0 {
-		body = P(Class("text-up t-body"), uistate.T("dashboard.allFresh"))
+		body = P(ClassStr("text-up t-body"), uistate.T("dashboard.allFresh"))
 	} else {
 		chips := make([]ui.Node, 0, len(stale))
 		for _, a := range stale {
-			chips = append(chips, Span(Class("member-chip"),
+			chips = append(chips, Span(ClassStr("member-chip"),
 				Span(a.Name),
-				Span(Class("text-warn fig"), fmt.Sprintf("· %dd", freshness.DaysSinceUpdate(a, now))),
+				Span(ClassStr("text-warn fig"), fmt.Sprintf("· %dd", freshness.DaysSinceUpdate(a, now))),
 			))
 		}
 		body = Div(
-			P(Class("text-dim t-body mb-2"), uistate.T("dashboard.staleCount", len(stale))),
-			Div(Class("flex flex-wrap gap-2 items-center"), chips),
-			Div(Class("flex gap-2 mt-2"),
-				Button(Class("btn"), Type("button"), Title(uistate.T("dashboard.remindTitle")), OnClick(onRemind), uistate.T("dashboard.remind")),
-				Button(Class("btn"), Type("button"), OnClick(onDismiss), uistate.T("action.dismiss")),
+			P(ClassStr("text-dim t-body mb-2"), uistate.T("dashboard.staleCount", len(stale))),
+			Div(ClassStr("flex flex-wrap gap-2 items-center"), chips),
+			Div(ClassStr("flex gap-2 mt-2"),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("dashboard.remindTitle")), OnClick(onRemind), uistate.T("dashboard.remind")),
+				Button(ClassStr("btn"), Type("button"), OnClick(onDismiss), uistate.T("action.dismiss")),
 			),
 		)
 	}
@@ -255,7 +255,7 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 
 	var body ui.Node
 	if len(upcoming) == 0 {
-		body = P(Class("empty text-dim t-body"), uistate.T("dashboard.noUpcomingBills"))
+		body = P(ClassStr("empty text-dim t-body"), uistate.T("dashboard.noUpcomingBills"))
 	} else {
 		if len(upcoming) > 4 {
 			upcoming = upcoming[:4]
@@ -266,13 +266,13 @@ func upcomingBillsWidget(app *appstate.App) ui.Node {
 			if b.DaysUntil <= 7 {
 				dueTone = "text-warn"
 			}
-			rows = append(rows, Div(Class("flex justify-between"),
+			rows = append(rows, Div(ClassStr("flex justify-between"),
 				Span(b.Name),
-				Span(Class(dueTone), pr.FormatDate(b.DueDate)),
-				Span(Class("font-display fig text-down w-24 text-right"), fmtMoney(b.Amount.Neg())),
+				Span(ClassStr(dueTone), pr.FormatDate(b.DueDate)),
+				Span(ClassStr("font-display fig text-down w-24 text-right"), fmtMoney(b.Amount.Neg())),
 			))
 		}
-		body = Div(Class("t-body space-y-2.5"), rows)
+		body = Div(ClassStr("t-body space-y-2.5"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "bills", Title: uistate.T("dashboard.upcomingBills"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "6",
@@ -334,7 +334,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 	if total == 0 {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "breakdown", Title: uistate.T("dashboard.breakdown"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
-			Body: P(Class("empty text-dim t-body"), uistate.T("dashboard.noSpending")),
+			Body: P(ClassStr("empty text-dim t-body"), uistate.T("dashboard.noSpending")),
 		})
 	}
 
@@ -363,16 +363,16 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 	for i, s := range segs {
 		tone := tones[i%len(tones)]
 		pct := int(s.amt * 100 / total)
-		barParts = append(barParts, Div(Class(tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
-		legend = append(legend, Span(Class("flex items-center gap-1.5"),
-			Span(Class("w-2 h-2 rounded-full "+tone)),
+		barParts = append(barParts, Div(ClassStr(tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
+		legend = append(legend, Span(ClassStr("flex items-center gap-1.5"),
+			Span(ClassStr("w-2 h-2 rounded-full "+tone)),
 			Textf("%s %d%%", s.name, pct),
 		))
 	}
 
 	body := Div(
-		Div(Class("h-2.5 rounded-full overflow-hidden flex"), barParts),
-		Div(Class("flex flex-wrap gap-x-4 gap-y-1 mt-3 t-caption text-dim"), legend),
+		Div(ClassStr("h-2.5 rounded-full overflow-hidden flex"), barParts),
+		Div(ClassStr("flex flex-wrap gap-x-4 gap-y-1 mt-3 t-caption text-dim"), legend),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "breakdown", Title: uistate.T("dashboard.breakdown"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",
@@ -407,17 +407,17 @@ func savingsRateWidget(income, expense money.Money, cfg widgetcfg.Config) ui.Nod
 	}
 
 	left := Div(
-		Div(Class("font-display fig t-figure-lg leading-none "+tone), fmt.Sprintf("%d%%", pct)),
-		Div(Class("t-caption text-dim mt-1"), uistate.T("dashboard.savingsSub", target)),
+		Div(ClassStr("font-display fig t-figure-lg leading-none "+tone), fmt.Sprintf("%d%%", pct)),
+		Div(ClassStr("t-caption text-dim mt-1"), uistate.T("dashboard.savingsSub", target)),
 	)
 	var right ui.Node = Fragment()
 	if showBar {
-		right = Div(Class("flex-1"),
+		right = Div(ClassStr("flex-1"),
 			uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: bar}),
-			Div(Class("t-caption text-faint mt-2"), uistate.T("dashboard.thisPeriod")),
+			Div(ClassStr("t-caption text-faint mt-2"), uistate.T("dashboard.thisPeriod")),
 		)
 	}
-	body := Div(Class("flex items-center gap-5"), left, right)
+	body := Div(ClassStr("flex items-center gap-5"), left, right)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "savings", Title: uistate.T("dashboard.savingsRate"), Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "7",
 		Body: body,
@@ -432,12 +432,12 @@ func topHighlightWidget(txns []domain.Transaction, categories []domain.Category,
 	anomalies := detectSpendingAnomalies(txns, categories, rates)
 	var body ui.Node
 	if len(anomalies) == 0 {
-		body = P(Class("text-dim t-body"), uistate.T("dashboard.noHighlights"))
+		body = P(ClassStr("text-dim t-body"), uistate.T("dashboard.noHighlights"))
 	} else {
 		a := anomalies[0]
-		body = Div(Class("flex items-start gap-2"),
-			Span(Class("insight-dot "+highlightTone(a)), Text(highlightArrow(a))),
-			Span(Class("t-body"), highlightText(a, rates.Base)),
+		body = Div(ClassStr("flex items-start gap-2"),
+			Span(ClassStr("insight-dot "+highlightTone(a)), Text(highlightArrow(a))),
+			Span(ClassStr("t-body"), highlightText(a, rates.Base)),
 		)
 	}
 	return uiw.Widget(uiw.WidgetProps{
@@ -477,12 +477,12 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 		if i == len(months)-1 {
 			labelTone = "text-fg"
 		}
-		bars = append(bars, Div(Class("flex flex-col items-center gap-1.5"),
-			Div(Class("flex items-end gap-1 h-14"),
-				Div(Class("w-3 bg-up"), Style(map[string]string{"height": fmt.Sprintf("%d%%", int(mb.income*100/maxv))})),
-				Div(Class("w-3 bg-down"), Style(map[string]string{"height": fmt.Sprintf("%d%%", int(mb.expense*100/maxv))})),
+		bars = append(bars, Div(ClassStr("flex flex-col items-center gap-1.5"),
+			Div(ClassStr("flex items-end gap-1 h-14"),
+				Div(ClassStr("w-3 bg-up"), Style(map[string]string{"height": fmt.Sprintf("%d%%", int(mb.income*100/maxv))})),
+				Div(ClassStr("w-3 bg-down"), Style(map[string]string{"height": fmt.Sprintf("%d%%", int(mb.expense*100/maxv))})),
 			),
-			Span(Class("t-caption "+labelTone), mb.label),
+			Span(ClassStr("t-caption "+labelTone), mb.label),
 		))
 	}
 
@@ -492,14 +492,14 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 	if last.income-last.expense < 0 {
 		netTone = "text-down"
 	}
-	netBlock := Div(Class("ml-auto text-right"),
-		Div(Class("t-caption text-faint"), "net · "+last.label),
-		Div(Class("font-display fig text-lg "+netTone), fmtMoney(netMoney)),
+	netBlock := Div(ClassStr("ml-auto text-right"),
+		Div(ClassStr("t-caption text-faint"), "net · "+last.label),
+		Div(ClassStr("font-display fig text-lg "+netTone), fmtMoney(netMoney)),
 	)
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "cashflow", Title: uistate.T("dashboard.cashFlow"), Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "6",
-		Body: Div(Class("flex items-end gap-5"), bars, netBlock),
+		Body: Div(ClassStr("flex items-end gap-5"), bars, netBlock),
 	})
 }
 
@@ -573,19 +573,19 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 	if !showXAxis {
 		spec.X.Format = "hidden"
 	}
-	body := Div(Class("trend-body"),
-		Div(Class("trend-head"),
-			Div(Class("trend-figure font-display fig t-figure"), fmtMoney(net)),
-			Div(Class("trend-standard t-caption text-dim"), trendWindowLabel(months)),
+	body := Div(ClassStr("trend-body"),
+		Div(ClassStr("trend-head"),
+			Div(ClassStr("trend-figure font-display fig t-figure"), fmtMoney(net)),
+			Div(ClassStr("trend-standard t-caption text-dim"), trendWindowLabel(months)),
 		),
-		Div(Class("trend-expanded"),
-			Div(Class("trend-stat"),
-				Span(Class("t-caption text-faint"), "Change"),
-				Span(Class("fig t-body "+deltaTone), deltaLabel),
+		Div(ClassStr("trend-expanded"),
+			Div(ClassStr("trend-stat"),
+				Span(ClassStr("t-caption text-faint"), "Change"),
+				Span(ClassStr("fig t-body "+deltaTone), deltaLabel),
 			),
-			Div(Class("trend-stat"),
-				Span(Class("t-caption text-faint"), "Range"),
-				Span(Class("fig t-body text-dim"), rangeLabel),
+			Div(ClassStr("trend-stat"),
+				Span(ClassStr("t-caption text-faint"), "Range"),
+				Span(ClassStr("fig t-body text-dim"), rangeLabel),
 			),
 		),
 		uiw.Chart(uiw.ChartProps{
@@ -618,9 +618,9 @@ type emptyAddProps struct {
 func emptyAddCTA(props emptyAddProps) ui.Node {
 	nav := router.UseNavigate()
 	path := props.Path
-	return Div(Class("empty text-dim t-body flex flex-col items-start gap-2"),
+	return Div(ClassStr("empty text-dim t-body flex flex-col items-start gap-2"),
 		Span(props.Message),
-		Button(Class("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath(path)) }), props.Label),
+		Button(ClassStr("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath(path)) }), props.Label),
 	)
 }
 
@@ -670,8 +670,8 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.
 			tone = "text-down"
 		}
 		cells = append(cells, Div(
-			Div(Class("text-dim"), a.Name),
-			Div(Class("font-display fig mt-0.5 "+tone), fmtMoney(bal)),
+			Div(ClassStr("text-dim"), a.Name),
+			Div(ClassStr("font-display fig mt-0.5 "+tone), fmtMoney(bal)),
 		))
 		if len(cells) >= limit {
 			break
@@ -681,7 +681,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.
 	if len(cells) == 0 {
 		body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No accounts yet.", Label: uistate.T("dashboard.addAccount"), Path: "/accounts"})
 	} else {
-		body = Div(Class("grid grid-cols-3 gap-4 t-body"), cells)
+		body = Div(ClassStr("grid grid-cols-3 gap-4 t-body"), cells)
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "accounts", Title: uistate.T("nav.accounts"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "5",
@@ -763,8 +763,8 @@ func todoWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 
 	progress := uistate.T("dashboard.todoProgress", len(openOrdered), len(doneTasks))
 	body := Div(
-		P(Class("t-caption text-dim mb-2"), progress),
-		Div(Class("t-body space-y-1.5"), rows),
+		P(ClassStr("t-caption text-dim mb-2"), progress),
+		Div(ClassStr("t-body space-y-1.5"), rows),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "todo", Title: uistate.T("nav.todo"), Draggable: true, Resizable: true, GridColumn: "2", GridRow: "5",
@@ -819,12 +819,12 @@ func dashTaskRow(props dashTaskRowProps) ui.Node {
 		titleCls += " text-down"
 	}
 	checkLabel := uistate.T("dashboard.todoComplete", t.Title)
-	return Div(Class("flex gap-2 items-center"),
-		Button(Class("dash-check"), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", boolStr(done)),
+	return Div(ClassStr("flex gap-2 items-center"),
+		Button(ClassStr("dash-check"), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", boolStr(done)),
 			Attr("aria-label", checkLabel), Attr("title", checkLabel), OnClick(toggle),
 			Text(checkGlyph(done))),
-		Span(Class(dotTone), Attr("title", prio), Attr("aria-label", prio), dot),
-		Button(Class(titleCls), Type("button"), OnClick(openTodo), t.Title),
+		Span(ClassStr(dotTone), Attr("title", prio), Attr("aria-label", prio), dot),
+		Button(ClassStr(titleCls), Type("button"), OnClick(openTodo), t.Title),
 	)
 }
 
@@ -849,7 +849,7 @@ type todoMoreProps struct{ N int }
 func todoMoreLink(props todoMoreProps) ui.Node {
 	nav := router.UseNavigate()
 	open := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/todo")) })
-	return Button(Class("t-caption text-dim hover:text-fg mt-1"), Type("button"), OnClick(open),
+	return Button(ClassStr("t-caption text-dim hover:text-fg mt-1"), Type("button"), OnClick(open),
 		uistate.T("dashboard.todoMore", props.N))
 }
 
@@ -889,12 +889,12 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 		caption += " · by " + g.TargetDate.Format("Jan 2")
 	}
 	body := Div(
-		Div(Class("flex justify-between t-body"),
-			Span(Class("text-dim"), "saved"),
-			Span(Class("font-display fig"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
+		Div(ClassStr("flex justify-between t-body"),
+			Span(ClassStr("text-dim"), "saved"),
+			Span(ClassStr("font-display fig"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 		),
 		uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: "bg-fg", Class: "mt-2"}),
-		Div(Class("t-caption text-dim mt-1.5"), caption),
+		Div(ClassStr("t-caption text-dim mt-1.5"), caption),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goals", Title: uistate.T("dashboard.goalPrefix", g.Name), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
@@ -950,7 +950,7 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 			body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No budgets yet.", Label: uistate.T("dashboard.addBudget"), Path: "/budgets"})
 		} else {
 			// Budgets exist but none match the at-risk filter — not an add case.
-			body = P(Class("empty text-dim t-body"), uistate.T("dashboard.noBudgetAlerts"))
+			body = P(ClassStr("empty text-dim t-body"), uistate.T("dashboard.noBudgetAlerts"))
 		}
 	} else {
 		if len(statuses) > limit {
@@ -970,14 +970,14 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 				label = catName[s.Budget.CategoryID]
 			}
 			rows = append(rows, Div(
-				Div(Class("flex justify-between"),
+				Div(ClassStr("flex justify-between"),
 					Span(label),
-					Span(Class("font-display fig "+tone), fmt.Sprintf("%d%%", s.Percent)),
+					Span(ClassStr("font-display fig "+tone), fmt.Sprintf("%d%%", s.Percent)),
 				),
 				uiw.ProgressBar(uiw.ProgressBarProps{Percent: s.Percent, Tone: bar, Class: "mt-1.5"}),
 			))
 		}
-		body = Div(Class("space-y-4 t-body"), rows)
+		body = Div(ClassStr("space-y-4 t-body"), rows)
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budgets", Title: uistate.T("nav.budgets"), Draggable: true, Resizable: true,
@@ -997,17 +997,17 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 	recent := ledger.Recent(txns, count)
 	var body ui.Node
 	if len(recent) == 0 {
-		body = P(Class("empty text-dim t-body"), uistate.T("dashboard.noTransactions"))
+		body = P(ClassStr("empty text-dim t-body"), uistate.T("dashboard.noTransactions"))
 	} else {
 		rows := make([]ui.Node, 0, len(recent))
 		for _, t := range recent {
-			rows = append(rows, Tr(Class("border-b border-line/70"),
-				Td(Class("py-2.5 fig text-dim w-16"), t.Date.Format("Jan 2")),
-				Td(Class("py-2.5"), t.Desc),
-				Td(Class("py-2.5 text-right font-display fig "+figTone(t.Amount)), fmtMoney(t.Amount)),
+			rows = append(rows, Tr(ClassStr("border-b border-line/70"),
+				Td(ClassStr("py-2.5 fig text-dim w-16"), t.Date.Format("Jan 2")),
+				Td(ClassStr("py-2.5"), t.Desc),
+				Td(ClassStr("py-2.5 text-right font-display fig "+figTone(t.Amount)), fmtMoney(t.Amount)),
 			))
 		}
-		body = Table(Class("w-full t-body"), Tbody(rows))
+		body = Table(ClassStr("w-full t-body"), Tbody(rows))
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "recent", Title: uistate.T("dashboard.recent"), Draggable: true, Resizable: true,
@@ -1044,13 +1044,13 @@ func DashboardLayoutControls() ui.Node {
 		uistate.PersistLayoutMode(m)
 	})
 	mode := modeAtom.Get()
-	return Div(Class("flex items-center gap-3 flex-wrap"),
-		Select(Class("rstep t-caption"), Attr("title", uistate.T("dashboard.layoutMode")), OnChange(onMode),
+	return Div(ClassStr("flex items-center gap-3 flex-wrap"),
+		Select(ClassStr("rstep t-caption"), Attr("title", uistate.T("dashboard.layoutMode")), OnChange(onMode),
 			Option(Value(string(dashlayout.ModeCustom)), SelectedIf(mode == dashlayout.ModeCustom), uistate.T("dashboard.layoutCustom")),
 			Option(Value(string(dashlayout.ModeAutoDefault)), SelectedIf(mode == dashlayout.ModeAutoDefault), uistate.T("dashboard.layoutAutoDefault")),
 			Option(Value(string(dashlayout.ModeAutoImportance)), SelectedIf(mode == dashlayout.ModeAutoImportance), uistate.T("dashboard.layoutAutoImportance")),
 		),
-		Button(Class("data-btn"), Type("button"), OnClick(reset), uistate.T("dashboard.reset")),
+		Button(ClassStr("data-btn"), Type("button"), OnClick(reset), uistate.T("dashboard.reset")),
 	)
 }
 
@@ -1111,14 +1111,14 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 	var body ui.Node
 	switch {
 	case len(items) == 0:
-		body = P(Class("text-up t-body"), uistate.T("dashboard.attentionClear"))
+		body = P(ClassStr("text-up t-body"), uistate.T("dashboard.attentionClear"))
 	case spanCol < 2 && spanRow < 2:
 		// Compact 1×1: the single most-urgent item, plus a count of the rest.
 		rows := []ui.Node{ui.CreateElement(attentionRow, attentionRowProps{Item: items[0], Base: base})}
 		if crit, warn := attention.Counts(items); crit+warn > 1 {
-			rows = append(rows, P(Class("t-caption text-dim mt-1"), uistate.T("dashboard.attentionMore", crit+warn-boolToInt(items[0].Severity >= attention.SeverityWarning))))
+			rows = append(rows, P(ClassStr("t-caption text-dim mt-1"), uistate.T("dashboard.attentionMore", crit+warn-boolToInt(items[0].Severity >= attention.SeverityWarning))))
 		}
-		body = Div(Class("attention-list"), rows)
+		body = Div(ClassStr("attention-list"), rows)
 	default:
 		rows := make([]ui.Node, 0, len(items))
 		for _, it := range items {
@@ -1130,7 +1130,7 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 		if spanRow < 2 {
 			cls = "attention-chips"
 		}
-		body = Div(Class(cls), rows)
+		body = Div(ClassStr(cls), rows)
 	}
 
 	return uiw.Widget(uiw.WidgetProps{
@@ -1205,10 +1205,10 @@ func attentionRow(props attentionRowProps) ui.Node {
 			scrollToID(it.AnchorID)
 		}
 	}
-	return Button(Class("attention-item "+attentionTone(it.Severity)), Type("button"), OnClick(open),
+	return Button(ClassStr("attention-item "+attentionTone(it.Severity)), Type("button"), OnClick(open),
 		Attr("title", uistate.T("dashboard.attentionOpen")),
-		Span(Class("attention-dot"), Attr("aria-hidden", "true"), Text(attentionGlyph(it.Severity))),
-		Span(Class("attention-text"), attentionText(it, props.Base)),
+		Span(ClassStr("attention-dot"), Attr("aria-hidden", "true"), Text(attentionGlyph(it.Severity))),
+		Span(ClassStr("attention-text"), attentionText(it, props.Base)),
 	)
 }
 
@@ -1280,7 +1280,7 @@ func plural(n int, singular string) string {
 // subline. figTone/subTone are color classes (e.g. "text-up", "text-dim").
 func kpiBody(figure, figTone, subline, subTone string) ui.Node {
 	return Div(
-		Div(Class("font-display fig t-figure leading-tight "+figTone), figure),
-		Div(Class("pt-1.5 t-caption "+subTone), subline),
+		Div(ClassStr("font-display fig t-figure leading-tight "+figTone), figure),
+		Div(ClassStr("pt-1.5 t-caption "+subTone), subline),
 	)
 }

@@ -55,7 +55,7 @@ func DataTable(props DataTableProps) ui.Node {
 	if props.Class != "" {
 		cls += " " + props.Class
 	}
-	table := Table(Class(cls), Thead(Tr(headers...)), Tbody(props.Body))
+	table := Table(ClassStr(cls), Thead(Tr(headers...)), Tbody(props.Body))
 	if props.OnPage == nil {
 		return table
 	}
@@ -76,7 +76,7 @@ func dtHeader(props dtHeaderProps) ui.Node {
 	c := props.Col
 	args := []any{Attr("scope", "col")}
 	if c.Class != "" {
-		args = append(args, Class(c.Class))
+		args = append(args, ClassStr(c.Class))
 	}
 	if c.SortKey == "" {
 		if c.Head != nil {
@@ -97,7 +97,7 @@ func dtHeader(props dtHeaderProps) ui.Node {
 	key := c.SortKey
 	on := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnSort(key) })
 	args = append(args, Attr("aria-sort", ariaSort),
-		Button(Class("th-sort"), Type("button"), OnClick(on), c.Label+caret))
+		Button(ClassStr("th-sort"), Type("button"), OnClick(on), c.Label+caret))
 	return Th(args...)
 }
 
@@ -127,23 +127,23 @@ func dtPager(props dtPagerProps) ui.Node {
 	}
 	sizeOpts = append(sizeOpts, Option(Value(strconv.Itoa(AllPageSize)), SelectedIf(props.PageSize < 0), "All"))
 
-	prevArgs := []any{Class("btn"), Type("button"), Attr("aria-label", "Previous page"), OnClick(onPrev)}
+	prevArgs := []any{ClassStr("btn"), Type("button"), Attr("aria-label", "Previous page"), OnClick(onPrev)}
 	if props.Page <= 1 {
 		prevArgs = append(prevArgs, Attr("disabled", "disabled"))
 	}
 	prevArgs = append(prevArgs, "Prev")
-	nextArgs := []any{Class("btn"), Type("button"), Attr("aria-label", "Next page"), OnClick(onNext)}
+	nextArgs := []any{ClassStr("btn"), Type("button"), Attr("aria-label", "Next page"), OnClick(onNext)}
 	if props.Page >= totalPages {
 		nextArgs = append(nextArgs, Attr("disabled", "disabled"))
 	}
 	nextArgs = append(nextArgs, "Next")
 
 	pos := strconv.Itoa(from) + "–" + strconv.Itoa(to) + " of " + strconv.Itoa(props.Total)
-	return Div(Class("data-pager"),
+	return Div(ClassStr("data-pager"),
 		Button(prevArgs...),
-		Span(Class("muted data-pos"), pos),
+		Span(ClassStr("muted data-pos"), pos),
 		Button(nextArgs...),
-		Span(Class("muted data-pager-label"), "Rows per page"),
-		Select(Class("field"), Attr("aria-label", "Rows per page"), OnChange(onSize), sizeOpts),
+		Span(ClassStr("muted data-pager-label"), "Rows per page"),
+		Select(ClassStr("field"), Attr("aria-label", "Rows per page"), OnChange(onSize), sizeOpts),
 	)
 }

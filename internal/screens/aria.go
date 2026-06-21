@@ -26,7 +26,7 @@ func errAttrs(errID, msg string) []any {
 // errText renders a form-level validation error with a stable id (so inputs can
 // reference it via errAttrs) and role="alert" (so it's announced when it appears),
 // rendering nothing when msg is blank — the drop-in replacement for the previous
-// inline If(msg != "", P(Class("err"), …)) pattern.
+// inline If(msg != "", P(ClassStr("err"), …)) pattern.
 func errText(errID, msg string) ui.Node {
-	return If(msg != "", P(Class("err"), Attr("role", "alert"), Attr("id", errID), msg))
+	return If(msg != "", P(ClassStr("err"), Attr("role", "alert"), Attr("id", errID), msg))
 }

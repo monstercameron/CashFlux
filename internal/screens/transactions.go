@@ -29,7 +29,7 @@ import (
 func Transactions() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 
 	rev := state.UseAtom("rev:transactions", 0)
@@ -401,7 +401,7 @@ func Transactions() ui.Node {
 
 	var formCard ui.Node
 	if len(accounts) == 0 {
-		formCard = Section(Class("card"), P(Class("empty"), uistate.T("transactions.needAccount")))
+		formCard = Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("transactions.needAccount")))
 	} else {
 		isTransfer := kind.Get() == "Transfer"
 		kindOptions := []ui.Node{
@@ -430,24 +430,24 @@ func Transactions() ui.Node {
 		if isTransfer {
 			formTxnDefs = nil
 		}
-		formCard = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("transactions.addTitle")),
-			Form(Class("form-grid"), OnSubmit(add),
-				Input(append([]any{Class("field"), Attr("id", "txn-add"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)}, errAttrs("txn-err", errMsg.Get())...)...),
-				Input(Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
-				Select(Class("field"), Attr("aria-label", uistate.T("transactions.kindLabel")), OnChange(onKind), kindOptions),
-				Select(Class("field"), Attr("aria-label", accLabel), Title(accLabel), OnChange(onAcc), accOptions),
+		formCard = Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("transactions.addTitle")),
+			Form(ClassStr("form-grid"), OnSubmit(add),
+				Input(append([]any{ClassStr("field"), Attr("id", "txn-add"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)}, errAttrs("txn-err", errMsg.Get())...)...),
+				Input(ClassStr("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
+				Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.kindLabel")), OnChange(onKind), kindOptions),
+				Select(ClassStr("field"), Attr("aria-label", accLabel), Title(accLabel), OnChange(onAcc), accOptions),
 				IfElse(isTransfer,
-					Select(Class("field"), Attr("aria-label", uistate.T("transactions.toAccount")), Title(uistate.T("transactions.toAccount")), OnChange(onToAcc), toAccOptions),
-					Select(Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
+					Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.toAccount")), Title(uistate.T("transactions.toAccount")), OnChange(onToAcc), toAccOptions),
+					Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
 				),
-				If(!isTransfer, Input(Class("field"), Type("text"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsStr.Get()), OnInput(onTags))),
-				Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateStr.Get()), OnInput(onDate)),
+				If(!isTransfer, Input(ClassStr("field"), Type("text"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsStr.Get()), OnInput(onTags))),
+				Input(ClassStr("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateStr.Get()), OnInput(onDate)),
 				MapKeyed(formTxnDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
-				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.repeatLastTitle")), OnClick(repeatLast), uistate.T("transactions.repeatLast")),
+				Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("transactions.repeatLastTitle")), OnClick(repeatLast), uistate.T("transactions.repeatLast")),
 			),
 			errText("txn-err", errMsg.Get()),
 		)
@@ -491,7 +491,7 @@ func Transactions() ui.Node {
 	case len(txns) == 0:
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), FocusID: "txn-add"})
 	case len(shown) == 0:
-		listBody = P(Class("empty"), uistate.T("transactions.noMatch"))
+		listBody = P(ClassStr("empty"), uistate.T("transactions.noMatch"))
 	default:
 		// Paginate the filtered set to the persisted page/size (C47), so a long
 		// ledger renders one page at a time.
@@ -516,7 +516,7 @@ func Transactions() ui.Node {
 		listBody = uiw.DataTable(uiw.DataTableProps{
 			Class: "txn-table",
 			Columns: []uiw.Column{
-				{Head: Span(Class("sr-only"), "Select")},
+				{Head: Span(ClassStr("sr-only"), "Select")},
 				{Label: "Date", SortKey: "date"},
 				{Label: "Description", SortKey: "payee"},
 				{Label: "Category", SortKey: "category"},
@@ -593,19 +593,19 @@ func Transactions() ui.Node {
 	// The Filters popover body — the controls that used to crowd the inline strip,
 	// now grouped inside the toolbar's FlipPanel. Filters apply live (each onChange
 	// persists), so the panel is close-only with nothing to "save".
-	filtersBody := Div(Class("filter-fields"),
-		Label(Class("field-label"), uistate.T("transactions.filterAccount"),
-			Select(Class("field"), Attr("aria-label", uistate.T("transactions.filterAccount")), OnChange(onFilterAcc), filterAccOptions)),
-		Label(Class("field-label"), uistate.T("transactions.filterCategory"),
-			Select(Class("field"), Attr("aria-label", uistate.T("transactions.filterCategory")), OnChange(onFilterCat), filterCatOptions)),
-		Label(Class("field-label"), uistate.T("transactions.member"),
-			Select(Class("field"), Attr("aria-label", uistate.T("transactions.member")), OnChange(onFilterMember), filterMemberOptions)),
-		Label(Class("field-label"), uistate.T("transactions.fromDate"),
-			Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.fromDate")), Value(f.From), OnInput(onFilterFrom))),
-		Label(Class("field-label"), uistate.T("transactions.toDate"),
-			Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.toDate")), Value(f.To), OnInput(onFilterTo))),
-		Label(Class("field-label"), uistate.T("transactions.clearedStatus"),
-			Select(Class("field"), Attr("aria-label", uistate.T("transactions.clearedStatus")), OnChange(onFilterCleared),
+	filtersBody := Div(ClassStr("filter-fields"),
+		Label(ClassStr("field-label"), uistate.T("transactions.filterAccount"),
+			Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.filterAccount")), OnChange(onFilterAcc), filterAccOptions)),
+		Label(ClassStr("field-label"), uistate.T("transactions.filterCategory"),
+			Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.filterCategory")), OnChange(onFilterCat), filterCatOptions)),
+		Label(ClassStr("field-label"), uistate.T("transactions.member"),
+			Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.member")), OnChange(onFilterMember), filterMemberOptions)),
+		Label(ClassStr("field-label"), uistate.T("transactions.fromDate"),
+			Input(ClassStr("field"), Type("date"), Attr("aria-label", uistate.T("transactions.fromDate")), Value(f.From), OnInput(onFilterFrom))),
+		Label(ClassStr("field-label"), uistate.T("transactions.toDate"),
+			Input(ClassStr("field"), Type("date"), Attr("aria-label", uistate.T("transactions.toDate")), Value(f.To), OnInput(onFilterTo))),
+		Label(ClassStr("field-label"), uistate.T("transactions.clearedStatus"),
+			Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.clearedStatus")), OnChange(onFilterCleared),
 				Option(Value(""), SelectedIf(f.Cleared == ""), uistate.T("transactions.clearedAll")),
 				Option(Value("no"), SelectedIf(f.Cleared == "no"), uistate.T("transactions.notCleared")),
 				Option(Value("yes"), SelectedIf(f.Cleared == "yes"), uistate.T("transactions.cleared")),
@@ -614,8 +614,8 @@ func Transactions() ui.Node {
 
 	return Div(
 		formCard,
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("transactions.listTitle")),
+		Section(ClassStr("card"),
+			H2(ClassStr("card-title"), uistate.T("transactions.listTitle")),
 			uiw.FilterToolbar(uiw.FilterToolbarProps{
 				Search:        f.Text,
 				SearchLabel:   uistate.T("transactions.searchPlaceholder"),
@@ -629,26 +629,26 @@ func Transactions() ui.Node {
 				ClearAllLabel: uistate.T("transactions.clearAllFilters"),
 				RemoveLabel:   uistate.T("transactions.removeFilter"),
 				Actions: []ui.Node{
-					Button(Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear")),
-					Button(Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
+					Button(ClassStr("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear")),
+					Button(ClassStr("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
 				},
 			}),
-			If(len(selected.Get()) > 0, Div(Class("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
-				Span(Class("muted"), uistate.T("transactions.selected", plural(len(selected.Get()), "transaction"))),
-				Select(Class("field"), Attr("aria-label", uistate.T("transactions.categoryToApply")), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
-				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.applyCategoryTitle")), OnClick(bulkRecategorize), uistate.T("transactions.applyCategory")),
-				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.markClearedTitle")), OnClick(bulkMarkCleared), uistate.T("transactions.markCleared")),
-				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.markUnclearedTitle")), OnClick(bulkMarkUncleared), uistate.T("transactions.markUncleared")),
-				Button(Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
-				Button(Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
+			If(len(selected.Get()) > 0, Div(ClassStr("flex flex-wrap gap-2 items-center"), Style(map[string]string{"margin-bottom": "0.6rem"}),
+				Span(ClassStr("muted"), uistate.T("transactions.selected", plural(len(selected.Get()), "transaction"))),
+				Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.categoryToApply")), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("transactions.applyCategoryTitle")), OnClick(bulkRecategorize), uistate.T("transactions.applyCategory")),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("transactions.markClearedTitle")), OnClick(bulkMarkCleared), uistate.T("transactions.markCleared")),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("transactions.markUnclearedTitle")), OnClick(bulkMarkUncleared), uistate.T("transactions.markUncleared")),
+				Button(ClassStr("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
+				Button(ClassStr("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
 			)),
-			If(len(shown) > 0, P(Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))))),
+			If(len(shown) > 0, P(ClassStr("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))))),
 			// Screen-reader live region announcing the match count as filters change
 			// (stays mounted across renders, so the zero-results case is announced too).
-			P(Class("sr-only"), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus)),
-			If(dupCount > 0, Div(Class("flex flex-wrap items-center gap-2"), Style(map[string]string{"margin-bottom": "0.6rem"}),
-				Span(Class("muted"), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate"))),
-				Button(Class("btn"), Type("button"), Title(uistate.T("transactions.selectDuplicatesTitle")), OnClick(selectDuplicates), uistate.T("transactions.selectDuplicates")),
+			P(ClassStr("sr-only"), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus)),
+			If(dupCount > 0, Div(ClassStr("flex flex-wrap items-center gap-2"), Style(map[string]string{"margin-bottom": "0.6rem"}),
+				Span(ClassStr("muted"), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate"))),
+				Button(ClassStr("btn"), Type("button"), Title(uistate.T("transactions.selectDuplicatesTitle")), OnClick(selectDuplicates), uistate.T("transactions.selectDuplicates")),
 			)),
 			listBody,
 		),
@@ -724,15 +724,15 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		for _, c := range props.Categories {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catS.Get() == c.ID), c.Name))
 		}
-		return Tr(Class("row-edit"),
+		return Tr(ClassStr("row-edit"),
 			Td(Attr("colspan", "9"),
-				Form(Class("form-grid"), OnSubmit(saveEdit),
-					Input(Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
-					Input(Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
-					Select(Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
-					Input(Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate)),
-					Button(Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-					Button(Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				Form(ClassStr("form-grid"), OnSubmit(saveEdit),
+					Input(ClassStr("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
+					Input(ClassStr("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
+					Select(ClassStr("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
+					Input(ClassStr("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate)),
+					Button(ClassStr("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+					Button(ClassStr("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 				),
 			),
 		)
@@ -762,19 +762,19 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	if props.Selected {
 		rowClass += " selected"
 	}
-	return Tr(Class(rowClass),
-		Td(Class("td-select"), Button(Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph)),
-		Td(Class("td-date fig"), pr.FormatDate(props.Txn.Date)),
-		Td(Class("row-desc"), props.Txn.Desc),
-		Td(Class("td-cat"), cat),
-		Td(Class("td-acct"), props.Account),
-		Td(Class("td-tags"), tagsText),
-		Td(Class("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
-		Td(Class("td-cleared"), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.toggleClearedTitle")), OnClick(clr), clearedLabel)),
-		Td(Class("td-actions"),
-			If(!props.Txn.IsTransfer(), Button(Class("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, Class("w-4 h-4 shrink-0")), Span(uistate.T("action.edit")))),
-			If(!props.Txn.IsTransfer(), Button(Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
-			Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+	return Tr(ClassStr(rowClass),
+		Td(ClassStr("td-select"), Button(ClassStr("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph)),
+		Td(ClassStr("td-date fig"), pr.FormatDate(props.Txn.Date)),
+		Td(ClassStr("row-desc"), props.Txn.Desc),
+		Td(ClassStr("td-cat"), cat),
+		Td(ClassStr("td-acct"), props.Account),
+		Td(ClassStr("td-tags"), tagsText),
+		Td(ClassStr("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
+		Td(ClassStr("td-cleared"), Button(ClassStr("btn"), Type("button"), Title(uistate.T("transactions.toggleClearedTitle")), OnClick(clr), clearedLabel)),
+		Td(ClassStr("td-actions"),
+			If(!props.Txn.IsTransfer(), Button(ClassStr("btn inline-flex items-center gap-1.5"), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, ClassStr("w-4 h-4 shrink-0")), Span(uistate.T("action.edit")))),
+			If(!props.Txn.IsTransfer(), Button(ClassStr("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
+			Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 		),
 	)
 }

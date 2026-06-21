@@ -25,7 +25,7 @@ import (
 func Workflows() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(Class("card"), P(Class("empty"), uistate.T("common.notReady")))
+		return Section(ClassStr("card"), P(ClassStr("empty"), uistate.T("common.notReady")))
 	}
 	rev := ui.UseState(0)
 	_ = rev.Get()
@@ -36,15 +36,15 @@ func Workflows() ui.Node {
 	for _, w := range wfs {
 		rows = append(rows, ui.CreateElement(workflowRow, workflowRowProps{Workflow: w, Refresh: refresh}))
 	}
-	listBody := P(Class("empty"), uistate.T("workflows.empty"))
+	listBody := P(ClassStr("empty"), uistate.T("workflows.empty"))
 	if len(rows) > 0 {
-		listBody = Div(Class("rows"), rows)
+		listBody = Div(ClassStr("rows"), rows)
 	}
 
 	return Div(
 		ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
-		Section(Class("card"),
-			H3(Class("card-title"), uistate.T("workflows.yours")),
+		Section(ClassStr("card"),
+			H3(ClassStr("card-title"), uistate.T("workflows.yours")),
 			listBody,
 		),
 		ui.CreateElement(workflowHistory, workflowHistoryProps{}),
@@ -159,11 +159,11 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				opts = append(opts, Option(Value(c.ID), SelectedIf(draftCat.Get() == c.ID), c.Name))
 			}
 		}
-		paramControl = Select(Class("field"), OnChange(onDraftCat), opts)
+		paramControl = Select(ClassStr("field"), OnChange(onDraftCat), opts)
 	case workflow.ActionApplyRules, workflow.ActionFlagReview:
-		paramControl = P(Class("muted"), uistate.T("workflows.noParam"))
+		paramControl = P(ClassStr("muted"), uistate.T("workflows.noParam"))
 	default: // createTask / notify / addTag
-		paramControl = Input(Class("field"), Attr("placeholder", uistate.T("workflows.actionText")),
+		paramControl = Input(ClassStr("field"), Attr("placeholder", uistate.T("workflows.actionText")),
 			Value(draftText.Get()), OnInput(onDraftText))
 	}
 
@@ -175,21 +175,21 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		}))
 	}
 
-	return Section(Class("card"),
-		H3(Class("card-title"), uistate.T("workflows.create")),
-		Div(Class("form-grid"),
-			Input(Class("field"), Attr("placeholder", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName)),
-			Select(Class("field"), OnChange(onTrigger),
+	return Section(ClassStr("card"),
+		H3(ClassStr("card-title"), uistate.T("workflows.create")),
+		Div(ClassStr("form-grid"),
+			Input(ClassStr("field"), Attr("placeholder", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName)),
+			Select(ClassStr("field"), OnChange(onTrigger),
 				Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
 				Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
 			),
-			Input(Class("field"), Attr("placeholder", uistate.T("workflows.condition")), Value(condition.Get()), OnInput(onCondition)),
+			Input(ClassStr("field"), Attr("placeholder", uistate.T("workflows.condition")), Value(condition.Get()), OnInput(onCondition)),
 		),
 		// Action builder. The parameter control depends on the chosen action:
 		// a category picker for "set category", a text field for create-task /
 		// notify / add-tag, and nothing for apply-rules / flag-for-review.
-		Div(Class("form-grid mt-2"),
-			Select(Class("field"), OnChange(onDraftKind),
+		Div(ClassStr("form-grid mt-2"),
+			Select(ClassStr("field"), OnChange(onDraftKind),
 				Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
 				Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
 				Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
@@ -198,12 +198,12 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				Option(Value(string(workflow.ActionNotify)), SelectedIf(draftKind.Get() == string(workflow.ActionNotify)), uistate.T("workflows.actNotify")),
 			),
 			paramControl,
-			Button(Class("btn"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
+			Button(ClassStr("btn"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
 		),
-		If(len(staged) > 0, Div(Class("rows"), staged)),
-		If(msg.Get() != "", P(Class("err"), Attr("role", "alert"), msg.Get())),
-		Div(Class("mt-2"),
-			Button(Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.save")),
+		If(len(staged) > 0, Div(ClassStr("rows"), staged)),
+		If(msg.Get() != "", P(ClassStr("err"), Attr("role", "alert"), msg.Get())),
+		Div(ClassStr("mt-2"),
+			Button(ClassStr("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.save")),
 		),
 	)
 }
@@ -255,33 +255,33 @@ func workflowRow(props workflowRowProps) ui.Node {
 	var result ui.Node = Fragment()
 	if r := last.Get(); r != nil {
 		if !r.Matched && !r.DryRun {
-			result = P(Class("muted mt-1"), uistate.T("workflows.noMatch"))
+			result = P(ClassStr("muted mt-1"), uistate.T("workflows.noMatch"))
 		} else if !r.Matched && r.DryRun {
-			result = P(Class("muted mt-1"), uistate.T("workflows.dryNoMatch"))
+			result = P(ClassStr("muted mt-1"), uistate.T("workflows.dryNoMatch"))
 		} else {
 			var lines []ui.Node
 			for _, e := range r.Effects {
-				lines = append(lines, Div(Class("row-meta"), "• "+e.Summary))
+				lines = append(lines, Div(ClassStr("row-meta"), "• "+e.Summary))
 			}
 			head := uistate.T("workflows.applied")
 			if r.DryRun {
 				head = uistate.T("workflows.wouldDo")
 			}
-			result = Div(Class("mt-1"), P(Class("row-meta"), head), Div(lines))
+			result = Div(ClassStr("mt-1"), P(ClassStr("row-meta"), head), Div(lines))
 		}
 	}
 
-	return Div(Class("row-edit"),
-		Div(Class("flex items-center justify-between gap-2 flex-wrap"),
-			Div(Class("row-main"),
-				Div(Class("row-desc"), w.Name),
-				Div(Class("row-meta"), triggerLabel(w.Trigger.Kind)+conditionSuffix(w.Condition)+" · "+actionsLabel(len(w.Actions))),
+	return Div(ClassStr("row-edit"),
+		Div(ClassStr("flex items-center justify-between gap-2 flex-wrap"),
+			Div(ClassStr("row-main"),
+				Div(ClassStr("row-desc"), w.Name),
+				Div(ClassStr("row-meta"), triggerLabel(w.Trigger.Kind)+conditionSuffix(w.Condition)+" · "+actionsLabel(len(w.Actions))),
 			),
-			Div(Class("flex gap-2 flex-wrap"),
-				Button(Class("btn"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
-				Button(Class("btn btn-primary"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow")),
-				Button(Class("btn"), Type("button"), OnClick(toggle), enableLabel),
-				Button(Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
+			Div(ClassStr("flex gap-2 flex-wrap"),
+				Button(ClassStr("btn"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
+				Button(ClassStr("btn btn-primary"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow")),
+				Button(ClassStr("btn"), Type("button"), OnClick(toggle), enableLabel),
+				Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, ClassStr("w-4 h-4"))),
 			),
 		),
 		result,
@@ -317,14 +317,14 @@ func workflowHistory(_ workflowHistoryProps) ui.Node {
 		if name == "" {
 			name = uistate.T("workflows.deleted")
 		}
-		rows = append(rows, Div(Class("row"),
-			Span(Class("row-desc"), name),
-			Span(Class("row-meta"), r.At+" · "+strconv.Itoa(len(r.Effects))+" "+uistate.T("workflows.effectsWord")),
+		rows = append(rows, Div(ClassStr("row"),
+			Span(ClassStr("row-desc"), name),
+			Span(ClassStr("row-meta"), r.At+" · "+strconv.Itoa(len(r.Effects))+" "+uistate.T("workflows.effectsWord")),
 		))
 	}
-	return Section(Class("card"),
-		H3(Class("card-title"), uistate.T("workflows.history")),
-		Div(Class("rows"), rows),
+	return Section(ClassStr("card"),
+		H3(ClassStr("card-title"), uistate.T("workflows.history")),
+		Div(ClassStr("rows"), rows),
 	)
 }
 
@@ -384,9 +384,9 @@ type stagedActionRowProps struct {
 // component so the remove button's OnClick hook sits at a stable render position —
 // the staged list is variable-length (the framework loop-hook gotcha).
 func stagedActionRow(props stagedActionRowProps) ui.Node {
-	return Div(Class("row"),
-		Span(Class("row-desc"), props.Label),
-		Button(Class("btn-del"), Type("button"), Attr("aria-label", "Remove action"), Title("Remove action"),
+	return Div(ClassStr("row"),
+		Span(ClassStr("row-desc"), props.Label),
+		Button(ClassStr("btn-del"), Type("button"), Attr("aria-label", "Remove action"), Title("Remove action"),
 			OnClick(func() { props.OnRemove(props.Index) }), "✕"),
 	)
 }

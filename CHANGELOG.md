@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Upgraded GoWebComponents to v3.2.0** (typed CSS `css`+`css/u`, `db/sqlite`, `RawHTML`, hookcheck, and more).
+  Migrated the one breaking change: the shorthand string-class setter `shorthand.Class(string)` was renamed to
+  `shorthand.ClassStr` (the typed `css.Class(...any)` now subsumes the string form), updated across all 49
+  shorthand-importing files (~1,526 call sites). No behavior change — verified build/vet/tests green and a clean
+  boot with zero console errors. This is the groundwork for the C91 Tailwind-CDN removal (typed-CSS migration).
+
 ### Added
 - **Undo / redo (Ctrl+Z / Ctrl+Shift+Z) (C78).** A diff-based change history over the whole dataset. Every
   autosave write now captures an undo point automatically (diff vs the last snapshot — no per-write-path

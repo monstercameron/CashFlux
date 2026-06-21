@@ -30,24 +30,24 @@ func AddMenu() uic.Node {
 	// item builds one menu row. Called a fixed number of times at stable
 	// positions (not a variable-length loop), so the OnClick hooks are stable.
 	item := func(labelKey string, ic icon.Name, onSelect func()) uic.Node {
-		return Button(Class("add-item flex items-center gap-2.5"), Type("button"), Attr("role", "menuitem"),
+		return Button(ClassStr("add-item flex items-center gap-2.5"), Type("button"), Attr("role", "menuitem"),
 			OnClick(func() {
 				closeMenu()
 				onSelect()
 			}),
-			ui.Icon(ic, Class("w-4 h-4 shrink-0")),
+			ui.Icon(ic, ClassStr("w-4 h-4 shrink-0")),
 			Span(uistate.T(labelKey)),
 		)
 	}
-	return Div(Class("add-wrap"),
-		Button(Class("px-3 py-1.5 rounded-[4px] border border-line text-fg hover:bg-hover"),
+	return Div(ClassStr("add-wrap"),
+		Button(ClassStr("px-3 py-1.5 rounded-[4px] border border-line text-fg hover:bg-hover"),
 			Attr("title", uistate.T("topbar.add")),
 			Attr("aria-haspopup", "menu"),
 			OnClick(func() { open.Set(!open.Get()) }),
 			uistate.T("topbar.addLabel"),
 		),
-		Div(Class("add-backdrop"+hidden), OnClick(closeMenu)),
-		Div(Class("add-menu"+hidden), Attr("role", "menu"),
+		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
+		Div(ClassStr("add-menu"+hidden), Attr("role", "menu"),
 			item("addmenu.transaction", icon.Transactions, func() { quickAdd.Set(true) }),
 			item("addmenu.account", icon.Accounts, func() { nav.Navigate(uistate.RoutePath("/accounts")) }),
 			item("addmenu.budget", icon.Budgets, func() { nav.Navigate(uistate.RoutePath("/budgets")) }),
