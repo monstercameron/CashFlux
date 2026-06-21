@@ -781,14 +781,21 @@ func reasoningModel(model string) bool {
 }
 
 // scrollChatToEnd scrolls the bounded thread container to its bottom (only the
-// container, never the page), so a newly spawned bubble or the "thinking" indicator
-// stays in view while the composer below stays put.
+// container, never the page), so the latest message stays in view. The scroll is
+// deferred via setTimeout so it runs AFTER the bubbles' Markdown innerHTML has been
+// filled (each bubble renders in its own effect, growing scrollHeight) — otherwise
+// an on-load resume would scroll a still-empty container and land at the top.
 func scrollChatToEnd() {
-	el := js.Global().Get("document").Call("getElementById", "cf-chat-thread")
-	if !el.Truthy() {
-		return
-	}
-	el.Call("scrollTo", js.ValueOf(map[string]any{"top": el.Get("scrollHeight"), "behavior": "smooth"}))
+	var cb js.Func
+	cb = js.FuncOf(func(js.Value, []js.Value) any {
+		cb.Release()
+		el := js.Global().Get("document").Call("getElementById", "cf-chat-thread")
+		if el.Truthy() {
+			el.Set("scrollTop", el.Get("scrollHeight"))
+		}
+		return nil
+	})
+	js.Global().Call("setTimeout", cb, 80)
 }
 
 // copyText writes text to the system clipboard (best-effort, no-op if unavailable).

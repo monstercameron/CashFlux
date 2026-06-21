@@ -32,6 +32,9 @@ and every commit updates this file under `Unreleased`.
   result, plus the existing send/resume/error e2e.
 
 ### Fixed
+- **Insights chat: on load, the thread starts at the latest message.** Reopening a saved chat left the thread
+  scrolled to the top — the auto-scroll fired before each bubble's Markdown filled in, so the container had no
+  height yet. The scroll is now deferred until after layout, landing on the most recent message.
 - **Insights chat: assistant Markdown replies are now styled.** The replies were converted to HTML (marked +
   DOMPurify) but Tailwind's preflight reset stripped heading sizes, list bullets, and spacing, so they looked
   like flat text. Added a theme-agnostic prose stylesheet for `.insights-answer` (headings, lists, bold/italic,
