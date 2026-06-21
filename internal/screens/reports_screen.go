@@ -209,7 +209,7 @@ func Reports() ui.Node {
 			if pct < 0 {
 				pct = -pct
 			}
-			delta = Span(ClassStr("row-meta inline-flex items-center gap-1 "+tone), uiw.Icon(arrow, css.Class("shrink-0", tw.W35, tw.H35)), Text(fmt.Sprintf("%d%%", pct)))
+			delta = Span(ClassStr("row-meta "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" "+tw.ColorClass(tone)), uiw.Icon(arrow, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Text(fmt.Sprintf("%d%%", pct)))
 		}
 		rowNodes = append(rowNodes, Div(css.Class("row"),
 			Div(css.Class("row-main"), Span(css.Class("row-desc"), nameOf(r.CategoryID)), shareBar(r.Amount, maxCat)),

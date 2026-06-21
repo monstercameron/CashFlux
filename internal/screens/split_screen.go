@@ -273,7 +273,7 @@ func Split() ui.Node {
 					func(id string) string { return nameByID[id] },
 					func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }),
 				Label: "Who owes whom",
-				Class: "mt-2",
+				Class: tw.Fold(tw.Mt2),
 			}),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 				Button(css.Class("btn btn-primary"), Type("button"), Title("Save this split to the settle-up ledger below"), OnClick(saveSplit), "Save split"),

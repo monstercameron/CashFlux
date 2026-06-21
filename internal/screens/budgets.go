@@ -551,9 +551,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// Envelope methodology: show the carried-forward balance under the period row.
 	var envLine ui.Node = Fragment()
 	if props.Envelope != "" {
-		cls := "budget-sub font-display"
+		cls := "budget-sub " + tw.Fold(tw.FontDisplay)
 		if props.EnvelopeNeg {
-			cls += " text-down"
+			cls += " " + tw.Fold(tw.TextDown)
 		}
 		envLine = Span(ClassStr(cls), uistate.T("budgets.envelopeRow", props.Envelope))
 	}
@@ -567,9 +567,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 
 	var rolloverLine ui.Node = Fragment()
 	if props.RolloverCarry != "" {
-		cls := "budget-sub font-display"
+		cls := "budget-sub " + tw.Fold(tw.FontDisplay)
 		if props.RolloverNeg {
-			cls += " text-down"
+			cls += " " + tw.Fold(tw.TextDown)
 		}
 		rolloverLine = Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
 	}
@@ -618,7 +618,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Span(css.Class("row-desc"), title)),
 			Span(css.Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
 			coverBtn,
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		Div(css.Class("bar"), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),

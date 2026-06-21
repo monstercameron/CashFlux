@@ -774,7 +774,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		Td(ClassStr("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
 		Td(css.Class("td-cleared"), Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.toggleClearedTitle")), OnClick(clr), clearedLabel)),
 		Td(css.Class("td-actions"),
-			If(!props.Txn.IsTransfer(), Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
+			If(!props.Txn.IsTransfer(), Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),

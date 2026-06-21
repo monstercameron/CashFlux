@@ -37,7 +37,7 @@ func AddMenu() uic.Node {
 				closeMenu()
 				onSelect()
 			}),
-			ui.Icon(ic, css.Class("shrink-0", tw.W4, tw.H4)),
+			ui.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T(labelKey)),
 		)
 	}

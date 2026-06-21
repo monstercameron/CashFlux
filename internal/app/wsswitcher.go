@@ -42,7 +42,7 @@ func wsColorDot(color string) uic.Node {
 	if c == "" {
 		c = "#6c6c72"
 	}
-	return Span(css.Class("shrink-0", tw.InlineBlock, tw.W25, tw.H25, tw.RoundedFull),
+	return Span(css.Class(tw.ShrinkO, tw.InlineBlock, tw.W25, tw.H25, tw.RoundedFull),
 		Style(map[string]string{"background-color": c}))
 }
 
@@ -82,9 +82,9 @@ func WorkspaceSwitcher() uic.Node {
 	// In the collapsed rail (58px) a full-width labelled button doesn't fit, so the
 	// trigger becomes an icon-only square and its menu flies out to the right at a
 	// readable fixed width instead of stretching edge-to-edge.
-	menuCls := "absolute left-0 right-0 mt-1 z-30 rounded-[4px] border border-line bg-base p-1 text-[13px]"
+	menuCls := tw.Fold(tw.Absolute, tw.Left0, tw.Right0, tw.Mt1, tw.Z30, tw.Rounded4, tw.Border, tw.BorderLine, tw.BgBase, tw.P1, tw.Text13)
 	if collapsed {
-		menuCls = "absolute left-full top-0 ml-1 z-40 w-48 rounded-[4px] border border-line bg-base p-1 text-[13px] shadow-lg"
+		menuCls = tw.Fold(tw.Absolute, tw.LeftFull, tw.Top0, tw.Ml1, tw.Z40, tw.W48, tw.Rounded4, tw.Border, tw.BorderLine, tw.BgBase, tw.P1, tw.Text13, tw.ShadowLg)
 	}
 	menu := Fragment()
 	if open.Get() {
@@ -120,7 +120,7 @@ func WorkspaceSwitcher() uic.Node {
 				wsColorDot(active.Color),
 				Span(css.Class(tw.Truncate), active.Name),
 			),
-			ui.Icon(icon.ChevronDown, css.Class("shrink-0", tw.W4, tw.H4, tw.TextFaint)),
+			ui.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextFaint)),
 		),
 		menu,
 	)
@@ -146,9 +146,9 @@ type wsMenuItemProps struct {
 // hook stays stable across the list (the On*-hooks-in-loops rule).
 func wsMenuItem(props wsMenuItemProps) uic.Node {
 	id := props.ID
-	cls := "w-full text-left px-2 py-1.5 rounded hover:bg-hover flex items-center justify-between gap-2"
+	cls := tw.Fold(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover, tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2)
 	if props.Active {
-		cls += " bg-hover text-fg font-medium"
+		cls += " " + tw.Fold(tw.BgHover, tw.TextFg, tw.FontMedium)
 	}
 	return Button(ClassStr(cls), Type("button"),
 		OnClick(func() { switchWorkspace(id) }),
@@ -211,9 +211,9 @@ func wsManageRow(props wsManageRowProps) uic.Node {
 		}
 	}
 	moveCls := func(enabled bool) string {
-		c := "shrink-0 px-1.5 py-1 text-faint hover:text-fg text-[13px] leading-none"
+		c := tw.Fold(tw.ShrinkO, tw.Px15, tw.Py1, tw.TextFaint, tw.HoverTextFg, tw.Text13, tw.LeadingNone)
 		if !enabled {
-			c += " opacity-30 pointer-events-none"
+			c += " " + tw.Fold(tw.Opacity30, tw.PointerEventsNone)
 		}
 		return c
 	}

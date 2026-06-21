@@ -211,7 +211,7 @@ func railHeader(label string) uic.Node {
 func Sidebar(props sidebarProps) uic.Node {
 	current := props.ActivePath
 	hidden := uistate.UseHiddenModules().Get()
-	cls := "rail w-60 shrink-0 border-r border-line flex flex-col"
+	cls := "rail " + tw.Fold(tw.W60, tw.ShrinkO, tw.BorderR, tw.BorderLine, tw.Flex, tw.FlexCol)
 	if uistate.UseRailCollapsed().Get() {
 		cls += " collapsed"
 	}
@@ -339,7 +339,7 @@ func Sidebar(props sidebarProps) uic.Node {
 	}
 	return Aside(ClassStr(cls),
 		Div(css.Class("railhead", tw.H14, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.Px5, tw.BorderB, tw.BorderLine),
-			Span(css.Class("shrink-0", tw.Grid, tw.PlaceItemsCenter, tw.W7, tw.H7, tw.Rounded, tw.BgFg, tw.TextBase, tw.FontDisplay, tw.FontSemibold, tw.Text13), "C"),
+			Span(css.Class(tw.ShrinkO, tw.Grid, tw.PlaceItemsCenter, tw.W7, tw.H7, tw.Rounded, tw.BgFg, tw.TextBase, tw.FontDisplay, tw.FontSemibold, tw.Text13), "C"),
 			Span(css.Class("brand-name", tw.FontDisplay, tw.TextLg, tw.FontSemibold, tw.TrackingTight), uistate.T("app.name")),
 		),
 		uic.CreateElement(WorkspaceSwitcher),
@@ -388,16 +388,17 @@ type navItemProps struct {
 // of how the nav list changes (the On*-hooks-in-loops rule).
 func navItem(props navItemProps) uic.Node {
 	nav := router.UseNavigate()
-	cls := "nav nv flex min-w-10 min-h-10 items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer"
+	base := tw.Fold(tw.Flex, tw.MinW10, tw.MinH10, tw.ItemsCenter, tw.Gap25, tw.Px3, tw.Py2, tw.Rounded4, tw.CursorPointer)
+	cls := "nav nv " + base
 	switch {
 	case props.Active:
-		cls = "nv flex min-w-10 min-h-10 items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer bg-[#1c1c1e] text-fg font-medium"
+		cls = "nv " + base + " " + tw.Fold(tw.BgHex1c, tw.TextFg, tw.FontMedium)
 	case props.Muted:
-		cls = "nav nv flex min-w-10 min-h-10 items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer text-faint"
+		cls = "nav nv " + base + " " + tw.Fold(tw.TextFaint)
 	}
 	iconClass := props.IconClass
 	if iconClass == "" {
-		iconClass = "w-4 h-4 shrink-0"
+		iconClass = tw.Fold(tw.W4, tw.H4, tw.ShrinkO)
 	}
 	path := props.Path
 	args := []any{
@@ -458,7 +459,7 @@ func HouseholdCard() uic.Node {
 			// signals it visually) without repeating it in the visible summary line.
 			Title(name+" · "+summary+" · "+uistate.T("household.settings")),
 			OnClick(func() { settings.Set(uistate.Global()) }),
-			ui.Icon(icon.Settings, css.Class("shrink-0", tw.W4, tw.H4, tw.TextDim)),
+			ui.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextDim)),
 			Span(css.Class("hh-text", tw.LeadingTight),
 				Span(css.Class(tw.FontDisplay, tw.Text14, tw.FontMedium, tw.Block), name),
 				Span(css.Class(tw.TextXs, tw.TextFaint, tw.Block), summary),

@@ -290,7 +290,7 @@ func workflowRow(props workflowRowProps) ui.Node {
 		// A Mermaid flowchart of this workflow: trigger → condition → actions (C70).
 		uiw.Mermaid(uiw.MermaidProps{
 			Source: mermaid.FromWorkflow(w),
-			Class:  "mt-2",
+			Class:  tw.Fold(tw.Mt2),
 			Label:  "Flowchart of " + w.Name,
 		}),
 	)

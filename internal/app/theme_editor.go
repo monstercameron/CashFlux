@@ -389,7 +389,7 @@ func themeFontRow(props themeFontRowProps) uic.Node {
 					props.OnRemove(props.Family)
 				}
 			}),
-			ui.Icon(icon.Close, css.Class("shrink-0", tw.W35, tw.H35)),
+			ui.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 			Span("Remove"),
 		),
 	)

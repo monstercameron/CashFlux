@@ -382,7 +382,7 @@ func widget(props WidgetProps) uic.Node {
 	// A leading glyph makes KPI tiles scannable by shape (C46); decorative, so it
 	// sits beside the (still-clickable) title rather than inside the link.
 	if ic := widgetIcon(props.ID); ic.Valid() {
-		titleNode = Span(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.MinW0), Icon(ic, css.Class("shrink-0", tw.W4, tw.H4, tw.TextDim)), titleNode)
+		titleNode = Span(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.MinW0), Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextDim)), titleNode)
 	}
 	args = append(args,
 		Div(css.Class("wh"),

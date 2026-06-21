@@ -381,7 +381,7 @@ func RuleRow(props ruleRowProps) ui.Node {
 			If(props.ShowMatchCount, Span(css.Class("row-meta"), uistate.T("rules.matchCountMeta", plural(props.MatchCount, "transaction")))),
 			If(props.Warning != "", Span(css.Class("row-meta", tw.TextWarn), props.Warning)),
 		),
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("rules.deleteTitle")), Title(uistate.T("rules.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }

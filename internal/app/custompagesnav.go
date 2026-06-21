@@ -170,7 +170,7 @@ func CustomPagesNav() uic.Node {
 		css.Class("nav nv", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.Px3, tw.Py2, tw.Rounded4, tw.CursorPointer, tw.TextFaint),
 		Title(uistate.T("rail.newPage")),
 		OnClick(create),
-		ui.Icon(icon.Plus, css.Class("shrink-0", tw.W4, tw.H4)),
+		ui.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("rail.newPage")),
 	)
 
@@ -231,11 +231,12 @@ func customPageRow(props customPageRowProps) uic.Node {
 	p := props.Page
 	path := uistate.RoutePath("/p/" + p.Slug)
 
-	cls := "nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer min-w-0 flex-1"
+	navBase := tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap25, tw.Px3, tw.Py2, tw.Rounded4, tw.CursorPointer, tw.MinW0, tw.Flex1)
+	cls := "nav nv " + navBase
 	if props.Active {
-		cls = "nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer bg-[#1c1c1e] text-fg font-medium min-w-0 flex-1"
+		cls = "nv " + navBase + " " + tw.Fold(tw.BgHex1c, tw.TextFg, tw.FontMedium)
 	} else if p.Hidden {
-		cls = "nav nv flex items-center gap-2.5 px-3 py-2 rounded-[4px] cursor-pointer text-faint min-w-0 flex-1"
+		cls = "nav nv " + navBase + " " + tw.Fold(tw.TextFaint)
 	}
 
 	link := A(ClassStr(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }))
@@ -254,12 +255,12 @@ func customPageRow(props customPageRowProps) uic.Node {
 					onDrop()
 				}
 			})),
-			ui.Icon(icon.Page, css.Class("shrink-0", tw.W4, tw.H4)),
+			ui.Icon(icon.Page, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class(tw.Truncate), p.Name),
 		)
 	} else {
 		link = A(ClassStr(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }),
-			ui.Icon(icon.Page, css.Class("shrink-0", tw.W4, tw.H4)),
+			ui.Icon(icon.Page, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class(tw.Truncate), p.Name),
 		)
 	}
@@ -283,7 +284,7 @@ func customPageRow(props customPageRowProps) uic.Node {
 
 	return Div(css.Class(tw.Relative, tw.Flex, tw.ItemsCenter),
 		link,
-		Button(css.Class("rail-section shrink-0", tw.Px15, tw.Py1, tw.TextFaint, tw.HoverTextFg), Type("button"),
+		Button(css.Class("rail-section", tw.ShrinkO, tw.Px15, tw.Py1, tw.TextFaint, tw.HoverTextFg), Type("button"),
 			Title(uistate.T("pages.menu")),
 			OnClick(func() { open.Set(!open.Get()) }), ui.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		menu,

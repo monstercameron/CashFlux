@@ -727,7 +727,7 @@ func Insights() ui.Node {
 			Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
 			IfElse(loading.Get(),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
-				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class("shrink-0", tw.W4, tw.H4)), Span(uistate.T("insights.send"))),
+				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("insights.send"))),
 			),
 		)
 	}
@@ -749,7 +749,7 @@ func Insights() ui.Node {
 	// switcher row is always present so its New-chat hook stays at a stable position).
 	convs := app.Conversations()
 	sort.Slice(convs, func(i, j int) bool { return convs[i].UpdatedAt.After(convs[j].UpdatedAt) })
-	pill := "inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] border border-black/10 hover:bg-black/[0.03]"
+	pill := tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border, tw.BorderBlack10, tw.HoverBgBlack03)
 	switcher := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb3, tw.ItemsCenter),
 		Button(ClassStr(pill), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
 		Button(ClassStr(pill), Type("button"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
@@ -868,11 +868,11 @@ type convPillProps struct {
 func ConversationPill(p convPillProps) ui.Node {
 	pick := ui.UseEvent(Prevent(func() { p.OnPick(p.C.ID) }))
 	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.C.ID) }))
-	cls := "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] border "
+	cls := tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border) + " "
 	if p.Active {
-		cls += "bg-sky-500/15 border-sky-500/40"
+		cls += tw.Fold(tw.BgSky15, tw.BorderSky40)
 	} else {
-		cls += "border-black/10 hover:bg-black/[0.03]"
+		cls += tw.Fold(tw.BorderBlack10, tw.HoverBgBlack03)
 	}
 	title := strings.TrimSpace(p.C.Title)
 	if title == "" {
@@ -909,7 +909,7 @@ func UserBubble(p userBubbleProps) ui.Node {
 			p.OnRetry()
 		}
 	}))
-	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
+	actBtn := tw.Fold(tw.TextFaint, tw.Opacity70, tw.HoverOpacity100, tw.InlineFlex, tw.ItemsCenter)
 	return Div(css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsEnd),
 		Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgSky10, tw.Px35, tw.Py2, tw.Text14, tw.WhitespacePreWrap), p.Text),
 		Div(css.Class(tw.Flex, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1, tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity),
@@ -972,7 +972,7 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 		}
 		note = P(css.Class(tw.TextFaint, tw.Text11, tw.Mt2), txt)
 	}
-	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
+	actBtn := tw.Fold(tw.TextFaint, tw.Opacity70, tw.HoverOpacity100, tw.InlineFlex, tw.ItemsCenter)
 	return Div(css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsStart),
 		Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py25),
 			// marked fills this element via the effect above.
@@ -986,7 +986,7 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 			),
 			IfElse(pinned.Get(),
 				Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("insights.pinnedConfirm")),
-				Button(ClassStr(actBtn+" gap-1 text-[12px]"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
+				Button(ClassStr(actBtn+" "+tw.Fold(tw.Gap1, tw.Text12)), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
 			),
 			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
 			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
@@ -1123,7 +1123,7 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 	ui.UseEffect(func() func() { renderMarkdown(mdID, p.Text); return nil }, sig)
 
 	long := len([]rune(p.Text)) > 140 || strings.Contains(p.Text, "\n")
-	descClass := "insights-answer text-[13.5px]"
+	descClass := "insights-answer " + tw.Fold(tw.Text135)
 	if long && !expanded.Get() {
 		descClass += " line-clamp-3"
 	}

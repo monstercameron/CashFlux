@@ -150,28 +150,28 @@ func Dashboard() ui.Node {
 		"kpi-networth": func() ui.Node {
 			return uiw.Widget(uiw.WidgetProps{
 				ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
-				GridColumn: "1", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				GridColumn: "1", GridRow: "2", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
 				Body: kpiBody(fmtMoney(net), figTone(net), nwSub, nwTone),
 			})
 		},
 		"kpi-income": func() ui.Node {
 			return uiw.Widget(uiw.WidgetProps{
 				ID: "kpi-income", Title: uistate.T("dashboard.income"), Draggable: true, Resizable: true,
-				GridColumn: "2", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				GridColumn: "2", GridRow: "2", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
 				Body: kpiBody(fmtMoney(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
 			})
 		},
 		"kpi-spending": func() ui.Node {
 			return uiw.Widget(uiw.WidgetProps{
 				ID: "kpi-spending", Title: uistate.T("dashboard.spending"), Draggable: true, Resizable: true,
-				GridColumn: "3", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				GridColumn: "3", GridRow: "2", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
 				Body: kpiBody(fmtMoney(expense), "text-down", periodLabel+" · "+plural(expCount, "transaction"), "text-dim"),
 			})
 		},
 		"kpi-liabilities": func() ui.Node {
 			return uiw.Widget(uiw.WidgetProps{
 				ID: "kpi-liabilities", Title: uistate.T("dashboard.liabilities"), Draggable: true, Resizable: true,
-				GridColumn: "4", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
+				GridColumn: "4", GridRow: "2", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
 				Body: kpiBody(fmtMoney(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
 			})
 		},
@@ -367,7 +367,7 @@ func spendingBreakdownWidget(app *appstate.App, txns []domain.Transaction, rates
 		pct := int(s.amt * 100 / total)
 		barParts = append(barParts, Div(ClassStr(tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
 		legend = append(legend, Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap15),
-			Span(ClassStr("w-2 h-2 rounded-full "+tone)),
+			Span(ClassStr(tw.Fold(tw.W2, tw.H2, tw.RoundedFull)+" "+tw.ColorClass(tone))),
 			Textf("%s %d%%", s.name, pct),
 		))
 	}
@@ -409,7 +409,7 @@ func savingsRateWidget(income, expense money.Money, cfg widgetcfg.Config) ui.Nod
 	}
 
 	left := Div(
-		Div(ClassStr("font-display fig t-figure-lg leading-none "+tone), fmt.Sprintf("%d%%", pct)),
+		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(tone)), fmt.Sprintf("%d%%", pct)),
 		Div(css.Class("t-caption", tw.TextDim, tw.Mt1), uistate.T("dashboard.savingsSub", target)),
 	)
 	var right ui.Node = Fragment()
@@ -496,7 +496,7 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 	}
 	netBlock := Div(css.Class(tw.MlAuto, tw.TextRight),
 		Div(css.Class("t-caption", tw.TextFaint), "net · "+last.label),
-		Div(ClassStr("font-display fig text-lg "+netTone), fmtMoney(netMoney)),
+		Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.TextLg)+" "+tw.ColorClass(netTone)), fmtMoney(netMoney)),
 	)
 
 	return uiw.Widget(uiw.WidgetProps{
@@ -599,7 +599,7 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "trend", Title: uistate.T("dashboard.netWorthTrend"), Draggable: true, Resizable: true, GridColumn: "4", GridRow: "3 / span 2",
-		BodyClass: "flex flex-col min-h-0", Body: body,
+		BodyClass: tw.Fold(tw.Flex, tw.FlexCol, tw.MinH0), Body: body,
 	})
 }
 
@@ -673,7 +673,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.
 		}
 		cells = append(cells, Div(
 			Div(css.Class(tw.TextDim), a.Name),
-			Div(ClassStr("font-display fig mt-0.5 "+tone), fmtMoney(bal)),
+			Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.Mt05)+" "+tw.ColorClass(tone)), fmtMoney(bal)),
 		))
 		if len(cells) >= limit {
 			break
@@ -814,11 +814,11 @@ func dashTaskRow(props dashTaskRowProps) ui.Node {
 	case domain.PriorityMedium:
 		dotTone, dot, prio = "text-dim", "●", "Medium priority"
 	}
-	titleCls := "flex-1 text-left truncate"
+	titleCls := tw.Fold(tw.Flex1, tw.TextLeft, tw.Truncate)
 	if done {
-		titleCls += " line-through text-faint"
+		titleCls += " " + tw.Fold(tw.LineThrough, tw.TextFaint)
 	} else if props.Overdue {
-		titleCls += " text-down"
+		titleCls += " " + tw.Fold(tw.TextDown)
 	}
 	checkLabel := uistate.T("dashboard.todoComplete", t.Title)
 	return Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter),
@@ -974,7 +974,7 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 			rows = append(rows, Div(
 				Div(css.Class(tw.Flex, tw.JustifyBetween),
 					Span(label),
-					Span(ClassStr("font-display fig "+tone), fmt.Sprintf("%d%%", s.Percent)),
+					Span(ClassStr("fig "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(tone)), fmt.Sprintf("%d%%", s.Percent)),
 				),
 				uiw.ProgressBar(uiw.ProgressBarProps{Percent: s.Percent, Tone: bar, Class: "mt-1.5"}),
 			))
@@ -1006,14 +1006,14 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 			rows = append(rows, Tr(css.Class(tw.BorderB, tw.BorderLine70),
 				Td(css.Class("fig", tw.Py25, tw.TextDim, tw.W16), t.Date.Format("Jan 2")),
 				Td(css.Class(tw.Py25), t.Desc),
-				Td(ClassStr("py-2.5 text-right font-display fig "+figTone(t.Amount)), fmtMoney(t.Amount)),
+				Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)+" "+tw.ColorClass(figTone(t.Amount))), fmtMoney(t.Amount)),
 			))
 		}
 		body = Table(css.Class("t-body", tw.WFull), Tbody(rows))
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "recent", Title: uistate.T("dashboard.recent"), Draggable: true, Resizable: true,
-		GridColumn: "1 / span 2", GridRow: "3 / span 2", BodyClass: "overflow-hidden",
+		GridColumn: "1 / span 2", GridRow: "3 / span 2", BodyClass: tw.Fold(tw.OverflowHidden),
 		Body: body,
 	})
 }
@@ -1282,7 +1282,7 @@ func plural(n int, singular string) string {
 // subline. figTone/subTone are color classes (e.g. "text-up", "text-dim").
 func kpiBody(figure, figTone, subline, subTone string) ui.Node {
 	return Div(
-		Div(ClassStr("font-display fig t-figure leading-tight "+figTone), figure),
-		Div(ClassStr("pt-1.5 t-caption "+subTone), subline),
+		Div(ClassStr("fig t-figure "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(figTone)), figure),
+		Div(ClassStr("t-caption "+tw.Fold(tw.Pt15)+" "+tw.ColorClass(subTone)), subline),
 	)
 }

@@ -19,7 +19,7 @@ func sampleInputs() Inputs {
 	return Inputs{
 		Now: now,
 		Bills: []bills.Bill{
-			{Name: "Card", Amount: usd(5000), DueDate: now.AddDate(0, 0, 1), DaysUntil: 1},  // critical
+			{Name: "Card", Amount: usd(5000), DueDate: now.AddDate(0, 0, 1), DaysUntil: 1},   // critical
 			{Name: "Rent", Amount: usd(120000), DueDate: now.AddDate(0, 0, 5), DaysUntil: 5}, // warning
 			{Name: "Gym", Amount: usd(2000), DueDate: now.AddDate(0, 0, 20), DaysUntil: 20},  // out of window
 		},
@@ -32,9 +32,9 @@ func sampleInputs() Inputs {
 			{ID: "a1", Name: "Checking", BalanceAsOf: now.AddDate(0, 0, -40)}, // warning
 		},
 		Tasks: []domain.Task{
-			{ID: "t1", Title: "Pay tax", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: now.AddDate(0, 0, -3)}, // overdue → critical
-			{ID: "t2", Title: "Call bank", Status: domain.StatusOpen, Priority: domain.PriorityHigh},                            // high, not overdue → warning
-			{ID: "t3", Title: "Someday", Status: domain.StatusOpen, Priority: domain.PriorityLow},                               // dropped
+			{ID: "t1", Title: "Pay tax", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: now.AddDate(0, 0, -3)},    // overdue → critical
+			{ID: "t2", Title: "Call bank", Status: domain.StatusOpen, Priority: domain.PriorityHigh},                              // high, not overdue → warning
+			{ID: "t3", Title: "Someday", Status: domain.StatusOpen, Priority: domain.PriorityLow},                                 // dropped
 			{ID: "t4", Title: "Done thing", Status: domain.StatusDone, Priority: domain.PriorityHigh, Due: now.AddDate(0, 0, -9)}, // dropped (done)
 		},
 		Anomaly: &insights.Anomaly{Category: "Groceries", PctChange: 80, Direction: insights.Up}, // info

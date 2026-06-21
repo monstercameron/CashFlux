@@ -8,13 +8,13 @@ import (
 
 func TestInlineStyleEmitsOnlySetValidFields(t *testing.T) {
 	got := InlineStyle(widgetcfg.Config{
-		KeyBg:     "#112233",
-		KeyText:   "#ffffff",
-		KeyRadius: "16",
-		KeyFont:   "display",
-		KeyWeight: "600",
-		KeyShadow: "soft",
-		KeyAccent: "#ff0066",
+		KeyBg:          "#112233",
+		KeyText:        "#ffffff",
+		KeyRadius:      "16",
+		KeyFont:        "display",
+		KeyWeight:      "600",
+		KeyShadow:      "soft",
+		KeyAccent:      "#ff0066",
 		"someOtherKey": "ignored",
 	})
 	want := map[string]string{
@@ -42,12 +42,12 @@ func TestInlineStyleEmitsOnlySetValidFields(t *testing.T) {
 func TestInlineStyleRejectsInvalid(t *testing.T) {
 	got := InlineStyle(widgetcfg.Config{
 		KeyBg:      "not-a-color",
-		KeyText:    "#xyz",     // bad hex
-		KeyBorderW: "99",       // out of range
-		KeyRadius:  "-4",       // out of range
-		KeyFont:    "comic",    // unknown token
-		KeyWeight:  "123",      // not allowed
-		KeyShadow:  "neon",     // unknown token
+		KeyText:    "#xyz",  // bad hex
+		KeyBorderW: "99",    // out of range
+		KeyRadius:  "-4",    // out of range
+		KeyFont:    "comic", // unknown token
+		KeyWeight:  "123",   // not allowed
+		KeyShadow:  "neon",  // unknown token
 	})
 	if len(got) != 0 {
 		t.Fatalf("invalid values should be dropped, got %v", got)
@@ -81,13 +81,13 @@ func TestEffectivePerWidgetWins(t *testing.T) {
 
 func TestHexNormalizesAndValidates(t *testing.T) {
 	cases := map[string]string{
-		"#ABC":     "#abc",
-		"#11AaFf":  "#11aaff",
-		"":         "",
-		"abc":      "",
-		"#12":      "",
-		"#1234":    "",
-		"#12345g":  "",
+		"#ABC":    "#abc",
+		"#11AaFf": "#11aaff",
+		"":        "",
+		"abc":     "",
+		"#12":     "",
+		"#1234":   "",
+		"#12345g": "",
 	}
 	for in, want := range cases {
 		if got := hex(in); got != want {
