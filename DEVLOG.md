@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: muzak — 8 tracks, mute icon, Settings volume, resume
+
+- Renamed the user's Suno files to web/audio/calm-01..08.mp3 and listed all 8 in DEFAULT_TRACKS. Verified real
+  playback in headless (calm-01 advancing, 8-track playlist).
+- Top bar: replaced the ♪ glyph with new icon.Volume / icon.VolumeMute (Lucide, path-only — the renderer rejects
+  <polygon>/<line>); also added the curated-set's missing `Copy` (the long-standing 58-vs-57 icon test failure).
+- Settings modal: new Background-music section (on/off + volume slider) via a persisted `UseMuzakVolume` atom; the
+  top-bar MuzakToggle effect (now keyed on enabled+volume) pushes init/setVolume/setEnabled to the JS controller,
+  so a Settings change applies live.
+- Resume: muzak.js checkpoints {trackIndex, seconds} to localStorage (throttled on timeupdate + on pause/pagehide/
+  visibilitychange) and seeks the first track back to it on load (loadedmetadata). e2e seeds a saved pos and
+  asserts the cursor resumes. SW v232.
+- Note on the DB-persistence request: the store autosaves by serializing the WHOLE dataset to a localStorage blob
+  on change, so streaming the playback position into the dataset would re-serialize everything every few seconds.
+  Kept the live position in localStorage; a dataset-backed (export/backup-travelling) music record would need to
+  be checkpoint-only — pending decision.
+
 ## 2026-06-21 - feat: background music (muzak)
 
 - `web/muzak.js`: a tiny ambient player — Audio element, looping playlist (DEFAULT_TRACKS = calm-01..03.mp3 in
