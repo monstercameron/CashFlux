@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Creation tools return a deep link, and chat links navigate in-app (C90.2).** Every creating tool
+  (`add_task`, `add_transaction`, `add_account`, `add_transfer`, `add_goal_contribution`) now returns the new
+  entity's id as a Markdown link to its screen anchored to that id — e.g. `[Open it](/todo#<id>)`. The system
+  prompt instructs the assistant to always surface that exact link in its reply. Clicking an internal link in a
+  chat answer is intercepted to route within the app (no full reload) and smooth-scroll/flash the target row;
+  entity rows carry an `id` anchor for the jump. Covered by a new e2e (link returned, click navigates to /todo,
+  row anchor present).
+- **Creation tools dedupe before creating (C90.2).** Each creating tool first checks for an existing or
+  near-identical entity (Jaccard-similar titles/names, or same account+amount+day+payee for transactions, or
+  matching account names) and, if found, returns the existing item's link instead of spawning a duplicate — so
+  the model relays "a similar one already exists" rather than cloning. Covered by the new e2e (a task matching a
+  sample task is blocked).
 - **Insights chat account + transfer tools, modeled correctly (C90.2).** New `add_account` (assets and
   **liabilities** — loans, credit cards, mortgages — with APR/credit-limit/min-payment; a liability balance is
   the amount owed), `add_transfer` (matched two-leg transfer between accounts, FX-aware), and

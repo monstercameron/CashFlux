@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: creation tools return deep links + dedupe before creating
+
+- Each creating tool now returns the new entity's id wrapped in a Markdown deep link (`openLink(route, id)` →
+  `[Open it](/route#id)`), and the system prompt tells the model to always echo that link. Entity rows carry an
+  `id` anchor; an `.insights-answer` click interceptor in `insights.go` catches internal links, routes via
+  `router.Navigate` (no reload), and `scrollToID` smooth-scrolls + flashes the target. Trade-off: gwc deep-link
+  404s on hard navigation, so we intercept clicks and stay in-app rather than relying on the URL.
+- Dedupe guard added to every creating tool before the write: `normText`/`similarText` (Jaccard ≥ 0.6, subset,
+  or equal token sets) for titles/names; transactions match on account+amount+same-day+payee. On a hit the tool
+  returns the existing item's link instead of cloning, so "duped or semi-cloned values" don't accumulate.
+- Verified by a new e2e (`insights_chat_links_check.mjs`): add_task returns a `/todo#id` link, clicking it
+  navigates to /todo and the row anchor is present; a task matching a sample task is blocked as a near-duplicate.
+  Full chat e2e suite re-run green (chat, tools, write, accounts, send, keyboard-robust).
+- Next: extend id-anchors + the remaining C90.2 write-tool groups (budgets, members, categories, rules,
+  recurring, navigate_to).
+
 ## 2026-06-20 - feat: C90 write tools + approval gate; read tools batch
 
 - C90.1 read tools: list_budgets, list_goals, list_tasks, list_recurring (bills), spending_breakdown — all

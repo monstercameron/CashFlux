@@ -284,7 +284,7 @@ func TaskRow(props taskRowProps) ui.Node {
 		meta = append(meta, Span(Class("row-meta"), t.Notes))
 	}
 
-	return Div(Class(rowClass),
+	return Div(Class(rowClass), Attr("id", t.ID),
 		Button(Class("check"), Type("button"), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), t.Title),

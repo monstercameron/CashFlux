@@ -1,0 +1,93 @@
+// C90 gate — asset creation returns a deep link and the chat link navigates in-app
+// (and dedupe blocks near-duplicates). add_task returns "[Open it](/todo#id)";
+// clicking it routes to /todo and scrolls to the task. Creating a task that matches
+// an existing one returns the existing item instead of cloning. Fresh page per run
+// (one approval). Exits non-zero on any failure.
+import { createRequire } from "module";
+import { fileURLToPath } from "url";
+import path from "path";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
+const { chromium } = require("playwright");
+
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8080";
+const browser = await chromium.launch({ headless: true });
+const fail = (m) => {
+  console.error("FAIL: " + m);
+  process.exitCode = 1;
+};
+const tc = (id, n, a) => ({ id, type: "function", function: { name: n, arguments: JSON.stringify(a) } });
+
+// run drives one add_task through approval; turn 2 echoes the tool result as the
+// answer (so the deep link renders in the bubble). Returns { ctx, page, result }.
+async function run(taskTitle) {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  let result = "";
+  await page.route("**/chat/completions", async (route) => {
+    const body = JSON.parse(route.request().postData() || "{}");
+    const toolMsgs = (body.messages || []).filter((m) => m.role === "tool");
+    if (!toolMsgs.length) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ finish_reason: "tool_calls", message: { role: "assistant", content: "", tool_calls: [tc("t1", "add_task", { title: taskTitle, priority: "medium" })] } }], usage: {} }) });
+    } else {
+      result = toolMsgs.map((m) => m.content).join(" ");
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ finish_reason: "stop", message: { role: "assistant", content: "Here you go — " + result } }], usage: {} }) });
+    }
+  });
+  await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#app *", { timeout: 60000 });
+  await page.evaluate(() => {
+    localStorage.setItem("cashflux:prefs", JSON.stringify({ rememberAiKey: true }));
+    localStorage.setItem("cashflux:openai-key", "sk-test");
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#app *", { timeout: 60000 });
+  await page.waitForTimeout(500);
+  await page.locator('a[title="Insights"]').first().click();
+  await page.waitForTimeout(700);
+  const card = page.locator(".card", { hasText: "Ask CashFlux" }).first();
+  await card.waitFor({ timeout: 10000 });
+  await card.locator("#cf-chat-input").fill("add the task please");
+  await card.getByRole("button", { name: "Send" }).first().click();
+  await page.waitForFunction(() => document.body.innerText.includes("wants to make a change"), { timeout: 8000 })
+    .catch(() => fail("approval card did not appear"));
+  await page.getByRole("button", { name: "Approve" }).first().click();
+  await page.waitForFunction(() => document.body.innerText.includes("Here you go"), { timeout: 8000 })
+    .catch(() => fail("no final answer"));
+  return { ctx, page, result };
+}
+
+try {
+  // 1) New task → link returned + clicking it navigates to /todo and jumps to the row.
+  {
+    const TITLE = "Research refinancing options e2e";
+    const { ctx, page, result } = await run(TITLE);
+    const m = result.match(/\/todo#([^)\s]+)/);
+    if (!m) fail("add_task result has no /todo#<id> link: " + JSON.stringify(result));
+    const id = m && m[1];
+    const link = page.locator(".insights-answer a", { hasText: "Open it" }).first();
+    if ((await link.count()) === 0) fail("the answer did not render an 'Open it' link");
+    await link.click();
+    await page.waitForFunction(() => location.pathname.replace(/\/$/, "").endsWith("/todo"), { timeout: 5000 })
+      .catch(() => fail("clicking the link did not navigate to /todo"));
+    if (!(await page.evaluate((t) => document.body.innerText.includes(t), TITLE))) fail("the task is not on the To-do screen after navigating");
+    if (id) {
+      await page.waitForSelector(`[id="${id}"]`, { timeout: 5000 })
+        .catch(() => fail("the To-do row is missing the id anchor for jump-to-item"));
+    }
+    await ctx.close();
+  }
+
+  // 2) Dedupe — creating a task matching an existing sample task returns the existing one.
+  {
+    const { ctx, result } = await run("Pay credit card before the 22nd");
+    if (!/already exists/i.test(result)) fail("dedupe did not catch a near-duplicate task: " + JSON.stringify(result));
+    if (!/\/todo#/.test(result)) fail("the dedupe message did not link to the existing task: " + JSON.stringify(result));
+    await ctx.close();
+  }
+
+  if (!process.exitCode) console.log("PASS: creation returns a deep link that navigates in-app; dedupe blocks near-duplicates.");
+} finally {
+  await browser.close();
+}

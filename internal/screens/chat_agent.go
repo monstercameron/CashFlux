@@ -58,6 +58,8 @@ const defaultChatSystemPrompt = `You are CashFlux, a friendly, concise personal-
 
 You can also CHANGE the user's data with tools (every change asks the user to approve first): add/complete tasks, record transactions, create accounts (assets and liabilities), transfer between accounts, set account balances, add goal contributions. Think in double-entry terms so net worth stays correct. Key rule: borrowing against an account (e.g. a 401(k) loan) is roughly NET-WORTH-NEUTRAL at the moment you borrow — model it as a new liability for the amount owed PLUS the cash you received (add_transfer or update_account_balance), not as a one-sided loss. When an event spans multiple accounts, plan the steps, do them in order, and tell the user what you changed. If a detail is missing, pick a sensible default and say so rather than refusing.
 
+Before creating anything, the tools check for an existing or near-duplicate item; if one is found they return it instead of making a clone — relay that to the user rather than forcing a duplicate. Whenever a creation tool's result contains a Markdown link (e.g. "[Open it](/todo#id)"), ALWAYS include that exact link in your reply so the user can jump straight to the new (or existing) item.
+
 Answer in plain English as short Markdown. The user's money is private and never leaves their device except for these requests.`
 
 // categoryNames returns a comma-separated list of the user's category names.
@@ -545,14 +547,21 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Title) == "" {
 					return "A task needs a title."
 				}
-				t := domain.Task{ID: id.New(), Title: strings.TrimSpace(a.Title), Notes: a.Notes, Status: domain.StatusOpen, Priority: parseTaskPriority(a.Priority), Source: domain.SourceAI}
+				title := strings.TrimSpace(a.Title)
+				// Dedupe: don't create a near-duplicate open task.
+				for _, ex := range app.Tasks() {
+					if ex.Status != domain.StatusDone && similarText(ex.Title, title) {
+						return fmt.Sprintf("A similar to-do already exists: “%s”.%s", ex.Title, openLink("/todo", ex.ID))
+					}
+				}
+				t := domain.Task{ID: id.New(), Title: title, Notes: a.Notes, Status: domain.StatusOpen, Priority: parseTaskPriority(a.Priority), Source: domain.SourceAI}
 				if d, err := dateutil.ParseDate(a.Due); err == nil && a.Due != "" {
 					t.Due = d
 				}
 				if err := app.PutTask(t); err != nil {
 					return "Couldn't add the task: " + err.Error()
 				}
-				return "Added to-do: " + t.Title
+				return "Added to-do: " + t.Title + "." + openLink("/todo", t.ID)
 			},
 		},
 		{
@@ -630,7 +639,8 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 						desc = "Expense"
 					}
 				}
-				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: money.New(majorToMinor(a.Amount, acc.Currency), acc.Currency), Payee: strings.TrimSpace(a.Payee), Desc: desc, Date: now}
+				amt := money.New(majorToMinor(a.Amount, acc.Currency), acc.Currency)
+				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: amt, Payee: strings.TrimSpace(a.Payee), Desc: desc, Date: now}
 				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
 					t.Date = d
 				}
@@ -639,10 +649,18 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 						t.CategoryID = c.ID
 					}
 				}
+				// Dedupe: skip an identical entry already recorded the same day.
+				for _, ex := range txns {
+					if ex.AccountID == t.AccountID && ex.Amount.Amount == t.Amount.Amount &&
+						ex.Date.Year() == t.Date.Year() && ex.Date.YearDay() == t.Date.YearDay() &&
+						strings.EqualFold(strings.TrimSpace(ex.Payee), t.Payee) {
+						return fmt.Sprintf("A matching transaction (%s in %s) is already recorded that day.%s", fmtMoney(amt), acc.Name, openLink("/transactions", ex.ID))
+					}
+				}
 				if err := app.PutTransaction(t); err != nil {
 					return "Couldn't record the transaction: " + err.Error()
 				}
-				return fmt.Sprintf("Recorded %s in %s.", fmtMoney(t.Amount), acc.Name)
+				return fmt.Sprintf("Recorded %s in %s.%s", fmtMoney(t.Amount), acc.Name, openLink("/transactions", t.ID))
 			},
 		},
 		{
@@ -673,7 +691,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 						if err := app.PutGoal(g); err != nil {
 							return "Couldn't update the goal: " + err.Error()
 						}
-						return fmt.Sprintf("Added %s to “%s” — now %s of %s.", fmtMoney(money.New(int64(math.Round(a.Amount*100)), base)), g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount))
+						return fmt.Sprintf("Added %s to “%s” — now %s of %s.%s", fmtMoney(money.New(int64(math.Round(a.Amount*100)), base)), g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount), openLink("/goals", g.ID))
 					}
 				}
 				return "No goal matching “" + a.Goal + "”."
@@ -716,6 +734,12 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 						acType = cand
 					}
 				}
+				// Dedupe: don't create an account that already exists by name.
+				for _, ex := range accounts {
+					if !ex.Archived && similarText(ex.Name, a.Name) {
+						return fmt.Sprintf("An account named “%s” already exists.%s", ex.Name, openLink("/accounts", ex.ID))
+					}
+				}
 				cls := acType.Class() // keep class consistent with the resolved type
 				minor := majorToMinor(a.Balance, base)
 				if cls == domain.ClassLiability && minor > 0 {
@@ -739,7 +763,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				if err := app.PutAccount(acc); err != nil {
 					return "Couldn't create the account: " + err.Error()
 				}
-				return fmt.Sprintf("Created %s account “%s” with balance %s.", cls, acc.Name, fmtMoney(acc.OpeningBalance))
+				return fmt.Sprintf("Created %s account “%s” with balance %s.%s", cls, acc.Name, fmtMoney(acc.OpeningBalance), openLink("/accounts", acc.ID))
 			},
 		},
 		{
@@ -795,7 +819,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				if err := app.PutTransaction(in); err != nil {
 					return "Couldn't record the transfer: " + err.Error()
 				}
-				return fmt.Sprintf("Transferred %s from %s to %s.", fmtMoney(fromMoney), from.Name, to.Name)
+				return fmt.Sprintf("Transferred %s from %s to %s.%s", fmtMoney(fromMoney), from.Name, to.Name, openLink("/transactions", out.ID))
 			},
 		},
 		{
@@ -847,6 +871,59 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 // currency, honoring its decimal places.
 func majorToMinor(major float64, cur string) int64 {
 	return int64(math.Round(major * math.Pow10(currency.Decimals(cur))))
+}
+
+// openLink returns a Markdown deep link to an entity's screen, anchored to its id so
+// the chat can offer a "jump to it" link (the screens render a matching element id;
+// the Insights link handler navigates in-app and scrolls to it).
+func openLink(route, id string) string {
+	return " [Open it](" + uistate.RoutePath(route) + "#" + id + ")"
+}
+
+// normText lowercases, trims, and collapses a string to its word tokens for fuzzy
+// comparison.
+func normText(s string) []string {
+	s = strings.ToLower(s)
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte(' ')
+		}
+	}
+	return strings.Fields(b.String())
+}
+
+// similarText reports whether two names are the same or near-duplicates: equal token
+// sets, one a subset of the other, or a high word overlap (Jaccard >= 0.6). Used to
+// avoid creating duplicate/semi-cloned entities.
+func similarText(a, b string) bool {
+	wa, wb := normText(a), normText(b)
+	if len(wa) == 0 || len(wb) == 0 {
+		return false
+	}
+	set := make(map[string]bool, len(wa))
+	for _, w := range wa {
+		set[w] = true
+	}
+	inter := 0
+	bset := make(map[string]bool, len(wb))
+	for _, w := range wb {
+		bset[w] = true
+		if set[w] {
+			inter++
+		}
+	}
+	union := len(set) + len(bset) - inter
+	if union == 0 {
+		return false
+	}
+	// Subset (every word of the shorter appears in the longer) or high Jaccard.
+	if inter == len(set) || inter == len(bset) {
+		return true
+	}
+	return float64(inter)/float64(union) >= 0.6
 }
 
 // parseTaskPriority maps a string to a TaskPriority (default medium).

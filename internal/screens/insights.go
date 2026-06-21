@@ -530,6 +530,41 @@ func Insights() ui.Node {
 		}
 	}, "cf-chat-history")
 
+	// Internal links inside an answer (e.g. "[Open it](/todo#id)") navigate in-app via
+	// the router and scroll to the linked item, instead of doing a full page load.
+	ui.UseEffect(func() func() {
+		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			ev := args[0]
+			a := ev.Get("target")
+			for a.Truthy() && a.Get("tagName").String() != "A" {
+				a = a.Get("parentElement")
+			}
+			if !a.Truthy() || !a.Call("closest", ".insights-answer").Truthy() {
+				return nil
+			}
+			href := a.Call("getAttribute", "href")
+			if !href.Truthy() || !strings.HasPrefix(href.String(), "/") {
+				return nil // external links keep their default (new tab)
+			}
+			ev.Call("preventDefault")
+			path, frag := href.String(), ""
+			if i := strings.IndexByte(path, '#'); i >= 0 {
+				frag = path[i+1:]
+				path = path[:i]
+			}
+			router.Navigate(path)
+			if frag != "" {
+				scrollToID(frag)
+			}
+			return nil
+		})
+		doc.Call("addEventListener", "click", cb)
+		return func() {
+			doc.Call("removeEventListener", "click", cb)
+			cb.Release()
+		}
+	}, "cf-chat-links")
+
 	// Once a chat has a few exchanges (>=4 messages), generate a short AI title for it
 	// (once) and update the switcher tab. Skips conversations already AI-named.
 	namingSig := convID.Get() + "|" + strconv.Itoa(len(turns.Get()))
@@ -983,6 +1018,25 @@ func scrollChatToEnd() {
 		return nil
 	})
 	js.Global().Call("setTimeout", cb, 80)
+}
+
+// scrollToID scrolls to (and briefly highlights) the element with the given id after
+// a short delay — used to jump to a chat-linked item once its screen has rendered.
+func scrollToID(id string) {
+	var cb js.Func
+	cb = js.FuncOf(func(js.Value, []js.Value) any {
+		cb.Release()
+		el := js.Global().Get("document").Call("getElementById", id)
+		if !el.Truthy() {
+			return nil
+		}
+		el.Call("scrollIntoView", js.ValueOf(map[string]any{"behavior": "smooth", "block": "center"}))
+		if cl := el.Get("classList"); cl.Truthy() {
+			cl.Call("add", "cf-jump-flash")
+		}
+		return nil
+	})
+	js.Global().Call("setTimeout", cb, 400)
 }
 
 // copyText writes text to the system clipboard (best-effort, no-op if unavailable).
