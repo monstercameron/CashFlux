@@ -3691,7 +3691,14 @@ of the current window** and truncates to the new granularity. Since a window's s
   unchanged** despite `app/custompagesnav.go` existing — the created page isn't added to the nav list.
   (Selector caught "New page" in the same section, so the custom page is very likely genuinely unlisted.)
 
-### C44. CDN scripts lack SRI + Tailwind-CDN-in-production + offline dependency ★ (security/prod — OWASP A08, from B32)
+### C44. CDN scripts lack SRI + Tailwind-CDN-in-production + offline dependency ★ (security/prod — OWASP A08, from B32) — ⚠️ D3 DONE; Tailwind is a build-pipeline task
+**✅ DONE:** **D3 is now vendored locally** (`web/d3.min.js`, referenced as `./d3.min.js`, in the SW precache) —
+no third-party CDN, no SRI gap, works offline. **Tailwind CDN remains** and is the one external script: it is a
+**runtime JIT compiler**, so it can't be SRI-pinned, and compiling it to static CSS for production needs a
+dedicated Tailwind CLI build step. Critically, the app composes utility classes as **dynamic Go strings** (e.g.
+`"btn " + cls`), which Tailwind's static content-scanner would miss — so a naive compile would **break styling**.
+Doing it safely requires a CI build that scans `internal/**/*.go` **plus a safelist** for the dynamically-built
+classes; that's infra work (no toolchain in this env), deliberately not attempted to avoid shipping a broken UI.
 **Verified live (`web/index.html`):** external CDN resources are loaded with **no Subresource Integrity**:
 `<script src="https://cdn.tailwindcss.com">` and `<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js">`
 have **no `integrity=` / `crossorigin`**; Google Fonts CSS likewise.

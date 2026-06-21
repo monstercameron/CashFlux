@@ -891,7 +891,8 @@
     <!-- D3 (pinned) + the chart shim the Go ui.Chart component drives. Loaded
          before the wasm boot so window.cashfluxRenderChart exists by first paint;
          both are service-worker cached for offline use. -->
-    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <!-- D3 vendored locally (C44): no third-party CDN, no SRI gap, works offline. -->
+    <script src="./d3.min.js"></script>
     <script src="./chart.js"></script>
     <script src="./flip.js"></script>
     <!-- Calming background music ("muzak"): low-volume looping ambient player. -->

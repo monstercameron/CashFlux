@@ -2,12 +2,11 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v238";
+const CACHE = "cashflux-v239";
 const CORE = [
   "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm", "./manifest.webmanifest",
   "./chart.js", "./flip.js", "./muzak.js", "./mermaid.min.js", "./mermaid.js",
-  "./marked.min.js", "./purify.min.js",
-  "https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js",
+  "./marked.min.js", "./purify.min.js", "./d3.min.js",
 ];
 
 self.addEventListener("install", (event) => {
