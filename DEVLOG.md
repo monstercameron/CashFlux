@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights becomes a chat interface (C82 wasm/UI wiring)
+
+- Per direction, the Insights screen is now a chat, not Explain/Q&A buttons. The two-card layout (just shipped
+  for C59) is superseded — both answers now coexist naturally as messages in a thread, so the C59 "shared slot"
+  fix is subsumed. New `chatTurn` model (id/role/text/usage) in `turns` state; `sendText` appends the user turn,
+  builds the message list from the whole history (system instructions + bounded `ai.FinancialContext` + turns),
+  calls the existing `ai.SendChat`/`SendProxyChat` transport, and appends the assistant turn via `turns.Update`
+  (avoids a stale-closure append). `AssistantBubble` is its own component (Markdown + per-message Save/Pin hooks
+  + cost note) so handler hooks stay stable across the list. Starter chips seed an empty thread and send on tap.
+  New i18n: `insights.chatTitle`/`chatHint`/`send`.
+- This is the C82 "wasm wiring + UI" item, MVP layer. It currently uses the flat-prompt chat-completions path.
+  NEXT, on this same screen: wire the existing `internal/agent` loop + `internal/aitools` (gated read tools:
+  query_transactions, account_balances, affordability) via an `agent.Model` adapter + appstate `DataSource`, so
+  detailed questions ("how much on groceries?", "can we afford $X by August?") are answered from real data with
+  a visible step/tool transcript; then token streaming. Bottom-up, separate commits.
+- Gate: `GOOS=js GOARCH=wasm go build` green; gofmt clean. Served via `gwc dev` on :8080.
+
 ## 2026-06-20 - feat: Insights — separate Explain/Q&A answer cards + expandable pins (C59)
 
 - C59 UX-review items, the two pure-UI gaps. (1) Explain and Q&A shared one `result` state, so each wiped the

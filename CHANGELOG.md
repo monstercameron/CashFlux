@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Insights is now a chat interface (C82 wiring, supersedes the C59 two-card layout).** The Explain/Q&A cards
+  are replaced by a conversation thread: user bubbles, Markdown assistant bubbles each with Save-as-task / Pin
+  and a token/cost note, a sticky composer, and starter-question chips that send on tap. The whole history is
+  sent each turn so it's genuinely conversational. This is the wasm/UI half of C82; the gated tool-loop
+  (richer answers, affordability) and token streaming land next on top of the same screen.
 - **Insights gives Explain and Q&A their own answer cards (C59).** They previously shared one result slot, so
   asking a question wiped the "Explain my month" narrative and vice-versa. Each now has its own slot, token/cost
   note, and Save-as-task / Pin actions, so both answers coexist; the in-flight action (`explain`/`qa`) is tracked

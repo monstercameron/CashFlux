@@ -2537,8 +2537,14 @@ preserved; render a **step transcript** (explainability rule).
 - [ ] **`internal/agent` (pure, native-tested):** `Tool`/`ToolCall`/`ToolResult` + registry + bounded
       loop; tests with a fake model (multi-step, stop conditions, budget caps, tool errors). No UI.
 - [ ] Bind tools to `appstate` (read first, then guarded writes), actor=`agent`, routed through C78.
-- [ ] wasm wiring + UI: agent surface w/ step transcript + approval prompts; capability gating +
+- [~] wasm wiring + UI: agent surface w/ step transcript + approval prompts; capability gating +
       plan-only fallback. Playwright story.
+      _(2026-06-20: Insights screen rebuilt as a **chat interface** — conversation thread, Markdown assistant
+      bubbles with per-message Save-as-task/Pin + cost, starter chips, composer; sends the whole history each
+      turn. MVP uses the flat-prompt chat-completions path. STILL OPEN: bind `internal/agent` loop +
+      `internal/aitools` gated read-tools via an `agent.Model` adapter + appstate `DataSource` (tool transcript,
+      affordability, richer Q&A), token streaming, approval prompts for future write tools, and the Playwright
+      story.)_
 - [ ] (Later) Expose the same tool registry as an **MCP server** over the self-host backend so external
       agents (Claude Code, etc.) can drive CashFlux.
 **Sequencing:** lands **after C81 Phase 1–3** (needs provider/dialect abstraction) and is much safer

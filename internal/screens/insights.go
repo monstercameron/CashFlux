@@ -90,20 +90,13 @@ func Insights() ui.Node {
 		)
 	}
 
-	// Explain and Q&A keep SEPARATE result slots so running one never wipes the
-	// other (C59): you can hold the monthly narrative while also asking a question.
-	explainRes := ui.UseState("")
-	qaRes := ui.UseState("")
-	explainUsage := ui.UseState(ai.Usage{})
-	qaUsage := ui.UseState(ai.Usage{})
-	// loading holds which action is in flight ("", "explain", or "qa") so only that
-	// card shows the busy/cancel state.
-	loading := ui.UseState("")
+	// The Insights screen is a chat with the CashFlux assistant (C82 wiring): a
+	// conversation thread the user types into, answered from their own figures.
+	turns := ui.UseState([]chatTurn{})
+	input := ui.UseState("")
+	onInput := ui.UseEvent(func(v string) { input.Set(v) })
+	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
-	savedE := ui.UseState("")
-	pinnedE := ui.UseState("")
-	savedQ := ui.UseState("")
-	pinnedQ := ui.UseState("")
 	rev := ui.UseState(0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 	var noCancel func()
@@ -112,32 +105,25 @@ func Insights() ui.Node {
 		if c := cancelFn.Get(); c != nil {
 			c()
 		}
-		loading.Set("")
+		loading.Set(false)
 	})
-	question := ui.UseState("")
-	onQuestion := ui.UseEvent(func(v string) { question.Set(v) })
 
-	// saveTask writes an answer to the To-do list; the full answer always lives in
-	// the notes, never the title (C27).
-	saveTask := func(text, title string) {
+	// saveTask writes an answer to the To-do list; the full answer always lives in the
+	// notes, never the title (C27). pinText saves it to the pinned-insights list.
+	saveTask := func(text string) bool {
 		text = strings.TrimSpace(text)
 		if text == "" {
-			return
-		}
-		title = strings.TrimSpace(title)
-		if title == "" {
-			title = uistate.T("insights.aiTaskTitle")
-		}
-		if rs := []rune(title); len(rs) > 80 { // rune-safe truncation for the title
-			title = strings.TrimSpace(string(rs[:80])) + "…"
+			return false
 		}
 		t := domain.Task{
-			ID: id.New(), Title: title, Notes: text,
+			ID: id.New(), Title: uistate.T("insights.aiTaskTitle"), Notes: text,
 			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceAI,
 		}
 		if err := app.PutTask(t); err != nil {
 			errMsg.Set(err.Error())
+			return false
 		}
+		return true
 	}
 	pinText := func(text string) bool {
 		text = strings.TrimSpace(text)
@@ -156,111 +142,56 @@ func Insights() ui.Node {
 		bump()
 	}
 
-	// Per-slot save/pin handlers — each acts only on its own answer (C59).
-	saveE := ui.UseEvent(Prevent(func() {
-		if r := explainRes.Get(); strings.TrimSpace(r) != "" {
-			saveTask(r, uistate.T("insights.aiTaskTitle"))
-			savedE.Set(uistate.T("insights.savedToTodo"))
+	// buildMessages turns the conversation so far into an OpenAI message list, led by
+	// the assistant's instructions and the bounded financial context (aggregates only;
+	// richer detail comes from gated tools, C82 wiring).
+	buildMessages := func(hist []chatTurn) []ai.Message {
+		msgs := []ai.Message{
+			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant for CashFlux. Answer from the provided context; if it isn't enough to answer precisely, say what's missing. Plain English, no jargon."},
+			{Role: ai.RoleSystem, Content: "Context — " + aiCtx.Line()},
 		}
-	}))
-	pinE := ui.UseEvent(Prevent(func() {
-		if pinText(explainRes.Get()) {
-			pinnedE.Set(uistate.T("insights.pinnedConfirm"))
+		for _, t := range hist {
+			role := ai.RoleUser
+			if t.Role == "assistant" {
+				role = ai.RoleAssistant
+			}
+			msgs = append(msgs, ai.Message{Role: role, Content: t.Text})
 		}
-	}))
-	saveQ := ui.UseEvent(Prevent(func() {
-		if r := qaRes.Get(); strings.TrimSpace(r) != "" {
-			saveTask(r, question.Get())
-			savedQ.Set(uistate.T("insights.savedToTodo"))
-		}
-	}))
-	pinQ := ui.UseEvent(Prevent(func() {
-		if pinText(qaRes.Get()) {
-			pinnedQ.Set(uistate.T("insights.pinnedConfirm"))
-		}
-	}))
-
-	// send runs one chat call and routes the reply into the given slot, leaving the
-	// other slot untouched.
-	send := func(messages []ai.Message, temp float64, which string, setRes func(string), setUsage func(ai.Usage)) {
-		loading.Set(which)
-		errMsg.Set("")
-		setRes("")
-		setUsage(ai.Usage{})
-		onResult := func(content string, u ai.Usage) { loading.Set(""); setRes(content); setUsage(u) }
-		onErr := func(e string) { loading.Set(""); errMsg.Set(e) }
-		if useBackendAI {
-			cancelFn.Set(ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, temp, onResult, onErr))
-		} else {
-			cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, temp, onResult, onErr))
-		}
+		return msgs
 	}
 
-	explain := ui.UseEvent(func() {
+	// sendText posts a user turn and routes the assistant's reply into a new turn.
+	sendText := func(text string) {
+		text = strings.TrimSpace(text)
+		if text == "" || loading.Get() {
+			return
+		}
 		if key == "" && !useBackendAI {
 			errMsg.Set(uistate.T("insights.needKey"))
 			return
 		}
-		savedE.Set("")
-		pinnedE.Set("")
-		prompt := aiCtx.Line() + " In 3-4 friendly sentences, explain how my month went and one thing I could do next."
-		messages := []ai.Message{
-			{Role: ai.RoleSystem, Content: "You are a concise, encouraging personal-finance assistant. Plain English, no jargon."},
-			{Role: ai.RoleUser, Content: prompt},
+		hist := append(append([]chatTurn{}, turns.Get()...), chatTurn{ID: id.New(), Role: "user", Text: text})
+		turns.Set(hist)
+		input.Set("")
+		errMsg.Set("")
+		loading.Set(true)
+		messages := buildMessages(hist)
+		onResult := func(content string, u ai.Usage) {
+			loading.Set(false)
+			turns.Update(func(cur []chatTurn) []chatTurn {
+				return append(cur, chatTurn{ID: id.New(), Role: "assistant", Text: content, Usage: u})
+			})
 		}
-		send(messages, 0.5, "explain", explainRes.Set, explainUsage.Set)
-	})
-
-	ask := ui.UseEvent(Prevent(func() {
-		q := strings.TrimSpace(question.Get())
-		if key == "" && !useBackendAI {
-			errMsg.Set(uistate.T("insights.needKey"))
-			return
+		onErr := func(e string) { loading.Set(false); errMsg.Set(e) }
+		if useBackendAI {
+			cancelFn.Set(ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, 0.4, onResult, onErr))
+		} else {
+			cancelFn.Set(ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0.4, onResult, onErr))
 		}
-		if q == "" {
-			errMsg.Set(uistate.T("insights.needQuestion"))
-			return
-		}
-		savedQ.Set("")
-		pinnedQ.Set("")
-		messages := []ai.Message{
-			{Role: ai.RoleSystem, Content: "You are a concise, friendly personal-finance assistant. Answer using the provided context; if it isn't enough, say what's missing. Plain English, no jargon."},
-			{Role: ai.RoleUser, Content: "Context — " + aiCtx.Line() + "\n\nQuestion: " + q},
-		}
-		send(messages, 0.4, "qa", qaRes.Set, qaUsage.Set)
-	}))
+	}
+	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates)
-
-	// usageNote renders the token/cost line for one answer (when the model's pricing
-	// is known) — so bring-your-own-key users see what each answer costs.
-	usageNote := func(u ai.Usage) ui.Node {
-		if u.TotalTokens == 0 {
-			return Fragment()
-		}
-		note := uistate.T("insights.usageTokens", u.TotalTokens)
-		if cost, ok := ai.EstimateCostUSD(model, u); ok {
-			note = uistate.T("insights.usageCost", u.TotalTokens, ai.FormatCostUSD(cost))
-		}
-		return P(Class("text-faint text-[11px] mt-2"), note)
-	}
-
-	busy := loading.Get()
-	var action ui.Node
-	switch {
-	case key == "" && !useBackendAI:
-		action = keyHintNode()
-	case busy == "explain":
-		action = Div(Class("flex items-center gap-2"),
-			Button(Class("btn btn-primary"), Type("button"), Attr("disabled", "disabled"), uistate.T("insights.thinking")),
-			Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
-		)
-	case busy == "qa":
-		// A Q&A is running; keep Explain visible but disabled (one call at a time).
-		action = Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), Attr("disabled", "disabled"), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.explainTitle")))
-	default:
-		action = Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("button"), OnClick(explain), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.explainTitle")))
-	}
 
 	// Pinned insights, newest first.
 	pins := app.SavedInsights()
@@ -278,67 +209,129 @@ func Insights() ui.Node {
 		)
 	}
 
+	convo := turns.Get()
+	empty := len(convo) == 0
+
+	// The conversation thread: user bubbles right, assistant bubbles (their own
+	// component, owning the save/pin hooks per the no-hooks-in-loops rule) left.
+	thread := Div(Class("flex flex-col gap-3 mb-3"),
+		MapKeyed(convo,
+			func(t chatTurn) any { return t.ID },
+			func(t chatTurn) ui.Node {
+				if t.Role == "user" {
+					return Div(Class("flex justify-end"),
+						Div(Class("max-w-[85%] rounded-2xl bg-sky-500/10 px-3.5 py-2 text-[14px] whitespace-pre-wrap"), t.Text),
+					)
+				}
+				return ui.CreateElement(AssistantBubble, asstBubbleProps{Text: t.Text, Usage: t.Usage, Model: model, OnSave: saveTask, OnPin: pinText})
+			},
+		),
+		If(loading.Get(), Div(Class("flex justify-start"),
+			Div(Class("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2 text-[13px] text-faint"), uistate.T("insights.thinking")),
+		)),
+	)
+
+	// Composer: the input row, or the key call-to-action when no key is set.
+	var composer ui.Node
+	if key == "" && !useBackendAI {
+		composer = keyHintNode()
+	} else {
+		composer = Form(Class("mt-1"), OnSubmit(onSubmit),
+			Div(Class("flex gap-2 items-center"),
+				Input(Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
+				IfElse(loading.Get(),
+					Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
+					Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("submit"), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.send"))),
+				),
+			),
+		)
+	}
+
+	// Starter chips seed an empty thread; tapping one sends it (L8).
+	chips := Fragment()
+	if empty && (key != "" || useBackendAI) && len(starters) > 0 {
+		chips = Div(Class("flex flex-wrap gap-2 mb-2"),
+			MapKeyed(starters,
+				func(q string) any { return q },
+				func(q string) ui.Node {
+					return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: sendText})
+				},
+			),
+		)
+	}
+
 	return Div(
 		highlights,
 		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("insights.explainTitle")),
-			P(Class("muted"), uistate.T("insights.explainHint")),
-			action,
+			H2(Class("card-title"), uistate.T("insights.chatTitle")),
+			If(empty, P(Class("muted"), uistate.T("insights.chatHint"))),
+			If(!empty, thread),
+			chips,
+			composer,
 			If(errMsg.Get() != "", P(Class("err"), Attr("role", "alert"), errMsg.Get())),
 		),
-		// Explain's answer lives in its OWN card (C59) so a later Q&A won't wipe it.
-		If(explainRes.Get() != "", Section(Class("card"),
-			H2(Class("card-title"), uistate.T("insights.answerTitle")),
-			Div(Class("md insights-answer"), Markdown(explainRes.Get(), MarkdownRenderOptions{LinkTarget: "_blank", LinkRel: "noopener noreferrer"})),
-			Div(Class("flex flex-wrap gap-2 items-center"),
-				Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(saveE), uistate.T("insights.saveTask")),
-				Button(Class("btn"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pinE), uistate.T("insights.pin")),
-				If(savedE.Get() != "", Span(Class("muted"), savedE.Get())),
-				If(pinnedE.Get() != "", Span(Class("muted"), pinnedE.Get())),
-			),
-			usageNote(explainUsage.Get()),
-		)),
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("insights.askTitle")),
-			// Tappable starter questions so a blank box never stalls the user (L8).
-			If(len(starters) > 0, Div(Class("flex flex-wrap gap-2 mb-2"),
-				MapKeyed(starters,
-					func(q string) any { return q },
-					func(q string) ui.Node {
-						return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: func(s string) { question.Set(s) }})
-					},
-				),
-			)),
-			// The Q&A needs a key; show the box either way so the feature is visible,
-			// with a disabled preview + key hint when no key is set (C9).
-			If(key != "" || useBackendAI, Form(Class("form-grid"), OnSubmit(ask),
-				Input(Class("field field-wide"), Type("text"), Placeholder(uistate.T("insights.askPlaceholder")), Value(question.Get()), OnInput(onQuestion)),
-				Button(Class("btn btn-primary inline-flex items-center gap-1.5"), Type("submit"), uiw.Icon(icon.Sparkles, Class("w-4 h-4 shrink-0")), Span(uistate.T("insights.ask"))),
-				If(busy == "qa", Button(Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel"))),
-			)),
-			If(key == "" && !useBackendAI, Div(
-				// Disabled preview still reflects a picked starter question, so the
-				// chips work as a compose aid even before a key is added.
-				Input(Class("field field-wide"), Type("text"), Attr("disabled", "disabled"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(question.Get())),
-				keyHintNode(),
-			)),
-		),
-		// The Q&A answer has its own card too. The model emits Markdown (lists, bold,
-		// headings), rendered as rich text (C59). The framework's Markdown is GFM-aware
-		// and drops active URL schemes (javascript:/data:), so model-authored text
-		// can't smuggle an executable href; links open safely in a new tab.
-		If(qaRes.Get() != "", Section(Class("card"),
-			H2(Class("card-title"), uistate.T("insights.answerTitle")),
-			Div(Class("md insights-answer"), Markdown(qaRes.Get(), MarkdownRenderOptions{LinkTarget: "_blank", LinkRel: "noopener noreferrer"})),
-			Div(Class("flex flex-wrap gap-2 items-center"),
-				Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(saveQ), uistate.T("insights.saveTask")),
-				Button(Class("btn"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pinQ), uistate.T("insights.pin")),
-				If(savedQ.Get() != "", Span(Class("muted"), savedQ.Get())),
-				If(pinnedQ.Get() != "", Span(Class("muted"), pinnedQ.Get())),
-			),
-			usageNote(qaUsage.Get()),
-		)),
 		pinnedCard,
+	)
+}
+
+// chatTurn is one message in the Insights conversation.
+type chatTurn struct {
+	ID    string
+	Role  string // "user" | "assistant"
+	Text  string
+	Usage ai.Usage
+}
+
+type asstBubbleProps struct {
+	Text   string
+	Usage  ai.Usage
+	Model  string
+	OnSave func(string) bool
+	OnPin  func(string) bool
+}
+
+// AssistantBubble renders one assistant message as Markdown with per-message
+// Save-as-task / Pin actions and a token/cost note. The model emits Markdown,
+// rendered as rich text; the framework's Markdown is GFM-aware and drops active
+// URL schemes (javascript:/data:), so model text can't smuggle an executable
+// href; links open safely in a new tab. Its own component so the action hooks
+// stay stable across the message list (no hooks in loops).
+func AssistantBubble(p asstBubbleProps) ui.Node {
+	saved := ui.UseState(false)
+	pinned := ui.UseState(false)
+	save := ui.UseEvent(Prevent(func() {
+		if p.OnSave(p.Text) {
+			saved.Set(true)
+		}
+	}))
+	pin := ui.UseEvent(Prevent(func() {
+		if p.OnPin(p.Text) {
+			pinned.Set(true)
+		}
+	}))
+	var note ui.Node = Fragment()
+	if p.Usage.TotalTokens > 0 {
+		txt := uistate.T("insights.usageTokens", p.Usage.TotalTokens)
+		if cost, ok := ai.EstimateCostUSD(p.Model, p.Usage); ok {
+			txt = uistate.T("insights.usageCost", p.Usage.TotalTokens, ai.FormatCostUSD(cost))
+		}
+		note = P(Class("text-faint text-[11px] mt-2"), txt)
+	}
+	return Div(Class("flex justify-start"),
+		Div(Class("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2.5"),
+			Div(Class("md insights-answer text-[14px]"), Markdown(p.Text, MarkdownRenderOptions{LinkTarget: "_blank", LinkRel: "noopener noreferrer"})),
+			Div(Class("flex flex-wrap gap-2 items-center mt-2"),
+				IfElse(saved.Get(),
+					Span(Class("muted text-[12px]"), uistate.T("insights.savedToTodo")),
+					Button(Class("btn"), Type("button"), Title(uistate.T("insights.saveTaskTitle")), OnClick(save), uistate.T("insights.saveTask")),
+				),
+				IfElse(pinned.Get(),
+					Span(Class("muted text-[12px]"), uistate.T("insights.pinnedConfirm")),
+					Button(Class("btn"), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
+				),
+			),
+			note,
+		),
 	)
 }
 
