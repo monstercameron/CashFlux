@@ -214,39 +214,43 @@ func Members() ui.Node {
 			}
 			opts = append(opts, Option(Value(m.ID), SelectedIf(reassignTo.Get() == m.ID), m.Name))
 		}
-		reassignPanel = Section(Class("card"),
-			H2(Class("card-title"), uistate.T("members.reassignTitle")),
-			P(Class("muted"), uistate.T("members.reassignDesc", targetName, ownedCount(rid))),
-			Form(Class("form-grid"), OnSubmit(confirmReassign),
-				Select(Class("field"), OnChange(onReassignTo), opts),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.moveAndDelete")),
-				Button(Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
+		reassignPanel = uiw.Card(uiw.CardProps{
+			Title: uistate.T("members.reassignTitle"),
+			Body: Fragment(
+				P(Class("muted"), uistate.T("members.reassignDesc", targetName, ownedCount(rid))),
+				Form(Class("form-grid"), OnSubmit(confirmReassign),
+					Select(Class("field"), OnChange(onReassignTo), opts),
+					Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.moveAndDelete")),
+					Button(Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
+				),
 			),
-		)
+		})
 	}
 
 	return Div(
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("members.add")),
-			Form(Class("form-grid"), OnSubmit(add),
-				Input(append([]any{Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
-				Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
-				MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
-				}),
-				Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.add")),
+		uiw.Card(uiw.CardProps{
+			Title: uistate.T("members.add"),
+			Body: Fragment(
+				Form(Class("form-grid"), OnSubmit(add),
+					Input(append([]any{Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
+					Input(Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
+					MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+						return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+					}),
+					Button(Class("btn btn-primary"), Type("submit"), uistate.T("members.add")),
+				),
+				errText("member-err", errMsg.Get()),
 			),
-			errText("member-err", errMsg.Get()),
-		),
+		}),
 		reassignPanel,
-		Section(Class("card"),
-			H2(Class("card-title"), uistate.T("members.listTitle")),
-			IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), FocusID: "member-add"}), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),
-		),
-		If(len(members) > 0, Section(Class("card"),
-			H2(Class("card-title"), uistate.T("members.netWorthTitle")),
-			Div(Class("rows"), ownerRows),
-		)),
+		uiw.Card(uiw.CardProps{
+			Title: uistate.T("members.listTitle"),
+			Body:  IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), FocusID: "member-add"}), Div(Class("rows"), MapKeyed(members, keyOf, renderRow))),
+		}),
+		If(len(members) > 0, uiw.Card(uiw.CardProps{
+			Title: uistate.T("members.netWorthTitle"),
+			Body:  Div(Class("rows"), ownerRows),
+		})),
 	)
 }
 
