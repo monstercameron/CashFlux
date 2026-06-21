@@ -149,7 +149,10 @@ func buildAppLockGate(doc js.Value) {
 	fails := 0
 	hintBtnEl := func() js.Value { return doc.Call("getElementById", "cf-lock-hint-btn") }
 	attempt := func() {
-		if loadAppLock().Verify(inp.Get("value").String()) {
+		if entered := inp.Get("value").String(); loadAppLock().Verify(entered) {
+			// Record the verified passcode for the session and, if the dataset on
+			// disk is encrypted (C45), decrypt + hydrate it now.
+			onAppUnlocked(entered)
 			unlockGate(doc, gate)
 			fails = 0
 			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
@@ -198,8 +201,9 @@ func buildAppLockGate(doc js.Value) {
 	})
 	inp.Call("addEventListener", "keydown", keyCb)
 
-	// Forgot passcode → wipe & reset. The gate is a soft, unencrypted deterrent,
-	// so erasing local data is the only honest recovery from a lost passcode.
+	// Forgot passcode → wipe & reset. The dataset is encrypted at rest with a key
+	// derived from the passcode (C45), so without it the data is unrecoverable —
+	// erasing local data is the only honest recovery from a lost passcode.
 	forgotCb := js.FuncOf(func(js.Value, []js.Value) any {
 		// Exception to C42: the lock gate is pre-Shell imperative DOM, so the in-app
 		// DialogHost isn't mounted here — a native confirm is the only option.

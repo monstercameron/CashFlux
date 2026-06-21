@@ -55,11 +55,20 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 		return false
 	}
 	saveAppLock(c)
+	// Remember the passcode for the session so the dataset autosave can encrypt at
+	// rest immediately (C45), without waiting for a reload + unlock.
+	activePasscode = passcode
+	migrateDatasetAtRest() // encrypt the existing at-rest copy now
 	return true
 }
 
-// disableAppLock removes the passcode lock.
-func disableAppLock() { saveAppLock(applock.Config{}) }
+// disableAppLock removes the passcode lock and forgets the session passcode, so
+// the next autosave writes plaintext — completing the reverse (decrypt) migration.
+func disableAppLock() {
+	saveAppLock(applock.Config{})
+	activePasscode = ""
+	migrateDatasetAtRest() // rewrite the at-rest copy as plaintext now
+}
 
 // setLockHideQuotes / setLockHideMeta flip the lock-screen content toggles on the
 // current (enabled) config. No-op when the lock isn't set.
