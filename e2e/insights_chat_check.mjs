@@ -158,6 +158,25 @@ try {
   const answers = await page.locator(".insights-answer").count();
   if (answers < 2) fail(`[resume] expected a new assistant reply after reload, got ${answers} answer bubbles`);
 
+  // Deleting a message unravels the thread from that point: delete the resumed-session
+  // user turn ("And on dining?") and everything after it should go, leaving the first
+  // exchange.
+  {
+    const before = await page.locator(".insights-answer").count();
+    if (before < 2) fail("[delete] expected >=2 replies before delete, got " + before);
+    // Hover the user bubble to reveal its actions, then click ITS delete (×).
+    const userBubble = page.locator(".group", { hasText: "And on dining?" }).last();
+    await userBubble.hover();
+    await userBubble.getByRole("button", { name: "Delete message" }).first().click({ force: true });
+    await page.waitForTimeout(400);
+    const stillDining = await page.evaluate(() => document.body.innerText.includes("And on dining?"));
+    if (stillDining) fail("[delete] the deleted message is still in the thread");
+    const stillGroceries = await page.evaluate(() => document.body.innerText.includes("How much did I spend on groceries?"));
+    if (!stillGroceries) fail("[delete] unraveled too far — the earlier exchange was removed");
+    const after = await page.locator(".insights-answer").count();
+    if (after !== 1) fail(`[delete] expected 1 reply left after unraveling, got ${after}`);
+  }
+
   // Error path: a rejected key must surface a visible error, not fail silently.
   mode = "401";
   await page.getByRole("button", { name: "New chat" }).first().click();

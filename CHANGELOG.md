@@ -33,6 +33,11 @@ and every commit updates this file under `Unreleased`.
   this next.
 
 ### Changed
+- **Insights chat: actions hover-reveal, delete unravels the thread, auto-scroll to newest (C82).** The action
+  icons under a message stay hidden until you hover (or focus) that message. Deleting a message now removes it
+  **and every later turn** (a conversation is a chain, so a mid-thread delete would orphan the continuation).
+  And the thread auto-scrolls to the bottom when a bubble (or the "thinking" indicator) spawns, so new messages
+  aren't left below the fold.
 - **Insights chat: action icons moved below the bubble; Retry on the last message either side (C82).** Copy /
   Pin / Retry / Delete now sit in a row *under* each message rather than inside it. Retry is offered on the
   latest message whether it's the assistant's reply or **your own message** — so a turn that errored with no

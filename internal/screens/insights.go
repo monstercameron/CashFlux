@@ -221,18 +221,23 @@ func Insights() ui.Node {
 		run(hist)
 	}
 
-	// deleteTurn removes a single message (user or assistant) from the thread. Uses an
-	// explicit Set over the current value (not a functional Update) for the same
-	// stale-base reason as onResult.
+	// deleteTurn unravels the thread from the deleted message onward: deleting a
+	// message drops it and every later turn (a conversation is a chain, so removing a
+	// middle turn would leave a dangling continuation). Uses an explicit Set over the
+	// current value (not a functional Update) for the same stale-base reason as onResult.
 	deleteTurn := func(tid string) {
 		cur := turns.Get()
-		out := make([]chatTurn, 0, len(cur))
-		for _, t := range cur {
-			if t.ID != tid {
-				out = append(out, t)
+		idx := -1
+		for i, t := range cur {
+			if t.ID == tid {
+				idx = i
+				break
 			}
 		}
-		turns.Set(out)
+		if idx < 0 {
+			return
+		}
+		turns.Set(append([]chatTurn{}, cur[:idx]...))
 	}
 
 	// persist upserts the current thread as a conversation, creating one (and a fresh
@@ -329,6 +334,14 @@ func Insights() ui.Node {
 		return nil
 	}, "cf-insights-init")
 
+	// Auto-scroll the thread to the bottom whenever a message is added or the
+	// "thinking" indicator toggles, so a freshly spawned bubble stays in view.
+	scrollSig := strconv.Itoa(len(turns.Get()))
+	if loading.Get() {
+		scrollSig += "|L"
+	}
+	ui.UseEffect(func() func() { scrollChatToEnd(); return nil }, scrollSig)
+
 	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
 	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
 	// Toggle the backend AI proxy on/off so the user can force the direct OpenAI
@@ -391,6 +404,8 @@ func Insights() ui.Node {
 		If(loading.Get(), Div(Class("flex justify-start"),
 			Div(Class("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2 text-[13px] text-faint"), uistate.T("insights.thinking")),
 		)),
+		// Scroll anchor: the auto-scroll effect brings this into view on new messages.
+		Div(Attr("id", "cf-chat-end")),
 	)
 
 	// Composer: the input row, or the key call-to-action when no key is set.
@@ -546,7 +561,7 @@ func UserBubble(p userBubbleProps) ui.Node {
 	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
 	return Div(Class("flex flex-col items-end group"),
 		Div(Class("max-w-[85%] rounded-2xl bg-sky-500/10 px-3.5 py-2 text-[14px] whitespace-pre-wrap"), p.Text),
-		Div(Class("flex gap-3 items-center mt-1 px-1"),
+		Div(Class("flex gap-3 items-center mt-1 px-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 motion-safe:transition-opacity"),
 			If(p.OnRetry != nil, Button(Class(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, Class("w-4 h-4")))),
 			Button(Class(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, Class("w-4 h-4"))),
 		),
@@ -607,13 +622,13 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 		note = P(Class("text-faint text-[11px] mt-2"), txt)
 	}
 	actBtn := "text-faint opacity-70 hover:opacity-100 inline-flex items-center"
-	return Div(Class("flex flex-col items-start"),
+	return Div(Class("flex flex-col items-start group"),
 		Div(Class("max-w-[85%] rounded-2xl bg-black/[0.04] px-3.5 py-2.5"),
 			// marked fills this element via the effect above.
 			Div(Attr("id", mdID), Class("md insights-answer text-[14px]")),
 		),
-		// Actions sit UNDER the bubble.
-		Div(Class("flex flex-wrap gap-3 items-center mt-1 px-1"),
+		// Actions sit UNDER the bubble, revealed when the bubble is hovered/focused.
+		Div(Class("flex flex-wrap gap-3 items-center mt-1 px-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 motion-safe:transition-opacity"),
 			IfElse(copied.Get(),
 				Span(Class("text-faint text-[12px]"), uistate.T("insights.copied")),
 				Button(Class(actBtn), Type("button"), Title(uistate.T("insights.copy")), Attr("aria-label", uistate.T("insights.copy")), OnClick(copyEvt), uiw.Icon(icon.Copy, Class("w-4 h-4"))),
@@ -652,6 +667,16 @@ func renderMarkdown(elemID, mdText string) {
 func reasoningModel(model string) bool {
 	m := strings.ToLower(strings.TrimSpace(model))
 	return strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "gpt-5")
+}
+
+// scrollChatToEnd brings the thread's bottom anchor into view, so a newly spawned
+// bubble (or the "thinking" indicator) isn't left below the fold.
+func scrollChatToEnd() {
+	el := js.Global().Get("document").Call("getElementById", "cf-chat-end")
+	if !el.Truthy() {
+		return
+	}
+	el.Call("scrollIntoView", js.ValueOf(map[string]any{"behavior": "smooth", "block": "end"}))
 }
 
 // copyText writes text to the system clipboard (best-effort, no-op if unavailable).

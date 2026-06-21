@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - feat: Insights chat UX — hover actions, delete-unravel, auto-scroll
+
+- Three asks: (1) per-message action icons hidden until the bubble is hovered/focused (`opacity-0
+  group-hover:opacity-100 group-focus-within:opacity-100 motion-safe:transition-opacity`; added `group` to the
+  assistant container — user already had it). (2) Deleting a message now unravels the thread from that index:
+  `deleteTurn` truncates `cur[:idx]` (drop the message + every later turn) instead of removing one, since a
+  conversation is a chain. (3) Auto-scroll: a `#cf-chat-end` anchor at the bottom of the thread + a `UseEffect`
+  keyed on `len(turns)|loading` calls `scrollIntoView({behavior:smooth,block:end})`, so a freshly spawned bubble
+  (or the thinking indicator) stays in view.
+- e2e extended: delete the resumed-session user turn and assert the thread unravels to the first exchange
+  (1 reply left, earlier exchange intact); confirms hover-hidden buttons are still clickable. All green.
+
 ## 2026-06-20 - fix: Insights chat first-message-after-resume drop (stale functional Update)
 
 - Cam: "initial chats fail, retries work — did you e2e test it properly?" My e2e tested a fresh send (passed),
