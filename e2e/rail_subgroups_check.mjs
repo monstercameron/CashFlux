@@ -16,9 +16,14 @@ try {
   await page.waitForTimeout(600);
 
   const heads = await page.locator(".rail-subhead").allTextContents();
-  for (const want of ["Plan & analyze", "Bills & recurring", "Data & import", "Build"]) {
-    if (!heads.some((h) => h.includes(want))) fail(`Tools sub-section header missing: ${want}`);
+  for (const want of ["Plan & analyze", "Bills & recurring", "Data & import", "Build", "System", "My pages"]) {
+    if (!heads.some((h) => h.includes(want))) fail(`collapsible section header missing: ${want}`);
   }
+  // System collapses too: collapsing it hides its items (e.g. Members).
+  if ((await page.locator('nav a[title="Members"]').count()) === 0) fail("Members not visible initially");
+  await page.locator(".rail-subhead", { hasText: "System" }).first().click();
+  await page.waitForTimeout(250);
+  if ((await page.locator('nav a[title="Members"]').count()) !== 0) fail("collapsing System did not hide its items");
   // "Allocate" lives under "Plan & analyze"; collapsing that section hides it.
   const allocate = page.locator('nav a[title="Allocate"]');
   if ((await allocate.count()) === 0) fail("Allocate tool not visible initially");

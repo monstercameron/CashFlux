@@ -30,6 +30,19 @@ func CustomPagesNav() uic.Node {
 	}
 	nav := router.UseNavigate()
 	current := router.InspectCurrentRoute().Path
+	// "My pages" is a collapsible rail section too (C67), keyed "mypages".
+	collapsedAtom := uistate.UseCollapsedToolGroups()
+	collapsed := collapsedAtom.Get()
+	myPagesCollapsed := collapsed["mypages"]
+	toggleMyPages := func() {
+		next := map[string]bool{}
+		for k, v := range collapsed {
+			next[k] = v
+		}
+		next["mypages"] = !myPagesCollapsed
+		collapsedAtom.Set(next)
+		uistate.PersistCollapsedToolGroups(next)
+	}
 	// A version counter forces a re-render after a mutation that doesn't itself
 	// change the route (rename in place, hide/show).
 	version := uic.UseState(0)
@@ -181,12 +194,19 @@ func CustomPagesNav() uic.Node {
 	// A single root Div (not a bare Fragment) so the section renders inline at its
 	// position among the other rail groups; a Fragment of mixed children doesn't
 	// preserve sibling order next to the MapKeyed groups.
-	return Div(Class("flex flex-col gap-0.5"),
-		railHeader(uistate.T("rail.myPages")),
-		rows, // []ui.Node — flattened into children by the framework
-		newPage,
-		hiddenSection,
-	)
+	body := []any{Class("flex flex-col gap-0.5"),
+		uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
+			Label: uistate.T("rail.myPages"), Collapsed: myPagesCollapsed, OnToggle: toggleMyPages,
+		}),
+	}
+	if !myPagesCollapsed {
+		body = append(body,
+			rows, // []ui.Node — flattened into children by the framework
+			newPage,
+			hiddenSection,
+		)
+	}
+	return Div(body...)
 }
 
 type customPageRowProps struct {

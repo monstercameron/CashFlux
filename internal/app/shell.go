@@ -310,6 +310,25 @@ func Sidebar(props sidebarProps) uic.Node {
 			visibleSystem = append(visibleSystem, it)
 		}
 	}
+	// System is a collapsible section too (C67), keyed "system" in the same store.
+	var systemNodes []any
+	if len(visibleSystem) > 0 {
+		sysCollapsed := collapsed["system"]
+		systemNodes = append(systemNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
+			Label: uistate.T("rail.system"), Collapsed: sysCollapsed,
+			OnToggle: func() { setCollapsed("system", !sysCollapsed) },
+		}))
+		if !sysCollapsed {
+			systemNodes = append(systemNodes, MapKeyed(visibleSystem,
+				func(it railItem) any { return it.Path },
+				func(it railItem) uic.Node {
+					return uic.CreateElement(navItem, navItemProps{
+						Label: uistate.T(it.Key), Path: it.Path, Icon: it.Icon, Active: current == it.Path,
+					})
+				},
+			))
+		}
+	}
 	return Aside(Class(cls),
 		Div(Class("railhead h-14 flex items-center gap-2.5 px-5 border-b border-line"),
 			Span(Class("grid place-items-center w-7 h-7 rounded bg-fg text-base font-display font-semibold text-[13px] shrink-0"), "C"),
@@ -333,18 +352,7 @@ func Sidebar(props sidebarProps) uic.Node {
 				},
 			),
 			Fragment(toolNodes...),
-			If(len(visibleSystem) > 0, railHeader(uistate.T("rail.system"))),
-			MapKeyed(visibleSystem,
-				func(it railItem) any { return it.Path },
-				func(it railItem) uic.Node {
-					return uic.CreateElement(navItem, navItemProps{
-						Label:  uistate.T(it.Key),
-						Path:   it.Path,
-						Icon:   it.Icon,
-						Active: current == it.Path,
-					})
-				},
-			),
+			Fragment(systemNodes...),
 			// The user's custom pages ("My pages"): listing, create, and reorder.
 			uic.CreateElement(CustomPagesNav),
 		),
