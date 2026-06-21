@@ -26,6 +26,7 @@ type Item struct {
 // offsets packed rows by one).
 func DefaultItems() []Item {
 	return []Item{
+		{ID: "attention", ColSpan: 4, RowSpan: 1},
 		{ID: "kpi-networth", ColSpan: 1, RowSpan: 1},
 		{ID: "kpi-income", ColSpan: 1, RowSpan: 1},
 		{ID: "kpi-spending", ColSpan: 1, RowSpan: 1},

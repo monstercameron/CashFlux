@@ -46,7 +46,10 @@ func loadItems() []dashlayout.Item {
 	if err := json.Unmarshal([]byte(v.String()), &items); err != nil || len(items) == 0 || items[0].ID == "" {
 		return dashlayout.DefaultItems()
 	}
-	return items
+	// Reconcile against the current widget set so a layout saved by an older build
+	// gains newly-introduced widgets (e.g. "attention") and sheds retired ones,
+	// while keeping the user's order and sizes.
+	return dashlayout.Reconcile(items)
 }
 
 const (

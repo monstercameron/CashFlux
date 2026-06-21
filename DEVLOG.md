@@ -15,7 +15,24 @@ problems and fixes, and what's next.
   display strings, so the widget localizes at the edge. Table tests cover ordering, per-source toggles, the bills
   window, the severity floor, the cap, and the calm empty case. Decision: an overdue task outranks a bill due
   tomorrow (an overdue deadline is the soonest), confirmed in test.
-- Next: widgetcfg schema for "attention" + the responsive widget, then layout merge + Settings move.
+- Steps 2–4 (this commit): the widget + integration. Registered a widgetcfg "attention" schema (5 source toggles,
+  bills-due window, max-items, min-severity select) so the existing gear/flip panel renders the config for free;
+  `attentionConfig` maps it to `attention.Config`. `attentionWidget` builds the inputs from the live store (reusing
+  bills/budgeting/freshness/anomaly logic), ranks them, and renders responsive-by-span (compact 1×1 → chips when
+  wide-and-short → list when taller); each row is its own `attentionRow` component (stable nav hook) that
+  deep-links + scrolls. Default placement 4×1 at the top of `DefaultItems`.
+- Layout plumbing: removed the fixed header cell, so I dropped the +1 row offset in `ui/widget.go` (Pack already
+  returns 1-indexed rows; widgets now fill from row 1). `loadItems` runs the new pure `dashlayout.Reconcile` so a
+  layout saved by an older build gains "attention" at the top and sheds unknown ids while keeping order/sizes
+  (tested). Updated pack_test's expected rows (+1 shift for the new top widget).
+- Settings: extracted `DashboardLayoutControls` (the mode select + Reset) and render it under a new "Dashboard
+  layout" section in `globalSettingsForm`. SW bumped to v226 (index.html CSS changed).
+- Verified by a new e2e (`dashboard_attention_check`): the widget is the top tile at grid-row 1, shows urgent
+  sample items, its gear toggles empty the digest when all sources are off ("All clear"), and the layout manager
+  is now in Settings. widget_color + banner e2es still green (the row-offset change). Pre-existing/unrelated: the
+  icon curated-set test and a11y_check (direct deep-link goto 404s on the gwc dev server) — neither touched here.
+
+## 2026-06-21 - fix: chat deep links caused a full page reload (absolute href)
 
 ## 2026-06-21 - fix: chat deep links caused a full page reload (absolute href)
 

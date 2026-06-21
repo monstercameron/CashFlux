@@ -157,7 +157,9 @@ func widget(props WidgetProps) uic.Node {
 	colSpan, rowSpan := 1, 1
 	if p, ok := packed.Get(props.ID); ok {
 		gridCol = p.GridColumn()
-		gridRow = dashlayout.Placement{Row: p.Row + 1, RowSpan: p.RowSpan}.GridRow()
+		// Pack already returns 1-indexed rows; the dashboard no longer has a fixed
+		// header cell occupying row 1, so widgets fill from row 1 directly.
+		gridRow = p.GridRow()
 		colSpan = p.ColSpan
 		rowSpan = p.RowSpan
 	}

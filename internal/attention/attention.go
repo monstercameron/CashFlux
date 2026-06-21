@@ -50,14 +50,14 @@ const (
 type Item struct {
 	Kind     Kind
 	Severity Severity
-	Label    string      // entity name / task title (user data)
-	Amount   money.Money // bill min-payment, budget overage context (zero = none)
-	Days     int         // bill: days until due; task: days overdue; stale: days since update
-	Pct      int         // budget: spent as percent of limit
-	Route    string      // in-app route for the deep link (e.g. "/todo")
-	AnchorID string      // entity id to anchor-scroll to, when one exists
+	Label    string            // entity name / task title (user data)
+	Amount   money.Money       // bill min-payment, budget overage context (zero = none)
+	Days     int               // bill: days until due; task: days overdue; stale: days since update
+	Pct      int               // budget: spent as percent of limit
+	Route    string            // in-app route for the deep link (e.g. "/todo")
+	AnchorID string            // entity id to anchor-scroll to, when one exists
 	Anomaly  *insights.Anomaly // set only for KindSpending, for the view to phrase
-	when     time.Time   // deadline used to order by soonness; zero sorts last
+	when     time.Time         // deadline used to order by soonness; zero sorts last
 }
 
 // Config selects which sources to include and how aggressively to surface them.
@@ -87,12 +87,12 @@ func DefaultConfig() Config {
 // budgeting.EvaluateRollup, freshness.VisibleStaleAccounts, app.Tasks,
 // insights.Detect) so this package stays free of store/UI concerns.
 type Inputs struct {
-	Now      time.Time
-	Bills    []bills.Bill
-	Budgets  []budgeting.Status
-	Stale    []domain.Account
-	Tasks    []domain.Task
-	Anomaly  *insights.Anomaly
+	Now     time.Time
+	Bills   []bills.Bill
+	Budgets []budgeting.Status
+	Stale   []domain.Account
+	Tasks   []domain.Task
+	Anomaly *insights.Anomaly
 }
 
 // Rank turns the raw inputs into an urgency-ordered digest under cfg: only

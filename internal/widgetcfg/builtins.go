@@ -65,4 +65,22 @@ func init() {
 			{Key: "showDate", Label: "Show the target date", Type: Toggle, Default: "true"},
 		},
 	})
+	register(Schema{
+		WidgetID: "attention",
+		Title:    "Needs attention",
+		Fields: []Field{
+			{Key: "bills", Label: "Bills due soon", Type: Toggle, Default: "true"},
+			{Key: "budgets", Label: "Budget alerts (near or over)", Type: Toggle, Default: "true"},
+			{Key: "stale", Label: "Stale account balances", Type: Toggle, Default: "true"},
+			{Key: "tasks", Label: "Overdue & high-priority to-dos", Type: Toggle, Default: "true"},
+			{Key: "spending", Label: "Biggest spending spike", Type: Toggle, Default: "true"},
+			{Key: "billsDays", Label: "Flag bills due within", Type: Number, Default: "7", Unit: "days", Min: 1, Max: 60},
+			{Key: "maxItems", Label: "Most you'll see at once", Type: Number, Default: "5", Min: 1, Max: 12},
+			{Key: "minSeverity", Label: "Only show", Type: Select, Default: "all", Options: []Option{
+				{Value: "all", Label: "Everything"},
+				{Value: "warn", Label: "Warnings & critical"},
+				{Value: "critical", Label: "Critical only"},
+			}},
+		},
+	})
 }

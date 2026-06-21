@@ -33,12 +33,13 @@ func assertNoOverlap(t *testing.T, l Layout, cols int) {
 func TestPackDefaultReproducesArrangement(t *testing.T) {
 	got := Pack(DefaultItems(), 4)
 	want := map[string][2]int{ // id -> {col, row} (1-based)
-		"kpi-networth": {1, 1}, "kpi-income": {2, 1}, "kpi-spending": {3, 1}, "kpi-liabilities": {4, 1},
-		"recent": {1, 2}, "budgets": {3, 2}, "trend": {4, 2},
-		"goals": {1, 4}, "todo": {2, 4}, "accounts": {3, 4},
-		"cashflow": {1, 5}, "bills": {3, 5},
-		"savings": {1, 6}, "breakdown": {3, 6},
-		"freshness": {1, 7},
+		"attention":    {1, 1}, // full-width digest at the top
+		"kpi-networth": {1, 2}, "kpi-income": {2, 2}, "kpi-spending": {3, 2}, "kpi-liabilities": {4, 2},
+		"recent": {1, 3}, "budgets": {3, 3}, "trend": {4, 3},
+		"goals": {1, 5}, "todo": {2, 5}, "accounts": {3, 5},
+		"cashflow": {1, 6}, "bills": {3, 6},
+		"savings": {1, 7}, "breakdown": {3, 7},
+		"freshness": {1, 8},
 	}
 	for _, p := range got {
 		w, ok := want[p.ID]

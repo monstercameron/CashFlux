@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/i18n"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
@@ -586,6 +587,9 @@ func globalSettingsForm() uic.Node {
 		Div(Class("set-label"), uistate.T("settings.screens")),
 		P(Class("text-faint text-[12px]"), uistate.T("settings.screensHint")),
 		Div(screenToggles),
+		Div(Class("set-label"), uistate.T("dashboard.dashboardLayout")),
+		P(Class("text-faint text-[12px]"), uistate.T("dashboard.hint")),
+		screens.DashboardLayoutControls(),
 		Div(Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(Class("text-faint text-[12px]"), uistate.T("settings.freshnessHint")),
 		Div(freshnessRows),

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/attention"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
@@ -19,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -133,13 +135,14 @@ func Dashboard() ui.Node {
 		nwSub = "excludes " + plural(len(nw.ExcludedAccounts), "account") + " — no " + strings.Join(nw.MissingCurrencies, ", ") + " rate"
 	}
 
+	attnCol, attnRow := spanOf(layoutItems, "attention")
 	return Fragment(
 		// Optional decorative banner band (B20) — shown only when the user picks a
 		// banner; driven entirely by CSS vars/attribute set by uistate.ApplyBanner,
 		// so it needs no state here. Decorative, hence aria-hidden.
 		Div(Class("app-banner"), Attr("aria-hidden", "true")),
 		Div(Class("bento"),
-			dashboardHeaderCell(),
+			attentionWidget(app, txns, rates, start, end, freshnessDismissals.Get(), widgetCfgs.For("attention"), attnCol, attnRow),
 			uiw.Widget(uiw.WidgetProps{
 				ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
 				GridColumn: "1", GridRow: "2", BodyClass: "flex flex-col justify-center kpi",
@@ -864,9 +867,13 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 	})
 }
 
-// dashboardHeaderCell is the full-width intro cell at the top of the bento grid,
-// with a Reset layout action that restores the default arrangement.
-func dashboardHeaderCell() ui.Node {
+// DashboardLayoutControls renders the dashboard layout manager — the Custom/Auto
+// mode selector (C24) and a Reset-layout action — for the Settings modal. Custom
+// keeps your hand-arranged order; the auto modes reorder the tiles (sizes stay as
+// you set them). Switching to Custom bakes the current auto order in so nothing
+// jumps. It lived in a wasted full-width header cell on the dashboard; it now
+// lives in Settings so the canvas is all widgets.
+func DashboardLayoutControls() ui.Node {
 	layoutAtom := uistate.UseLayoutItems()
 	modeAtom := uistate.UseLayoutMode()
 	reset := func() {
@@ -874,9 +881,6 @@ func dashboardHeaderCell() ui.Node {
 		layoutAtom.Set(d)
 		uistate.PersistItems(d)
 	}
-	// Layout-mode selector (C24): Custom keeps your hand-arranged order; the auto
-	// modes reorder the tiles (sizes stay as you set them). Switching to Custom
-	// bakes the current auto order into the sequence so nothing jumps.
 	onMode := ui.UseEvent(func(e ui.Event) {
 		m := dashlayout.Mode(e.GetValue())
 		if !m.Valid() {
@@ -891,22 +895,227 @@ func dashboardHeaderCell() ui.Node {
 		uistate.PersistLayoutMode(m)
 	})
 	mode := modeAtom.Get()
-	return Div(Class("w"), Style(map[string]string{"grid-column": "1 / -1", "grid-row": "1"}),
-		Div(Class("flex-1 flex items-center px-5 gap-3"),
-			Div(Class("flex-1"),
-				// The page <h1> lives in the top bar (the breadcrumb's current page),
-				// so this in-canvas header is an <h2> to keep the heading order valid.
-				H2(Class("font-display text-2xl font-semibold tracking-tight"), uistate.T("dashboard.title")),
-				P(Class("text-dim mt-0.5 t-body"), uistate.T("dashboard.hint")),
-			),
-			Select(Class("rstep t-caption"), Attr("title", uistate.T("dashboard.layoutMode")), OnChange(onMode),
-				Option(Value(string(dashlayout.ModeCustom)), SelectedIf(mode == dashlayout.ModeCustom), uistate.T("dashboard.layoutCustom")),
-				Option(Value(string(dashlayout.ModeAutoDefault)), SelectedIf(mode == dashlayout.ModeAutoDefault), uistate.T("dashboard.layoutAutoDefault")),
-				Option(Value(string(dashlayout.ModeAutoImportance)), SelectedIf(mode == dashlayout.ModeAutoImportance), uistate.T("dashboard.layoutAutoImportance")),
-			),
-			Button(Class("data-btn"), Type("button"), OnClick(reset), uistate.T("dashboard.reset")),
+	return Div(Class("flex items-center gap-3 flex-wrap"),
+		Select(Class("rstep t-caption"), Attr("title", uistate.T("dashboard.layoutMode")), OnChange(onMode),
+			Option(Value(string(dashlayout.ModeCustom)), SelectedIf(mode == dashlayout.ModeCustom), uistate.T("dashboard.layoutCustom")),
+			Option(Value(string(dashlayout.ModeAutoDefault)), SelectedIf(mode == dashlayout.ModeAutoDefault), uistate.T("dashboard.layoutAutoDefault")),
+			Option(Value(string(dashlayout.ModeAutoImportance)), SelectedIf(mode == dashlayout.ModeAutoImportance), uistate.T("dashboard.layoutAutoImportance")),
 		),
+		Button(Class("data-btn"), Type("button"), OnClick(reset), uistate.T("dashboard.reset")),
 	)
+}
+
+// spanOf returns the intrinsic column/row span of the widget with the given id
+// in the current layout, defaulting to 1×1 when absent. The attention widget uses
+// it to choose how much detail to render (responsive-by-span).
+func spanOf(items []dashlayout.Item, id string) (col, row int) {
+	for _, it := range items {
+		if it.ID == id {
+			c, r := it.ColSpan, it.RowSpan
+			if c < 1 {
+				c = 1
+			}
+			if r < 1 {
+				r = 1
+			}
+			return c, r
+		}
+	}
+	return 1, 1
+}
+
+// attentionWidget is the headline "Needs attention" digest: the urgent, act-now
+// signals (bills due soon, near/over budgets, stale balances, overdue &
+// high-priority to-dos, the biggest spending spike), ranked by the pure
+// internal/attention package under the widget's gear/flip settings. It is
+// responsive-by-span: at 1×1 it shows the single most-urgent item plus a count;
+// wider/taller it shows more. Default placement is 4×1 at the top of the grid.
+func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, start, end time.Time, dismissals freshness.Dismissals, cfg widgetcfg.Config, spanCol, spanRow int) ui.Node {
+	now := time.Now()
+
+	// Budget statuses (near/over are what the digest keeps), rolled up like the
+	// Budgets widget so parent budgets include sub-category spend.
+	cats := app.Categories()
+	statuses := make([]budgeting.Status, 0, len(app.Budgets()))
+	bs, be := dateutil.MonthRange(now)
+	for _, b := range app.Budgets() {
+		if st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); err == nil {
+			statuses = append(statuses, st)
+		}
+	}
+
+	var anomalyPtr *insights.Anomaly
+	if anomalies := detectSpendingAnomalies(txns, cats, rates); len(anomalies) > 0 {
+		anomalyPtr = &anomalies[0]
+	}
+
+	items := attention.Rank(attention.Inputs{
+		Now:     now,
+		Bills:   bills.UpcomingAll(app.Accounts(), app.Recurring(), now),
+		Budgets: statuses,
+		Stale:   freshness.VisibleStaleAccounts(app.Accounts(), app.FreshnessWindows(), dismissals, now),
+		Tasks:   app.Tasks(),
+		Anomaly: anomalyPtr,
+	}, attentionConfig(cfg))
+
+	base := rates.Base
+	var body ui.Node
+	switch {
+	case len(items) == 0:
+		body = P(Class("text-up t-body"), uistate.T("dashboard.attentionClear"))
+	case spanCol < 2 && spanRow < 2:
+		// Compact 1×1: the single most-urgent item, plus a count of the rest.
+		rows := []ui.Node{ui.CreateElement(attentionRow, attentionRowProps{Item: items[0], Base: base})}
+		if crit, warn := attention.Counts(items); crit+warn > 1 {
+			rows = append(rows, P(Class("t-caption text-dim mt-1"), uistate.T("dashboard.attentionMore", crit+warn-boolToInt(items[0].Severity >= attention.SeverityWarning))))
+		}
+		body = Div(Class("attention-list"), rows)
+	default:
+		rows := make([]ui.Node, 0, len(items))
+		for _, it := range items {
+			rows = append(rows, ui.CreateElement(attentionRow, attentionRowProps{Item: it, Base: base}))
+		}
+		// Wide-and-short (e.g. the default 4×1) flows items as wrapping chips; any
+		// layout with height stacks them as a list.
+		cls := "attention-list"
+		if spanRow < 2 {
+			cls = "attention-chips"
+		}
+		body = Div(Class(cls), rows)
+	}
+
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "attention", Title: uistate.T("dashboard.attention"), Draggable: true, Resizable: true,
+		GridColumn: "1 / span 4", GridRow: "1", Body: body,
+	})
+}
+
+// attentionConfig maps the widget's stored gear settings to a typed
+// attention.Config, falling back to the schema defaults.
+func attentionConfig(cfg widgetcfg.Config) attention.Config {
+	out := attention.DefaultConfig()
+	sch, ok := widgetcfg.SchemaFor("attention")
+	if !ok {
+		return out
+	}
+	boolField := func(key string, dst *bool) {
+		if f, ok := sch.FieldByKey(key); ok {
+			*dst = f.Bool(cfg)
+		}
+	}
+	boolField("bills", &out.Bills)
+	boolField("budgets", &out.Budgets)
+	boolField("stale", &out.Stale)
+	boolField("tasks", &out.Tasks)
+	boolField("spending", &out.Spending)
+	if f, ok := sch.FieldByKey("billsDays"); ok {
+		out.BillsWindowDays = f.Int(cfg)
+	}
+	if f, ok := sch.FieldByKey("maxItems"); ok {
+		out.MaxItems = f.Int(cfg)
+	}
+	if f, ok := sch.FieldByKey("minSeverity"); ok {
+		switch f.Str(cfg) {
+		case "warn":
+			out.MinSeverity = attention.SeverityWarning
+		case "critical":
+			out.MinSeverity = attention.SeverityCritical
+		default:
+			out.MinSeverity = attention.SeverityInfo
+		}
+	}
+	return out
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// attentionRowProps configures one attention digest row.
+type attentionRowProps struct {
+	Item attention.Item
+	Base string
+}
+
+// attentionRow renders one urgent item as a clickable line — a severity dot, the
+// plain-English detail, and (when one exists) a deep link that navigates to the
+// item's screen and scrolls to it. Its own component so the navigate hook stays
+// at a stable position across the list.
+func attentionRow(props attentionRowProps) ui.Node {
+	nav := router.UseNavigate()
+	it := props.Item
+	open := func() {
+		if it.Route == "" {
+			return
+		}
+		nav.Navigate(uistate.RoutePath(it.Route))
+		if it.AnchorID != "" {
+			scrollToID(it.AnchorID)
+		}
+	}
+	return Button(Class("attention-item "+attentionTone(it.Severity)), Type("button"), OnClick(open),
+		Attr("title", uistate.T("dashboard.attentionOpen")),
+		Span(Class("attention-dot"), Attr("aria-hidden", "true"), Text(attentionGlyph(it.Severity))),
+		Span(Class("attention-text"), attentionText(it, props.Base)),
+	)
+}
+
+// attentionText renders the plain-English line for an item from its structured
+// fields, localizing at the edge.
+func attentionText(it attention.Item, base string) string {
+	switch it.Kind {
+	case attention.KindBill:
+		when := uistate.T("dashboard.attentionDueToday")
+		switch {
+		case it.Days == 1:
+			when = uistate.T("dashboard.attentionDueTomorrow")
+		case it.Days > 1:
+			when = uistate.T("dashboard.attentionDueInDays", it.Days)
+		}
+		return uistate.T("dashboard.attentionBill", it.Label, when, fmtMoney(it.Amount))
+	case attention.KindBudget:
+		if it.Severity >= attention.SeverityCritical {
+			return uistate.T("dashboard.attentionBudgetOver", it.Label, it.Pct)
+		}
+		return uistate.T("dashboard.attentionBudgetNear", it.Label, it.Pct)
+	case attention.KindStale:
+		return uistate.T("dashboard.attentionStale", it.Label, it.Days)
+	case attention.KindTask:
+		if it.Severity >= attention.SeverityCritical {
+			return uistate.T("dashboard.attentionTaskOverdue", it.Label, it.Days)
+		}
+		return uistate.T("dashboard.attentionTaskHigh", it.Label)
+	case attention.KindSpending:
+		if it.Anomaly != nil {
+			return highlightText(*it.Anomaly, base)
+		}
+	}
+	return it.Label
+}
+
+func attentionTone(s attention.Severity) string {
+	switch s {
+	case attention.SeverityCritical:
+		return "is-critical"
+	case attention.SeverityWarning:
+		return "is-warning"
+	default:
+		return "is-info"
+	}
+}
+
+func attentionGlyph(s attention.Severity) string {
+	switch s {
+	case attention.SeverityCritical:
+		return "▲"
+	case attention.SeverityWarning:
+		return "●"
+	default:
+		return "○"
+	}
 }
 
 // plural renders a count with a singular/plural noun, e.g. "1 deposit" or

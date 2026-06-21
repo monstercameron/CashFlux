@@ -6,6 +6,19 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **The dashboard's dead header cell is now a configurable "Needs attention" widget.** The full-width top cell
+  used to hold only a title and the layout manager; it's replaced by a real draggable/resizable widget (default
+  **4×1**, top of the grid) that surfaces the urgent, act-now signals — bills due soon, near/over budgets, stale
+  balances, overdue & high-priority to-dos, and the biggest spending spike — ranked by the new `internal/attention`
+  package. Each row deep-links to its screen and scrolls to the item. It's **responsive by span** (one item + a
+  count at 1×1; a wrapping chip row when wide-and-short; a stacked list when taller) and **configurable via its
+  gear**: per-source toggles, a bills-due window, a max-items cap, and a minimum-severity floor. Existing saved
+  layouts gain the widget automatically (a new `dashlayout.Reconcile` merges the current widget set into a saved
+  layout — surfacing newcomers at the top, dropping retired ids, preserving the user's order and sizes).
+- **The dashboard layout manager moved to Settings.** The Custom/Auto mode selector and Reset-layout action now
+  live under a **Dashboard layout** section in the Settings modal, freeing the canvas to be all widgets.
+
 ### Added
 - **`internal/attention` — urgency-ranking for the dashboard digest.** Pure package that takes the already-computed
   dashboard signals (bills due soon, near/over budgets, stale balances, overdue & high-priority to-dos, the top
