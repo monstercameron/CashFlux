@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Insights chat: the first message after reopening a saved chat now works.** Reopening Insights resumes the
+  most recent conversation; the first send into a resumed chat appeared to do nothing (the request was made but
+  the reply never showed). Cause: under the state churn of the resume + autosave, the assistant turn was
+  appended via a functional state Update that read a stale base and dropped it. The reply is now written by
+  setting the thread to the exact sent history plus the reply (sending is disabled while in flight, so it's
+  authoritative); the same hardening was applied to message deletion. Covered by an expanded chat e2e that
+  reloads, resumes, and sends.
 - **Insights chat works with reasoning models.** o-series / gpt-5.x models reject a custom temperature on
   /chat/completions; the chat now omits temperature for them (mild 0.4 for other models), so the configured
   OpenAI model no longer silently errors.

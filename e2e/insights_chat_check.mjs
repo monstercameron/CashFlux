@@ -42,6 +42,8 @@ try {
       });
       return;
     }
+    // Simulate real OpenAI latency so any in-flight re-render race is exposed.
+    await new Promise((r) => setTimeout(r, 1500));
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -124,6 +126,37 @@ try {
   // A conversation pill should now exist in the switcher (autosaved).
   const pills = await page.getByRole("button", { name: /groceries/i }).count();
   if (pills === 0) fail("the conversation was not saved into the switcher");
+
+  // --- Reproduce "open app, initial chat fails": reload so the saved conversation
+  // is resumed by the init effect, then send the first message of the new session. ---
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#app *", { timeout: 60000 });
+  await page.waitForTimeout(500);
+  await page.locator('a[title="Insights"]').first().click();
+  await page.waitForTimeout(700);
+  const resumedCard = page.locator(".card", { hasText: "Ask CashFlux" }).first();
+  await resumedCard.waitFor({ timeout: 10000 });
+  // The previous conversation should be resumed (its question is visible).
+  const resumed = await page.evaluate(() => document.body.innerText.includes("How much did I spend on groceries?"));
+  if (!resumed) fail("the saved conversation was not resumed on reload");
+
+  const beforeCalls = aiCalls;
+  await resumedCard.locator("input.field-wide").first().fill("And on dining?");
+  await resumedCard.getByRole("button", { name: "Send" }).first().click();
+  await page.waitForFunction(
+    () => document.body.innerText.includes("And on dining?"),
+    { timeout: 5000 }
+  ).catch(() => fail("[resume] user message did not appear"));
+  // The key assertion: the first send of a resumed session must reach OpenAI and reply.
+  await page.waitForFunction(
+    (n) => window.__noassert || document.querySelectorAll(".insights-answer").length >= 2,
+    {},
+    {}
+  ).catch(() => {});
+  await page.waitForTimeout(2500);
+  if (aiCalls <= beforeCalls) fail("[resume] the initial chat after reload did NOT call OpenAI (this is the bug)");
+  const answers = await page.locator(".insights-answer").count();
+  if (answers < 2) fail(`[resume] expected a new assistant reply after reload, got ${answers} answer bubbles`);
 
   // Error path: a rejected key must surface a visible error, not fail silently.
   mode = "401";

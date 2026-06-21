@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-20 - fix: Insights chat first-message-after-resume drop (stale functional Update)
+
+- Cam: "initial chats fail, retries work — did you e2e test it properly?" My e2e tested a fresh send (passed),
+  but missed the real flow: reopening Insights resumes the last conversation (init effect → switchTo), and the
+  FIRST send into a resumed chat silently produced no reply. Reproduced by extending the e2e to reload → resume
+  → send (it failed: "got 1 answer bubbles"), then instrumented with logging: `onResult` fired (request made,
+  callsDelta=1, no pageerror) and saw turns=3, but after `turns.Update(append)` turns was STILL 3 — the
+  functional updater applied append to a STALE base under the churn of switchTo's many Sets + the autosave
+  persist effect, dropping the user turn and reply. (Retry worked because by then the churn had settled.)
+- Fix: `onResult` now writes `turns.Set(hist + reply)` deterministically (hist = the exact thread sent; sending
+  is disabled while in flight, so it's authoritative) instead of relying on the functional Update's
+  "latest committed" semantics under concurrent Sets. Hardened `deleteTurn` the same way. Removed debug logging.
+- The e2e now permanently covers reload→resume→send (3 OpenAI calls) + the 401 visible-error path. All green.
+  Root lesson: the framework's functional State.Update is not reliable when many Sets to the same cell race in
+  one tick; prefer an explicit Set over a captured snapshot for async callbacks.
+
 ## 2026-06-20 - feat: Insights chat — actions below the bubble + retry on the last user message
 
 - Moved Copy/Pin/Retry/Delete out of the message bubble into a row UNDER it (both bubbles became flex-col, user

@@ -165,11 +165,14 @@ func Insights() ui.Node {
 		errMsg.Set("")
 		loading.Set(true)
 		messages := buildMessages(hist)
+		// Set turns deterministically to the sent history + the reply, rather than a
+		// functional Update: under the state churn of an init-effect resume + autosave,
+		// the functional updater can read a stale base and drop the user turn/reply.
+		// Sending is disabled while in flight, so `hist` is the authoritative thread.
 		onResult := func(content string, u ai.Usage) {
 			loading.Set(false)
-			turns.Update(func(cur []chatTurn) []chatTurn {
-				return append(cur, chatTurn{ID: id.New(), Role: "assistant", Text: content, Usage: u})
-			})
+			reply := chatTurn{ID: id.New(), Role: "assistant", Text: content, Usage: u}
+			turns.Set(append(append([]chatTurn{}, hist...), reply))
 		}
 		onErr := func(e string) { loading.Set(false); errMsg.Set(e) }
 		if useBackendAI {
@@ -218,17 +221,18 @@ func Insights() ui.Node {
 		run(hist)
 	}
 
-	// deleteTurn removes a single message (user or assistant) from the thread.
+	// deleteTurn removes a single message (user or assistant) from the thread. Uses an
+	// explicit Set over the current value (not a functional Update) for the same
+	// stale-base reason as onResult.
 	deleteTurn := func(tid string) {
-		turns.Update(func(cur []chatTurn) []chatTurn {
-			out := make([]chatTurn, 0, len(cur))
-			for _, t := range cur {
-				if t.ID != tid {
-					out = append(out, t)
-				}
+		cur := turns.Get()
+		out := make([]chatTurn, 0, len(cur))
+		for _, t := range cur {
+			if t.ID != tid {
+				out = append(out, t)
 			}
-			return out
-		})
+		}
+		turns.Set(out)
 	}
 
 	// persist upserts the current thread as a conversation, creating one (and a fresh
