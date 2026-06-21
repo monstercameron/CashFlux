@@ -7,14 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Background music ("muzak").** A low-volume looping ambient player, **on by default** and toggled from a ♪
-  button in the top bar (the choice persists across reloads). `web/muzak.js` has a proper `Playlist` data
+- **Background music ("muzak").** A low-volume looping ambient player, **on by default**, toggled from a
+  speaker/mute icon in the top bar (next to + Add) and with a **volume slider + on/off in the Settings modal**.
+  Ships an 8-track calming playlist (`web/audio/calm-01..08.mp3`). `web/muzak.js` has a proper `Playlist` data
   structure (list + cursor, advance/shuffle), **crossfaded track transitions** (two `<audio>` elements overlapped
-  near track end), and **volume fading** (fade-in on enable, fade-out on disable, fade-in on loop) at a 0.12
-  default. Browsers block autoplay, so playback starts on the first click/keypress; missing files are skipped and
-  an all-tracks-failed case backs off instead of busy-looping. Drop MP3s in `web/audio/` (`calm-01.mp3` …
-  `calm-03.mp3`) to supply tracks; the toggle works (silently) without them. Covered by an e2e (default-on,
-  toggles, drives the controller, playlist DS populated, cursor advances, persists).
+  near track end), **volume fading** (fade-in on enable, fade-out on disable, fade-in on loop), and **resume**:
+  it remembers the current track + position (localStorage) and continues from there on reload. Browsers block
+  autoplay, so playback starts on the first click/keypress; missing files are skipped and an all-tracks-failed
+  case backs off instead of busy-looping. The on/off choice and volume persist. New `Volume`/`VolumeMute` icons
+  (and the curated icon set's missing `Copy` entry is fixed). Covered by an e2e (default-on, toggle, controller +
+  playlist DS, cursor advance, persistence, resume-to-saved-track, Settings slider).
 - **Widget Manager — Phase 2 (tile styling with live preview).** A new "Tile style" editor on the Widget Manager
   page lets you style tiles: pick **All widgets** for the global default or a single widget to override it, and set
   **background, text, border color, accent, border width, corner radius, font, weight, and shadow** — with a **live

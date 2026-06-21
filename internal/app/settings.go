@@ -65,6 +65,39 @@ type widgetSettingsFormProps struct {
 // widget's registered widgetcfg.Schema generically (toggle/number/select),
 // bound to the persisted WidgetConfigs atom so changes survive reloads. Widgets
 // with no schema yet show a friendly placeholder.
+// musicSettings is the Settings-modal control group for the background music: an
+// on/off toggle and a volume slider. It writes the shared muzak atoms (the same
+// ones the top-bar speaker button uses), so changes apply live and persist. Its
+// own component so the slider's input hook stays at a stable position.
+func musicSettings() uic.Node {
+	enabled := uistate.UseMuzakEnabled()
+	vol := uistate.UseMuzakVolume()
+	pct := int(vol.Get()*100 + 0.5)
+	onVol := uic.UseEvent(func(e uic.Event) {
+		f, err := strconv.ParseFloat(strings.TrimSpace(e.GetValue()), 64)
+		if err != nil {
+			return
+		}
+		v := f / 100
+		vol.Set(v)
+		uistate.PersistMuzakVolume(v)
+	})
+	return Div(
+		Div(Class("set-label"), uistate.T("settings.music")),
+		ui.ToggleRow(ui.ToggleRowProps{
+			Label:    uistate.T("settings.musicOn"),
+			On:       enabled.Get(),
+			OnChange: func(on bool) { enabled.Set(on); uistate.PersistMuzakEnabled(on) },
+		}),
+		Div(Class("toggle-row"),
+			Span(uistate.T("settings.musicVolume")),
+			Input(Type("range"), Class("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
+				Attr("aria-label", uistate.T("settings.musicVolume")),
+				Value(strconv.Itoa(pct)), OnInput(onVol), OnChange(onVol)),
+		),
+	)
+}
+
 func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 	cfgAtom := uistate.UseWidgetConfigs()
 	all := cfgAtom.Get()
@@ -589,6 +622,7 @@ func globalSettingsForm() uic.Node {
 		Div(Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(Class("text-faint text-[12px]"), uistate.T("settings.freshnessHint")),
 		Div(freshnessRows),
+		uic.CreateElement(musicSettings),
 	)
 
 	activeLang := uistate.ActiveLanguage()

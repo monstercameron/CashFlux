@@ -429,14 +429,16 @@ func TopBar(props topBarProps) uic.Node {
 func MuzakToggle() uic.Node {
 	enabledAtom := uistate.UseMuzakEnabled()
 	enabled := enabledAtom.Get()
+	volume := uistate.UseMuzakVolume().Get()
 
 	uic.UseEffect(func() func() {
 		if m := js.Global().Get("cashfluxMuzak"); m.Truthy() {
 			m.Call("init")
+			m.Call("setVolume", volume)
 			m.Call("setEnabled", enabled)
 		}
 		return nil
-	}, fmt.Sprintf("muzak:%v", enabled))
+	}, fmt.Sprintf("muzak:%v:%.3f", enabled, volume))
 
 	toggle := func() {
 		next := !enabledAtom.Get()
@@ -446,16 +448,18 @@ func MuzakToggle() uic.Node {
 
 	cls := "muzak-btn"
 	titleKey := "muzak.turnOff"
+	glyph := icon.Volume
 	if !enabled {
 		cls += " is-off"
 		titleKey = "muzak.turnOn"
+		glyph = icon.VolumeMute
 	}
 	return Button(Class(cls), Type("button"),
 		Attr("title", uistate.T(titleKey)),
 		Attr("aria-label", uistate.T(titleKey)),
 		Attr("aria-pressed", fmt.Sprintf("%v", enabled)),
 		OnClick(toggle),
-		Span(Attr("aria-hidden", "true"), "♪"),
+		ui.Icon(glyph, Class("w-[18px] h-[18px]")),
 	)
 }
 

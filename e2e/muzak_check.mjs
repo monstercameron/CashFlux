@@ -29,7 +29,7 @@ try {
 
   // The internal playlist data structure is populated (default 3 tracks) at low volume.
   const st = await page.evaluate(() => window.cashfluxMuzak.state());
-  if (st.size !== 3) fail(`playlist should hold the 3 default tracks, got size ${st.size}`);
+  if (st.size !== 8) fail(`playlist should hold the 8 default tracks, got size ${st.size}`);
   if (!(st.volume > 0 && st.volume <= 0.2)) fail(`expected a low default volume, got ${st.volume}`);
   if (!(st.crossfadeMs > 0)) fail("crossfade duration should be configured for track transitions");
 
@@ -53,14 +53,37 @@ try {
   await page.evaluate(() => window.cashfluxMuzak.next());
   await page.waitForTimeout(150);
   const after = await page.evaluate(() => window.cashfluxMuzak.state().index);
-  if (after !== (before + 1) % 3) fail(`next() did not advance the playlist cursor: ${before} -> ${after}`);
+  if (after !== (before + 1) % 8) fail(`next() did not advance the playlist cursor: ${before} -> ${after}`);
 
   // Toggle back on for a clean default.
   await btn2.click();
   await page.waitForTimeout(200);
   if ((await page.evaluate(() => localStorage.getItem("cashflux:muzak"))) !== "1") fail("could not re-enable music");
 
-  if (!process.exitCode) console.log("PASS: muzak is on by default, toggles, drives the audio controller, and persists across reloads.");
+  // Resume: a saved position restores the playlist cursor to that track on load.
+  const ctx2 = await browser.newContext();
+  const page3 = await ctx2.newPage();
+  await page3.addInitScript(() => {
+    localStorage.setItem("cashflux:muzak", "1");
+    localStorage.setItem("cashflux:muzak-pos", JSON.stringify({ i: 5, t: 37 }));
+  });
+  await page3.goto(BASE + "/", { waitUntil: "domcontentloaded" });
+  await page3.waitForSelector(".bento", { timeout: 60000 });
+  await page3.waitForTimeout(700);
+  const resumed = await page3.evaluate(() => window.cashfluxMuzak.state().index);
+  if (resumed !== 5) fail(`playlist did not resume to the saved track: index ${resumed}, want 5`);
+  await ctx2.close();
+
+  // Settings modal exposes the volume slider + music toggle.
+  await page.locator("button.hh").first().click();
+  await page.waitForTimeout(600);
+  const hasMusicSetting = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll(".set-label")].map((e) => e.textContent.trim());
+    return labels.includes("Background music") && !!document.querySelector(".set-range");
+  });
+  if (!hasMusicSetting) fail("Settings should expose the Background music section with a volume slider");
+
+  if (!process.exitCode) console.log("PASS: muzak default-on, toggles, drives the controller, persists, resumes the saved track, and has a Settings volume slider.");
 } finally {
   await browser.close();
 }

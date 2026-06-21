@@ -12,10 +12,14 @@
 // cashfluxMuzak.init([...urls])). Missing files are skipped; if every track fails
 // the player backs off instead of busy-looping.
 (function () {
-  var DEFAULT_TRACKS = ["./audio/calm-01.mp3", "./audio/calm-02.mp3", "./audio/calm-03.mp3"];
+  var DEFAULT_TRACKS = [
+    "./audio/calm-01.mp3", "./audio/calm-02.mp3", "./audio/calm-03.mp3", "./audio/calm-04.mp3",
+    "./audio/calm-05.mp3", "./audio/calm-06.mp3", "./audio/calm-07.mp3", "./audio/calm-08.mp3",
+  ];
   var DEFAULT_VOL = 0.12;
   var CROSSFADE_MS = 2600; // overlap when moving between tracks
   var TOGGLE_MS = 1200; // fade-in / fade-out on enable / disable
+  var POS_KEY = "cashflux:muzak-pos"; // {i: trackIndex, t: seconds} — resume point
 
   function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 
@@ -71,6 +75,36 @@
   var crossing = false; // a crossfade is in progress
   var armed = false; // a gesture listener is waiting
   var errStreak = 0; // consecutive load errors → back off
+  var inited = false; // resume point applied once
+  var pendingResume = 0; // seconds to seek the first track to on startup
+  var lastSave = 0; // throttle position writes
+
+  // ---- Resume persistence: remember the track + position across reloads ------
+  function savePos(force) {
+    if (!els) return;
+    var el = els[active];
+    if (!el || !isFinite(el.currentTime)) return;
+    var now = Date.now();
+    if (!force && now - lastSave < 4000) return;
+    lastSave = now;
+    try { localStorage.setItem(POS_KEY, JSON.stringify({ i: pl.index, t: el.currentTime })); } catch (e) {}
+  }
+  function loadPos() {
+    try {
+      var o = JSON.parse(localStorage.getItem(POS_KEY) || "null");
+      if (o && typeof o.i === "number" && typeof o.t === "number") return o;
+    } catch (e) {}
+    return null;
+  }
+  function applyResume() {
+    if (inited) return;
+    inited = true;
+    var pos = loadPos();
+    if (pos && pos.i >= 0 && pos.i < pl.size()) {
+      pl.index = pos.i;
+      pendingResume = pos.t > 1 ? pos.t : 0; // ignore tiny offsets
+    }
+  }
 
   function ensureEls() {
     if (els) return;
@@ -83,7 +117,14 @@
       el.addEventListener("ended", onEnded);
       el.addEventListener("error", onError);
       el.addEventListener("playing", function () { errStreak = 0; });
+      el.addEventListener("pause", function () { savePos(true); });
     }
+    // Persist the resume point when leaving / backgrounding the page.
+    window.addEventListener("beforeunload", function () { savePos(true); });
+    window.addEventListener("pagehide", function () { savePos(true); });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") savePos(true);
+    });
   }
 
   function configureLoop() {
@@ -96,8 +137,20 @@
   function startTrack(el, src) {
     if (!src) return;
     el.src = src;
-    try { el.currentTime = 0; } catch (e) { /* not seekable yet */ }
     el.volume = 0;
+    // Resume the saved position for the first track only; consume it so later
+    // tracks start from the top. Seeking needs metadata, so wait for it.
+    var seek = pendingResume;
+    pendingResume = 0;
+    if (seek > 0) {
+      var onMeta = function () {
+        el.removeEventListener("loadedmetadata", onMeta);
+        try { if (isFinite(el.duration) && seek < el.duration - 0.5) el.currentTime = seek; } catch (e) {}
+      };
+      el.addEventListener("loadedmetadata", onMeta);
+    } else {
+      try { el.currentTime = 0; } catch (e) { /* not seekable yet */ }
+    }
     var p = el.play();
     if (p && p.catch) p.catch(armGesture);
   }
@@ -116,10 +169,12 @@
     var el = e.target;
     if (!enabled || el !== els[active] || crossing || pl.size() < 2) return;
     if (!isFinite(el.duration) || el.duration <= 0) return;
+    savePos(false); // throttled — remember where we are
     var remain = el.duration - el.currentTime;
     if (el.currentTime > 0 && remain <= CROSSFADE_MS / 1000 + 0.05) {
       crossing = true;
       crossfadeTo(pl.advance());
+      savePos(true);
     }
   }
 
@@ -176,6 +231,7 @@
       if (Array.isArray(list) && list.length) pl.set(list);
       if (typeof volume === "number") vol = clamp01(volume);
       ensureEls();
+      applyResume(); // restore the saved track + position once
     },
     setEnabled: function (on) {
       enabled = !!on;
@@ -196,7 +252,11 @@
     shuffle: function () { pl.shuffle(); },
     // Debug/introspection (used by tests): the live playlist + player state.
     state: function () {
-      return { enabled: enabled, size: pl.size(), index: pl.index, volume: vol, crossfadeMs: CROSSFADE_MS };
+      var a = els ? els[active] : null;
+      return {
+        enabled: enabled, size: pl.size(), index: pl.index, volume: vol, crossfadeMs: CROSSFADE_MS,
+        playing: !!(a && !a.paused), currentTime: a ? a.currentTime : 0, src: a ? a.src : "",
+      };
     },
   };
 })();

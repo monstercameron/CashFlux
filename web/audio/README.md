@@ -1,18 +1,15 @@
 # CashFlux background music (muzak)
 
-Drop your generated tracks here as MP3s with these exact names (the player loops
-through them in order):
-
-- `calm-01.mp3`
-- `calm-02.mp3`
-- `calm-03.mp3`
-
-Want a different playlist? Edit `DEFAULT_TRACKS` in `web/muzak.js` (or call
-`cashfluxMuzak.init([...urls])`).
+The calming playlist (`calm-01.mp3` … `calm-08.mp3`) the player loops through and
+crossfades between. To change the set, edit `DEFAULT_TRACKS` in `web/muzak.js` (or
+call `cashfluxMuzak.init([...urls])`).
 
 Notes:
-- Music is **on by default at low volume (0.12)** and toggled from the ♪ button in
-  the top bar. The choice persists in `localStorage` (`cashflux:muzak`).
+- Music is **on by default at low volume (0.12)** and toggled from the speaker
+  button in the top bar (next to the + Add menu). The choice persists in
+  `localStorage` (`cashflux:muzak`).
 - Browsers block autoplay until the first click/keypress, so playback starts on
   your first interaction with the page.
-- Keep files reasonably small (these aren't precached by the service worker).
+- Tracks crossfade into each other near the end (see `CROSSFADE_MS` in muzak.js).
+- These files are not precached by the service worker (they're large); they stream
+  on demand.

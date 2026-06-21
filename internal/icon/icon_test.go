@@ -14,9 +14,10 @@ var curated = []Name{
 	Check, CheckCircle, AlertCircle, AlertTriangle, Clock, TrendingUp, TrendingDown,
 	ArrowUp, ArrowDown, ArrowUpCircle, ArrowDownCircle,
 	Pencil, Refresh, List, PlusCircle,
-	Sparkles, MessageCircle, FileText,
+	Sparkles, MessageCircle, FileText, Copy,
 	CreditCard, Receipt, Landmark, Filter, Box, Workflow, Scale, Repeat, Calculator,
 	ScanLine, Upload, History, Ban, HelpCircle,
+	Volume, VolumeMute,
 }
 
 func TestEveryConstantResolves(t *testing.T) {
