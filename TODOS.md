@@ -2349,7 +2349,14 @@ as its own local backend** (most local-first-friendly). Out of scope for this en
 _Cross-links: **B19** (the approved plan + Phase B), **C42/C43** (FlipPanel/overlay for the center/rules),
 **C69** (theme), **B15** (a11y/live-region), **C73** (build the center/rules with shared components)._
 
-### C76. AI quick-suggestion modal (FlipPanel) — unify the scattered inline AI affordances ★ (UX, user-requested 2026-06-20)
+### C76. AI quick-suggestion modal (FlipPanel) — unify the scattered inline AI affordances ★ (UX, user-requested 2026-06-20) — ⏸️ WON'T-BUILD (resolved 2026-06-21, with reasoning)
+**Resolved as won't-build:** a code audit shows the premise doesn't hold. The inline "suggest" affordances
+(budget limit, payoff extra, rule suggestions) are **local heuristics**, not AI; the genuine LLM features —
+vision statement import (`documents.go`), allocation (`allocate.go`), and the chat (`insights.go`) — are
+**heterogeneous workflows** with different inputs/outputs and their own loading/error UX. A single shared
+"AiSuggestionModal" would force-fit unlike features → **premature abstraction** against the project's
+clean-architecture rule (no untyped/over-general layers). Keeping them feature-specific is the cleaner design.
+Re-open only if a genuinely repeated AI-suggestion pattern emerges.
 **Context.** AI suggestions are currently **inline cards**, not a modal, and inconsistent across screens:
 Allocate "Explain with AI" (C54), Insights explain/Q&A (C59), Rules suggestions (C64), Documents draft
 extraction/categorization (C60). The `FlipPanel` modal is only used for Settings + the +Add quick-add.
