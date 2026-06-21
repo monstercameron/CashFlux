@@ -1912,7 +1912,11 @@ CTAs. **Buttons aren't oversized.** Issues (one is a correctness/data risk):
 - [ ] **Verify** after changes: reassign only offers same-kind targets; nesting reads cleanly without
       em-dashes; rows show usage + drill into transactions; all controls labelled.
 
-### C64. Rules: UX review — excellent shadow warnings + suggestions; missing precedence reorder ★ (UX review loop, user-requested 2026-06-20)
+### C64. Rules: UX review — excellent shadow warnings + suggestions; missing precedence reorder ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
+**✅ DONE:** added drag-to-reorder precedence. `rules.Rule` gained an `Order` field; `store.ListRules` now sorts
+by Order (then id) so "first match wins" honors user order; `appstate.ReorderRules(orderedIDs)` renumbers + saves.
+`RuleRow` is draggable with a grip; dropping one rule on another reorders. Store test
+`TestListRulesPrecedenceOrder` + e2e `rules_reorder_check`. (Match preview + labels were already done.)
 **Reviewed** the live app (boots clean at `/` — 200, no console errors via `gwc probe`) + the authoritative
 render code (`internal/screens/rules.go`). **Verdict:** a genuinely strong screen — add an auto-categorize
 rule (match phrase → category + optional tags), **history-based rule suggestions** with supporting evidence

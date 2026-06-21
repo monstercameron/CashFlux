@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -238,7 +239,19 @@ func (s *SQLiteStore) DeleteRule(id string) (bool, error) {
 	return deleteRow(s.db, "rules", id)
 }
 func (s *SQLiteStore) ListRules() ([]rules.Rule, error) {
-	return loadRows[rules.Rule](s.db, "rules")
+	rs, err := loadRows[rules.Rule](s.db, "rules")
+	if err != nil {
+		return nil, err
+	}
+	// Precedence is the user-controlled Order (lower runs first); ties fall back to
+	// id for a stable order. First matching rule wins (internal/rules.FirstMatch).
+	sort.SliceStable(rs, func(i, j int) bool {
+		if rs[i].Order != rs[j].Order {
+			return rs[i].Order < rs[j].Order
+		}
+		return rs[i].ID < rs[j].ID
+	})
+	return rs, nil
 }
 
 // --- Documents (imported statements/receipts) ---

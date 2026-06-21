@@ -36,6 +36,7 @@ func Rules() ui.Node {
 	categoryID := ui.UseState("")
 	tags := ui.UseState("")
 	errMsg := ui.UseState("")
+	dragSrc := ui.UseState("") // id of the rule being dragged (precedence reorder, C64)
 	notice := uistate.UseNotice()
 
 	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
@@ -150,15 +151,42 @@ func Rules() ui.Node {
 	covered := rules.Covered(rs, texts)
 	hasTxns := len(texts) > 0
 
+	// Drag-to-reorder precedence (C64): drop the dragged rule in front of the target,
+	// renumber Order via appstate, and refresh. First matching rule wins, so order =
+	// precedence.
+	reorder := func(targetID string) {
+		src := dragSrc.Get()
+		dragSrc.Set("")
+		if src == "" || src == targetID {
+			return
+		}
+		res := make([]string, 0, len(rs))
+		for _, r := range rs {
+			if r.ID == src {
+				continue
+			}
+			if r.ID == targetID {
+				res = append(res, src)
+			}
+			res = append(res, r.ID)
+		}
+		if err := app.ReorderRules(res); err == nil {
+			bump()
+		}
+	}
+
 	list := IfElse(len(rs) == 0,
 		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), FocusID: "rule-add"}),
 		Div(Class("rows"), MapKeyed(rs,
 			func(r rules.Rule) any { return r.ID },
 			func(r rules.Rule) ui.Node {
+				rid := r.ID
 				return ui.CreateElement(RuleRow, ruleRowProps{
 					Rule: r, Categories: cats, CategoryName: catName[r.SetCategoryID],
 					Warning: warnByID[r.ID], MatchCount: r.MatchCount(texts), ShowMatchCount: hasTxns,
 					OnDelete: deleteRule, OnSave: saveRule,
+					OnDragStart: func() { dragSrc.Set(rid) },
+					OnDrop:      func() { reorder(rid) },
 				})
 			},
 		)),
@@ -272,6 +300,8 @@ type ruleRowProps struct {
 	ShowMatchCount bool   // whether to show the count (there are transactions to count)
 	OnDelete       func(string)
 	OnSave         func(id, match, category, tags string)
+	OnDragStart    func()
+	OnDrop         func()
 }
 
 // RuleRow is a per-rule row, editable inline (match + category + tags). All hooks
@@ -330,7 +360,19 @@ func RuleRow(props ruleRowProps) ui.Node {
 	if len(r.SetTags) > 0 {
 		meta += " · " + strings.Join(r.SetTags, ", ")
 	}
-	return Div(Class("row"),
+	return Div(Class("row"), Attr("draggable", "true"),
+		OnDragStart(func() {
+			if props.OnDragStart != nil {
+				props.OnDragStart()
+			}
+		}),
+		OnDragOver(Prevent(func() {})), // allow drop
+		OnDrop(Prevent(func() {
+			if props.OnDrop != nil {
+				props.OnDrop()
+			}
+		})),
+		Span(Class("rule-grip"), Attr("aria-hidden", "true"), Title(uistate.T("rules.dragTitle")), uiw.Icon(icon.MoreH, Class("w-4 h-4"))),
 		Div(Class("row-main"),
 			Span(Class("row-desc"), uistate.T("rules.matchLabel", r.Match)),
 			Span(Class("row-meta"), meta),

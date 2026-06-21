@@ -605,6 +605,31 @@ func (a *App) PutRule(r rules.Rule) error {
 // DeleteRule removes an auto-categorization rule.
 func (a *App) DeleteRule(id string) error { return a.del("rule", id, a.store.DeleteRule) }
 
+// ReorderRules sets each rule's precedence (Order) from its position in
+// orderedIDs (index 0 = highest precedence, runs first). Ids not present keep
+// their relative order after the listed ones. Used by drag-to-reorder (C64).
+func (a *App) ReorderRules(orderedIDs []string) error {
+	rs := a.Rules()
+	pos := make(map[string]int, len(orderedIDs))
+	for i, id := range orderedIDs {
+		pos[id] = i
+	}
+	next := len(orderedIDs)
+	for i := range rs {
+		if p, ok := pos[rs[i].ID]; ok {
+			rs[i].Order = p
+		} else {
+			rs[i].Order = next
+			next++
+		}
+		if err := a.store.PutRule(rs[i]); err != nil {
+			return err
+		}
+	}
+	a.log.Info("rules reordered", "count", len(rs))
+	return nil
+}
+
 func (a *App) transactionAutoRules() []rules.Rule {
 	userRules := a.Rules()
 	categories := a.Categories()

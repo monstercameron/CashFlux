@@ -305,6 +305,7 @@ var english = Catalog{
 	"rules.matchRequired":      "Enter a phrase to match.",
 	"rules.categoryRequired":   "Choose a category to assign.",
 	"rules.editTitle":          "Edit rule",
+	"rules.dragTitle":          "Drag to reorder precedence",
 	"rules.deleteTitle":        "Delete rule",
 	"rules.shadowed":           "Never runs — an earlier rule (%q) already matches it.",
 	"rules.noMatch":            "Never runs — no match phrase.",

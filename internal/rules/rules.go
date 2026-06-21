@@ -12,6 +12,7 @@ type Rule struct {
 	Match         string // case-insensitive substring matched against payee + description
 	SetCategoryID string
 	SetTags       []string
+	Order         int `json:",omitempty"` // precedence: lower runs first (first match wins)
 }
 
 // matches reports whether pattern (trimmed, case-insensitive) is a substring of
