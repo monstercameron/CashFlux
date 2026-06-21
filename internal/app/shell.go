@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -415,8 +416,46 @@ func TopBar(props topBarProps) uic.Node {
 		),
 		Div(Class("topbar-controls ml-auto flex items-center gap-2.5 text-dim text-[13px]"),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
+			uic.CreateElement(MuzakToggle),
 			uic.CreateElement(AddMenu),
 		),
+	)
+}
+
+// MuzakToggle is the top-bar ♪ button that turns the calming background music on
+// or off. It drives the JS audio controller (web/muzak.js) from the persisted
+// on/off atom: an effect keyed on the state (re)initializes the player and
+// applies enabled/disabled, so the choice survives navigation and reloads.
+func MuzakToggle() uic.Node {
+	enabledAtom := uistate.UseMuzakEnabled()
+	enabled := enabledAtom.Get()
+
+	uic.UseEffect(func() func() {
+		if m := js.Global().Get("cashfluxMuzak"); m.Truthy() {
+			m.Call("init")
+			m.Call("setEnabled", enabled)
+		}
+		return nil
+	}, fmt.Sprintf("muzak:%v", enabled))
+
+	toggle := func() {
+		next := !enabledAtom.Get()
+		enabledAtom.Set(next)
+		uistate.PersistMuzakEnabled(next)
+	}
+
+	cls := "muzak-btn"
+	titleKey := "muzak.turnOff"
+	if !enabled {
+		cls += " is-off"
+		titleKey = "muzak.turnOn"
+	}
+	return Button(Class(cls), Type("button"),
+		Attr("title", uistate.T(titleKey)),
+		Attr("aria-label", uistate.T(titleKey)),
+		Attr("aria-pressed", fmt.Sprintf("%v", enabled)),
+		OnClick(toggle),
+		Span(Attr("aria-hidden", "true"), "♪"),
 	)
 }
 

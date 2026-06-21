@@ -812,6 +812,14 @@
       .wm-preview-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint,#9ca3af); }
       /* The preview is a real tile shell so overrides read true; it isn't on the grid. */
       .wm-preview-tile { position:static !important; min-height:120px; }
+
+      /* Background-music (muzak) top-bar toggle. */
+      .muzak-btn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+        border:1px solid var(--line,#e5e7eb); border-radius:8px; background:transparent; cursor:pointer;
+        color:var(--accent,#3b82f6); font-size:15px; line-height:1;
+        transition:background .12s ease, color .12s ease, opacity .12s ease; }
+      .muzak-btn:hover { background:color-mix(in srgb, var(--accent,#3b82f6) 10%, transparent); }
+      .muzak-btn.is-off { color:var(--faint,#9ca3af); opacity:.7; }
     </style>
   </head>
   <body>
@@ -867,6 +875,8 @@
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
     <script src="./chart.js"></script>
     <script src="./flip.js"></script>
+    <!-- Calming background music ("muzak"): low-volume looping ambient player. -->
+    <script src="./muzak.js"></script>
     <!-- Mermaid diagrams (C70): vendored locally (no CDN, C44) + its shim. -->
     <script src="./mermaid.min.js"></script>
     <script src="./mermaid.js"></script>

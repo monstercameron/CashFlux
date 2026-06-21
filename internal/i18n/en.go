@@ -13,6 +13,8 @@ var english = Catalog{
 
 	// Top bar
 	"topbar.menu":       "Collapse menu",
+	"muzak.turnOn":      "Turn music on",
+	"muzak.turnOff":     "Turn music off",
 	"topbar.add":        "Add something new",
 	"topbar.addLabel":   "+ Add",
 	"topbar.breadcrumb": "Breadcrumb",
