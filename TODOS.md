@@ -4840,10 +4840,11 @@ assert the category auto-fills).
 - [~] **Actions beyond category + tags** — covered by the workflow engine's actions
       (`ActionSetCategory`, `ActionAddTag`, `ActionFlagReview`; seeded in sample.go). (Remaining:
       member/owner + budget actions; converge with the simple Rule.)
-- [ ] **"Create rule from this transaction" + preview count.** A per-transaction action "Always
-      categorize like this" prefilling the rule form; and on the rule form show **"matches N existing
-      transactions"** before you hit Apply-to-existing (which is currently blind). Bottom-up: a pure
-      `CountMatches(rules, txns)` → a count label + a row action.
+- [x] **"Create rule from this transaction" + preview count.** Both done: the per-transaction action
+      "Always categorize like this" prefills the rule form (via a shared `uistate` RuleDraft atom, mirroring
+      the dialog-host pattern) and navigates to /rules; the **match-count preview** ("matches N existing
+      transactions", live as you type + per-rule) was already wired (`rules.MatchCount`/`Covered`). e2e
+      `create_rule_from_txn_check.mjs`.
 
 **Probe note:** the auto-categorize check **false-negatived** first (the script read the *account* select
 "Auto Loan", not the *category* select); a focused re-measure confirmed the category = "Dining". Fix

@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "gwc": {
-      "command": "C:\\Users\\cam\\Developer\\CashFlux\\.tools\\gwc.exe",
+      "command": "C:\\Users\\mreca\\Desktop\\CashFlux\\.tools\\gwc.exe",
       "args": ["mcp"],
       "env": {}
     }

@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: create-rule-from-transaction + rules round-trip gate (L15)
+
+L15's engine, auto-categorize, and the match-count preview were already solid; and the richer-conditions /
+more-actions asks turn out to be largely covered by the separate `workflow` engine (expression conditions like
+`txn_abs > 200`, `ActionFlagReview`). So the genuine net-new work was two things. (1) A CI gate — `rules_check.mjs`
+— for the core create-rule → matching-txn → auto-file → reload round-trip that nothing covered (wrote it myself).
+(2) "Always categorize like this": a per-transaction action that prefills the Rules add-form from the txn. The
+cross-screen handoff rides a shared `uistate` RuleDraft atom captured in DialogHost (always mounted), exactly
+mirroring the dialog-atom pattern; Rules() consumes it on render and clears it so a later visit is blank.
+
+e2e gotcha (same family as before): a newly added rule sorts to the FRONT by Order, and the agent's gate read
+localStorage once right after submit (no autosave flush) and looked at slice(0,5) — so it intermittently missed
+the rule. A probe proved the feature works (count 5→6, "Northside Goods" at index 0); fixed the gate to poll with
+a visibilitychange flush and match anywhere in the list. Sub-agent built the feature; integrated + regressed
+(add-txn / live-count / preview green). This closes the L15 cluster. Next: L25.
+
 ## 2026-06-22 - feat: subscription cancellation + charged-after-cancel alert (L12)
 
 TODOS had the Logic and State/UI sub-items checked, but a grep proved none of it existed — the marks were

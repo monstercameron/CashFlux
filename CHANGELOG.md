@@ -9,6 +9,13 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - **Subscription cancellation tracking + charged-after-cancel alert (L12).**
 
+### Added
+- **"Always categorize like this" — create a rule from a transaction (L15).** Every transaction row gains an
+  action that opens the Rules screen with the rule form prefilled from that transaction (match phrase = its
+  payee/description, category = its current category), so turning a one-off categorization into a standing rule
+  is one click. The prefill rides a shared `uistate` rule-draft atom (same pattern as the dialog host). Pairs
+  with the existing live match-count preview. e2e `create_rule_from_txn_check.mjs`.
+
 ### Tests
 - **Rule auto-categorization round-trip gate (L15).** `e2e/rules_check.mjs` covers the core "set it and forget
   it" flow end to end: create a rule (phrase → category), add a transaction whose description matches, assert

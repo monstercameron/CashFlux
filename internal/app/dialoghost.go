@@ -38,9 +38,13 @@ func dialogInputValue() string {
 // DialogHost renders the pending modal dialog. It always returns a stable root
 // element (empty when no dialog is open) so the framework has an anchor to update,
 // and calls its hooks unconditionally (hook order must be stable across renders).
+// It also captures the rule-draft atom so that SetRuleDraft (called before
+// navigation) notifies the correct subscriber.
 func DialogHost() uic.Node {
 	d := uistate.UseDialog()
 	uistate.CaptureDialog(d)
+	rd := uistate.UseRuleDraft()
+	uistate.CaptureRuleDraft(rd)
 	req := d.Get()
 	open := req != nil
 

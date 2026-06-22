@@ -34,12 +34,29 @@ func Rules() ui.Node {
 	rev := state.UseAtom("rev:rules", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 
+	// Consume any pending prefill set by "Always categorize like this" on a
+	// transaction row. UseRuleDraft reads the atom; if a draft is present we
+	// seed the form states from it and clear the atom so a later visit is blank.
+	// This must happen before the UseState calls whose initial values we want to
+	// override, but the states themselves are declared first so hook order is
+	// stable — we call Set on them right after, which is fine.
 	match := ui.UseState("")
 	categoryID := ui.UseState("")
 	tags := ui.UseState("")
 	errMsg := ui.UseState("")
 	dragSrc := ui.UseState("") // id of the rule being dragged (precedence reorder, C64)
 	notice := uistate.UseNotice()
+
+	// Prefill from a pending rule draft (set by the transactions screen). UseAtom
+	// here re-uses the same key as UseRuleDraft, so this component subscribes to
+	// the atom and re-renders when it changes. On the first render where the draft
+	// is non-nil we seed the form and clear the atom.
+	draftAtom := uistate.UseRuleDraft()
+	if draft := draftAtom.Get(); draft != nil {
+		match.Set(draft.Match)
+		categoryID.Set(draft.CategoryID)
+		uistate.ClearRuleDraft()
+	}
 
 	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
 	onCategory := ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })

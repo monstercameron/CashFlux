@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -34,6 +35,7 @@ func Transactions() ui.Node {
 		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
+	nav := router.UseNavigate()
 	rev := state.UseAtom("rev:transactions", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 
@@ -315,6 +317,15 @@ func Transactions() ui.Node {
 		bump()
 	}
 
+	// createRuleFromTxn prefills the Rules add-form with this transaction's payee
+	// (falling back to its description) and current category, then navigates there
+	// so the user can confirm and save the rule in one click.
+	createRuleFromTxn := func(t domain.Transaction) {
+		phrase := strings.TrimSpace(firstNonEmpty(t.Payee, t.Desc))
+		uistate.SetRuleDraft(phrase, t.CategoryID)
+		nav.Navigate(uistate.RoutePath("/rules"))
+	}
+
 	toggleCleared := func(t domain.Transaction) {
 		t.Cleared = !t.Cleared
 		if err := app.PutTransaction(t); err != nil {
@@ -588,7 +599,7 @@ func Transactions() ui.Node {
 					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], Categories: categories,
 					Members:  app.Members(),
 					Selected: selected.Get()[t.ID],
-					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect, OnToggleCleared: toggleCleared,
+					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect, OnToggleCleared: toggleCleared, OnCreateRule: createRuleFromTxn,
 				})
 			},
 		)
@@ -746,6 +757,9 @@ type transactionRowProps struct {
 	OnSave          func(orig domain.Transaction, desc, amount, categoryID, date, memberID string)
 	OnToggleSelect  func(string)
 	OnToggleCleared func(domain.Transaction)
+	// OnCreateRule navigates to the Rules screen with the add-form prefilled from
+	// this transaction's payee/description and category.
+	OnCreateRule func(domain.Transaction)
 }
 
 // (Transaction filtering/sorting now lives in the pure, tested internal/txnfilter
@@ -764,6 +778,11 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	dup := ui.UseEvent(Prevent(func() { props.OnDuplicate(t) }))
 	sel := ui.UseEvent(Prevent(func() { props.OnToggleSelect(t.ID) }))
 	clr := ui.UseEvent(Prevent(func() { props.OnToggleCleared(t) }))
+	createRule := ui.UseEvent(Prevent(func() {
+		if props.OnCreateRule != nil {
+			props.OnCreateRule(t)
+		}
+	}))
 	pr := uistate.UsePrefs().Get()
 	// Resolve the default member for this row: the transaction's own MemberID if
 	// set, otherwise the account owner via MemberForNewTransaction.
@@ -865,6 +884,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		Td(css.Class("td-actions"),
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
+			If(!props.Txn.IsTransfer(), Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.createRuleTitle")), Title(uistate.T("transactions.createRuleTitle")), Attr("data-testid", "txn-create-rule"), OnClick(createRule), uistate.T("transactions.createRule"))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 	)
