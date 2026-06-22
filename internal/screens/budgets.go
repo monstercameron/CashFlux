@@ -357,7 +357,10 @@ func Budgets() ui.Node {
 				H2(css.Class("card-title"), uistate.T("nav.budgets")),
 			),
 			assignBanner,
-			If(overCount > 0 || nearCount > 0, P(css.Class("budget-sub"), uistate.T("budgets.overNear", overCount, nearCount))),
+			If(overCount > 0 || nearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				If(overCount > 0, Span(css.Class("pill", tw.TextDown), uistate.T("budgets.overBadge", overCount))),
+				If(nearCount > 0, Span(css.Class("pill", tw.TextWarn), uistate.T("budgets.nearBadge", nearCount))),
+			)),
 			listBody,
 		),
 	)

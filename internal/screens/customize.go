@@ -78,6 +78,10 @@ func Customize() ui.Node {
 	onExpr := ui.UseEvent(func(v string) { expr.Set(v) })
 	fName := ui.UseState("")
 	fMsg := ui.UseState("")
+	// editID tracks the formula loaded into the editor so Save updates it in place
+	// instead of minting a new ID (which silently duplicated it on every load→save).
+	// Empty = a brand-new formula; cleared after a save or a "New" reset.
+	editID := ui.UseState("")
 	rev := ui.UseState(0)
 	onFName := ui.UseEvent(func(v string) { fName.Set(v) })
 	saveFormula := ui.UseEvent(Prevent(func() {
@@ -87,19 +91,27 @@ func Customize() ui.Node {
 			fMsg.Set(uistate.T("customize.saveNeedsBoth"))
 			return
 		}
-		if err := app.PutFormula(domain.Formula{ID: id.New(), Name: name, Expr: ex, Enabled: true}); err != nil {
+		fid := editID.Get()
+		if fid == "" {
+			fid = id.New()
+		}
+		if err := app.PutFormula(domain.Formula{ID: fid, Name: name, Expr: ex, Enabled: true}); err != nil {
 			fMsg.Set(err.Error())
 			return
 		}
 		fName.Set("")
+		editID.Set("")
 		fMsg.Set(uistate.T("customize.saved"))
 		rev.Set(rev.Get() + 1)
 	}))
 	deleteFormula := func(fid string) {
 		_ = app.DeleteFormula(fid)
+		if editID.Get() == fid {
+			editID.Set("")
+		}
 		rev.Set(rev.Get() + 1)
 	}
-	loadFormula := func(ex string) { expr.Set(ex); fMsg.Set("") }
+	loadFormula := func(f domain.Formula) { expr.Set(f.Expr); fName.Set(f.Name); editID.Set(f.ID); fMsg.Set("") }
 
 	var resultBody ui.Node
 	switch e := strings.TrimSpace(expr.Get()); {
@@ -163,7 +175,7 @@ func Customize() ui.Node {
 // savedFormulasCard lists the user's saved formulas, each evaluated live against
 // the current figures, with load-into-editor and delete actions. Hidden when
 // there are none.
-func savedFormulasCard(formulas []domain.Formula, vars map[string]float64, onLoad func(string), onDelete func(string)) ui.Node {
+func savedFormulasCard(formulas []domain.Formula, vars map[string]float64, onLoad func(domain.Formula), onDelete func(string)) ui.Node {
 	if len(formulas) == 0 {
 		return Fragment()
 	}
@@ -192,7 +204,7 @@ func evalFormulaDisplay(expr string, vars map[string]float64) string {
 type savedFormulaRowProps struct {
 	Formula  domain.Formula
 	Result   string
-	OnLoad   func(string)
+	OnLoad   func(domain.Formula)
 	OnDelete func(string)
 }
 
@@ -201,7 +213,7 @@ type savedFormulaRowProps struct {
 // no-hooks-in-loops rule).
 func SavedFormulaRow(props savedFormulaRowProps) ui.Node {
 	f := props.Formula
-	load := ui.UseEvent(Prevent(func() { props.OnLoad(f.Expr) }))
+	load := ui.UseEvent(Prevent(func() { props.OnLoad(f) }))
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(f.ID) }))
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),

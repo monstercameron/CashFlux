@@ -364,6 +364,10 @@ func Reports() ui.Node {
 	}
 
 	return Div(
+		// Make the covered window (and the comparison period) explicit on the page —
+		// the report silently uses the top-bar window, so without this the numbers
+		// have no stated date range (L-quickhit #32).
+		P(css.Class("t-caption", tw.TextDim), uistate.T("reports.covering", pr.FormatDate(cs), pr.FormatDate(ce), pr.FormatDate(ps), pr.FormatDate(pe))),
 		Div(css.Class("stat-grid"),
 			stat(uistate.T("dashboard.income"), fmtMoney(money.New(flow.Income, base)), "pos"),
 			stat(uistate.T("dashboard.spending"), fmtMoney(money.New(flow.Expense, base)), "neg"),

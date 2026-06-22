@@ -10978,3 +10978,14 @@ add form. Wired Bills (→/accounts), Subscriptions (→/transactions), Reports 
 plan-add). Covers quick-hit tasks #49–#52. Also reconciled stale TODOS: Bills annualCost
 (#28, already cadence-correct via bills.AnnualAmounts), Bills key collision (#29, already a composite
 MapKeyed key), and Bills urgency tone (#30, already billUrgencyTone) were verified already-done.
+
+## 2026-06-22 — Quick-hits batch 2: formula fix + UX/a11y polish
+Fixed the real bug (#43): Customize minted a new formula id on every Save, so load→save duplicated.
+Editor now tracks editID (set on load, cleared on save/delete) and reuses it. Added gate
+formula_save_inplace_check (3→3, no dup). Plus: budgets over/near badges (#40), reports "Covering
+X–Y compared with …" caption (#32), rules match/category/tags aria-labels (#45), members name
+aria-label + reassign select label & focus-on-open (#47). Reconciled many stale-checked items as
+already-done: #31 goal-complete tone, #34 currency Select, #35 same-kind reassign filter, #36 insights
+key→Settings link, #37 documents select label, #38 todo labels, #39 todo overdue cue, #41 subs price
+tone, #42 artifacts error notice, #44 member avatar, #46 category per-row usage, #48/#33 input
+constraints, #53/#54/#55 labeledField forms, #56/#57 budget/goal drill-downs.

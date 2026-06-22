@@ -204,6 +204,15 @@ func Members() ui.Node {
 		Span(ClassStr(accentFor(grp)), fmtMoney(grp)),
 	))
 
+	// When the reassign panel opens, move focus to its target select so a
+	// keyboard user lands on the choice they must make (L-quickhit #47).
+	ui.UseEffect(func() func() {
+		if reassignID.Get() != "" {
+			focusByID("member-reassign")
+		}
+		return nil
+	}, reassignID.Get())
+
 	// Reassign-before-delete panel, shown when a member who owns entities is deleted.
 	reassignPanel := Fragment()
 	if rid := reassignID.Get(); rid != "" {
@@ -221,7 +230,7 @@ func Members() ui.Node {
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("members.reassignDesc", targetName, ownedCount(rid))),
 				Form(css.Class("form-grid"), OnSubmit(confirmReassign),
-					Select(css.Class("field"), OnChange(onReassignTo), opts),
+					Select(css.Class("field"), Attr("id", "member-reassign"), Attr("aria-label", uistate.T("members.reassignTitle")), OnChange(onReassignTo), opts),
 					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("members.moveAndDelete")),
 					Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 				),
@@ -234,7 +243,7 @@ func Members() ui.Node {
 			Title: uistate.T("members.add"),
 			Body: Fragment(
 				Form(css.Class("form-grid"), OnSubmit(add),
-					Input(append([]any{css.Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
+					Input(append([]any{css.Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-label", uistate.T("members.name")), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
 					Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
 					MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 						return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
@@ -331,7 +340,7 @@ func MemberRow(props memberRowProps) ui.Node {
 	if editing.Get() {
 		return Div(css.Class("row"),
 			Form(css.Class("form-grid"), OnSubmit(saveEdit),
-				Input(css.Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName)),
+				Input(css.Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Attr("aria-label", uistate.T("members.name")), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName)),
 				Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(colorS.Get()), OnInput(onColor)),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),

@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Quick-hit UX polish (L audits).** Budgets show the over/near summary as tone'd badges; the Reports
+  screen now states the covered date range ("Covering … compared with …"); Rules' match/category/tags
+  controls and the Members name + reassign-target select gained accessible labels, and opening the
+  member reassign panel moves focus to its select.
+
+### Fixed
+- **Customize no longer duplicates a formula on load→save (L #43).** Editing a saved formula now updates
+  it in place (the editor tracks the loaded id) instead of minting a new id on every Save. Gate:
+  `e2e/formula_save_inplace_check.mjs`.
+
+### Added
 - **Guided empty states on derived & planning screens (L-quickhits).** Bills, Subscriptions, and the
   Reports breakdown now render a friendly `EmptyStateCTA` that routes the user to where the data is
   created (Accounts / Transactions) instead of a bare "nothing here" line; Planning's Recurring and
