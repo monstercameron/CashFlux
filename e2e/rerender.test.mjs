@@ -47,7 +47,7 @@ try {
   }
   // Add-menu open/close.
   for (let i = 0; i < 4; i++) {
-    await page.getByText("+ Add").first().click().catch(() => {});
+    await page.locator(".add-btn").first().click().catch(() => {});
     await page.waitForTimeout(100);
     await page.locator("body").click({ position: { x: 4, y: 4 } }).catch(() => {});
     await assertSingle(page, `addmenu#${i}`);

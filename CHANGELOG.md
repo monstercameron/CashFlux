@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Unified top-bar controls into consistent filled icon buttons.** The notification bell, music play/pause
+  toggle, and the "+ Add" control now share one borderless, filled icon-button style (the Add control is now a
+  plus icon instead of "+ Add" text). All three carry an `aria-label` and a hover `title`, and the Add button
+  exposes `aria-haspopup`/`aria-expanded` for its menu.
+
 ### Removed
 - **The Tailwind CSS CDN is gone (C91).** Deleted `<script src="https://cdn.tailwindcss.com">` and the inline
   `tailwind.config` from `web/index.html`. The app no longer loads any third-party CSS/JS to style itself — one

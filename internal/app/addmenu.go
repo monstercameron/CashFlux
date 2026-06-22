@@ -41,12 +41,20 @@ func AddMenu() uic.Node {
 			Span(uistate.T(labelKey)),
 		)
 	}
+	// aria-expanded reflects the popover state for assistive tech (this is a menu
+	// button, now icon-only — so it needs an explicit accessible name + hover title).
+	expanded := "false"
+	if open.Get() {
+		expanded = "true"
+	}
 	return Div(css.Class("add-wrap"),
-		Button(css.Class(tw.Px3, tw.Py15, tw.Rounded4, tw.Border, tw.BorderLine, tw.TextFg, tw.HoverBgHover),
+		Button(css.Class("add-btn"),
 			Attr("title", uistate.T("topbar.add")),
+			Attr("aria-label", uistate.T("topbar.add")),
 			Attr("aria-haspopup", "menu"),
+			Attr("aria-expanded", expanded),
 			OnClick(func() { open.Set(!open.Get()) }),
-			uistate.T("topbar.addLabel"),
+			ui.Icon(icon.Plus, css.Class(tw.W18px, tw.H18px)),
 		),
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu"+hidden), Attr("role", "menu"),

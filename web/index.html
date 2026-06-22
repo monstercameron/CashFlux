@@ -823,11 +823,11 @@
       .wm-preview-tile { position:static !important; min-height:120px; }
 
       /* Background-music (muzak) top-bar toggle. */
-      .muzak-btn, .notify-btn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
-        border:1px solid var(--line,#e5e7eb); border-radius:8px; background:transparent; cursor:pointer;
+      .muzak-btn, .notify-btn, .add-btn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+        border:0; border-radius:8px; background:var(--bg-elev,#1a1a1d); cursor:pointer;
         color:var(--accent,#3b82f6); font-size:15px; line-height:1;
         transition:background .12s ease, color .12s ease, opacity .12s ease; }
-      .muzak-btn:hover, .notify-btn:hover { background:color-mix(in srgb, var(--accent,#3b82f6) 10%, transparent); }
+      .muzak-btn:hover, .notify-btn:hover, .add-btn:hover { background:color-mix(in srgb, var(--accent,#3b82f6) 18%, var(--bg-elev,#1a1a1d)); }
       .muzak-btn.is-off { color:var(--faint,#9ca3af); opacity:.7; }
       .muzak-btn.relative { position:relative; }
       .notify-badge { position:absolute; top:-3px; right:-3px; min-width:15px; height:15px; padding:0 3px;
