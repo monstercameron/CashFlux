@@ -42,3 +42,19 @@ func MemberCSV(rows []MemberSpend, name func(id string) string, amount func(int6
 	w.Flush()
 	return buf.Bytes()
 }
+
+// CustomFieldCSV renders a spending-by-custom-field report as CSV bytes: a
+// header row then one row per distinct field value with the display value and
+// total amount. fieldLabel is the column header for the value column (typically
+// the field's Label from its Def). amount renders a minor-units integer as a
+// plain decimal string. Pure, standard-library only.
+func CustomFieldCSV(rows []CustomFieldSpend, fieldLabel string, amount func(int64) string) []byte {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{fieldLabel, "Amount"})
+	for _, r := range rows {
+		_ = w.Write([]string{r.Value, amount(r.Amount)})
+	}
+	w.Flush()
+	return buf.Bytes()
+}

@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: spending report by custom field (L18, also L16)
+
+Custom fields could be defined, filled, and filtered, but the data was a dead end — no way to total by them.
+Added `reports.ByCustomField(txns, fieldKey, start, end, rates)` mirroring `SpendingByMember` (expenses only,
+in-range, FX→base, largest-first deterministic) + `reports.CustomFieldCSV`, and a "Spending by <field>" section
+on Reports with a selector across the transaction custom fields. Value normalization is the fiddly bit: bool→
+Yes/No, float→trailing-zeros stripped, json.Number via Float64, missing→"" shown as "(no value)". Notably this
+also closes L16's tax-tagging ask — a bool "Deductible" field + this roll-up gives the deductibles total with no
+separate tax-flag schema. 9 table tests; e2e `report_by_customfield_check.mjs` (uses the seeded `project` select
++ `reimbursable` bool fields). Sub-agent built; integrated + regressed (sankey/sharebars green). Next: L20.
+
 ## 2026-06-22 - feat: "Repeat" a transaction from the add form (L24)
 
 Closes the L24/L26 recurrence cluster. The schedule engine + Planning management UI already existed; this adds

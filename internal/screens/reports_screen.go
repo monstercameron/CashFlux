@@ -8,7 +8,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -55,6 +57,20 @@ func Reports() ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	txns := app.Transactions()
+
+	// Custom-field grouper: collect transaction-scoped field defs and track which
+	// one the user has chosen for the roll-up section. Defaults to the first field.
+	txnDefs := app.CustomFieldDefsFor("transaction")
+	var cfDefs []customfields.Def
+	for _, d := range txnDefs {
+		cfDefs = append(cfDefs, d)
+	}
+	firstCFKey := ""
+	if len(cfDefs) > 0 {
+		firstCFKey = cfDefs[0].Key
+	}
+	selectedCFKey := ui.UseState(firstCFKey)
+	onCFKeyChange := OnChange(func(v string) { selectedCFKey.Set(v) })
 
 	// The viewed period is the shared top-bar window; the comparison is the
 	// immediately preceding window of the same length.
@@ -430,6 +446,101 @@ func Reports() ui.Node {
 			H2(css.Class("card-title"), uistate.T("reports.savingsTrend")),
 			P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
 			uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
+		)),
+		If(len(cfDefs) > 0, customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor)),
+	)
+}
+
+// customFieldSpendSection renders the "Spending by <field>" card: a field
+// selector, a ranked list of value→amount rows, and a CSV download button.
+// It is extracted to keep the main Reports function readable and to isolate the
+// per-field OnChange hook (called at a single stable render position, not in a
+// loop).
+func customFieldSpendSection(
+	txns []domain.Transaction,
+	defs []customfields.Def,
+	selectedKey string,
+	onKeyChange any,
+	start, end time.Time,
+	rates currency.Rates,
+	base string,
+	fmtMinor func(int64) string,
+) ui.Node {
+	// Resolve the active definition; fall back to the first if selectedKey is stale.
+	activeDef := defs[0]
+	for _, d := range defs {
+		if d.Key == selectedKey {
+			activeDef = d
+			break
+		}
+	}
+
+	cfRows, _ := reports.ByCustomField(txns, activeDef.Key, start, end, rates)
+
+	// Field selector options — built outside of a loop hook (no On* here).
+	var fieldOpts []ui.Node
+	for _, d := range defs {
+		fieldOpts = append(fieldOpts, Option(Value(d.Key), SelectedIf(d.Key == activeDef.Key), d.Label))
+	}
+
+	// Value rows are plain display (no On* in the loop).
+	noValueLabel := uistate.T("reports.customFieldNoValue")
+	var rowNodes []ui.Node
+	var maxAmt int64
+	for _, r := range cfRows {
+		if r.Amount > maxAmt {
+			maxAmt = r.Amount
+		}
+	}
+	for _, r := range cfRows {
+		label := r.Value
+		if label == "" {
+			label = noValueLabel
+		}
+		pct := 0
+		if maxAmt > 0 {
+			pct = int(r.Amount * 100 / maxAmt)
+		}
+		if pct > 100 {
+			pct = 100
+		}
+		bar := Div(Style(map[string]string{"height": "4px", "max-width": "260px", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
+		rowNodes = append(rowNodes, Div(css.Class("row"),
+			Div(css.Class("row-main"), Span(css.Class("row-desc"), label), bar),
+			Span(css.Class("budget-amount"), fmtMinor(r.Amount)),
+		))
+	}
+
+	var body ui.Node
+	if len(rowNodes) == 0 {
+		body = P(css.Class("empty"), uistate.T("reports.empty"))
+	} else {
+		body = Div(css.Class("rows"), rowNodes)
+	}
+
+	sectionLabel := uistate.T("reports.byCustomField", activeDef.Label)
+	selectorLabel := uistate.T("reports.customFieldSelectLabel")
+
+	return Section(css.Class("card"), Attr("data-testid", "customfield-spend-section"),
+		H2(css.Class("card-title"), sectionLabel),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Py1),
+			Label(Attr("for", "cf-field-select"), selectorLabel),
+			Select(css.Class("field"), Attr("id", "cf-field-select"), Attr("aria-label", selectorLabel), Attr("data-testid", "cf-field-select"), onKeyChange, fieldOpts),
+		),
+		body,
+		If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+			Button(css.Class("btn"), Type("button"),
+				Attr("data-testid", "cf-download-csv"),
+				Title(uistate.T("reports.customFieldDownloadTitle")),
+				Attr("aria-label", uistate.T("reports.customFieldDownloadTitle")),
+				OnClick(func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					filename := "spending-by-" + activeDef.Key + ".csv"
+					downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
+				}),
+				uistate.T("reports.downloadCsv"),
+			),
 		)),
 	)
 }

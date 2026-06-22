@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Spending report grouped by a custom field (L18 / L16).** A new "Spending by <field>" section on Reports
+  totals expenses grouped by any transaction custom field's value, with a selector to switch fields and a CSV
+  export. Booleans show as Yes/No, numbers strip trailing zeros, and untagged transactions fall into a
+  "(no value)" bucket. This turns custom fields from a dead end into a reporting dimension — e.g. spending per
+  Property, or a "Deductible" total for tax time (which also covers L16's tax-tagging with no extra schema).
+  Pure `reports.ByCustomField` + `reports.CustomFieldCSV`, 9 table tests; e2e `report_by_customfield_check.mjs`.
 - **"Repeat" a transaction from the add form (L24).** The transaction add form now has a Repeat picker
   (weekly/monthly/quarterly/yearly). Choosing a cadence posts the entered transaction now and creates an
   auto-posting recurring schedule (first future due one cadence step after the entered date), so recurring

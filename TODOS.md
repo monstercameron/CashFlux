@@ -4943,10 +4943,11 @@ renders in the transaction form, probe filter/report by it).
         (equals / one-of for select, range for number, true/false for bool).
   - [x] **State/UI** `internal/screens/transactions.go`: a filter control per filterable custom field
         (persisted with the other filters, per C-section).
-- [ ] **Report / total by a custom field.** No way to see "spending per Property" or a "Deductible"
-      total. Bottom-up: `reports.ByCustomField(txns, fieldKey, rates)` roll-up (pure, table-tested) → a
-      Reports section grouped by the field + CSV. **This also satisfies L16's tax-tagging** — a bool
-      "Deductible" custom field + this roll-up = a deductibles total, no separate tax-flag schema needed.
+- [x] **Report / total by a custom field.** `reports.ByCustomField(txns, fieldKey, start, end, rates)`
+      roll-up (pure, 9 table tests) + `reports.CustomFieldCSV` → a "Spending by <field>" Reports section with
+      a field selector (groups by any transaction custom field) + CSV. Bool normalizes Yes/No, numbers strip
+      trailing zeros, missing → "(no value)". e2e `report_by_customfield_check.mjs`. **Also satisfies L16's
+      tax-tagging** — a bool "Deductible" custom field + this roll-up = a deductibles total.
 - [ ] *(Enhancement)* **Custom fields in export/import + the Allocate/Insights context** so the
       extensibility is end-to-end (verify they round-trip in the backup from L9).
 
@@ -5730,6 +5731,103 @@ This was a probe logic error: the ledger is paginated at 50 rows (page header re
 sorted newest-first. Adding a transaction places it at row 1 and rotates row 50 off the visible page —
 the count correctly stays at 50. Fixed the check to assert that "Morning coffee" exists in a `tbody tr`
 cell, which passes and is the meaningful assertion. All 14 checks pass; exit code 0.
+
+---
+
+### L40. Story — "Setting a Grocery Budget" (household manager Sam) — 2026-06-22 ★
+
+**The ritual:** Sam wants to cap monthly grocery spending at $600. She opens /budgets, fills in the
+add form (name "Monthly Groceries", category Groceries, period Monthly, limit $600), and clicks Add.
+The budget appears immediately in the list showing $X spent / $600 limit (where X reflects any
+existing Groceries transactions for the month). She then logs two grocery purchases in /transactions
+($47.32 "Whole Foods run" + $102.89 "Trader Joe's") and a non-grocery Dining expense ($35 "Thai
+restaurant"). Back on /budgets she expects to see the grocery spent figure increase by exactly
+$150.21, the Dining expense excluded from the Groceries budget (category isolation), and the progress
+bar fill proportionally. After a hard reload, the budget definition and spend both survive.
+
+**Drive script:** `e2e/loopstory_40_create_budget.mjs`.
+All 26 checks pass; exit code 0. The script seeds all test data from the live app (no fixture file
+needed) and uses baseline-delta arithmetic to sidestep the sample dataset's pre-existing $520 of
+Groceries spend.
+
+**What already works well (regression anchors):**
+- ✓ **Budget creation is full-featured at first render.** The add form exposes Name, Category, Owner,
+  Period, Limit, and "Roll unused funds" in one place with persistent field labels above every input
+  — no progressive disclosure needed here (6 fields, all useful, all labelled). Confirmed in
+  `loop40-02-add-form-filled.png`.
+- ✓ **Budget appears immediately after submit with correct limit.** No page reload needed; the new row
+  is reactive and shows the $600 limit right away. Confirmed `loop40-03-after-add-budget.png`.
+- ✓ **Existing-month spend is applied instantly.** When Sam creates the Groceries budget, the sample
+  data's $520 in prior Groceries transactions is already counted — `$520.00 / $600.00 · 86% · Near
+  limit` shows immediately. The budget retroactively aggregates matching transactions from the current
+  period window. Confirmed row text in Step 4c output.
+- ✓ **Category isolation is enforced.** A $35 Dining expense adds to the Dining budget only; the
+  Groceries budget row does not include it ($670.21, not $705.21). Confirmed Step 10 / `loop40-06`.
+- ✓ **Spent / limit / progress bar update correctly after new grocery transactions.** After adding
+  $150.21 in Groceries spend, the row updates to `$670.21 / $600.00 · Over budget · 111%` with a
+  red bar fill. Delta arithmetic verified to the cent. Confirmed `loop40-05-budgets-after-spend.png`.
+- ✓ **Budget definition and spend both persist across hard reload.** `$670.21 / $600.00` is identical
+  before and after `page.reload()`. Confirmed Step 11 / `loop40-07-budgets-after-reload.png`.
+- ✓ **"Cover…" action appears when over budget.** Once the Groceries budget tips over $600, the
+  "Cover…" button appears inline — the right affordance at the right moment. Confirmed `loop40-05`.
+- ✓ **Pace projection is live and accurate.** The amber "At this pace, projected to go over by
+  $136.32" warning appears immediately after creation, based on the current run rate — a genuinely
+  useful proactive signal. Confirmed `loop40-03`.
+- ✓ **Zero JS page errors** across the entire flow (/budgets create → /transactions add × 3 →
+  /budgets verify → reload).
+
+**Mechanical gaps:**
+
+- [ ] **No "one budget per category" guard.** The sample dataset ships with a "Groceries" budget
+  (`$520/$450`); creating "Monthly Groceries" produces a second budget for the same category and the
+  same period window. The two budgets aggregate the same transactions independently, splitting the
+  mental model and the summary strip. Result: Sam sees two competing Groceries rows with no warning.
+  Before: submitting a second Groceries budget silently creates a duplicate.
+  After: `app.PutBudget` (or a validation layer above it) should reject a new budget whose
+  `(categoryID, period, ownerID)` triple matches an existing live budget, returning a plain-English
+  error "A Monthly Groceries budget already exists. Edit it instead."
+  (`internal/budgeting/` validation + `internal/screens/budgets.go` form error display.)
+- [ ] **Budget Name is not validated — empty name is accepted.** The Name input has no `aria-required`
+  and no client-side guard; submitting with a blank name creates an unnamed budget row that shows only
+  "· Groceries" in the list (the category name falls back to identify it, but the user-chosen label
+  is lost). Before: empty name → unnamed budget. After: treat Name as required (add `aria-required`
+  and mirror the `errMsg` path used for Limit validation). (`internal/screens/budgets.go` `add` handler,
+  before the `PutBudget` call.)
+
+**UI/UX defects (screenshot-confirmed):**
+
+- [ ] **No success confirmation after Add.** After clicking Add the budget silently appears below with
+  no toast, snackbar, or row highlight. A first-time user who doesn't immediately scroll down may
+  wonder if the click registered — same pattern as the transaction add-feedback gap in L39.
+  Screenshot: `loop40-03-after-add-budget.png` (no confirmation signal visible at top of page).
+  After: a brief toast "Budget added" or a 1–2 s highlight on the newly inserted row.
+  (`internal/ui/` toast system, or a flash CSS class on the inserted card.)
+  Close-out: re-screenshot after implementing; confirm toast/highlight visible.
+- [ ] **"Roll unused funds into the next period" label is truncated on the add row.** The checkbox
+  label wraps inside a narrow column at 1280 × 900 and the copy is long ("Roll unused funds into the
+  next period"). On smaller viewports it clips. The label should be shortened to "Roll over unused
+  funds" (9 words → 4) with a `title` tooltip for the full description.
+  Screenshot: `loop40-02-add-form-filled.png` (right column shows truncated label).
+  After: relabel + add tooltip; re-screenshot at 1280 px to confirm no wrap.
+- [ ] **Add form does not reset Category after submit.** After submitting "Monthly Groceries
+  (Groceries)", the Category select resets to "Dining" (the first expense category alphabetically),
+  not to a neutral or last-used state. If Sam immediately wants to add a second budget for a different
+  category she has to re-select — minor friction — but the form's snappy reactive reset elsewhere
+  (Name clears, Limit clears) makes the Category not-resetting feel inconsistent.
+  Screenshot: `loop40-05-budgets-after-spend.png` (Category select shows "Dining" in add form after
+  prior Groceries add).
+  After: keep as-is or default to last-used category — least-surprise would be to default to the
+  first category that has no existing budget for the period. (`budgets.go` add handler, `catID` state reset.)
+
+**Probe hardening:**
+- The initial `select[aria-label]` selector grabbed the "Jump to…" period picker (index 0) instead of
+  the "Category" budget-form select (index 1). Fixed by targeting `select[aria-label="Category"]`
+  explicitly — confirmed stable.
+- Spent-amount assertions used absolute dollar checks ("150") that broke against the sample dataset's
+  pre-existing $520 in Groceries spend. Fixed with baseline-capture + delta arithmetic: read the
+  row's `$X / $600` figure immediately after budget creation, then assert `afterSpent − baseline ≈
+  $150.21 ± $0.05`. This pattern generalises to any spend-tracking e2e story where sample data
+  pre-populates the category.
 
 ---
 
