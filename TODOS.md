@@ -5437,22 +5437,22 @@ whole app's feel. **Drive script:** `e2e/loopstory_32_quickadd_ux.mjs` (+ `_ente
   (L15). The add form is a proper `<form>` (`transactions.go:435`, `OnSubmit(add)`). ✓
 
 **God-tier UX gaps (verified):**
-- [ ] **No auto-focus on Description.** Landing on `/transactions` leaves focus on `body` (measured) — a
+- [x] **No auto-focus on Description.** Landing on `/transactions` leaves focus on `body` (measured) — a
       wasted click/tap before the primary action. Auto-focus `#txn-add` on the transactions screen (and
       the quick-add). Scope it so it doesn't steal focus on unrelated navigation. (`transactions.go`
       formCard + a `ui.UseEffect` focus, like the EmptyStateCTA already does via `FocusID`.)
-- [ ] **Enter does not submit the add form.** Verified twice (no transaction added; **no crash**) despite
+- [x] **Enter does not submit the add form.** Verified twice (no transaction added; **no crash**) despite
       a real `<form>`+submit button. Keyboard users must mouse to "Add" — unacceptable for a high-
       frequency flow. Verify on a real browser; if the framework swallows implicit submission, wire an
       explicit **Enter → add** on the description/amount inputs. before→after: type "Coffee" ⇥ "4.50" ⏎
       logs it.
-- [ ] **Focus doesn't return to Description after submit.** For logging several purchases in a row, the
+- [x] **Focus doesn't return to Description after submit.** For logging several purchases in a row, the
       cleared form should re-focus `#txn-add` so the next entry is immediate (measured: focus did not
       return). Add focus-return in the `add` success path.
 - [ ] **Mobile: the "Add" button sits ~7 fields down**, below period controls that dominate the top
       (cross-ref L11). For the primary action that's a lot of scrolling. Offer a **compact quick mode**
       (description + amount + Add visible) or a sticky Add, and collapse the period controls on mobile.
-- [ ] **Amount input → `inputmode="decimal"`** (currently `type="number"`) for a cleaner money keypad on
+- [x] **Amount input → `inputmode="decimal"`** (currently `type="number"`) for a cleaner money keypad on
       mobile (no spinner/scientific notation). One-line attr in `transactions.go:437`.
 
 **Needs verification (don't action yet):**
@@ -5461,7 +5461,7 @@ whole app's feel. **Drive script:** `e2e/loopstory_32_quickadd_ux.mjs` (+ `_ente
       quick-add form** (`#txn-add` absent after 700ms). The god-tier path is "log from anywhere" — verify
       what Alt+N does (navigate vs modal) and ensure a fast global quick-add exists. Re-test with a longer
       settle + check for a modal container.
-- [ ] **One-off "Go program has already exited"** appeared during the Alt+N + viewport-resize sequence
+- [x] **One-off "Go program has already exited"** appeared during the Alt+N + viewport-resize sequence
       but was **NOT reproduced** in isolation (the add flow itself never crashed). Flag for the dev agent
       to watch the global-shortcut / rapid-navigation path; not a confirmed bug.
 

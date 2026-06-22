@@ -41,6 +41,13 @@ func Transactions() ui.Node {
 	rev := state.UseAtom("rev:transactions", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 
+	// Land focus on the Description field when the ledger opens, so logging a
+	// purchase is type-immediately (L32 "three seconds at the register").
+	ui.UseEffect(func() func() {
+		focusByID("txn-add")
+		return nil
+	}, []any{})
+
 	accounts := app.Accounts()
 	categories := app.Categories()
 
@@ -309,6 +316,7 @@ func Transactions() ui.Node {
 		whoOverridden.Set(false)
 		errMsg.Set("")
 		bump()
+		focusByID("txn-add") // return focus for rapid back-to-back logging (L32)
 	}))
 
 	// Receipt attachments (L29): the preview holds the currently-open attachment
@@ -607,7 +615,7 @@ func Transactions() ui.Node {
 			H2(css.Class("card-title"), uistate.T("transactions.addTitle")),
 			Form(css.Class("form-grid"), OnSubmit(add),
 				Input(append([]any{css.Class("field"), Attr("id", "txn-add"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)}, errAttrs("txn-err", errMsg.Get())...)...),
-				Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
+				Input(css.Class("field"), Type("number"), Attr("inputmode", "decimal"), Attr("aria-required", "true"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.kindLabel")), OnChange(onKind), kindOptions),
 				Select(css.Class("field"), Attr("aria-label", accLabel), Title(accLabel), OnChange(onAcc), accOptions),
 				IfElse(isTransfer,
