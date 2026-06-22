@@ -335,6 +335,26 @@ type Goal struct {
 	Custom        map[string]any `json:"custom,omitempty"`
 }
 
+// EarmarkKind identifies what kind of entity an Earmark is targeting.
+const (
+	EarmarkKindAccount = "account" // an asset account earmark
+	EarmarkKindDebt    = "debt"    // a liability paydown earmark
+)
+
+// Earmark records that a specific amount has been mentally assigned to an
+// account or debt paydown destination without moving any cash. It is created
+// by ApplyAllocation and survives reload via the store. Goals do not use
+// Earmarks — goal contributions bump Goal.CurrentAmount directly.
+type Earmark struct {
+	ID              string      `json:"id"`
+	DestinationID   string      `json:"destinationId"`
+	DestinationKind string      `json:"destinationKind"` // EarmarkKindAccount or EarmarkKindDebt
+	Amount          money.Money `json:"amount"`
+	Currency        string      `json:"currency"`
+	CreatedAt       time.Time   `json:"createdAt"`
+	Note            string      `json:"note,omitempty"`
+}
+
 // WidgetBinding declares where a custom widget gets its data, kept as plain,
 // declarative fields so the binding is config — not code — and stays inspectable
 // and JSON-serializable. The pure evaluator (internal/widgetspec) interprets it

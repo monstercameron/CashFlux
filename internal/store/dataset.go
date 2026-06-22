@@ -76,6 +76,7 @@ type Dataset struct {
 	WorkflowRuns   []workflow.Run             `json:"workflowRuns,omitempty"`
 	SharedExpenses []domain.SharedExpense     `json:"sharedExpenses,omitempty"`
 	Settlements    []domain.Settlement        `json:"settlements,omitempty"`
+	Earmarks       []domain.Earmark           `json:"earmarks,omitempty"`
 	Settings       Settings                   `json:"settings"`
 }
 

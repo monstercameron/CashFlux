@@ -414,6 +414,21 @@ func (s *SQLiteStore) ListWorkflowRuns() ([]workflow.Run, error) {
 	return loadRows[workflow.Run](s.db, "workflowruns")
 }
 
+// --- Earmarks (allocation commitments without cash movement) ---
+
+func (s *SQLiteStore) PutEarmark(e domain.Earmark) error {
+	return putJSON(s.db, "earmarks", e.ID, e)
+}
+func (s *SQLiteStore) GetEarmark(id string) (domain.Earmark, bool, error) {
+	return getJSON[domain.Earmark](s.db, "earmarks", id)
+}
+func (s *SQLiteStore) DeleteEarmark(id string) (bool, error) {
+	return deleteRow(s.db, "earmarks", id)
+}
+func (s *SQLiteStore) ListEarmarks() ([]domain.Earmark, error) {
+	return loadRows[domain.Earmark](s.db, "earmarks")
+}
+
 // --- Shared expenses + settlements (the roommate "settle up" ledger) ---
 
 func (s *SQLiteStore) PutSharedExpense(e domain.SharedExpense) error {

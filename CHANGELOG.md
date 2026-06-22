@@ -6,6 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Apply allocation (L17).** The Allocate screen no longer only *suggests* — an "Apply allocation" button
+  commits the plan with earmark-only semantics (no cash moves between accounts; money is never created or
+  lost). Goal destinations add to the goal's saved amount, capped at target with any overflow disclosed;
+  account and liability "pay-down" destinations become persisted earmark records (new `domain.Earmark`
+  entity). Apply is atomic (snapshot-on-failure rollback) and reversible via a single Undo. Pure
+  `allocate.PlanActions` mapping + `appstate.ApplyAllocation`/`UndoLastAllocation`, fully unit-tested; e2e
+  `allocate_apply_check.mjs` gates apply→persist→undo and `allocate_determinism_check.mjs` asserts
+  `sum(distributed) + keptBack == amount` to the cent across several amounts/reserves.
+
 ### Fixed
 - **CSV import is now row-resilient (L23).** A single malformed row (non-numeric amount, missing required
   field) no longer aborts the entire paste. The parser (`store.TransactionsFromCSVResilient`) processes

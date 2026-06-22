@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -1507,6 +1508,131 @@ func (a *App) PutSettings(s store.Settings) error {
 	}
 	a.log.Info("settings saved")
 	return nil
+}
+
+// --- allocation application (L17) ---
+
+// AllocationResult summarises the outcome of ApplyAllocation so the UI can
+// show exactly what happened.
+type AllocationResult struct {
+	GoalsFunded    int   // number of goals that received a contribution
+	GoalDollars    int64 // total minor units added to goals
+	EarmarksMade   int   // number of earmarks created
+	EarmarkDollars int64 // total minor units earmarked
+	Overflow       int64 // minor units that could not be added to goals because they are already complete
+}
+
+// undoSnapshot holds the pre-apply dataset for single-step undo.
+var undoSnapshot *store.Dataset
+
+// ApplyAllocation commits a set of Actions returned by allocate.PlanActions.
+// Goals receive contributions (CurrentAmount is bumped, capped at TargetAmount;
+// any excess is reported in AllocationResult.Overflow but never silently lost).
+// Account and debt earmarks are persisted as domain.Earmark records.
+//
+// The operation is atomic: the full dataset is snapshotted before any writes,
+// and on any error the snapshot is restored so the store is left unchanged.
+// On success the pre-apply snapshot is stored for UndoLastAllocation.
+func (a *App) ApplyAllocation(actions []allocate.Action) (AllocationResult, error) {
+	snap, err := a.store.Snapshot()
+	if err != nil {
+		return AllocationResult{}, fmt.Errorf("appstate: apply allocation: snapshot: %w", err)
+	}
+
+	var result AllocationResult
+	for _, act := range actions {
+		if err := a.applyAllocationAction(act, &result); err != nil {
+			// Atomically roll back to the pre-apply snapshot.
+			if loadErr := a.store.Load(snap); loadErr != nil {
+				a.log.Error("apply allocation rollback failed", "rollbackErr", loadErr, "originalErr", err)
+			}
+			return AllocationResult{}, fmt.Errorf("appstate: apply allocation: %w", err)
+		}
+	}
+
+	undoSnapshot = &snap
+	a.log.Info("allocation applied",
+		"goals", result.GoalsFunded, "goalDollars", result.GoalDollars,
+		"earmarks", result.EarmarksMade, "earmarkDollars", result.EarmarkDollars,
+		"overflow", result.Overflow)
+	return result, nil
+}
+
+func (a *App) applyAllocationAction(act allocate.Action, result *AllocationResult) error {
+	switch act.Kind {
+	case allocate.GoalContribution:
+		g, ok, err := a.store.GetGoal(act.DestinationID)
+		if err != nil {
+			return fmt.Errorf("load goal %q: %w", act.DestinationID, err)
+		}
+		if !ok {
+			return fmt.Errorf("goal %q not found", act.DestinationID)
+		}
+		headroom := g.TargetAmount.Amount - g.CurrentAmount.Amount
+		if headroom < 0 {
+			headroom = 0
+		}
+		credit := act.Amount
+		if credit > headroom {
+			result.Overflow += credit - headroom
+			credit = headroom
+		}
+		if credit > 0 {
+			g.CurrentAmount.Amount += credit
+			if err := a.PutGoal(g); err != nil {
+				return fmt.Errorf("save goal %q: %w", act.DestinationID, err)
+			}
+		}
+		result.GoalsFunded++
+		result.GoalDollars += credit
+
+	case allocate.AccountEarmark, allocate.DebtPaydownEarmark:
+		kind := domain.EarmarkKindAccount
+		if act.Kind == allocate.DebtPaydownEarmark {
+			kind = domain.EarmarkKindDebt
+		}
+		cur := a.Settings().BaseCurrency
+		if cur == "" {
+			cur = "USD"
+		}
+		em := domain.Earmark{
+			ID:              id.New(),
+			DestinationID:   act.DestinationID,
+			DestinationKind: kind,
+			Amount:          money.New(act.Amount, cur),
+			Currency:        cur,
+			CreatedAt:       a.clock(),
+		}
+		if err := a.store.PutEarmark(em); err != nil {
+			return fmt.Errorf("save earmark for %q: %w", act.DestinationID, err)
+		}
+		result.EarmarksMade++
+		result.EarmarkDollars += act.Amount
+	}
+	return nil
+}
+
+// UndoLastAllocation restores the dataset to the state before the last
+// ApplyAllocation call. It is a no-op (returns an error) when there is no
+// snapshot to restore.
+func (a *App) UndoLastAllocation() error {
+	if undoSnapshot == nil {
+		return fmt.Errorf("appstate: no allocation to undo")
+	}
+	snap := *undoSnapshot
+	undoSnapshot = nil
+	if err := a.store.Load(snap); err != nil {
+		return fmt.Errorf("appstate: undo allocation: %w", err)
+	}
+	a.log.Info("allocation undone")
+	return nil
+}
+
+// Earmarks returns all persisted earmark records.
+func (a *App) Earmarks() []domain.Earmark {
+	v, err := a.store.ListEarmarks()
+	a.logErr("earmarks", err)
+	return v
 }
 
 func (a *App) del(entity, id string, fn func(string) (bool, error)) error {

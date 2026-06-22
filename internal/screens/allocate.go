@@ -24,6 +24,16 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// applyRowProps holds the props for one confirmation row in the apply-confirm panel.
+type applyRowProps struct {
+	Label string
+}
+
+// ApplyConfirmRow renders one confirmation row inside the apply-confirm panel.
+func ApplyConfirmRow(props applyRowProps) ui.Node {
+	return P(css.Class("muted"), props.Label)
+}
+
 type allocRowProps struct {
 	R         allocate.Ranked
 	Amount    string // suggested dollar amount (empty when no split amount entered)
@@ -356,6 +366,107 @@ func Allocate() ui.Node {
 		return fmtMoney(money.New(planByID[id], base))
 	}
 
+	// --- apply allocation state ---
+	applyConfirming := ui.UseState(false)
+	applyMsg := ui.UseState("")
+	applyErr := ui.UseState("")
+	applyDidApply := ui.UseState(false)
+
+	// isLiabilityID returns true when id belongs to a liability account. Built
+	// from the accounts list already in scope; no extra store call needed.
+	liabilityIDs := map[string]bool{}
+	for _, a := range app.Accounts() {
+		if a.Class == domain.ClassLiability {
+			liabilityIDs[a.ID] = true
+		}
+	}
+
+	// planActions derives the full Action list from the current plans.
+	planActions := func() []allocate.Action {
+		if totalMinor <= 0 {
+			return nil
+		}
+		plans := make([]allocate.Plan, 0, len(ranked))
+		for _, r := range ranked {
+			plans = append(plans, allocate.Plan{Candidate: r.Candidate, Amount: planByID[r.Candidate.ID]})
+		}
+		return allocate.PlanActions(plans, func(id string) bool { return liabilityIDs[id] })
+	}
+
+	openConfirm := ui.UseEvent(Prevent(func() {
+		if totalMinor <= 0 {
+			applyErr.Set(uistate.T("allocate.applyNoPlans"))
+			return
+		}
+		applyErr.Set("")
+		applyMsg.Set("")
+		applyConfirming.Set(true)
+	}))
+	cancelConfirm := ui.UseEvent(Prevent(func() {
+		applyConfirming.Set(false)
+	}))
+	doApply := ui.UseEvent(Prevent(func() {
+		actions := planActions()
+		if len(actions) == 0 {
+			applyErr.Set(uistate.T("allocate.applyNoPlans"))
+			applyConfirming.Set(false)
+			return
+		}
+		result, err := app.ApplyAllocation(actions)
+		if err != nil {
+			applyErr.Set(uistate.T("allocate.applyErr", err.Error()))
+			applyConfirming.Set(false)
+			return
+		}
+		applyConfirming.Set(false)
+		applyDidApply.Set(true)
+		applyErr.Set("")
+
+		// Build a plain-English result summary.
+		goalAmt := fmtMoney(money.New(result.GoalDollars, base))
+		earmarkAmt := fmtMoney(money.New(result.EarmarkDollars, base))
+		var msg string
+		switch {
+		case result.GoalsFunded > 0 && result.EarmarksMade > 0:
+			msg = uistate.T("allocate.applySuccess", result.GoalsFunded, goalAmt, earmarkAmt)
+		case result.GoalsFunded > 0:
+			msg = uistate.T("allocate.applySuccessNoEarmark", result.GoalsFunded, goalAmt)
+		default:
+			msg = uistate.T("allocate.applySuccessNoGoal", earmarkAmt, result.EarmarksMade)
+		}
+		if result.Overflow > 0 {
+			msg += " " + uistate.T("allocate.applyOverflow", fmtMoney(money.New(result.Overflow, base)))
+		}
+		applyMsg.Set(msg)
+	}))
+	doUndo := ui.UseEvent(Prevent(func() {
+		if err := app.UndoLastAllocation(); err != nil {
+			applyErr.Set(uistate.T("allocate.undoErr"))
+			return
+		}
+		applyMsg.Set(uistate.T("allocate.undoDone"))
+		applyDidApply.Set(false)
+		applyErr.Set("")
+	}))
+
+	// Build confirm rows — one per action. Wrapped in own components to keep hook
+	// positions stable (no On* calls inside variable-length loops here; the
+	// ApplyConfirmRow component has no interactive hooks).
+	var confirmRows []ui.Node
+	for _, act := range planActions() {
+		amt := fmtMoney(money.New(act.Amount, base))
+		var label string
+		switch act.Kind {
+		case allocate.GoalContribution:
+			label = uistate.T("allocate.applyConfirmGoal", act.DestinationName, amt)
+		case allocate.DebtPaydownEarmark:
+			label = uistate.T("allocate.applyConfirmDebt", act.DestinationName, amt)
+		default:
+			label = uistate.T("allocate.applyConfirmEarmark", act.DestinationName, amt)
+		}
+		confirmRows = append(confirmRows, ui.CreateElement(ApplyConfirmRow, applyRowProps{Label: label}))
+	}
+
 	var listBody ui.Node
 	switch {
 	case len(ranked) == 0 && hiddenZero:
@@ -431,6 +542,41 @@ func Allocate() ui.Node {
 			Button(css.Class("btn"), Type("button"), OnClick(explain), IfElse(aiLoading.Get(), Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAI")))),
 			If(aiErr.Get() != "", P(css.Class("err"), Attr("role", "alert"), aiErr.Get())),
 			If(aiResult.Get() != "", P(css.Class("muted"), aiResult.Get())),
+		)),
+		If(totalMinor > 0, Section(css.Class("card"), Attr("aria-label", uistate.T("allocate.applyTitle")),
+			H2(css.Class("card-title"), uistate.T("allocate.applyTitle")),
+			P(css.Class("muted"), uistate.T("allocate.applyDesc")),
+			If(applyErr.Get() != "", P(css.Class("err"), Attr("role", "alert"), applyErr.Get())),
+			If(applyMsg.Get() != "", Div(css.Class(tw.Flex, tw.Gap1),
+				P(css.Class("muted"), applyMsg.Get()),
+				If(applyDidApply.Get(), Button(css.Class("btn"), Type("button"),
+					Attr("aria-label", uistate.T("allocate.undoTitle")),
+					OnClick(doUndo), uistate.T("allocate.undoButton"),
+				)),
+			)),
+			IfElse(applyConfirming.Get(),
+				// Confirm panel
+				Div(
+					H3(css.Class("set-label"), uistate.T("allocate.applyConfirmTitle")),
+					P(css.Class("muted"), uistate.T("allocate.applyConfirmDesc")),
+					Div(css.Class("rows"), confirmRows),
+					Div(css.Class(tw.Flex, tw.Gap1),
+						Button(css.Class("btn btn-primary"), Type("button"),
+							Attr("aria-label", uistate.T("allocate.applyConfirmTitle")),
+							OnClick(doApply), uistate.T("allocate.applyConfirm"),
+						),
+						Button(css.Class("btn"), Type("button"), OnClick(cancelConfirm), uistate.T("allocate.applyCancel")),
+					),
+				),
+				// Show the apply button when not confirming and not yet applied (or after undo)
+				If(!applyDidApply.Get(),
+					Button(css.Class("btn btn-primary"), Type("button"),
+						Attr("aria-label", uistate.T("allocate.applyTitle")),
+						Attr("data-testid", "allocate-apply-btn"),
+						OnClick(openConfirm), uistate.T("allocate.applyButton"),
+					),
+				),
+			),
 		)),
 	)
 }

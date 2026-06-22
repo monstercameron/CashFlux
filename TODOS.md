@@ -4897,19 +4897,19 @@ remainder sum exactly to the input).
   No money created or lost. ✓
 
 **Action (lock in the win):**
-- [ ] **Promote to a CI gate** (`e2e/allocate_determinism_check.mjs`): for several amounts/reserves, assert
+- [x] **Promote to a CI gate** (`e2e/allocate_determinism_check.mjs`): for several amounts/reserves, assert
       `sum(distributed) + keptBack == amount` to the cent. Financial-correctness invariant.
 
 **Dream-big gaps (close the loop from SUGGESTION to ASSIGNMENT):**
-- [ ] **"Apply this allocation" — actually commit the dollars.** Today Allocate only *suggests*; nothing
-      moves. Zero-based budgeting means the dollars get assigned. Add an **Apply** action that turns the
-      plan into real **goal contributions / budget fundings / transfers**. Bottom-up:
-  - [x] **Logic** `internal/allocate`: a `Plan → []Action` mapping (contribute-to-goal / fund-budget /
-        transfer-to-account), pure + tested (sum of actions == distributed).
-  - [ ] **State** `internal/appstate`: apply all actions atomically (reuse the L1 cover/move + L5 goal
-        contribute + L10 income paths); single undo.
-  - [ ] **UI** `internal/screens/allocate.go`: an "Apply allocation" button + a confirm summary; show
-        the resulting balances (determinism).
+- [x] **"Apply this allocation" — actually commit the dollars.** Earmark-only semantics (chosen 2026-06-21):
+      no cash moves between accounts, money never created/lost. Goals bump CurrentAmount (capped at target,
+      overflow disclosed); account & debt destinations become persisted `domain.Earmark` records; single undo.
+  - [x] **Logic** `internal/allocate`: `PlanActions` → `[]Action` (contribute-to-goal / account-earmark /
+        debt-paydown-earmark), pure + tested (sum of actions == distributed).
+  - [x] **State** `internal/appstate`: `ApplyAllocation` applies atomically (snapshot-on-fail rollback);
+        `UndoLastAllocation` restores the pre-apply snapshot. New `domain.Earmark` entity + store wiring.
+  - [x] **UI** `internal/screens/allocate.go`: an "Apply allocation" button + confirm summary + result line
+        with Undo. e2e `allocate_apply_check.mjs` gates apply→persist→undo.
 - [ ] **Fill-to-target (envelope) mode.** Zero-based often means funding each budget to its limit in
       priority order (rent $1,800, groceries $600, …) rather than score-weighted spread. Add a mode that
       `Distribute`s to each destination's remaining-to-target first, then ranks the rest. Pure + tested.

@@ -3,6 +3,28 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: apply allocation, earmark semantics (L17)
+
+Closed the loop from *suggestion* to *assignment*. Allocate ranked destinations and split dollars but nothing
+ever committed; now "Apply allocation" does.
+
+- **Design decision (asked the user).** The money-movement semantics were a real fork — earmark-only vs real
+  transfers vs goals-only. Chose **earmark-only**: no cash crosses accounts, so the money-never-created
+  invariant is trivially safe. Goals bump `CurrentAmount` (capped at `TargetAmount`, overflow reported, never
+  silently lost); account & liability "pay-down" destinations become persisted `domain.Earmark{DestinationID,
+  DestinationKind, Amount, …}` records — a job assigned to dollars you already hold.
+- **Bottom-up.** `allocate.PlanActions(plans, isLiability) []Action` (pure, sum-invariant tested) → new
+  `domain.Earmark` wired through the store exactly like Goals (`earmarks` table, Dataset field, Snapshot/Load,
+  Export/Import round-trip test) → `appstate.ApplyAllocation` (snapshot first; restore on any error = atomic)
+  + `UndoLastAllocation` (single-slot pre-apply snapshot) → `allocate.go` Apply button + confirm summary +
+  result line with Undo. 21 i18n keys; confirm rows are their own component (no On* hooks in loops).
+- **e2e gotchas fixed during integration.** `money.Money` has no json tags so it serializes `{Amount,Currency}`
+  (capital A) — the check read `.amount` and saw nothing; and it read localStorage before the autosave flushed.
+  Fixed the gate to poll-with-visibilitychange-flush and read `.Amount`. Determinism gate (separate L17 bullet)
+  passes for 5 amount/reserve pairs.
+- **Built by a sequential sonnet sub-agent**, integrated + gated here. Remaining L17 dream-big items
+  (fill-to-target envelope mode, save-as-recurring-plan) are deferred as their own commits. Next: L21.
+
 ## 2026-06-21 - fix: row-resilient CSV import (L23)
 
 First feature of the "build every L-story" pass. The decade-importer bug: one non-numeric amount aborted the
