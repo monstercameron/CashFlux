@@ -4598,7 +4598,7 @@ entity counts, opens Settings data section).
   the last backup. ✓
 
 **Mechanical gap (silent data-loss on migration — confirmed by source + storage enumeration):**
-- [ ] **"Export JSON" is dataset-only — it is NOT a complete backup, yet it's framed as one.**
+- [x] **"Export JSON" is dataset-only — it is NOT a complete backup, yet it's framed as one.**
       `exportJSON` → `app.ExportJSON()` serializes only the **active workspace's dataset**. State that
       lives in **separate localStorage keys is left behind**:
   - **`cashflux:workspaces`** — the workspace registry + every **non-active workspace/household** (a user
@@ -4612,9 +4612,9 @@ entity counts, opens Settings data section).
         envelope** `{schemaVersion, datasets[] (all workspaces), workspaceRegistry, appearance{theme,
         fonts, banner, prefs}, fxRates}`; `MarshalBackup` / `UnmarshalBackup`; **round-trip test**
         (build → marshal → unmarshal → deep-equal).
-  - [ ] **State** `internal/appstate` + `internal/app`: gather all workspaces' datasets + the uistate
+  - [x] **State** `internal/appstate` + `internal/app`: gather all workspaces' datasets + the uistate
         side-keys; restore them all on import (and re-apply appearance live).
-  - [ ] **UI** `internal/app/settings.go`: a distinct **"Back up everything"** action (keep the existing
+  - [x] **UI** `internal/app/settings.go`: a distinct **"Back up everything"** action (keep the existing
         per-workspace "Export JSON" for sharing a single household) + an import that detects a full
         backup vs a single dataset and restores accordingly. Plain-English copy stating exactly what's
         included.
@@ -5363,7 +5363,7 @@ CashFlux to match and expects a reconciling adjustment for the difference, the a
   freshness updated.
 
 **Gaps (dream-big — make reconciliation trustworthy, not just a force-to-target):**
-- [ ] **Show the computed difference + let the user label the adjustment.** The form takes only the new
+- [x] **Show the computed difference + let the user label the adjustment.** The form takes only the new
       balance; it doesn't preview "current $8,070.00 → entered $8,999.45 = **+$929.45 adjustment**" before
       saving, and the adjustment lands as a generic **uncategorized** "Balance adjustment" (which can skew
       reports — a $929 uncategorized entry). Show the delta inline + an optional **category/note** (e.g.
