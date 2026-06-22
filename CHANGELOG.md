@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Due recurring transactions auto-post on app open (L24).** Scheduled bills, paychecks and "pay yourself
+  first" transfers (the `Recurring` schedules managed on Planning, with autopost enabled) now post the moment
+  the app boots — catching up any periods missed while it was closed — instead of only when you visit Planning
+  and click "Post due". It runs after autosave is armed so the advanced schedule and new transactions persist
+  immediately, and is idempotent across reopens (each schedule's next-due advances past today, so reopening
+  never double-posts). e2e `boot_autopost_check.mjs` gates the catch-up and the no-double-post invariant.
 - **Per-transaction member assignment (L21).** The transaction add form and the inline row editor now carry an
   optional "Who" member picker (shown only when a household has more than one member). It defaults to the
   account's owner and follows the account when you switch it, until you explicitly override — so on a shared or

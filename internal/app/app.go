@@ -119,6 +119,14 @@ func Run() {
 	startDatasetAutosave()
 	startBackendSync()
 
+	// Auto-post any due recurring transactions (bills, "pay yourself first")
+	// caught up to today, so scheduled money posts the moment the app opens
+	// instead of only when the user visits Planning and clicks "Post due". Runs
+	// after autosave is armed so the advanced NextDue + new transactions persist
+	// immediately (idempotent: NextDue advances past today, so a reopen won't
+	// double-post). Boot-safe — a nil/empty store just posts nothing.
+	postDueRecurringOnBoot()
+
 	// Expose the music checkpoint bridge (window.cashfluxMusicSave) for the JS player.
 	registerMusicBridge()
 

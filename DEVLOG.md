@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: auto-post due recurring on app open (L24)
+
+Found L24's recurring engine already substantially built — `domain.Recurring` (cadence/NextDue/account/
+category/autopost/`Advance`), store wiring, `PutRecurring`, `PostDueRecurring(asOf)` with a 600-step bounded
+catch-up, and a full create/edit/autopost management UI on Planning. The one thing missing for it to feel
+automatic: posting only happened when you opened Planning and clicked "Post due". Added `postDueRecurringOnBoot`
+(app.go, js/wasm) to run the catch-up at startup.
+
+- **Ordering matters.** It runs *after* `startDatasetAutosave()` so `resaveDataset` is non-nil — I force an
+  immediate re-save once anything posts, otherwise the advanced NextDue lives only in memory and a crash before
+  the next autosave tick would re-post (new IDs → duplicates) on reopen. With the immediate save it's idempotent.
+- **e2e gotcha (worth remembering).** Backdating the seeded `rec-salary` NextDue via a plain localStorage write
+  then reload does NOT work: the reloading page fires pagehide→autosave and clobbers the edit with the in-memory
+  (future) value before the new page boots. Fix: a one-shot Playwright `addInitScript` that backdates at
+  document-start — after that pagehide save, before wasm reads localStorage — and consumes its sentinel so the
+  idempotency reload isn't re-backdated. Gate caught up 3 paychecks and confirmed no double-post on a 2nd reload.
+- Remaining L24: a "Repeat" affordance on the transaction add form (inline schedule creation), and
+  cross-currency transfers. Next.
+
 ## 2026-06-21 - feat: per-transaction member assignment (L21)
 
 Shared-account attribution. `Transaction.MemberID` already existed and persisted, but the only way it got set

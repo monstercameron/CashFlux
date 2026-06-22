@@ -5163,14 +5163,14 @@ import silently failed on the bad amount, so the delta was just the sample (57) 
   excluded-from-income/expense is a core correctness invariant.
 
 **Gaps (dream-big automation + edge cases):**
-- [ ] **No recurring / scheduled transactions or transfers.** The `Transaction` struct
-      (`domain/entities.go:69`) has **no recurrence field**; the UI "repeat" is only manual **"repeat
-      last"**. A monthly "pay yourself first" (and recurring bills/income) must be re-entered by hand.
-      Bottom-up: add a recurrence (reuse `RecurringCadence` weekly/monthly/quarterly/yearly + nextDate +
-      optional end) to a **scheduled-transaction** model that **auto-posts** on its date; pure scheduler
-      (tested: next-occurrence, catch-up on missed dates, end) → store → state → a "Repeat monthly"
-      option on the add form + an upcoming/auto-post surface. Ties to L13 (cash-flow projection should
-      consume these) and the Planning recurring cash flows (which are projection-only today).
+- [~] **Recurring / scheduled transactions.** The `domain.Recurring` model (cadence + NextDue + account +
+      category + autopost + `Advance()`), its store wiring, `PutRecurring`, and `PostDueRecurring(asOf)` with
+      bounded catch-up ALL already existed; Planning has the full create/edit/autopost management UI.
+  - [x] **Auto-post on app open** — `postDueRecurringOnBoot` (app.go) catches up every due autopost recurring
+        at boot (after autosave is armed → persists immediately; idempotent, no double-post on reopen). e2e
+        `boot_autopost_check.mjs`. Previously only a manual Planning "Post due" button did this.
+  - [ ] **"Repeat" option on the transaction add form** — let a user mark a new transaction recurring inline
+        (create the schedule from the add form), not only via the Planning screen.
 - [ ] **Cross-currency transfer (ties L4).** A transfer assumes one amount/one currency; moving USD→EUR
       needs an FX rate (and likely a received-amount). Verify + handle: apply the FX table, optionally let
       the user set the received amount; test net-worth stays consistent in base currency.
