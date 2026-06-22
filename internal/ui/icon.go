@@ -18,7 +18,7 @@ import (
 
 // Icon renders one stroked line icon from the curated icon set as an inline SVG
 // that inherits its color from `currentColor` and its size from the caller's
-// classes (e.g. ClassStr("w-4 h-4 shrink-0")). The name is a compile-checked
+// classes (e.g. css.Class(tw.W4, tw.H4, tw.ShrinkO)). The name is a compile-checked
 // icon.Name, so call sites can't reference an icon that doesn't exist. Extra prop
 // options (classes, inline styles) are applied after the shared viewBox/stroke
 // defaults so callers can size and tint each icon at its site.
