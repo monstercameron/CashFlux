@@ -45,15 +45,18 @@ const TODAY         = "2026-06-22";
 // CSV with 5 transactions.  The placeholder hint on the /documents textarea is
 // "date,payee,amount,account" which maps to the CashFlux CSV import format.
 // The CSV plain-import path (ImportTransactionsCSV) does NOT consume the importAcct
-// selector — it assigns transactions based on the CSV's own "account" column or
-// defaults to the first account if the column is missing/blank.
-// We deliberately use the exact column names from the textarea placeholder.
+// selector — it assigns transactions based on the CSV's own "account" column only.
+// A blank "account" column causes ValidateTransaction to fail (accountId is required),
+// so ALL rows are silently dropped.  This is the core account-hand-off gap:
+// the user must embed a valid account name/ID in their CSV file; there is no UI
+// picker to route the import to a chosen account.
+// For this ritual we use the account name in the "account" column so rows land.
 const IMPORT_CSV = `date,payee,amount,account
-2026-06-15,L44 SUPERMARKET GROCERIES,-95.00,
-2026-06-16,L44 COFFEE SHOP,-12.50,
-2026-06-18,L44 RENT PARTIAL,-200.00,
-2026-06-20,L44 PAYCHECK DEPOSIT,1500.00,
-2026-06-21,L44 UTILITIES PAYMENT,-147.50,`;
+2026-06-15,L44 SUPERMARKET GROCERIES,-95.00,L44 Omar Checking
+2026-06-16,L44 COFFEE SHOP,-12.50,L44 Omar Checking
+2026-06-18,L44 RENT PARTIAL,-200.00,L44 Omar Checking
+2026-06-20,L44 PAYCHECK DEPOSIT,1500.00,L44 Omar Checking
+2026-06-21,L44 UTILITIES PAYMENT,-147.50,L44 Omar Checking`;
 
 // Expected amounts from the CSV rows
 const EXPECTED_AMOUNTS = [95.00, 12.50, 200.00, 1500.00, 147.50];
@@ -89,6 +92,18 @@ const parseDollar = (s) => {
 const parseAccountsNetWorth = (text) => {
   const m = text.match(/NET WORTH\s*\$([\d,]+\.\d{2})/i);
   return m ? parseDollar(m[1].replace(/,/g, "")) : NaN;
+};
+
+// Parse balance for a specific account name from accounts body text.
+// The line format is:  "<AccountName>\n<Type> · USD\n$X.XX"
+// We match exactly the first dollar figure on the third "line" after the name.
+const parseAccountBalance = (text, acctName) => {
+  // Escape special regex chars in account name
+  const esc = acctName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Match name, followed (within ~100 chars) by first $X.XX
+  const m = text.match(new RegExp(esc + "[\\s\\S]{0,80}\\$(([\\d,]+\\.\\d{2}))"));
+  if (!m) return NaN;
+  return parseDollar(m[1].replace(/,/g, ""));
 };
 
 // Extract net worth from Dashboard — it's the FIRST dollar figure after "Net worth"
@@ -336,8 +351,7 @@ try {
   const nwBeforeRec = parseAccountsNetWorth(bodyAccBeforeRec);
 
   // Find L44 Omar Checking's balance
-  const omarBalBeforeMatch = bodyAccBeforeRec.match(/L44 Omar Checking[\s\S]{0,120}\$([\d,]+\.\d{2})/);
-  const omarBalBefore = omarBalBeforeMatch ? parseDollar(omarBalBeforeMatch[1].replace(/,/g, "")) : NaN;
+  const omarBalBefore = parseAccountBalance(bodyAccBeforeRec, ACCT_NAME);
   console.log(`L44 Omar Checking balance before reconcile: $${omarBalBefore}`);
 
   if (!isNaN(omarBalBefore)) {
@@ -355,17 +369,16 @@ try {
 
   for (const btn of allMoreBtns) {
     // Check if this button is in a row near L44 Omar Checking
+    // Walk up to nearest ancestor that contains the account name text
     const rowText = await btn.evaluate((b) => {
-      // Walk up to the nearest row-like ancestor
       let el = b;
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 10; i++) {
         el = el.parentElement;
         if (!el) break;
-        if (el.querySelector && el.querySelector('.row-desc')) {
-          return el.innerText?.trim() ?? "";
-        }
+        const txt = el.innerText?.trim() ?? "";
+        if (txt.includes("L44 Omar Checking")) return txt;
       }
-      return el?.innerText?.trim() ?? "";
+      return "";
     });
     if (/L44 Omar/i.test(rowText)) {
       await btn.click();
@@ -437,8 +450,7 @@ try {
 
   await page.screenshot({ path: SS("l44_step5_accounts_after_reconcile.png") });
   const bodyAccAfterRec = await page.evaluate(() => document.body.innerText);
-  const omarBalAfterMatch = bodyAccAfterRec.match(/L44 Omar Checking[\s\S]{0,120}\$([\d,]+\.\d{2})/);
-  const omarBalAfter = omarBalAfterMatch ? parseDollar(omarBalAfterMatch[1].replace(/,/g, "")) : NaN;
+  const omarBalAfter = parseAccountBalance(bodyAccAfterRec, ACCT_NAME);
   console.log(`L44 Omar Checking balance after reconcile: $${omarBalAfter}`);
 
   if (!isNaN(omarBalAfter) && Math.abs(omarBalAfter - parseFloat(RECONCILE_BAL)) < 1) {

@@ -5090,16 +5090,13 @@ CSS tokens, reload, assert persistence).
   **dashboard banner**. ✓
 
 **Gaps (this area is well-covered; the gaps are a11y + portability):**
-- [ ] **No contrast guard on custom themes (a11y, ties to L7).** A user can pick a low-contrast
-      accent/text/surface combo with no warning. Add a **WCAG contrast check** in the theme editor that
-      flags text/background and accent/surface pairs below AA (4.5:1 / 3:1). Bottom-up: a pure
-      `contrastRatio(fg,bg)` + `MeetsAA(...)` in a small color util (table-tested) → an inline warning
-      badge in the editor next to failing tokens.
-- [ ] **Custom appearance isn't portable (cross-ref L9).** The theme/custom-fonts/banner persist locally
-      but are **excluded from Export JSON** (L9), so "Make It Mine" doesn't follow Renée to a new device.
-      Fold the appearance keys into the **full-backup envelope** (L9) so they round-trip.
-- [ ] *(Enhancement)* **Share a theme** — export/import just the theme token set (a small JSON) so a user
-      can share or restore a crafted look independent of their data.
+- [x] **Contrast guard on custom themes** (already shipped — stale gap): the theme editor runs a WCAG
+      contrast check (`internal/contrast` `Ratio`/`PassesAA`) and shows inline "Some tokens may be hard to
+      read" warnings per failing token, or "all text meets the contrast guideline" (`theme_editor.go:192-203`).
+- [x] **Share a theme** (already shipped): the theme editor has **Export theme** (`cashflux-theme.json`) +
+      **Import theme** buttons for the token set (`theme_editor.go:280-297`).
+- [ ] **Custom appearance in the FULL backup (cross-ref L9)** — the theme is independently exportable now
+      (above); folding the appearance keys into the L9 full-backup envelope remains a minor follow-up.
 
 **Probe note:** the "persisted across reload" check **false-negatived** — the `after` token snapshot was
 read before the accent swatch's live update fully propagated, so it compared the reloaded accent
