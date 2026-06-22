@@ -5787,7 +5787,7 @@ Groceries spend.
   funds" (9 words → 4) with a `title` tooltip for the full description.
   Screenshot: `loop40-02-add-form-filled.png` (right column shows truncated label).
   After: relabel + add tooltip; re-screenshot at 1280 px to confirm no wrap.
-- [ ] **Add form does not reset Category after submit.** After submitting "Monthly Groceries
+- [x] **Add form does not reset Category after submit.** After submitting "Monthly Groceries
   (Groceries)", the Category select resets to "Dining" (the first expense category alphabetically),
   not to a neutral or last-used state. If Sam immediately wants to add a second budget for a different
   category she has to re-select — minor friction — but the form's snappy reactive reset elsewhere

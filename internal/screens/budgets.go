@@ -124,9 +124,13 @@ func Budgets() ui.Node {
 		name.Set("")
 		limit.Set("")
 		rollover.Set(false)
+		if len(expenseCats) > 0 {
+			catID.Set(expenseCats[0].ID) // reset category to the default after add (L40)
+		}
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		bump()
+		uistate.PostNotice(uistate.T("budgets.addedToast"), false) // L40 success confirmation
 	}))
 
 	deleteBudget := func(budgetID string) {
