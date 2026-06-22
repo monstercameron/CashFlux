@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 	"github.com/monstercameron/CashFlux/internal/planning"
+	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/runway"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -245,9 +246,10 @@ func Planning() ui.Node {
 		txns := app.Transactions()
 		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 		net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
-		mStart, mEnd := dateutil.MonthRange(time.Now())
-		income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
-		monthlyNet := income.Amount - expense.Amount
+		// Base the forecast on the average of the last 3 complete months, not just
+		// this (possibly atypical) month — a one-off purchase or bonus shouldn't skew
+		// the 12-month projection (L27).
+		monthlyNet, _ := reports.TrailingMonthlyNet(txns, time.Now(), 3, rates)
 
 		series := forecast.Project(net.Amount, []forecast.Recurring{{Label: "net cash flow", Monthly: monthlyNet}}, nil, 12)
 		endVal := money.New(series[len(series)-1], base)

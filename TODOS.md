@@ -5266,7 +5266,7 @@ They model it, watch the trajectory, see their runway, and save the scenario.
       (interpolated fractional crossing, table-tested incl. never-depletes / already-negative / one-time dip)
       → a "Money lasts ~5.6 months" readout in the danger tone + a ⚠ marker on a plan that crosses zero (calm
       "Stays positive through N months" otherwise). e2e `plan_runway_check.mjs`.
-- [ ] **Baseline forecast = THIS month's net extrapolated 12×** (`planning.go:231-234`,
+- [x] **Baseline forecast = THIS month's net extrapolated 12×** (`planning.go:231-234`,
       `monthlyNet = income−expense for MonthRange(now)`). If the current month is atypical (a one-off
       purchase, a bonus), the 12-month forecast is misleading. Base it on a **trailing average** (last
       3–6 months) or the recurring cash flows. Bottom-up: an averaged `monthlyNet` (pure, tested) feeding

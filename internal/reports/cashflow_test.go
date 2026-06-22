@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -72,5 +73,28 @@ func TestIncomeExpenseSeriesTooFewBounds(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("got %d, want 0 for a single bound", len(got))
+	}
+}
+
+func TestTrailingMonthlyNet(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	mk := func(y int, m time.Month, d int, amt int64) domain.Transaction {
+		return domain.Transaction{Date: time.Date(y, m, d, 0, 0, 0, 0, time.UTC), Amount: money.New(amt, "USD")}
+	}
+	// May: +1000 income, -400 expense (net +600); Apr: net +200; Mar: net +400.
+	txns := []domain.Transaction{
+		mk(2026, time.May, 3, 100000), mk(2026, time.May, 10, -40000),
+		mk(2026, time.April, 3, 20000),
+		mk(2026, time.March, 3, 40000),
+		mk(2026, time.June, 3, 999999), // current month — excluded
+	}
+	got, err := TrailingMonthlyNet(txns, now, 3, rates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := (60000 + 20000 + 40000) / 3 // 40000
+	if got != int64(want) {
+		t.Fatalf("TrailingMonthlyNet = %d, want %d", got, want)
 	}
 }

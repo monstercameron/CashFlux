@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 )
@@ -54,4 +55,27 @@ func IncomeExpenseSeries(txns []domain.Transaction, bounds []time.Time, rates cu
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+// TrailingMonthlyNet returns the average monthly net cash flow (income minus
+// expense, base currency minor units) over the `months` COMPLETE calendar months
+// immediately before the month containing `now` — a steadier basis for a forecast
+// than a single (possibly atypical) current month (L27). months <= 0 falls back to
+// 1. Transfers are excluded via PeriodTotals.
+func TrailingMonthlyNet(txns []domain.Transaction, now time.Time, months int, rates currency.Rates) (int64, error) {
+	if months <= 0 {
+		months = 1
+	}
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	var sum int64
+	for i := 1; i <= months; i++ {
+		s := dateutil.AddMonths(monthStart, -i)
+		e := dateutil.AddMonths(monthStart, -i+1)
+		income, expense, err := ledger.PeriodTotals(txns, s, e, rates)
+		if err != nil {
+			return 0, err
+		}
+		sum += income.Amount - expense.Amount
+	}
+	return sum / int64(months), nil
 }
