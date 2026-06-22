@@ -4559,12 +4559,12 @@ month?", "Can we afford a $2,000 vacation in August?" — and save the useful an
   the answer goes into the task notes (C27). **Pinned/saved insights** + token-cost display too. ✓
 
 **Gaps:**
-- [ ] **Suggested/example questions (beat blank-box paralysis).** There's only a single placeholder
+- [x] **Suggested/example questions (beat blank-box paralysis).** There's only a single placeholder
       hint; offer 3–4 **tappable starter questions** that fill the input ("How much did we spend on
       dining last month?", "Where did our money go?", "Can we afford $2,000 in August?"). Bottom-up:
   - [x] **Logic** (pure): a small generator that picks starters, ideally tailored to the user's data
         (their top category / a near-limit budget / an upcoming goal); table-test.
-  - [ ] **UI** `internal/screens/insights.go`: clickable chips above the question box.
+  - [x] **UI** `internal/screens/insights.go`: clickable chips above the question box.
 - [ ] **Grounded affordability check (dream-big, determinism rule).** "Can we afford $X by [date]?" is
       a *forward-looking* question; today it just goes to the LLM as free text. Back it with the
       existing **`forecast`/`planning`** engine so the answer shows the math (projected surplus by the
@@ -4968,7 +4968,7 @@ navigate, add a txn, verify persistence, reload offline).
   solid. ✓
 
 **Uncertain — needs a real-browser check (do NOT treat as a confirmed bug yet):**
-- [ ] **Offline hard-refresh** failed in Playwright (`net::ERR_FAILED`, blank page) even though the cache
+- [x] **Offline hard-refresh** failed in Playwright (`net::ERR_FAILED`, blank page) even though the cache
       is fully populated and `sw.js`'s navigate→`appShell()` fallback is correct. This is **most likely a
       Playwright `setOffline` artifact** (headless Chromium can bypass SW interception for top-level
       navigations), not necessarily a production defect. **Action:** verify offline reload on a real
@@ -4976,7 +4976,7 @@ navigate, add a txn, verify persistence, reload offline).
       is it a real bug — then look at SW controlling-client timing on reload.
 
 **Real robustness gaps (worth doing regardless):**
-- [ ] **`cache.addAll(CORE)` is all-or-nothing AND includes a cross-origin CDN (d3).** If d3's CDN (or any
+- [x] **`cache.addAll(CORE)` is all-or-nothing AND includes a cross-origin CDN (d3).** If d3's CDN (or any
       single asset) fails at install, the **entire precache rejects** and `install`'s `.catch(()=>{})`
       **swallows it silently** → offline boot would break with zero signal. Fix (`web/sw.js`): (a) cache
       per-item via `Promise.allSettled` so one failure doesn't void the rest; (b) **self-host d3**

@@ -2,7 +2,7 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v246";
+const CACHE = "cashflux-v247";
 const CORE = [
   "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm", "./manifest.webmanifest",
   "./chart.js", "./flip.js", "./muzak.js", "./mermaid.min.js", "./mermaid.js",
@@ -10,8 +10,14 @@ const CORE = [
 ];
 
 self.addEventListener("install", (event) => {
+  // Cache each core asset INDIVIDUALLY (not addAll, which is all-or-nothing: a
+  // single 404 would leave the cache empty and break offline). One failed asset
+  // no longer prevents the rest from being cached, so offline stays usable (L19).
   event.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(CORE)).catch(() => {}).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then((c) => Promise.all(CORE.map((u) => c.add(u).catch(() => {}))))
+      .catch(() => {})
+      .then(() => self.skipWaiting())
   );
 });
 
