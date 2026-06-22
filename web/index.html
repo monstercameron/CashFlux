@@ -362,6 +362,9 @@
       .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; align-items: end; }
       .field { width: 100%; padding: 0.5rem 0.6rem; min-height: 44px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: inherit; }
       .field:focus { outline: none; border-color: var(--accent); }
+      /* Keyboard focus keeps a visible ring (the bare border-tint above is too subtle for
+         keyboard-only users); :focus-visible scopes it to keyboard focus, not mouse clicks (L7). */
+      .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       /* Native color picker rendered as a proper swatch (a bare-width text field
          clipped it to a thin line). */
       .color-input { width: 44px; height: 44px; padding: 3px; background: var(--bg-elev);

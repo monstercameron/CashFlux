@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"syscall/js"
+
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -10,6 +12,30 @@ import (
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
+
+// focusRadioAt moves DOM focus to the nth [role=radio] child of the element
+// identified by groupID. Called after arrow-key navigation so that the newly
+// selected option receives focus synchronously (before the re-render updates
+// tabindex). If the element or the index is out of range the call is a no-op.
+func focusRadioAt(groupID string, index int) {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return
+	}
+	el := doc.Call("getElementById", groupID)
+	if el.IsNull() || el.IsUndefined() {
+		return
+	}
+	radios := el.Call("querySelectorAll", "[role=radio]")
+	if radios.IsNull() || radios.IsUndefined() {
+		return
+	}
+	n := radios.Get("length").Int()
+	if index < 0 || index >= n {
+		return
+	}
+	radios.Call("item", index).Call("focus")
+}
 
 // SegOption is one choice in a Segmented control: a stable value and its label.
 type SegOption struct {
@@ -33,6 +59,7 @@ func Segmented(props SegmentedProps) uic.Node {
 }
 
 func segmented(props SegmentedProps) uic.Node {
+	groupID := uic.UseId()
 	options := props.Options
 	selected := props.Selected
 	onSelect := props.OnSelect
@@ -49,6 +76,8 @@ func segmented(props SegmentedProps) uic.Node {
 			break
 		}
 	}
+	// move advances selection by delta and synchronously focuses the new radio so
+	// keyboard users get immediate visual feedback even before the re-render.
 	move := func(delta int) {
 		if onSelect == nil || len(options) == 0 {
 			return
@@ -62,8 +91,9 @@ func segmented(props SegmentedProps) uic.Node {
 		}
 		next := (i + delta + len(options)) % len(options)
 		onSelect(options[next].Value)
+		focusRadioAt(groupID, next)
 	}
-	args := []any{css.Class("seg"), Attr("role", "radiogroup"), OnKeyDown(func(e uic.KeyboardEvent) {
+	args := []any{ID(groupID), css.Class("seg"), Attr("role", "radiogroup"), OnKeyDown(func(e uic.KeyboardEvent) {
 		switch e.GetKey() {
 		case "ArrowLeft", "ArrowUp":
 			e.PreventDefault()
@@ -298,6 +328,7 @@ func SwatchPicker(props SwatchPickerProps) uic.Node {
 }
 
 func swatchPicker(props SwatchPickerProps) uic.Node {
+	groupID := uic.UseId()
 	onSelect := props.OnSelect
 	colors := props.Colors
 	// Roving tabindex + arrow-key navigation (ARIA radiogroup): one Tab stop, and
@@ -313,6 +344,8 @@ func swatchPicker(props SwatchPickerProps) uic.Node {
 			break
 		}
 	}
+	// move advances selection by delta and synchronously focuses the new swatch so
+	// keyboard users get immediate visual feedback even before the re-render.
 	move := func(delta int) {
 		if onSelect == nil || len(colors) == 0 {
 			return
@@ -324,9 +357,11 @@ func swatchPicker(props SwatchPickerProps) uic.Node {
 				break
 			}
 		}
-		onSelect(colors[(i+delta+len(colors))%len(colors)])
+		next := (i + delta + len(colors)) % len(colors)
+		onSelect(colors[next])
+		focusRadioAt(groupID, next)
 	}
-	return Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), Attr("role", "radiogroup"), Attr("aria-label", uistate.T("a11y.accentColor")),
+	return Div(ID(groupID), css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), Attr("role", "radiogroup"), Attr("aria-label", uistate.T("a11y.accentColor")),
 		OnKeyDown(func(e uic.KeyboardEvent) {
 			switch e.GetKey() {
 			case "ArrowLeft", "ArrowUp":

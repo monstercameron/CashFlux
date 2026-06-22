@@ -4530,17 +4530,16 @@ in-progress edit — sortable table headers — left the tree non-compiling). So
   `aria-label`(color) + Space/Enter operable. ✓
 
 **A11y refinement gaps (real, source-grounded):**
-- [ ] **Roving tabindex for radiogroups.** `Segmented` options are native `<button>`s and swatches are
-      `tabindex=0` divs, so **every** option is a Tab stop. The ARIA radio pattern wants **one** Tab
-      stop (the checked option, `tabindex=0`) with the rest `tabindex=-1`, moved between by arrows.
-      Apply roving tabindex in `segButton` + `swatch` (drive from `Active`/`Selected`). Pure
-      view-layer; verify with the runtime sweep below.
-- [ ] **Promote the runtime a11y sweep to a committed gate.** Once the build is green, turn
-      `loopstory_07` into `e2e/a11y_check.mjs` run by `run-stories.mjs`: assert (1) `nav[aria-label]`
-      + `main#main` landmarks, (2) **zero** focusable controls without an accessible name, (3) zero
-      unlabeled form fields, (4) a visible focus ring on first Tab — across `/transactions`,
-      `/accounts`, and the Settings panel. This locks in the a11y audit (§ accessibility) so
-      regressions fail CI.
+- [x] **Roving tabindex for radiogroups.** `segButton` + `swatch` now take a `TabStop` bool driven from
+      `Active`/`Selected`: the checked/selected option gets `tabindex="0"`, all others `tabindex="-1"`, so
+      a radiogroup is a single Tab stop. Arrow-key nav moves DOM focus to the newly-active option via a
+      new `focusRadioAt(groupID,index)` helper (containers minted a stable `UseId`). `internal/ui/controls.go`.
+- [x] **Committed a11y gate** — `e2e/a11y_check.mjs` sweeps `/transactions` + `/accounts`: asserts (1)
+      `nav[aria-label]` + `main` landmarks, (2) zero unnamed focusable controls, (3) zero unlabeled form
+      fields, (4) a visible focus ring after first Tab, (5) each radiogroup has exactly one Tab stop. Also
+      fixed `.field:focus` stripping the keyboard ring — added `.field:focus-visible { outline }` (was a
+      genuine gap the gate caught). *(Settings panel deferred — needs an open gesture; covered by the
+      same per-render name/label rules.)*
 - [ ] **Re-run L7 after the green build** to capture the transactions add-form field labels + the
       unnamed-control scan that this iteration could not execute.
 

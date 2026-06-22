@@ -10950,3 +10950,13 @@ wide (account-based). Reports by-member section gate relaxed to ≥2 members + �
 sample (only Daniel has spend) shows it. Fixed the agent's `If(cond, Attr("selected",...))` (invalid
 — Attr is a PropOption, not a Node) → `SelectedIf(cond)`. e2e member_view_toggle_check + crosscurrency
 + year-view all green.
+
+## 2026-06-22 — L7 a11y: roving tabindex + committed gate
+Radiogroups (Segmented, SwatchPicker) now follow the ARIA radio pattern: one Tab stop per group
+(selected option tabindex=0, rest -1) via a TabStop prop, with Arrow nav moving DOM focus through a
+new focusRadioAt(groupID,index) js helper (containers get a stable UseId). Authored e2e/a11y_check.mjs
+as a committed gate over /transactions + /accounts (landmarks, accessible names, labeled fields,
+focus ring on first Tab, one-tab-stop-per-radiogroup). The gate immediately caught a real gap:
+`.field:focus { outline:none }` was stripping the keyboard focus ring on every text input, leaving
+only a faint border tint — added `.field:focus-visible { outline:2px solid var(--accent) }`. Segmented
+auto-merged from the worktree; settings/segmented regressions still green.

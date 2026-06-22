@@ -13,6 +13,14 @@ and every commit updates this file under `Unreleased`.
   household-wide (it's account-based, not per-transaction). The by-member Reports section now shows for any
   ≥2-member household with ≥1 attributed spend. New `MemberSwitcher` component; `member_view_toggle_check.mjs`.
 
+### Accessibility
+- **Roving tabindex on radiogroups + a committed a11y gate (L7).** `Segmented` options and color swatches
+  now expose exactly one Tab stop per group (the selected option, `tabindex=0`; the rest `tabindex=-1`),
+  with Arrow keys moving DOM focus between them — the standard ARIA radio pattern. Text inputs (`.field`)
+  regained a visible keyboard focus ring (`:focus-visible` outline; the prior `:focus` rule stripped it).
+  New `e2e/a11y_check.mjs` sweeps `/transactions` + `/accounts` for landmarks, accessible names, labeled
+  fields, a visible focus indicator, and the one-tab-stop radiogroup invariant.
+
 ### Fixed
 - **Deleting a parent category no longer orphans its sub-categories (L28).** Removing a parent now re-homes
   each child onto the parent's own parent (the grandparent, or the root for a top-level category) before
