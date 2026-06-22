@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reports roll-up by parent category (L28).** The Spending-by-category breakdown now has a "Roll up
+  sub-categories" toggle that combines each category's children into its top-level parent total (e.g.
+  Electricity + Internet → Utilities), so a deep category tree reads at the parent level; off by default so
+  leaf detail stays visible. Pure `reports.RollUpByParent` (table-tested incl. nested children); e2e
+  `reports_rollup_check.mjs`.
 - **FX rate staleness signal (L4).** Each exchange rate is now stamped with when it was last set, and the
   Settings FX table flags any rate not refreshed in over 30 days with a "Stale" badge — so manual rates that
   silently drift (and quietly skew every multi-currency total) become visible. Pure `currency.RateStale` +

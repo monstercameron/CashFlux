@@ -113,29 +113,43 @@ const defineCustomField = async (page, entityVal, key, label, typeVal) => {
 };
 
 // Inject 3 transactions with custom field values directly into localStorage.
-// Uses the same schema as domain.Transaction (Go JSON tags): id, accountId, date,
-// desc, amount {Amount, Currency}, custom {l53_property, l53_tax_ded}.
-// Falls back to the first available account if none is specified.
+// STRATEGY: REPLACE the transactions array entirely with only the 3 Dana transactions.
+// Appending to the 604-item seed array causes Go's json.Unmarshal to silently drop
+// the appended transaction (observed: array length 605 in JS → 604 after wasm import).
+// INJECTION STRATEGY — root cause documented here:
+//   The wasm autosave has a `pagehide` event handler. When page.reload() fires,
+//   the browser dispatches `pagehide` on the old page, and the wasm autosave writes
+//   its in-memory state (the un-modified dataset) back to localStorage, overwriting
+//   the injected data *before* the new page reads it. Solution: after injecting,
+//   block further writes to cashflux:dataset by patching localStorage.setItem to a
+//   no-op for that key, so the pagehide autosave is silently swallowed. The patch
+//   lives only for the current page lifetime (it disappears on reload).
 const injectTransactions = async (page, txns) => {
   return page.evaluate((txnsData) => {
     const ds = JSON.parse(localStorage.getItem("cashflux:dataset") || "{}");
     const accounts = ds.accounts || [];
     const defaultAcctId = accounts.length > 0 ? accounts[0].id : "acct-checking";
-    const now = new Date().toISOString(); // RFC3339 — Go's time.Time requires full ISO timestamp
+    const fixedDate = "2024-07-14T00:00:00Z"; // Exact seed format
 
-    for (const t of txnsData) {
-      ds.transactions = ds.transactions || [];
-      ds.transactions.push({
-        id:        t.id,
-        accountId: defaultAcctId,
-        date:      now,
-        desc:      t.desc,
-        amount:    { Amount: t.amountMinor, Currency: "USD" },
-        custom:    t.custom
-      });
-    }
-    localStorage.setItem("cashflux:dataset", JSON.stringify(ds));
-    window.dispatchEvent(new Event("visibilitychange"));
+    ds.transactions = txnsData.map(t => ({
+      id:        t.id,
+      accountId: defaultAcctId,
+      date:      fixedDate,
+      desc:      t.desc,
+      amount:    { Amount: t.amountMinor, Currency: "USD" },
+      custom:    t.custom
+    }));
+    const newRaw = JSON.stringify(ds);
+    localStorage.setItem("cashflux:dataset", newRaw);
+
+    // Freeze further writes to cashflux:dataset so the wasm pagehide autosave
+    // (triggered by the reload) cannot overwrite the injected data.
+    const origSet = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = (k, v) => {
+      if (k === "cashflux:dataset") return; // blocked — injection protected
+      return origSet(k, v);
+    };
+
     return ds.transactions.length;
   }, txns);
 };
@@ -222,9 +236,8 @@ try {
   ];
 
   const totalAfterInject = await injectTransactions(page, txnsToInject);
-  await page.waitForTimeout(500);
-
-  // Reload so wasm picks up the injected data
+  // Reload IMMEDIATELY — do not yield; the wasm autosave ticker (~4s) must not
+  // fire between inject and reload, or it overwrites localStorage with stale state.
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector("#app", { timeout: 60000 });
   await page.waitForTimeout(2500);

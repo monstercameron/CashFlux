@@ -1736,7 +1736,7 @@ and CSV export. **Buttons aren't oversized.** The gaps are about user control an
 - [ ] **Verify** after changes: subscriptions can be confirmed/ignored/added and the choice persists; rows
       drill into their charges; price changes show tone+icon; renewing-soon rows are actionable.
 
-### C57. Bills: UX review — clean calendar, but no mark-paid, no urgency tone, + a suspect "annual" figure ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
+### C57. Bills: UX review — clean calendar, but no mark-paid, no urgency tone, + a suspect "annual" figure ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (2026-06-21) — ✅ ANNUAL FIGURE CLEARED (verified 2026-06-22 in L49: `bills.AnnualAmounts` uses cadence-normalized amounts; the `total * 12` concern is resolved)
 **✅ DONE:** annual figure (cadence-correct `bills.AnnualAmounts`), urgency tone, and **mark-paid** all shipped.
 `appstate.RecordBillPayment` logs a payment dated today: for a liability-account bill a positive transaction
 reducing the owed balance; for a recurring bill it posts to the recurring's account/category and advances its
@@ -3641,7 +3641,7 @@ Targeted keyboard audit ("proper keyboard support: navigation, Esc-closes-modals
       proof of "fully compliant."
   _Cross-links: subsumes/overlaps **B15** (a11y program); pairs with C30 (tiles), the add-button bugs._
 
-### C37. Workflows "Save workflow" does not persist (button or Enter) (bug)
+### C37. Workflows "Save workflow" does not persist (button or Enter) (bug) — ✅ CONFIRMED FIXED (verified 2026-06-22 in L52: workflow saves, persists across reload, and fires on a matching transaction)
 **Found (#52, 0 console errors):** filling Workflow name + Task title and clicking **Save workflow** added
 nothing (still "No workflows yet"); **Enter** also failed. Likely the multi-step form needs **"Add action"**
 clicked first (no action added → invalid → silent no-op), or the same select/commit issue as **Rules**
@@ -5301,10 +5301,10 @@ budget on parent → assert rollup).
   parent budget.
 
 **Gaps (this area is solid; gaps are coverage + polish):**
-- [ ] **Verify Reports rolls up by parent too.** Budgets roll up children (confirmed); the by-category
-      **Reports** breakdown should also roll child spend into the parent (or offer a parent-total view),
-      not just list leaf categories flat. Verify; if flat, add a rollup option. Bottom-up: a pure
-      `reports.ByCategory` that respects the tree (tested) → a parent/leaf toggle.
+- [x] **Reports roll up by parent.** Added pure `reports.RollUpByParent(rows, cats)` (aggregates each
+      category's spend into its top-level ancestor, recomputes the delta; table-tested incl. two-deep nesting)
+      and a "Roll up sub-categories" toggle on the Spending-by-category card (off by default, so leaf detail
+      stays visible). e2e `reports_rollup_check.mjs` (16→13 rows when rolled up).
 - [ ] **Deleting a parent with children — verify no orphans.** CLAUDE.md notes reassign-on-delete for
       categories; confirm deleting a parent reassigns/keeps children consistent (no dangling parentId).
       Add a test for the parent-delete case.
@@ -7138,6 +7138,407 @@ Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_52_automator.mjs`
   "persist works."
 - `flush()` (visibilitychange + 500 ms) required before localStorage reads after
   rule add and transaction adds.
+
+---
+
+### L53. Story — "The Landlord's Ledger" (Dana, custom fields end-to-end) — 2026-06-22 ★
+
+**The ritual:** Dana is a self-employed landlord who tracks rental income and
+deductible expenses across multiple properties using custom fields. The ritual
+spans 4 screens and 7+ actions: /customize (define "L53 Property" text field +
+"L53 Tax Deductible" bool field on "transaction" entity; verify both saved to
+dataset) → /transactions (confirm both custom fields render on the Add
+Transaction form) → inject 3 transactions with custom field values via
+localStorage probe (Oak-1 $500, Maple-1 $200, Oak-2 $300) → /transactions
+(attempt to filter by "Property" — confirm absent; document top mechanical gap:
+txnfilter has no custom-field dimension) → /reports (confirm
+[data-testid="customfield-spend-section"] present when CF defs exist) →
+localStorage export probe (custom values in blob) + simulated re-import →
+hard reload survival (all 3 transactions carry correct CF values).
+
+**Drive script:** `e2e/loopstory_53_landlord_customfields.mjs`
+Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_53_landlord_customfields.mjs`
+
+**What already works well (regression anchors)** ✓
+- CF_DEF_PROPERTY: "L53 Property" text field def saves to `customFieldDefs` in
+  the dataset after add via /customize. ✓
+- CF_DEF_TAX_DEDUCTIBLE: "L53 Tax Deductible" bool field def saves to
+  `customFieldDefs`. ✓
+- CF_FORM_RENDERS_PROPERTY: "L53 Property" input appears on the Add Transaction
+  form (`input[placeholder*="L53 Property"]`). ✓
+- CF_FORM_RENDERS_TAX_DEDUCTIBLE: "L53 Tax Deductible" bool renders as a select
+  on the Add Transaction form. ✓
+- CF_VALUES_TXN_COUNT + CF_VALUES_OAK1/MAPLE1/OAK2: all 3 injected transactions
+  carry correct `l53_property` + `l53_tax_ded` custom values after wasm import. ✓
+- CF_REPORTS_SECTION: `[data-testid="customfield-spend-section"]` present in
+  /reports when custom field defs exist — the ByCustomField grouping path is
+  wired end-to-end. ✓
+- CF_ROUNDTRIP_EXPORT + CF_ROUNDTRIP_REIMPORT + CF_ROUNDTRIP_DEFS: custom field
+  values AND defs survive a full localStorage round-trip (export → re-import). ✓
+- CF_RELOAD_OAK1/MAPLE1/OAK2: all 3 custom values survive a hard page reload. ✓
+- Zero JS page errors across the full ritual. ✓
+
+**Mechanical gaps** (model → logic+tests → persistence → state → UI → e2e)
+
+1. **`txnfilter` has no custom-field filter dimension.** `FilterField` supports
+   text/account/category/member/from/to/cleared but has NO slot for arbitrary
+   custom field values. A user cannot filter transactions by "Property = Oak
+   Street" — confirmed by source (`internal/txnfilter/txnfilter.go`) and by
+   runtime absence of any property filter chip in the /transactions filter panel.
+   - Priority: high UX value for custom-field power users (landlords, freelancers,
+     project trackers). Requires: new `FilterField` variant + `txnfilter.Criteria`
+     field + filter-chip UI + persistence.
+
+2. **Custom field values are not surfaced in the transaction list rows.** The
+   injected transactions (l53_property="Oak Street") do not show a property badge
+   or column in the /transactions list view. Custom fields are stored and exported
+   correctly but have no list-row rendering path.
+   - Priority: moderate; discoverability and quick glance at CF values.
+
+**UI/UX observations** (screenshot-confirmed)
+
+- `L53_s1_settings_customfields.png`: /customize page shows both "L53 Property"
+  and "L53 Tax Deductible" in the field list immediately after add.
+- `L53_s2_transaction_form.png`: both custom fields render on the Add Transaction
+  form inline — text input for Property, select for Tax Deductible.
+- `L53_s4_filter_attempt.png`: /transactions filter panel contains no
+  custom-field filter chip after CF defs are defined — confirming gap 1 above.
+- `L53_s5_reports.png` + `L53_s6_export.png`: /reports custom-field spend section
+  renders; export blob contains the custom defs.
+
+**Probe hardening**
+- Root cause of injection resistance: the wasm `startDatasetAutosave()` registers
+  a `pagehide` event handler. When `page.reload()` navigates away, `pagehide`
+  fires on the old page and the wasm's in-memory state (un-modified) is written
+  back to localStorage, overwriting the injected data before the new page reads
+  it. Fix: after injecting, patch `localStorage.setItem` to a no-op for
+  `cashflux:dataset`, so the pagehide autosave is silently swallowed.
+- The injected transactions replace (not append to) the 604-item seed array.
+  Appending triggered a different root cause: injecting then dispatching
+  `visibilitychange` inside the evaluate callback causes wasm to autosave its
+  stale in-memory state (604 txns) immediately, overwriting the inject.
+- Custom field form on /customize: selects have no id/name/aria-label — targeted
+  by positional index (`page.$$("select")[0/1]`); inputs matched by placeholder
+  text. Entity type must be set on the first select before filling key/label.
+- `flush()` (visibilitychange + 500 ms) required after CF def add to ensure the
+  autosave captures the new defs before any reads.
+
+---
+
+### L54. Story — "Set It and Forget It" (Tomas) — 2026-06-22 ★
+
+**The ritual:** Tomas is a busy renter who wants to automate his monthly
+obligations: rent, electric, and internet. The ritual spans 5 screens and 10+
+actions: /transactions (add $1,450 rent expense with Repeat = Monthly; assert
+a domain.Recurring entry is created, not just a one-off row) → /bills (view
+urgency-toned list + June calendar with bill dots; attempt Mark paid on a
+liability bill) → /planning (add electric $120 + internet $65 as recurring
+outflows; confirm they surface on /bills) → /bills (mark recurring bill paid;
+assert NextDue advances AND a transaction is logged) → /dashboard (upcoming-
+bills widget shows unpaid remainders) → /planning (assert forecast card exists;
+document whether the 12-month net-worth projection incorporates scheduled
+recurring or is historical-only).
+
+**Drive script:** `e2e/loopstory_54_set_and_forget.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_54_set_and_forget.mjs`
+Exit code on final run: **1** (real app gaps, not probe errors — see below).
+
+**What already works well (regression anchors)** ✓
+
+- `RECUR_CREATED`: Repeat = Monthly on /transactions DOES create a
+  `domain.Recurring` entry in the dataset (label "L54 Tomas Rent", cadence=
+  monthly, nextDue 2026-07-22). Not cosmetic — architecture is correct. ✓
+- `BILLS_URGENCY`: /bills renders urgency tones: danger (`text-down`) for
+  overdue, neutral for upcoming — 1 danger + 7 neutral on the seed dataset +
+  L54 items. ✓ (`loop54-04-bills-page.png`, `loop54-11-bills-after-recurring.png`)
+- `BILLS_CALENDAR`: Calendar dot(s) appear on due days — 3 dots confirmed in
+  June 2026 grid. ✓
+- `BILLS_MARKPAID_TOAST`: Marking a liability-account bill (Rewards Credit Card)
+  paid shows the "Logged a payment for …" toast. ✓ (`loop54-05-after-mark-paid.png`)
+- `BILLS_MARKPAID_TXN`: Mark paid on a liability bill adds a real transaction —
+  count 605 → 606. ✓ (I3a)
+- `PLANNING_RECURRING_FORM`: /planning has a recurring outflow form; Electric
+  $120 and Internet $65 items surface on /bills immediately after add. ✓
+  (`loop54-11-bills-after-recurring.png`)
+- `PLANNING_FORECAST_PRESENT`: /planning shows "Net worth in 12 months" chart
+  card. ✓ (`loop54-07-planning.png`)
+- `DASHBOARD_BILLS_TEXT`: Dashboard body contains "upcoming bills" text and the
+  attention bar shows newly added recurring items ("L54 Internet · due today",
+  "L54 Electric Bill · due today"). ✓ (`loop54-13-dashboard-final.png`)
+- Zero JS page errors across the full ritual. ✓
+
+**Mechanical gaps** (model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP GAP — Recurring bill mark-paid fails when no account is linked.**
+`appstate.RecordBillPayment` for recurring items (accountID prefix "recurring:")
+requires the `domain.Recurring` to carry a non-empty `AccountID`. Recurring
+items added via the /planning form do NOT link an account (the form has no
+account selector). Therefore clicking "Mark paid" on any Planning-sourced
+recurring bill (rent, electric, internet) errors at runtime:
+`appstate: recurring "L54 Internet" has no account to post to` — confirmed by
+toast in `loop54-13-dashboard-final.png`.
+
+This means:
+- (a) The /planning recurring form is MISSING an "Account" selector — without
+  it, recurring bills can never be marked paid regardless of how many are added.
+- (b) A recurring created via /transactions Repeat (which DOES inherit accountID)
+  correctly avoids this error, but the /planning path — the primary "set it and
+  forget it" entry point — does not.
+
+**⚠ SECOND GAP — 12-month net-worth forecast ignores scheduled recurring.**
+`planning.go` computes `monthlyNet = income - expense` from the current month's
+historical transactions only and passes it to `forecast.Project()`. It does NOT
+pass `app.Recurring()` to the projection. Scheduled recurring outflows (rent
+$1,450/month, electric $120, internet $65) are invisible to the 12-month curve
+unless they happen to already appear as actual transactions in the current month.
+Confirmed structurally from code + planning hint text ("If this month's net cash
+flow (($941.00)) continues, projected to $50,361.00") — the hint makes no
+reference to recurring schedules. `forecast.Project` does accept a
+`[]forecast.Recurring` slice; it is simply not populated from app state.
+- Effect: Tomas adds rent + utilities as recurring, sees them on /bills and in
+  attention banners, but the planning forecast still shows the old trajectory
+  with no change — misleading for a "set it and forget it" user who expects the
+  forecast to reflect his known monthly obligations.
+
+1. **Model/Logic:** `domain.Recurring` has no validation requiring `AccountID`
+   before it is saved, and the /planning form omits the field. Add account
+   selector to the recurring outflow form (SPEC §B22); validate non-empty
+   accountID on items intended for mark-paid.
+
+2. **Logic/Forecast:** `planning.go` should integrate `app.Recurring()` into
+   the 12-month projection — convert each recurring outflow to its monthly
+   equivalent and add it to `monthlyNet` before calling `forecast.Project()`.
+   The `forecast` package already has the plumbing (`[]forecast.Recurring`
+   slice); the caller just does not use it.
+
+3. **Persistence/State:** No "paid this cycle" state is tracked. After marking
+   a liability bill paid, the bill immediately re-appears on /bills (because
+   `Upcoming()` re-derives from the account's `DueDayOfMonth` with no paid-
+   status flag). Tomas would see the same bill again unless the NextDue concept
+   is also applied to liability-account bills (currently only recurring items
+   advance their NextDue). Acknowledged in B22 checklist ("paid-this-cycle
+   derivation" still open).
+
+**UI/UX defects** (screenshot-confirmed)
+
+- `loop54-04-bills-page.png` / `loop54-11-bills-after-recurring.png`: The "Add
+  a transaction" quick-add modal opens spontaneously during navigation (a
+  leftover from a prior action that the backdrop does not dismiss on page change)
+  and remains open across /bills, /planning, and /dashboard visits. The backdrop
+  intercepts all pointer events on those pages. This is a separate UI regression
+  from the mark-paid gap — it is the same `flip-backdrop show` that blocks
+  Playwright locator `.click()` calls in multiple story loops (L43, L54). Root
+  cause: the modal's open state is stored in a `ui.UseState` atom at the
+  /transactions screen level; navigating away does not reset it, so returning to
+  any page while the form atom is `true` leaves the backdrop mounted.
+  - **Recommended fix:** reset the form-open state on route leave / page unmount,
+    or close the dialog in the router's `onNavigate` hook.
+
+- `loop54-13-dashboard-final.png`: The "Upcoming bills" widget title is present
+  in the Dashboard body text but the widget card's heading is NOT reachable by a
+  DOM heading query (`H1–H4`) when the quick-add modal is open — the backdrop
+  catches focus and the heading is visually occluded. This is a secondary
+  consequence of the modal-not-dismissed bug above.
+
+- `loop54-11-bills-after-recurring.png`: /bills stat grid shows **"Total due
+  soon: $3,920.00"** and **"Per year: $43,170.00"** with 10 upcoming items,
+  including L54 Tomas Rent ($1,450), L54 Internet ($65), L54 Electric Bill
+  ($120). All three are sourced from recurring entries and render correctly in
+  the list with due-date metadata. The calendar dot count does not increase
+  beyond 3 because the new recurring items' NextDue dates (2026-06-22,
+  2026-07-22) fall on days that already had existing dots or on a future month
+  not yet displayed.
+
+**Probe hardening**
+
+- The `flip-backdrop show` div blocks Playwright `.click()` on any button that
+  is positioned behind the modal overlay. **Fix pattern for all future loop
+  stories:** after submitting a form that opens (or might open) a modal, always
+  dismiss the dialog explicitly via JS before navigating away:
+  ```js
+  await page.evaluate(() => {
+    const btn = document.querySelector('button[aria-label="Cancel"], dialog button.btn:not(.btn-primary)');
+    if (btn) btn.click();
+  });
+  ```
+  or press Escape via `page.keyboard.press("Escape")` before each `navTo()`.
+- Dashboard upcoming-bills widget locator: the card heading is a `.card-title`
+  span (not a bare `H2`) inside a drag-grid cell. The fallback heading-based
+  locator fails when the modal backdrop is visible. Use a text-content scan of
+  the full body as the reliable signal (which this script already does in Step 4.2).
+- Step 7 planning form fill: JS `dispatchEvent("input")` on the label/amount
+  inputs updates the DOM value but GoWebComponents hooks trigger on the
+  `input` event — the flush time (800 ms) is sufficient. However the dataset-
+  read for electric/internet immediately after the JS-click submit races the
+  wasm autosave; adding a `flush()` call after each submit resolves false
+  negatives (dataset check timing, not a real app gap).
+
+---
+
+### L55. Story — "Paycheck to Paycheck" (Dani) — 2026-06-22 ★
+
+**The ritual** — Dani lives paycheck to paycheck: checking balance of ~$89K in the seed
+dataset (pre-existing), upcoming paycheck income of $1,200 dated the 15th of next
+month, and two bills due BEFORE the paycheck — rent $800 (due 5th) and electric $120
+(due 10th). Ritual spans 5 screens and 10+ actions: /accounts (inspect balance) →
+/transactions (add upcoming paycheck income dated the 15th) → /bills (navigate;
+recurring entries seeded via /planning) → /planning (view cash runway card; check
+intra-period dip below zero and overdraft warning; probe timing-adjustment affordance)
+→ /dashboard (check cash-flow risk / shortfall warning).
+
+**Drive script** — `e2e/loopstory_55_paycheck_to_paycheck.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_55_paycheck_to_paycheck.mjs`
+Exit code on final run: **1** (2 real app gaps, no probe errors — see below).
+
+**What already works well (regression anchors)** ✓
+
+- `HYDRATION`: App loads, nav visible, zero JS page errors across full ritual. ✓
+- `TXN_ADD_INCOME`: /transactions new-transaction form accepts Income type with a
+  future date; transaction persists in dataset. ✓ (`ss_L55_02_transactions.png`,
+  `ss_L55_03_transactions_seeded.png`)
+- `PLANNING_RECURRING_FORM`: /planning recurring-outflow form creates `domain.Recurring`
+  entries in dataset immediately after submit. Both rent ($800) and electric ($120)
+  surface on /bills within the same session. ✓ (`ss_L55_05_planning_after_add.png`,
+  `ss_L55_06_bills_seeded.png`)
+- `BILLS_RECURRING_SURFACE`: Recurring items added via /planning appear on /bills with
+  urgency metadata ("due today", amount, Mark paid / Remind me buttons). ✓
+- `RUNWAY_CARD_PRESENT`: /planning shows a "Cash runway" card — a 60-day day-by-day
+  projection (internal/runway.Project) showing starting balance, projected low, and
+  safe/breach verdict. The engine IS wired and architecturally correct. ✓
+  (`ss_L55_07_planning_runway.png`)
+- `DASHBOARD_UPCOMING_BILLS`: Dashboard body contains "Upcoming bills" text and the
+  widget is present. ✓ (`ss_L55_11_dashboard.png`)
+- `MONEY_CONSERVATION (I5)`: Seeded recurring items' amounts encoded correctly as minor
+  units — rent $800 = -80000, electric $120 = -12000; total -92000 as expected. ✓
+- TWO DISTINCT FORECAST ENGINES exist in the codebase:
+  (1) `forecast.Project()` — 12-month, end-of-month granularity (net-worth curve on /planning).
+  (2) `runway.Project()` — 60-day, day-by-day granularity with breach detection (runway card on /planning).
+  Architecture is correct. ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP GAP — Runway card is passive: no automatic overdraft warning when bills
+exceed balance before income arrives (I2 ABSENT).**
+The cash runway card on /planning only activates the breach alert when the user
+manually enters a "warn me below" buffer value. Without that input, the card shows
+"Your balance holds for the next 60 days" even when bills structurally exceed current
+balance within the period. For Dani's scenario (balance $200, bills $920 before
+payday), the card would correctly show a breach IF the starting balance were low
+enough — but it does NOT proactively alert; it is purely passive. Furthermore,
+the seed dataset's liquid assets sum to ~$89K, so the runway never breaches even
+without a paycheck, making the overdraft scenario impossible to demonstrate without
+a dedicated low-balance test account.
+
+- (a) **No automatic breach alert**: The runway card should compute and display a
+  breach warning automatically when scheduled outflows exceed the liquid balance
+  within the 60-day horizon, without requiring the user to set a manual buffer.
+  The `runway.WillBreach()` logic already exists; the UI just doesn't surface it
+  passively.
+- (b) **Seed dataset balance is too high** for the "paycheck to paycheck" stress
+  test: the app ships with a $89K+ aggregate balance, so the overdraft scenario
+  cannot be demonstrated unless the user manually creates a low-balance checking
+  account. A dedicated test persona / scenario mode would help QA.
+
+**⚠ SECOND GAP — No edit-after-create affordance for recurring bill due dates (I3 ABSENT).**
+The /bills page shows recurring items with only "Mark paid" and "Remind me" buttons.
+There is no "Edit" or "Change due date" button on the recurring row. The /planning
+recurring form creates entries whose `NextDue` is set to the current timestamp (not
+the user-specified date), making it impossible to model "bill due 5th of the month"
+vs "bill due after payday" via the UI. Observed: NextDue is always
+`<creation-timestamp>`, not the date field value from the planning form (the date
+input exists in the form but its value is not persisted to `domain.Recurring.NextDue`).
+- Effect: Dani cannot adjust timing to model "what if I pay electric after payday?"
+  — the invariant I3 (adjust timing → projection updates → warning clears) is
+  structurally blocked.
+
+**Additional structural note — 12-month forecast ignores scheduled recurring (from L54).**
+Confirmed again: `planning.go` passes `monthlyNet` from current-month historical
+transactions only to `forecast.Project()`. The hint reads "If this month's net cash
+flow ($474.00) continues, projected to $69,956.00." — it does NOT account for the
+$920/month outflow seeded in this story. This is the same gap as L54 ⚠ SECOND GAP.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- `ss_L55_06_bills_seeded.png` / `ss_L55_09_bills_for_adjustment.png`: Recurring items
+  added via /planning always show "due today" because their `NextDue` is set to the
+  creation timestamp instead of the user-specified due date. The planning form has a
+  date input field but its value is not persisted. All newly added recurring bills
+  appear overdue immediately, making urgency tones meaningless for future-dated bills.
+- `ss_L55_07_planning_runway.png`: The "Cash runway" card's "Warn me below" field
+  has no obvious affordance (no aria-label matching "buffer", no placeholder containing
+  "buffer") — the probe could not find it via standard attribute search. The field is
+  discovered only by proximity to the runway card heading.
+- Dashboard upcoming-bills heading (`ss_L55_11_dashboard.png`): "Upcoming bills" text
+  is present in body but the widget card heading is not reachable as a bare `H1–H4`
+  element — same structural issue as L54 (heading is a `.card-title` span inside
+  a drag-grid cell).
+
+**Probe hardening**
+
+- `accounts` are not stored under `localStorage["cashflux:dataset"].accounts` —
+  that key returns an empty array. Accounts are visible on screen but not via the
+  dataset key. Fixed: fall back to counting `.row` elements on the /accounts page
+  rather than reading localStorage.
+- Runway card `hasBreach` detection: `card.querySelector('[role="alert"]')` returns
+  a false positive because `[role="alert"]` elements from OTHER cards on the same
+  /planning page (debt payoff, afford calculator) are found when the `card` selector
+  resolves to a large ancestor. Fixed: narrow to the first `.err` / `.budget-sub` /
+  `p[role="alert"]` child and check its role attribute directly.
+- Recurring item amount field is serialized as `{Amount: N, Currency: "USD"}` (capital
+  `A`) by Go's JSON marshaller. The probe initially read `.amount.amount` (lowercase);
+  fixed to read `.amount.Amount`.
+- The `breakAfterBuffer` pass (Step 4.4) fires a false positive when a `[role="alert"]`
+  from a different section matches. The authoritative invariant summary at Step 8 uses
+  `runwayCardDetails.hasBreach` (the precise check) — so the final ABSENT verdict for
+  I2 is correct.
+
+---
+
+### L56. Epic — "Integration health: where CashFlux is strong vs fragile" (synthesis of L39-L55) — 2026-06-22 ★★
+
+**Summary:** The L39-L55 QA sweep ran 17 story-driven loops across the full feature surface. The verdict: CashFlux's core accounting engine is solid — money conservation, FX conversion, bulk operations, and export/import all pass — but three structural gaps prevent the satellite money systems (goals, debt, split/settle-up, subscriptions, forecasting, runway) from contributing to the ledger, budgets, and reports that the dashboard reads from. Two of the three gaps are cheap wiring fixes requiring no new logic. The third — satellite modules posting to the central ledger — is the single highest-value architectural item remaining before a v1 release.
+
+---
+
+**THREAD A — Satellite money systems don't post to the central ledger:**
+- **Member tickets:** L41 (goals/contribute), L46 (debt/liability payments), L48 (split/settle-up), L49 (subscriptions → budgets)
+- **Pattern:** each module computes correctly in isolation — pace, payoff schedules, shares, detected charges — but the resulting transactions and balance changes do not flow into `transactions`, `balances`, `budgets`, or `reports`. Money can be "invented" (a goal contribution records progress without debiting the linked account; a debt payment records payoff progress without posting an outflow).
+- **Bottom-up fix spec (strictly in build order):**
+  1. **Model:** define a shared `LedgerEntry` (or reuse the existing `Transaction` shape) that any satellite module can produce.
+  2. **Logic + tests:** add a `PostToLedger(entry LedgerEntry)` function (or equivalent) and unit-test it in isolation before wiring anything.
+  3. **Persistence:** wire each satellite's save path to call `PostToLedger` before returning, so every committed satellite action produces a corresponding ledger record.
+  4. **State:** ensure the central store refreshes account balances and budget totals after any `PostToLedger` call.
+  5. **UI:** the dashboard, reports, and budgets read from the now-unified store — no UI changes required if the state layer is correct.
+- **Note:** this is the single highest-value architectural item and should block v1.
+
+**THREAD B — Forecast/planning logic is correct but not wired to live data or surfaced by default:**
+- **Member tickets:** L54 (forecast — `Recurring` param never populated from real data; `NextDue` ignores the form's entered date and anchors to today instead), L55 (runway — `WillBreach()` only fires when a manual buffer is entered; default 0-buffer path never triggers the alert; gap re-confirmed in L55 probe)
+- **Pattern:** the math is right, the data paths are broken. `forecast.Recurring` is computed correctly when populated but is never set from the subscription/recurring-transaction store on load or mutation. `WillBreach` fires correctly when a buffer value is present but the default no-buffer path is silently inert. `NextDue` is computed from `time.Now()` rather than from the form's entered start date.
+- **Bottom-up fix spec (cheap, high-impact — no new logic needed):**
+  1. Populate `forecast.Recurring` from the subscription/recurring-transaction store on app load and on any mutation to that store.
+  2. Wire `WillBreach` to fire on the default 0-buffer path, or set a sensible non-zero default buffer in the form.
+  3. Fix `NextDue` to use the form's entered date as the anchor, not `time.Now()`.
+- **Note:** all three are data-plumbing fixes; the underlying logic packages are correct and need no changes.
+
+**THREAD C — "Write succeeds but UI doesn't reflect / cleanup":**
+- **Member tickets:** L39 (no success toast on Add transaction), L40 (no success toast on Add budget), L41 (no success toast on Add goal), L42 (no success toast on Add category), L49 (subscription cancel triggers no re-render of the list), L54 (add-transaction modal does not close on navigation away)
+- **Pattern:** the persistence layer writes correctly but the reactive lifecycle does not propagate — likely a shared root cause: a missing post-write store notification, a missing modal dismiss signal, or a missing list refresh trigger.
+- **Note for investigation:** check whether a single shared post-write signal or event is absent across all these paths before building per-screen fixes.
+
+---
+
+**Where CashFlux is STRONG (regression anchors — do not regress):**
+- **Lossless export/import round-trip including custom fields** — verified in L47 (JSON round-trip) and L53 (custom field definitions + per-entity values survive export → wipe → import).
+- **Bulk operations on a 616-row store** — verified in L50 (bulk delete, bulk recategorize, bulk clear all function correctly at scale with no data loss).
+- **Multi-currency FX conversion + zero rounding drift** — verified in L51 (all foreign-currency transactions convert to USD base with no floating-point drift; aggregate figures balance).
+- **Rule/workflow persist and fire correctly** — verified in L52; workflow Save persists (C37 confirmed fixed in L52).
+- **Money conservation held in nearly every story across L39-L55** — the accounting identity (assets − liabilities = net worth; income − expenses = net change) is preserved across add/edit/delete flows in every story that tested it.
+
+---
+
+**Resolved backlog items from this sweep:**
+- **C37** (workflow Save does not persist) — **CONFIRMED FIXED in L52** (2026-06-22): L52 verified that a workflow saves, persists across reload, and fires correctly on a matching transaction. The bug described in C37 no longer reproduces.
+- **C57** (Bills "annual" figure suspect) — **CLEARED in L49** (2026-06-22): L49 confirmed that `bills.AnnualAmounts` uses cadence-normalized amounts, not a raw `total * 12`. The correctness concern in C57 is resolved by the shipped `appstate.RecordBillPayment` + cadence-correct annual calculation.
 
 ---
 

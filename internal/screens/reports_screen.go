@@ -72,6 +72,11 @@ func Reports() ui.Node {
 	selectedCFKey := ui.UseState(firstCFKey)
 	onCFKeyChange := OnChange(func(v string) { selectedCFKey.Set(v) })
 
+	// Roll sub-categories up into their top-level parent in the by-category
+	// breakdown (L28). Off by default so sub-category detail stays visible.
+	rollupCats := ui.UseState(false)
+	onToggleRollup := ui.UseEvent(func() { rollupCats.Set(!rollupCats.Get()) })
+
 	// The viewed period is the shared top-bar window; the comparison is the
 	// immediately preceding window of the same length.
 	w := uistate.UsePeriod().Get()
@@ -154,6 +159,9 @@ func Reports() ui.Node {
 	runway := reports.EstimateRunway(liquid.Amount, burn)
 
 	cats := app.Categories()
+	if rollupCats.Get() {
+		rows = reports.RollUpByParent(rows, cats)
+	}
 	catName := make(map[string]string, len(cats))
 	for _, c := range cats {
 		catName[c.ID] = c.Name
@@ -371,7 +379,13 @@ func Reports() ui.Node {
 			Div(anomalyNodes),
 		)),
 		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.byCategory")),
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
+				H2(css.Class("card-title"), uistate.T("reports.byCategory")),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
+					Attr("aria-pressed", boolStr(rollupCats.Get())),
+					Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
+					uistate.T(rollupLabelKey(rollupCats.Get()))),
+			),
 			P(css.Class("muted"), narrative),
 			If(weekdayPeakLine != "", P(css.Class("muted"), weekdayPeakLine)),
 			catBody,
@@ -543,4 +557,13 @@ func customFieldSpendSection(
 			),
 		)),
 	)
+}
+
+// rollupLabelKey is the i18n key for the by-category roll-up toggle's label,
+// reflecting whether sub-categories are currently rolled up (L28).
+func rollupLabelKey(on bool) string {
+	if on {
+		return "reports.rollupOn"
+	}
+	return "reports.rollupOff"
 }
