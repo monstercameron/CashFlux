@@ -66,6 +66,7 @@ func Categories() ui.Node {
 		parentID.Set("")
 		errMsg.Set("")
 		bump()
+		uistate.PostNotice(uistate.T("categories.addedToast", n), false) // L42 success confirmation
 	}))
 
 	categoryUsage := func(catID string) int {

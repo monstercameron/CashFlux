@@ -5765,7 +5765,7 @@ Groceries spend.
   `(categoryID, period, ownerID)` triple matches an existing live budget, returning a plain-English
   error "A Monthly Groceries budget already exists. Edit it instead."
   (`internal/budgeting/` validation + `internal/screens/budgets.go` form error display.)
-- [ ] **Budget Name is not validated — empty name is accepted.** The Name input has no `aria-required`
+- [x] **Budget Name is not validated — empty name is accepted.** The Name input has no `aria-required`
   and no client-side guard; submitting with a blank name creates an unnamed budget row that shows only
   "· Groceries" in the list (the category name falls back to identify it, but the user-chosen label
   is lost). Before: empty name → unnamed budget. After: treat Name as required (add `aria-required`
@@ -5896,7 +5896,7 @@ All 29 checks pass; exit code 0.
   no toast, snackbar, or row highlight — same gap as L39/L40. Screenshot: `loop41-03-after-add-goal.png`
   (no confirmation signal at top of page). After: brief toast "Goal added" or 1–2 s highlight on the
   newly inserted row. (`internal/ui/` toast system.)
-- [ ] **No success confirmation after Contribute.** After submitting the contribution the amount
+- [x] **No success confirmation after Contribute.** After submitting the contribution the amount
   updates silently — there is no toast or flash. For a $200 action this feels unacknowledged.
   Screenshot: `loop41-05-after-contribute.png` (amount changed but no confirmation visible).
   After: brief inline feedback "Contributed $200.00" or a row highlight. Close-out: re-screenshot.
@@ -5985,7 +5985,7 @@ All 28 checks pass; exit code 0.
   Before: submit → color stays at last value. After: reset `color` to `"#7c83ff"` in the `add`
   handler. (`internal/screens/categories.go` `add` closure, alongside `name.Set("")`.)
 
-- [ ] **No success confirmation after category Add.** The category silently appears below with
+- [x] **No success confirmation after category Add.** The category silently appears below with
   no toast, snackbar, or row highlight — consistent gap with L39/L40/L41. Screenshot:
   `loop42-02-after-add-category.png` (no confirmation signal at top of page).
   After: brief toast "Category added" or 1–2 s highlight on the newly inserted row.
@@ -5993,7 +5993,7 @@ All 28 checks pass; exit code 0.
 
 **UI/UX defects (screenshot-confirmed):**
 
-- [ ] **Color picker is the only non-labelled control in the add form.** The `input[type="color"]`
+- [x] **Color picker is the only non-labelled control in the add form.** The `input[type="color"]`
   has an `aria-label` and `title` of "Color" (the key `categories.color`) but renders as a
   small swatch with no visible text label in the form row — a first-time user scanning the form
   sees: Name · Type · Parent · [colored square] · Add. The swatch's purpose is not obvious

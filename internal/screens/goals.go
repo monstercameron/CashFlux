@@ -201,6 +201,7 @@ func Goals() ui.Node {
 			return
 		}
 		bump()
+		uistate.PostNotice(uistate.T("goals.contributedToast", fmtMoney(money.New(amt, cur))), false) // L41
 	}
 
 	ownerOptions := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), uistate.T("owner.group"))}

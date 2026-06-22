@@ -202,7 +202,7 @@ func Budgets() ui.Node {
 			H2(css.Class("card-title"), uistate.T("budgets.add")),
 			Form(css.Class("form-grid"), OnSubmit(add),
 				labeledField(uistate.T("common.name"),
-					Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...)),
+					Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...)),
 				labeledField(uistate.T("budgets.categoryLabel"),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.categoryLabel")), OnChange(onCat), catOptions)),
 				labeledField(uistate.T("common.owner"),
