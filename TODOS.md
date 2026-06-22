@@ -5235,16 +5235,15 @@ with due dates, marks them done, and expects overdue ones surfaced + a hide-done
   is shown on the row when set (`todo.go:266-267`). Clean professional UI. ✓
 
 **Gaps:**
-- [ ] **Overdue tasks are NOT visually flagged.** A past-due task shows "Due <date>" with no red/badge/
-      "Overdue" treatment (`todo.go` has no overdue styling) — Nina can't spot what's late. Add overdue
-      styling + an "Overdue" / "N days late" badge for `Due < today && status==open`. Bottom-up: pure
-      `tasksort.IsOverdue(task, now)` (tested) → conditional row class/badge; optionally a dashboard
-      "N tasks overdue" nudge.
-- [ ] **Money chores can't link to the entity they're about.** "Pay credit card by the 18th" / "cancel
-      gym" are free text; they can't deep-link to the **account / bill / subscription / goal** or carry
-      an action ("mark paid", "go to subscription"). Add an optional **linked-entity ref** on a task →
-      a link + contextual action. Ties to L13 (mark-paid), L12 (cancel subscription), goals — turns the
-      to-do into an actionable money command center.
+- [x] **Overdue tasks ARE visually flagged** (already shipped, C52, `todo.go:306-318`): an open task past its
+      due date renders the danger tone (`text-down`) plus an explicit "· overdue" word (colour + text, not
+      colour alone — B15). Stale gap; verified present.
+- [x] **Money chores link to the entity they're about.** The `RelatedType`/`RelatedID` model already
+      existed with zero UI; added a "Link to" type + entity picker on the to-do add form AND inline editor
+      (Account/Budget/Goal/Transaction), and a clickable "→ <name>" deep-link on the row that navigates to
+      that entity's screen (`/accounts`,`/budgets`,`/goals`,`/transactions`). New pure `internal/tasklink`
+      (Route/TypeLabel/EntityName, tested); deleted-entity links degrade to "(linked item removed)". e2e
+      `task_entity_link_check.mjs`.
 - [ ] **No recurring tasks** ("rebalance 401k" quarterly, "review budget" monthly) — same recurrence
       theme as L24. Reuse `RecurringCadence` to auto-recreate a task on completion/schedule.
 

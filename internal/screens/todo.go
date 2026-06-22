@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/tasklink"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/tasktree"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -19,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -42,12 +44,20 @@ func Todo() ui.Node {
 	notes := ui.UseState("")
 	hideDone := ui.UseState(false)
 	errMsg := ui.UseState("")
+	// Link-to fields for the add form.
+	addLinkType := ui.UseState(string(domain.RelatedNone))
+	addLinkID := ui.UseState("")
 
 	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueStr.Set(v) })
 	onNotes := ui.UseEvent(func(v string) { notes.Set(v) })
 	onPriority := ui.UseEvent(func(e ui.Event) { priority.Set(e.GetValue()) })
 	toggleHideDone := ui.UseEvent(func() { hideDone.Set(!hideDone.Get()) })
+	onAddLinkType := ui.UseEvent(func(e ui.Event) {
+		addLinkType.Set(e.GetValue())
+		addLinkID.Set("") // reset entity selection when type changes
+	})
+	onAddLinkID := ui.UseEvent(func(e ui.Event) { addLinkID.Set(e.GetValue()) })
 
 	add := ui.UseEvent(Prevent(func() {
 		var due time.Time
@@ -59,9 +69,15 @@ func Todo() ui.Node {
 			}
 			due = d
 		}
+		rt := domain.RelatedType(addLinkType.Get())
+		rid := addLinkID.Get()
+		if rt == domain.RelatedNone || rt == "" {
+			rid = ""
+		}
 		t := domain.Task{
 			ID: id.New(), Title: strings.TrimSpace(title.Get()), Notes: strings.TrimSpace(notes.Get()),
 			Status: domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
+			RelatedType: rt, RelatedID: rid,
 		}
 		if err := app.PutTask(t); err != nil {
 			errMsg.Set(err.Error())
@@ -70,11 +86,17 @@ func Todo() ui.Node {
 		title.Set("")
 		dueStr.Set("")
 		notes.Set("")
+		addLinkType.Set(string(domain.RelatedNone))
+		addLinkID.Set("")
 		errMsg.Set("")
 		bump()
 	}))
 
 	tasks := app.Tasks()
+	accounts := app.Accounts()
+	budgets := app.Budgets()
+	goals := app.Goals()
+	txns := app.Transactions()
 	byID := make(map[string]domain.Task, len(tasks))
 	for _, t := range tasks {
 		byID[t.ID] = t
@@ -123,7 +145,7 @@ func Todo() ui.Node {
 			bump()
 		})
 	}
-	saveTask := func(taskID, newTitle, prio, dueStr, newNotes string) {
+	saveTask := func(taskID, newTitle, prio, dueStr, newNotes, relType, relID string) {
 		t, ok := byID[taskID]
 		if !ok {
 			return
@@ -145,6 +167,14 @@ func Todo() ui.Node {
 			t.Due = time.Time{}
 		}
 		t.Notes = strings.TrimSpace(newNotes)
+		rt := domain.RelatedType(relType)
+		if rt == domain.RelatedNone || rt == "" {
+			t.RelatedType = domain.RelatedNone
+			t.RelatedID = ""
+		} else {
+			t.RelatedType = rt
+			t.RelatedID = relID
+		}
 		if err := app.PutTask(t); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -159,6 +189,17 @@ func Todo() ui.Node {
 		Option(Value(string(domain.PriorityLow)), SelectedIf(priority.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 	}
 
+	// "Link to" type selector for the add form.
+	addLinkTypeOpts := linkTypeOptions(addLinkType.Get())
+	// Entity selector — only shown when a non-None type is chosen.
+	curAddType := domain.RelatedType(addLinkType.Get())
+	var addEntitySelect ui.Node
+	if curAddType != domain.RelatedNone && curAddType != "" {
+		addEntitySelect = labeledField(uistate.T("todo.linkEntity"),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkEntity")), OnChange(onAddLinkID),
+				buildEntityOptions(curAddType, addLinkID.Get(), accounts, budgets, goals, txns)))
+	}
+
 	form := Section(css.Class("card"),
 		H2(css.Class("card-title"), uistate.T("todo.addTitle")),
 		Form(css.Class("form-grid"), OnSubmit(add),
@@ -168,6 +209,9 @@ func Todo() ui.Node {
 			labeledField("Due date",
 				Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueStr.Get()), OnInput(onDue))),
 			Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
+			labeledField(uistate.T("todo.linkTo"),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkTo")), OnChange(onAddLinkType), addLinkTypeOpts)),
+			addEntitySelect,
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		),
 		errText("todo-err", errMsg.Get()),
@@ -191,6 +235,7 @@ func Todo() ui.Node {
 				return ui.CreateElement(TaskRow, taskRowProps{
 					Task: n.Task, Depth: n.Depth,
 					OnToggle: toggleTask, OnDelete: deleteTask, OnSave: saveTask, OnAddSub: addSub,
+					Accounts: accounts, Budgets: budgets, Goals: goals, Transactions: txns,
 				})
 			},
 		)
@@ -215,17 +260,21 @@ func Todo() ui.Node {
 }
 
 type taskRowProps struct {
-	Task     domain.Task
-	Depth    int // nesting depth (0 = top level) → indentation (C72)
-	OnToggle func(string)
-	OnDelete func(string)
-	OnSave   func(id, title, priority, due, notes string)
-	OnAddSub func(parentID string)
+	Task         domain.Task
+	Depth        int // nesting depth (0 = top level) → indentation (C72)
+	OnToggle     func(string)
+	OnDelete     func(string)
+	OnSave       func(id, title, priority, due, notes, relType, relID string)
+	OnAddSub     func(parentID string)
+	Accounts     []domain.Account
+	Budgets      []domain.Budget
+	Goals        []domain.Goal
+	Transactions []domain.Transaction
 }
 
 // TaskRow renders one task with complete/edit/delete. It can be edited inline
-// (title, priority, due, notes). All hooks are declared unconditionally so the
-// edit toggle never reorders them.
+// (title, priority, due, notes, entity link). All hooks are declared
+// unconditionally so the edit toggle never reorders them.
 func TaskRow(props taskRowProps) ui.Node {
 	t := props.Task
 	dueISO := ""
@@ -233,6 +282,7 @@ func TaskRow(props taskRowProps) ui.Node {
 		dueISO = dateutil.FormatDate(t.Due)
 	}
 
+	nav := router.UseNavigate()
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t.ID) }))
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
 	addSub := ui.UseEvent(Prevent(func() {
@@ -246,20 +296,31 @@ func TaskRow(props taskRowProps) ui.Node {
 	prioS := ui.UseState(string(t.Priority))
 	dueS := ui.UseState(dueISO)
 	notesS := ui.UseState(t.Notes)
+	// Inline-edit link state — initialised from the task's persisted values.
+	editLinkType := ui.UseState(string(t.RelatedType))
+	editLinkID := ui.UseState(t.RelatedID)
 	onTitle := ui.UseEvent(func(v string) { titleS.Set(v) })
 	onPrio := ui.UseEvent(func(e ui.Event) { prioS.Set(e.GetValue()) })
 	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
 	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
+	onEditLinkType := ui.UseEvent(func(e ui.Event) {
+		editLinkType.Set(e.GetValue())
+		editLinkID.Set("") // reset entity when type changes
+	})
+	onEditLinkID := ui.UseEvent(func(e ui.Event) { editLinkID.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		titleS.Set(t.Title)
 		prioS.Set(string(t.Priority))
 		dueS.Set(dueISO)
 		notesS.Set(t.Notes)
+		editLinkType.Set(string(t.RelatedType))
+		editLinkID.Set(t.RelatedID)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(t.ID, titleS.Get(), prioS.Get(), dueS.Get(), notesS.Get())
+		props.OnSave(t.ID, titleS.Get(), prioS.Get(), dueS.Get(), notesS.Get(),
+			editLinkType.Get(), editLinkID.Get())
 		editing.Set(false)
 	}))
 
@@ -275,7 +336,19 @@ func TaskRow(props taskRowProps) ui.Node {
 		return nil
 	}, editKey)
 
+	// Row-display deep-link: declared unconditionally here (before any early
+	// return) so the hook slot never shifts across renders (framework rule).
+	linkRoute := tasklink.Route(t.RelatedType)
+	goLink := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath(linkRoute)) }))
+
 	if editing.Get() {
+		curEditType := domain.RelatedType(editLinkType.Get())
+		var editEntitySelect ui.Node
+		if curEditType != domain.RelatedNone && curEditType != "" {
+			editEntitySelect = labeledField(uistate.T("todo.linkEntity"),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkEntity")), OnChange(onEditLinkID),
+					buildEntityOptions(curEditType, editLinkID.Get(), props.Accounts, props.Budgets, props.Goals, props.Transactions)))
+		}
 		return Div(css.Class("row"),
 			Form(css.Class("form-grid"), OnSubmit(saveEdit),
 				Input(css.Class("field field-wide"), Attr("id", "task-edit-"+t.ID), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
@@ -288,10 +361,30 @@ func TaskRow(props taskRowProps) ui.Node {
 				labeledField("Due date",
 					Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueS.Get()), OnInput(onDue))),
 				Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
+				labeledField(uistate.T("todo.linkTo"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkTo")), OnChange(onEditLinkType),
+						linkTypeOptions(editLinkType.Get()))),
+				editEntitySelect,
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
+	}
+
+	// Build the row deep-link node (goLink + linkRoute already declared above).
+	var linkNode ui.Node
+	if linkRoute != "" {
+		name, ok := tasklink.EntityName(t.RelatedType, t.RelatedID,
+			props.Accounts, props.Budgets, props.Goals, props.Transactions)
+		if ok {
+			linkLabel := "→ " + name
+			ariaLabel := uistate.T("todo.linkAriaLabel", name)
+			linkNode = Button(css.Class("btn row-meta"), Type("button"),
+				Attr("aria-label", ariaLabel), Title(ariaLabel), OnClick(goLink), linkLabel)
+		} else if t.RelatedID != "" {
+			// Entity was deleted — show a muted note rather than nothing.
+			linkNode = Span(css.Class("row-meta text-muted"), uistate.T("todo.linkRemoved"))
+		}
 	}
 
 	done := t.Status == domain.StatusDone
@@ -319,6 +412,9 @@ func TaskRow(props taskRowProps) ui.Node {
 	}
 	if t.Notes != "" {
 		meta = append(meta, Span(css.Class("row-meta"), t.Notes))
+	}
+	if linkNode != nil {
+		meta = append(meta, linkNode)
 	}
 
 	if props.Depth > 0 {
@@ -350,4 +446,56 @@ func priorityMeta(p domain.TaskPriority) (label, class string) {
 	default:
 		return uistate.T("priority.medium"), "prio-med"
 	}
+}
+
+// linkTypeOptions builds the <option> list for the "Link to" type selector.
+// selectedVal is the currently-selected RelatedType string.
+func linkTypeOptions(selectedVal string) []ui.Node {
+	none := string(domain.RelatedNone)
+	return []ui.Node{
+		Option(Value(none), SelectedIf(selectedVal == none || selectedVal == ""), uistate.T("todo.linkNone")),
+		Option(Value(string(domain.RelatedAccount)), SelectedIf(selectedVal == string(domain.RelatedAccount)), uistate.T("todo.linkAccount")),
+		Option(Value(string(domain.RelatedBudget)), SelectedIf(selectedVal == string(domain.RelatedBudget)), uistate.T("todo.linkBudget")),
+		Option(Value(string(domain.RelatedGoal)), SelectedIf(selectedVal == string(domain.RelatedGoal)), uistate.T("todo.linkGoal")),
+		Option(Value(string(domain.RelatedTransaction)), SelectedIf(selectedVal == string(domain.RelatedTransaction)), uistate.T("todo.linkTransaction")),
+	}
+}
+
+// buildEntityOptions builds the <option> list for the entity sub-selector that
+// appears when a non-None RelatedType is chosen. The first option is a blank
+// "— Choose —" prompt so users must make an intentional selection.
+func buildEntityOptions(
+	rt domain.RelatedType,
+	selectedID string,
+	accounts []domain.Account,
+	budgets []domain.Budget,
+	goals []domain.Goal,
+	txns []domain.Transaction,
+) []ui.Node {
+	opts := []ui.Node{
+		Option(Value(""), SelectedIf(selectedID == ""), uistate.T("todo.linkEntity")),
+	}
+	switch rt {
+	case domain.RelatedAccount:
+		for _, a := range accounts {
+			opts = append(opts, Option(Value(a.ID), SelectedIf(selectedID == a.ID), a.Name))
+		}
+	case domain.RelatedBudget:
+		for _, b := range budgets {
+			opts = append(opts, Option(Value(b.ID), SelectedIf(selectedID == b.ID), b.Name))
+		}
+	case domain.RelatedGoal:
+		for _, g := range goals {
+			opts = append(opts, Option(Value(g.ID), SelectedIf(selectedID == g.ID), g.Name))
+		}
+	case domain.RelatedTransaction:
+		for _, tx := range txns {
+			label := tx.Payee
+			if label == "" {
+				label = tx.Desc
+			}
+			opts = append(opts, Option(Value(tx.ID), SelectedIf(selectedID == tx.ID), label))
+		}
+	}
+	return opts
 }

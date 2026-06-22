@@ -1158,6 +1158,15 @@ var english = Catalog{
 	"todo.addSub":           "+ Sub",
 	"todo.addSubTitle":      "Add a sub-task",
 	"todo.subtaskPrompt":    "New sub-task",
+	"todo.linkTo":           "Link to",
+	"todo.linkNone":         "— None —",
+	"todo.linkAccount":      "Account",
+	"todo.linkBudget":       "Budget",
+	"todo.linkGoal":         "Goal",
+	"todo.linkTransaction":  "Transaction",
+	"todo.linkEntity":       "— Choose —",
+	"todo.linkAriaLabel":    "Go to linked item: %s",
+	"todo.linkRemoved":      "(linked item removed)",
 
 	// Custom pages
 	"pages.notFound":       "That page doesn't exist. It may have been deleted.",

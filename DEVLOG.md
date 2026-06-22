@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: to-do items link to their entity (L26)
+
+`domain.Task` already carried `RelatedType`/`RelatedID` (account/budget/goal/transaction/document) and the
+enum had `.Valid()`/`.String()` — but nothing ever set or read them. Added the whole UX on top of the existing
+model: a "Link to" type picker + a conditional entity sub-select on both the add form and the inline editor,
+and a clickable "→ <name>" deep-link in the row that `nav.Navigate`s to the entity's screen. Pulled the pure
+bits into `internal/tasklink` (Route, TypeLabel, EntityName) so route-mapping and name-resolution are
+table-tested off-wasm; the option-builders are plain helpers (no hooks) so they're safe to call inside the
+keyed list. Deleted-entity links degrade to "(linked item removed)" rather than dangling. Verified routes
+against `screens.All()`. e2e `task_entity_link_check.mjs`. Sequential sonnet sub-agent; integrated + regressed
+(todo toggle/nesting/overdue/labels/dashboard-widget all green) here. Next: recurring tasks + add-form repeat.
+
 ## 2026-06-21 - feat: auto-post due recurring on app open (L24)
 
 Found L24's recurring engine already substantially built — `domain.Recurring` (cadence/NextDue/account/

@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **To-do items can link to the entity they're about (L26).** A money chore ("pay the credit card", "rebalance
+  the 401k") can now be attached to a specific account, budget, goal or transaction via a "Link to" picker on
+  the to-do add form and inline editor. The task row then shows a clickable "→ <name>" deep-link that navigates
+  straight to that entity's screen, turning the to-do list into an actionable money command center. Resolution
+  is graceful — a link to a since-deleted entity shows "(linked item removed)". New pure `internal/tasklink`
+  package (route + name resolution, unit-tested); e2e `task_entity_link_check.mjs`.
 - **Due recurring transactions auto-post on app open (L24).** Scheduled bills, paychecks and "pay yourself
   first" transfers (the `Recurring` schedules managed on Planning, with autopost enabled) now post the moment
   the app boots — catching up any periods missed while it was closed — instead of only when you visit Planning
