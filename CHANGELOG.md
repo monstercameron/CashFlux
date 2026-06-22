@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **One-tap Year view for Reports (L16).** Added a "Year" option to the period resolution control (alongside
+  Week / Month / Quarter) and made the Reports screen period-aware in the top bar, so an annual / tax-season
+  review is a single tap — every report, total and breakdown recomputes for the whole calendar year. New pure
+  `period.Year` resolution (Truncate/Step/Label, table-tested); e2e `reports_year_view_check.mjs`.
 - **Offline indicator (L19).** A calm "Offline" pill now appears in the top bar when the browser loses
   connectivity (and disappears when it returns), with a tooltip reassuring you that changes are saved on this
   device and will sync when you're back — fitting for a local-first app used on a plane. Backed by a shared

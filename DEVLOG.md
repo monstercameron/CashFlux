@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: one-tap Year view for Reports (L16, polish sweep)
+
+Tax season needs an annual view; the period control only went Week/Month/Quarter. Added a `period.Year`
+resolution — pure, just `yearStart` + the Truncate/Step/Label arms, table-tested (and flipped the old test that
+asserted "year" was invalid). Wired "Year" into the top-bar segmented control, and added `/reports` to the
+period-aware route set so the resolution control actually appears there (it wasn't — Reports read the shared
+period but had no control to change it). Now selecting Year shows a "2026" period label and every report recomputes
+for the calendar year. Pairs with the custom-field "Deductible" report shipped earlier for the tax-summary story.
+e2e `reports_year_view_check.mjs`. Fiscal-year-start offset deferred. NB the dev SW cache can serve stale wasm to
+probes — reload picks up the rebuild.
+
 ## 2026-06-22 - feat: offline indicator (L19, polish sweep)
 
 First of the L4/L16/L19/L22/L28 polish items. A local-first app should reassure you when you're offline, not go

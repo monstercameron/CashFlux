@@ -494,7 +494,7 @@ func TopBar(props topBarProps) uic.Node {
 	// The time-resolution control only makes sense where there's a period concept;
 	// on Members/Categories/Rules/etc. it does nothing, so hide it there (C4).
 	periodAware := map[string]bool{
-		"/": true, "/transactions": true, "/budgets": true, "/planning": true, "/insights": true,
+		"/": true, "/transactions": true, "/budgets": true, "/planning": true, "/insights": true, "/reports": true,
 	}[curPath]
 	return Div(css.Class("topbar", tw.BorderB, tw.BorderLine, tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Px6, tw.Gap3, tw.Sticky, tw.Top0, tw.BgBase, tw.Z20),
 		Button(css.Class("menu-btn", tw.W7, tw.H7, tw.MlN1), Attr("title", uistate.T("topbar.menu")),
@@ -677,6 +677,7 @@ func ResolutionControl() uic.Node {
 				{Value: string(period.Week), Label: "Week"},
 				{Value: string(period.Month), Label: "Month"},
 				{Value: string(period.Quarter), Label: "Quarter"},
+				{Value: string(period.Year), Label: "Year"},
 			},
 			Selected: string(w.Res),
 			OnSelect: func(v string) {

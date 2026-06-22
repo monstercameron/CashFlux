@@ -10,13 +10,13 @@ func d(y int, m time.Month, day int) time.Time {
 }
 
 func TestValid(t *testing.T) {
-	for _, r := range []Resolution{Week, Month, Quarter} {
+	for _, r := range []Resolution{Week, Month, Quarter, Year} {
 		if !r.Valid() {
 			t.Errorf("%q should be valid", r)
 		}
 	}
-	if Resolution("year").Valid() {
-		t.Error("year should be invalid")
+	if Resolution("decade").Valid() {
+		t.Error("decade should be invalid")
 	}
 }
 
@@ -30,6 +30,8 @@ func TestTruncate(t *testing.T) {
 		{Quarter, d(2026, time.June, 15), d(2026, time.April, 1)},       // Q2
 		{Quarter, d(2026, time.January, 9), d(2026, time.January, 1)},   // Q1
 		{Quarter, d(2026, time.December, 31), d(2026, time.October, 1)}, // Q4
+		{Year, d(2026, time.June, 15), d(2026, time.January, 1)},
+		{Year, d(2026, time.December, 31), d(2026, time.January, 1)},
 		{Week, d(2026, time.June, 17), d(2026, time.June, 15)},          // Wed -> Mon
 	}
 	for _, tt := range tests {
@@ -49,6 +51,8 @@ func TestStep(t *testing.T) {
 		{Month, d(2026, time.June, 1), 2, d(2026, time.August, 1)},
 		{Month, d(2026, time.January, 1), -1, d(2025, time.December, 1)},
 		{Quarter, d(2026, time.April, 1), 1, d(2026, time.July, 1)},
+		{Year, d(2026, time.January, 1), 1, d(2027, time.January, 1)},
+		{Year, d(2026, time.January, 1), -1, d(2025, time.January, 1)},
 		{Quarter, d(2026, time.January, 1), -1, d(2025, time.October, 1)},
 		{Week, d(2026, time.June, 15), 1, d(2026, time.June, 22)},
 		{Week, d(2026, time.June, 15), -2, d(2026, time.June, 1)},

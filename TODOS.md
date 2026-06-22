@@ -4863,11 +4863,10 @@ breakdown for the **year**, deductible categories called out, and a clean export
   `If(len(memberSpend) > 1)`, so the **single-member sample hides it** (ties to L2). ✓
 
 **Gaps (make it tax-ready):**
-- [ ] **No one-tap YEAR / fiscal-year view.** The period is Week/Month/Quarter (+ manual custom range);
-      there's no annual preset, which is exactly what a tax year needs. Add a **"Year"** period option
-      honoring the **fiscal-month-start** preference. Bottom-up: extend the period-range model
-      (`internal/budgeting` PeriodRange already has weekly/quarterly) with an annual/fiscal-year range
-      (table-tested) → add the option to the period selector → Reports/totals respect it.
+- [x] **One-tap YEAR view.** Added a `period.Year` resolution (Truncate/Step/Label, table-tested) and a
+      "Year" segment to the top-bar resolution control; also made `/reports` period-aware so the annual review
+      is one tap there. Period label reads the calendar year (e.g. "2026"). e2e `reports_year_view_check.mjs`.
+      (Fiscal-month-start offset for the year boundary is a future refinement.)
 - [ ] **No deductible/tax tagging or tax-summary export.** Add a category **"tax group / deductible"**
       attribute, a Reports **"Deductible totals"** section, and a single **annual tax-summary export**
       (all sections, year-stamped) to hand to an accountant. Bottom-up: `Deductible`/`TaxGroup` on the

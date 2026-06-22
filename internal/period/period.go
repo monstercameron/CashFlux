@@ -22,12 +22,13 @@ const (
 	Week    Resolution = "week"
 	Month   Resolution = "month"
 	Quarter Resolution = "quarter"
+	Year    Resolution = "year"
 )
 
 // Valid reports whether r is a known resolution.
 func (r Resolution) Valid() bool {
 	switch r {
-	case Week, Month, Quarter:
+	case Week, Month, Quarter, Year:
 		return true
 	default:
 		return false
@@ -45,6 +46,8 @@ func Truncate(r Resolution, t time.Time, weekStart time.Weekday) time.Time {
 		return dateutil.WeekStart(t, weekStart)
 	case Quarter:
 		return quarterStart(t)
+	case Year:
+		return yearStart(t)
 	default: // Month
 		return dateutil.MonthStart(t)
 	}
@@ -58,6 +61,8 @@ func Step(r Resolution, t time.Time, delta int) time.Time {
 		return t.AddDate(0, 0, 7*delta)
 	case Quarter:
 		return dateutil.AddMonths(t, 3*delta)
+	case Year:
+		return dateutil.AddMonths(t, 12*delta)
 	default: // Month
 		return dateutil.AddMonths(t, delta)
 	}
@@ -75,6 +80,8 @@ func Label(r Resolution, t time.Time, weekStart time.Weekday) string {
 	case Quarter:
 		s := quarterStart(t)
 		return fmt.Sprintf("Q%d %d", int(s.Month()-1)/3+1, s.Year())
+	case Year:
+		return fmt.Sprintf("%d", yearStart(t).Year())
 	default: // Month
 		return dateutil.MonthStart(t).Format("Jan 2006")
 	}
@@ -91,6 +98,12 @@ func Range(r Resolution, from, to time.Time, weekStart time.Weekday) (start, end
 	}
 	end = Step(r, toStart, 1)
 	return start, end
+}
+
+// yearStart returns the first day of the calendar year containing t (UTC-midnight
+// boundary, matching the UTC-dated transactions it's compared against).
+func yearStart(t time.Time) time.Time {
+	return time.Date(t.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
 }
 
 // quarterStart returns the first day of the calendar quarter containing t.
