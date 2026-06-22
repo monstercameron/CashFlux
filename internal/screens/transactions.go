@@ -191,6 +191,13 @@ func Transactions() ui.Node {
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
 	onFilterCleared := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Cleared = e.GetValue() }) })
+	// Filter by a transaction custom field's value (L18): choosing a field sets the
+	// key (and clears the stale value); choosing/typing a value narrows the list.
+	onFilterCustomKey := ui.UseEvent(func(e ui.Event) {
+		setFilter(func(x *uistate.TxFilter) { x.CustomKey, x.CustomVal = e.GetValue(), "" })
+	})
+	onFilterCustomVal := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.CustomVal = e.GetValue() }) })
+	onFilterCustomValText := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.CustomVal = v }) })
 	// Remove a single active filter (a chip's ✕). Without is a scope change, so the
 	// page resets back to 1 via ResetPageIfScopeChanged.
 	removeFilter := func(field txnfilter.FilterField) {
@@ -805,6 +812,44 @@ func Transactions() ui.Node {
 	// The Filters popover body — the controls that used to crowd the inline strip,
 	// now grouped inside the toolbar's FlipPanel. Filters apply live (each onChange
 	// persists), so the panel is close-only with nothing to "save".
+	// Custom-field filter control (L18): a field picker + a value control whose
+	// shape follows the field type (select → option dropdown, bool → Yes/No, else
+	// a text box). Built inline since the handlers already exist at stable hook
+	// positions; the option lists involve no hooks.
+	var customFilterNode ui.Node = Fragment()
+	if len(txnDefs) > 0 {
+		keyOpts := []ui.Node{Option(Value(""), SelectedIf(f.CustomKey == ""), uistate.T("transactions.filterCustomNone"))}
+		var selDef *customfields.Def
+		for i := range txnDefs {
+			d := txnDefs[i]
+			keyOpts = append(keyOpts, Option(Value(d.Key), SelectedIf(f.CustomKey == d.Key), d.Label))
+			if d.Key == f.CustomKey {
+				selDef = &txnDefs[i]
+			}
+		}
+		var valControl ui.Node = Fragment()
+		if selDef != nil {
+			switch selDef.Type {
+			case customfields.TypeSelect:
+				opts := []ui.Node{Option(Value(""), SelectedIf(f.CustomVal == ""), uistate.T("transactions.filterCustomAny"))}
+				for _, o := range selDef.Options {
+					opts = append(opts, Option(Value(o), SelectedIf(f.CustomVal == o), o))
+				}
+				valControl = Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterCustomValue")), Attr("data-testid", "txn-filter-custom-val"), OnChange(onFilterCustomVal), opts)
+			case customfields.TypeBool:
+				valControl = Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterCustomValue")), Attr("data-testid", "txn-filter-custom-val"), OnChange(onFilterCustomVal),
+					Option(Value(""), SelectedIf(f.CustomVal == ""), uistate.T("transactions.filterCustomAny")),
+					Option(Value("true"), SelectedIf(f.CustomVal == "true"), uistate.T("common.yes")),
+					Option(Value("false"), SelectedIf(f.CustomVal == "false"), uistate.T("common.no")))
+			default:
+				valControl = Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.filterCustomValue")), Attr("data-testid", "txn-filter-custom-val"), Placeholder(uistate.T("transactions.filterCustomValue")), Value(f.CustomVal), OnInput(onFilterCustomValText))
+			}
+		}
+		customFilterNode = Label(css.Class("field-label"), uistate.T("transactions.filterCustomField"),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterCustomField")), Attr("data-testid", "txn-filter-custom-key"), OnChange(onFilterCustomKey), keyOpts),
+			valControl)
+	}
+
 	filtersBody := Div(css.Class("filter-fields"),
 		Label(css.Class("field-label"), uistate.T("transactions.filterAccount"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterAccount")), OnChange(onFilterAcc), filterAccOptions)),
@@ -822,6 +867,7 @@ func Transactions() ui.Node {
 				Option(Value("no"), SelectedIf(f.Cleared == "no"), uistate.T("transactions.notCleared")),
 				Option(Value("yes"), SelectedIf(f.Cleared == "yes"), uistate.T("transactions.cleared")),
 			)),
+		customFilterNode,
 	)
 
 	// Receipt preview overlay (L29): when a row's paperclip is clicked, look up the

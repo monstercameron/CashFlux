@@ -151,7 +151,7 @@ func Dashboard() ui.Node {
 			return uiw.Widget(uiw.WidgetProps{
 				ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
 				GridColumn: "1", GridRow: "2", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
-				Body: kpiBody(fmtMoney(net), figTone(net), nwSub, nwTone),
+				Body: kpiBodyHero(fmtMoney(net), figTone(net), nwSub, nwTone),
 			})
 		},
 		"kpi-income": func() ui.Node {
@@ -176,7 +176,7 @@ func Dashboard() ui.Node {
 			})
 		},
 		"recent":   func() ui.Node { return recentWidget(txns, widgetCfgs.For("recent")) },
-		"budgets":  func() ui.Node { return budgetsWidget(app, txns, rates, widgetCfgs.For("budgets")) },
+		"budgets":  func() ui.Node { return budgetsWidget(app, txns, rates, start, end, widgetCfgs.For("budgets")) },
 		"goals":    func() ui.Node { return goalsWidget(app, widgetCfgs.For("goals")) },
 		"todo":     func() ui.Node { return todoWidget(app, widgetCfgs.For("todo")) },
 		"accounts": func() ui.Node { return accountsWidget(app, txns, widgetCfgs.For("accounts")) },
@@ -904,11 +904,11 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	})
 }
 
-// budgetsWidget is the 1×2 Budgets widget: current-month spend vs limit per
-// budget with an ok/near/over progress bar (via internal/budgeting). Budgets are
-// monthly, so it always evaluates the current month regardless of the dashboard
-// window.
-func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, cfg widgetcfg.Config) ui.Node {
+// budgetsWidget is the 1×2 Budgets widget: spend vs limit per budget with an
+// ok/near/over progress bar (via internal/budgeting). It evaluates the shared
+// dashboard period window (start/end) so it stays in sync with the top-bar
+// time selector. Over-budget rows are clickable links to the Budgets screen.
+func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, start, end time.Time, cfg widgetcfg.Config) ui.Node {
 	limit, atRisk := 6, false
 	if sch, ok := widgetcfg.SchemaFor("budgets"); ok {
 		if f, ok := sch.FieldByKey("count"); ok {
@@ -919,7 +919,6 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 		}
 	}
 	budgets := app.Budgets()
-	start, end := dateutil.MonthRange(time.Now())
 	// Parent-category budgets roll up their sub-categories' spend (D5).
 	cats := app.Categories()
 	statuses := make([]budgeting.Status, 0, len(budgets))
@@ -971,13 +970,13 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 			if label == "" {
 				label = catName[s.Budget.CategoryID]
 			}
-			rows = append(rows, Div(
-				Div(css.Class(tw.Flex, tw.JustifyBetween),
-					Span(label),
-					Span(ClassStr("fig "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(tone)), fmt.Sprintf("%d%%", s.Percent)),
-				),
-				uiw.ProgressBar(uiw.ProgressBarProps{Percent: s.Percent, Tone: bar, Class: "mt-1.5"}),
-			))
+			rows = append(rows, ui.CreateElement(dashBudgetRow, dashBudgetRowProps{
+				Label:   label,
+				Percent: s.Percent,
+				Tone:    tone,
+				Bar:     bar,
+				Over:    s.State == budgeting.StateOver,
+			}))
 		}
 		body = Div(css.Class("t-body", tw.SpaceY4), rows)
 	}
@@ -1285,4 +1284,51 @@ func kpiBody(figure, figTone, subline, subTone string) ui.Node {
 		Div(ClassStr("fig t-figure "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(figTone)), figure),
 		Div(ClassStr("t-caption "+tw.Fold(tw.Pt15)+" "+tw.ColorClass(subTone)), subline),
 	)
+}
+
+// kpiBodyHero renders the visual-hero variant of a KPI tile body: a larger
+// figure (t-figure-lg) so the headline number draws the eye first. Used for
+// Net Worth, the most important single number on the dashboard (L33).
+func kpiBodyHero(figure, figTone, subline, subTone string) ui.Node {
+	return Div(
+		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(figTone)), figure),
+		Div(ClassStr("t-caption "+tw.Fold(tw.Pt15)+" "+tw.ColorClass(subTone)), subline),
+	)
+}
+
+// dashBudgetRowProps configures one budget row in the dashboard budgets widget.
+type dashBudgetRowProps struct {
+	Label   string
+	Percent int
+	Tone    string // color class for the figure, e.g. "text-down"
+	Bar     string // progress bar tone class, e.g. "bg-down"
+	Over    bool   // true when the budget is over-limit (drives the drill link)
+}
+
+// dashBudgetRow renders one budget progress row in the dashboard budgets
+// widget. When the budget is over its limit the row is a button that navigates
+// to /budgets so the user can act immediately. Its own component so the
+// navigate hook stays at a stable position across the variable-length list
+// (the On* loop gotcha).
+func dashBudgetRow(props dashBudgetRowProps) ui.Node {
+	nav := router.UseNavigate()
+	openBudgets := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/budgets")) })
+
+	header := Div(css.Class(tw.Flex, tw.JustifyBetween),
+		Span(props.Label),
+		Span(ClassStr("fig "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(props.Tone)), fmt.Sprintf("%d%%", props.Percent)),
+	)
+	bar := uiw.ProgressBar(uiw.ProgressBarProps{Percent: props.Percent, Tone: props.Bar, Class: "mt-1.5"})
+
+	if props.Over {
+		// Over-budget rows are actionable: clicking opens the Budgets screen.
+		return Button(css.Class("budget-over-row", tw.WFull, tw.TextLeft),
+			Type("button"),
+			Attr("aria-label", uistate.T("dashboard.budgetDrillTitle")),
+			Attr("title", uistate.T("dashboard.budgetDrillTitle")),
+			OnClick(openBudgets),
+			header, bar,
+		)
+	}
+	return Div(header, bar)
 }

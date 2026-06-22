@@ -4933,7 +4933,7 @@ renders in the transaction form, probe filter/report by it).
   count/abs/round/if — with presets + a variables panel). ✓
 
 **Gaps (define+fill works, but the data is a dead end — you can't slice by it):**
-- [ ] **Filter lists by a custom field.** Dana can tag "Property = Maple St" but can't list all Maple St
+- [x] **Filter lists by a custom field.** Dana can tag "Property = Maple St" but can't list all Maple St
       transactions. The transactions filter set (account/category/cleared/tags) has **no custom-field
       predicate**. Bottom-up:
   - [x] **Logic** (pure, tested): extend the transaction filter to match custom-field values
@@ -5482,16 +5482,16 @@ focus rings.
   savings-rate donut; **reconfigurable** (drag/resize/reset). Rich at-a-glance coverage. ✓
 
 **God-tier UX gaps (verified):**
-- [ ] **Prime real estate is spent on a how-to, not a signal.** The top-left permanently reads "Your
+- [x] **Prime real estate is spent on a how-to, not a signal.** The top-left permanently reads "Your
       dashboard · Drag tiles to move · grab the edge handles to resize" — the spot the eye lands first is
       a rearrange tutorial. before→after: replace with a **glanceable greeting + health line** ("Good
       morning — you're on track; net worth ▲ 0% this month") and move the drag hint into an **edit mode**
       / one-time dismissible tip. (`internal/screens/dashboard.go` header; a `seenDragTip` flag.)
-- [ ] **No visual hero — the four top stats are all 24px** (net worth = income = spending = liabilities,
+- [x] **No visual hero — the four top stats are all 24px** (net worth = income = spending = liabilities,
       measured identical font size). Nothing draws the eye to the "are we okay" number. before→after:
       give **net worth** dominant weight (larger figure, prominent period delta + arrow, optionally span
       two cells) so the glance resolves instantly. (`dashboard.go` stat tiles / a hero variant.)
-- [ ] **No consolidated "needs attention" strip.** Priya's 2nd question ("anything need me?") is scattered
+- [x] **No consolidated "needs attention" strip.** Priya's 2nd question ("anything need me?") is scattered
       across the Freshness, Budgets, and Upcoming-bills tiles. Add a compact **attention summary** near
       the top: "2 budgets near limit · 1 bill due in 3 days · 3 balances stale → review". Bottom-up: a
       pure `dashboard.Attention(state, now)` that rolls up the existing freshness/budget/bill signals
@@ -6328,7 +6328,7 @@ E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_45_month_end_close.mjs
 
 **Mechanical gaps:**
 
-- [ ] **Dashboard budgets widget uses `time.Now()` (current month), not the shared period
+- [x] **Dashboard budgets widget uses `time.Now()` (current month), not the shared period
   atom — so it silently ignores the period selector (C?? new gap).**
   `budgetsWidget()` in `internal/screens/dashboard.go:922` calls
   `start, end := dateutil.MonthRange(time.Now())` unconditionally. The shared period atom
@@ -6375,7 +6375,7 @@ E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_45_month_end_close.mjs
   Screenshot: `l45_step9a_reports_before_export.png` (export button visible, period May 2026;
   filename confirmed by Playwright download event).
 
-- [ ] **Dashboard budgets widget has NO drill-through link — over-budget items are
+- [x] **Dashboard budgets widget has NO drill-through link — over-budget items are
   display-only with no "why?" affordance.** The `budgetsWidget()` renders budget rows
   as static `Div` elements (no `Button`, no `A`, no `OnClick`). Clicking a red over-budget
   bar on the dashboard does nothing. The only drill path is: navigate to /budgets manually,
@@ -7606,6 +7606,159 @@ balance, and the adjustment flows into net worth. This is a Thread A regression 
 - Fixed `computeCurrentBalance` to handle Money structs and the `accountId` JSON tag.
 - Used `txnsByDescPrefix` + dataset read for balance verification (avoids sample-data text-parse
   collisions on the Accounts page which has 10+ accounts).
+
+---
+
+### L58. Story — "Tax Season" (Priya) — 2026-06-22 ★
+
+**The ritual** — Priya, 42, household manager, sits down for annual tax prep. She needs a full-year
+spending breakdown for her accountant — total income, total expenses, and tax-relevant categories
+(medical, charity, home office). She sets the period to Year 2025 via the resolution control,
+navigates to /reports to review spending by category, tries to drill from the Medical category into
+/transactions, recategorizes a mislabeled transaction, returns to /reports to confirm totals updated,
+and finally exports the annual CSV for her accountant.
+
+**Drive script** `e2e/loopstory_58_tax_season.mjs`
+
+Seeds 36 transactions (Jan–Dec 2025) across 6 categories: Groceries, Medical, Charity, Home Office,
+Utilities, Entertainment, plus 12 monthly income entries. One Charity transaction is intentionally
+seeded under the wrong category (Groceries) to exercise the recategorize-and-verify flow. All seeded
+names prefixed "L58" for isolation.
+
+**gwc build / run commands and exit codes:**
+```
+App already running: http://127.0.0.1:8099   [server pre-running]
+E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_58_tax_season.mjs
+  → 18 passed, 1 failed, 5 maybe                    EXIT 1
+```
+
+**Screenshots produced:**
+`l58_00_transactions_seeded.png`, `l58_01_dashboard_before_period.png`,
+`l58_01b_dashboard_year_2025.png`, `l58_02_reports_annual.png`,
+`l58_03_transactions_drill_medical.png`, `l58_04a_before_recat.png`,
+`l58_04b_after_recat.png`, `l58_05_reports_after_recat.png`,
+`l58_06a_reports_before_export.png`, `l58_06b_reports_after_export.png`,
+`l58_08a_dashboard_final.png`, `l58_08b_budgets_final.png`.
+
+**What already works well (regression anchors)** ✓
+
+- ✓ **ANNUAL_WINDOW: Year resolution + prior-year stepping works end-to-end.**
+  Clicking the "Year" segment in the resolution control and pressing "‹" (previous) correctly
+  steps from 2026 → 2025. The period pill shows "2025" on /dashboard, /reports, /transactions,
+  and /budgets throughout the ritual. Confirmed `l58_01b_dashboard_year_2025.png`.
+
+- ✓ **PERIOD_CARRY across all screens via soft-nav.**
+  After setting Year 2025 on /dashboard, soft-navigating via the nav rail to /reports, then to
+  /transactions, then back to /reports, then to /dashboard and /budgets — the "2025" period pill
+  is present at every hop. `uistate.UsePeriod()` atom correctly survives the entire ritual.
+  Confirmed via `getPeriodPill()` DOM reads at every step.
+
+- ✓ **Annual income + expense stats visible on /reports.**
+  /reports shows INCOME $48,406 and SPENDING $82,915.24 for the 2025 annual window. The figures
+  include the seeded L58 income transactions ($38,200 cumulative) on top of the demo-data baseline.
+  Confirmed `l58_02_reports_annual.png`.
+
+- ✓ **Spending-by-category section renders for annual period.**
+  Groceries, Entertainment, Housing, Health & Fitness, Gifts & Charity, Utilities all appear in
+  the by-category breakdown for 2025. The section header "Spending by category" is visible.
+
+- ✓ **Recategorize (inline) works from /transactions search.**
+  Filtering to "L58 Charity MISLABELED" via the search box and using the inline Category select
+  to reassign to "Gifts & Charity" (cat-gifts) succeeds in the dataset.
+
+- ✓ **Export CSV download fires from /reports.**
+  Clicking "Export CSV" triggers a browser download event. The data in the export file covers
+  the currently viewed period. The Playwright download API captures it correctly.
+
+- ✓ **Zero JS page errors across the entire 9-step, 5-screen ritual.**
+  No `page.on("pageerror")` events fired.
+
+**⚠️ Top violation — EXPORT_FILENAME (L45 gap persists into annual workflow)**
+
+`internal/screens/reports_screen.go:395` hardcodes `downloadBytes("spending-by-category.csv", ...)`.
+In the annual context this is worse than in the monthly context: Priya exports 2025 and 2026 annual
+reports in the same session and gets `spending-by-category.csv` and `spending-by-category (1).csv`
+with no way to tell which year is which. Cross-reference L45 EXPORT_FILENAME gap.
+
+- Before: `spending-by-category.csv` (confirmed, filename captured by Playwright download event).
+- After: `fmt.Sprintf("spending-by-category-%d.csv", w.From.Year())` for Year resolution;
+  `fmt.Sprintf("spending-by-category-%s.csv", w.From.Format("2006-01"))` for Month; both at
+  `internal/screens/reports_screen.go:395`.
+  Screenshot: `l58_06a_reports_before_export.png` (export button, period "2025" in pill).
+
+**Mechanical gaps** (model → logic+tests → persistence → state → UI → e2e)
+
+- [ ] **No drill-through from /reports category row to /transactions (FILTER_CARRY gap, C??).** 
+  On the "Spending by category" section of /reports, clicking a category name does nothing — there
+  is no link or button that navigates to /transactions pre-filtered to that category for the viewed
+  period. Priya cannot click "Medical" on the annual report and land in /transactions filtered to
+  Medical + 2025. The probe searched for `a[href*="transactions"]` and category drill links inside
+  `.cat-row`, `.category-row`, `tr a`, `[class*="row"] a` — none found.
+  Bottom-up: (1) in `internal/reports`, expose a drill URL constructor; (2) in
+  `internal/screens/reports_screen.go`, wrap each category label in an anchor or button that calls
+  `softNav("/transactions?cat=<id>")` and sets `TxFilter{Category: catID}` + period atom before
+  navigating. This is the same FILTER_CARRY affordance confirmed in L45 via the /budgets drill.
+
+- [ ] **Annual period is NOT persisted to localStorage (L45 gap, still open).**
+  `uistate.PersistResolution` persists only the resolution (Year), not the From/To anchors.
+  A hard reload resets to the current year (2026), losing the 2025 selection. Priya cannot
+  share a direct URL to the 2025 annual report or reload mid-session. Identical to L45 gap.
+  (`internal/uistate/period.go` — persist window anchors alongside resolution.)
+
+- [ ] **Recategorize-then-reports round-trip did not update category totals in probe.**
+  After recategorizing "L58 Charity MISLABELED" from Groceries to Gifts & Charity, /reports
+  still showed Groceries at $13,359.74 (unchanged). This may indicate: (a) the seeded
+  transaction used a different category ID than the reports page aggregates by (category IDs
+  vs display names mismatch), or (b) the reports page totals are computed at load time and
+  do not react to a mid-session recategorize without full reload (RECAT_UPDATES gap). 
+  Inconclusive — requires further investigation with exact category ID tracing.
+
+- [ ] **No tax-deductible flag / "Deductible totals" section on /reports (L16 gap, still open).**
+  L16 identified that the tax-prep story needs a "Deductible totals" section (medical, charity,
+  home-office flagged as deductible) and a dedicated annual tax-summary export. Neither exists.
+  The user must manually identify relevant categories from the generic by-category table.
+  Bottom-up: (1) `domain.Category.Deductible bool`; (2) `reports.DeductibleTotal(txns, period)`;
+  (3) a "Deductible" section on /reports with per-category amounts + combined total; (4) export
+  with a separate Deductible column or a filtered "Deductible only" CSV.
+
+- [ ] **No "prior year" preset in the Jump To select (C?? new gap).**
+  The preset select offers: This period / Last period / This quarter / Year to date. There is no
+  "Prior year" option. The annual review ritual requires: click "Year" segment → click "‹" twice.
+  A "Prior year" preset would reduce this to one action, directly serving the tax-prep workflow.
+  (`internal/app/shell.go:698` — add `Option(Value("lastyear"), ...)` and handle it in `onPreset`
+  by calling `period.Previous(period.Year, now, w.WeekStart)`.)
+
+**UI/UX defects** (screenshot-confirmed)
+
+- [ ] **EXPORT_FILENAME: annual export gets no year stamp — tax-season exports collide.**
+  See top violation above. Screenshot: `l58_06a_reports_before_export.png` (period "2025" in pill,
+  export button visible); `l58_06b_reports_after_export.png` (post-download, no feedback).
+
+- [ ] **No category-row drill affordance visible in /reports by-category table.**
+  Category names in the spending-by-category section are plain text with no visual cue that they
+  are clickable. The L45 /budgets drill is a link — /reports should match that pattern. Screenshot:
+  `l58_02_reports_annual.png` (category table, no drill links visible).
+
+- [ ] **MONEY_CONSERVATION probe gap: sub-category rows are rendered in the by-category table
+  alongside their parents, causing double-counting in plain-text sum.**
+  The reports page renders "Housing" + "Rent" (its child) as separate rows; summing all rows
+  gives $109,165 vs reported $82,915 (31.7% diff). The headline expense stat is computed
+  independently and is correct. Whether the sub-category/parent row rendering itself confuses
+  users who try to sum the rows manually is a UX question worth investigating. Screenshot:
+  `l58_02_reports_annual.png`.
+
+**Probe hardening**
+
+- Fixed `parsePeriodLabel` to use `getPeriodPill()` DOM query (`.reso-control` element) instead
+  of full-body text parsing. Year resolution shows "2025" in the stepper pill; body text also
+  contains "Dec 2025" (from the trend chart legend), causing the old text parser to return "Dec 2025"
+  instead of "2025". `getPeriodPill` reads the stepper label directly.
+- Fixed `parseCategoryTotals` to match multi-line layout (category name on one line, dollar amount
+  on the next) rather than expecting same-line "Category $X.XX" format.
+- Fixed MONEY_CONSERVATION to filter income categories and exclude rows whose value ≈ total expense
+  (the "Reimbursable" rolled-up row). Noted sub-category double-count as probe parse limitation.
+- Fixed RECAT_UPDATES category-name matching to use fuzzy search (`/grocer/i`, `/charity|gift/i`)
+  rather than exact names, since the app uses "Gifts & Charity" not "Charity".
 
 ---
 

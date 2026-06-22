@@ -258,3 +258,24 @@ func TestApplyDoesNotMutate(t *testing.T) {
 		t.Error("Apply mutated the input slice order")
 	}
 }
+
+func TestApplyCustomFieldFilter(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "1", Custom: map[string]any{"property": "Maple St"}},
+		{ID: "2", Custom: map[string]any{"property": "Oak Ave"}},
+		{ID: "3", Custom: map[string]any{"deductible": true}},
+		{ID: "4"}, // no custom values
+	}
+	got := Apply(txns, Criteria{CustomKey: "property", CustomVal: "Maple St"})
+	if len(got) != 1 || got[0].ID != "1" {
+		t.Fatalf("property=Maple St filter: got %d rows %v, want just id 1", len(got), got)
+	}
+	gotBool := Apply(txns, Criteria{CustomKey: "deductible", CustomVal: "true"})
+	if len(gotBool) != 1 || gotBool[0].ID != "3" {
+		t.Fatalf("deductible=true filter: got %v, want id 3", gotBool)
+	}
+	// Empty val = no filter (all pass).
+	if all := Apply(txns, Criteria{CustomKey: "property"}); len(all) != 4 {
+		t.Fatalf("empty custom value should not filter; got %d", len(all))
+	}
+}

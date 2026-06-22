@@ -286,6 +286,8 @@ var english = Catalog{
 	"action.dismiss": "Dismiss",
 
 	// Shared
+	"common.yes":           "Yes",
+	"common.no":            "No",
 	"common.notReady":      "App state is not ready yet.",
 	"common.name":          "Name",
 	"common.reassignTitle": "Reassign before deleting",
@@ -1079,6 +1081,7 @@ var english = Catalog{
 	"dashboard.netWorthChartLabel":     "Net worth trend, currently %s",
 	"dashboard.highlight":              "Spending highlight",
 	"dashboard.noHighlights":           "No big spending changes this month.",
+	"dashboard.budgetDrillTitle":       "View budgets",
 
 	// Customize screen
 	"customize.formulaHint":     "Type a formula above — e.g. round((income - expense) / income * 100)",
@@ -1273,6 +1276,10 @@ var english = Catalog{
 	"transactions.previewClose":       "Close receipt preview",
 	"transactions.previewAlt":         "Receipt image for %s",
 	"transactions.previewMissing":     "This receipt image is no longer available.",
+	"transactions.filterCustomField":  "Custom field",
+	"transactions.filterCustomNone":   "— Any field —",
+	"transactions.filterCustomAny":    "— Any value —",
+	"transactions.filterCustomValue":  "Value",
 	"transactions.addedToast":         "Transaction added.",
 
 	// Offline indicator (L19)

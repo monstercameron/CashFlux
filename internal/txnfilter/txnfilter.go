@@ -5,6 +5,7 @@
 package txnfilter
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -67,6 +68,11 @@ type Criteria struct {
 	Sort     string `json:"sort,omitempty"`
 	Dir      string `json:"dir,omitempty"`
 	Cleared  string `json:"cleared,omitempty"`
+	// CustomKey/CustomVal filter by a transaction custom field's value (L18): a
+	// row matches when its Custom[CustomKey] stringifies to CustomVal. Both empty
+	// = no custom-field filter.
+	CustomKey string `json:"customKey,omitempty"`
+	CustomVal string `json:"customVal,omitempty"`
 	// Pagination (persisted with the rest). Page is 1-based; PageSize 0 means the
 	// default, PageSizeAll (negative) means "show all".
 	Page     int `json:"page,omitempty"`
@@ -126,6 +132,7 @@ const (
 	FieldFrom     FilterField = "from"
 	FieldTo       FilterField = "to"
 	FieldCleared  FilterField = "cleared"
+	FieldCustom   FilterField = "custom"
 )
 
 // ActiveFilter describes one engaged filter for the toolbar's count badge and
@@ -156,6 +163,9 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 	if c.Cleared == "yes" || c.Cleared == "no" {
 		out = append(out, ActiveFilter{Field: FieldCleared, Value: c.Cleared})
 	}
+	if c.CustomKey != "" && c.CustomVal != "" {
+		out = append(out, ActiveFilter{Field: FieldCustom, Value: c.CustomVal})
+	}
 	return out
 }
 
@@ -182,6 +192,8 @@ func (c Criteria) Without(f FilterField) Criteria {
 		c.To = ""
 	case FieldCleared:
 		c.Cleared = ""
+	case FieldCustom:
+		c.CustomKey, c.CustomVal = "", ""
 	}
 	return c
 }
@@ -243,6 +255,7 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case ft != "" && !matchText(t, ft):
 		case c.Cleared == "yes" && !t.Cleared:
 		case c.Cleared == "no" && t.Cleared:
+		case c.CustomKey != "" && c.CustomVal != "" && customString(t.Custom[c.CustomKey]) != c.CustomVal:
 		default:
 			out = append(out, t)
 		}
@@ -314,4 +327,24 @@ func matchText(t domain.Transaction, q string) bool {
 		}
 	}
 	return false
+}
+
+// customString renders a transaction custom-field value to the string the filter
+// compares against (matching the option strings the UI offers): strings pass
+// through, bools become "true"/"false", everything else uses fmt.Sprint, and a
+// missing value is "".
+func customString(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	case bool:
+		if x {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprint(x)
+	}
 }
