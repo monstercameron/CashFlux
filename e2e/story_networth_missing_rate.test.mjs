@@ -39,8 +39,11 @@ try {
   await page.goto(BASE + "/accounts", { waitUntil: "domcontentloaded" });
   await page.waitForSelector('input[type="text"][aria-required="true"]', { timeout: 60000 });
 
-  // Pick a currency the seeded FX table has no rate for.
-  const d0 = await dataset(page);
+  // Pick a currency the seeded FX table has no rate for. Wait until the seeded
+  // sample's FX table has actually been persisted — reading too early sees an empty
+  // table and would pick a currency that in fact HAS a rate (so it wouldn't be
+  // excluded, and no notice would show).
+  const d0 = await waitForDataset(page, (d) => d.settings && Object.keys(d.settings.fxRates || {}).length > 0);
   const fx = (d0.settings && d0.settings.fxRates) || {};
   const base = (d0.settings && d0.settings.baseCurrency) || "USD";
   const cur = CANDIDATES.find((c) => c !== base && !(c in fx));
