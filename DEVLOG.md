@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: runway indicator on what-if plans (L27)
+
+The what-if planner projected a sabbatical to −$25,500 at 12 months but never stated the number that matters:
+when does the money run out? Added pure `planning.RunwayMonths(p) (months float64, depletes bool)` — walks the
+existing `Project` curve, finds the first month the balance goes negative, and linearly interpolates the
+fractional crossing (prev/(prev−cur)); one-time dips land at month boundaries so mid-month interpolation across
+one is approximate but consistent with the displayed curve (documented). PlanCard now shows "Money lasts ~5.6
+months" + a ⚠ marker in the danger tone, or a calm "Stays positive through N months". L13's cash runway card
+already existed; this is the per-plan readout.
+
+Integration note: the logic was right first try — the e2e was the problem. Two bugs in the gate, both
+instructive: (1) the /planning page has multiple plans (the sample seeds its own) so a global `.plan-runway`
+`.first()` read a SEEDED plan, not the new one — scoped every assertion to the card containing the unique plan
+name; (2) more subtly, the page's "Can I afford it?" section has its own `step="0.01"` number inputs earlier in
+the DOM, so `input[step=0.01].nth(0/1)` filled THOSE, leaving the plan's start balance at 0 → it "depleted" at
+0.0 months. Fixed by scoping all field fills to the plan `form` (the one containing the "Add plan" button). Lesson
+for future gates on this screen: always scope to the specific form/card, never global nth(). Next: L12.
+
 ## 2026-06-22 - feat: goal-completion lifecycle (L20)
 
 The completion *moment* was already handled (capped bar + "Complete 🎉", pace nag removed); this is what

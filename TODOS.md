@@ -5274,12 +5274,10 @@ They model it, watch the trajectory, see their runway, and save the scenario.
   $X/mo / track progress"). 👍
 
 **Gaps (dream-big modeling):**
-- [ ] **No RUNWAY indicator — the key sabbatical number.** The plan projects to −$25,500 at 12 months but
-      never says **"funds run out in month ~6"** (22,500 / 4,000 ≈ 5.6) — it just goes negative silently.
-      Add a runway/depletion readout ("money lasts ~5.6 months · depleted by ~Dec 2026") + a warning when
-      a plan crosses zero. Bottom-up: pure `forecast.RunwayMonths(start, monthly, oneTimes)` (table-
-      tested incl. never-depletes) → a line on the plan card + a red marker on the curve. (Ties to L13's
-      cash-flow runway — share the calc.)
+- [x] **RUNWAY indicator on what-if plans.** Pure `planning.RunwayMonths(p) (months float64, depletes bool)`
+      (interpolated fractional crossing, table-tested incl. never-depletes / already-negative / one-time dip)
+      → a "Money lasts ~5.6 months" readout in the danger tone + a ⚠ marker on a plan that crosses zero (calm
+      "Stays positive through N months" otherwise). e2e `plan_runway_check.mjs`.
 - [ ] **Baseline forecast = THIS month's net extrapolated 12×** (`planning.go:231-234`,
       `monthlyNet = income−expense for MonthRange(now)`). If the current month is atypical (a one-off
       purchase, a bonus), the 12-month forecast is misleading. Base it on a **trailing average** (last
@@ -5931,6 +5929,104 @@ All 29 checks pass; exit code 0.
 - The `/accounts` balance snapshot captures the entire body text; it is stable but verbose. A
   tighter probe would locate the specific account row by `data-id` or a stable class and read only
   its balance cell.
+
+---
+
+### L42. Story — "Adding a Category" (Maya, pet care expense category) — 2026-06-22 ★
+
+**The ritual:** Maya, 29, tracks household spending carefully and wants to separate vet bills from
+general "Miscellaneous". She opens /categories, fills in the add form (name "L42 Pet Care",
+kind=Expense, color=#7c83ff default), and clicks Add. The category appears in the Expense list.
+She navigates to /transactions, sees "L42 Pet Care" already in the category picker (no reload),
+adds a new transaction ("L42 Vet Bill", $85, Expense, category=L42 Pet Care, date=2026-06-22),
+and confirms the row shows the assignment. She then opens /reports and sees "L42 Pet Care" listed
+in the spending-by-category breakdown with a total of $85.00. After a hard reload both the category
+and the transaction persist.
+
+**Drive script:** `e2e/loopstory_42_add_category.mjs`.
+All 28 checks pass; exit code 0.
+
+**What already works well (regression anchors):**
+- ✓ **Category creation is immediate and full-featured.** The /categories add form exposes Name
+  (text, required with client-side guard), Kind (Expense / Income select), Parent category
+  (optional, for sub-categories), and a color picker — all in one labelled row. No progressive
+  disclosure required. Confirmed `loop42-02-after-add-category.png`.
+- ✓ **Category appears in the Expense list immediately after submit.** No page reload needed;
+  the list is reactive. Confirmed body text check and screenshot.
+- ✓ **Category is immediately available in the /transactions picker without a page reload.**
+  Navigating directly from /categories → /transactions after creation shows "L42 Pet Care" in
+  the category `<select>` with no explicit reload step. This is the shared `appstate` atom
+  propagating correctly. Confirmed `loop42-03-after-add-transaction.png`.
+- ✓ **Transaction assigned to the category shows the category label in the list.** "L42 Vet Bill"
+  row shows "Pet Care" inline. Confirmed `loop42-04-transaction-row.png`.
+- ✓ **Reports/spending-by-category lists "L42 Pet Care" with the correct $85.00 total.**
+  The row reads exactly `"L42 Pet Care$85.00"` in the DOM. Full spend order confirmed:
+  Housing · Groceries · Education & Loans · Shopping · Dining · Electricity · Entertainment ·
+  Health & Fitness · Transit · **L42 Pet Care $85.00** · Gas · Internet · Utilities ·
+  Subscriptions · Uncategorized. Confirmed `loop42-05-reports-page.png`.
+- ✓ **Category persists across hard reload of /categories.** Post-`page.reload()` "L42 Pet Care"
+  still appears in the list. Confirmed `loop42-06-categories-after-reload.png`.
+- ✓ **Transaction persists across hard reload of /transactions.** "L42 Vet Bill" still present.
+  Confirmed `loop42-07-transactions-after-reload.png`.
+- ✓ **Name field clears after successful category add.** `#cat-add` is empty after submit.
+- ✓ **Zero JS page errors** across the full flow (/categories create → /transactions add+assign
+  → /reports verify → reload /categories → reload /transactions).
+
+**Mechanical gaps:**
+
+- [ ] **NO inline category creation from the transaction form — forced detour to /categories
+  (basic-usage probe).** There is no "+" or "Add new category" affordance anywhere in the
+  /transactions add form. A user who realizes mid-entry that their desired category does not exist
+  must: (1) abandon or memorize the transaction they were entering, (2) navigate to /categories,
+  (3) add the category, (4) navigate back to /transactions, and (5) re-enter the transaction.
+  The category does appear in the picker immediately after returning (no reload needed), but the
+  navigation round-trip is required. Before: user must leave /transactions to create a category.
+  After: add a "New category…" pseudo-option at the bottom of the category `<select>` (or a
+  small `+` icon button beside it) that opens a lightweight inline modal or expands a mini-form
+  to create the category in place, then auto-selects it on save. (`internal/screens/transactions.go`
+  category select area; `internal/screens/categories.go` form logic reusable as a sub-component.)
+
+- [ ] **Kind select does NOT reset after category add.** After submitting the add form, the Name
+  field clears (correct) but the Kind select stays on "expense" — it does not reset to its
+  default. If the user immediately adds an Income category next, the kind is already correct by
+  coincidence, but if they toggled it to Income and add-then-add, the third add would start on
+  Income unexpectedly. The partial reset is inconsistent with the name-clears / kind-stays
+  behavior. Before: submit → name clears, kind stays. After: reset kind to the domain default
+  (`domain.KindExpense`) in the `add` handler alongside `name.Set("")`.
+  (`internal/screens/categories.go` `add` closure.)
+
+- [ ] **Color picker does NOT reset after category add.** The color input retains whatever
+  color was last chosen; a new category starts with that color rather than the default
+  `#7c83ff`. A user adding several categories without thinking about color will get identical
+  colors on all of them, making the Mermaid category chart indistinguishable by color.
+  Before: submit → color stays at last value. After: reset `color` to `"#7c83ff"` in the `add`
+  handler. (`internal/screens/categories.go` `add` closure, alongside `name.Set("")`.)
+
+- [ ] **No success confirmation after category Add.** The category silently appears below with
+  no toast, snackbar, or row highlight — consistent gap with L39/L40/L41. Screenshot:
+  `loop42-02-after-add-category.png` (no confirmation signal at top of page).
+  After: brief toast "Category added" or 1–2 s highlight on the newly inserted row.
+  (`internal/ui/` toast system, same fix as L39/L40/L41.)
+
+**UI/UX defects (screenshot-confirmed):**
+
+- [ ] **Color picker is the only non-labelled control in the add form.** The `input[type="color"]`
+  has an `aria-label` and `title` of "Color" (the key `categories.color`) but renders as a
+  small swatch with no visible text label in the form row — a first-time user scanning the form
+  sees: Name · Type · Parent · [colored square] · Add. The swatch's purpose is not obvious
+  without hovering for the tooltip. Screenshot: `loop42-01-categories-before.png` (form row
+  visible; color swatch has no inline text). After: add a short visible label "Color" before or
+  below the swatch, consistent with how the other fields are labelled.
+  (`internal/screens/categories.go` form layout, the color `Input` line.)
+
+**Probe hardening:**
+- The category select in /transactions is identified by exact `aria-label="Category"` match
+  (case-insensitive). This is stable as long as the aria-label doesn't change. Confirmed present.
+- The spending-by-category rows are found via `.row-desc` class; if that class changes the probe
+  falls back to scanning `<li>` / `.row` elements inside a heading containing "category" — dual
+  strategy is resilient.
+- The transactions add form's description input is found by `id^="txn-add"` prefix; if the id
+  scheme changes, the fallback is `input[placeholder*="desc" i]` then first `input[type="text"]`.
 
 ---
 

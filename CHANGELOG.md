@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Runway indicator on what-if plans (L27).** A what-if plan that draws its balance down now shows the key
+  number — "Money lasts ~5.6 months" — with a ⚠ danger marker, instead of just silently projecting to a
+  negative end balance. Plans that stay solvent over the horizon show a calm "Stays positive through N months."
+  New pure `planning.RunwayMonths(plan)` with interpolated fractional crossing (table-tested incl.
+  never-depletes, already-negative, and one-time-dip cases); e2e `plan_runway_check.mjs`.
 - **Goal-completion lifecycle (L20).** Finished savings goals now have somewhere to go. An over-funded goal
   shows a calm "<amount> over target" note; a completed goal gains an Archive action that moves it into a
   collapsible "Achieved" section (with Unarchive), and archived goals are excluded from the headline "Overall

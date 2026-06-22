@@ -715,8 +715,10 @@ type planRowProps struct {
 }
 
 // PlanRow renders one saved what-if plan: its name, the horizon/start/monthly
-// assumptions, and the projected end-of-horizon balance from internal/planning,
-// with a remove button. Its own component per the no-hooks-in-loops rule.
+// assumptions, the projected end-of-horizon balance, and — when the projected
+// balance crosses zero within the horizon — a runway readout ("Money lasts ~N
+// months") in the danger tone plus a danger badge. Its own component per the
+// no-hooks-in-loops rule.
 func PlanRow(props planRowProps) ui.Node {
 	p := props.Plan
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(p.ID) }))
@@ -736,6 +738,9 @@ func PlanRow(props planRowProps) ui.Node {
 		stroke = "#d8716f"
 	}
 
+	// Runway readout: how long does the balance last before crossing zero?
+	runwayMo, depletes := planning.RunwayMonths(p)
+
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), p.Name),
@@ -746,6 +751,26 @@ func PlanRow(props planRowProps) ui.Node {
 			Width: 120, Height: 28, Label: uistate.T("plans.chartLabel", fmtMoney(end)),
 		})),
 		Span(ClassStr("amount fig "+figTone(end)), uistate.T("plans.projected", fmtMoney(end))),
+		// Runway indicator: shown only when the balance depletes within the horizon.
+		// Uses both colour (text-down) and text so the warning is not colour-alone (a11y).
+		IfElse(depletes,
+			Span(
+				css.Class("plan-runway plan-runway--danger"),
+				Attr("role", "status"),
+				Attr("aria-label", uistate.T("plans.runwayDanger")),
+				Span(css.Class("plan-runway__badge"), "⚠"),
+				Span(
+					css.Class("plan-runway__text text-down"),
+					uistate.T("plans.runwayMonths", strconv.FormatFloat(runwayMo, 'f', 1, 64)),
+				),
+			),
+			If(p.HorizonMonths > 0,
+				Span(
+					css.Class("plan-runway plan-runway--ok"),
+					uistate.T("plans.staysPositive", p.HorizonMonths),
+				),
+			),
+		),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("plans.deleteTitle")), Title(uistate.T("plans.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }

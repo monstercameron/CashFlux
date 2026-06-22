@@ -514,6 +514,9 @@ var english = Catalog{
 	"plans.rowMeta":              "%d months · start %s · %s/mo",
 	"plans.projected":            "Projected %s",
 	"plans.deleteTitle":          "Delete this plan",
+	"plans.runwayMonths":         "Money lasts ~%s months",
+	"plans.runwayDanger":         "Balance crosses zero",
+	"plans.staysPositive":        "Stays positive through %d months",
 
 	// Documents screen
 	"documents.csvEmpty":             "Paste some CSV first.",
