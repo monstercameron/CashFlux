@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Per-member "my money" view (L21).** A top-bar member switcher (Everyone + each household member, shown
+  when ≥2 members) backed by `uistate.UseActiveMember()` — a persisted atom (`cashflux:active-member`) —
+  scopes the Transactions ledger and Dashboard KPIs/widgets to one person or Everyone. Net worth stays
+  household-wide (it's account-based, not per-transaction). The by-member Reports section now shows for any
+  ≥2-member household with ≥1 attributed spend. New `MemberSwitcher` component; `member_view_toggle_check.mjs`.
+
 ### Fixed
 - **Deleting a parent category no longer orphans its sub-categories (L28).** Removing a parent now re-homes
   each child onto the parent's own parent (the grandparent, or the root for a top-level category) before

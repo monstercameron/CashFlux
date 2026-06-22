@@ -1192,6 +1192,12 @@ var english = Catalog{
 	// Ownership (shared)
 	"owner.group": "Group (shared)",
 
+	// Member switcher (L21 — top-bar household-member perspective picker)
+	"member.everyone":      "Everyone",
+	"member.switcherLabel": "View as member",
+	"member.activeNotice":  "Viewing %s's money",
+	"member.allNotice":     "Viewing all members",
+
 	// Members screen
 	"members.add":                "Add member",
 	"members.name":               "Name",

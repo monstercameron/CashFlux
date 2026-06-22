@@ -430,7 +430,11 @@ func Reports() ui.Node {
 			H2(css.Class("card-title"), uistate.T("reports.biggestExpenses")),
 			Div(css.Class("rows"), largestNodes),
 		)),
-		If(len(memberSpend) > 1, Section(css.Class("card"),
+		// L21: show the member-spend section whenever the household has ≥2 members
+		// and at least one has attributed spending — not just when both have spend.
+		// With one member doing all the spending, the section still answers "who
+		// spent what?" and surfaces the unattributed remainder.
+		If(len(app.Members()) >= 2 && len(memberSpend) >= 1, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.byMember")),
 			Div(css.Class("rows"), memberNodes),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),

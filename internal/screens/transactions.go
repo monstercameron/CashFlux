@@ -115,6 +115,15 @@ func Transactions() ui.Node {
 	notifyErr := func(text string) { noticeAtom.Set(noticeAtom.Get().With(text, true)) }
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
+	// L21: honour the top-bar active-member perspective. When a member is
+	// selected in the switcher and the per-screen filter has no explicit member
+	// constraint of its own, scope the ledger to that member automatically.
+	// The persisted filter is never mutated — the switcher scope is layered on
+	// top so the user's own manual member filter always takes priority.
+	activeMemberAtom := uistate.UseActiveMember()
+	if am := activeMemberAtom.Get(); am != "" && f.Member == "" {
+		f.Member = am
+	}
 	setFilter := func(mut func(*uistate.TxFilter)) {
 		prev := filterAtom.Get()
 		nf := prev

@@ -10939,3 +10939,14 @@ Deep category trees rendered as a flat indented list with no way to fold. Added 
 ## 2026-06-22 - chore: reconcile L1-L5 verified-done items (/loop iter 8)
 
 Not new code — backlog truth-up. Confirmed by running their e2es that L1 cover-overspending (story_budget_cover), L2 settle-up (story_settle_up), L3 receipt-as-split (source: documents.go receiptMode/importReceipt), L4 currency picker (already a <select>) + networth-no-rate (story_networth_missing_rate), and L5 exclude/strategy/progress/per-debt-schedule/debt-free-date (story_payoff_exclude/suggest/progress/chart/date) are all shipped. Flipped 21 stale "- [ ]" sub-items to done. After this pass, every L1-L30 STORY feature gap is shipped or verified-done; the only remaining unchecked boxes are non-story infra/meta items (gwc dev SPA fallback, icon-generator scripts, axe-core CI wiring, a11y audit, the privacy-lock design section) and explicitly out-of-scope/cant-do-headless items (online FX-refresh API, the L11 mobile/responsive visual pass).
+
+## 2026-06-22 — L21 household "my money" view
+Integrated the L21 agent: a per-member view toggle. New `uistate.UseActiveMember()` atom
+(persisted `cashflux:active-member`, Everyone = "") + a top-bar `MemberSwitcher` (shown only for
+≥2-member households, captured-atom setter so it's panic-safe from callbacks). Transactions overlays
+the active member on its render-time filter without mutating the user's persisted filter; Dashboard
+scopes income/expense KPIs + spending widgets to the member's txns while keeping net worth household-
+wide (account-based). Reports by-member section gate relaxed to ≥2 members + ≥1 spend so the seeded
+sample (only Daniel has spend) shows it. Fixed the agent's `If(cond, Attr("selected",...))` (invalid
+— Attr is a PropOption, not a Node) → `SelectedIf(cond)`. e2e member_view_toggle_check + crosscurrency
++ year-view all green.

@@ -524,6 +524,7 @@ func TopBar(props topBarProps) uic.Node {
 		),
 		Div(css.Class("topbar-controls", tw.MlAuto, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextDim, tw.Text13),
 			uic.CreateElement(OfflineIndicator),
+			uic.CreateElement(MemberSwitcher),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(MuzakToggle),

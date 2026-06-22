@@ -71,19 +71,35 @@ func Dashboard() ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
+	// L21: scope spending/income KPIs to the active member when one is selected
+	// in the top-bar switcher. Net worth is account-based so it stays household-
+	// wide regardless of the member view.
+	activeMemberAtom := uistate.UseActiveMember()
+	activeMemberID := activeMemberAtom.Get()
+	kpiTxns := txns
+	if activeMemberID != "" {
+		filtered := make([]domain.Transaction, 0, len(txns))
+		for _, t := range txns {
+			if t.MemberID == activeMemberID {
+				filtered = append(filtered, t)
+			}
+		}
+		kpiTxns = filtered
+	}
+
 	nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 	w := uistate.UsePeriod().Get()
 	widgetCfgs := uistate.UseWidgetConfigs().Get()
 	start, end := w.Range()
-	income, expense, _ := ledger.PeriodTotals(txns, start, end, rates)
+	income, expense, _ := ledger.PeriodTotals(kpiTxns, start, end, rates)
 	periodLabel := w.FromLabel()
 	if w.ToLabel() != w.FromLabel() {
 		periodLabel += " – " + w.ToLabel()
 	}
 
 	incCount, expCount := 0, 0
-	for _, t := range txns {
+	for _, t := range kpiTxns {
 		if !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
