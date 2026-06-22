@@ -4717,13 +4717,15 @@ tree red.*
   (`DetectPriceChanges`, `priceUp`/`priceDown`); a **recurring-share-of-spending** gauge. ✓
 
 **Gaps (the screen is read-only; the story wants to ACT):**
-- [ ] **Make it actionable: mark-to-cancel + "charged after cancel" alert** (the real money-saver).
-  - [ ] **Model/store** `internal/domain`+`internal/store`: a cancellations record (sub identity +
-        cancelled-on date), persisted + round-tripped.
-  - [x] **Logic** `internal/subscriptions`: `ChargedAfterCancel(txns, cancellations)` → flag any charge
-        matching a cancelled sub after its cancel date; table-tested.
-  - [x] **State/UI**: a "Mark as cancelled" action per row + a prominent **alert** when a cancelled sub
-        bills again ("You cancelled Netflix on Mar 2 but were charged $15.99 on Apr 2").
+- [x] **Make it actionable: mark-to-cancel + "charged after cancel" alert** (the real money-saver). (The
+      prior `[x]` marks were aspirational — none of this existed; built bottom-up this pass.)
+  - [x] **Model/store**: `domain.SubscriptionCancellation{ID, SubName, CancelledOn}` persisted + round-tripped
+        (mirrors the Earmark store wiring).
+  - [x] **Logic** `internal/subscriptions`: `ChargedAfterCancel(txns, cancels, rates) []LateCharge` → flags
+        any expense matching a cancelled sub's name dated after its cancel date; table-tested (FX, case, etc.).
+  - [x] **State/UI**: `appstate.MarkSubscriptionCancelled`/`Unmark`/`Cancellations`; a "Mark as cancelled"
+        action per row (+ Undo) and a prominent top `role="alert"` banner ("You cancelled X on … but were
+        charged … on …"). e2e `subscription_cancel_check.mjs`.
 - [ ] **"Cancel these → save $X/year" framing.** Multi-select cancel-candidates and show the annual
       savings of cancelling them — turns the annual total into action.
 - [ ] **Unused proxy (no usage signal available).** Offer a low-pressure "review" nudge for subs above a
@@ -4769,11 +4771,9 @@ screenshot).
 - [ ] **Warning → suggested action.** On a detected dip: "Checking dips to -$240 on Jul 2 — move $X from
       High-Yield Savings, or delay the Auto Loan." Reuse the L1 cover/move-money + a bill-delay; emit a
       dismissible nudge → task (friendly, never naggy).
-- [ ] **Mark a bill paid.** Bills currently offer only **"Remind me"** — there's no way to record that a
-      bill was paid. Add **"Mark paid"** that records the payment (links/creates the paying transaction,
-      advances next due, clears the reminder). Note bills are **derived from liability accounts**, so
-      this needs a small payment-tracking model (bill ↔ paying transaction) — bottom-up: domain link +
-      store + UI action + test.
+- [x] **Mark a bill paid** (already shipped): BillRow has a "Mark paid" action wired to
+      `appstate.RecordBillPayment(accountID, name, amount)`, which records the paying transaction. Stale gap;
+      verified present (`bills_screen.go:66`).
 
 **Probe note:** "mark paid" GAP is accurate (the affordance is "Remind me", not paid). Calendar/upcoming
 checks passed against real content.

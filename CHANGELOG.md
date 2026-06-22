@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Subscription cancellation tracking + charged-after-cancel alert (L12).** The Subscriptions screen is no
+  longer read-only: each detected subscription has a "Mark as cancelled" action (with Undo), and if a cancelled
+  subscription bills you again, a prominent alert banner calls it out — "You cancelled Gym membership on May 20
+  but were charged $40.00 on Jun 3" — the real money-saver. New `domain.SubscriptionCancellation` entity
+  (persisted + round-tripped), pure `subscriptions.ChargedAfterCancel` (table-tested, FX-aware), and
+  `appstate.MarkSubscriptionCancelled`/`Unmark`/`Cancellations`; e2e `subscription_cancel_check.mjs`.
 - **Runway indicator on what-if plans (L27).** A what-if plan that draws its balance down now shows the key
   number — "Money lasts ~5.6 months" — with a ⚠ danger marker, instead of just silently projecting to a
   negative end balance. Plans that stay solvent over the horizon show a calm "Stays positive through N months."

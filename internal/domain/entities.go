@@ -455,3 +455,14 @@ type Task struct {
 	// Empty (zero value) means the task is a one-shot and no successor is spawned.
 	Recurrence RecurringCadence `json:"recurrence,omitempty"`
 }
+
+// SubscriptionCancellation records that the user has explicitly cancelled a
+// detected subscription. SubName is the subscription's display name (the
+// transaction Desc that identifies the recurring charge) and is the join key
+// against Subscription.Name. Only one cancellation record per SubName is kept;
+// MarkSubscriptionCancelled deduplicates on save.
+type SubscriptionCancellation struct {
+	ID          string    `json:"id"`
+	SubName     string    `json:"subName"`
+	CancelledOn time.Time `json:"cancelledOn"`
+}

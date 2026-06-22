@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: subscription cancellation + charged-after-cancel alert (L12)
+
+TODOS had the Logic and State/UI sub-items checked, but a grep proved none of it existed — the marks were
+aspirational. Built the whole thing bottom-up: `domain.SubscriptionCancellation{ID, SubName, CancelledOn}`
+(SubName = the detected sub's Name = the charge Desc, the only stable identity since subs are derived, not
+stored) wired through the store on the Earmark template; pure `subscriptions.ChargedAfterCancel(txns, cancels,
+rates)` flagging expenses whose Desc matches a cancelled sub and whose date is strictly after the cancel date;
+`appstate.MarkSubscriptionCancelled/Unmark/Cancellations` (dedup by name); and the UI — a per-row "Mark as
+cancelled" + Undo, and a top `role="alert"` banner listing late charges (the headline value).
+
+e2e notes: the agent's first gate imported `@playwright/test` (wrong — this repo drives raw `playwright` via
+createRequire off `.tools/package.json`) and injected the cancellation via a plain localStorage write before a
+reload, which the pagehide→autosave clobbers. Rewrote it to the project pattern + the one-shot addInitScript
+injection (document-start, post-pagehide). Subtlety worth recording: the UI "Mark as cancelled" stamps *today*,
+and the sample's last gym charge is Jun 3 (past), so a UI-driven cancel can't itself produce a late charge — the
+gate injects a back-dated cancellation to exercise the alert, and a separate probe confirmed the UI button does
+persist a (today-dated) cancellation. The aria-label is the long `cancelTitle + name`, not the button text
+"Mark as cancelled" — select rows by the sub name. Sub-agent built; integrated + regressed (drill/price-tone
+green). Next: L15.
+
 ## 2026-06-22 - feat: runway indicator on what-if plans (L27)
 
 The what-if planner projected a sabbatical to −$25,500 at 12 months but never stated the number that matters:

@@ -1687,6 +1687,70 @@ func (a *App) Earmarks() []domain.Earmark {
 	return v
 }
 
+// Cancellations returns every persisted subscription cancellation record.
+func (a *App) Cancellations() []domain.SubscriptionCancellation {
+	v, err := a.store.ListSubscriptionCancellations()
+	a.logErr("subscription cancellations", err)
+	return v
+}
+
+// MarkSubscriptionCancelled records that the subscription identified by subName
+// was cancelled on the given date. If a cancellation record already exists for
+// this subscription name, it is updated rather than duplicated (dedupe by
+// SubName). subName must not be empty.
+func (a *App) MarkSubscriptionCancelled(subName string, on time.Time) error {
+	subName = strings.TrimSpace(subName)
+	if subName == "" {
+		return fmt.Errorf("appstate: subscription name is required")
+	}
+	// Dedupe: look for an existing record with the same SubName.
+	existing, err := a.store.ListSubscriptionCancellations()
+	if err != nil {
+		return err
+	}
+	for _, c := range existing {
+		if strings.EqualFold(strings.TrimSpace(c.SubName), subName) {
+			// Update the existing record in place.
+			c.CancelledOn = on
+			if err := a.store.PutSubscriptionCancellation(c); err != nil {
+				return err
+			}
+			a.log.Info("subscription cancellation updated", "subName", subName, "cancelledOn", on)
+			return nil
+		}
+	}
+	sc := domain.SubscriptionCancellation{
+		ID:          id.New(),
+		SubName:     subName,
+		CancelledOn: on,
+	}
+	if err := a.store.PutSubscriptionCancellation(sc); err != nil {
+		return err
+	}
+	a.log.Info("subscription marked cancelled", "subName", subName, "cancelledOn", on)
+	return nil
+}
+
+// UnmarkSubscriptionCancelled removes the cancellation record for subName. It
+// is a no-op (and returns nil) if no record exists for that name.
+func (a *App) UnmarkSubscriptionCancelled(subName string) error {
+	subName = strings.TrimSpace(subName)
+	existing, err := a.store.ListSubscriptionCancellations()
+	if err != nil {
+		return err
+	}
+	for _, c := range existing {
+		if strings.EqualFold(strings.TrimSpace(c.SubName), subName) {
+			if _, err := a.store.DeleteSubscriptionCancellation(c.ID); err != nil {
+				return err
+			}
+			a.log.Info("subscription cancellation removed", "subName", subName)
+			return nil
+		}
+	}
+	return nil
+}
+
 func (a *App) del(entity, id string, fn func(string) (bool, error)) error {
 	ok, err := fn(id)
 	if err != nil {

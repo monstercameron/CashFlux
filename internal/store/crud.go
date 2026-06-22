@@ -429,6 +429,21 @@ func (s *SQLiteStore) ListEarmarks() ([]domain.Earmark, error) {
 	return loadRows[domain.Earmark](s.db, "earmarks")
 }
 
+// --- Subscription cancellations ---
+
+func (s *SQLiteStore) PutSubscriptionCancellation(c domain.SubscriptionCancellation) error {
+	return putJSON(s.db, "subcancellations", c.ID, c)
+}
+func (s *SQLiteStore) GetSubscriptionCancellation(id string) (domain.SubscriptionCancellation, bool, error) {
+	return getJSON[domain.SubscriptionCancellation](s.db, "subcancellations", id)
+}
+func (s *SQLiteStore) DeleteSubscriptionCancellation(id string) (bool, error) {
+	return deleteRow(s.db, "subcancellations", id)
+}
+func (s *SQLiteStore) ListSubscriptionCancellations() ([]domain.SubscriptionCancellation, error) {
+	return loadRows[domain.SubscriptionCancellation](s.db, "subcancellations")
+}
+
 // --- Shared expenses + settlements (the roommate "settle up" ledger) ---
 
 func (s *SQLiteStore) PutSharedExpense(e domain.SharedExpense) error {

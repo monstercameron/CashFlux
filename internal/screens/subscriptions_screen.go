@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -60,6 +61,16 @@ func Subscriptions() ui.Node {
 		annual += s.AnnualAmount()
 	}
 
+	// Build a lookup of cancelled subscriptions by lower-case name.
+	cancelList := app.Cancellations()
+	cancelMap := make(map[string]time.Time, len(cancelList))
+	for _, c := range cancelList {
+		cancelMap[strings.ToLower(strings.TrimSpace(c.SubName))] = c.CancelledOn
+	}
+
+	// late charges: charges that arrived after a cancellation.
+	lateCharges, _ := subscriptions.ChargedAfterCancel(app.Transactions(), cancelList, rates)
+
 	// remind creates a to-do dated to the subscription's next renewal, so a
 	// "should I keep this?" task surfaces before the next charge (B25).
 	notice := uistate.UseNotice()
@@ -84,10 +95,44 @@ func Subscriptions() ui.Node {
 		notice.Set(notice.Get().With(uistate.T("subs.reminderAdded", s.Name), false))
 	}
 
+	doCancel := func(name string) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.MarkSubscriptionCancelled(name, time.Now()); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+		}
+	}
+	doUncancel := func(name string) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.UnmarkSubscriptionCancelled(name); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+		}
+	}
+
 	rows := MapKeyed(subs,
 		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
 		func(s subscriptions.Subscription) ui.Node {
-			return ui.CreateElement(SubscriptionRow, subscriptionRowProps{Sub: s, Base: base, NextDate: pr.FormatDate(s.NextRenewal), OnRemind: remind, OnDrill: viewCharges})
+			cancelledOn, isCancelled := cancelMap[strings.ToLower(strings.TrimSpace(s.Name))]
+			cancelledDate := ""
+			if isCancelled {
+				cancelledDate = pr.FormatDate(cancelledOn)
+			}
+			return ui.CreateElement(SubscriptionRow, subscriptionRowProps{
+				Sub:         s,
+				Base:        base,
+				NextDate:    pr.FormatDate(s.NextRenewal),
+				Cancelled:   isCancelled,
+				CancelledOn: cancelledDate,
+				OnRemind:    remind,
+				OnDrill:     viewCharges,
+				OnCancel:    doCancel,
+				OnUncancel:  doUncancel,
+			})
 		},
 	)
 
@@ -138,7 +183,35 @@ func Subscriptions() ui.Node {
 		shareStat = stat(uistate.T("subs.shareOfSpending"), fmt.Sprintf("%d%%", pct), "")
 	}
 
+	// Build the charged-after-cancel alert section. Each late charge gets its
+	// own plain-English line in a danger-toned banner at the very top.
+	lateChargeRows := MapKeyed(lateCharges,
+		func(lc subscriptions.LateCharge) any {
+			return lc.SubName + "|" + fmt.Sprint(lc.ChargeDate.Unix())
+		},
+		func(lc subscriptions.LateCharge) ui.Node {
+			return P(
+				css.Class("row-desc"),
+				Text(uistate.T("subs.lateCharge",
+					lc.SubName,
+					pr.FormatDate(lc.CancelledOn),
+					fmtMoney(money.New(lc.Amount, base)),
+					pr.FormatDate(lc.ChargeDate),
+				)),
+			)
+		},
+	)
+
 	return Div(
+		If(len(lateCharges) > 0, Section(
+			css.Class("card"),
+			Attr("role", "alert"),
+			Attr("aria-live", "polite"),
+			Style(map[string]string{"border-left": "4px solid var(--color-danger, #ef4444)"}),
+			H2(css.Class("card-title "+tw.ColorClass("text-down")),
+				uistate.T("subs.lateChargesTitle")),
+			Div(css.Class("rows"), lateChargeRows),
+		)),
 		If(len(subs) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("subs.monthlyBurden"), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base)), "neg"),
 			stat(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
@@ -178,16 +251,22 @@ func Subscriptions() ui.Node {
 }
 
 type subscriptionRowProps struct {
-	Sub      subscriptions.Subscription
-	Base     string
-	NextDate string // pre-formatted next-renewal date
-	OnRemind func(subscriptions.Subscription)
-	OnDrill  func(payee string) // open Transactions searched for this subscription's payee
+	Sub         subscriptions.Subscription
+	Base        string
+	NextDate    string // pre-formatted next-renewal date
+	Cancelled   bool
+	CancelledOn string // pre-formatted cancellation date, set when Cancelled is true
+	OnRemind    func(subscriptions.Subscription)
+	OnDrill     func(payee string) // open Transactions searched for this subscription's payee
+	OnCancel    func(name string)
+	OnUncancel  func(name string)
 }
 
-// SubscriptionRow renders one detected subscription with a "remind me to cancel"
-// action. It owns its click hook (per the On*-hooks-in-loops rule), so the list
-// can render many rows without reordering hooks.
+// SubscriptionRow renders one detected subscription with cancel/uncancel and
+// "remind me to cancel" actions. It owns all click hooks (per the
+// On*-hooks-in-loops rule), so the list renders many rows without reordering
+// hooks. A cancelled subscription shows its cancel date and an Undo action
+// instead of the standard remind button.
 func SubscriptionRow(props subscriptionRowProps) ui.Node {
 	s := props.Sub
 	remind := ui.UseEvent(Prevent(func() { props.OnRemind(s) }))
@@ -196,13 +275,60 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			props.OnDrill(s.Name)
 		}
 	}))
+	cancel := ui.UseEvent(Prevent(func() {
+		if props.OnCancel != nil {
+			props.OnCancel(s.Name)
+		}
+	}))
+	uncancel := ui.UseEvent(Prevent(func() {
+		if props.OnUncancel != nil {
+			props.OnUncancel(s.Name)
+		}
+	}))
+
 	meta := subscriptionCadenceLabel(s.Cadence) + " · " + uistate.T("subs.next", props.NextDate)
+
+	var statusArea ui.Node
+	if props.Cancelled {
+		statusArea = Span(
+			css.Class(tw.ColorClass("text-down")+" "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+			Text(uistate.T("subs.cancelledState", props.CancelledOn)),
+		)
+	} else {
+		statusArea = Fragment()
+	}
+
+	var actions ui.Node
+	if props.Cancelled {
+		actions = Button(
+			css.Class("btn"),
+			Type("button"),
+			Title(uistate.T("subs.uncancelTitle")),
+			Attr("aria-label", uistate.T("subs.uncancelTitle")+" "+s.Name),
+			OnClick(uncancel),
+			uistate.T("subs.uncancel"),
+		)
+	} else {
+		actions = Fragment(
+			Button(css.Class("btn"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
+			Button(
+				css.Class("btn btn-danger"),
+				Type("button"),
+				Title(uistate.T("subs.cancelTitle")),
+				Attr("aria-label", uistate.T("subs.cancelTitle")+" "+s.Name),
+				OnClick(cancel),
+				uistate.T("subs.cancel"),
+			),
+		)
+	}
+
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
 			Button(css.Class("row-desc sub-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
 				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
 				s.Name),
 			Span(css.Class("row-meta"), meta),
+			statusArea,
 		),
 		// Only show the normalized "/mo" figure when it differs from the actual
 		// charge (i.e. weekly/yearly). For monthly subs they're identical, so
@@ -210,7 +336,7 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 		If(s.Cadence != subscriptions.CadenceMonthly,
 			Span(css.Class("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base))))),
 		Span(css.Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),
-		Button(css.Class("btn"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
+		actions,
 	)
 }
 
