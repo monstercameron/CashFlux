@@ -10960,3 +10960,13 @@ focus ring on first Tab, one-tab-stop-per-radiogroup). The gate immediately caug
 `.field:focus { outline:none }` was stripping the keyboard focus ring on every text input, leaving
 only a faint border tint — added `.field:focus-visible { outline:2px solid var(--accent) }`. Segmented
 auto-merged from the worktree; settings/segmented regressions still green.
+
+## 2026-06-22 — L30 guided statement reconciliation
+New pure `internal/reconcile.Diff(clearedMinor, statementMinor) -> {DifferenceMinor, Reconciled}`
+(integer minor units, table-tested) backs a new "Reconcile to statement" mode on each account (⋯
+menu, `accounts.go`). Enter the statement ending balance, tick cleared txns (reusing the existing
+per-txn clear flag + `ledger.ClearedBalance`), and the live difference closes to 0 → "Reconciled ✓"
++ Done, with NO adjustment posted (the distinction from the force-to-target Update-balance path,
+which is left untouched). Per-row clear lives in its own `ReconcileTxnRow` component (no On* in a
+loop). e2e `reconcile_statement_check.mjs`: had to flush before reading the auto-seeded dataset, and
+always open the row overflow menu (the menu item is in the DOM but hidden when collapsed). Green.

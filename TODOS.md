@@ -5369,13 +5369,12 @@ CashFlux to match and expects a reconciling adjustment for the difference, the a
       reports — a $929 uncategorized entry). Show the delta inline + an optional **category/note** (e.g.
       interest, a missed transaction), or flag adjustments excludable from spending. Bottom-up: surface
       `AdjustmentToTarget` delta in the form + a category field on the adjustment; test.
-- [ ] **Guided statement reconciliation (gold standard).** True reconcile = tick off each transaction on
-      the statement until the **cleared balance** matches the statement, rather than forcing the total.
-      The pieces exist (a `cleared` flag — L25 bulk-clear — and a cleared-balance display). Add a
-      **"Reconcile to statement"** mode: enter the statement balance, check cleared items, and confirm
-      when cleared-balance == statement (only then no adjustment needed). Bottom-up: pure
-      `reconcile.Diff(clearedTxns, statementBalance)` (tested) → a guided UI over the existing cleared
-      flag.
+- [x] **Guided statement reconciliation (gold standard).** New **"Reconcile to statement"** mode on each
+      account (⋯ menu): enter the statement ending balance, tick cleared items, and watch the live
+      difference (`reconcile.Diff(clearedMinor, statementMinor)`, pure + table-tested) close to 0 — at
+      which point a **"Reconciled ✓"** confirmation + Done appear and *no* adjustment is posted (vs the
+      force-to-target flow). Reuses `ledger.ClearedBalance` + the existing per-txn clear flag.
+      `internal/reconcile`, `accounts.go` (`ReconcileTxnRow`); `e2e/reconcile_statement_check.mjs`.
 
 **Probe note:** the "adjustment equals $123.45" check **false-negatived** twice over — (1) my row-balance
 regex grabbed the **cleared-balance meta** ("cleared $8,876.00") instead of the actual balance ($8,070),

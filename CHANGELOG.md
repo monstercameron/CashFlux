@@ -12,6 +12,12 @@ and every commit updates this file under `Unreleased`.
   scopes the Transactions ledger and Dashboard KPIs/widgets to one person or Everyone. Net worth stays
   household-wide (it's account-based, not per-transaction). The by-member Reports section now shows for any
   ≥2-member household with ≥1 attributed spend. New `MemberSwitcher` component; `member_view_toggle_check.mjs`.
+- **Guided statement reconciliation (L30).** A new "Reconcile to statement" mode (per-account ⋯ menu)
+  lets you enter the statement ending balance, tick off cleared transactions, and watch the live
+  difference close — when cleared-balance equals the statement, a "Reconciled ✓" confirmation appears and
+  no balance adjustment is posted (unlike the force-to-target "Update balance" flow). Backed by the new
+  pure, table-tested `internal/reconcile.Diff`; reuses `ledger.ClearedBalance` and the existing cleared
+  flag. New `e2e/reconcile_statement_check.mjs`.
 
 ### Accessibility
 - **Roving tabindex on radiogroups + a committed a11y gate (L7).** `Segmented` options and color swatches

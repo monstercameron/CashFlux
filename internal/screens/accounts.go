@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/reconcile"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -547,6 +548,20 @@ func AccountRow(props accountRowProps) ui.Node {
 		settingBal.Set(false)
 	}))
 	cancelSetBal := ui.UseEvent(Prevent(func() { settingBal.Set(false) }))
+
+	// reconcile-to-statement mode (L30): user enters a statement balance; we show
+	// per-account uncleared transactions they can mark cleared, recomputing the
+	// cleared balance live against the target until the difference reaches zero.
+	reconciling := ui.UseState(false)
+	stmtBalS := ui.UseState("")
+	onStmtBal := ui.UseEvent(func(v string) { stmtBalS.Set(v) })
+	startReconcile := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		stmtBalS.Set("")
+		reconciling.Set(true)
+	}))
+	cancelReconcile := ui.UseEvent(Prevent(func() { reconciling.Set(false) }))
+
 	editing := ui.UseState(false)
 	nameS := ui.UseState(a.Name)
 	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
@@ -631,11 +646,13 @@ func AccountRow(props accountRowProps) ui.Node {
 		switch {
 		case settingBal.Get():
 			focusByID("acct-setbal-" + a.ID)
+		case reconciling.Get():
+			focusByID("acct-reconcile-stmt-" + a.ID)
 		case editing.Get():
 			focusByID("acct-edit-" + a.ID)
 		}
 		return nil
-	}, fmt.Sprintf("%t-%t", editing.Get(), settingBal.Get()))
+	}, fmt.Sprintf("%t-%t-%t", editing.Get(), settingBal.Get(), reconciling.Get()))
 
 	if settingBal.Get() {
 		return Div(css.Class("row-edit"),
@@ -645,6 +662,89 @@ func AccountRow(props accountRowProps) ui.Node {
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelSetBal), uistate.T("action.cancel")),
 			),
+		)
+	}
+	if reconciling.Get() {
+		app := appstate.Default
+		var allTxns []domain.Transaction
+		if app != nil {
+			allTxns = app.Transactions()
+		}
+		// Re-derive cleared balance live so it updates as the user marks transactions.
+		clearedNow, _ := ledger.ClearedBalance(a, allTxns)
+
+		// Parse whatever the user has typed into the statement-balance field.
+		dec := currency.Decimals(a.Currency)
+		stmtMinor, _ := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
+		result := reconcile.Diff(clearedNow.Amount, stmtMinor)
+
+		diffLabel := money.FormatMinor(result.DifferenceMinor, dec)
+		if result.DifferenceMinor > 0 {
+			diffLabel = "+" + diffLabel
+		}
+
+		// Collect uncleared transactions for this account so the user can mark them.
+		var unclearedTxns []domain.Transaction
+		for _, t := range allTxns {
+			if t.AccountID == a.ID && !t.Cleared {
+				unclearedTxns = append(unclearedTxns, t)
+			}
+		}
+
+		// onToggleClear is passed as a plain func to each ReconcileTxnRow — the row
+		// component owns the On* hook; we never call On* inside the loop below.
+		onToggleClear := func(t domain.Transaction) {
+			if app == nil {
+				return
+			}
+			t.Cleared = !t.Cleared
+			_ = app.PutTransaction(t)
+			// Trigger a re-render by bumping rev via the parent's OnSetBalance
+			// callback, which already calls bump(). Since we can't access bump()
+			// directly here, we re-use the OnRefresh callback (a no-op balance-as-of
+			// touch) to propagate the render cycle.
+			props.OnRefresh(a)
+		}
+
+		keyOfTxn := func(t domain.Transaction) any { return t.ID }
+		renderTxnRow := func(t domain.Transaction) ui.Node {
+			return ui.CreateElement(ReconcileTxnRow, reconcileTxnRowProps{
+				Txn:      t,
+				Currency: a.Currency,
+				OnToggle: onToggleClear,
+			})
+		}
+
+		return Div(Attr("data-testid", "reconcile-statement-mode"),
+			H3(Style(map[string]string{"margin": "0.5rem 0 0.25rem"}), "Reconcile to statement — ", a.Name),
+			Div(css.Class("form-grid"),
+				labeledField("Statement balance",
+					Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID),
+						Attr("data-testid", "reconcile-statement-input"),
+						Type("number"), Step("0.01"),
+						Placeholder("Enter statement balance"),
+						Value(stmtBalS.Get()), OnInput(onStmtBal))),
+			),
+			Div(Style(map[string]string{"margin": "0.5rem 0"}),
+				Span(Style(map[string]string{"margin-right": "1rem"}),
+					"Cleared balance: ", fmtMoney(clearedNow)),
+				Span(Attr("data-testid", "reconcile-difference"),
+					"Difference: ", diffLabel),
+				If(result.Reconciled, Span(Style(map[string]string{"margin-left": "1rem", "color": "var(--cf-pos)", "font-weight": "bold"}),
+					Attr("data-testid", "reconcile-confirmed"), "Reconciled ✓")),
+			),
+			If(result.Reconciled,
+				Button(css.Class("btn btn-primary"), Type("button"),
+					Attr("data-testid", "reconcile-done"),
+					OnClick(cancelReconcile), "Done")),
+			If(len(unclearedTxns) > 0,
+				Div(Style(map[string]string{"margin-top": "0.75rem"}),
+					P(css.Class("t-caption"), "Uncleared transactions — mark cleared to reconcile:"),
+					Div(css.Class("rows"), MapKeyed(unclearedTxns, keyOfTxn, renderTxnRow)),
+				)),
+			If(len(unclearedTxns) == 0 && !result.Reconciled,
+				P(css.Class("muted"), "No uncleared transactions. Adjust the statement balance to match the cleared balance above.")),
+			Button(css.Class("btn"), Type("button"), OnClick(cancelReconcile), uistate.T("action.cancel")),
 		)
 	}
 	if editing.Get() {
@@ -709,11 +809,42 @@ func AccountRow(props accountRowProps) ui.Node {
 			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),
+				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), "Reconcile to statement")),
 				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
 			),
 		),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+	)
+}
+
+// reconcileTxnRowProps holds the data and callback for a single uncleared
+// transaction row inside the reconcile-to-statement panel.
+type reconcileTxnRowProps struct {
+	Txn      domain.Transaction
+	Currency string
+	// OnToggle is a plain func — never an On* hook — so the parent can pass it
+	// into MapKeyed without violating the no-On*-in-loop rule (CLAUDE.md §gotchas).
+	OnToggle func(domain.Transaction)
+}
+
+// ReconcileTxnRow renders a single uncleared transaction for the reconcile
+// panel. It owns its own OnClick hook (satisfying the per-row component rule),
+// and exposes a "Mark cleared" button whose label doubles as a status badge.
+func ReconcileTxnRow(props reconcileTxnRowProps) ui.Node {
+	t := props.Txn
+	dec := currency.Decimals(props.Currency)
+	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t) }))
+	return Div(css.Class("row"), Attr("data-testid", "reconcile-txn-row"), Attr("data-id", t.ID),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), t.Desc),
+			Span(css.Class("row-meta"), t.Date.Format("2006-01-02")),
+		),
+		Span(ClassStr("fig "+amountClass(t.Amount)), money.FormatMinor(t.Amount.Amount, dec)),
+		Button(css.Class("btn"), Type("button"),
+			Attr("data-testid", "reconcile-txn-clear-btn"),
+			Title("Mark this transaction cleared"),
+			OnClick(toggle), "Mark cleared"),
 	)
 }
 
