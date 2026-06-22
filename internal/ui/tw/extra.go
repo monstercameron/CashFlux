@@ -3,37 +3,42 @@ package tw
 import "github.com/monstercameron/GoWebComponents/css"
 
 // ColorClass maps a color-token name (the old "text-up"/"bg-warn"/… utility class
-// strings that are computed dynamically into tones) to a folded hashed class. An
-// empty token yields "" and an unrecognized token is returned unchanged (so any
-// stray semantic class still passes through). Used where a tone is conditional.
+// strings that are computed dynamically into tones) to a styled class. It returns
+// the token name as a stable, semantic marker class (so the tone stays selectable
+// for tests/automation — up=positive, down=negative, etc.) followed by the folded
+// hashed class that actually carries the color. An empty token yields "" and an
+// unrecognized token passes through unchanged.
 func ColorClass(token string) string {
+	var rule any
 	switch token {
 	case "":
 		return ""
 	case "text-up":
-		return Fold(TextUp)
+		rule = TextUp
 	case "text-down":
-		return Fold(TextDown)
+		rule = TextDown
 	case "text-warn":
-		return Fold(TextWarn)
+		rule = TextWarn
 	case "text-dim":
-		return Fold(TextDim)
+		rule = TextDim
 	case "text-faint":
-		return Fold(TextFaint)
+		rule = TextFaint
 	case "text-fg":
-		return Fold(TextFg)
+		rule = TextFg
 	case "bg-up":
-		return Fold(BgUp)
+		rule = BgUp
 	case "bg-down":
-		return Fold(BgDown)
+		rule = BgDown
 	case "bg-warn":
-		return Fold(BgWarn)
+		rule = BgWarn
 	case "bg-dim":
-		return Fold(BgDim)
+		rule = BgDim
 	case "bg-fg":
-		return Fold(BgFg)
+		rule = BgFg
+	default:
+		return token
 	}
-	return token
+	return token + " " + Fold(rule)
 }
 
 // Fold collapses typed utility rules (css.Rule or []css.Rule, e.g. variants and

@@ -19,7 +19,7 @@ const counts = (page) =>
     asides: document.querySelectorAll("aside").length,
     topbars: document.querySelectorAll(".topbar").length,
     h1s: document.querySelectorAll("h1").length,
-    shells: document.querySelectorAll("#app > div.flex.h-screen").length,
+    shells: document.querySelectorAll("#app > div.cf-shell").length,
   }));
 
 const failures = [];

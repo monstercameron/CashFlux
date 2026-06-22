@@ -37,7 +37,7 @@ try {
   if (leftAfter !== leftBefore - 1) fail(`completing a task did not drop the open count: ${leftBefore} -> ${leftAfter}`);
 
   // Clicking a task title drills into /todo.
-  await page.locator('.w[data-widget="todo"] button.flex-1').first().click();
+  await page.locator('.w[data-widget="todo"] button.dash-task').first().click();
   await page.waitForFunction(() => location.pathname.replace(/\/$/, "").endsWith("/todo"), { timeout: 5000 })
     .catch(() => fail("clicking a task title did not navigate to /todo"));
 

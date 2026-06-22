@@ -84,7 +84,7 @@ try {
 
     // Active highlight must follow the click: exactly one active rail item, and
     // it is the one we navigated to (active class adds "font-medium").
-    const actives = page.locator(`${RAIL} a.font-medium`);
+    const actives = page.locator(`${RAIL} a.active`);
     const activeCount = await actives.count();
     check(activeCount === 1, `${routePath}: ${activeCount} active rail items, want 1`);
     if (activeCount >= 1) {

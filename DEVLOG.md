@@ -3,6 +3,33 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: remove the Tailwind CDN via a typed CSS migration (C91)
+
+Retired `cdn.tailwindcss.com` — the last styling dependency — by migrating every utility class to a typed Go
+vocabulary backed by the new gwc `css`/`css/u` engine.
+
+- **gwc upgrade.** Pulled gwc v3.2.0 (@master) and migrated its one breaking change (`shorthand.Class`→
+  `ClassStr`, ~1,526 sites). Confirmed regression-free by diffing the e2e baseline against the old gwc (the 4
+  failing tests — muzak ×2, restore_backup, dashboard drag — fail identically on both, so they're pre-existing
+  and environmental, not upgrade regressions).
+- **Foundation.** Built `internal/ui/tw`: a typed Tailwind-compatible vocabulary where each utility emits the
+  exact Tailwind-default CSS via the css registry/Sink (spacing n×0.25rem, the type scale's size+line-height
+  pairs, the custom palette hex, border-style re-added since dropping the CDN also drops Tailwind's preflight).
+  Exact-value tests via `css.Harvest`; verified in-browser that `css.Class` injects `<style id=gwc-css>` and
+  computed styles match — all while the CDN was still present (parity-safe parallel).
+- **Conversion.** A regex converter mechanically turned ~1,450 literal `ClassStr("…")` sites into
+  `css.Class("semantic", tw.Util…)` — semantic app classes (which live in the design-system stylesheet) stay
+  strings, utilities become typed. Then hand-typed the ~40 dynamically composed strings (rail items, KPI tiles,
+  menus, chips, progress bar) via `tw.Fold` (folds typed rules — incl. multi-decl/variant `[]Rule` — into a
+  hashed class string) and `tw.ColorClass` (maps conditional tone tokens). Audits caught utilities the converter
+  kept as strings (`shrink-0`, `line-through`) — added and relocated.
+- **Removal + validation.** Deleted the CDN script + config. Post-removal smoke: **0 `cdn.tailwindcss.com`
+  requests, 0 console errors**, shell/nav/KPI computed styles correct, ~10KB of gwc-injected CSS. Full e2e run
+  to confirm cross-screen parity; SW bumped to v246.
+
+Next: optionally vendor Google Fonts for a fully offline/CDN-free build; reconcile the palette tokens with the
+theme engine's CSS vars (currently exact hex for parity).
+
 ## 2026-06-21 - feat: final 4 C-series items (undo/redo, encrypt-at-rest, statement import, UI primitives)
 
 Closed the last four open C-series backlog items. Authored the isolated, testable cores via four parallel

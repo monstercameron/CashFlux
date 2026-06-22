@@ -73,7 +73,7 @@ func Shell(props ShellProps) uic.Node {
 	// deep-link refreshes resolve assets, but that also makes a bare "#main" resolve
 	// against the base (navigating to the root). Anchoring it to the live path keeps
 	// "skip to content" an in-page jump on every route.
-	return Div(css.Class(tw.Flex, tw.HScreen, tw.OverflowHidden, tw.BgBase, tw.TextFg, tw.FontSans),
+	return Div(css.Class("cf-shell", tw.Flex, tw.HScreen, tw.OverflowHidden, tw.BgBase, tw.TextFg, tw.FontSans),
 		A(css.Class("skip-link"), Attr("href", uistate.RoutePath(props.ActivePath)+"#main"), uistate.T("a11y.skipToContent")),
 		uic.CreateElement(Sidebar, sidebarProps{ActivePath: props.ActivePath}),
 		Main(css.Class("cf-scroll", tw.Flex1, tw.MinW0, tw.OverflowYAuto), Attr("id", "main"), Attr("tabindex", "-1"),
@@ -392,7 +392,7 @@ func navItem(props navItemProps) uic.Node {
 	cls := "nav nv " + base
 	switch {
 	case props.Active:
-		cls = "nv " + base + " " + tw.Fold(tw.BgHex1c, tw.TextFg, tw.FontMedium)
+		cls = "nv active " + base + " " + tw.Fold(tw.BgHex1c, tw.TextFg, tw.FontMedium)
 	case props.Muted:
 		cls = "nav nv " + base + " " + tw.Fold(tw.TextFaint)
 	}

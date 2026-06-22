@@ -826,7 +826,7 @@ func dashTaskRow(props dashTaskRowProps) ui.Node {
 			Attr("aria-label", checkLabel), Attr("title", checkLabel), OnClick(toggle),
 			Text(checkGlyph(done))),
 		Span(ClassStr(dotTone), Attr("title", prio), Attr("aria-label", prio), dot),
-		Button(ClassStr(titleCls), Type("button"), OnClick(openTodo), t.Title),
+		Button(ClassStr("dash-task "+titleCls), Type("button"), OnClick(openTodo), t.Title),
 	)
 }
 

@@ -6,6 +6,20 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Removed
+- **The Tailwind CSS CDN is gone (C91).** Deleted `<script src="https://cdn.tailwindcss.com">` and the inline
+  `tailwind.config` from `web/index.html`. The app no longer loads any third-party CSS/JS to style itself — one
+  fewer external dependency, SRI-pinnable, and it works offline. (Google Fonts is the only remaining external
+  asset.)
+
+### Added
+- **Typed, CDN-free CSS (C91).** All Tailwind utility classes are now emitted by a typed Go vocabulary
+  (`internal/ui/tw`, built on the gwc `css`/`css/u` engine) that injects the exact same CSS at runtime into
+  `<style id="gwc-css">`. ~1,450 static call sites use `css.Class("semantic", tw.Util…)`; ~40 dynamically
+  composed class strings (rail items, KPI tiles, menus, chips, progress bar) fold typed rules into hashed
+  classes via `tw.Fold`/`tw.ColorClass`. Exact-value table tests; verified zero `cdn.tailwindcss.com` requests
+  and correct computed styles after removal.
+
 ### Changed
 - **Upgraded GoWebComponents to v3.2.0** (typed CSS `css`+`css/u`, `db/sqlite`, `RawHTML`, hookcheck, and more).
   Migrated the one breaking change: the shorthand string-class setter `shorthand.Class(string)` was renamed to
