@@ -1169,6 +1169,15 @@ var english = Catalog{
 	"insights.highlightDown":           "%s spending is down %d%% — %s this month vs about %s a month.",
 	"insights.uncategorized":           "Uncategorized",
 
+	// Affordability answer card (L8 deterministic path)
+	"insights.affordYes":         "Yes, you can afford %s.",
+	"insights.affordNo":          "Not quite — you're short by %s.",
+	"insights.affordProjected":   "Projected available: %s",
+	"insights.affordSurplus":     "Surplus: %s",
+	"insights.affordShortfall":   "Shortfall: %s",
+	"insights.affordAssumptions": "Based on:",
+	"insights.affordNoData":      "No balance data yet — add an account to get a grounded answer.",
+
 	// Priority (shared)
 	"priority.high":   "High",
 	"priority.medium": "Medium",

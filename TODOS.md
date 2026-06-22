@@ -4565,7 +4565,7 @@ month?", "Can we afford a $2,000 vacation in August?" — and save the useful an
   - [x] **Logic** (pure): a small generator that picks starters, ideally tailored to the user's data
         (their top category / a near-limit budget / an upcoming goal); table-test.
   - [x] **UI** `internal/screens/insights.go`: clickable chips above the question box.
-- [ ] **Grounded affordability check (dream-big, determinism rule).** "Can we afford $X by [date]?" is
+- [x] **Grounded affordability check (dream-big, determinism rule).** "Can we afford $X by [date]?" is
       a *forward-looking* question; today it just goes to the LLM as free text. Back it with the
       existing **`forecast`/`planning`** engine so the answer shows the math (projected surplus by the
       date, minus commitments + goal contributions), not an LLM guess. Bottom-up:

@@ -290,12 +290,28 @@ func Insights() ui.Node {
 		}()
 	}
 
-	// sendText posts a user turn, then runs the model on the new history.
+	// sendText posts a user turn, then either answers deterministically (for
+	// recognised affordability questions) or runs the AI model on the new history.
 	sendText := func(text string) {
 		text = strings.TrimSpace(text)
 		if text == "" || loading.Get() {
 			return
 		}
+
+		// Affordability fast-path: answer from real numbers, no AI key needed.
+		if q, ok := insights.ParseAffordQuery(text); ok {
+			monthlyNet := income.Amount - expense.Amount // this month's net (minor units)
+			ar := insights.AffordAnswer(*q, net.Amount, monthlyNet, 0)
+			hist := append(append([]chatTurn{}, turns.Get()...),
+				chatTurn{ID: id.New(), Role: "user", Text: text},
+				chatTurn{ID: id.New(), Role: "afford", Text: affordCardText(ar, q, base)},
+			)
+			turns.Set(hist)
+			input.Set("")
+			histIdx.Set(-1)
+			return
+		}
+
 		if key == "" && !useBackendAI {
 			errMsg.Set(uistate.T("insights.needKey"))
 			return
@@ -707,6 +723,9 @@ func Insights() ui.Node {
 			func(t chatTurn) ui.Node {
 				if t.Role == "user" {
 					return ui.CreateElement(UserBubble, userBubbleProps{ID: t.ID, Text: t.Text, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
+				}
+				if t.Role == "afford" {
+					return ui.CreateElement(AffordResultBubble, affordResultBubbleProps{ID: t.ID, HTML: t.Text, OnDelete: deleteTurn})
 				}
 				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
 			},
@@ -1283,4 +1302,62 @@ func highlightArrow(a insights.Anomaly) icon.Name {
 		return icon.ArrowUp
 	}
 	return icon.ArrowDown
+}
+
+// affordCardText builds the inner HTML for a grounded affordability answer card.
+// The markup is later set via innerHTML; the outer element carries the
+// data-cf="afford-result" selector so e2e tests can assert on it.
+func affordCardText(ar insights.AffordResult, q *insights.AffordQuery, base string) string {
+	amtStr := fmtMoney(money.New(q.Amount, base))
+	projStr := fmtMoney(money.New(ar.Projected, base))
+	availStr := fmtMoney(money.New(ar.Available, base))
+
+	var headline, surplusLine string
+	if ar.CanAfford {
+		headline = uistate.T("insights.affordYes", amtStr)
+		surplusStr := fmtMoney(money.New(ar.Surplus, base))
+		surplusLine = uistate.T("insights.affordSurplus", surplusStr)
+	} else {
+		shortfall := ar.Surplus
+		if shortfall < 0 {
+			shortfall = -shortfall
+		}
+		shortfallStr := fmtMoney(money.New(shortfall, base))
+		headline = uistate.T("insights.affordNo", shortfallStr)
+		surplusLine = uistate.T("insights.affordShortfall", shortfallStr)
+	}
+	projLine := uistate.T("insights.affordProjected", availStr+" (balance "+projStr+")")
+	assumptLabel := uistate.T("insights.affordAssumptions")
+
+	var b strings.Builder
+	b.WriteString(headline + "\n" + projLine + "\n" + surplusLine + "\n\n" + assumptLabel + "\n")
+	for _, a := range ar.Assumptions {
+		b.WriteString("- " + a + "\n")
+	}
+	return b.String()
+}
+
+type affordResultBubbleProps struct {
+	ID       string
+	HTML     string // plain text (Markdown) content for the card
+	OnDelete func(string)
+}
+
+// AffordResultBubble renders a deterministic affordability answer card in the
+// chat thread. It uses the same Markdown renderer as AssistantBubble but carries
+// the data-cf="afford-result" attribute for e2e targeting. Its own component so
+// the delete hook stays stable across the list (no On* in loops).
+func AffordResultBubble(p affordResultBubbleProps) ui.Node {
+	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.ID) }))
+	mdID := "cf-afford-" + p.ID
+	ui.UseEffect(func() func() { renderMarkdown(mdID, p.HTML); return nil }, p.HTML)
+	actBtn := tw.Fold(tw.TextFaint, tw.Opacity70, tw.HoverOpacity100, tw.InlineFlex, tw.ItemsCenter)
+	return Div(Attr("data-cf", "afford-result"), css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsStart),
+		Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.Px35, tw.Py25, tw.Border, "border-sky-200 bg-sky-50"),
+			Div(Attr("id", mdID), css.Class("md insights-answer", tw.Text14)),
+		),
+		Div(css.Class(tw.Flex, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1, tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity),
+			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		),
+	)
 }
