@@ -1,0 +1,315 @@
+diff --git a/internal/app/app.go b/internal/app/app.go
+index 9be3157..e1ce362 100644
+--- a/internal/app/app.go
++++ b/internal/app/app.go
+@@ -26,6 +26,10 @@ func Run() {
+ 	if err := appstate.Init(nil, false); err != nil {
+ 		panic(err)
+ 	}
++	// Open the IndexedDB artifact store so binary bytes are kept out of the main
++	// localStorage JSON blob. This must run before hydrateDataset so the blob store
++	// is ready when ImportJSON moves artifact bytes on load.
++	initBlobStore()
+ 	// Initialize the workspace registry (migrates an existing single dataset into a
+ 	// "Default" workspace). The active workspace's data already lives in the
+ 	// canonical localStorage keys, so hydrateDataset below loads it as usual.
+diff --git a/internal/appstate/appstate.go b/internal/appstate/appstate.go
+index 9567192..018cfe8 100644
+--- a/internal/appstate/appstate.go
++++ b/internal/appstate/appstate.go
+@@ -17,6 +17,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/monstercameron/CashFlux/internal/allocate"
++	"github.com/monstercameron/CashFlux/internal/artifactstore"
+ 	"github.com/monstercameron/CashFlux/internal/budgeting"
+ 	"github.com/monstercameron/CashFlux/internal/categorytree"
+ 	"github.com/monstercameron/CashFlux/internal/currency"
+@@ -41,6 +42,12 @@ type App struct {
+ 	store *store.SQLiteStore
+ 	log   *slog.Logger
+ 	ring  *logging.Ring
++	// blobs is the optional IndexedDB-backed binary artifact store. When non-nil,
++	// artifact image/binary bytes are kept here instead of in the main dataset
++	// JSON blob, which prevents large uploads from blowing the localStorage quota.
++	// Wired in by the wasm entry point after OpenIDB succeeds; nil on native Go
++	// (tests) or if IndexedDB is unavailable.
++	blobs artifactstore.Store
+ 	// triggersSuspended pauses automatic workflow firing from PutTransaction while
+ 	// a bulk operation (import) or a workflow's own effects are running, so a single
+ 	// user-facing "add a transaction" fires triggers but a 500-row import doesn't
+@@ -92,40 +99,108 @@ func Init(w io.Writer, seed bool) error {
+ // Store exposes the underlying store for export/import and advanced queries.
+ func (a *App) Store() *store.SQLiteStore { return a.store }
+ 
++// SetBlobStore wires in an IndexedDB-backed binary blob store so that artifact
++// image bytes are kept out of the main localStorage JSON blob. Called once by
++// the wasm entry point after successfully opening IndexedDB. A nil argument
++// clears the blob store (falls back to embedding bytes in the dataset).
++func (a *App) SetBlobStore(s artifactstore.Store) { a.blobs = s }
++
++// BlobStoreUsage returns the number of bytes the blob store reports it is
++// currently using (best-effort; returns 0 when no blob store is wired in or
++// when the storage API is unavailable).
++func (a *App) BlobStoreUsage() int64 {
++	if a.blobs == nil {
++		return 0
++	}
++	n, err := a.blobs.Usage()
++	if err != nil {
++		a.log.Warn("blob store usage query failed", "err", err)
++		return 0
++	}
++	return n
++}
++
+ // Log returns the application logger.
+ func (a *App) Log() *slog.Logger { return a.log }
+ 
+ // LogRing returns the in-app log ring buffer.
+ func (a *App) LogRing() *logging.Ring { return a.ring }
+ 
+-// ExportJSON serializes the whole dataset.
++// ExportJSON serializes the whole dataset. When a blob store is wired in,
++// artifact binary bytes are gathered from IndexedDB and embedded in the export
++// so the backup is fully self-contained (import on a fresh device works without
++// access to the original IndexedDB).
+ func (a *App) ExportJSON() ([]byte, error) {
+ 	ds, err := a.store.Snapshot()
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	a.rehydrateArtifactBytes(ds.Artifacts)
+ 	return store.Export(ds)
+ }
+ 
+ // ExportJSONRedacted serializes the whole dataset for local persistence with the
+ // OpenAI key removed, so the secret is never written to localStorage (it stays
+-// session-only). The manual ExportJSON keeps the key, so a user's own backup is
+-// complete.
++// session-only). Artifact bytes are gathered from the blob store (same as
++// ExportJSON) so the autosaved snapshot is complete.
+ func (a *App) ExportJSONRedacted() ([]byte, error) {
+ 	ds, err := a.store.Snapshot()
+ 	if err != nil {
+ 		return nil, err
+ 	}
+ 	ds.Settings.OpenAIKey = ""
++	a.rehydrateArtifactBytes(ds.Artifacts)
+ 	return store.Export(ds)
+ }
+ 
+-// ImportJSON replaces all data with the given dataset JSON.
++// rehydrateArtifactBytes fills in Bytes for each artifact that has none stored
++// in SQLite by fetching them from the blob store. It is a no-op when blobs is
++// nil or when the artifact already carries bytes.
++func (a *App) rehydrateArtifactBytes(arts []domain.Artifact) {
++	if a.blobs == nil {
++		return
++	}
++	for i := range arts {
++		if len(arts[i].Bytes) > 0 {
++			continue // already present (legacy record or CSV artifact)
++		}
++		if arts[i].Kind != "image" {
++			continue // only binary artifacts need rehydration
++		}
++		_, data, ok, err := a.blobs.Get(arts[i].ID)
++		if err != nil {
++			a.log.Warn("blob store get for export failed", "id", arts[i].ID, "err", err)
++			continue
++		}
++		if ok {
++			arts[i].Bytes = data
++		}
++	}
++}
++
++// ImportJSON replaces all data with the given dataset JSON. When a blob store
++// is wired in, artifact image bytes embedded in the import are moved to
++// IndexedDB and cleared from the in-memory record, so the next autosave does
++// not write them back into localStorage.
+ func (a *App) ImportJSON(data []byte) error {
+ 	ds, err := store.Import(data)
+ 	if err != nil {
+ 		return err
+ 	}
++	// Move image bytes to the blob store before loading, so SQLite stores only
++	// the lightweight record.
++	if a.blobs != nil {
++		for i := range ds.Artifacts {
++			art := &ds.Artifacts[i]
++			if art.Kind == "image" && len(art.Bytes) > 0 {
++				if putErr := a.blobs.Put(art.ID, art.MIME, art.Bytes); putErr != nil {
++					a.log.Warn("blob store put during import failed", "id", art.ID, "err", putErr)
++				} else {
++					art.Bytes = nil // strip from the SQLite record
++				}
++			}
++		}
++	}
+ 	if err := a.store.Load(ds); err != nil {
+ 		return err
+ 	}
+@@ -324,9 +399,12 @@ func (a *App) CustomPages() []domain.CustomPage {
+ }
+ 
+ // Artifacts returns every user-stored artifact (uploaded images, datasets).
++// When a blob store is wired in, image bytes are rehydrated from IndexedDB so
++// callers (e.g. the preview renderer) always receive a complete Artifact.
+ func (a *App) Artifacts() []domain.Artifact {
+ 	v, err := a.store.ListArtifacts()
+ 	a.logErr("artifacts", err)
++	a.rehydrateArtifactBytes(v)
+ 	return v
+ }
+ 
+@@ -993,6 +1071,9 @@ func (a *App) DeleteCustomPage(id string) error {
+ }
+ 
+ // PutArtifact saves a user artifact (needs an ID, a name, and a kind).
++// When a blob store is wired in, image bytes are moved to IndexedDB and the
++// lightweight record (no Bytes field) is stored in SQLite, keeping the main
++// dataset JSON small and safely within the localStorage quota.
+ func (a *App) PutArtifact(art domain.Artifact) error {
+ 	if art.ID == "" {
+ 		return fmt.Errorf("appstate: artifact needs an id")
+@@ -1003,6 +1084,15 @@ func (a *App) PutArtifact(art domain.Artifact) error {
+ 	if art.Kind == "" {
+ 		return fmt.Errorf("appstate: artifact needs a kind")
+ 	}
++	if a.blobs != nil && art.Kind == "image" && len(art.Bytes) > 0 {
++		if err := a.blobs.Put(art.ID, art.MIME, art.Bytes); err != nil {
++			// Blob store write failed — fall back to storing bytes in SQLite so
++			// the upload still succeeds rather than silently losing data.
++			a.log.Warn("blob store put failed, falling back to sqlite", "id", art.ID, "err", err)
++		} else {
++			art.Bytes = nil // clear from the SQLite record
++		}
++	}
+ 	if err := a.store.PutArtifact(art); err != nil {
+ 		return err
+ 	}
+@@ -1010,8 +1100,14 @@ func (a *App) PutArtifact(art domain.Artifact) error {
+ 	return nil
+ }
+ 
+-// DeleteArtifact removes a user artifact.
++// DeleteArtifact removes a user artifact and its associated blob (if any) from
++// the blob store.
+ func (a *App) DeleteArtifact(id string) error {
++	if a.blobs != nil {
++		if err := a.blobs.Delete(id); err != nil {
++			a.log.Warn("blob store delete failed", "id", id, "err", err)
++		}
++	}
+ 	return a.del("artifact", id, a.store.DeleteArtifact)
+ }
+ 
+@@ -1219,17 +1315,30 @@ func (a *App) RunTriggered(event workflow.TriggerKind, t *domain.Transaction) {
+ 	}
+ }
+ 
+-// DatasetBytes reports the serialized size of the whole dataset in bytes — what
+-// gets written to browser storage. The UI uses it for a storage meter/warning,
+-// since large artifacts inflate the single autosaved blob toward the localStorage
+-// quota. Returns 0 on a marshal error (logged).
++// DatasetBytes reports the combined storage footprint in bytes: the serialized
++// dataset JSON (what goes to localStorage) plus the blob store usage (IndexedDB
++// artifact bytes). The UI uses this for a storage meter. Returns 0 on errors
++// (logged). When a blob store is wired in, the JSON will not contain artifact
++// bytes (they moved to IndexedDB), so both values are summed here.
+ func (a *App) DatasetBytes() int {
+-	b, err := a.ExportJSON()
++	// Use ExportJSONRedacted so we don't include the API key in the size
++	// estimate (it's stripped from the autosave path anyway).
++	ds, err := a.store.Snapshot()
++	if err != nil {
++		a.logErr("datasetBytes", err)
++		return 0
++	}
++	ds.Settings.OpenAIKey = ""
++	// Do NOT rehydrate artifact bytes here — we want the size of what actually
++	// lands in localStorage (blob bytes live in IndexedDB, not localStorage).
++	b, err := store.Export(ds)
+ 	if err != nil {
+ 		a.logErr("datasetBytes", err)
+ 		return 0
+ 	}
+-	return len(b)
++	total := len(b)
++	total += int(a.BlobStoreUsage())
++	return total
+ }
+ 
+ // PostDueRecurring posts a transaction for each autopost recurring whose NextDue
+diff --git a/internal/i18n/en.go b/internal/i18n/en.go
+index 5399dad..62ab0c4 100644
+--- a/internal/i18n/en.go
++++ b/internal/i18n/en.go
+@@ -1293,6 +1293,8 @@ var english = Catalog{
+ 	"artifacts.uploadImage":       "Upload image",
+ 	"artifacts.importCSV":         "Import CSV",
+ 	"artifacts.storage":           "Local storage in use: %s",
++	"artifacts.storageIDB":        "Image storage (IndexedDB): %s · total footprint: %s",
++	"artifacts.quotaWarn":         "You're using %s for receipt images — consider exporting a backup and removing some to free up space.",
+ 	"artifacts.referencedBy":      "Referenced by %s",
+ 	"artifacts.referencedByNone":  "Not referenced by any transaction",
+ 	"artifacts.referencedByCount": "%d transaction",
+diff --git a/internal/screens/artifacts.go b/internal/screens/artifacts.go
+index caf48d3..28b5c43 100644
+--- a/internal/screens/artifacts.go
++++ b/internal/screens/artifacts.go
+@@ -9,6 +9,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/monstercameron/CashFlux/internal/appstate"
++	"github.com/monstercameron/CashFlux/internal/artifactstore"
+ 	"github.com/monstercameron/CashFlux/internal/artifacts"
+ 	"github.com/monstercameron/CashFlux/internal/domain"
+ 	"github.com/monstercameron/CashFlux/internal/icon"
+@@ -96,8 +97,33 @@ func Artifacts() ui.Node {
+ 		listBody = Div(css.Class("rows"), rows)
+ 	}
+ 
+-	// Storage meter: total serialized dataset size (what hits localStorage).
++	// Storage meter: combined localStorage dataset size + IndexedDB blob store bytes.
+ 	total := app.DatasetBytes()
++	blobUsage := app.BlobStoreUsage()
++
++	// Quota nudge: shown once when IndexedDB usage is near the recommended cap.
++	// Dismissed by the user; stored as component state so it only shows for this
++	// session (not a permanent persistent setting — refreshing the page re-evaluates
++	// usage, and if the user has removed artifacts it may not show again).
++	quotaDismissed := ui.UseState(false)
++	var quotaNudge ui.Node = Fragment()
++	if blobUsage > 0 && artifactstore.NearLimit(blobUsage) && !quotaDismissed.Get() {
++		quotaNudge = Div(css.Class("notice notice-warn", tw.Mt2, tw.Flex, tw.ItemsCenter, tw.Gap2),
++			Span(uistate.T("artifacts.quotaWarn", artifacts.HumanSize(int(blobUsage)))),
++			Button(css.Class("btn btn-sm"), Type("button"),
++				OnClick(func() { quotaDismissed.Set(true) }),
++				uistate.T("action.dismiss"),
++			),
++		)
++	}
++
++	storageLabel := uistate.T("artifacts.storage", artifacts.HumanSize(total))
++	if blobUsage > 0 {
++		storageLabel = uistate.T("artifacts.storageIDB",
++			artifacts.HumanSize(int(blobUsage)),
++			artifacts.HumanSize(total),
++		)
++	}
+ 
+ 	return Div(
+ 		Section(css.Class("card"),
+@@ -105,7 +131,8 @@ func Artifacts() ui.Node {
+ 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
+ 				Button(css.Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
+ 			),
+-			P(css.Class("muted", tw.Mt2), uistate.T("artifacts.storage", artifacts.HumanSize(total))),
++			P(css.Class("muted", tw.Mt2), storageLabel),
++			quotaNudge,
+ 		),
+ 		Section(css.Class("card"), listBody),
+ 	)

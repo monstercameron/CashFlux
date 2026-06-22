@@ -112,7 +112,7 @@ func Bills() ui.Node {
 
 	var body ui.Node
 	if len(billRows) == 0 {
-		body = P(css.Class("empty"), uistate.T("bills.empty"))
+		body = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("bills.empty"), CTALabel: uistate.T("bills.addFirst"), Href: "/accounts"})
 	} else {
 		body = Div(css.Class("rows"), rows)
 	}

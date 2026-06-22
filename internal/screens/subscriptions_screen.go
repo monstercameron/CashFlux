@@ -229,7 +229,7 @@ func Subscriptions() ui.Node {
 
 	var body ui.Node
 	if len(subs) == 0 {
-		body = P(css.Class("empty"), uistate.T("subs.empty"))
+		body = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("subs.empty"), CTALabel: uistate.T("subs.addFirst"), Href: "/transactions"})
 	} else {
 		body = Div(css.Class("rows"), rows)
 	}

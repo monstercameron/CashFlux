@@ -462,7 +462,7 @@ func Planning() ui.Node {
 			totalNote = P(css.Class("muted"), uistate.T("recurring.monthlyTotal", fmtMoney(money.New(monthlyTotal, base))))
 		}
 		list := IfElse(len(recs) == 0,
-			P(css.Class("empty"), uistate.T("recurring.empty")),
+			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("recurring.empty"), CTALabel: uistate.T("recurring.add"), FocusID: "recurring-add"}),
 			Div(css.Class("rows"), MapKeyed(recs,
 				func(r domain.Recurring) any { return r.ID },
 				func(r domain.Recurring) ui.Node {
@@ -474,7 +474,7 @@ func Planning() ui.Node {
 			H2(css.Class("card-title"), uistate.T("recurring.title")),
 			P(css.Class("muted"), uistate.T("recurring.hint")),
 			Form(css.Class("form-grid"), OnSubmit(addRecurring),
-				Input(append([]any{css.Class("field"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)}, errAttrs("refi-err", rErr.Get())...)...),
+				Input(append([]any{css.Class("field"), Attr("id", "recurring-add"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)}, errAttrs("refi-err", rErr.Get())...)...),
 				labeledField(uistate.T("recurring.amountPlaceholder", base), Input(css.Class("field"), Type("number"), Value(rAmount.Get()), Step("0.01"), OnInput(onRAmount))),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), Title(uistate.T("recurring.cadence")), OnChange(onRCadence), cadenceOpts),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.account")), Title(uistate.T("recurring.account")), OnChange(onRAccount), acctOpts),
@@ -496,7 +496,7 @@ func Planning() ui.Node {
 	if app != nil {
 		plans := app.Plans()
 		list := IfElse(len(plans) == 0,
-			P(css.Class("empty"), uistate.T("plans.empty")),
+			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("plans.empty"), CTALabel: uistate.T("plans.add"), FocusID: "plan-add"}),
 			Div(css.Class("rows"), MapKeyed(plans,
 				func(p domain.Plan) any { return p.ID },
 				func(p domain.Plan) ui.Node {
@@ -508,7 +508,7 @@ func Planning() ui.Node {
 			H2(css.Class("card-title"), uistate.T("plans.title")),
 			P(css.Class("muted"), uistate.T("plans.hint")),
 			Form(css.Class("form-grid"), OnSubmit(addPlan),
-				Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
+				Input(append([]any{css.Class("field"), Attr("id", "plan-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
 				labeledField(uistate.T("plans.horizonPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon))),
 				labeledField(uistate.T("plans.startPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart))),
 				labeledField(uistate.T("plans.monthlyPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly))),

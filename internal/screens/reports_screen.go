@@ -244,7 +244,7 @@ func Reports() ui.Node {
 
 	var catBody ui.Node
 	if len(rowNodes) == 0 {
-		catBody = P(css.Class("empty"), uistate.T("reports.empty"))
+		catBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("reports.empty"), CTALabel: uistate.T("reports.addFirst"), Href: "/transactions"})
 	} else {
 		catBody = Div(css.Class("rows"), rowNodes)
 	}

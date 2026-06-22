@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Guided empty states on derived & planning screens (L-quickhits).** Bills, Subscriptions, and the
+  Reports breakdown now render a friendly `EmptyStateCTA` that routes the user to where the data is
+  created (Accounts / Transactions) instead of a bare "nothing here" line; Planning's Recurring and
+  Plans empties now jump focus to their add form. `EmptyStateCTA` gained an optional `Href` for
+  route-based guidance on screens that have no on-page add form.
+
+### Added
 - **Per-member "my money" view (L21).** A top-bar member switcher (Everyone + each household member, shown
   when ≥2 members) backed by `uistate.UseActiveMember()` — a persisted atom (`cashflux:active-member`) —
   scopes the Transactions ledger and Dashboard KPIs/widgets to one person or Everyone. Net worth stays

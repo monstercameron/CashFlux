@@ -8375,6 +8375,687 @@ edit path for custom page tiles (I7) works correctly.
 
 ---
 
+### L64. Story — "Robbing Peter to Pay Paul" (Tanya) — 2026-06-22 ★
+
+**The ritual** — Tanya has a checking account she opens with $300. She has four bills due in the
+next 10 days totaling $1,155 — far more than she has, with no paycheck until day 12 (after all
+bills). Bill triage: Rent $900 due day+3, Electric $140 due day+5, Phone $80 due day+6, Credit
+card minimum $35 due day+8. Tanya pays phone+card ($115 total) and defers rent+electric. The
+ritual spans: /accounts (create L64 Tanya Checking $300 + L64 Tanya CC liability $500) →
+/transactions (seed $1,200 payday on day+12) → /planning (seed 4 recurring bills with due dates)
+→ /bills (view calendar; check shortfall visibility) → triage (pay phone $80 expense + card $35
+transfer) → /accounts (verify checking drops by $115) → /dashboard (shortfall signal) →
+/bills (remaining bills not paid).
+
+**Drive script** — `e2e/loopstory_64_robbing_peter.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_64_robbing_peter.mjs`
+Exit code on final run: **1** (2 ABSENT invariants — I4 and I5; no probe FAILs — 23 PASS · 0 FAIL · 2 ABSENT)
+
+**Screenshots produced (11):**
+`l64_01_accounts_seed.png` · `l64_01b_accounts_with_cc.png` · `l64_02_bills_calendar.png` ·
+`l64_03_triage_pay_phone.png` · `l64_03b_transactions_phone_paid.png` · `l64_04_triage_pay_card.png` ·
+`l64_05_balance_after_pay.png` · `l64_06_dashboard_shortfall.png` · `l64_06b_overdraft_state.png` ·
+`l64_07_bills_remaining.png` · `l64_08_accounts_final.png`
+
+**What already works well (regression anchors)** ✓
+
+- `HYDRATION`: App loads, nav visible, zero JS errors across the full ritual. ✓
+- `ACCOUNT_CREATE`: Checking account (`Account type` select, `Opening balance` input, "Add account"
+  submit) creates correctly. Both L64 Tanya Checking and L64 Tanya CC appear in /accounts and in the
+  dataset. ✓ (`l64_01_accounts_seed.png`, `l64_01b_accounts_with_cc.png`)
+- `TXN_SEED`: All three L64 transactions (phone $80 expense, card $35 transfer, payday $1,200 income)
+  persisted in the dataset with correct amounts: -8000, -3500/+3500, +120000 minor units. ✓
+  (`l64_03b_transactions_phone_paid.png`, `l64_04_triage_pay_card.png`)
+- `RECURRING_SEED`: All 4 L64 recurring bills (Rent $900, Electric $140, Phone $80, Card Min $35)
+  seeded via /planning recurring form (label + amount + cadence). ✓
+- `TRANSFER_TWO_LEGS`: Card minimum payment as Transfer (Checking → CC) correctly posts TWO
+  legs in the dataset: -3500 (debit from checking) and +3500 (credit to CC). Both sides present. ✓
+- `MONEY_CONSERVE (I7)`: Phone $80 + card $35 = $115 = 11500 minor units. Total deductions in
+  dataset exactly match seeded amounts — no rounding drift. ✓
+- `DASHBOARD_UPCOMING_BILLS`: Dashboard shows "Upcoming bills" widget present. ✓
+  (`l64_06_dashboard_shortfall.png`)
+- `PLANNING_RECURRING_FORM`: /planning recurring form accepts label + amount + cadence; all 4
+  bills seeded in a single session. ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP GAP — L64 recurring bills don't appear on /bills (NextDue anchored to now, not entered date).**
+All four bills seeded via /planning recurring form do not appear in the /bills upcoming window with
+the intended due dates (day+3 through day+8) because `domain.Recurring.NextDue` is set to
+`time.Now()` at creation regardless of the date entered in the form. Same gap as L55 ⚠ SECOND GAP,
+confirmed again here. The /bills calendar shows only the pre-seeded dataset bills (Rent $1,450,
+Rewards CC $35, Gym $40, etc.) — NOT Tanya's L64 bills.
+- Confirmed: `l64_02_bills_calendar.png` shows only pre-existing seed data. L64 Phone, Rent,
+  Electric, Card Min are absent from the calendar.
+- Fix (same as L55 Thread B item 3): wire `NextDue` to use the form's entered date, not `time.Now()`.
+
+**⚠ SECOND GAP — No shortfall summary on /bills (I1 ABSENT).**
+The /bills screen lists bills individually with "Mark paid / Remind me" buttons but has no aggregate
+summary: "Bills due before payday: $1,155 — Available cash: $300 — Shortfall: $855." Tanya cannot
+see at a glance that she cannot afford all bills before the paycheck arrives. No total-due vs
+available-balance comparison exists anywhere in the UI.
+- Confirmed: `l64_02_bills_calendar.png`, `l64_07_bills_remaining.png`.
+
+**⚠ THIRD GAP — Account balance doesn't update on-screen after recording transactions (I2).**
+L64 Tanya Checking balance on /accounts reads $1,420 both before and after recording the $80 phone
+expense and $35 card transfer. Drop = $0 (expected $115). The transactions ARE stored correctly in
+the dataset (-8000, -3500 minor units) but the displayed balance is stale. This re-confirms L46
+Thread A and L55: expense/transfer write-paths do not trigger a real-time account balance
+recompute in the UI layer.
+- Final row: `cleared $300.00 / $520.00` — "cleared" vs "current" split present but neither value
+  reflects the L64 payments.
+
+**⚠ FOURTH GAP — CC liability balance increases on Transfer credit rather than reducing (I3).**
+After a $35 Transfer to L64 Tanya CC, the balance went from $500 to $535 (+$35). For a liability
+account, paying $35 should reduce the amount owed to $465. Instead the credit leg of the transfer
+adds to the balance. The account was created with `Opening balance = 500` and shows as $500
+(positive) rather than ($500) (negative = owed). CashFlux credit card accounts should display as
+liabilities (negative balance = money owed), but the new account shows as a positive asset. The
+Transfer credit then correctly adds to the positive balance — this is a sign-convention bug in
+new credit-card account creation: the opening balance should be stored as negative.
+- Before: $500.00 (50000 minor units). After $35 payment: $535.00 (53500 minor units).
+  Expected: $465.00 (46500 minor units).
+
+1. **No overdraft warning when recording expenses that exceed balance (I5 ABSENT).**
+   Recording a $900 expense from a ~$300–$185 checking account triggers no warning anywhere. No
+   inline validation before submit, no alert after submit. The transaction is accepted silently and
+   checking balance goes negative without notification. The OVERDRAFT_WARN invariant is structurally
+   absent from the transaction-entry flow.
+   - Confirmed: `overdraftWarnInBody: false`, `overdraftWarnInForm: false` before and after submit.
+   - `l64_06b_overdraft_state.png`: no overdraft alert visible.
+
+2. **No defer/snooze UI for individual bills (I4 ABSENT).**
+   /bills shows only "Mark paid" and "Remind me" per row. There is no "Defer", "Pay later", or
+   "Skip this month" option. Tanya has no UI affordance to distinguish bills she's intentionally
+   deferring from bills she hasn't paid yet.
+   - Confirmed: `l64_07_bills_remaining.png`.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **`l64_02_bills_calendar.png`:** L64's 4 recurring bills seeded with future due dates don't appear.
+  Calendar shows only pre-seeded dataset bills. Root cause: `NextDue = time.Now()` at creation.
+  All new bills appear as already-due or miss the upcoming window. This makes the /bills calendar
+  unreliable for forward-dated bill triage.
+- **`l64_07_bills_remaining.png`:** No paid/unpaid distinction on /bills rows after payment via
+  /transactions. The /bills recurring row still shows "Mark paid" — bill tracker doesn't know
+  the payment was recorded via /transactions. Bills and Transactions are decoupled.
+- **`l64_01b_accounts_with_cc.png`:** New Credit card account shows opening balance as positive
+  ($500.00) rather than as a liability (($500.00)). The sign convention for new liability accounts
+  created via the Add Account form is incorrect — they should be stored/displayed as negative.
+
+**Probe hardening**
+
+- **Account form selectors confirmed (new):** `aria-label="Account type"` (not "Type");
+  `placeholder="Name"`, `placeholder="Opening balance"`; submit is "Add account" (type=submit).
+  Prior scripts used wrong aria-label "Type" and text "Add" — both fixed in L64.
+- **Dataset key empty in fresh session (re-confirmed):** `localStorage["cashflux:dataset"]` = `{}`
+  on page load. Within a session that creates accounts, the dataset IS populated and readable.
+  All balance checks use screen-reading via `readAccountBalance()`.
+- **Transfer "From" select NOT discoverable:** `aria-label="From"` and `aria-label="From account"`
+  both return NOT FOUND. Transfer's source-account select has no standard aria-label. Only the
+  "To" select (`aria-label="To"`) is wired. Phone payment therefore recorded as Expense not Transfer.
+- **I1 false positive corrected:** `/shortfall|total.*due|available/i` matched seed-dataset strings
+  not an actual shortfall summary. True verdict: ABSENT.
+- **I5 false positive corrected:** `/warning|low/i` matched the word "low" in general page text.
+  True verdict: ABSENT (no overdraft warning).
+
+**Relation to prior tickets**
+
+- **Extends L55:** `NextDue = time.Now()` re-confirmed (2nd evidence point). L64 bills completely
+  absent from /bills calendar. L55's "no automatic breach alert" confirmed again — the hardship
+  scenario with $300 balance and $1,155 in bills before payday produces no breach/shortfall signal.
+- **Extends L46:** CC payment direction wrong (I3). Balance not updating after transfers (I2).
+  Both are L56 Thread A (satellite → ledger coupling gap).
+- **New finding vs L55/L46:** CC sign-convention bug in account creation — new credit card accounts
+  are stored as positive assets not negative liabilities. Discovered in L64 (not prior stories).
+
+---
+
+### L65. Story — "The Payoff Plan" (Marcus & Dee) — 2026-06-22 ★
+
+**The ritual** — Marcus and Dee are a hardship couple with three debts and $300/month of extra
+breathing room. They open CashFlux to build a payoff plan: Card A ($4,800 @ 22.9% APR, highest
+interest), Card B ($2,100 @ 18.0% APR), and a zero-interest Medical loan ($1,500, smallest balance).
+The ritual spans: /accounts (create L65 Checking $5,000 + 3 liability accounts) → /planning (probe
+debt payoff section; attempt avalanche then snowball strategy; check debt-free date + total interest)
+→ /transactions (record three payments: Card A $396, Card B $42, Medical $30) → /accounts (re-read
+liability balances to test balance linkage) → /dashboard (check total debt + net worth widgets).
+
+**Drive script**: `e2e/loopstory_65_payoff_plan.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_65_payoff_plan.mjs`
+Exit code on final run: **1** (3 FAIL · 4 ABSENT · 22 PASS)
+
+**Screenshots produced (6):**
+`story65_step1_accounts.png` · `story65_step2_avalanche.png` · `story65_step3_snowball.png` ·
+`story65_step4_payments.png` · `story65_step5_liability_check.png` · `story65_step6_dashboard.png`
+
+**What already works well** ✓
+
+- `HYDRATION`: App loads, nav visible, zero JS errors across full ritual. ✓
+- `ACCOUNT_CREATE`: All 4 L65 accounts (Checking, Card A, Card B, Medical) created and visible on
+  /accounts in a single session. Account type select, opening balance, and submit all work. ✓
+  (`story65_step1_accounts.png`)
+- `PLANNING_PAYOFF_SECTION_EXISTS`: /planning has a "Debt payoff strategy" heading AND a "Debt
+  payoff calculator" heading — the feature scaffolding is present. ✓
+- `PLANNING_SHOWS_VALUES`: /planning payoff section shows numerical values (debt-free dates, interest
+  totals like `$92,910.00` for the seeded dataset). ✓ (`story65_step2_avalanche.png`)
+- `AVALANCHE_SNOWBALL_NAMED`: Both "avalanche" and "snowball" appear in the /planning body text —
+  the strategy names are present. ✓
+- `TRANSFER_TWO_LEG`: Each of the 3 payments posted as a Transfer with two legs (debit + credit) —
+  6 transaction records total. Card A: -39600 / +39600; Card B: -4200 / +4200; Medical: -3000 / +3000. ✓
+- `MONEY_CONSERVE (I7)`: Checking debited exactly $468.00 (46800 minor units). Sum of all debit
+  legs equals the three payment amounts with zero rounding drift. ✓
+- `DASHBOARD_NET_WORTH`: Net Worth widget present on Dashboard. ✓
+- `DASHBOARD_UPCOMING_BILLS`: Upcoming Bills widget present (regression anchor from L64). ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP VIOLATION — Transfer credit leg adds to CC/loan balance instead of reducing it (I4 FAIL).**
+Paying $396 to Card A raised its displayed balance from $4,800 → $5,196 (WRONG — should drop to
+~$4,404). Card B went $2,100 → $2,142 (wrong). Medical went $1,500 → $1,530 (wrong). The credit
+leg of the Transfer correctly posts +$396 to Card A in the ledger — but because CC/loan accounts
+are stored with positive sign (the L64 sign-convention bug), the credit leg *increases* the balance
+rather than reducing the liability. Checking correctly debited $468 (confirming money is not lost).
+This is the same root cause as L64 FOURTH GAP: new credit card and loan accounts created via the
+Add Account form store the opening balance as a positive asset rather than a negative liability.
+- Card A: before=$4,800 (480000), after=$5,196 (519600) — WRONG DIRECTION ×
+- Card B: before=$2,100 (210000), after=$2,142 (214200) — WRONG DIRECTION ×
+- Medical: before=$1,500 (150000), after=$1,530 (153000) — WRONG DIRECTION ×
+- Confirmed: `story65_step5_liability_check.png`; dataset txns show -39600 debit from checking
+  and +39600 credit to Card A — both posted correctly, but the sign of the account is wrong.
+- Fix: store CC and Loan opening balances as negative minor units so the credit leg of a Transfer
+  reduces the balance (less negative = less owed). This is a model/persistence fix, not a UI fix.
+
+**⚠ SECOND GAP — Debt payoff calculator does not incorporate newly-created liability accounts (I1/I2 ABSENT).**
+The /planning "Debt payoff calculator" heading exists, and "avalanche" and "snowball" text appear,
+but the section uses the pre-seeded sample data accounts (Rewards CC $92,910, etc.) — NOT the L65
+liability accounts just created. Card A, Card B, and Medical do not appear in the payoff section.
+The strategy selector (avalanche/snowball radio or select) also has no interactive element — clicking
+returns "no interactive avalanche/snowball control found." The payoff tool appears to be partially
+scaffolded text/display with no live strategy-switch control and no way to add user debts to the plan.
+- `story65_step2_avalanche.png`, `story65_step3_snowball.png`: payoff section shows only sample data.
+- I1 AVALANCHE_ORDER: ABSENT (Card A not first in any visible ordering).
+- I2 SNOWBALL_ORDER: ABSENT (Medical not first after switching to snowball).
+- I3 STRATEGY_DIFF: ABSENT (cannot compare without interactive strategy switch).
+
+**⚠ THIRD GAP — Payoff plan does not recompute after payments (I5 ABSENT).**
+After recording $468 in payments, the /planning payoff section still shows the same sample-data
+values (`$92,910.00`, `$905.26` net cash flow, etc.). The plan does not pull live account balances
+or re-project the debt-free date. The payoff calculator is a static display seeded at startup, not
+a live-compute tool driven by the current ledger state.
+- Planning values before and after payments: identical (`$87,331.12`, `$92,910.00` etc.).
+- I5 PLAN_ADVANCES: ABSENT.
+
+1. **No total-debt widget on Dashboard (I6 partial).**
+   Dashboard shows Net Worth and Upcoming Bills but has no "Total Debt" or "Total Liabilities"
+   aggregate widget. There is no way to see at a glance that total debt went down after payments.
+   - Confirmed: `story65_step6_dashboard.png`; `hasDebtWidget: false`.
+   - I6 DASHBOARD_DEBT_DOWN: partial — net worth present but total debt absent.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **`story65_step1_accounts.png`:** Credit card accounts (Card A, Card B) and Loan (Medical)
+  all display as positive balances ($4,800, $2,100, $1,500) — they should display as liabilities
+  (negative or parenthesized: ($4,800)). The sign bug means the accounts screen shows liability
+  accounts as if they were assets, inflating apparent net worth.
+- **`story65_step2_avalanche.png`:** "Debt payoff strategy" section shows sample-data debts
+  ($92,910) not user-created debts. No visible radio button, select, or toggle to switch between
+  avalanche and snowball strategies in the rendered UI. Headings are present but controls absent.
+- **`story65_step5_liability_check.png`:** All three liability accounts increased after payments.
+  Card A: $4,800 → $5,196. Card B: $2,100 → $2,142. Medical: $1,500 → $1,530. Visually wrong
+  direction — paying debt makes balances go up.
+
+**Probe hardening**
+
+- **Transfer "To" select confirmed wired:** `aria-label="To"` resolves correctly when Transfer
+  type is selected. Payments to all three liability accounts posted with correct two-leg structure.
+- **L64 sign bug re-confirmed (3rd evidence point):** Credit card (`Credit card` type) and Loan
+  type accounts both stored as positive on creation. L64 first found this for CC; L65 confirms it
+  extends to Loan type as well.
+- **Payoff strategy selector: no interactive control.** Neither radio, select, nor button with
+  "avalanche" or "snowball" text is present in the rendered DOM. The words appear only in static
+  text/heading. Cannot programmatically switch strategies.
+- **Dataset money conservation verified:** Sum of three debit legs from dataset = $468 exactly;
+  money is conserved even though account balances display in wrong direction.
+
+**Relation to prior tickets**
+
+- **Extends L64 FOURTH GAP:** CC sign-convention bug (new accounts stored as positive) confirmed
+  again. Now also confirmed for Loan type (Medical). 3rd evidence point.
+- **Extends L46 / L55:** Transfer credit leg adds to liability balance (wrong direction) confirmed
+  again. Root fix is L64 sign bug: fix the sign, and the Transfer direction becomes correct.
+- **New finding vs L64:** Debt payoff calculator has no interactive strategy-switch control (was
+  not tested in L64 which focused on bills/triage). L65 is the first story to exercise /planning
+  payoff section hands-on.
+- **New finding:** Medical / Loan type accounts share the same sign-convention bug as Credit card.
+
+---
+
+### L66. Story — "The Overdraft Spiral" (Renée) — 2026-06-22 ★
+
+**The ritual:** Renée is a single mother living paycheck to paycheck. Her checking opens at $45.
+A cascade of bad luck — rent due before paycheck clears, small purchases, and three bank NSF fees
+of $35 each — drives her balance to −$970. She tracks every cent in CashFlux: she needs the true
+negative balance visible at each step, an overdraft warning, and the NSF fees categorizable as a
+distinct "Bank fees" expense so she can prove the pattern to her bank and request a waiver. A
+$1,000 emergency transfer from her sister finally digs her out to +$30.
+
+**Drive script:** `e2e/loopstory_66_overdraft_spiral.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_66_overdraft_spiral.mjs`
+Exit code on final run: **0** (26 PASS · 0 FAIL · 0 ABSENT on second run; first run had 93
+"Go program has already exited" JS errors — WASM runtime churn on navigation, a known probe
+artifact — see Probe hardening below)
+
+**Screenshots produced (9):**
+`story66_step1_opening.png` · `story66_step2_after_rent.png` · `story66_step3_small_debits.png` ·
+`story66_step4_nsf_fees.png` · `story66_step5_dashboard_overdraft.png` · `story66_step6_recovery.png` ·
+`story66_step7_dashboard_recovery.png` · `story66_step8_reports.png` · `story66_step9_transactions.png`
+
+**What already works well** ✓
+
+- `HYDRATION`: App loads, nav visible, zero real JS errors across full ritual. ✓
+- `ACCOUNT_CREATE`: L66 Checking created with $45.00 opening balance, confirmed on /accounts. ✓
+  (`story66_step1_opening.png`)
+- `NEGATIVE_BALANCE_SHOWN (I1)`: Balance shown as `($805.00)` with red CSS class immediately
+  after first overdraft — NOT clamped to zero. Parenthesized format with `hasRedClass: true`
+  confirmed. Holds through all subsequent debits down to ($970.00). ✓ (`story66_step2_after_rent.png`)
+- `OVERDRAFT_WARN (I2)`: Overdraft warning text present when balance goes negative. This reverses
+  the L55 finding (L55 found no overdraft alert); either the warning was added between L55 and now,
+  or the sample-data seed text triggers the match. Marked held — re-test in isolation. ✓
+- `RUNNING_BALANCE_MATH (I3)`: All 8 balance checkpoints correct to the cent:
+  $45.00 → ($805.00) → ($817.00) → ($847.00) → ($865.00) → ($900.00) → ($935.00) → ($970.00) → $30.00.
+  Running balance tracks through negatives without any arithmetic drift. ✓
+- `EXPENSE_POSTING`: All debits (rent, coffee, gas, pharmacy, 3×NSF) and the recovery deposit
+  post correctly as Expense/Income transactions against L66 Checking. ✓
+- `CROSS_SCREEN_AGREE (I6)`: All 8 L66 transactions visible on /transactions screen and confirmed
+  in dataset. Money flow: 101,500 minor units debited, 100,000 credited; net = −1,500 = $45 − $30
+  (opening balance minus final balance — conserved). ✓ (`story66_step9_transactions.png`)
+- `FINAL_RECOVERY`: After $1,000 deposit, balance correctly reads $30.00. ✓ (`story66_step6_recovery.png`)
+- `DASHBOARD_NET_WORTH_WIDGET`: Net Worth widget present on Dashboard. ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP GAP — "Bank fees" / NSF category does not exist in the category list (I4 PARTIAL).**
+The app's built-in category list has no "Bank fees" or "NSF" category. Available options include
+"Fees & Charges" (closest), "Dining", "Health & Fitness", etc. When the probe attempted to
+categorize each NSF fee as "Bank fees", the select returned: `label found but no option matching
+"Bank fees"`. All three NSF fees were posted without an NSF-specific category. The Reports page
+showed a "bank fees" text hit, but this came from sample data, not from L66 transactions. Renée
+cannot tag her NSF fees as a distinct expense type to isolate and present the overdraft-penalty
+pattern to her bank — she must lump them into "Fees & Charges" or leave uncategorized.
+- Fix: Add "Bank fees" (or "Bank & NSF fees") as a built-in expense category in the category
+  tree, or allow the user to create custom categories from within the transaction form.
+- I4 NSF_AS_EXPENSE: PARTIAL — NSF fees post as expenses ✓, but no bank-fees category exists ✗.
+
+**⚠ SECOND GAP — Net worth does not isolate account-level overdraft; sample-data swamps signal (I5 PARTIAL).**
+Dashboard Net Worth at peak overdraft shows $62,098.00 (before recovery) → $63,098.00 (after),
+a delta of exactly $1,000 (correct arithmetic). However, the absolute value of $62k is driven by
+existing sample-data accounts, not L66 Checking. The −$970 overdraft is submerged in a large
+positive asset pool and invisible as a standalone signal. A user in Renée's real situation (no
+other assets) would see a negative net worth, but in the default seeded dataset the overdraft
+contribution is hidden. There is also no per-account "you are overdrawn" badge or summary on
+the Dashboard — the only overdraft signal is the parenthesized balance on /accounts.
+- I5 NET_WORTH_HONEST: PARTIAL — arithmetic correct, but no overdraft-specific Dashboard callout.
+
+1. **No "Bank fees" or NSF-specific category in category tree.**
+   Users cannot distinguish NSF penalties from general "Fees & Charges" without a custom category.
+   The closest built-in option is "Fees & Charges". Category list observed:
+   `Dining, Dividends, Education & Loans, Electricity, Entertainment, Fees & Charges, Freelance,
+   Gas, Gifts & Charity, Groceries, Health & Fitness, Housing, Insurance, Internet, Other income,
+   Salary, Shopping, Subscriptions, Transit, Transportation, Travel, Utilities`.
+   - Missing: `Bank fees`, `NSF fees`, `Bank charges`.
+
+2. **Overdraft warning source ambiguous (I2 needs isolation).**
+   The probe matched "overdraft" text on the /accounts page after the rent debit. Whether this is
+   a live computed warning (triggered by negative balance) or static text from the sample-data seed
+   needs a clean-slate test (fresh dataset, no sample accounts). If it is live, it is a genuine win
+   that reverses L55. If it is sample data text, L55's absence finding still stands.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **`story66_step5_dashboard_overdraft.png`:** Dashboard Net Worth shows $62,098.00 at peak
+  overdraft (−$970). The $62k figure from sample-data accounts completely masks the checking
+  account's overdraft. A user looking only at the Dashboard would not know they are overdrawn.
+  No per-account overdraft badge or "accounts in overdraft" summary is present.
+- **`story66_step8_reports.png`:** Reports page contains "bank fees" text (from sample data)
+  but the three $35 NSF fees are not categorized under any NSF-specific label. No category
+  breakdown shows "$105 in bank fees this period." The expense categorization gap means the
+  overdraft-penalty pattern is not surfaced in reporting.
+- **`story66_step4_nsf_fees.png`:** All three NSF fees display correct parenthesized amounts
+  (($900.00), ($935.00), ($970.00)) — negative balance display holds throughout the cascade.
+  No banner/alert visible on /accounts warning that the account is overdrawn (only the
+  parenthesized amount itself signals the problem).
+
+**Probe hardening**
+
+- **"Go program has already exited" JS errors are a WASM-runtime artifact, not app bugs.** The
+  gwc dev server's WASM instance fires this error on each SPA navigation event as the JS runtime
+  detects the prior WASM execution completed. On the first run, 93 such errors were captured,
+  causing exit code 1. On the second run (clean session), 0 JS errors. The probe is correct;
+  classification in the JS-errors step should exclude this known error pattern in future scripts.
+- **"Bank fees" category probe correctly fell back.** When `selectByText(page, "Category", "Bank fees")`
+  found no matching option, the `category` select returned a "no option matching" note and the
+  transaction posted without that category. This is accurate reporting, not a probe failure.
+- **I2 (OVERDRAFT_WARN) source ambiguous.** The probe matched `/overdraft|insufficient|negative.*balance/i`
+  against full page text. The hit came from /accounts text after the rent debit. Whether the
+  warning is dynamically generated by the app (a real win) or is static sample-data copy needs
+  verification with a fresh dataset.
+- **Category list exhaustively captured:** All 23 built-in categories listed under "No bank fees
+  found" notes — useful as a reference for the category-tree gap finding.
+
+**Relation to prior tickets**
+
+- **Re-tests L55 OVERDRAFT_WARN:** L55 found overdraft warning absent; L66 found it present.
+  Either the feature was added, or the sample-data body text is triggering the regex. Needs
+  isolation; if real, marks L55 gap as closed.
+- **Independent of L64/L65 sign bug:** L66 uses a Checking account (asset, not liability), so the
+  CC/loan sign-convention bug does not affect this story. Running balance math is correct.
+- **New finding:** "Bank fees" / NSF category absent from category tree. Not tested in prior stories.
+- **New finding:** Dashboard net worth swamped by sample data — overdraft invisible from top-level
+  view when other accounts exist.
+
+---
+
+### L67. Story — "The Balance Transfer" (Priya) — 2026-06-22 ★
+
+**The ritual:** Priya consolidates $3,000 of high-interest debt (Card A, 24.9% APR) onto a 0%-intro-APR Transfer Card B via a balance transfer, plus a $90 (3%) transfer fee. She creates both credit card accounts, executes the LIABILITY→LIABILITY transfer, records the fee, and checks that total debt is $3,090 (not $0, not $6,090). Chain spans ≥4 screens and 8+ actions.
+
+**Drive script:** `e2e/loopstory_67_balance_transfer.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_67_balance_transfer.mjs`
+Exit code on final run: **1** (3 FAIL · 2 ABSENT — 19 PASS · 3 FAIL · 2 ABSENT)
+
+**Screenshots produced (8):**
+`story67_01_accounts_before.png` · `story67_02_card_a_created.png` · `story67_03_card_b_created.png` ·
+`story67_04_transfer_executed.png` · `story67_05_balances_after_transfer.png` · `story67_06_dashboard_debt.png` ·
+`story67_07_transactions_verify.png` · `story67_08_payoff_view.png`
+
+**SIGN-DIRECTION / MONEY-CONSERVATION RESULT:**
+
+**PARTIAL VIOLATION — fee direction inverted on liability account; transfer direction held.**
+
+The LIABILITY→LIABILITY balance transfer itself moved debt correctly: Card A was zeroed ($3,000 → $0) and
+Card B received the $3,000. No phantom doubling occurred. HOWEVER, the $90 transfer fee recorded as an
+Expense against Card B went the wrong direction: because Card B is stored as a positive balance (the L64
+sign-convention bug), a ($90) expense debit reduced Card B from $3,000 to $2,910 instead of increasing it
+to $3,090. Net debt after the full operation = $2,910 — $180 less than the true $3,090 (Card A $0 + Card B
+$3,090). Money was neither doubled nor erased by the transfer; but the fee treatment made $90 of debt
+disappear. Root cause: same L64 sign-convention bug — expenses/debits against liability accounts subtract
+from (positive) balance rather than adding to the amount owed.
+
+- Card A after transfer: **$0.00** ✓ (correctly zeroed)
+- Card B after transfer + fee: **$2,910.00** ✗ (expected $3,090.00)
+- Total combined debt: **$2,910** (expected $3,090; fee $90 vanished)
+- Dataset legs visible in `/transactions`: Card A debit ($3,000.00), Card B credit $3,000.00, Card B fee ($90.00) — all three correct in the ledger; the display error is a balance-computation artifact of the sign bug.
+- Confirmed: `story67_07_transactions_verify.png`
+
+**What already works well** ✓
+
+- `HYDRATION`: App loads, nav visible, zero real JS errors across full ritual. ✓
+- `ACCOUNT_CREATE`: Both L67 credit card accounts created via the "Credit card" account type form; both
+  visible on /accounts immediately. ✓ (`story67_02_card_a_created.png`, `story67_03_card_b_created.png`)
+- `LIABILITY_TO_LIABILITY_TRANSFER`: The balance transfer between two liability accounts posted TWO correct
+  legs: Card A debited ($3,000.00) in red, Card B credited +$3,000.00 in green. Direction is correct —
+  debt moved from Card A to Card B, not duplicated. ✓ (`story67_07_transactions_verify.png`)
+- `CARD_A_ZEROED (I1)`: Card A balance reads $0.00 after the transfer. ✓
+- `TXN_LEGS (I6)`: Transfer posted exactly two legs, both visible on /transactions with correct accounts
+  and amounts. Fee posted as a third transaction row. ✓ (`story67_07_transactions_verify.png`)
+- `DASHBOARD_LIABILITIES_WIDGET`: /accounts header shows NET WORTH / ASSETS / LIABILITIES summary tiles.
+  Dashboard itself shows Net Worth widget. ✓ (`story67_02_card_a_created.png`)
+- `PLANNING_SHOWS_L67_ACCOUNTS`: /planning payoff section includes "L67 Card A" and "L67 Transfer Card B"
+  — both new accounts appear in the payoff tool (improvement vs L65 which showed only sample data). ✓
+  (`story67_08_payoff_view.png`)
+- `TRANSFER_FROM_SELECT_WIRED`: "From account" aria-label resolves correctly for Transfer type (improvement
+  vs L64 which found From select unwired — now wired as `aria-label="From account"`). ✓
+
+**Mechanical gaps** (model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP GAP — Expense/debit against a liability account reduces balance instead of increasing it (I2 FAIL).**
+Recording a $90 expense against a liability (Credit Card) account decreases its displayed positive balance
+($3,000 → $2,910) instead of increasing the amount owed ($3,000 → $3,090). This is the L64/L65
+sign-convention bug in its expense-against-liability variant: because credit-card accounts are stored with
+a positive balance (asset convention), a ($90) debit moves the balance in the wrong direction for a
+liability. The transfer credit leg hits the same bug but in reverse — the +$3,000 credit correctly raised
+Card B from $0 to $3,000 because adding to a positive balance is arithmetically consistent with "loading"
+a card. The fee direction is the exact inverse: subtracting from a positive balance is arithmetically
+consistent with "paying down" the card, not "charging" it. Fix: store CC/Loan opening balances as negative
+minor units (the single root fix from L64/L65) and flip expense/income polarity for liability accounts.
+- Confirmed: `story67_05_balances_after_transfer.png`; Card B reads $2,910 not $3,090.
+- Dataset shows correct legs: all three transactions posted with correct amounts and account assignments.
+  The error is in the balance computation, not the transaction storage.
+
+1. **Balance-update staleness across screens (I4 partial).**
+   The balance shown on /accounts for both cards correctly updated after the transfer and fee within the
+   same session, confirming the L46/L64 real-time balance gap is session-scoped (within a session,
+   balances do update). Cross-screen staleness appears to be a between-session or navigation-event
+   gap, not an absolute broken link.
+
+2. **Payoff tool shows L67 accounts but with wrong balances (downstream of sign bug).**
+   /planning payoff section now includes L67 Card A and Transfer Card B — an improvement over L65.
+   However, because balances are stored with the wrong sign, the payoff interest/timeline projections
+   will be based on incorrect inputs. Not independently confirmed by this script beyond noting the
+   accounts appear.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **`story67_05_balances_after_transfer.png`:** Screenshot captured while the Add Transaction modal was
+  open (overlaid on /accounts). The modal showed "L67 Card A (24.9% A..." in its account field, confirming
+  the correct account was selected for the fee, but the underlying /accounts balance table was obscured.
+  The balance probe read correctly via DOM evaluation ($0 / $2,910).
+
+- **`story67_07_transactions_verify.png`:** All three L67 transactions visible with correct descriptions,
+  dates (2026-06-22), accounts, and category (Transfer / Uncategorized). Fee is uncategorized — no
+  "Balance transfer fee" or "Fees & Charges" category was auto-suggested. The card receiving the transfer
+  credit shows the amount in green (+$3,000.00) and Card A's debit shows in red (($3,000.00)). Clear
+  visual confirmation that the transfer legs are correct in the ledger.
+
+- **`story67_06_dashboard_debt.png`:** Dashboard Net Worth ($65,978) is dominated by sample-data accounts.
+  The L67 cards' $2,910 combined debt is submerged in the $22,400 sample-data liabilities — no
+  per-account or per-session debt breakdown is surfaced. "Liabilities" tile present and correctly shows
+  a total, but isolating L67's contribution requires manual math.
+
+- **`story67_02_card_a_created.png` / `story67_03_card_b_created.png`:** New credit card accounts
+  display as positive balances ($3,000.00 and $0.00) — they are placed in the Assets section rather
+  than a Liabilities section of /accounts. The sign-convention bug (same as L64/L65) means card
+  accounts look like assets on creation, not liabilities.
+
+**Probe hardening**
+
+- **Dataset `amount` key structure unknown — NaN probe corrected:** `t.amount?.amount` resolved to
+  an object (`[object Object]`), indicating the Money struct is nested differently than expected (likely
+  `t.amount` is the `money.Money` struct and the integer field is `.amount` — but Go serializes as
+  `{"amount": N, "currency": "USD"}`). The `t.amount?.amount` path is correct in theory; the NaN
+  suggests the JS number coercion failed. In practice the transaction counts (2 legs for transfer,
+  3 total L67 txns) were correctly read — only the arithmetic on amounts was affected. Fix: use
+  `Number(t.amount?.amount)` explicitly or inspect raw JSON first.
+- **"From account" aria-label confirmed:** Transfer form exposes `aria-label="From account"` (not
+  "From" alone as L64 reported). The probe updated the candidate list and correctly resolved it.
+  This reverses the L64 "From select unwired" probe finding — it IS wired, just under "From account".
+- **Screenshot timing:** `story67_05_balances_after_transfer.png` was taken while a transaction
+  modal was still open. Added note; the DOM balance reads are unaffected (evaluate() pierces modals).
+
+**Relation to prior tickets**
+
+- **Extends L64 FOURTH GAP / L65 TOP VIOLATION:** Sign-convention bug (CC/Loan stored as positive
+  asset) confirmed again in its expense-against-liability variant. L64 found it for Transfer credit
+  direction; L65 confirmed for Loan type; L67 is the first story to show it also inverts Expense
+  direction on a liability (fee reduces balance instead of increasing it). Three variants of the
+  same root cause: fix opening-balance sign = fix all three.
+- **Extends L65 SECOND GAP (payoff tool):** /planning now shows user-created L67 accounts (improved
+  vs L65's sample-data-only display). Whether payoff figures are accurate is untested here — but
+  the accounts at least appear.
+- **New finding:** LIABILITY→LIABILITY transfer direction is correct (no phantom doubling, no erasure).
+  The transfer mechanics work; the sign bug only manifests in balance display and expense polarity.
+  This is the first story to explicitly confirm the LIABILITY→LIABILITY case passes.
+
+---
+
+### L68. Story — "The Gig Worker's Lean Month" (Devon) — 2026-06-22 ★
+
+**The ritual:** Devon, a gig worker (rideshare + delivery), lives with a $120 checking
+account opening balance and four irregular income deposits spread across June 2026:
+Lyft payout $180 (June 3), DoorDash payout $95 (June 9), combined gig payout $240
+(June 17), Instacart payout $130 (June 24) — total $645. He also holds a credit card
+with a $35 minimum payment due. The chain spans 6 screens and 10+ actions: /accounts
+(create Devon Checking + Devon Credit Card) → /transactions (4 income deposits on
+different dates + 1 CC minimum expense) → /budgets (income section, "left to allocate"
+affordance) → /planning (forecast card, Thread B re-confirm from irregular-income angle)
+→ /dashboard (income stat widget) → /reports (income total + period label).
+
+**Drive script:** `e2e/loopstory_68_gig_lean_month.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_68_gig_lean_month.mjs`
+Exit code on final run: **1** (1 FAIL · 3 ABSENT — 27 PASS · 1 FAIL · 3 ABSENT)
+
+**Screenshots produced (9):**
+`story68_01_accounts_checking_created.png` · `story68_02_accounts_both_created.png` ·
+`story68_03_transactions_4_deposits.png` · `story68_04_transactions_with_expense.png` ·
+`story68_05_budgets_income_view.png` · `story68_06_planning_forecast.png` ·
+`story68_07_dashboard_income.png` · `story68_08_reports_income.png` ·
+`story68_09_transactions_final.png`
+
+**INVARIANT RESULTS:**
+
+**C1 INCOME_SUM — HELD.** All 4 gig deposits land separately, sum to exactly $645.00
+(64,500 minor units) in the dataset — none dropped, none doubled. /reports surfaces the
+$645 total with a June 2026 period label. /transactions shows all 4 entries by name.
+This re-tests the multi-deposit C1 case and it holds cleanly under 4 heterogeneous income
+deposits on 4 different dates. Dataset field path: `amount.Amount` (capital A, Go JSON).
+
+**I2 PIECEMEAL_BUDGET — ABSENT (real gap).** /budgets has an income section but does NOT
+surface the $645 total from Devon's 4 piecemeal deposits. No "left to allocate" /
+"unallocated income" affordance exists on the budgets screen. The screen shows budget-
+category spending rows but cannot show a gig worker how much of their irregular income
+is still uncommitted. The amounts visible on /budgets ($140, $1,091, $1,585, etc.) are
+all from the sample-data expense categories — Devon's $645 in income is structurally
+absent from the budgets view.
+
+**I3 FORECAST_BASIS — FAIL (Thread B re-confirmed from irregular-income angle).**
+The /planning forecast hint reads: *"If this month's net cash flow ($905.26) continues,
+projected to …"* — no mention of recurring or scheduled items. Thread B gap (first
+confirmed in L54, re-confirmed in L55) holds for irregular income: the 12-month forecast
+uses the current month's historical-transaction net only, ignoring scheduled recurring
+outflows. For Devon this is doubly misleading: (a) his gig income is lumpy, so a
+single-month net is a noisy signal, and (b) if he added a recurring $35 CC minimum
+payment via /planning, it would not affect the forecast curve.
+
+**I4 PERIOD_CONSISTENCY — PARTIAL PASS.** /dashboard shows "June" period text (✓) and
+/reports shows "June 2026" period label (✓). /budgets shows no explicit period label
+(ABSENT — same structural note as L54/L55). /planning shows no period label.
+
+**What already works well** ✓
+
+- `C1 MULTI_DEPOSIT (re-test)`: All 4 gig income deposits on 4 different dates land
+  separately in the dataset; exact $645 sum (64,500 minor units) confirmed both from
+  dataset read and from /reports. No drop, no doubling. ✓ (`story68_03_transactions_4_deposits.png`,
+  `story68_09_transactions_final.png`)
+- `ACCOUNT_CREATE`: Devon Checking (checking type, $120 opening) and Devon Credit Card
+  (credit card type, $0 opening) both created and visible on /accounts. ✓
+  (`story68_01_accounts_checking_created.png`, `story68_02_accounts_both_created.png`)
+- `INCOME_TYPE_MULTI_DATE`: /transactions new-transaction form accepts Income type with
+  arbitrary past dates (June 3 through June 24). All 4 deposits post to the correct
+  account with the correct date. ✓
+- `REPORTS_INCOME_645`: /reports shows $645 income in its amounts list and a "June 2026"
+  period label. ✓ (`story68_08_reports_income.png`)
+- `BUDGETS_HAS_INCOME_SECTION`: /budgets has an income section (not expenses-only). ✓
+  (`story68_05_budgets_income_view.png`)
+- `FORECAST_CARD_PRESENT`: 12-month net worth forecast card present on /planning. ✓
+  (`story68_06_planning_forecast.png`)
+- `CASH_RUNWAY_PRESENT`: Cash runway 60-day card present on /planning. ✓
+- `DASHBOARD_INCOME_TEXT`: Dashboard body contains "income" text and a period label. ✓
+  (`story68_07_dashboard_income.png`)
+- Zero JS page errors across the full ritual. ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP GAP — /budgets does not surface multi-source income total or "left to allocate"
+affordance (I2 ABSENT — real gap for gig/irregular earners).**
+The budgets screen presents spending categories against category budgets but has no
+view that sums total actual income for the period (regardless of source count) and
+shows how much remains uncommitted. For a traditional salary earner who enters one
+paycheck, this is workable (one big income transaction). For Devon — 4 deposits
+at irregular intervals — the budgets screen gives no answer to "how much did I make
+this month and how much of it is still unallocated?" This is a distinct gap from the
+category-spending view. The information is available in the transaction store (sum of
+income-type transactions) but is not surfaced on /budgets.
+
+- (a) **Model/Logic:** No `income.TotalForPeriod(transactions, period)` roll-up is
+  wired into the budgets presenter. The budgets package aggregates spending against
+  categories but does not compute a top-level income total.
+- (b) **State/UI:** No "Income this period: $X | Left to allocate: $Y" header or
+  widget on the /budgets screen. A gig worker cannot use /budgets as a zero-based
+  budgeting tool (income − allocations = 0) because the income baseline is invisible.
+  Fix: add a period income total (sum of income-type txns) to the budgets presenter
+  and render it as a "left to allocate" header above the category grid.
+
+**⚠ SECOND GAP — 12-month forecast ignores scheduled recurring (Thread B — 3rd re-confirm).**
+Forecast hint on /planning: *"If this month's net cash flow ($905.26) continues…"* — no
+reference to recurring items. Devon's structural $35/month CC minimum payment (and any
+recurring outflows) are invisible to the forecast even after being added as recurring
+bills. The `forecast.Recurring` parameter slice is never populated from the app's
+recurring store. Confirmed for the third time (after L54 and L55). Especially harmful
+for irregular earners: a $905 net in a good gig month does not predict a $400 net in a
+slow month; using the current month's one-off net as a perpetual projection is noisier
+for Devon than for a salaried worker.
+
+- Fix (unchanged from L54/L55): populate `forecast.Recurring` from `app.Recurring()`
+  in `planning.go` before calling `forecast.Project()`. No new logic needed — the
+  plumbing already accepts the slice.
+
+**Additional gap — Dashboard income stat ($645) submerged in sample-data aggregate.**
+/dashboard income widget shows totals dominated by the ~$89K sample-data accounts. Devon's
+$645 does not appear as a distinct figure on the Dashboard; it is folded into a large
+aggregate. The /reports page correctly isolates it (✓), but the Dashboard home screen
+that a gig worker lands on first shows no actionable figure for their irregular income.
+This is an amplified version of the period-context gap noted in L55/L56: the Dashboard
+income widget has no isolation mode for a fresh test persona.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- `story68_05_budgets_income_view.png`: /budgets screen shows category spending rows
+  (Food, Transportation, Phone, etc.) from sample data. Devon's income deposits are not
+  surfaced. The amounts visible ($140, $1,091, $1,585, etc.) are all expense-category
+  actuals. No income total row or "to allocate" figure appears.
+
+- `story68_06_planning_forecast.png`: Forecast hint "net cash flow ($905.26)" — the
+  figure does not match Devon's $645 income minus his $35 CC minimum expense ($610 net).
+  This confirms the forecast is not reading Devon's transactions specifically — it is
+  reading the aggregated current-month net across all sample-data accounts, making the
+  forecast meaningless for a new user in their first month.
+
+- `story68_07_dashboard_income.png`: Dashboard amounts include $35, $63,798, $4,420,
+  etc. — all sample-data dominated. Devon's $645 is invisible. The income widget does
+  not isolate by account or persona-specific period context.
+
+**Probe hardening**
+
+- Amount field path confirmed: `t.amount?.Amount` (capital A) resolves correctly for
+  all income transactions in this story. The `?.amount` (lowercase) path returns 0 —
+  Go's JSON marshaller uses exported field names. This is consistent with L55/L57/L67.
+- /reports income detection: the probe used `$645` literal text search. It matched
+  because the individual deposit amounts ($180, $95, $240, $130) appear separately in
+  the reports list and the $645 total was inferred from context — on re-inspection, the
+  `/645/i` regex matched `$130` + other amounts that happen to contain "645" (e.g. the
+  $3,600 in sample data does not contain 645; but $645 does match the standalone figure
+  if reports renders an income subtotal). Treat step 8.1 PASS as "645 appears somewhere
+  in reports" not "income total widget shows $645.00 explicitly." The dataset audit
+  (Step 9.1) is the authoritative C1 confirmation.
+- `FAIL` on step 6.3 (Thread B re-confirm) is a REAL FINDING, not a probe error:
+  the forecast hint text was read directly from the DOM and explicitly does not contain
+  "recurring", "scheduled", or "bills".
+
+**Relation to prior tickets**
+
+- **Re-confirms L54 ⚠ SECOND GAP and L55 SECOND GAP (Thread B):** Forecast ignores
+  recurring for a third consecutive story, now additionally confirmed for the
+  irregular-income persona where the gap is most harmful.
+- **New finding (not in L54–L67):** The budgets screen's "left to allocate" / income
+  baseline is absent for multi-source income — this is the first story to specifically
+  probe piecemeal income budgeting rather than the single-paycheck path.
+- **C1 multi-deposit re-test HELD:** The multi-deposit C1 concern (income totals
+  dropping or doubling across 4 deposits) was raised as a re-test target. Result: it
+  holds cleanly. The app's income summation is correct at the transaction/dataset layer.
+
+---
+
 ## 0. Foundation & tooling (Phase 0)
 
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH

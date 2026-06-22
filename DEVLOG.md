@@ -10970,3 +10970,11 @@ per-txn clear flag + `ledger.ClearedBalance`), and the live difference closes to
 which is left untouched). Per-row clear lives in its own `ReconcileTxnRow` component (no On* in a
 loop). e2e `reconcile_statement_check.mjs`: had to flush before reading the auto-seeded dataset, and
 always open the row overflow menu (the menu item is in the DOM but hidden when collapsed). Green.
+
+## 2026-06-22 — Quick-hits batch 1: guided empty states
+Extended EmptyStateCTA with an optional Href (route-based CTA) for derived screens with no on-page
+add form. Wired Bills (→/accounts), Subscriptions (→/transactions), Reports breakdown
+(→/transactions), and Planning Recurring/Plans (focus their add form via new ids recurring-add /
+plan-add). Covers quick-hit tasks #49–#52. Also reconciled stale TODOS: Bills annualCost
+(#28, already cadence-correct via bills.AnnualAmounts), Bills key collision (#29, already a composite
+MapKeyed key), and Bills urgency tone (#30, already billUrgencyTone) were verified already-done.
