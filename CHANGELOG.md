@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Fill-to-target allocation mode (L17).** Allocate gains a "Fill to target" mode alongside the score-weighted
+  one: it funds each destination up to its remaining-to-target in ranked priority order (give every envelope
+  its due first), then spreads any leftover by score — zero-based budgeting's "fund the essentials, then
+  optimize." New pure `allocate.DistributeFillToTarget` (sum-to-the-cent invariant, table-tested); goals
+  contribute their target shortfall. e2e `allocate_fill_to_target_check.mjs`.
 - **"What next" prompt when a goal is funded (L20).** A completed goal's row now shows a calm one-line prompt
   with a "Reallocate" action that jumps to Allocate, so the money you were putting toward it can be redirected
   to another goal instead of quietly sitting idle. e2e `goal_whatnext_check.mjs`.

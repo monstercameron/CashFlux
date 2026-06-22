@@ -644,6 +644,9 @@ var english = Catalog{
 	"allocate.undoDone":               "Allocation undone.",
 	"allocate.undoErr":                "Nothing to undo.",
 	"allocate.applyErr":               "Could not apply allocation: %s",
+	"allocate.mode":                   "Allocation mode",
+	"allocate.modeWeighted":           "Weighted",
+	"allocate.modeFillToTarget":       "Fill to target",
 
 	// Custom fields (manager + types)
 	"cf.typeText":           "Text",

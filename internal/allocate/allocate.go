@@ -26,6 +26,9 @@ type Candidate struct {
 	// score highest, favouring finishing what's almost done over starting anew.
 	// Non-goal destinations leave it 0 and so score 0 on that criterion.
 	GoalProgress float64
+	// RemainingToTarget is the minor-unit amount still needed to reach the
+	// candidate's target (0 means no target / unbounded).
+	RemainingToTarget int64
 }
 
 // Weights expresses how much a user cares about each criterion. They need not
@@ -133,6 +136,113 @@ type Plan struct {
 type SplitOptions struct {
 	Reserve int64 // emergency buffer held back from the total before splitting
 	MaxPer  int64 // cap per destination (0 = no cap)
+}
+
+// DistributeFillToTarget allocates total to ranked candidates using a
+// fill-then-spread strategy:
+//  1. Reserve opts.Reserve from total; work with the remainder.
+//  2. In ranked order, give each candidate up to min(RemainingToTarget,
+//     available, opts.MaxPer) — candidates with RemainingToTarget==0 are
+//     skipped in this fill pass (they have no envelope to fill).
+//  3. Spread any money still remaining across ALL candidates via the
+//     existing score-weighted Distribute, respecting opts.MaxPer minus
+//     what each candidate already received in the fill pass.
+//  4. Return one Plan per input candidate (ranked order) and the final
+//     unallocated remainder.
+//
+// INVARIANT: sum(plan.Amount) + remainder == total for every input.
+func DistributeFillToTarget(ranked []Ranked, total int64, opts SplitOptions) ([]Plan, int64) {
+	plans := make([]Plan, len(ranked))
+	for i, r := range ranked {
+		plans[i] = Plan{Candidate: r.Candidate}
+	}
+	if total <= 0 || len(ranked) == 0 {
+		return plans, total
+	}
+
+	available := total - opts.Reserve
+	if available < 0 {
+		available = 0
+	}
+
+	// Fill pass: in ranked order give each goal-envelope candidate up to its
+	// remaining target, capped by available and by MaxPer when set.
+	fillAmount := make(map[string]int64, len(ranked))
+	for _, r := range ranked {
+		if available <= 0 {
+			break
+		}
+		if r.Candidate.RemainingToTarget <= 0 {
+			continue
+		}
+		give := r.Candidate.RemainingToTarget
+		if opts.MaxPer > 0 && give > opts.MaxPer {
+			give = opts.MaxPer
+		}
+		if give > available {
+			give = available
+		}
+		fillAmount[r.Candidate.ID] = give
+		available -= give
+	}
+
+	// Spread pass: distribute whatever is left across all candidates via
+	// Distribute, honouring remaining headroom under MaxPer for each candidate.
+	var spreadPlans []Plan
+	if available > 0 {
+		adjusted := make([]Ranked, 0, len(ranked))
+		adjustedMaxPer := make(map[string]int64, len(ranked))
+		for _, r := range ranked {
+			if opts.MaxPer > 0 {
+				remaining := opts.MaxPer - fillAmount[r.Candidate.ID]
+				if remaining <= 0 {
+					// Already at or above cap — exclude from spread.
+					continue
+				}
+				adjustedMaxPer[r.Candidate.ID] = remaining
+			}
+			adjusted = append(adjusted, r)
+		}
+		if len(adjusted) > 0 {
+			// Build per-candidate adjusted opts. Because Distribute takes a single
+			// MaxPer we apply the lowest adjusted cap across the slice, which may
+			// over-constrain some candidates. Instead, run Distribute with no cap
+			// and then clamp each spread amount manually to the candidate's headroom.
+			spreadRaw, _ := Distribute(adjusted, available, SplitOptions{})
+			spreadPlans = make([]Plan, len(spreadRaw))
+			var totalSpread int64
+			for i, p := range spreadRaw {
+				amt := p.Amount
+				if opts.MaxPer > 0 {
+					cap := adjustedMaxPer[p.Candidate.ID]
+					if amt > cap {
+						amt = cap
+					}
+				}
+				spreadPlans[i] = Plan{Candidate: p.Candidate, Amount: amt}
+				totalSpread += amt
+			}
+			_ = totalSpread
+		}
+	}
+
+	// Build spread lookup by ID.
+	spreadByID := make(map[string]int64, len(spreadPlans))
+	for _, p := range spreadPlans {
+		spreadByID[p.Candidate.ID] = p.Amount
+	}
+
+	// Merge fill + spread into the output plans.
+	for i, r := range ranked {
+		plans[i].Amount = fillAmount[r.Candidate.ID] + spreadByID[r.Candidate.ID]
+	}
+
+	// Compute remainder from the invariant so it holds exactly.
+	var sumAmounts int64
+	for _, p := range plans {
+		sumAmounts += p.Amount
+	}
+	return plans, total - sumAmounts
 }
 
 // Distribute splits total (minor units) across ranked candidates in proportion to

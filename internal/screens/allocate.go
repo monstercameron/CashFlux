@@ -133,6 +133,10 @@ func Allocate() ui.Node {
 		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
+	// allocationMode toggles between score-weighted and fill-to-target (envelope) allocation.
+	allocationMode := ui.UseState("weighted")
+	onMode := ui.UseEvent(func(e ui.Event) { allocationMode.Set(e.GetValue()) })
+
 	profile := ui.UseState("balanced")
 	// Editable criterion weights drive the ranking; the profile select loads a
 	// preset or saved profile into them, and they can be saved as a new profile.
@@ -226,10 +230,18 @@ func Allocate() ui.Node {
 		if done, _ := goalsvc.IsComplete(g); done {
 			continue
 		}
+		var remaining int64
+		if allocationMode.Get() == "fill" {
+			r := g.TargetAmount.Amount - g.CurrentAmount.Amount
+			if r > 0 {
+				remaining = r
+			}
+		}
 		cands = append(cands, allocate.Candidate{
 			ID: "goal:" + g.ID, Name: uistate.T("allocate.goalPrefix", g.Name),
 			StabilityScore: 80, LiquidityScore: 60,
-			GoalProgress: float64(goalsvc.Percent(g)) / 100,
+			GoalProgress:      float64(goalsvc.Percent(g)) / 100,
+			RemainingToTarget: remaining,
 		})
 	}
 
@@ -354,7 +366,12 @@ func Allocate() ui.Node {
 	var remainder int64
 	if totalMinor > 0 {
 		var plans []allocate.Plan
-		plans, remainder = allocate.Distribute(ranked, totalMinor, allocate.SplitOptions{Reserve: reserveMinor, MaxPer: maxPerMinor})
+		splitOpts := allocate.SplitOptions{Reserve: reserveMinor, MaxPer: maxPerMinor}
+		if allocationMode.Get() == "fill" {
+			plans, remainder = allocate.DistributeFillToTarget(ranked, totalMinor, splitOpts)
+		} else {
+			plans, remainder = allocate.Distribute(ranked, totalMinor, splitOpts)
+		}
 		for _, p := range plans {
 			planByID[p.Candidate.ID] = p.Amount
 		}
@@ -495,6 +512,10 @@ func Allocate() ui.Node {
 			H2(css.Class("card-title"), uistate.T("allocate.profileTitle")),
 			P(css.Class("muted"), uistate.T("allocate.profileDesc")),
 			Form(css.Class("form-grid"),
+				Select(css.Class("field"), Attr("data-testid", "allocate-mode"), OnChange(onMode),
+					Option(Value("weighted"), SelectedIf(allocationMode.Get() == "weighted"), uistate.T("allocate.modeWeighted")),
+					Option(Value("fill"), SelectedIf(allocationMode.Get() == "fill"), uistate.T("allocate.modeFillToTarget")),
+				),
 				Select(css.Class("field"), OnChange(onProfile),
 					Option(Value("balanced"), SelectedIf(profile.Get() == "balanced"), uistate.T("allocate.balanced")),
 					Option(Value("returns"), SelectedIf(profile.Get() == "returns"), uistate.T("allocate.maxReturns")),

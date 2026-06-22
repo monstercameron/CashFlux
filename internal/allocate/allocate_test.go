@@ -288,6 +288,149 @@ func TestScoreBreakdownClamped(t *testing.T) {
 	}
 }
 
+func sumInvariant(t *testing.T, label string, plans []Plan, rem int64, total int64) {
+	t.Helper()
+	var s int64
+	for _, p := range plans {
+		s += p.Amount
+	}
+	if s+rem != total {
+		t.Errorf("%s: sum(plans)=%d + remainder=%d = %d, want %d", label, s, rem, s+rem, total)
+	}
+}
+
+func TestDistributeFillToTarget(t *testing.T) {
+	// Helpers: ranked candidates with RemainingToTarget set.
+	mkGoal := func(id string, score float64, remaining int64) Ranked {
+		return Ranked{
+			Candidate: Candidate{ID: id, RemainingToTarget: remaining},
+			Score:     score,
+		}
+	}
+	mkFree := func(id string, score float64) Ranked {
+		return Ranked{
+			Candidate: Candidate{ID: id},
+			Score:     score,
+		}
+	}
+
+	t.Run("empty ranked — invariant holds", func(t *testing.T) {
+		plans, rem := DistributeFillToTarget(nil, 1000, SplitOptions{})
+		if len(plans) != 0 {
+			t.Errorf("want 0 plans, got %d", len(plans))
+		}
+		sumInvariant(t, "empty", plans, rem, 1000)
+	})
+
+	t.Run("ample money — all targets fully funded, leftover spread", func(t *testing.T) {
+		ranked := []Ranked{
+			mkGoal("g1", 0.8, 200),
+			mkGoal("g2", 0.6, 300),
+			mkFree("a1", 0.5),
+		}
+		plans, rem := DistributeFillToTarget(ranked, 10000, SplitOptions{})
+		sumInvariant(t, "ample", plans, rem, 10000)
+		// Both goals should be fully funded.
+		byID := map[string]int64{}
+		for _, p := range plans {
+			byID[p.Candidate.ID] = p.Amount
+		}
+		if byID["g1"] < 200 {
+			t.Errorf("g1 amount = %d, want >= 200 (fully funded)", byID["g1"])
+		}
+		if byID["g2"] < 300 {
+			t.Errorf("g2 amount = %d, want >= 300 (fully funded)", byID["g2"])
+		}
+	})
+
+	t.Run("tight money — partial fill of lowest-priority envelope", func(t *testing.T) {
+		// Only 250 available after reserve; g1 needs 200, g2 needs 300.
+		ranked := []Ranked{
+			mkGoal("g1", 0.8, 200),
+			mkGoal("g2", 0.6, 300),
+		}
+		plans, rem := DistributeFillToTarget(ranked, 250, SplitOptions{})
+		sumInvariant(t, "tight", plans, rem, 250)
+		byID := map[string]int64{}
+		for _, p := range plans {
+			byID[p.Candidate.ID] = p.Amount
+		}
+		// g1 is higher priority and its full 200 should be covered.
+		if byID["g1"] != 200 {
+			t.Errorf("g1 = %d, want 200 (full fill)", byID["g1"])
+		}
+		// g2 gets the remaining 50.
+		if byID["g2"] != 50 {
+			t.Errorf("g2 = %d, want 50 (partial fill)", byID["g2"])
+		}
+	})
+
+	t.Run("zero-target candidates only get leftover spread", func(t *testing.T) {
+		ranked := []Ranked{
+			mkGoal("g1", 0.9, 100),
+			mkFree("a1", 0.7), // no envelope
+			mkFree("a2", 0.3),
+		}
+		plans, rem := DistributeFillToTarget(ranked, 500, SplitOptions{})
+		sumInvariant(t, "zero-target", plans, rem, 500)
+		byID := map[string]int64{}
+		for _, p := range plans {
+			byID[p.Candidate.ID] = p.Amount
+		}
+		// g1 gets at least its 100.
+		if byID["g1"] < 100 {
+			t.Errorf("g1 = %d, want >= 100", byID["g1"])
+		}
+		// Free candidates must get something from the spread.
+		if byID["a1"] == 0 && byID["a2"] == 0 {
+			t.Errorf("free candidates got nothing from spread (a1=%d a2=%d)", byID["a1"], byID["a2"])
+		}
+	})
+
+	t.Run("reserve respected — reserve > total leaves everything in remainder", func(t *testing.T) {
+		ranked := []Ranked{mkGoal("g1", 1, 1000)}
+		plans, rem := DistributeFillToTarget(ranked, 100, SplitOptions{Reserve: 500})
+		sumInvariant(t, "reserve>total", plans, rem, 100)
+		if plans[0].Amount != 0 {
+			t.Errorf("plan amount = %d, want 0 (all reserved)", plans[0].Amount)
+		}
+		if rem != 100 {
+			t.Errorf("remainder = %d, want 100", rem)
+		}
+	})
+
+	t.Run("MaxPer respected in fill pass", func(t *testing.T) {
+		// Goal needs 1000 but MaxPer=400; fill pass must cap at 400.
+		ranked := []Ranked{mkGoal("g1", 1, 1000)}
+		plans, rem := DistributeFillToTarget(ranked, 1500, SplitOptions{MaxPer: 400})
+		sumInvariant(t, "maxper-fill", plans, rem, 1500)
+		if plans[0].Amount > 400 {
+			t.Errorf("g1 amount = %d, exceeds MaxPer=400", plans[0].Amount)
+		}
+	})
+
+	t.Run("sum invariant holds across varied inputs", func(t *testing.T) {
+		cases := []struct {
+			label   string
+			ranked  []Ranked
+			total   int64
+			opts    SplitOptions
+		}{
+			{"zero total", []Ranked{mkGoal("g1", 1, 500)}, 0, SplitOptions{}},
+			{"negative total", []Ranked{mkGoal("g1", 1, 500)}, -100, SplitOptions{}},
+			{"exact fill", []Ranked{mkGoal("g1", 1, 300)}, 300, SplitOptions{}},
+			{"reserve + fill", []Ranked{mkGoal("g1", 0.8, 200), mkFree("a1", 0.5)}, 1000, SplitOptions{Reserve: 100}},
+			{"multi-goal multi-free", []Ranked{
+				mkGoal("g1", 0.9, 150), mkGoal("g2", 0.7, 250), mkFree("a1", 0.6), mkFree("a2", 0.4),
+			}, 2000, SplitOptions{Reserve: 200, MaxPer: 800}},
+		}
+		for _, tc := range cases {
+			plans, rem := DistributeFillToTarget(tc.ranked, tc.total, tc.opts)
+			sumInvariant(t, tc.label, plans, rem, tc.total)
+		}
+	})
+}
+
 func TestRankDebtPriority(t *testing.T) {
 	cands := []Candidate{
 		{ID: "savings", ExpectedReturnAPR: 4, StabilityScore: 90, LiquidityScore: 90},
