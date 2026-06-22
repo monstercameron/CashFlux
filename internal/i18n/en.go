@@ -401,6 +401,13 @@ var english = Catalog{
 	"goals.bySuffix":          " · by %s",
 	"goals.saveSuffix":        " · save %s/mo",
 	"goals.linkedSuffix":      " · linked to %s",
+	"goals.overTarget":        "%s over target",
+	"goals.archive":           "Archive",
+	"goals.archiveTitle":      "Move this completed goal to Achieved",
+	"goals.unarchive":         "Unarchive",
+	"goals.unarchiveTitle":    "Move this goal back to active",
+	"goals.achieved":          "Achieved",
+	"goals.achievedCount":     "%d achieved",
 
 	// Planning screen
 	"planning.forecastTitle":            "Net worth in 12 months",

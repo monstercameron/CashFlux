@@ -167,3 +167,83 @@ func TestEvaluate(t *testing.T) {
 		t.Errorf("projection = %v has=%v", s.Projected, s.HasProjection)
 	}
 }
+
+func TestOverfund(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  int64
+		current int64
+		want    int64
+	}{
+		{"exactly at target → 0", 100000, 100000, 0},
+		{"over by 20000 → surplus", 100000, 120000, 20000},
+		{"under target → 0", 100000, 80000, 0},
+		{"zero current → 0", 100000, 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := goal(tt.target, tt.current)
+			got, err := Overfund(g)
+			if err != nil {
+				t.Fatalf("Overfund error: %v", err)
+			}
+			if got.Amount != tt.want {
+				t.Errorf("Overfund(%d, %d) = %d, want %d", tt.target, tt.current, got.Amount, tt.want)
+			}
+			// Currency is always preserved from the goal's target currency.
+			if got.Currency != "USD" {
+				t.Errorf("Overfund currency = %q, want USD", got.Currency)
+			}
+		})
+	}
+}
+
+func TestOverallProgress(t *testing.T) {
+	archived := func(target, current int64) domain.Goal {
+		g := goal(target, current)
+		g.Archived = true
+		return g
+	}
+
+	tests := []struct {
+		name            string
+		goals           []domain.Goal
+		includeArchived bool
+		want            int
+	}{
+		{"empty → 0", nil, false, 0},
+		{"empty include archived → 0", nil, true, 0},
+		{"all active, 50%", []domain.Goal{goal(100000, 50000)}, false, 50},
+		{"zero target → 0", []domain.Goal{goal(0, 0)}, false, 0},
+		{"cap at 100", []domain.Goal{goal(100000, 200000)}, false, 100},
+		{
+			"archived excluded changes %",
+			[]domain.Goal{goal(100000, 50000), archived(100000, 100000)},
+			false, // archived goal excluded
+			50,    // only the active 50% goal counts
+		},
+		{
+			"archived included",
+			[]domain.Goal{goal(100000, 50000), archived(100000, 100000)},
+			true,
+			75, // (50000+100000)*100 / (100000+100000) = 75
+		},
+		{
+			"multiple active, mixed",
+			[]domain.Goal{goal(200000, 100000), goal(100000, 100000)},
+			false,
+			66, // (100000+100000)*100/300000 = 66 (integer division)
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := OverallProgress(tt.goals, tt.includeArchived)
+			if err != nil {
+				t.Fatalf("OverallProgress error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("OverallProgress = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

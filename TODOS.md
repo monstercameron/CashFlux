@@ -5013,20 +5013,17 @@ completed state). Verified by creating a goal over target ($80 saved / $50 targe
 - Contribute/Edit remain available; the bar correctly caps at 100% even when over-funded ($80/$50). ✓
 
 **Gaps (what happens AFTER the finish line):**
-- [ ] **Over-funding isn't acknowledged or handled.** The row shows "$80.00 / $50.00" — $30 over — but
-      nothing flags the surplus or offers to do anything with it. Add an **"$X over target"** note + an
-      action to **redirect the excess** to another goal (or back to available). Bottom-up: a pure
-      `goals.Overfund(goal)` calc (tested) → a row note + a "move excess" action reusing the
-      L17 allocate / L5 contribute paths.
+- [~] **Over-funding acknowledged.** Pure `goals.Overfund(goal)` (tested) → a calm "<amount> over target"
+      note on over-funded rows. (Remaining: a "move excess" redirect action reusing L17 allocate / L5
+      contribute — deferred.)
 - [ ] **No "what next" when a goal completes.** Completing a goal frees its monthly contribution; nothing
       suggests redirecting it. Add a low-pressure prompt ("🎉 Emergency fund is funded — send its
       $1,071/mo to your next goal?") → deep-link to that goal's contribute / Allocate. Friendly, never
       naggy.
-- [ ] **Completed goals stay inline in the active list with no archive.** Over time finished goals
-      clutter the list, and **"Overall progress" includes them** (so the headline % is diluted by done
-      goals). Add an **Achieved** section / archive toggle and an option to exclude completed goals from
-      the overall-progress math. Bottom-up: a `goal.Achieved`/`ArchivedAt` flag (store round-trip) →
-      grouping + a progress calc that can exclude completed; tested.
+- [x] **Completed goals archive into an "Achieved" section.** New `Goal.Archived` flag (JSON round-trip);
+      completed goals get an Archive action → a collapsible "Achieved" section (with Unarchive); the headline
+      "Overall progress" uses `goals.OverallProgress(active, false)` so archived goals no longer dilute it.
+      `appstate.ArchiveGoal` + tests; e2e `goal_lifecycle_check.mjs`.
 - [ ] *(Polish)* **One-time celebration moment** on crossing the line (a subtle toast/animation), not just
       a persistent static "Complete 🎉" badge — keep it calm per the UI rules.
 
@@ -5828,6 +5825,112 @@ Groceries spend.
   row's `$X / $600` figure immediately after budget creation, then assert `afterSpent − baseline ≈
   $150.21 ± $0.05`. This pattern generalises to any spend-tracking e2e story where sample data
   pre-populates the category.
+
+---
+
+### L41. Story — "Starting a Vacation Fund" (Cam, first savings goal) — 2026-06-22 ★
+
+**The ritual:** Cam wants to save $2,000 for a vacation by December 2026. He opens /goals, fills in
+the add form (name "L41 Vacation Fund", target $2,000, target date 2026-12-01, linked account
+"Emergency Savings (HYSA)", saved so far $0) and clicks Add. The goal appears immediately at 0% with
+`$0.00 / $2,000.00` and a `save $333.34/mo` pace figure. He then clicks Contribute, enters $200, and
+submits. He expects: progress advances to 10% ($200/$2,000, $1,800 to go), pace recomputes to
+`$300/mo`, the bar fills, and the linked Savings account balance does NOT change (he'll log the real
+transfer separately). After a hard reload, the goal + $200 progress both persist.
+
+**Drive script:** `e2e/loopstory_41_create_goal.mjs`.
+All 29 checks pass; exit code 0.
+
+**What already works well (regression anchors):**
+- ✓ **Goal creation is full-featured.** The add form exposes Name, Target (USD), Saved so far, Owner,
+  Linked account (optional), and Target date in one labelled row — all confirmed visible in
+  `loop41-02-add-form-filled.png`. No progressive disclosure required.
+- ✓ **Goal appears immediately after submit with correct $0/$2,000 and 0% bar.** No reload needed;
+  row is reactive. Confirmed `loop41-03-after-add-goal.png`: `$0.00 / $2,000.00 · 0% · $2,000.00
+  to go · by 2026-12-01 · save $333.34/mo · linked to Emergency Savings (HYSA)`.
+- ✓ **Pace figure (`save $X/mo`) is live and accurate from creation.** `MonthlyNeeded` fires
+  whenever a `TargetDate` is set; $2,000 / ~6 months = $333.34/mo is correct. Confirmed row text.
+- ✓ **Contribution advances progress to exactly 10%.** After $200 Contribute, the row reads
+  `$200.00 / $2,000.00 · 10% · $1,800.00 to go · by 2026-12-01 · save $300.00/mo`. Bar fill
+  style changes from `width:0%` to `width:10%`. Pace recomputes ($300/mo). Confirmed
+  `loop41-05-after-contribute.png`.
+- ✓ **Linked account label + drill link render correctly.** "linked to Emergency Savings (HYSA)"
+  appears as a clickable underlined link that drills to /transactions filtered to that account.
+  Confirmed `loop41-03-after-add-goal.png`.
+- ✓ **Goal and $200 contribution both persist across hard reload.** Post-`page.reload()` the row
+  still reads `$200.00 / $2,000.00 · 10%`. Confirmed `loop41-08-goals-after-reload.png`.
+- ✓ **Zero JS page errors** across the entire flow (/goals create → contribute → /accounts verify
+  → /transactions verify → /goals reload).
+
+**Mechanical gaps:**
+
+- [ ] **CONFIRMED DECOUPLED: "Contribute" is a silent progress bump — it does NOT balance against
+  the linked account (C51 gap).** `contribute()` in `internal/screens/goals.go` (line 177) only
+  mutates `Goal.CurrentAmount` and calls `app.PutGoal`. No transaction is created, no account
+  balance is debited. After contributing $200 to the goal linked to "Emergency Savings (HYSA)",
+  the HYSA balance remains `$12,200.00` — confirmed via `loop41-06-accounts-after-contrib.png`
+  (unchanged) and cross-checked in /transactions (no auto-transaction exists).
+  This means money can be "invented": a user contributes $200 to a goal without any corresponding
+  outflow from their savings account. The goal's apparent progress and the real account balance
+  drift apart silently. The correct behavior is: Contribute should create a transfer transaction
+  from the linked account to the goal (or at minimum warn the user that the contribution is
+  manual/memo-only and not reflected in their account balance).
+  Before: contribute $200 → `Goal.CurrentAmount += $200`, account unchanged.
+  After: contribute $200 → create a transaction (`Amount: -$200`, `AccountID: linkedAccountID`,
+  `TransferAccountID: goal-pseudo-account` or equivalent) that debits the linked account, and
+  `Goal.CurrentAmount` derives from that transaction sum, not a stored field. If no linked account
+  is set, contribution remains memo-only with an explicit "not tracked against any account" notice.
+  (`internal/screens/goals.go` `contribute` func; `internal/goals` service; `internal/domain.Goal`
+  may need `CurrentAmount` to become a computed field over linked transactions.)
+- [ ] **No "Goal name is required" guard.** The Name input (`#goal-add`) has no `aria-required` and
+  no client-side guard; submitting with a blank name creates an unnamed goal row. Before: empty name
+  → unnamed goal. After: treat Name as required (`aria-required="true"` + errMsg path matching the
+  Target validation). (`internal/screens/goals.go` `add` handler before `app.PutGoal`.)
+- [ ] **"Contribute" has no floor/ceiling validation.** A user can contribute $0, a negative amount,
+  or an amount larger than the remaining target without any warning. The `contribute` func parses the
+  amount but only guards `amt == 0` (silently no-ops) — it does not reject negatives or over-target
+  amounts. Before: contribute -$50 → `CurrentAmount -= $50` (balance goes negative), no error.
+  After: reject amounts ≤ 0 with an errMsg; optionally warn (not block) if the contribution would
+  exceed the remaining target. (`internal/screens/goals.go` `GoalRow.OnContribute` / the `contribute`
+  closure, lines 177–192.)
+
+**UI/UX defects (screenshot-confirmed):**
+
+- [ ] **"Linked account (optional)" select label is truncated in the add form.** At 1280 × 900 the
+  linked-account select only shows `"Emergency Saving…"` — the account name is cut off by column
+  width. The field label above it also reads `"Linked account (optional)"` which is long; the select
+  itself is constrained to the same column width as the other fields in the single-row form layout.
+  Screenshot: `loop41-02-add-form-filled.png` (linked account select text truncated).
+  After: widen the linked-account column or shorten the label to `"Linked account"` with the
+  optional hint in a `title`/`aria-describedby`; add `title` to the select itself so the full name
+  is visible on hover. Close-out: re-screenshot at 1280 px confirming full name visible.
+- [ ] **Add form does not reset after submit.** After submitting the goal, the Name and Target inputs
+  clear (correct), but Target date retains `12/01/2026` and Linked account retains `Emergency
+  Savings (HYSA)`. If Cam immediately adds a second goal for a different purpose he must re-clear
+  both fields. The partial reset is inconsistent. Screenshot: `loop41-03-after-add-goal.png` (add
+  form still shows prior date and account after submit).
+  After: reset `dateStr`, `linkAcct` to `""` in the `add` handler alongside `name`/`target`/
+  `current`. (`internal/screens/goals.go` `add` closure, lines 113–120.)
+- [ ] **No success confirmation after Add.** After clicking Add the goal silently appears below with
+  no toast, snackbar, or row highlight — same gap as L39/L40. Screenshot: `loop41-03-after-add-goal.png`
+  (no confirmation signal at top of page). After: brief toast "Goal added" or 1–2 s highlight on the
+  newly inserted row. (`internal/ui/` toast system.)
+- [ ] **No success confirmation after Contribute.** After submitting the contribution the amount
+  updates silently — there is no toast or flash. For a $200 action this feels unacknowledged.
+  Screenshot: `loop41-05-after-contribute.png` (amount changed but no confirmation visible).
+  After: brief inline feedback "Contributed $200.00" or a row highlight. Close-out: re-screenshot.
+
+**Probe hardening:**
+- The linked-account select has no unique `aria-label` referencing "linked" — it is identified by
+  scanning all `<select>` elements for one whose options include a `/saving/i` match. This is
+  fragile if a future budget or other form also has a Savings option. Fix: add a stable
+  `aria-label="Linked account"` to the linked-account select in `goals.go` (the label already
+  reads `goals.linkedOptional`; the select's `aria-label` is already set to that same key — but
+  the probe should use `select[aria-label*="Linked" i]` or `select[aria-label*="linked" i]` for
+  specificity rather than scanning all selects by option content.
+- The `/accounts` balance snapshot captures the entire body text; it is stable but verbose. A
+  tighter probe would locate the specific account row by `data-id` or a stable class and read only
+  its balance cell.
 
 ---
 

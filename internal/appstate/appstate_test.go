@@ -695,6 +695,42 @@ func TestPutValidatesAndPersists(t *testing.T) {
 	}
 }
 
+func TestArchiveGoal(t *testing.T) {
+	a := newApp(t, false)
+	g := domain.Goal{
+		ID: "g-arch", Name: "Test goal", OwnerID: domain.GroupOwnerID,
+		Scope:         domain.ScopeShared,
+		TargetAmount:  money.New(100000, "USD"),
+		CurrentAmount: money.New(100000, "USD"),
+	}
+	if err := a.PutGoal(g); err != nil {
+		t.Fatalf("PutGoal: %v", err)
+	}
+
+	// Archive it.
+	if err := a.ArchiveGoal("g-arch", true); err != nil {
+		t.Fatalf("ArchiveGoal(true): %v", err)
+	}
+	goals := a.Goals()
+	if len(goals) != 1 || !goals[0].Archived {
+		t.Errorf("expected archived=true, got %+v", goals)
+	}
+
+	// Unarchive it.
+	if err := a.ArchiveGoal("g-arch", false); err != nil {
+		t.Fatalf("ArchiveGoal(false): %v", err)
+	}
+	goals = a.Goals()
+	if len(goals) != 1 || goals[0].Archived {
+		t.Errorf("expected archived=false after restore, got %+v", goals)
+	}
+
+	// Missing ID returns error.
+	if err := a.ArchiveGoal("nonexistent", true); err == nil {
+		t.Error("expected error for missing goal ID")
+	}
+}
+
 func TestExportImportRoundTrip(t *testing.T) {
 	a := newApp(t, true)
 	data, err := a.ExportJSON()

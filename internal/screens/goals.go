@@ -129,6 +129,14 @@ func Goals() ui.Node {
 		bump()
 	}
 
+	archiveGoal := func(goalID string, archive bool) {
+		if err := app.ArchiveGoal(goalID, archive); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		bump()
+	}
+
 	saveGoal := func(id, newName, targetStr, dateStr, accountID, ownerID string) {
 		for _, g := range app.Goals() {
 			if g.ID != id {
@@ -220,23 +228,38 @@ func Goals() ui.Node {
 		errText("goal-err", errMsg.Get()),
 	)
 
-	goals := app.Goals()
-	// Incomplete goals first, then alphabetical.
-	sort.SliceStable(goals, func(i, j int) bool {
-		ci, _ := goalsvc.IsComplete(goals[i])
-		cj, _ := goalsvc.IsComplete(goals[j])
+	allGoals := app.Goals()
+
+	// Partition into active (non-archived) and achieved (archived).
+	var activeGoals, achievedGoals []domain.Goal
+	for _, g := range allGoals {
+		if g.Archived {
+			achievedGoals = append(achievedGoals, g)
+		} else {
+			activeGoals = append(activeGoals, g)
+		}
+	}
+
+	// Active list: incomplete goals first, then alphabetical within each group.
+	sort.SliceStable(activeGoals, func(i, j int) bool {
+		ci, _ := goalsvc.IsComplete(activeGoals[i])
+		cj, _ := goalsvc.IsComplete(activeGoals[j])
 		if ci != cj {
 			return !ci
 		}
-		return goals[i].Name < goals[j].Name
+		return activeGoals[i].Name < activeGoals[j].Name
+	})
+	// Achieved list: alphabetical.
+	sort.SliceStable(achievedGoals, func(i, j int) bool {
+		return achievedGoals[i].Name < achievedGoals[j].Name
 	})
 
-	// Combined progress across all goals, each converted to the base currency via
-	// the FX table (goals may be denominated in different currencies). A goal whose
-	// currency has no rate falls back to its raw amount rather than being dropped.
+	// Combined progress across active goals only (archived goals excluded so they
+	// don't dilute the headline figure). Each goal is converted to the base currency
+	// via the FX table; a missing rate falls back to raw minor units.
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	var savedTotal, targetTotal int64
-	for _, g := range goals {
+	for _, g := range activeGoals {
 		if c, err := rates.Convert(g.CurrentAmount, base); err == nil {
 			savedTotal += c.Amount
 		} else {
@@ -248,30 +271,56 @@ func Goals() ui.Node {
 			targetTotal += g.TargetAmount.Amount
 		}
 	}
-	overallPct := 0
-	if targetTotal > 0 {
-		overallPct = int(savedTotal * 100 / targetTotal)
-		if overallPct > 100 {
-			overallPct = 100
-		}
-	}
+	overallPct, _ := goalsvc.OverallProgress(activeGoals, false)
+
+	members := app.Members()
 
 	var listBody ui.Node
-	if len(goals) == 0 {
+	if len(activeGoals) == 0 {
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("goals.empty"), CTALabel: uistate.T("goals.addFirst"), FocusID: "goal-add"})
 	} else {
-		rows := MapKeyed(goals,
+		rows := MapKeyed(activeGoals,
 			func(g domain.Goal) any { return g.ID },
 			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: app.Members(), OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns})
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal})
 			},
 		)
 		listBody = Div(rows)
 	}
 
+	achievedOpen := ui.UseState(true)
+	toggleAchieved := ui.UseEvent(Prevent(func() { achievedOpen.Set(!achievedOpen.Get()) }))
+
+	var achievedSection ui.Node = Fragment()
+	if len(achievedGoals) > 0 {
+		achievedRows := MapKeyed(achievedGoals,
+			func(g domain.Goal) any { return g.ID },
+			func(g domain.Goal) ui.Node {
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal})
+			},
+		)
+		achievedSection = Section(css.Class("card"),
+			Attr("aria-label", uistate.T("goals.achieved")),
+			H2(css.Class("card-title"),
+				Button(
+					css.Class("btn"),
+					Type("button"),
+					Attr("aria-expanded", fmt.Sprintf("%t", achievedOpen.Get())),
+					Attr("aria-controls", "goals-achieved-list"),
+					OnClick(toggleAchieved),
+					uistate.T("goals.achieved"),
+					Span(css.Class("budget-sub"), uistate.T("goals.achievedCount", len(achievedGoals))),
+				),
+			),
+			If(achievedOpen.Get(),
+				Div(Attr("id", "goals-achieved-list"), achievedRows),
+			),
+		)
+	}
+
 	return Div(
 		form,
-		If(len(goals) > 0, Div(css.Class("stat-grid"),
+		If(len(allGoals) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("goals.savedSoFar"), fmtMoney(money.New(savedTotal, base)), "pos"),
 			stat(uistate.T("goals.totalTarget"), fmtMoney(money.New(targetTotal, base)), ""),
 			stat(uistate.T("goals.overallProgress"), fmt.Sprintf("%d%%", overallPct), ""),
@@ -280,6 +329,7 @@ func Goals() ui.Node {
 			H2(css.Class("card-title"), uistate.T("nav.goals")),
 			listBody,
 		),
+		achievedSection,
 	)
 }
 
@@ -290,7 +340,8 @@ type goalRowProps struct {
 	OnDelete       func(string)
 	OnContribute   func(domain.Goal, string)
 	OnSave         func(id, name, target, date, accountID, owner string)
-	OnDrillAccount func(accountID string) // open Transactions filtered to the linked account
+	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
+	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section
 }
 
 // goalAccountOptions builds the linked-account <option>s for a goal, with a
@@ -335,6 +386,16 @@ func GoalRow(props goalRowProps) ui.Node {
 	}
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(g.ID) }))
+	doArchive := ui.UseEvent(Prevent(func() {
+		if props.OnArchive != nil {
+			props.OnArchive(g.ID, true)
+		}
+	}))
+	doUnarchive := ui.UseEvent(Prevent(func() {
+		if props.OnArchive != nil {
+			props.OnArchive(g.ID, false)
+		}
+	}))
 	drillAcct := ui.UseEvent(Prevent(func() {
 		if props.OnDrillAccount != nil {
 			props.OnDrillAccount(g.AccountID)
@@ -424,6 +485,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	pct := goalsvc.Percent(g)
 	rem, _ := goalsvc.Remaining(g)
 	complete, _ := goalsvc.IsComplete(g)
+	overfund, _ := goalsvc.Overfund(g)
 
 	sub := uistate.T("goals.progressFmt", pct, fmtMoney(rem))
 	if complete {
@@ -437,6 +499,18 @@ func GoalRow(props goalRowProps) ui.Node {
 			}
 		}
 	}
+
+	// Over-funding note: shown whenever the current amount exceeds the target.
+	var overfundNote ui.Node = Fragment()
+	if overfund.IsPositive() {
+		overfundNote = Span(
+			css.Class("budget-sub"),
+			Attr("data-testid", "goal-overfund-"+g.ID),
+			Style(map[string]string{"color": "var(--up)"}),
+			uistate.T("goals.overTarget", fmtMoney(overfund)),
+		)
+	}
+
 	// The linked account is split out of the run-on sub-line into its own clickable
 	// element that drills to that account's transactions (C51).
 	linkedName := accountName(props.Accounts, g.AccountID)
@@ -449,16 +523,43 @@ func GoalRow(props goalRowProps) ui.Node {
 		)
 	}
 
+	// Archive button shown on complete active goals; Unarchive shown on archived goals.
+	var archiveBtn ui.Node = Fragment()
+	if g.Archived {
+		archiveBtn = Button(
+			css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+			Type("button"),
+			Attr("aria-label", uistate.T("goals.unarchiveTitle")),
+			Title(uistate.T("goals.unarchiveTitle")),
+			Attr("data-testid", "goal-unarchive-"+g.ID),
+			OnClick(doUnarchive),
+			Span(uistate.T("goals.unarchive")),
+		)
+	} else if complete {
+		archiveBtn = Button(
+			css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+			Type("button"),
+			Attr("aria-label", uistate.T("goals.archiveTitle")),
+			Title(uistate.T("goals.archiveTitle")),
+			Attr("data-testid", "goal-archive-"+g.ID),
+			OnClick(doArchive),
+			Span(uistate.T("goals.archive")),
+		)
+	}
+
 	return Div(css.Class("budget"),
+		Attr("data-testid", "goal-row-"+g.ID),
 		Div(css.Class("budget-head"),
 			Span(css.Class("row-desc"), g.Name),
 			Span(css.Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute"))),
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
+			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
+			archiveBtn,
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		Div(css.Class("bar"), Div(css.Class("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
 		Span(css.Class("budget-sub"), sub),
+		overfundNote,
 		linkedLine,
 	)
 }

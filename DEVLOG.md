@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: goal-completion lifecycle (L20)
+
+The completion *moment* was already handled (capped bar + "Complete 🎉", pace nag removed); this is what
+happens after. Added `Goal.Archived` (JSON round-trips, no store change), pure `goals.Overfund(goal)` (surplus
+over target, same-currency) and `goals.OverallProgress(goals, includeArchived)` — pulled the headline %
+math out of the view into a tested function that can exclude archived goals. UI: a calm "<amount> over target"
+note on over-funded rows, an Archive action on completed goals that relocates them to a collapsible "Achieved"
+disclosure (with Unarchive), and the headline progress now computed over active goals only so finished ones
+stop diluting it. `appstate.ArchiveGoal` convenience + test. Deferred (own follow-ups): the "move excess"
+redirect action, the "what next → next goal" prompt, and the one-time celebration toast. e2e
+`goal_lifecycle_check.mjs` (creates a fresh over-funded goal — no seeded one is over target). Next: L13/L27.
+
 ## 2026-06-22 - feat: spending report by custom field (L18, also L16)
 
 Custom fields could be defined, filled, and filtered, but the data was a dead end — no way to total by them.

@@ -1452,6 +1452,23 @@ func (a *App) PutGoal(g domain.Goal) error {
 }
 func (a *App) DeleteGoal(id string) error { return a.del("goal", id, a.store.DeleteGoal) }
 
+// ArchiveGoal sets the Archived flag on a goal to archive (true) or restore
+// (false) it. The goal must already exist; a missing ID returns an error.
+func (a *App) ArchiveGoal(goalID string, archive bool) error {
+	goals, err := a.store.ListGoals()
+	if err != nil {
+		return fmt.Errorf("appstate: archive goal: %w", err)
+	}
+	for _, g := range goals {
+		if g.ID != goalID {
+			continue
+		}
+		g.Archived = archive
+		return a.PutGoal(g)
+	}
+	return fmt.Errorf("appstate: archive goal: id %q not found", goalID)
+}
+
 func (a *App) PutTask(t domain.Task) error {
 	if is := validate.ValidateTask(t); !is.OK() {
 		return is

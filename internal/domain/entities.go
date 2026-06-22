@@ -324,15 +324,18 @@ type Budget struct {
 
 // Goal is a savings target, individual or shared.
 type Goal struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Scope         Scope          `json:"scope"`
-	OwnerID       string         `json:"ownerId"`
-	TargetAmount  money.Money    `json:"targetAmount"`
-	CurrentAmount money.Money    `json:"currentAmount"`
-	TargetDate    time.Time      `json:"targetDate,omitempty"`
-	AccountID     string         `json:"accountId,omitempty"`
-	Custom        map[string]any `json:"custom,omitempty"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Scope         Scope       `json:"scope"`
+	OwnerID       string      `json:"ownerId"`
+	TargetAmount  money.Money `json:"targetAmount"`
+	CurrentAmount money.Money `json:"currentAmount"`
+	TargetDate    time.Time   `json:"targetDate,omitempty"`
+	AccountID     string      `json:"accountId,omitempty"`
+	// Archived marks a completed goal as moved to the "Achieved" section.
+	// JSON round-trips automatically; no store schema change is needed.
+	Archived bool           `json:"archived,omitempty"`
+	Custom   map[string]any `json:"custom,omitempty"`
 }
 
 // EarmarkKind identifies what kind of entity an Earmark is targeting.

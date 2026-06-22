@@ -143,6 +143,52 @@ func OnTrack(goal domain.Goal, monthly money.Money, from time.Time) (onTrack, kn
 	return !projected.After(goal.TargetDate), true, nil
 }
 
+// Overfund returns the surplus amount by which a goal's current balance exceeds
+// its target. When the goal is not over-funded (or exactly at target) it returns
+// a zero-valued Money in the goal's target currency. Currency mismatches are
+// propagated as errors.
+func Overfund(goal domain.Goal) (money.Money, error) {
+	cmp, err := goal.CurrentAmount.Cmp(goal.TargetAmount)
+	if err != nil {
+		return money.Money{}, err
+	}
+	if cmp <= 0 {
+		return money.Zero(goal.TargetAmount.Currency), nil
+	}
+	surplus, err := goal.CurrentAmount.Sub(goal.TargetAmount)
+	if err != nil {
+		return money.Money{}, err
+	}
+	return surplus, nil
+}
+
+// OverallProgress computes the combined 0..100 savings progress across the
+// provided goals. When includeArchived is false, archived goals are excluded
+// from both the numerator and denominator — they no longer dilute the headline
+// figure after being moved to the "Achieved" section. A zero total target
+// returns 0. The result is clamped to 100.
+func OverallProgress(goals []domain.Goal, includeArchived bool) (int, error) {
+	var saved, target int64
+	for _, g := range goals {
+		if !includeArchived && g.Archived {
+			continue
+		}
+		saved += g.CurrentAmount.Amount
+		target += g.TargetAmount.Amount
+	}
+	if target <= 0 {
+		return 0, nil
+	}
+	pct := int(saved * 100 / target)
+	if pct > 100 {
+		return 100, nil
+	}
+	if pct < 0 {
+		return 0, nil
+	}
+	return pct, nil
+}
+
 // Evaluate returns the full Status for a goal given an assumed monthly
 // contribution and a reference date.
 func Evaluate(goal domain.Goal, monthly money.Money, from time.Time) (Status, error) {

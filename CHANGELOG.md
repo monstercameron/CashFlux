@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Goal-completion lifecycle (L20).** Finished savings goals now have somewhere to go. An over-funded goal
+  shows a calm "<amount> over target" note; a completed goal gains an Archive action that moves it into a
+  collapsible "Achieved" section (with Unarchive), and archived goals are excluded from the headline "Overall
+  progress" so a pile of finished goals no longer dilutes the figure. New `Goal.Archived` flag (JSON
+  round-trip), pure `goals.Overfund` + `goals.OverallProgress(goals, includeArchived)` (table-tested), and
+  `appstate.ArchiveGoal`; e2e `goal_lifecycle_check.mjs`.
 - **Spending report grouped by a custom field (L18 / L16).** A new "Spending by <field>" section on Reports
   totals expenses grouped by any transaction custom field's value, with a selector to switch fields and a CSV
   export. Booleans show as Yes/No, numbers strip trailing zeros, and untagged transactions fall into a
