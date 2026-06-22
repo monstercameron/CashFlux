@@ -5162,7 +5162,7 @@ import silently failed on the bad amount, so the delta was just the sample (57) 
         Yearly) creates an autopost `domain.Recurring` schedule inline (NextDue = next cadence after the
         entered date, so today's entry isn't double-posted); boot auto-post carries it forward. e2e
         `txn_add_repeat_check.mjs`. (Transfers excluded — two-leg recurring is future work.)
-- [ ] **Cross-currency transfer (ties L4).** A transfer assumes one amount/one currency; moving USD→EUR
+- [x] **Cross-currency transfer (ties L4).** A transfer assumes one amount/one currency; moving USD→EUR
       needs an FX rate (and likely a received-amount). Verify + handle: apply the FX table, optionally let
       the user set the received amount; test net-worth stays consistent in base currency.
 
@@ -8005,6 +8005,159 @@ Exit code 0 — 19 PASS · 0 FAIL · 2 MAYBE
 - The "Criterion weights" heading (`CRITERION WEIGHTS`) is a CSS-uppercase `set-label` span, not
   plain text — `innerText` returns it uppercase, breaking the `"Criterion weights"` check. Fix the
   script to use case-insensitive matching for that heading.
+
+### L61. Story — "The What-If" (Dev & Priya) — 2026-06-22 ★
+
+**Persona:** Dev & Priya, dual-income couple. Dev wants to model: "What if I trim spending
+$500/month — how does that change our 12-month net-worth trajectory? And what if we take on a
+new $200/month recurring expense instead?" He also wants to see whether the planning scenario
+moves the Vacation Fund goal's completion date.
+
+**The ritual:**
+1. /planning — view the "Net worth in 12 months" forecast card; note baseline net cash flow
+   and projected figure.
+2. Enter $500 in the trim field — assert the trim note / second series appears with a higher
+   12-month projected balance (scenario recompute).
+3. Clear the trim field — assert the trim note disappears and only the baseline series remains
+   (revert-clean, no state leak).
+4. "Savings & spending plans" — add "L61 Raise Scenario" (start=$63,068, monthly=+$500, 12mo).
+5. Add "L61 New Expense" (start=$63,068, monthly=−$200, 12mo). Assert both appear in plans list.
+6. Verify plan math: Raise projected = $69,068, Expense projected = $60,668 — exact match.
+7. /goals — confirm goals page loads, pace / monthly-needed figure is visible.
+8. /dashboard — confirm net worth reads $63,068 (matches account aggregate); no JS errors.
+9. /accounts — confirm net worth aggregate consistent with /dashboard.
+10. Reload → /planning — both saved plans persist across full page reload.
+
+**Drive script:** `e2e/loopstory_61_what_if.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_61_what_if.mjs`
+Exit code: **0** — 13 PASS · 0 FAIL · 1 MAYBE
+
+**Screenshots produced (9 substantive):**
+`l61_01_planning_baseline.png` · `l61_02_planning_with_trim.png` ·
+`l61_03_planning_baseline_restored.png` · `l61_04_planning_raise_plan_added.png` ·
+`l61_05_planning_both_plans.png` · `l61_06_goals_page.png` ·
+`l61_07_dashboard_net_worth.png` · `l61_08_accounts_net_worth.png` ·
+`l61_09_planning_after_reload.png`
+
+**What already works well (regression anchors)** ✓
+
+- `FORECAST_CARD_PRESENT`: "Net worth in 12 months" card renders on /planning with a 12-month
+  balance-curve chart and hint text showing monthly net and projected end figure. ✓
+  (`l61_01_planning_baseline.png`)
+- `I2 SCENARIO_RECOMPUTE_DIRECTION`: Entering $500 in the trim field triggers an immediate
+  re-render adding a trim note ("If you trim spending by $500.00, you'd have $Y — $Z more
+  than baseline") and a second colored series on the chart. The chart updates synchronously
+  on input. ✓ (`l61_02_planning_with_trim.png`)
+- `BASELINE_REVERT_CLEAN`: Clearing the trim field removes the scenario series and note —
+  no state leak, baseline-only chart is restored cleanly. ✓ (`l61_03_planning_baseline_restored.png`)
+- `PLANS_CARD_PRESENT`: "Savings & spending plans" card is present with a named-plan form
+  (name text input, horizon/start/monthly/onceAmt/onceMonth number inputs, Add button). ✓
+- `I4 PLAN_MATH_CORRECT (EXACT)`: Plan projected balance is computed as
+  `StartBalance + monthly × horizon` — verified to the dollar:
+  Raise: $63,068 + $500 × 12 = **$69,068.00** ✓ | Expense: $63,068 − $200 × 12 = **$60,668.00** ✓
+  Plan row text shows "Projected $69,068.00" and "Projected $60,668.00" respectively.
+  (`l61_05_planning_both_plans.png`)
+- `I1 FORECAST_START==NET_WORTH (TO THE CENT)`: The forecast hint implies a month-0 balance
+  of $63,068.00 (= $73,931.12 projected − 12 × $905.26 monthly net). /accounts aggregate net
+  worth = $63,068.00. Delta = **$0.00**. Forecast start exactly equals live net worth. ✓
+  (`l61_08_accounts_net_worth.png`)
+- `I3 PLAN_PERSISTENCE`: Both "L61 Raise Scenario" and "L61 New Expense" plans survive a full
+  page reload (localStorage / SQLite round-trip confirmed). ✓ (`l61_09_planning_after_reload.png`)
+- `I5 RECURRING_NOT_IN_FORECAST (L54/L55 gap confirmed)`: Baseline hint reads "If this month's
+  net cash flow ($905.26) continues…" — the forecast uses the historical monthly average from
+  `reports.TrailingMonthlyNet`, NOT the scheduled recurring store. The seed dataset has recurring
+  entries totalling $1,952.50/month net; these do not appear in the forecast. Gap confirmed
+  (no regression — L54/L55 finding is stable). ✓
+- `GOALS_PAGE_LOADS` + `GOAL_PACE_SHOWN`: /goals renders with goal rows and a monthly-needed
+  / pace figure. ✓ (`l61_06_goals_page.png`)
+- `DASHBOARD_STABLE`: /dashboard shows net worth $63,068.00, no JS page errors across the
+  full 10-step ritual. ✓ (`l61_07_dashboard_net_worth.png`)
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP GAP — 12-month forecast ignores the scheduled recurring store (Thread B, re-confirmed).**
+`planning.go` computes `monthlyNet` from `reports.TrailingMonthlyNet(txns, now, 3, rates)` —
+a 3-month historical average of *actual* transactions. It does NOT read `app.Recurring()`.
+The seed dataset has recurring entries (Rent $1,450/mo, Paycheck $3,600/mo, Gym $40/mo, etc.)
+totalling $1,952.50/month net. The forecast's $905.26/month figure comes from historical
+transactions only, making the 12-month curve misleading: a user who configures recurring
+entries expects to see them drive the forecast. `forecast.Project` accepts a `[]forecast.Recurring`
+slice — it is simply never populated from the recurring store. See L54 ⚠ SECOND GAP, L55
+additional note, L56 Thread B.
+- **Fix spec (data-plumbing only — no logic change):** in `planning.go`
+  `forecastCard` block, after computing `monthlyNet`, accumulate `app.Recurring()` into
+  an additional `[]forecast.Recurring` slice and pass it to `forecast.Project`. The
+  `planning.toForecastInputs` helper already does this conversion for saved Plans; the
+  same pattern can be applied to the live-feed baseline.
+
+**⚠ SECOND GAP — No scenario-to-goal link (I3 structural gap).**
+The /planning trim scenario and saved Plans are disconnected from the /goals engine.
+Increasing the monthly savings rate on /planning does NOT update any goal's completion
+date or monthly-needed figure. The two engines (`internal/planning` / `internal/forecast`
+and `internal/goals`) are architecturally separate and share no reactive state.
+- Observed: /goals shows "Vacation Fund" with a monthly-needed pace, but changing the trim
+  amount on /planning has no effect on that figure. There is no UI affordance to say
+  "apply this scenario's savings rate to my Vacation Fund timeline."
+- **Fix spec (medium complexity):** expose a "Plan → Goal link" field on the plan form
+  where a user can associate a plan's monthly surplus with a specific goal. The goals
+  engine can then compute an adjusted `MonthlyNeeded` using the plan's projected
+  surplus rather than the fixed pace. Alternatively, a read-only "Scenario impact on
+  goal: fund in N months vs M months (baseline)" callout below each goal row when a
+  plan is active.
+
+**Additional gap — negative monthly change not validated on Plans form (UX).**
+The Plans form accepts negative values in the "Monthly change" field (tested with −200)
+and creates a valid plan. This is correct by design (negative = expense scenario). However,
+the form label is "Monthly change, + in / − out (USD)" which is clear. No bug — but the
+plan row shows "($200.00)/mo" in parentheses notation for negative amounts (accounting
+convention), which is good.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **`l61_02_planning_with_trim.png`:** The "What if I trim monthly spending by… (USD)" input
+  has no visible label element (neither `<label>` nor `aria-label`). The label text appears
+  as a sibling span set via the `labeledField` helper, but the `input` itself carries no
+  `aria-label` attribute. Screen readers cannot associate the label to the field. The probe
+  confirmed `inp.getAttribute("aria-label") === null`.
+- **`l61_04_planning_raise_plan_added.png` / `l61_05_planning_both_plans.png`:** Plan rows
+  show a compact sparkline and "Stays positive through N months" badge. When the plan's
+  monthly change is negative but the balance stays above zero, the badge is green — correct.
+  However when a plan depletes the balance within the horizon, the badge correctly shows
+  "⚠ Money lasts ~N months" in danger tone. This behavior was verified with the expense
+  plan ($60,668 end > 0 → no warning). The runway readout works correctly.
+- **`l61_06_goals_page.png`:** Goal pace is present but no target date is shown for the
+  sample goals. Goals without a target date display pace correctly (monthly-needed) but
+  omit the "funded by <month>" projection — this is a known UX gap from L41.
+- **`l61_01_planning_baseline.png`:** The "Net worth in 12 months" chart uses compact SI
+  notation on the Y axis (`$64k`, `$66k`, …) which is correct. However the X axis labels
+  are numeric (0, 2, 4, 6, 8, 10) — month indices, not calendar month labels. A user
+  cannot tell which bar is "December 2026" vs "June 2027". Month labels on the X axis
+  would improve readability.
+
+**Probe hardening**
+
+- **B1 SPA fallback bug workaround required:** `goto(page, "/planning")` returns a 404
+  because the dev server does not serve `index.html` for non-root paths (B1 bug). Fixed:
+  always `goto(page, "/")` first, then `navTo(page, "Planning")` via click-navigation.
+  All future loop stories must use this same root-first pattern.
+- **`section.card` text-match for forecast section:** the forecast section's unique text
+  "Net worth in 12 months" was the reliable selector. "forecast" and "12 months" alone
+  both appeared in other contexts. Best practice: match on the full card heading.
+- **Trim input selector:** the trim field has no `aria-label` or `placeholder`. It is
+  reliably found as the first `input[type="number"]` inside the "Net worth in 12 months"
+  section. This is fragile; adding `aria-label="Spending trim (USD)"` to the input would
+  fix both the a11y gap and the probe's selector stability.
+- **Plans form input ordering:** inputs in the plans `section.card` are ordered
+  [name (text), horizon (number[0]), start (number[1]), monthly (number[2]),
+  onceAmt (number[3]), onceMonth (number[4])]. The number index order is stable as long
+  as the form layout doesn't change. A `data-testid` on each labeled field would be more
+  robust.
+
+**Cross-references:**
+- L54 ⚠ SECOND GAP: 12-month forecast ignores scheduled recurring (same gap, re-confirmed).
+- L55 additional structural note: same gap re-confirmed in Dani's story.
+- L56 Thread B: "Forecast/planning logic is correct but not wired to live data" — this
+  story (L61) is the third confirmation; fix spec in L56 Thread B applies here directly.
 
 ---
 

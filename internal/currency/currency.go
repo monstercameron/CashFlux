@@ -155,6 +155,22 @@ func (r Rates) Convert(m money.Money, toCurrency string) (money.Money, error) {
 	return money.New(toMinor, to), nil
 }
 
+// ConvertBetween converts amt (in integer minor units of from) to integer minor
+// units of to, routing through the base currency of rates. It is a pure-Go
+// helper for business logic that works with raw int64 amounts rather than
+// money.Money values.
+//
+// Same-currency conversions are identity and never consult the rate table.
+// When a required rate is missing, ConvertBetween returns 0 and a descriptive
+// error wrapping ErrUnknownRate.
+func ConvertBetween(amt int64, from, to string, rates Rates) (int64, error) {
+	result, err := rates.Convert(money.New(amt, from), to)
+	if err != nil {
+		return 0, err
+	}
+	return result.Amount, nil
+}
+
 func pow10(n int) float64 {
 	p := 1.0
 	for i := 0; i < n; i++ {

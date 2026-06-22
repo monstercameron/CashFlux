@@ -857,6 +857,8 @@ var english = Catalog{
 	"transactions.invalidDate":         "Enter a valid date (YYYY-MM-DD).",
 	"transactions.diffDestination":     "Choose a different destination account.",
 	"transactions.transferCurrency":    "Transfers between different currencies aren't supported yet.",
+	"transactions.receivedAmount":      "Received amount",
+	"transactions.fxRateMissing":       "No exchange rate found between %s and %s. Add rates in Settings.",
 	"transactions.pairedTransferErr":   "Couldn't remove the paired transfer: %s",
 	"transactions.bulkClearErr":        "Couldn't update some transactions: %s",
 	"transactions.bulkRecatErr":        "Couldn't recategorize some transactions: %s",

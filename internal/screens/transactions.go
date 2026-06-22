@@ -96,6 +96,7 @@ func Transactions() ui.Node {
 	accID := ui.UseState(defaultAcc)
 	catID := ui.UseState("")
 	toAccID := ui.UseState("")
+	receivedAmtStr := ui.UseState("") // override for cross-currency received amount
 	tagsStr := ui.UseState("")
 	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
 	customVals := ui.UseState(map[string]string{})
@@ -166,6 +167,7 @@ func Transactions() ui.Node {
 		whoOverridden.Set(true)
 	})
 	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
+	onReceivedAmt := ui.UseEvent(func(v string) { receivedAmtStr.Set(v) })
 	onTags := ui.UseEvent(func(v string) { tagsStr.Set(v) })
 	repeatCadence := ui.UseState("")
 	onRepeat := ui.UseEvent(func(e ui.Event) { repeatCadence.Set(e.GetValue()) })
@@ -273,20 +275,47 @@ func Transactions() ui.Node {
 				errMsg.Set(uistate.T("transactions.diffDestination"))
 				return
 			}
-			if toAcc.Currency != acc.Currency {
-				errMsg.Set(uistate.T("transactions.transferCurrency"))
-				return
-			}
 			if label == "" {
 				label = uistate.T("transactions.transfer")
 			}
+
+			// Determine how many minor units the destination account receives.
+			// For same-currency transfers the amount is identical; for cross-currency
+			// transfers we convert via the FX table, or accept a user-supplied override.
+			var receivedAmt int64
+			if toAcc.Currency == acc.Currency {
+				receivedAmt = amt
+			} else {
+				// Check for a user-supplied override first.
+				if override := strings.TrimSpace(receivedAmtStr.Get()); override != "" {
+					parsed, perr := money.ParseMinor(override, currency.Decimals(toAcc.Currency))
+					if perr != nil || parsed <= 0 {
+						errMsg.Set(uistate.T("transactions.positiveAmount"))
+						return
+					}
+					receivedAmt = parsed
+				} else {
+					base := app.Settings().BaseCurrency
+					if base == "" {
+						base = "USD"
+					}
+					rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+					converted, cerr := currency.ConvertBetween(amt, acc.Currency, toAcc.Currency, rates)
+					if cerr != nil {
+						errMsg.Set(uistate.T("transactions.fxRateMissing", acc.Currency, toAcc.Currency))
+						return
+					}
+					receivedAmt = converted
+				}
+			}
+
 			out := domain.Transaction{
 				ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
 				Amount: money.New(-amt, acc.Currency), TransferAccountID: toAcc.ID, MemberID: chosenMember(acc),
 			}
 			in := domain.Transaction{
 				ID: id.New(), AccountID: toAcc.ID, Date: date, Desc: label,
-				Amount: money.New(amt, toAcc.Currency), TransferAccountID: acc.ID, MemberID: memberFor(toAcc),
+				Amount: money.New(receivedAmt, toAcc.Currency), TransferAccountID: acc.ID, MemberID: memberFor(toAcc),
 			}
 			if err := app.PutTransaction(out); err != nil {
 				errMsg.Set(err.Error())
@@ -298,6 +327,7 @@ func Transactions() ui.Node {
 			}
 			desc.Set("")
 			amountStr.Set("")
+			receivedAmtStr.Set("")
 			whoOverridden.Set(false)
 			errMsg.Set("")
 			bump()
@@ -625,6 +655,29 @@ func Transactions() ui.Node {
 		if isTransfer {
 			accLabel = uistate.T("transactions.fromAccount")
 		}
+
+		// Determine whether the two selected accounts have different currencies so
+		// we can show (or hide) the "Received amount" override field.
+		srcAcc := accByID[accID.Get()]
+		dstAcc := accByID[toAccID.Get()]
+		isCrossCurrency := isTransfer && toAccID.Get() != "" && dstAcc.Currency != "" && dstAcc.Currency != srcAcc.Currency
+
+		// Pre-compute the FX preview value that pre-fills the received-amount field.
+		// We only do this when both sides are resolved; errors are silently omitted
+		// because the field is just a convenience default.
+		fxPreview := receivedAmtStr.Get()
+		if isCrossCurrency && fxPreview == "" {
+			base := app.Settings().BaseCurrency
+			if base == "" {
+				base = "USD"
+			}
+			rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+			if srcAmtRaw, perr := money.ParseMinor(strings.TrimSpace(amountStr.Get()), currency.Decimals(srcAcc.Currency)); perr == nil && srcAmtRaw > 0 {
+				if converted, cerr := currency.ConvertBetween(srcAmtRaw, srcAcc.Currency, dstAcc.Currency, rates); cerr == nil {
+					fxPreview = money.FormatMinor(converted, currency.Decimals(dstAcc.Currency))
+				}
+			}
+		}
 		// Custom fields apply to income/expense entries, not transfer legs.
 		formTxnDefs := txnDefs
 		if isTransfer {
@@ -649,6 +702,16 @@ func Transactions() ui.Node {
 				IfElse(isTransfer,
 					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.toAccount")), Title(uistate.T("transactions.toAccount")), OnChange(onToAcc), toAccOptions),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
+				),
+				If(isCrossCurrency,
+					Input(css.Class("field"), Type("number"), Attr("inputmode", "decimal"),
+						Attr("aria-label", uistate.T("transactions.receivedAmount")),
+						Attr("data-testid", "txn-xfer-received"),
+						Placeholder(uistate.T("transactions.receivedAmount")),
+						Value(fxPreview),
+						Step("0.01"),
+						OnInput(onReceivedAmt),
+					),
 				),
 				If(len(members) > 1, Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.whoLabel")), Attr("data-testid", "txn-who-add"), OnChange(onWho), whoOptions)),
 				If(!isTransfer, Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsStr.Get()), OnInput(onTags))),
