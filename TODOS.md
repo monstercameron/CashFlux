@@ -5690,7 +5690,7 @@ consistency (ledger → budget spent → dashboard) define whether the app feels
   Before: "Add transaction" form defaults Account to `401(k) / Brokerage`.
   After: default to the most-recently-used account, or failing that, the account flagged as primary/checking
   (e.g. `acct-checking`). (`internal/screens/transactions.go` add-form defaulting logic.)
-- [ ] **No visible form labels** — Description and Amount inputs rely solely on placeholder text, which
+- [x] **No visible form labels** — Description and Amount inputs rely solely on placeholder text, which
   vanishes the moment the user starts typing. Mid-entry there is no hint of what each field is.
   Before: placeholders read "Description" / "Amount" — gone once typing starts.
   After: persistent `<label>` above (or floating label pattern) for Description, Amount, and at least the
