@@ -4828,18 +4828,18 @@ assert the category auto-fills).
   ordering, table-tested. ✓
 
 **Action (lock in the win):**
-- [ ] **Promote to a CI gate** (`e2e/rules_check.mjs` in `run-stories.mjs`): create rule → matching txn
-      auto-categorizes → survives reload. No existing test covers the rule→txn round-trip.
+- [x] **Promoted to a CI gate** (`e2e/rules_check.mjs`, auto-discovered by `run-stories`): create rule →
+      matching txn auto-categorizes → survives reload. The core round-trip is now covered.
 
 **Dream-big gaps (extend a solid engine):**
-- [ ] **Richer match conditions.** Today a rule matches a single case-insensitive **substring of the
-      description** only. Power users want: **amount range**, **account scope**, payee-vs-memo, multiple
-      keywords (AND/OR), and starts-with/regex. Bottom-up: extend the `Rule` type with optional
-      conditions + a `Matches(txn)` in `internal/rules` (pure, table-tested for each condition + combos)
-      → store migration (additive) → extra fields in the rule form.
-- [ ] **Actions beyond category + tags.** Let a rule also set **member/owner**, assign a **budget**, mark
-      **transfer**, or **flag-for-review**. Additive `Rule` action fields + applied in
-      `SuggestTransactionFields` + the backfill; tested.
+- [~] **Richer match conditions** — substantially covered by the existing **workflow** engine
+      (`internal/workflow` + `/workflows`): expression conditions like `txn_abs > 200` (amount range) and
+      `contains(txn_payee, "coffee")` (keyword), tested. The pure `rules.Condition` type (AllKeywords/
+      AnyKeywords/AccountID/Min-MaxAmount, tested) also exists but isn't yet wired into the simple `Rule`
+      struct/form. (Remaining: surface `Condition` in the simple rules form, OR converge rules→workflows.)
+- [~] **Actions beyond category + tags** — covered by the workflow engine's actions
+      (`ActionSetCategory`, `ActionAddTag`, `ActionFlagReview`; seeded in sample.go). (Remaining:
+      member/owner + budget actions; converge with the simple Rule.)
 - [ ] **"Create rule from this transaction" + preview count.** A per-transaction action "Always
       categorize like this" prefilling the rule form; and on the rule form show **"matches N existing
       transactions"** before you hit Apply-to-existing (which is currently blind). Bottom-up: a pure

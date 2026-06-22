@@ -7,7 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Subscription cancellation tracking + charged-after-cancel alert (L12).** The Subscriptions screen is no
+- **Subscription cancellation tracking + charged-after-cancel alert (L12).**
+
+### Tests
+- **Rule auto-categorization round-trip gate (L15).** `e2e/rules_check.mjs` covers the core "set it and forget
+  it" flow end to end: create a rule (phrase → category), add a transaction whose description matches, assert
+  it is auto-filed into the rule's category, and confirm it survives a reload. Auto-discovered by run-stories. The Subscriptions screen is no
   longer read-only: each detected subscription has a "Mark as cancelled" action (with Undo), and if a cancelled
   subscription bills you again, a prominent alert banner calls it out — "You cancelled Gym membership on May 20
   but were charged $40.00 on Jun 3" — the real money-saver. New `domain.SubscriptionCancellation` entity
