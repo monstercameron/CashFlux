@@ -18,6 +18,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -584,7 +585,19 @@ func (a *App) PutCategory(c domain.Category) error {
 	a.log.Info("category saved", "id", c.ID)
 	return nil
 }
-func (a *App) DeleteCategory(id string) error { return a.del("category", id, a.store.DeleteCategory) }
+
+// DeleteCategory removes a category, first re-homing any sub-categories that
+// pointed to it onto its own parent (the grandparent, or the root for a
+// top-level category) so deleting a parent never leaves orphaned children with a
+// dangling ParentID (L28).
+func (a *App) DeleteCategory(id string) error {
+	for _, child := range categorytree.ReparentOnDelete(a.Categories(), id) {
+		if err := a.store.PutCategory(child); err != nil {
+			return fmt.Errorf("appstate: re-home child %q before deleting %q: %w", child.ID, id, err)
+		}
+	}
+	return a.del("category", id, a.store.DeleteCategory)
+}
 
 // PutRule saves an auto-categorization rule. A rule needs an ID, a non-empty
 // match phrase, and a target category to be useful.

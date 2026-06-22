@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Deleting a parent category no longer orphans its sub-categories (L28).** Removing a parent now re-homes
+  each child onto the parent's own parent (the grandparent, or the root for a top-level category) before
+  deleting, instead of leaving children with a dangling `parentId` that pointed at a category that no longer
+  exists. New pure `categorytree.ReparentOnDelete` (table-tested); e2e `category_parent_delete_check.mjs`.
+
 ### Added
 - **Fill-to-target allocation mode (L17).** Allocate gains a "Fill to target" mode alongside the score-weighted
   one: it funds each destination up to its remaining-to-target in ranked priority order (give every envelope

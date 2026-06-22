@@ -103,3 +103,31 @@ func Descendants(cats []domain.Category, rootID string) map[string]bool {
 	walk(rootID)
 	return out
 }
+
+// ReparentOnDelete returns the direct children of deletedID, each re-pointed to
+// deletedID's own parent, so deleting a parent category re-homes its children to
+// the grandparent (or to the root when the deleted category was top-level)
+// instead of leaving them with a dangling ParentID (orphaned). Only the children
+// that actually need a change are returned; callers persist those.
+func ReparentOnDelete(cats []domain.Category, deletedID string) []domain.Category {
+	if deletedID == "" {
+		return nil
+	}
+	var newParent string
+	for _, c := range cats {
+		if c.ID == deletedID {
+			if c.ParentID != deletedID { // guard a self-parent cycle
+				newParent = c.ParentID
+			}
+			break
+		}
+	}
+	var out []domain.Category
+	for _, c := range cats {
+		if c.ParentID == deletedID && c.ID != deletedID {
+			c.ParentID = newParent
+			out = append(out, c)
+		}
+	}
+	return out
+}
