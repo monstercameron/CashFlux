@@ -1272,6 +1272,7 @@ var english = Catalog{
 	"transactions.previewClose":       "Close receipt preview",
 	"transactions.previewAlt":         "Receipt image for %s",
 	"transactions.previewMissing":     "This receipt image is no longer available.",
+	"transactions.addedToast":         "Transaction added.",
 
 	// Offline indicator (L19)
 	// Command palette entity jump targets (L14)

@@ -102,30 +102,40 @@ const getAccountByName = (page, name) =>
     return found;
   }, name);
 
-// Compute current balance for an account from the dataset (opening + all txns)
+// Compute current balance for an account from the dataset (opening + all txns).
+// The Go JSON serialization uses capital-letter field names: Amount, Currency.
+// openingBalance = {Amount: N, Currency: "USD"}; txn amount = {Amount: N, Currency: "USD"}
 const computeCurrentBalance = (page, accountId) =>
   page.evaluate((id) => {
     const data = JSON.parse(localStorage.getItem("cashflux:dataset") || "{}");
-    // Find account
     let account = null;
     const walkA = (o) => {
       if (!o || typeof o !== "object") return;
       if (Array.isArray(o)) { o.forEach(walkA); return; }
-      if (o.id === id && typeof o.openingBalance !== "undefined") account = o;
+      if (o.id === id && o.openingBalance !== undefined) account = o;
       else Object.values(o).forEach(walkA);
     };
     walkA(data);
     if (!account) return null;
-    // Collect transactions for this account
+    // Extract opening balance in minor units
+    const ob = account.openingBalance;
+    const opening = ob?.Amount ?? ob?.amount ?? 0;
+    // Collect transaction amounts for this account
     let sum = 0;
     const walkT = (o) => {
       if (!o || typeof o !== "object") return;
       if (Array.isArray(o)) { o.forEach(walkT); return; }
-      if (o.accountId === id && typeof o.amount === "number") sum += o.amount;
-      else Object.values(o).forEach(walkT);
+      // Match by accountId or accountID field
+      const acctId = o.accountId ?? o.accountID;
+      if (acctId === id && o.amount !== undefined) {
+        const amt = o.amount;
+        if (typeof amt === "number") sum += amt;
+        else if (typeof amt === "object" && amt !== null) sum += (amt.Amount ?? amt.amount ?? 0);
+      } else {
+        Object.values(o).forEach(walkT);
+      }
     };
     walkT(data);
-    const opening = account.openingBalance?.amount ?? 0;
     return { opening, txnSum: sum, total: opening + sum };
   }, accountId);
 
@@ -579,7 +589,11 @@ try {
 
     // ADJUSTMENT_MATH: amount == BANK_FIGURE - preReconcileCurrent, to the cent
     const adjTxn = adjTxns[0];
-    const adjAmountMinor = adjTxn.amount ?? adjTxn.Amount ?? 0;
+    // Amount is a Money struct {Amount: N, Currency: "USD"} — N is in minor units (cents)
+    const adjAmountRaw = adjTxn.amount ?? adjTxn.Amount ?? 0;
+    const adjAmountMinor = (typeof adjAmountRaw === "object" && adjAmountRaw !== null)
+      ? (adjAmountRaw.Amount ?? adjAmountRaw.amount ?? 0)
+      : adjAmountRaw;
     // Dataset stores in minor units (cents): +500 = +$5.00
     const adjDollars = adjAmountMinor / 100;
     const expectedDollars = parseFloat(BANK_FIGURE) - (preReconcileCurrent || CURRENT_EXPECTED);

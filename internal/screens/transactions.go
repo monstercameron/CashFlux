@@ -316,7 +316,8 @@ func Transactions() ui.Node {
 		whoOverridden.Set(false)
 		errMsg.Set("")
 		bump()
-		focusByID("txn-add") // return focus for rapid back-to-back logging (L32)
+		uistate.PostNotice(uistate.T("transactions.addedToast"), false) // success confirmation (L39)
+		focusByID("txn-add")                                            // return focus for rapid back-to-back logging (L32)
 	}))
 
 	// Receipt attachments (L29): the preview holds the currently-open attachment

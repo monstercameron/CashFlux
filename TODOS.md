@@ -5590,7 +5590,7 @@ the screenshot. Bars measured as `div-bar` (no role) — accurate.
       delete ×** — small + adjacent makes accidental deletes likely, compounding the no-undo gap. Enforce
       ≥44px hit areas and/or collapse row actions into an overflow (⋯) menu on mobile (ties **L11**,
       **L25**). (`transactions.go` `TransactionRow` action buttons.)
-- [ ] **Consistency: edit auto-focuses but the ADD form does not** (L32). Unify — both should auto-focus
+- [x] **Consistency: edit auto-focuses but the ADD form does not** (L32). Unify — both should auto-focus
       their first field on open. Minor, but it makes the app feel coherent.
 
 **Probe note:** the in-run delete check **false-negatived** (57→57) on **autosave timing** — I read
@@ -5651,7 +5651,7 @@ contributing must be frictionless. **Drive script:** `e2e/loopstory_38_goals_ux.
       fill** on contribute, and crossing a milestone (25/50/75%) deserves a subtle moment (today only
       100% celebrates, L20). Bottom-up: a CSS width transition on the goal `.bar` fill + a one-shot
       milestone toast keyed on crossing a threshold (pure `goals.MilestoneCrossed(before,after)`, tested).
-- [ ] **Verify Enter-to-contribute** in the inline amount field (consistency with the L32 add-form
+- [x] **Verify Enter-to-contribute** in the inline amount field (consistency with the L32 add-form
       Enter-submit gap) — should submit without reaching for the Contribute button.
 
 **Probe note:** "contributing gives feedback" **false-positived** — my `/saved/` match hit the
@@ -5696,7 +5696,7 @@ consistency (ledger → budget spent → dashboard) define whether the app feels
   After: persistent `<label>` above (or floating label pattern) for Description, Amount, and at least the
   Type select. (`internal/screens/transactions.go` add-form markup; the existing `aria-required="true"`
   on Amount shows a11y intent was there — complete it with a visible label.)
-- [ ] **No success confirmation after Add** — the row silently appears at the top of the ledger with no
+- [x] **No success confirmation after Add** — the row silently appears at the top of the ledger with no
   toast, snackbar, or transient highlight. A first-time user who scrolls or blinks will miss the feedback
   entirely and may click Add again (duplicate).
   Before: submit triggers no user-facing confirmation signal.
@@ -5774,7 +5774,7 @@ Groceries spend.
 
 **UI/UX defects (screenshot-confirmed):**
 
-- [ ] **No success confirmation after Add.** After clicking Add the budget silently appears below with
+- [x] **No success confirmation after Add.** After clicking Add the budget silently appears below with
   no toast, snackbar, or row highlight. A first-time user who doesn't immediately scroll down may
   wonder if the click registered — same pattern as the transaction add-feedback gap in L39.
   Screenshot: `loop40-03-after-add-budget.png` (no confirmation signal visible at top of page).
@@ -5892,7 +5892,7 @@ All 29 checks pass; exit code 0.
   form still shows prior date and account after submit).
   After: reset `dateStr`, `linkAcct` to `""` in the `add` handler alongside `name`/`target`/
   `current`. (`internal/screens/goals.go` `add` closure, lines 113–120.)
-- [ ] **No success confirmation after Add.** After clicking Add the goal silently appears below with
+- [x] **No success confirmation after Add.** After clicking Add the goal silently appears below with
   no toast, snackbar, or row highlight — same gap as L39/L40. Screenshot: `loop41-03-after-add-goal.png`
   (no confirmation signal at top of page). After: brief toast "Goal added" or 1–2 s highlight on the
   newly inserted row. (`internal/ui/` toast system.)
