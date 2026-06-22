@@ -151,27 +151,62 @@ const getL58Txns = (page) =>
   });
 
 // Parse spending-by-category totals from reports page text.
-// Returns a map { categoryName: dollarAmount } for visible rows.
+// Returns a map { categoryName: dollarAmount } for visible category rows.
+// We only parse lines that look like a single category row: a short label
+// followed immediately by a dollar amount on the same line, filtering out
+// header stats (INCOME, SPENDING, NET WORTH, etc.) and prose lines.
 const parseCategoryTotals = (text) => {
   const map = {};
-  // Match lines like "Groceries $641.25" or "Medical $1,125.00"
-  const pattern = /([A-Za-z][A-Za-z &\-]+?)\s+\$([\d,]+\.\d{2})/g;
-  let m;
-  while ((m = pattern.exec(text)) !== null) {
+  // EXCLUDED header/stat words that appear in the stat-grid, not the category table
+  const EXCLUDED = new Set([
+    "income", "spending", "net worth", "assets", "liabilities",
+    "savings rate", "runway", "no-spend days", "personal",
+  ]);
+  const lines = text.split(/\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Must end with a dollar amount
+    const m = trimmed.match(/^([A-Za-z][A-Za-z &\-']{1,40}?)\s+\$([\d,]+\.\d{2})$/);
+    if (!m) continue;
     const name = m[1].trim();
-    const amt = parseFloat(m[2].replace(/,/g, ""));
-    if (!isNaN(amt)) map[name] = (map[name] ?? 0) + amt;
+    const amt  = parseFloat(m[2].replace(/,/g, ""));
+    if (isNaN(amt) || amt === 0) continue;
+    if (EXCLUDED.has(name.toLowerCase())) continue;
+    // Skip if name contains numbers (e.g. years, percentages)
+    if (/\d/.test(name)) continue;
+    // Skip overly long names (prose, not category labels)
+    if (name.length > 40) continue;
+    map[name] = (map[name] ?? 0) + amt;
   }
   return map;
 };
 
-// Parse period label from page (year: "2025"; month: "May 2026")
+// Parse period label from page.
+// Year resolution renders as a standalone "2025" in the stepper pill.
+// Month resolution renders as "May 2026". Prioritise the pure-year match
+// (the stepper pill area), but avoid matching years embedded in month labels.
 const parsePeriodLabel = (text) => {
-  // Year resolution shows just "2025"
-  const yearM = text.match(/\b(20\d\d)\b/);
+  // Month label wins when it appears in the resolution/stepper area
   const monthM = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+20\d\d/i);
+  // For Year resolution the stepper shows just "2025" — detect it by looking
+  // for a standalone 4-digit year NOT preceded/followed by a month name.
+  // We scan the reso-control area: the Year segment will be "selected" / active.
+  // Heuristic: if the page text contains "Year" near a 4-digit year without a
+  // month name on the same line, treat that as a Year-resolution label.
+  const yearOnlyLine = text.split(/\n/).find((line) =>
+    /\b20\d\d\b/.test(line) &&
+    !/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i.test(line) &&
+    line.trim().length < 60
+  );
+  const yearOnlyM = yearOnlyLine ? yearOnlyLine.match(/\b(20\d\d)\b/) : null;
+
+  // If we have a pure-year line AND it's a different year than the month label,
+  // prefer the pure-year (Year resolution is active).
+  if (yearOnlyM && (!monthM || !monthM[0].includes(yearOnlyM[1]))) {
+    return yearOnlyM[1];
+  }
   if (monthM) return monthM[0];
-  if (yearM) return yearM[1];
+  if (yearOnlyM) return yearOnlyM[1];
   return null;
 };
 
@@ -552,10 +587,10 @@ try {
 
   if (recatDone) {
     // Groceries should be lower now (mislabeled $75 moved out)
-    // Charity should be higher (gained $75)
-    const groceries1 = catTotals["Groceries"] ?? catTotals["groceries"] ?? NaN;
-    const groceries2 = catTotals2["Groceries"] ?? catTotals2["groceries"] ?? NaN;
-    const charity2 = catTotals2["Charity"] ?? catTotals2["charity"] ?? NaN;
+    // Charity (shown as "Gifts & Charity" in demo data) should be higher (gained $75)
+    const groceries1 = Object.entries(catTotals).find(([k]) => /grocer/i.test(k))?.[1] ?? NaN;
+    const groceries2 = Object.entries(catTotals2).find(([k]) => /grocer/i.test(k))?.[1] ?? NaN;
+    const charity2   = Object.entries(catTotals2).find(([k]) => /charity|gift/i.test(k))?.[1] ?? NaN;
     console.log(`  INFO  Groceries before recat: $${groceries1}, after: $${groceries2}`);
     console.log(`  INFO  Charity after recat: $${charity2}`);
 

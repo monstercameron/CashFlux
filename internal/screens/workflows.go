@@ -6,8 +6,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/mermaid"
@@ -61,6 +63,7 @@ type addWorkflowFormProps struct{ Refresh func() }
 func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 	name := ui.UseState("")
 	trigger := ui.UseState(string(workflow.TriggerManual))
+	cadence := ui.UseState(string(domain.CadenceMonthly))
 	condition := ui.UseState("")
 	actions := ui.UseState([]workflow.Action(nil))
 	draftKind := ui.UseState(string(workflow.ActionCreateTask))
@@ -70,6 +73,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onTrigger := ui.UseEvent(func(v string) { trigger.Set(v) })
+	onCadence := ui.UseEvent(func(v string) { cadence.Set(v) })
 	onCondition := ui.UseEvent(func(v string) { condition.Set(v) })
 	onDraftKind := ui.UseEvent(func(v string) { draftKind.Set(v) })
 	onDraftText := ui.UseEvent(func(v string) { draftText.Set(v) })
@@ -93,6 +97,8 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		case workflow.ActionSetCategory:
 			a.CategoryID = draftCat.Get()
 			return a, a.CategoryID != ""
+		case workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
+			return a, true
 		default: // applyRules / flagReview need no parameter
 			return a, true
 		}
@@ -127,9 +133,14 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		if a, ok := buildDraft(); ok {
 			acts = append(acts, a)
 		}
+		trig := workflow.Trigger{Kind: workflow.TriggerKind(trigger.Get())}
+		if trig.Kind == workflow.TriggerScheduled {
+			trig.Cadence = domain.RecurringCadence(cadence.Get())
+			trig.NextRun = trig.Cadence.Next(time.Now())
+		}
 		w := workflow.Workflow{
 			ID: id.New(), Name: name.Get(), Enabled: true,
-			Trigger:   workflow.Trigger{Kind: workflow.TriggerKind(trigger.Get())},
+			Trigger:   trig,
 			Condition: condition.Get(), Actions: acts,
 		}
 		if errs := workflow.Validate(w); len(errs) > 0 {
@@ -162,7 +173,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			}
 		}
 		paramControl = Select(css.Class("field"), OnChange(onDraftCat), opts)
-	case workflow.ActionApplyRules, workflow.ActionFlagReview:
+	case workflow.ActionApplyRules, workflow.ActionFlagReview, workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
 		paramControl = P(css.Class("muted"), uistate.T("workflows.noParam"))
 	default: // createTask / notify / addTag
 		paramControl = Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.actionText")),
@@ -184,6 +195,18 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			Select(css.Class("field"), OnChange(onTrigger),
 				Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
 				Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
+				Option(Value(string(workflow.TriggerScheduled)), SelectedIf(trigger.Get() == string(workflow.TriggerScheduled)), uistate.T("workflows.triggerScheduled")),
+				Option(Value(string(workflow.TriggerBudgetExceeded)), SelectedIf(trigger.Get() == string(workflow.TriggerBudgetExceeded)), uistate.T("workflows.triggerBudgetExceeded")),
+				Option(Value(string(workflow.TriggerGoalReached)), SelectedIf(trigger.Get() == string(workflow.TriggerGoalReached)), uistate.T("workflows.triggerGoalReached")),
+				Option(Value(string(workflow.TriggerBillDue)), SelectedIf(trigger.Get() == string(workflow.TriggerBillDue)), uistate.T("workflows.triggerBillDue")),
+			),
+			If(trigger.Get() == string(workflow.TriggerScheduled),
+				Select(css.Class("field"), OnChange(onCadence),
+					Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.cadenceWeekly")),
+					Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.cadenceMonthly")),
+					Option(Value(string(domain.CadenceQuarterly)), SelectedIf(cadence.Get() == string(domain.CadenceQuarterly)), uistate.T("workflows.cadenceQuarterly")),
+					Option(Value(string(domain.CadenceYearly)), SelectedIf(cadence.Get() == string(domain.CadenceYearly)), uistate.T("workflows.cadenceYearly")),
+				),
 			),
 			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.condition")), Value(condition.Get()), OnInput(onCondition)),
 		),
@@ -198,6 +221,8 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				Option(Value(string(workflow.ActionFlagReview)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagReview)), uistate.T("workflows.actFlagReview")),
 				Option(Value(string(workflow.ActionApplyRules)), SelectedIf(draftKind.Get() == string(workflow.ActionApplyRules)), uistate.T("workflows.actApplyRules")),
 				Option(Value(string(workflow.ActionNotify)), SelectedIf(draftKind.Get() == string(workflow.ActionNotify)), uistate.T("workflows.actNotify")),
+				Option(Value(string(workflow.ActionPostRecurring)), SelectedIf(draftKind.Get() == string(workflow.ActionPostRecurring)), uistate.T("workflows.actPostRecurring")),
+				Option(Value(string(workflow.ActionFlagBudgetOver)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagBudgetOver)), uistate.T("workflows.actFlagBudgetOver")),
 			),
 			paramControl,
 			Button(css.Class("btn"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
@@ -346,6 +371,10 @@ func actionLabel(a workflow.Action) string {
 		return uistate.T("workflows.actAddTag") + ": " + a.Tag
 	case workflow.ActionFlagReview:
 		return uistate.T("workflows.actFlagReview")
+	case workflow.ActionPostRecurring:
+		return uistate.T("workflows.actPostRecurring")
+	case workflow.ActionFlagBudgetOver:
+		return uistate.T("workflows.actFlagBudgetOver")
 	default:
 		return string(a.Kind)
 	}
@@ -362,10 +391,20 @@ func actionsLabel(n int) string {
 }
 
 func triggerLabel(k workflow.TriggerKind) string {
-	if k == workflow.TriggerTxnAdded {
+	switch k {
+	case workflow.TriggerTxnAdded:
 		return uistate.T("workflows.triggerTxn")
+	case workflow.TriggerScheduled:
+		return uistate.T("workflows.triggerScheduled")
+	case workflow.TriggerBudgetExceeded:
+		return uistate.T("workflows.triggerBudgetExceeded")
+	case workflow.TriggerGoalReached:
+		return uistate.T("workflows.triggerGoalReached")
+	case workflow.TriggerBillDue:
+		return uistate.T("workflows.triggerBillDue")
+	default:
+		return uistate.T("workflows.triggerManual")
 	}
-	return uistate.T("workflows.triggerManual")
 }
 
 func conditionSuffix(cond string) string {

@@ -129,6 +129,8 @@ func Run() {
 	// immediately (idempotent: NextDue advances past today, so a reopen won't
 	// double-post). Boot-safe — a nil/empty store just posts nothing.
 	postDueRecurringOnBoot()
+	runDueScheduledWorkflowsOnBoot()
+	fireBillDueTriggerOnBoot()
 
 	// Expose the music checkpoint bridge (window.cashfluxMusicSave) for the JS player.
 	registerMusicBridge()

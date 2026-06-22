@@ -192,7 +192,7 @@ func Goals() ui.Node {
 			cur = base
 		}
 		amt, err := money.ParseMinor(strings.TrimSpace(amtStr), currency.Decimals(cur))
-		if err != nil || amt == 0 {
+		if err != nil || amt <= 0 { // reject $0 and negative contributions (L41)
 			return
 		}
 		g.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, cur)

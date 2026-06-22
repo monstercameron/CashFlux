@@ -5399,18 +5399,18 @@ on a schedule (e.g. on the 1st: post recurring bills, flag any budget over 90%, 
 - **Action:** promote to a CI gate (`e2e/workflow_apply_check.mjs`) — dry-run no-op vs run-now applies.
 
 **Gaps (dream-big — make it a real unattended automator):**
-- [ ] **No scheduled / time trigger (headline).** Triggers are only **"When I run it"** (manual) and
+- [x] **No scheduled / time trigger (headline).** Triggers are only **"When I run it"** (manual) and
       **"When a transaction is added"**. Raj's "on the 1st of the month / every Monday" is impossible —
       time-based automations require manually clicking **Run now**, which defeats automation. Add a
       **`TriggerScheduled`** (cadence: daily/weekly/monthly + day-of) that fires via a due-check on app
       open (and records the run). Ties to the recurrence theme (L24 txns, L26 tasks, L27
       `PostDueRecurring`) — share one scheduler. Bottom-up: pure `workflow.DueScheduled(workflows, now,
       lastRun)` (tested) → a boot-time runner → the trigger option in the builder.
-- [ ] **Richer actions for real routines.** Raj wanted "**post recurring bills**" and "**flag budgets
+- [x] **Richer actions for real routines.** Raj wanted "**post recurring bills**" and "**flag budgets
       over 90%**" — current actions don't include post-recurring, budget-threshold flag, transfer, or
       goal-contribute. Extend the `workflow.Action` set + the apply layer (write-safe, tested), e.g.
       `ActionPostDueRecurring`, `ActionFlagBudgetOver(pct)`, `ActionContributeGoal`.
-- [ ] **Event triggers beyond txn-added** — budget-exceeded, bill-due, goal-reached as triggers for
+- [x] **Event triggers beyond txn-added** — budget-exceeded, bill-due, goal-reached as triggers for
       event-driven automation. Bottom-up: emit domain events → match against workflow triggers; tested.
 
 **Probe note:** all checks passed and were **double-confirmed** (the run-now task verified in both the
@@ -5867,7 +5867,7 @@ All 29 checks pass; exit code 0.
   no client-side guard; submitting with a blank name creates an unnamed goal row. Before: empty name
   → unnamed goal. After: treat Name as required (`aria-required="true"` + errMsg path matching the
   Target validation). (`internal/screens/goals.go` `add` handler before `app.PutGoal`.)
-- [ ] **"Contribute" has no floor/ceiling validation.** A user can contribute $0, a negative amount,
+- [x] **"Contribute" has no floor/ceiling validation.** A user can contribute $0, a negative amount,
   or an amount larger than the remaining target without any warning. The `contribute` func parses the
   amount but only guards `amt == 0` (silently no-ops) — it does not reject negatives or over-target
   amounts. Before: contribute -$50 → `CurrentAmount -= $50` (balance goes negative), no error.

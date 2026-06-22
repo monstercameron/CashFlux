@@ -1149,6 +1149,12 @@ func (a *App) applyEffect(e workflow.Effect) {
 		if a.Notifier != nil {
 			a.Notifier(e.Message)
 		}
+	case workflow.ActionPostRecurring:
+		if _, err := a.PostDueRecurring(a.clock()); err != nil {
+			a.logErr("workflowPostRecurring", err)
+		}
+	case workflow.ActionFlagBudgetOver:
+		a.applyFlagBudgetOver()
 	}
 }
 
@@ -1259,6 +1265,103 @@ func (a *App) PostDueRecurring(asOf time.Time) (int, error) {
 		a.log.Info("posted due recurring", "count", posted)
 	}
 	return posted, nil
+}
+
+// RunDueScheduledWorkflows finds every enabled scheduled workflow whose NextRun
+// is on or before now, runs it, advances NextRun, and persists the updated
+// trigger. Returns how many workflows ran. Errors on individual workflows are
+// logged and skipped; a store write error aborts and is returned.
+func (a *App) RunDueScheduledWorkflows(now time.Time) (int, error) {
+	ran := 0
+	for _, w := range a.Workflows() {
+		if !w.Enabled || !workflow.IsScheduledWorkflowDue(w, now) {
+			continue
+		}
+		if _, err := a.RunWorkflow(w, false); err != nil {
+			a.logErr("scheduledWorkflow", err)
+			continue
+		}
+		workflow.AdvanceScheduledNextRun(&w, now)
+		if err := a.store.PutWorkflow(w); err != nil {
+			return ran, err
+		}
+		ran++
+	}
+	if ran > 0 {
+		a.log.Info("ran due scheduled workflows", "count", ran)
+	}
+	return ran, nil
+}
+
+// isBudgetOver returns true when the given budget is currently in the StateOver
+// state according to a full EvaluateRollup against the live dataset.
+func (a *App) isBudgetOver(b domain.Budget) bool {
+	now := a.clock()
+	base := a.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
+	cats := a.Categories()
+	bs, be := budgeting.PeriodRange(b.Period, now, time.Monday)
+	st, err := budgeting.EvaluateRollup(b, a.Transactions(), bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
+	return err == nil && st.State == budgeting.StateOver
+}
+
+// applyFlagBudgetOver creates an open task for every budget that is currently
+// over its limit, skipping any that already have an open task with the same
+// title (deduplication).
+func (a *App) applyFlagBudgetOver() {
+	now := a.clock()
+	base := a.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
+	cats := a.Categories()
+	txns := a.Transactions()
+	existing := a.Tasks()
+	for _, b := range a.Budgets() {
+		bs, be := budgeting.PeriodRange(b.Period, now, time.Monday)
+		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
+		if err != nil || st.State != budgeting.StateOver {
+			continue
+		}
+		title := "Budget over limit: " + b.Name
+		dup := false
+		for _, tk := range existing {
+			if tk.Status == domain.StatusOpen && tk.Title == title {
+				dup = true
+				break
+			}
+		}
+		if dup {
+			continue
+		}
+		_ = a.PutTask(domain.Task{
+			ID:       id.New(),
+			Title:    title,
+			Notes:    fmt.Sprintf("Budget %q is at %d%% of its limit.", b.Name, st.Percent),
+			Status:   domain.StatusOpen,
+			Priority: domain.PriorityMedium,
+			Source:   domain.SourceManual,
+		})
+	}
+}
+
+// FireBillDueTrigger runs every enabled bill-due workflow if any recurring item
+// is on or past its due date as of asOf. It is a no-op when triggers are
+// suspended.
+func (a *App) FireBillDueTrigger(asOf time.Time) {
+	if a.triggersSuspended {
+		return
+	}
+	for _, r := range a.Recurring() {
+		if !r.NextDue.After(asOf) {
+			a.RunTriggered(workflow.TriggerBillDue, nil)
+			return
+		}
+	}
 }
 
 // ApplyRules assigns a category to every currently uncategorized, non-transfer
@@ -1414,10 +1517,20 @@ func (a *App) PutBudget(b domain.Budget) error {
 	if err := a.validateCustom("budget", b.Custom); err != nil {
 		return err
 	}
+	wasOver := false
+	for _, existing := range a.Budgets() {
+		if existing.ID == b.ID {
+			wasOver = a.isBudgetOver(existing)
+			break
+		}
+	}
 	if err := a.store.PutBudget(b); err != nil {
 		return err
 	}
 	a.log.Info("budget saved", "id", b.ID)
+	if !wasOver && !a.triggersSuspended && a.isBudgetOver(b) {
+		a.RunTriggered(workflow.TriggerBudgetExceeded, nil)
+	}
 	return nil
 }
 func (a *App) DeleteBudget(id string) error { return a.del("budget", id, a.store.DeleteBudget) }
@@ -1470,10 +1583,21 @@ func (a *App) PutGoal(g domain.Goal) error {
 	if err := a.validateCustom("goal", g.Custom); err != nil {
 		return err
 	}
+	wasComplete := false
+	for _, existing := range a.Goals() {
+		if existing.ID == g.ID {
+			wasComplete = existing.CurrentAmount.Amount >= existing.TargetAmount.Amount && existing.TargetAmount.Amount > 0
+			break
+		}
+	}
 	if err := a.store.PutGoal(g); err != nil {
 		return err
 	}
 	a.log.Info("goal saved", "id", g.ID)
+	isComplete := g.CurrentAmount.Amount >= g.TargetAmount.Amount && g.TargetAmount.Amount > 0
+	if !wasComplete && isComplete && !a.triggersSuspended {
+		a.RunTriggered(workflow.TriggerGoalReached, nil)
+	}
 	return nil
 }
 func (a *App) DeleteGoal(id string) error { return a.del("goal", id, a.store.DeleteGoal) }

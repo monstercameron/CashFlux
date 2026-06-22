@@ -10,7 +10,9 @@ package workflow
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/formula"
 )
 
@@ -22,11 +24,21 @@ const (
 	TriggerManual TriggerKind = "manual"
 	// TriggerTxnAdded runs after a transaction is added.
 	TriggerTxnAdded TriggerKind = "txn-added"
+	// TriggerScheduled runs automatically on a recurring cadence.
+	TriggerScheduled TriggerKind = "scheduled"
+	// TriggerBudgetExceeded runs when a budget transitions to over-limit.
+	TriggerBudgetExceeded TriggerKind = "budget-exceeded"
+	// TriggerGoalReached runs when a goal is fully funded.
+	TriggerGoalReached TriggerKind = "goal-reached"
+	// TriggerBillDue runs when a recurring bill is on or past its due date.
+	TriggerBillDue TriggerKind = "bill-due"
 )
 
 // Trigger configures when a workflow runs.
 type Trigger struct {
-	Kind TriggerKind `json:"kind"`
+	Kind    TriggerKind             `json:"kind"`
+	Cadence domain.RecurringCadence `json:"cadence,omitempty"`
+	NextRun time.Time               `json:"nextRun,omitempty"`
 }
 
 // ActionKind is one effect a workflow can perform. The set is write-safe (no
@@ -47,6 +59,10 @@ const (
 	ActionAddTag ActionKind = "addTag"
 	// ActionFlagReview tags the triggering transaction for review.
 	ActionFlagReview ActionKind = "flagReview"
+	// ActionPostRecurring posts all due autopost recurring transactions.
+	ActionPostRecurring ActionKind = "postRecurring"
+	// ActionFlagBudgetOver creates tasks for every budget currently over its limit.
+	ActionFlagBudgetOver ActionKind = "flagBudgetOver"
 )
 
 // ReviewTag is the tag ActionFlagReview adds.
@@ -178,10 +194,36 @@ func planAction(a Action, ctx Context) Effect {
 	case ActionFlagReview:
 		e.Tag = ReviewTag
 		e.Summary = "Flag the transaction for review"
+	case ActionPostRecurring:
+		e.Summary = "Post all due autopost recurring transactions"
+	case ActionFlagBudgetOver:
+		e.Summary = "Create tasks for budgets over their limit"
 	default:
 		e.Summary = "Unknown action: " + string(a.Kind)
 	}
 	return e
+}
+
+// IsScheduledWorkflowDue reports whether a scheduled workflow's NextRun is on or
+// before now. It returns false for any non-scheduled trigger.
+func IsScheduledWorkflowDue(w Workflow, now time.Time) bool {
+	if w.Trigger.Kind != TriggerScheduled {
+		return false
+	}
+	return !w.Trigger.NextRun.After(now)
+}
+
+// AdvanceScheduledNextRun bumps w.Trigger.NextRun forward by the workflow's
+// cadence until it is strictly after now, catching up any missed periods. It is
+// a no-op for non-scheduled triggers. The guard cap (600) prevents an infinite
+// loop on a misconfigured zero-interval cadence.
+func AdvanceScheduledNextRun(w *Workflow, now time.Time) {
+	if w.Trigger.Kind != TriggerScheduled {
+		return
+	}
+	for guard := 0; !w.Trigger.NextRun.After(now) && guard < 600; guard++ {
+		w.Trigger.NextRun = w.Trigger.Cadence.Next(w.Trigger.NextRun)
+	}
 }
 
 func fallback(s, def string) string {
@@ -202,7 +244,7 @@ func Validate(wf Workflow) []string {
 		errs = append(errs, "A workflow needs a name.")
 	}
 	switch wf.Trigger.Kind {
-	case TriggerManual, TriggerTxnAdded:
+	case TriggerManual, TriggerTxnAdded, TriggerScheduled, TriggerBudgetExceeded, TriggerGoalReached, TriggerBillDue:
 	default:
 		errs = append(errs, "Unknown trigger.")
 	}
@@ -223,6 +265,7 @@ func Validate(wf Workflow) []string {
 			if strings.TrimSpace(a.Tag) == "" {
 				errs = append(errs, "An \"add tag\" action needs a tag.")
 			}
+		case ActionPostRecurring, ActionFlagBudgetOver: // no required fields
 		}
 	}
 	return errs
