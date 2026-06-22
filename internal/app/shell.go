@@ -452,9 +452,12 @@ func HouseholdCard() uic.Node {
 	}
 	// The household card plus a small muted version line anchored at the rail foot
 	// (mt-auto on the wrapper). One source of truth: internal/version (C80).
-	return Div(css.Class(tw.MtAuto),
+	// The horizontal inset lives on this wrapper's padding (not the button's margin):
+	// a <button> is fit-content by default so it needs w-full to span the rail, and
+	// w-full + horizontal margins would overflow (the margins add onto 100%).
+	return Div(css.Class(tw.MtAuto, tw.Px3),
 		Button(
-			css.Class("hh", tw.M3, tw.P3, tw.Rounded4, tw.Border, tw.BorderLine, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextLeft, tw.HoverBgHover, tw.WFull),
+			css.Class("hh", tw.Mt3, tw.Mb3, tw.P3, tw.Rounded4, tw.Border, tw.BorderLine, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextLeft, tw.HoverBgHover, tw.WFull),
 			// Tooltip/accessible name — keeps the "Settings" affordance (the gear icon
 			// signals it visually) without repeating it in the visible summary line.
 			Title(name+" · "+summary+" · "+uistate.T("household.settings")),
