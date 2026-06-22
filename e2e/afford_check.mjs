@@ -30,9 +30,9 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/planning", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('input[placeholder^="Purchase amount"]', { timeout: 60000 });
+  await page.getByLabel(/Purchase amount/).first().waitFor({ timeout: 60000 });
 
-  const amount = page.locator('input[placeholder^="Purchase amount"]').first();
+  const amount = page.getByLabel(/Purchase amount/).first();
 
   // A token amount: the affordability breakdown (projected-balance stat) should
   // render. (The stat label is CSS-uppercased, so match case-insensitively.)

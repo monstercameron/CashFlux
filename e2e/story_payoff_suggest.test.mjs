@@ -23,7 +23,7 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/planning", { waitUntil: "domcontentloaded" });
-  const extra = page.locator('input[aria-label="Extra monthly payment"]');
+  const extra = page.getByLabel(/Extra per month/);
   await extra.waitFor({ timeout: 60000 });
 
   // With no extra entered, the card prompts a sensible amount.

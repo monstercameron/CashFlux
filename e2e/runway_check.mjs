@@ -37,7 +37,7 @@ try {
   // Add a recurring outflow large enough to breach any starting balance.
   const recForm = page.locator("form").filter({ has: page.locator('input[placeholder^="Label (e.g."]') });
   await recForm.locator('input[placeholder^="Label (e.g."]').fill("Runway breach test");
-  await recForm.locator('input[placeholder^="Amount ("]').fill("-99999999");
+  await recForm.getByLabel(/Amount/).fill("-99999999");
   await recForm.locator('button[type=submit]').click();
 
   // The runway should now warn that the balance dips below the buffer.

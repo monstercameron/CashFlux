@@ -23,8 +23,8 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/planning", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('input[aria-label="Extra monthly payment"]', { timeout: 60000 });
-  await page.locator('input[aria-label="Extra monthly payment"]').fill("800");
+  await page.getByLabel(/Extra per month/).first().waitFor({ timeout: 60000 });
+  await page.getByLabel(/Extra per month/).fill("800");
   await page.waitForTimeout(700);
 
   if ((await page.getByText("Balance burn-down to zero", { exact: false }).count()) === 0) {

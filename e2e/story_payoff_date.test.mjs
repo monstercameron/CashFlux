@@ -25,8 +25,8 @@ try {
 
   await page.goto(BASE + "/planning", { waitUntil: "domcontentloaded" });
   // Commit an extra monthly amount so the multi-debt plan is viable + diverges.
-  await page.waitForSelector('input[aria-label="Extra monthly payment"]', { timeout: 60000 });
-  await page.locator('input[aria-label="Extra monthly payment"]').fill("800");
+  await page.getByLabel(/Extra per month/).first().waitFor({ timeout: 60000 });
+  await page.getByLabel(/Extra per month/).fill("800");
   await page.waitForTimeout(500);
   // The debt-strategy card prints a calendar debt-free date.
   await page.waitForSelector("text=Debt-free by", { timeout: 60000 });
