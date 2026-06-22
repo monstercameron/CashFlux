@@ -1046,6 +1046,8 @@ func importJSON(onChange func(), notify func(string, bool)) {
 			notify(uistate.T("settings.importErr", err.Error()), true)
 			return
 		}
+		// A real import means the user is no longer on sample data (L6).
+		uistate.SetSampleActive(false)
 		onChange()
 		notify(uistate.T("settings.importedData"), false)
 	})
@@ -1079,6 +1081,8 @@ func wipeData(onChange func(), notify func(string, bool)) {
 			notify(uistate.T("settings.wipeErr", err.Error()), true)
 			return
 		}
+		// A wipe means the user is starting fresh — hide the sample banner (L6).
+		uistate.SetSampleActive(false)
 		onChange()
 		notify(uistate.T("settings.wiped"), false)
 	})

@@ -4490,16 +4490,16 @@ fine product choice — but the current implementation has a real trap and missi
   - [ ] **E2E**: wipe via Settings → reload → assert zero accounts (no re-seed). Add to `loopstory_06`.
 
 **UX gaps (onboarding):**
-- [ ] **No "this is sample data" framing.** A brand-new user sees a stranger's finances with nothing
+- [x] **No "this is sample data" framing.** A brand-new user sees a stranger's finances with nothing
       saying so. Add a **dismissible first-run banner**: "You're exploring sample data — **Start fresh**
       to add your own accounts, or keep looking around." **Start fresh** = wipe → clean empty (per the
       bug fix) → land on a guided "add your first account". (`internal/app` shell/dashboard + a
       first-run flag.)
-- [ ] **Empty states need friendly design** (now reachable once the bug above is fixed): Dashboard,
+- [x] **Empty states need friendly design** (now reachable once the bug above is fixed): Dashboard,
       Accounts, Budgets, Goals currently render bare forms / zero-stat tiles with no guidance. Add
       "add your first account / budget / goal" empty states with a single clear CTA (per screen,
       `internal/screens/*`), plain English.
-- [ ] **Offer the sample as an explicit choice, not a silent default.** On a true first run, a small
+- [x] **Offer the sample as an explicit choice, not a silent default.** On a true first run, a small
       "Add my first account" **or** "Explore with sample data" choice respects the user's intent
       instead of auto-seeding a stranger's household.
 

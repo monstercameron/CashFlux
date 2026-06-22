@@ -89,19 +89,24 @@ const parseNetWorth = (text) => {
 };
 
 // Find account balance by account name in page text.
-// The accounts page renders: AccountName\nType · USD\n$X,XXX.XX
-// so we look for the first dollar amount within 3 lines after the account name.
+// The accounts page renders (probed): AccountName\nType · USD · cleared $X\n$X,XXX.XX
+// Current balance is a standalone "$X,XXX.XX" line AFTER the "Type · USD" line.
+// Skip lines that contain "cleared" (those show cleared balance, not current).
 const parseAccountBalance = (text, acctName) => {
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes(acctName)) {
-      // Scan up to 4 lines ahead for a dollar amount
-      for (let j = i + 1; j <= i + 4 && j < lines.length; j++) {
-        const m = lines[j].match(/^\$?([\d,]+\.\d{2})$/);
-        if (m) return parseFloat(m[1].replace(/,/g, ""));
-        // Also match "$3,000.00" with a leading dollar sign
-        const m2 = lines[j].match(/\$([\d,]+\.\d{2})/);
-        if (m2) return parseFloat(m2[1].replace(/,/g, ""));
+      // Scan up to 5 lines ahead for a standalone dollar amount (not inline with "cleared")
+      for (let j = i + 1; j <= i + 5 && j < lines.length; j++) {
+        // Skip lines that contain "cleared" — those are the cleared balance annotation
+        if (/cleared/i.test(lines[j])) continue;
+        // Match a standalone "$X,XXX.XX" or "($X,XXX.XX)" line (current balance)
+        const m = lines[j].match(/^\(?(\$[\d,]+\.\d{2})\)?$/);
+        if (m) {
+          const neg = lines[j].startsWith("(");
+          const val = parseFloat(m[1].replace(/[$,]/g, ""));
+          return neg ? -val : val;
+        }
       }
     }
   }
@@ -208,10 +213,11 @@ try {
     maybe("Step 0b — Linked account select not found on goal form");
   }
 
-  const goalSubmitBtn = await page.$('button[type="submit"]');
+  // Use the "Add" submit button specifically (not the Contribute submit)
+  const goalSubmitBtn = await page.$('button[type="submit"]:has-text("Add")') ?? await page.$('button[type="submit"]');
   if (goalSubmitBtn) {
     await goalSubmitBtn.click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
     pass("Step 0b — Goal add form submitted");
   } else {
     fail("Step 0b — Goal submit button not found");
@@ -260,73 +266,84 @@ try {
   console.log(`  INFO  Net worth pre-contribution: $${netWorth_preContrib}`);
   await softNav(page, "Goals", "/goals");
 
-  // Find Contribute button for L59 goal
-  const contribBtns = await page.$$('button');
-  let contribBtn = null;
-  for (const btn of contribBtns) {
-    const txt = await btn.evaluate((el) => el.textContent?.trim() ?? "");
-    if (/contribute|add funds|deposit/i.test(txt)) {
-      contribBtn = btn;
-      break;
+  // Find the Contribute button scoped to the L59 goal row.
+  // Goals page renders each row as a list item; we scan all buttons for one whose
+  // nearest ancestor row/li contains GOAL_NAME and whose text is "Contribute".
+  const clickContribute = async (goalName) => {
+    const allBtns = await page.$$('button');
+    for (const btn of allBtns) {
+      const info = await btn.evaluate((el, name) => {
+        const txt = el.textContent?.trim() ?? "";
+        const row = el.closest("li, tr, [class*='goal'], [class*='row'], article, section") ?? el.parentElement;
+        const rowTxt = row ? row.textContent ?? "" : "";
+        return { txt, inRow: rowTxt.includes(name) };
+      }, goalName);
+      if (/^contribute$/i.test(info.txt) && info.inRow) return btn;
     }
-  }
-
-  if (!contribBtn) {
-    // Try looking for a button near the goal name
-    const allBtns2 = await page.$$(`button`);
-    for (const btn of allBtns2) {
-      const near = await btn.evaluate((el) => {
-        const row = el.closest('[class*="row"], li, tr, [class*="goal"]');
-        return row ? row.textContent : "";
-      });
-      if (near.includes(GOAL_NAME) && /contrib|add|fund/i.test(await btn.evaluate(el => el.textContent))) {
-        contribBtn = btn;
-        break;
-      }
+    // Fallback: first Contribute button on page
+    for (const btn of allBtns) {
+      const txt = await btn.evaluate(el => el.textContent?.trim() ?? "");
+      if (/^contribute$/i.test(txt)) return btn;
     }
-  }
+    return null;
+  };
 
+  let contribBtn = await clickContribute(GOAL_NAME);
   if (contribBtn) {
     await contribBtn.click();
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1000);
     pass("Step 2a — Contribute button clicked");
   } else {
     fail("Step 2a — Contribute button not found on /goals");
   }
 
-  // Fill in $25 contribution
-  const contribAmtIn = await page.$('input[aria-label*="amount" i], input[placeholder*="amount" i], input[type="number"]');
+  // Fill in $25 contribution — confirmed placeholder from probe
+  const contribAmtIn = await page.$('input[placeholder="Amount to add"], input[aria-label*="amount" i]');
   if (contribAmtIn) {
     await contribAmtIn.fill(FINAL_CONTRIB);
     pass(`Step 2b — Contribution amount $${FINAL_CONTRIB} filled`);
   } else {
-    fail("Step 2b — Contribution amount input not found");
+    fail("Step 2b — Contribution amount input not found (expected placeholder='Amount to add')");
   }
 
   await page.screenshot({ path: SS("l59_02a_contribution_form.png") });
 
-  const contribSubmit = await page.$('button[type="submit"], button:has-text("Confirm"), button:has-text("Add"), button:has-text("Contribute")');
+  // Use the Contribute SUBMIT button specifically (not the "Add" submit for the goal-add form)
+  const contribSubmit = await page.$('button[type="submit"]:has-text("Contribute")');
   if (contribSubmit) {
     await contribSubmit.click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
     pass("Step 2c — Contribution form submitted");
   } else {
-    fail("Step 2c — Contribution submit button not found");
+    fail("Step 2c — Contribute submit button not found");
   }
 
   await page.waitForTimeout(1500);
   await page.screenshot({ path: SS("l59_02b_after_final_contribution.png") });
 
-  // Check completion state
+  // Check completion state — both via UI text and via localStorage to distinguish
+  // timing/render gaps from actual data bugs.
   const goalsBody2 = await bodyText(page);
   const has100 = /100\s*%|100%/.test(goalsBody2);
   const hasComplete = /complete|achieved|goal met|done|congrat/i.test(goalsBody2);
   const hasZeroRemain = /\$0\.00\s*to\s*go|\$0\s*remaining|fully\s*funded/i.test(goalsBody2);
 
+  // Cross-check via localStorage: did currentAmount actually reach targetAmount?
+  const goalDataAfterContrib = await page.evaluate((name) => {
+    const d = JSON.parse(localStorage.getItem("cashflux:dataset") || "{}");
+    const goals = d.goals ?? [];
+    return goals.find(g => g.name === name) ?? null;
+  }, GOAL_NAME);
+  console.log(`  INFO  Goal localStorage after $25 contrib: ${JSON.stringify(goalDataAfterContrib)}`);
+  const dataReached100 = goalDataAfterContrib &&
+    goalDataAfterContrib.currentAmount?.Amount >= goalDataAfterContrib.targetAmount?.Amount;
+
   if (has100) {
-    pass("Step 2d — COMPLETION_FIRES: goal shows 100% after final contribution");
+    pass("Step 2d — COMPLETION_FIRES: goal shows 100% in UI after final contribution");
+  } else if (dataReached100) {
+    fail("Step 2d — COMPLETION_FIRES VIOLATED: data reached 100% but UI does NOT show 100% (render bug)");
   } else {
-    fail("Step 2d — COMPLETION_FIRES VIOLATED: goal does NOT show 100% after $25 final contribution");
+    fail("Step 2d — COMPLETION_FIRES VIOLATED: goal does NOT show 100% AND data currentAmount did not reach targetAmount — contribution had no effect");
   }
 
   if (hasComplete || hasZeroRemain) {
@@ -338,29 +355,21 @@ try {
   // ── Step 3: Overfunding test ($10 extra) ─────────────────────────────────
   console.log("\n── Step 3: Overfunding test — contribute $10 extra on completed goal ──");
 
-  // Find contribute button again
-  const contribBtns3 = await page.$$('button');
-  let contribBtn3 = null;
-  for (const btn of contribBtns3) {
-    const txt = await btn.evaluate((el) => el.textContent?.trim() ?? "");
-    if (/contribute|add funds|deposit/i.test(txt)) {
-      contribBtn3 = btn;
-      break;
-    }
-  }
+  // Find contribute button again (scoped to GOAL_NAME row)
+  const contribBtn3 = await clickContribute(GOAL_NAME);
 
   if (contribBtn3) {
     await contribBtn3.click();
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1000);
 
-    const overfundIn = await page.$('input[aria-label*="amount" i], input[placeholder*="amount" i], input[type="number"]');
+    const overfundIn = await page.$('input[placeholder="Amount to add"], input[aria-label*="amount" i]');
     if (overfundIn) {
       await overfundIn.fill(OVERFUND_CONTRIB);
 
-      const overfundSubmit = await page.$('button[type="submit"], button:has-text("Confirm"), button:has-text("Contribute")');
+      const overfundSubmit = await page.$('button[type="submit"]:has-text("Contribute")');
       if (overfundSubmit) {
         await overfundSubmit.click();
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(3000);
       }
     }
 

@@ -1290,8 +1290,14 @@ var english = Catalog{
 	"palette.entityGoal":    "Goal",
 	"palette.entityBudget":  "Budget",
 
-	"offline.label":        "Offline",
-	"offline.savedLocally": "You're offline — your changes are saved on this device and sync when you're back.",
+	// Sample-data banner (L6)
+	"sample.bannerText":      "You're viewing sample data — it's here to explore. Start fresh whenever you're ready.",
+	"sample.startFresh":      "Start fresh",
+	"sample.dismiss":         "Dismiss",
+	"sample.startFreshTitle": "Wipe the sample and start with an empty slate",
+	"sample.dismissTitle":    "Hide this banner",
+	"offline.label":          "Offline",
+	"offline.savedLocally":   "You're offline — your changes are saved on this device and sync when you're back.",
 
 	// Workflows screen
 	"nav.workflows":                   "Workflows",

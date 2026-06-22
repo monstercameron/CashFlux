@@ -63,6 +63,12 @@ func hydrateDataset() {
 			app.Log().Error("dataset hydrate failed; seeding sample", "err", err)
 			hadLocalDataset = false
 			_ = app.LoadSample()
+			// Fallback to sample — show the banner so the user knows (L6).
+			uistate.SetSampleActive(true)
+		} else {
+			// A real saved dataset means the user has personalised — clear any
+			// stale sample-active flag left from a prior first run.
+			uistate.SetSampleActive(false)
 		}
 		markSeeded()
 	case hydrateSeed:
@@ -70,10 +76,13 @@ func hydrateDataset() {
 		if err := app.LoadSample(); err != nil {
 			app.Log().Error("seed sample failed", "err", err)
 		}
+		// Mark that we are showing sample data so the banner appears (L6).
+		uistate.SetSampleActive(true)
 		markSeeded()
 	case hydrateEmpty:
 		// Set up before, intentionally empty — preserve the clean slate (L6).
 		hadLocalDataset = false
+		uistate.SetSampleActive(false)
 	}
 }
 

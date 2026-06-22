@@ -78,6 +78,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(Sidebar, sidebarProps{ActivePath: props.ActivePath}),
 		Main(css.Class("cf-scroll", tw.Flex1, tw.MinW0, tw.OverflowYAuto), Attr("id", "main"), Attr("tabindex", "-1"),
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
+			uic.CreateElement(SampleDataBanner),
 			Div(css.Class(tw.P10px), uic.CreateElement(props.View)),
 		),
 		uic.CreateElement(SettingsHost),
