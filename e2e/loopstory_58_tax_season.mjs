@@ -135,6 +135,31 @@ const softNav = async (page, routeTitle, fallbackHash) => {
 
 const bodyText = (page) => page.evaluate(() => document.body.innerText);
 
+// Read the period pill label from the resolution control (more reliable than full text parse).
+const getPeriodPill = (page) =>
+  page.evaluate(() => {
+    // The stepper pill is rendered by ui.StepperPill — look for the label span in .reso-control
+    const resoControl = document.querySelector(".reso-control");
+    if (resoControl) {
+      // The period label is the text node in the stepper pill button
+      const spans = resoControl.querySelectorAll("span, button");
+      for (const el of spans) {
+        const txt = el.textContent?.trim() ?? "";
+        // Match "2025" (Year), "May 2026" (Month), "Q2 2026" (Quarter)
+        if (/^\d{4}$/.test(txt) || /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}$/i.test(txt) || /^Q[1-4]\s+\d{4}$/.test(txt)) {
+          return txt;
+        }
+      }
+    }
+    // Fallback: find first standalone 4-digit year near the top of the page
+    const header = document.querySelector("header, nav, [class*='topbar'], [class*='shell']");
+    if (header) {
+      const m = header.textContent?.match(/\b(20\d\d)\b/);
+      if (m) return m[1];
+    }
+    return null;
+  });
+
 // Read L58 transactions from localStorage dataset
 const getL58Txns = (page) =>
   page.evaluate(() => {
@@ -388,8 +413,8 @@ try {
   await page.screenshot({ path: SS("l58_02_reports_annual.png") });
 
   const reportsBody = await bodyText(page);
-  const reportsPeriod = parsePeriodLabel(reportsBody);
-  console.log(`  INFO  Reports period label: "${reportsPeriod}"`);
+  const reportsPeriod = await getPeriodPill(page);
+  console.log(`  INFO  Reports period label (pill): "${reportsPeriod}"`);
 
   if (reportsPeriod === "2025") {
     pass("Step 2a — PERIOD_CARRY: /reports shows period 2025 (soft-nav preserved year window)");
@@ -483,8 +508,8 @@ try {
 
   await page.screenshot({ path: SS("l58_03_transactions_drill_medical.png") });
   const txnDrillBody = await bodyText(page);
-  const txnDrillPeriod = parsePeriodLabel(txnDrillBody);
-  console.log(`  INFO  Transactions period after drill: "${txnDrillPeriod}"`);
+  const txnDrillPeriod = await getPeriodPill(page);
+  console.log(`  INFO  Transactions period after drill (pill): "${txnDrillPeriod}"`);
 
   if (txnDrillPeriod === "2025") {
     pass("Step 3b — FILTER_CARRY: /transactions shows 2025 period after drill from reports");
@@ -571,8 +596,8 @@ try {
   await page.screenshot({ path: SS("l58_05_reports_after_recat.png") });
 
   const reportsBody2 = await bodyText(page);
-  const reportsPeriod2 = parsePeriodLabel(reportsBody2);
-  console.log(`  INFO  Reports period after recat: "${reportsPeriod2}"`);
+  const reportsPeriod2 = await getPeriodPill(page);
+  console.log(`  INFO  Reports period after recat (pill): "${reportsPeriod2}"`);
 
   if (reportsPeriod2 === "2025") {
     pass("Step 5a — PERIOD_CARRY: /reports still shows 2025 after recategorize round-trip");
@@ -667,8 +692,7 @@ try {
 
   // Check /dashboard
   await softNav(page, "Dashboard", "/");
-  const dashBody8 = await bodyText(page);
-  const dp8 = parsePeriodLabel(dashBody8);
+  const dp8 = await getPeriodPill(page);
   if (dp8 === "2025") {
     pass("Step 8a — PERIOD_CARRY: /dashboard still shows 2025");
   } else {
@@ -678,8 +702,7 @@ try {
 
   // Check /budgets
   await softNav(page, "Budgets", "/budgets");
-  const budgetsBody8 = await bodyText(page);
-  const bp8 = parsePeriodLabel(budgetsBody8);
+  const bp8 = await getPeriodPill(page);
   if (bp8 === "2025") {
     pass("Step 8b — PERIOD_CARRY: /budgets shows 2025");
   } else {

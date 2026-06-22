@@ -4278,7 +4278,7 @@ the **Emergency Fund** pace → eyeball **upcoming bills** — without hunting.
         the projected-over line clears, and it survives a reload.
 
 **UI/UX defect (real, screenshot-confirmed):**
-- [ ] **Budget row sub-lines render glued together.** `internal/screens/budgets.go` renders
+- [x] **Budget row sub-lines render glued together.** `internal/screens/budgets.go` renders
       `budgets.rowSub` ("Monthly · On track · 79% · $61.00 left") and the pace `Span`
       ("At this pace, projected to go over by $72.25") as **adjacent inline `Span`s with no
       separator**, so they read as "...$61.00 left**At this pace**, projected to go over...". Fix:
@@ -4319,7 +4319,7 @@ so nobody chases receipts.
         English, light/dark, keyboard-reachable; show the math (determinism rule).
   - [x] **E2E**: log 3 shared expenses with different payers, assert net balances + minimal transfers,
         record one settlement, assert the ledger re-balances and survives reload.
-- [ ] **Sample data is a single-member household** ("Michael Brooks", footer "1 member"), so every
+- [x] **Sample data is a single-member household** ("Michael Brooks", footer "1 member"), so every
       multi-person tool (Split, member filters, per-member budgets/goals owners) is undemoable from the
       sample. Add **2–3 sample members** with a few shared expenses so Split/Settle-up have real data
       out of the box. (`internal/app` LoadSample / sample dataset.)
@@ -5549,11 +5549,11 @@ must read in ~3s. **Drive script:** `e2e/loopstory_35_budgets_ux.mjs`.
   "cover overspending / move money between budgets" feature has shipped.* 👍 The L1 sub-line glue is fixed.
 
 **God-tier UX gaps (verified from `loop35-overbudget.png`):**
-- [ ] **Over-budget copy reads as buggy/alarming.** The OVERTEST row shows "Over budget · **2390%** ·
+- [x] **Over-budget copy reads as buggy/alarming.** The OVERTEST row shows "Over budget · **2390%** ·
       **($229.00) left**" — a runaway percentage and a *negative "left"* in accounting parens. before→
       after: drop the absurd % (or cap at "100%+") and say **"over by $229.00"** instead of "($229.00)
       left". Plain, calm, direct. (`internal/screens/budgets.go` `rowSub` / the over-budget branch.)
-- [ ] **Status word contradicts the pace projection.** Dining shows "**On track** · 79% · $61 left" AND
+- [x] **Status word contradicts the pace projection.** Dining shows "**On track** · 79% · $61 left" AND
       "At this pace, projected to go over by $64.08" (same for Shopping) — "on track" while "projected to
       go over" is a mixed signal that erodes trust. Reconcile into a coherent state: when the pace
       projects an overage, surface a distinct **"Trending over"** status (not "On track"), or fold the

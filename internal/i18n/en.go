@@ -378,6 +378,7 @@ var english = Catalog{
 	"budgets.rolloverCarry":    "Carried from previous period: %s",
 	"budgets.suggest":          "You've averaged %s/mo here recently.",
 	"budgets.useSuggest":       "Use this",
+	"budgets.atRisk":           "At risk",
 	"budgets.onTrack":          "On track",
 	"budgets.nearLimit":        "Near limit",
 	"budgets.overBudget":       "Over budget",

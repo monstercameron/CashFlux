@@ -548,6 +548,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	case budgeting.StateOver:
 		fillClass = "bar-fill over"
 		label = uistate.T("budgets.overBudget")
+	default:
+		// Not over/near yet, but the pace projection says this budget is trending
+		// to overspend — don't claim "On track" while also warning of an overspend
+		// (the L35 contradiction). Call it "At risk" instead.
+		if props.PaceOver != "" {
+			fillClass = "bar-fill near"
+			label = uistate.T("budgets.atRisk")
+		}
 	}
 
 	// Show "name · category" only when they add information (see budgetTitle).
@@ -627,7 +635,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-		Span(css.Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
+		Span(css.Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, width, fmtMoney(s.Remaining))),
 		paceLine,
 		rolloverLine,
 		envLine,
