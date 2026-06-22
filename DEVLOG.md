@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: offline indicator (L19, polish sweep)
+
+First of the L4/L16/L19/L22/L28 polish items. A local-first app should reassure you when you're offline, not go
+silent. Added a top-bar "Offline" pill (hidden when online) backed by a shared `uistate` online atom — same
+captured-atom seam as dialog/notice — kept in sync by `wireOnlineStatus()` (boot): seeds from `navigator.onLine`
+and listens for the window online/offline events. Did this one by hand (it's js/wasm-only + browser-event
+wiring, which agents can't test). e2e drives it via Playwright `context.setOffline`. While scanning the sweep I
+also found several "gaps" already shipped — the account-currency control is already a validated `<select>` (not
+free text), so that L4 item is stale. Remaining sweep items (FX-rate staleness, Reports year/fiscal view, theme
+contrast guard + export, collapsible category tree) are still open; doing the highest-ROI ones.
+
 ## 2026-06-22 - feat: per-transaction receipt attachments (L29)
 
 The plumbing existed (`Transaction.Attachments []AttachmentRef`, the `Artifact` entity + Artifacts screen) but

@@ -4986,10 +4986,10 @@ navigate, add a txn, verify persistence, reload offline).
       per-item via `Promise.allSettled` so one failure doesn't void the rest; (b) **self-host d3**
       (`./d3.min.js`) so the precache is all same-origin and offline never depends on a third party;
       (c) log precache failures instead of swallowing. Pure SW change + an e2e offline-boot assertion.
-- [ ] **No offline indicator / "saved locally" reassurance.** Offline, the app shows no affordance that
-      it's offline and still saving. Add a subtle offline badge (online/offline via `navigator.onLine` +
-      events) so the airplane user trusts their entries are safe. Bottom-up: a small state atom + a
-      header pill; tested toggling.
+- [x] **Offline indicator / "saved locally" reassurance.** A calm top-bar "Offline" pill appears when the
+      browser loses connectivity (hidden when online), with a tooltip that changes are saved on this device.
+      Driven by a shared `uistate` online atom kept in sync from `navigator.onLine` + the window online/offline
+      events (`wireOnlineStatus`). e2e `offline_indicator_check.mjs` (Playwright `setOffline`).
 
 **Incidental finding (a11y/semantics regression — ties to L7):**
 - [ ] **Rail nav `<a>` elements have NO `href`** (now onClick-only — confirmed by enumerating nav anchors:

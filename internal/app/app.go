@@ -110,6 +110,9 @@ func Run() {
 	// Global keyboard shortcuts (Alt+1..9 → primary nav sections).
 	wireKeyboardShortcuts()
 
+	// Keep the top-bar offline indicator in sync with browser connectivity.
+	wireOnlineStatus()
+
 	// If a passcode lock is set, cover the app with the unlock gate, and arm the
 	// inactivity auto-lock timer.
 	maybeLockOnBoot()

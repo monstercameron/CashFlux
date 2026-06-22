@@ -1258,6 +1258,10 @@ var english = Catalog{
 	"transactions.previewAlt":         "Receipt image for %s",
 	"transactions.previewMissing":     "This receipt image is no longer available.",
 
+	// Offline indicator (L19)
+	"offline.label":        "Offline",
+	"offline.savedLocally": "You're offline — your changes are saved on this device and sync when you're back.",
+
 	// Workflows screen
 	"nav.workflows":                  "Workflows",
 	"workflows.empty":                "No workflows yet. Create one above.",

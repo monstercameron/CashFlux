@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Offline indicator (L19).** A calm "Offline" pill now appears in the top bar when the browser loses
+  connectivity (and disappears when it returns), with a tooltip reassuring you that changes are saved on this
+  device and will sync when you're back — fitting for a local-first app used on a plane. Backed by a shared
+  online-state atom kept in sync with `navigator.onLine` and the window online/offline events. e2e
+  `offline_indicator_check.mjs`.
 - **Per-transaction receipt attachments (L29).** "Keep the receipt": each transaction row now has an "Attach
   receipt" action that uploads an image and links it to that transaction, a paperclip marker (with a count) on
   rows that have receipts, and a click-to-preview overlay. The Artifacts screen shows "Referenced by N

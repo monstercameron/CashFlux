@@ -513,11 +513,30 @@ func TopBar(props topBarProps) uic.Node {
 			H1(css.Class(tw.TextLg, tw.FontSemibold, tw.Truncate), Attr("aria-current", "page"), props.Title),
 		),
 		Div(css.Class("topbar-controls", tw.MlAuto, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextDim, tw.Text13),
+			uic.CreateElement(OfflineIndicator),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(MuzakToggle),
 			uic.CreateElement(AddMenu),
 		),
+	)
+}
+
+// OfflineIndicator shows a calm "Offline · saved on this device" pill in the top
+// bar when the browser loses connectivity — reassuring the user their data is safe
+// locally (CashFlux is local-first). When online it renders nothing. It reads the
+// shared online atom, which the boot wiring keeps in sync with navigator.onLine and
+// the window online/offline events.
+func OfflineIndicator() uic.Node {
+	online := uistate.UseOnline()
+	uistate.CaptureOnline(online)
+	if online.Get() {
+		return Fragment()
+	}
+	return Span(css.Class("offline-pill", tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.Px2, tw.Py05, tw.Rounded4),
+		Attr("role", "status"), Attr("aria-live", "polite"), Attr("data-testid", "offline-indicator"),
+		Attr("title", uistate.T("offline.savedLocally")),
+		Span(css.Class(tw.ColorClass("text-warn")), uistate.T("offline.label")),
 	)
 }
 
