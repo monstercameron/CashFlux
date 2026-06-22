@@ -47,6 +47,9 @@ func Goals() ui.Node {
 		uistate.PersistTxFilter(f)
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
+	// A completed goal frees its monthly contribution — jump to Allocate to put it
+	// to work elsewhere (L20 "what next").
+	redirectToAllocate := func() { nav.Navigate(uistate.RoutePath("/allocate")) }
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -282,7 +285,7 @@ func Goals() ui.Node {
 		rows := MapKeyed(activeGoals,
 			func(g domain.Goal) any { return g.ID },
 			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal})
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate})
 			},
 		)
 		listBody = Div(rows)
@@ -296,7 +299,7 @@ func Goals() ui.Node {
 		achievedRows := MapKeyed(achievedGoals,
 			func(g domain.Goal) any { return g.ID },
 			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal})
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate})
 			},
 		)
 		achievedSection = Section(css.Class("card"),
@@ -342,6 +345,7 @@ type goalRowProps struct {
 	OnSave         func(id, name, target, date, accountID, owner string)
 	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
 	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section
+	OnRedirect     func()                        // a completed goal frees its monthly — jump to Allocate (L20)
 }
 
 // goalAccountOptions builds the linked-account <option>s for a goal, with a
@@ -500,6 +504,24 @@ func GoalRow(props goalRowProps) ui.Node {
 		}
 	}
 
+	redirect := ui.UseEvent(Prevent(func() {
+		if props.OnRedirect != nil {
+			props.OnRedirect()
+		}
+	}))
+
+	// "What next" prompt: a completed (not-yet-archived) goal frees up whatever was
+	// going into it — offer a calm, dismissible jump to Allocate to redirect it
+	// toward another goal (L20). No nagging: it's a single low-key line.
+	var whatNext ui.Node = Fragment()
+	if complete && !g.Archived {
+		whatNext = Div(css.Class("budget-sub"), Attr("data-testid", "goal-whatnext-"+g.ID),
+			Span(uistate.T("goals.whatNext")+" "),
+			Button(css.Class("budget-drill"), Type("button"), Attr("aria-label", uistate.T("goals.whatNextAction")),
+				Attr("data-testid", "goal-redirect-"+g.ID), OnClick(redirect), uistate.T("goals.whatNextAction")),
+		)
+	}
+
 	// Over-funding note: shown whenever the current amount exceeds the target.
 	var overfundNote ui.Node = Fragment()
 	if overfund.IsPositive() {
@@ -560,6 +582,7 @@ func GoalRow(props goalRowProps) ui.Node {
 		Div(css.Class("bar"), Div(css.Class("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
 		Span(css.Class("budget-sub"), sub),
 		overfundNote,
+		whatNext,
 		linkedLine,
 	)
 }

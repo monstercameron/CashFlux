@@ -4261,7 +4261,7 @@ the **Emergency Fund** pace → eyeball **upcoming bills** — without hunting.
 - Bills nav entry exists under Tools (probe false-negatived it — nav items aren't `role=link`). ✓
 
 **Mechanical gap (the core of the ritual — NOT supported):**
-- [ ] **"Cover overspending" — move money between budgets.** When Groceries is at 92% (projected
+- [x] **"Cover overspending" — move money between budgets.** (Shipped: budgeting.Transfer + appstate.CoverBudget + a "Cover…" action on over-budget rows; e2e story_budget_cover.test.mjs.) When Groceries is at 92% (projected
       +$304 over) Maya needs to pull from an under-budget envelope (e.g. Shopping, 72%) to cover it.
       Budgets today support add / inline-edit / delete / rollover toggle only — there is **no
       inter-budget transfer**. Build bottom-up:
@@ -4301,7 +4301,7 @@ so nobody chases receipts.
 - Members screen renders + offers add-member. ✓
 
 **Mechanical gaps (block the ritual):**
-- [ ] **"Settle up" — the reverse ledger of who owes whom.** Split today only computes a *single*
+- [x] **"Settle up" — the reverse ledger of who owes whom.** (Shipped: internal/settle minimal-transfer logic + SharedExpense/Settlement persistence + record-settlement UI; e2e story_settle_up.test.mjs.) Split today only computes a *single*
       expense's shares; there is **no running net-balance across many split expenses** and **no way to
       record a settlement**. Build bottom-up:
   - [ ] **Model/logic** `internal/settle` (pure, no `syscall/js`): given a set of shared expenses
@@ -5013,10 +5013,7 @@ completed state). Verified by creating a goal over target ($80 saved / $50 targe
 - [~] **Over-funding acknowledged.** Pure `goals.Overfund(goal)` (tested) → a calm "<amount> over target"
       note on over-funded rows. (Remaining: a "move excess" redirect action reusing L17 allocate / L5
       contribute — deferred.)
-- [ ] **No "what next" when a goal completes.** Completing a goal frees its monthly contribution; nothing
-      suggests redirecting it. Add a low-pressure prompt ("🎉 Emergency fund is funded — send its
-      $1,071/mo to your next goal?") → deep-link to that goal's contribute / Allocate. Friendly, never
-      naggy.
+- [x] **"What next" when a goal completes.** A completed (not-yet-archived) goal row shows a calm, single-line prompt with a "Reallocate" action that jumps to Allocate to put the freed-up monthly toward another goal. e2e goal_whatnext_check.mjs.
 - [x] **Completed goals archive into an "Achieved" section.** New `Goal.Archived` flag (JSON round-trip);
       completed goals get an Archive action → a collapsible "Achieved" section (with Unarchive); the headline
       "Overall progress" uses `goals.OverallProgress(active, false)` so archived goals no longer dilute it.

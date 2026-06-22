@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"What next" prompt when a goal is funded (L20).** A completed goal's row now shows a calm one-line prompt
+  with a "Reallocate" action that jumps to Allocate, so the money you were putting toward it can be redirected
+  to another goal instead of quietly sitting idle. e2e `goal_whatnext_check.mjs`.
 - **Reports roll-up by parent category (L28).** The Spending-by-category breakdown now has a "Roll up
   sub-categories" toggle that combines each category's children into its top-level parent total (e.g.
   Electricity + Internet → Utilities), so a deep category tree reads at the parent level; off by default so

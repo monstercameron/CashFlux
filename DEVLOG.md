@@ -10915,3 +10915,11 @@ Manual FX rates drift silently and skew every multi-currency total. Added `Setti
 ## 2026-06-22 - feat: reports roll-up by parent category (L28, /loop iter 3)
 
 The by-category breakdown listed every leaf category flat; budgets already rolled children into parents but reports did not. Added pure `reports.RollUpByParent(rows, cats)` — re-buckets each row into its top-level ancestor via a cycle-guarded parent walk, sums Amount/Prior, recomputes the delta; table-tested including two-deep nesting (Coffee under Dining under Food). Wired a "Roll up sub-categories" toggle on the Spending-by-category card (off by default so leaf detail stays). Since the toggle just transforms `rows` before everything downstream consumes it, the narrative, share bars, and CSV all follow automatically. e2e sets the Year period (so seeded sub-category spend is in range) and asserts the row count drops (16->13). Wake timer is unreliable in this env so I am running iterations straight through instead of relying on ScheduleWakeup.
+
+## 2026-06-22 - feat: goal "what next" redirect + backlog reconciliation (L20, /loop iter 4)
+
+Killed a redundant agent — L1 cover-overspending turned out already shipped (b7b1391: budgeting.Transfer + appstate.CoverBudget + the Cover UI + story_budget_cover). Same for L2 settle-up (internal/settle + SharedExpense/Settlement + story_settle_up). The L-backlog is mostly already-built across prior sessions; a lot of this loop is reconciliation — verify the e2e, check the box. Marked L1 + L2 done.
+
+Built one genuinely-open item: L20 "what next". A completed (not-yet-archived) goal row now shows a calm single line + a "Reallocate" button that navigates to /allocate, so the freed-up monthly gets redirected instead of idling. Added OnRedirect to goalRowProps, a nav closure in the parent, rendered between the over-funding note and the linked-account line. e2e creates a funded goal (target=saved=100) and asserts the prompt + that Reallocate routes to /allocate.
+
+Wake timer is unreliable here, so still running iterations straight through; agent-completion notifications are the reliable wake signal.

@@ -406,6 +406,8 @@ var english = Catalog{
 	"goals.deleteTitle":       "Delete goal",
 	"goals.progressFmt":       "%d%% · %s to go",
 	"goals.complete":          "Complete 🎉",
+	"goals.whatNext":          "🎉 Funded — put what you were saving toward another goal?",
+	"goals.whatNextAction":    "Reallocate",
 	"goals.bySuffix":          " · by %s",
 	"goals.saveSuffix":        " · save %s/mo",
 	"goals.linkedSuffix":      " · linked to %s",
