@@ -716,30 +716,42 @@ func Insights() ui.Node {
 		)),
 	)
 
-	// Composer: the input row, or the key call-to-action when no key is set.
-	var composer ui.Node
-	if key == "" && !useBackendAI {
-		composer = keyHintNode()
-	} else {
-		// A plain Div (not a Form) so there is no native submit that could reload the
-		// page; Send is a button and Enter is handled by the keydown listener.
-		composer = Div(css.Class(tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
-			Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
-			IfElse(loading.Get(),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel")),
-				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("insights.send"))),
-			),
-		)
+	// Composer: always show the Ask input (so the starter chips have a visible box to
+	// fill and a new user sees what they'd ask, L8). With AI configured it pairs with
+	// Send/Cancel; without a key it pairs with the add-your-key call-to-action so the
+	// user is guided to set one up before sending. A plain Div (not a Form) so there's
+	// no native submit that could reload the page; Enter is handled by the keydown listener.
+	noAI := key == "" && !useBackendAI
+	var trailing ui.Node
+	switch {
+	case noAI:
+		trailing = Fragment()
+	case loading.Get():
+		trailing = Button(css.Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel"))
+	default:
+		trailing = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("insights.send")))
+	}
+	inputRow := Div(css.Class(tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
+		Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
+		trailing,
+	)
+	composer := inputRow
+	if noAI {
+		composer = Fragment(inputRow, keyHintNode())
 	}
 
-	// Starter chips seed an empty thread; tapping one sends it (L8).
+	// Starter chips beat the blank box (L8): show them whenever the thread is empty,
+	// even before an AI key is set, so a new user sees what they can ask. Tapping one
+	// FILLS the Ask box (it doesn't send) so the user can review/edit, then press Send
+	// — which is also the natural moment to prompt for a key if none is configured.
 	chips := Fragment()
-	if empty && (key != "" || useBackendAI) && len(starters) > 0 {
+	if empty && len(starters) > 0 {
+		fillAsk := func(q string) { input.Set(q); focusByID("cf-chat-input") }
 		chips = Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb2),
 			MapKeyed(starters,
 				func(q string) any { return q },
 				func(q string) ui.Node {
-					return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: sendText})
+					return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: fillAsk})
 				},
 			),
 		)
