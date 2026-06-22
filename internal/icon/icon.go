@@ -94,6 +94,9 @@ const (
 
 	// Notifications.
 	Bell Name = "bell"
+
+	// Attachment.
+	Paperclip Name = "paperclip"
 )
 
 // inner maps each icon to its inner SVG markup — the child shapes only. Stroke,
@@ -166,6 +169,8 @@ var inner = map[Name]string{
 	VolumeMute: `<path d="M11 5 6 9 2 9 2 15 6 15 11 19Z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/>`,
 	Bell:       `<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>`,
 	HelpCircle: `<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4.6 1.4c0 1.6-2.1 2-2.1 3.1"/><path d="M12 17h.01"/>`,
+
+	Paperclip: `<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>`,
 }
 
 // Inner returns the icon's inner SVG markup, or "" for an unknown name.

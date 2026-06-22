@@ -5339,16 +5339,14 @@ for warranty/tax proof — a paperclip on the row, retrieve/preview later, survi
   sets `SourceDocID` — the *plumbing* exists. ✓
 
 **🔴 Gap (the story's core need is unmet):**
-- [ ] **No per-transaction receipt attachment in the UI.** `transactions.go` has **no attach code** — you
-      can't attach an artifact to a specific transaction, there's **no paperclip indicator** on rows, and
-      no transaction→receipt navigation. The `Attachments` field is unused by the UI. Build bottom-up:
-  - [x] **State/UI** `internal/screens/transactions.go`: an **"Attach receipt"** action (add/edit/row)
-        that uploads via `pickFile` → creates an Artifact → appends an `AttachmentRef`; a **paperclip
-        marker** on rows with attachments; click → preview the image.
-  - [ ] **Artifacts↔txn linkage** `internal/screens/artifacts.go`: each artifact row shows **which
-        transaction(s)** reference it; ideally create-and-link in one step.
-  - [ ] **Round-trip** (ties L9): ensure `AttachmentRef` + the artifact bytes are included in the
-        backup/export so receipts survive a device migration; test.
+- [x] **Per-transaction receipt attachment in the UI** (built this pass — the model existed, the UI didn't):
+  - [x] **State/UI** `internal/screens/transactions.go`: an **"Attach receipt"** row action uploads via
+        `pickFile` → creates an Artifact → appends an `AttachmentRef`; a **paperclip marker** (with count) on
+        rows with attachments; click → an image preview overlay.
+  - [x] **Artifacts↔txn linkage** `internal/screens/artifacts.go`: each artifact row shows "Referenced by N
+        transaction(s)".
+  - [x] **Round-trip** (ties L9): `AttachmentRef` + Artifact bytes already ride the dataset export/import;
+        locked in with `store.TestAttachmentRoundTrip`. e2e `receipt_attach_check.mjs`.
 - [ ] **Storage scalability for receipts.** Artifacts live in **localStorage** (the "KB in use" readout
       is good) — but binary receipt images will blow the ~5-10 MB quota fast for "keep all my receipts".
       Move artifact bytes to **IndexedDB** (keep refs in the dataset), with a graceful quota warning.
@@ -6025,6 +6023,142 @@ All 28 checks pass; exit code 0.
   strategy is resilient.
 - The transactions add form's description input is found by `id^="txn-add"` prefix; if the id
   scheme changes, the fallback is `input[placeholder*="desc" i]` then first `input[type="text"]`.
+
+---
+
+### L43. Story — "The Paycheck Cascade" (Nadia's payday ritual) — 2026-06-22 ★
+
+**The ritual:** Nadia gets paid and runs her full payday sequence in one sitting. She opens
+/transactions and logs a $3,500 salary deposit as Income. She then adds a $500 transfer
+transaction from Everyday Checking to Emergency Savings (HYSA). She opens /goals and contributes
+$200 to her Emergency Fund goal, expecting the progress bar to advance. She opens /budgets and
+applies Cover to two over-limit budgets ($100 each). She opens /bills and marks two due bills paid,
+expecting their next-due dates to advance by one cycle. Finally she opens /dashboard and confirms
+the $3,500 salary is reflected in the Income (this period) stat, and that net worth on the dashboard
+exactly matches the net worth shown on /accounts.
+
+**Drive script:** `e2e/loopstory_43_paycheck_cascade.mjs`.
+Script seeds all data from the live sample dataset (no fixture file) and uses baseline-delta
+arithmetic to sidestep pre-existing income figures.
+
+**What already works well (regression anchors):**
+- ✓ **Salary income transaction logs correctly and appears in /transactions immediately.** Row text
+  reads `2026-06-22 · L43 Salary Deposit · Other income · Everyday Checking · #needs-review ·
+  $3,500.00`. No reload required. Confirmed `loop43-02-income-added.png`.
+- ✓ **Transfer is routed through the transaction form (Type=Transfer) with From/To account
+  selectors.** The intended flow works: select Type=Transfer, choose To-account, submit — both
+  Checking and Savings update atomically. Net worth holds flat post-transfer (money-conservation
+  invariant). Confirmed `loop43-04-accounts-after-transfer.png`.
+- ✓ **Goal Contribute flow accepts amount and advances progress bar.** Emergency Fund advances
+  from prior state after the $200 contribution. Pace figure recomputes correctly. Confirmed
+  `loop43-06-after-contribute.png`.
+- ✓ **"Cover…" button appears on over-limit budgets.** Groceries ($520/$450) and Shopping
+  ($215/$200) both showed Cover; applying Cover updated the budget summary strip
+  (`SPENT $1,091 / BUDGETED $1,585 / LEFT $494`). Confirmed `loop43-08-after-budget-cover.png`.
+- ✓ **Bills "Mark paid" flow works and advances recurring next-due dates.** Rewards Credit Card
+  ($35, due 2026-06-22) and Rent ($1,450, due 2026-06-22) marked paid; Rent next-due advanced to
+  2026-08-01. Toast "Logged a payment for Rent." confirmed. Confirmed `loop43-10-after-bills-paid.png`.
+- ✓ **Dashboard Income stat includes the $3,500 salary deposit.** Dashboard shows `Income $7,310 ·
+  4 deposits this period` with the new salary visible in Recent Transactions widget. Confirmed
+  `loop43-11-dashboard-end-state.png`.
+- ✓ **Cross-screen net worth invariant holds.** Dashboard and /accounts both show `$63,068.00` net
+  worth (`Assets $88,378 − Liabilities $25,310`). Confirmed `loop43-12-accounts-balances.png`.
+- ✓ **Period window is consistent.** Dashboard, Budgets, and Reports all show `Jun 2026`.
+  Confirmed via DOM reads at each screen.
+- ✓ **All data persists across hard reload.** L43 Salary Deposit and transfer row survive
+  `page.reload()` on /transactions; account balances survive reload on /accounts.
+  Confirmed `loop43-12-transactions-after-reload.png`, `loop43-13-accounts-after-reload.png`.
+- ✓ **Zero JS page errors** across the entire six-screen flow.
+
+**Mechanical gaps:**
+
+- [ ] **No dedicated Transfer button on /accounts — transfer must be created as a transaction
+  (C52 discoverability gap).** There is no "Transfer" or "Move money" affordance on the /accounts
+  page or on individual account rows. Nadia must navigate to /transactions, select Type=Transfer,
+  and know to choose From/To accounts — a flow that is not discoverable from the accounts screen.
+  A first-time user looking at their account list has no affordance pointing them to the transaction
+  form for this action.
+  Before: user lands on /accounts, sees balances, no path to transfer.
+  After: add a "Transfer…" action button per account row (or a floating "Transfer" button in the
+  /accounts header) that pre-populates the transaction form with Type=Transfer and From=this account.
+  (`internal/screens/accounts.go` account row actions; `internal/screens/transactions.go` to accept
+  URL query params for pre-population.)
+
+- [ ] **CONFIRMED DECOUPLED: Goal Contribute is memo-only — does not debit the linked account
+  (C51 gap, persists from L41).** After the $200 Emergency Fund contribution, Emergency Savings
+  (HYSA) balance remained at `$12,200.00` — unchanged. The contribution advances `Goal.CurrentAmount`
+  internally but creates no corresponding transaction and debits no account. The goal shows linked
+  to `Emergency Savings (HYSA)` yet its progress is entirely independent of that account's balance.
+  Money can be "contributed" without any real funds moving, silently decoupling goal progress from
+  actual savings.
+  Before: contribute $200 → `Goal.CurrentAmount += $200`, HYSA unchanged.
+  After: contribute $200 → create a transaction (`Amount: -$200`, `AccountID: linkedAccountID`,
+  memo = goal name) that debits HYSA, and derive `Goal.CurrentAmount` from the sum of those
+  transactions. If no linked account, flag as memo-only with an explicit notice.
+  (`internal/screens/goals.go` `contribute` func; `internal/goals` service.)
+
+- [ ] **No "Salary" income sub-category — all salary income falls into "Other income".** The
+  transaction category picker for Type=Income offers generic sub-categories (Other income, etc.)
+  but no "Salary" or "Wages" option. Nadia's $3,500 salary is categorized as "Other income",
+  making it indistinguishable from side-income or one-off windfalls in Reports.
+  Before: Income transactions have no Salary/Wages category.
+  After: add standard sub-categories under Income: Salary, Freelance/Contract, Investment, Rental,
+  Benefits, Other. (`internal/store` seed data / default category scheme; `internal/catscheme`.)
+
+- [ ] **"Top up" / "Add funds" action is absent for under-limit budgets.** The Cover button
+  appears only when a budget is over-limit (it covers the overage). There is no equivalent action
+  to proactively add funds to an under-limit budget — e.g. "I want to increase my Groceries
+  envelope by $100 for this month." A user who wants to move money into a budget before overspending
+  has no affordance; they must manually edit the budget Limit.
+  Before: no "Add funds" or "Top up" on under-limit budget rows.
+  After: add a "Top up…" action (or rename Cover to be accessible before overage) that lets the
+  user increase the budget's effective limit for the current period by a chosen amount.
+  (`internal/screens/budgets.go` budget row actions; `internal/budgeting/` cover/envelope logic.)
+
+**UI/UX defects (screenshot-confirmed):**
+
+- [ ] **All new transactions auto-tagged `#needs-review` — no way to suppress on confident entry.**
+  Every transaction Nadia adds (income, transfer) arrives with the `#needs-review` tag. For a user
+  who is confident in her entry (her own salary, her own transfer), the tag is noise that must be
+  manually cleared. There is no "Mark as reviewed" shortcut inline at entry time, and no preference
+  to suppress auto-tagging for manual entries.
+  Screenshot: `loop43-02-income-added.png` (row shows `#needs-review` on manually entered salary).
+  After: add a "Mark reviewed" checkbox or toggle in the add-transaction form, defaulting to
+  unchecked (reviewed) for manual entries, checked (needs review) only for imported/AI-extracted
+  entries. (`internal/screens/transactions.go` add form; `internal/domain.Transaction` `NeedsReview`
+  flag default.)
+
+- [ ] **No inline "Transfer" shortcut on Dashboard.** The Dashboard is the entry point for most
+  payday workflows, but the primary actions (Log income, Transfer, Cover budget, Pay bill) all
+  require navigating to their respective screens. A "Quick actions" strip on the Dashboard
+  (Log transaction, Transfer, Mark bill paid) would let Nadia run her payday ritual without leaving
+  the overview screen.
+  Screenshot: `loop43-11-dashboard-end-state.png` (no quick-action strip visible).
+  After: add a collapsible Quick Actions row to the Dashboard with the 3-4 most common entry points.
+  (`internal/screens/dashboard.go`; `internal/widgetcfg` for configurability.)
+
+- [ ] **No success confirmation after bill "Mark paid" action — toast appears only for some bills.**
+  The Rent bill showed a toast "Logged a payment for Rent." The Rewards Credit Card bill was marked
+  paid with no visible toast or confirmation signal. The inconsistency means some payments feel
+  acknowledged and others feel unacknowledged — within the same screen, same action.
+  Screenshot: `loop43-10-after-bills-paid.png` (Rent toast confirmed; Credit Card has no feedback).
+  After: ensure every "Mark paid" action emits a consistent toast "Payment logged for [Bill Name]."
+  (`internal/screens/bills.go` mark-paid handler; toast call should be unconditional.)
+
+**Probe hardening:**
+- Checking and Savings balances are parsed from body text via regex on the account name followed
+  by a `$X.XX` pattern. This is stable against reorderings but fragile if the account name changes
+  or is truncated. Fix: locate the account row by `data-id` attribute (if present) or a stable
+  `aria-label` on the balance cell, then read the balance from that element directly.
+- Dashboard income delta assertion uses a baseline captured at session start; if the session
+  persists pre-existing income from a prior run (the sample dataset already has income
+  transactions), the delta check requires parsing the deposit-count change (`N deposits → N+1
+  deposits`) rather than the absolute figure. The script uses the deposit-count text as a secondary
+  probe to guard against absolute-figure false passes.
+- The "Mark paid" probe finds buttons by text `"Mark paid"` (case-insensitive). The Rewards Credit
+  Card button triggered without a toast; the probe captures the row's parent element text to record
+  the bill name before clicking — confirmed stable for two consecutive clicks without a modal
+  interrupting focus.
 
 ---
 

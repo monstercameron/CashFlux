@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Per-transaction receipt attachments (L29).** "Keep the receipt": each transaction row now has an "Attach
+  receipt" action that uploads an image and links it to that transaction, a paperclip marker (with a count) on
+  rows that have receipts, and a click-to-preview overlay. The Artifacts screen shows "Referenced by N
+  transaction(s)" on each artifact. Receipts ride the dataset backup (the `AttachmentRef` lives on the
+  transaction and the image bytes on the Artifact), locked in by `store.TestAttachmentRoundTrip`; e2e
+  `receipt_attach_check.mjs`. (Moving artifact bytes to IndexedDB for large receipt libraries is deferred.)
 - **Bulk-action undo + select-all-filtered (L25).** Destructive ledger bulk actions are now reversible: bulk
   delete, recategorize, and mark-cleared each capture the affected rows' prior state and show an inline
   "Deleted 5 · Undo" banner that restores them (re-creating deleted rows with their original IDs). A new

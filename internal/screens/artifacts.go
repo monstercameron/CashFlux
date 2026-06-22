@@ -78,10 +78,18 @@ func Artifacts() ui.Node {
 		})
 	}
 
+	// Count how many transactions reference each artifact (L29), so each row can
+	// show "Referenced by N transaction(s)".
+	refCount := map[string]int{}
+	for _, t := range app.Transactions() {
+		for _, att := range t.Attachments {
+			refCount[att.ArtifactID]++
+		}
+	}
 	list := app.Artifacts()
 	var rows []ui.Node
 	for _, a := range list {
-		rows = append(rows, ui.CreateElement(artifactRow, artifactRowProps{Artifact: a, Refresh: refresh}))
+		rows = append(rows, ui.CreateElement(artifactRow, artifactRowProps{Artifact: a, Refresh: refresh, ReferencedBy: refCount[a.ID]}))
 	}
 	listBody := P(css.Class("empty"), uistate.T("artifacts.empty"))
 	if len(rows) > 0 {
@@ -104,8 +112,9 @@ func Artifacts() ui.Node {
 }
 
 type artifactRowProps struct {
-	Artifact domain.Artifact
-	Refresh  func()
+	Artifact     domain.Artifact
+	Refresh      func()
+	ReferencedBy int // how many transactions attach this artifact (L29)
 }
 
 // artifactRow is one artifact entry with a delete action — its own component so
@@ -135,10 +144,24 @@ func artifactRow(props artifactRowProps) ui.Node {
 			Div(
 				Div(css.Class("row-desc"), a.Name),
 				Div(css.Class("row-meta"), meta+" · "+artifacts.HumanSize(a.Size)),
+				Div(css.Class("row-meta"), Attr("data-testid", "artifact-refs"), referencedByLabel(props.ReferencedBy)),
 			),
 		),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
+}
+
+// referencedByLabel renders the plain-English "Referenced by N transaction(s)"
+// (or a not-referenced note) for an artifact (L29).
+func referencedByLabel(n int) string {
+	if n == 0 {
+		return uistate.T("artifacts.referencedByNone")
+	}
+	noun := uistate.T("artifacts.referencedByCount", n)
+	if n != 1 {
+		noun += "s"
+	}
+	return uistate.T("artifacts.referencedBy", noun)
 }
 
 // itoaPct0 renders an int without a percent sign (small helper for counts).

@@ -1239,11 +1239,24 @@ var english = Catalog{
 	"pages.chooseArtifact": "— Choose artifact —",
 
 	// Artifacts screen
-	"nav.artifacts":         "Artifacts",
-	"artifacts.empty":       "No artifacts yet. Upload an image or import a dataset.",
-	"artifacts.uploadImage": "Upload image",
-	"artifacts.importCSV":   "Import CSV",
-	"artifacts.storage":     "Local storage in use: %s",
+	"nav.artifacts":               "Artifacts",
+	"artifacts.empty":             "No artifacts yet. Upload an image or import a dataset.",
+	"artifacts.uploadImage":       "Upload image",
+	"artifacts.importCSV":         "Import CSV",
+	"artifacts.storage":           "Local storage in use: %s",
+	"artifacts.referencedBy":      "Referenced by %s",
+	"artifacts.referencedByNone":  "Not referenced by any transaction",
+	"artifacts.referencedByCount": "%d transaction",
+
+	// Receipt attachment (L29)
+	"transactions.attachReceipt":      "Attach receipt",
+	"transactions.attachReceiptTitle": "Attach a receipt image to this transaction",
+	"transactions.receiptAttached":    "%d receipt attached",
+	"transactions.receiptsAttached":   "%d receipts attached",
+	"transactions.previewReceipt":     "Receipt preview",
+	"transactions.previewClose":       "Close receipt preview",
+	"transactions.previewAlt":         "Receipt image for %s",
+	"transactions.previewMissing":     "This receipt image is no longer available.",
 
 	// Workflows screen
 	"nav.workflows":                  "Workflows",

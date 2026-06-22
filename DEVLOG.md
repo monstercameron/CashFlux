@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: per-transaction receipt attachments (L29)
+
+The plumbing existed (`Transaction.Attachments []AttachmentRef`, the `Artifact` entity + Artifacts screen) but
+the transaction UI had zero attach code despite a stale TODOS checkmark. Built the UI half: an "Attach receipt"
+row action (`pickFile("image/*")` → `PutArtifact` → append `AttachmentRef` → `PutTransaction`), a paperclip
+marker with a count on rows that have receipts, a click-to-preview image overlay (looks up the artifact bytes
+and renders `artifacts.DataURL`), and "Referenced by N transaction(s)" on each Artifacts row. Artifacts + the
+attachment ref already round-trip in the dataset export/import, so backup survival was free — locked it in with
+`store.TestAttachmentRoundTrip` (PNG bytes + ref survive export→import).
+
+Process note: this one's agent **timed out mid-stream** (API stream idle timeout) after only adding the
+Paperclip icon + i18n keys — the Go UI/store/e2e weren't done. Rather than re-dispatch (risking duplicate
+i18n/icon and lost partial state), I finished it by hand on the agent's scaffold. e2e gotcha: `pickFile` is an
+off-DOM native picker Playwright can't drive, so the gate injects an artifact + ref via the one-shot
+addInitScript pattern and filters the ledger to that txn (so its row is on page 1), then asserts marker →
+preview img → artifacts linkage. Builds + all regressions green. This was the last fully-new story; remaining
+backlog is the L4/L16/L19/L22/L28 polish sweep and L11/L14 (responsive + command palette).
+
 ## 2026-06-22 - feat: bulk-action undo + select-all-filtered (L25)
 
 Made the cleanup flow safe and fast. Undo: each bulk op (delete / recategorize / mark-cleared) snapshots the

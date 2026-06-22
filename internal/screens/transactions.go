@@ -3,10 +3,12 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -308,6 +310,27 @@ func Transactions() ui.Node {
 		errMsg.Set("")
 		bump()
 	}))
+
+	// Receipt attachments (L29): the preview holds the currently-open attachment
+	// ("" ArtifactID = closed). attachReceipt uploads an image and links it.
+	previewRef := ui.UseState(domain.AttachmentRef{})
+	attachReceipt := func(t domain.Transaction) {
+		pickFile("image/*", func(name, mime string, data []byte) {
+			art := domain.Artifact{ID: id.New(), Name: name, Kind: "image", MIME: mime, Bytes: data, Size: len(data), CreatedAt: time.Now()}
+			if err := app.PutArtifact(art); err != nil {
+				notifyErr(uistate.T("transactions.attachReceiptTitle") + ": " + err.Error())
+				return
+			}
+			t.Attachments = append(t.Attachments, domain.AttachmentRef{ArtifactID: art.ID, Name: name, Kind: "image", MIME: mime})
+			if err := app.PutTransaction(t); err != nil {
+				notifyErr(err.Error())
+				return
+			}
+			bump()
+		})
+	}
+	viewReceipt := func(ref domain.AttachmentRef) { previewRef.Set(ref) }
+	closePreview := ui.UseEvent(Prevent(func() { previewRef.Set(domain.AttachmentRef{}) }))
 
 	duplicateTxn := func(t domain.Transaction) {
 		cp := t
@@ -669,6 +692,7 @@ func Transactions() ui.Node {
 					Members:  app.Members(),
 					Selected: selected.Get()[t.ID],
 					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect, OnToggleCleared: toggleCleared, OnCreateRule: createRuleFromTxn,
+					OnAttach: attachReceipt, OnViewReceipt: viewReceipt,
 				})
 			},
 		)
@@ -771,7 +795,37 @@ func Transactions() ui.Node {
 			)),
 	)
 
+	// Receipt preview overlay (L29): when a row's paperclip is clicked, look up the
+	// referenced artifact's bytes and show the image with a close control.
+	var previewNode ui.Node = Fragment()
+	if ref := previewRef.Get(); ref.ArtifactID != "" {
+		var art *domain.Artifact
+		for i := range app.Artifacts() {
+			if app.Artifacts()[i].ID == ref.ArtifactID {
+				a := app.Artifacts()[i]
+				art = &a
+				break
+			}
+		}
+		var body ui.Node
+		if art != nil && len(art.Bytes) > 0 {
+			body = Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
+		} else {
+			body = P(css.Class("empty"), uistate.T("transactions.previewMissing"))
+		}
+		previewNode = Div(css.Class("receipt-preview-overlay"), Attr("role", "dialog"), Attr("aria-label", uistate.T("transactions.previewReceipt")),
+			Section(css.Class("card"),
+				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
+					H2(css.Class("card-title"), uistate.T("transactions.previewReceipt")),
+					Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.previewClose")), Attr("data-testid", "receipt-preview-close"), OnClick(closePreview), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+				),
+				body,
+			),
+		)
+	}
+
 	return Div(
+		previewNode,
 		formCard,
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("transactions.listTitle")),
@@ -836,6 +890,10 @@ type transactionRowProps struct {
 	// OnCreateRule navigates to the Rules screen with the add-form prefilled from
 	// this transaction's payee/description and category.
 	OnCreateRule func(domain.Transaction)
+	// OnAttach uploads a receipt image and links it to this transaction; OnViewReceipt
+	// opens a preview of an attached receipt (L29).
+	OnAttach      func(domain.Transaction)
+	OnViewReceipt func(domain.AttachmentRef)
 }
 
 // (Transaction filtering/sorting now lives in the pure, tested internal/txnfilter
@@ -857,6 +915,16 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	createRule := ui.UseEvent(Prevent(func() {
 		if props.OnCreateRule != nil {
 			props.OnCreateRule(t)
+		}
+	}))
+	attach := ui.UseEvent(Prevent(func() {
+		if props.OnAttach != nil {
+			props.OnAttach(t)
+		}
+	}))
+	viewReceipt := ui.UseEvent(Prevent(func() {
+		if props.OnViewReceipt != nil && len(t.Attachments) > 0 {
+			props.OnViewReceipt(t.Attachments[0])
 		}
 	}))
 	pr := uistate.UsePrefs().Get()
@@ -961,7 +1029,18 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.createRuleTitle")), Title(uistate.T("transactions.createRuleTitle")), Attr("data-testid", "txn-create-rule"), OnClick(createRule), uistate.T("transactions.createRule"))),
+			If(!props.Txn.IsTransfer(), Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("transactions.attachReceiptTitle")), Title(uistate.T("transactions.attachReceiptTitle")), Attr("data-testid", "txn-attach"), OnClick(attach), uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("transactions.attachReceipt")))),
+			If(len(props.Txn.Attachments) > 0, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", receiptCountLabel(len(props.Txn.Attachments))), Title(receiptCountLabel(len(props.Txn.Attachments))), Attr("data-testid", "txn-attach-marker"), OnClick(viewReceipt), uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(len(props.Txn.Attachments))))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 	)
+}
+
+// receiptCountLabel is the plain-English label for a transaction's attached
+// receipts, e.g. "1 receipt attached" / "3 receipts attached" (L29).
+func receiptCountLabel(n int) string {
+	if n == 1 {
+		return uistate.T("transactions.receiptAttached", n)
+	}
+	return uistate.T("transactions.receiptsAttached", n)
 }
