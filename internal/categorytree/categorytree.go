@@ -104,6 +104,41 @@ func Descendants(cats []domain.Category, rootID string) map[string]bool {
 	return out
 }
 
+// VisibleUnderCollapsed returns the set of category IDs that should be shown
+// when some parent categories are collapsed. A category is included in the
+// result only when none of its ancestors appear in the collapsed map with a
+// true value. Root categories (no parent, or a missing parent) are always
+// visible regardless of the collapsed map.
+func VisibleUnderCollapsed(cats []domain.Category, collapsed map[string]bool) map[string]bool {
+	// Build a fast parent-lookup.
+	parentOf := make(map[string]string, len(cats))
+	ids := make(map[string]bool, len(cats))
+	for _, c := range cats {
+		parentOf[c.ID] = c.ParentID
+		ids[c.ID] = true
+	}
+
+	visible := make(map[string]bool, len(cats))
+	for _, c := range cats {
+		// Walk up the ancestor chain; hide if any ancestor is collapsed.
+		hidden := false
+		cur := c.ParentID
+		seen := make(map[string]bool) // cycle guard
+		for cur != "" && ids[cur] && !seen[cur] {
+			seen[cur] = true
+			if collapsed[cur] {
+				hidden = true
+				break
+			}
+			cur = parentOf[cur]
+		}
+		if !hidden {
+			visible[c.ID] = true
+		}
+	}
+	return visible
+}
+
 // ReparentOnDelete returns the direct children of deletedID, each re-pointed to
 // deletedID's own parent, so deleting a parent category re-homes its children to
 // the grandparent (or to the root when the deleted category was top-level)

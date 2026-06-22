@@ -40,6 +40,7 @@ func Categories() ui.Node {
 	errMsg := ui.UseState("")
 	reassignID := ui.UseState("") // category awaiting reassignment before delete
 	reassignTo := ui.UseState("")
+	collapsed := ui.UseState(map[string]bool{}) // id → collapsed; session state
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onColor := ui.UseEvent(func(v string) { color.Set(v) })
@@ -197,8 +198,38 @@ func Categories() ui.Node {
 		errMsg.Set("")
 		bump()
 	}
+	// hasChildrenSet: set of category IDs that have at least one child in the full
+	// category list, used to decide whether to show a collapse toggle.
+	hasChildrenSet := make(map[string]bool, len(cats))
+	for _, c := range cats {
+		if c.ParentID != "" {
+			hasChildrenSet[c.ParentID] = true
+		}
+	}
+
+	toggleCollapse := func(id string) {
+		cur := collapsed.Get()
+		next := make(map[string]bool, len(cur)+1)
+		for k, v := range cur {
+			next[k] = v
+		}
+		next[id] = !cur[id]
+		collapsed.Set(next)
+	}
+
 	renderFlat := func(f categorytree.Flat) ui.Node {
-		return ui.CreateElement(CategoryRow, categoryRowProps{Category: f.Category, Depth: f.Depth, AllCategories: cats, TxnCount: txnByCat[f.Category.ID], OnView: viewTxns, OnDelete: deleteCat, OnSave: saveCat})
+		return ui.CreateElement(CategoryRow, categoryRowProps{
+			Category:      f.Category,
+			Depth:         f.Depth,
+			AllCategories: cats,
+			TxnCount:      txnByCat[f.Category.ID],
+			HasChildren:   hasChildrenSet[f.Category.ID],
+			Collapsed:     collapsed.Get()[f.Category.ID],
+			OnView:        viewTxns,
+			OnDelete:      deleteCat,
+			OnSave:        saveCat,
+			OnToggle:      toggleCollapse,
+		})
 	}
 	flatKey := func(f categorytree.Flat) any { return f.Category.ID }
 
@@ -232,11 +263,11 @@ func Categories() ui.Node {
 		reassignPanel,
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("categories.expenseTitle")),
-			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), FocusID: "cat-add"}), Div(css.Class("rows"), MapKeyed(categorytree.Flatten(expenseList), flatKey, renderFlat))),
+			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), FocusID: "cat-add"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(expenseList), categorytree.VisibleUnderCollapsed(expenseList, collapsed.Get())), flatKey, renderFlat))),
 		),
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("categories.incomeTitle")),
-			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), FocusID: "cat-add"}), Div(css.Class("rows"), MapKeyed(categorytree.Flatten(incomeList), flatKey, renderFlat))),
+			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), FocusID: "cat-add"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(incomeList), categorytree.VisibleUnderCollapsed(incomeList, collapsed.Get())), flatKey, renderFlat))),
 		),
 		// Visual category map: the hierarchy as a Mermaid graph (C70/C63 tree view).
 		If(len(cats) > 0, Section(css.Class("card"),
@@ -251,9 +282,26 @@ type categoryRowProps struct {
 	Depth         int
 	AllCategories []domain.Category // for the inline parent picker
 	TxnCount      int               // transactions filed under this category
+	HasChildren   bool              // true when this category has at least one child
+	Collapsed     bool              // true when this category's children are hidden
 	OnView        func(string)      // drill into Transactions filtered by category
 	OnDelete      func(string)
 	OnSave        func(id, name, kind, parent, color string)
+	OnToggle      func(id string) // toggle collapse/expand for this category
+}
+
+// visibleFlats filters a pre-flattened category list to only those entries whose
+// IDs appear in the visible set (as produced by categorytree.VisibleUnderCollapsed).
+// This keeps the filter logic out of the render closure while preserving the
+// DFS pre-order produced by Flatten.
+func visibleFlats(flats []categorytree.Flat, visible map[string]bool) []categorytree.Flat {
+	out := make([]categorytree.Flat, 0, len(flats))
+	for _, f := range flats {
+		if visible[f.Category.ID] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // indentLabel returns a depth-proportional prefix for nested category names in
@@ -275,6 +323,11 @@ func CategoryRow(props categoryRowProps) ui.Node {
 			props.OnView(c.ID)
 		}
 	})
+	toggle := ui.UseEvent(Prevent(func() {
+		if props.OnToggle != nil {
+			props.OnToggle(c.ID)
+		}
+	}))
 	editing := ui.UseState(false)
 	nameS := ui.UseState(c.Name)
 	kindS := ui.UseState(string(c.Kind))
@@ -351,8 +404,40 @@ func CategoryRow(props categoryRowProps) ui.Node {
 	if c.Kind == domain.KindIncome {
 		kindLabel = uistate.T("category.income")
 	}
+	// Chevron toggle: shown for parent categories; a spacer aligns leaf rows.
+	var toggleBtn ui.Node
+	if props.HasChildren {
+		chevronIcon := icon.ChevronRight
+		if props.Collapsed {
+			chevronIcon = icon.ChevronRight
+		} else {
+			chevronIcon = icon.ChevronDown
+		}
+		ariaLabel := uistate.T("categories.collapseTitle", c.Name)
+		if props.Collapsed {
+			ariaLabel = uistate.T("categories.expandTitle", c.Name)
+		}
+		ariaExpanded := "true"
+		if props.Collapsed {
+			ariaExpanded = "false"
+		}
+		toggleBtn = Button(
+			css.Class("btn", tw.ShrinkO),
+			Type("button"),
+			Attr("aria-label", ariaLabel),
+			Attr("aria-expanded", ariaExpanded),
+			Attr("data-testid", "cat-toggle-"+c.ID),
+			OnClick(toggle),
+			uiw.Icon(chevronIcon, css.Class(tw.W4, tw.H4)),
+		)
+	} else {
+		// Spacer keeps name-column aligned with parent rows that do have a toggle.
+		toggleBtn = Span(Style(map[string]string{"display": "inline-block", "width": "1.5rem", "flex-shrink": "0"}))
+	}
+
 	return Div(css.Class("row"),
 		Span(css.Class("cat-swatch"), Style(map[string]string{"background": catColor(c.Color)})),
+		toggleBtn,
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), Style(descStyle), c.Name),
 			Span(css.Class("row-meta"),

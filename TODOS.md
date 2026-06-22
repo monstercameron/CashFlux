@@ -5303,8 +5303,7 @@ budget on parent → assert rollup).
       and a "Roll up sub-categories" toggle on the Spending-by-category card (off by default, so leaf detail
       stays visible). e2e `reports_rollup_check.mjs` (16→13 rows when rolled up).
 - [x] **Deleting a parent re-homes its children (no orphans).** DeleteCategory now re-parents any sub-category that pointed at the deleted category onto its grandparent (or root for a top-level parent) before deleting, so children never dangle. Pure categorytree.ReparentOnDelete (tested); e2e category_parent_delete_check.mjs.
-- [ ] *(Polish)* **Collapsible tree view.** Categories render as an indented flat list; for deep trees a
-      collapse/expand per parent would help navigation. Minor.
+- [x] **Collapsible tree view.** Each parent category in the Categories list has a chevron toggle that collapses/expands its descendants (pure categorytree.VisibleUnderCollapsed, tested; session-state). e2e category_collapse_check.mjs.
 
 **Positive observation (dev-agent progress):** the **L1 budget sub-line glue defect appears FIXED** — the
 budget rows now show "…$61.00 left" and "At this pace, projected to go over by $86.45" on **separate

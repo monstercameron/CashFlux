@@ -314,6 +314,8 @@ var english = Catalog{
 	"categories.addFirstIncome":  "Add an income category",
 	"categories.editTitle":       "Edit category",
 	"categories.deleteTitle":     "Delete category",
+	"categories.collapseTitle":   "Collapse %s",
+	"categories.expandTitle":     "Expand %s",
 
 	// Rules screen (auto-categorization)
 	"rules.add":                "Add rule",

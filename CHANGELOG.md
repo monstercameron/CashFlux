@@ -13,6 +13,9 @@ and every commit updates this file under `Unreleased`.
   exists. New pure `categorytree.ReparentOnDelete` (table-tested); e2e `category_parent_delete_check.mjs`.
 
 ### Added
+- **Collapsible category tree (L28).** Each parent category in the Categories list now has a chevron toggle to
+  collapse or expand its sub-categories, so a deep tree stays scannable. Pure `categorytree.VisibleUnderCollapsed`
+  (table-tested, cycle-safe); collapse state is session-scoped. e2e `category_collapse_check.mjs`.
 - **Fill-to-target allocation mode (L17).** Allocate gains a "Fill to target" mode alongside the score-weighted
   one: it funds each destination up to its remaining-to-target in ranked priority order (give every envelope
   its due first), then spreads any leftover by score — zero-based budgeting's "fund the essentials, then
