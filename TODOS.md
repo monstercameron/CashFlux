@@ -4758,7 +4758,7 @@ screenshot).
   with bill dots**; **Download CSV**; per-bill **"Remind me"**. ✓
 
 **Gaps (the safety net the story needs is absent):**
-- [ ] **Forward daily cash-flow projection + overdraft warning (headline).** Project each spending
+- [x] **Forward daily cash-flow projection + overdraft warning (headline).** Project each spending
       account's balance day-by-day over the next N days from known **upcoming bills** (due date+amount)
       and **expected income** (recurring paychecks), and flag the first day any account dips below zero
       (or below a user-set **buffer**). Bottom-up:
@@ -4768,7 +4768,7 @@ screenshot).
   - [x] **State/UI**: a **"Cash-flow runway"** card (Bills and/or Dashboard) — a daily balance line with
         a red marker on the danger day and a plain-English warning. Determinism: show the contributing
         bills/income.
-- [ ] **Warning → suggested action.** On a detected dip: "Checking dips to -$240 on Jul 2 — move $X from
+- [x] **Warning → suggested action.** On a detected dip: "Checking dips to -$240 on Jul 2 — move $X from
       High-Yield Savings, or delay the Auto Loan." Reuse the L1 cover/move-money + a bill-delay; emit a
       dismissible nudge → task (friendly, never naggy).
 - [x] **Mark a bill paid** (already shipped): BillRow has a "Mark paid" action wired to
@@ -8158,6 +8158,115 @@ convention), which is good.
 - L55 additional structural note: same gap re-confirmed in Dani's story.
 - L56 Thread B: "Forecast/planning logic is correct but not wired to live data" — this
   story (L61) is the third confirmation; fix spec in L56 Thread B applies here directly.
+
+### L62. Story — "The Money Question" (Renu, Insights Q&A) — 2026-06-22 ★
+
+**The ritual**
+Renu is a solo earner visiting /insights for the first time with no AI key set. She wants to:
+1. See whether the no-key state is handled gracefully (a CTA, not a dead-end).
+2. Follow the CTA to Settings so she can add a key.
+3. Confirm the AI key field exists in Settings.
+4. Ask an affordability question offline ("Can I afford $500?") — no key needed.
+5. Try to pin the answer; note whether the offline answer card has a Pin action.
+6. Add a task via /todo and verify it persists across a reload.
+7. After reload: CTA still present, task still in /todo.
+
+**Drive script**
+`e2e/loopstory_62_money_question.mjs` — drives the full no-key → CTA → settings → affordability
+fast-path → todo add → persistence reload chain. Does NOT enter a real API key.
+Exit code: **1** — 10 PASS · 1 FAIL · 1 MAYBE
+
+**Screenshots produced (9):**
+`l62_01_insights_no_key.png` · `l62_02_after_settings_click.png` · `l62_03_settings_modal.png` ·
+`l62_04_afford_result.png` · `l62_05_after_pin.png` · `l62_06_todo_before.png` ·
+`l62_07_todo_after_add.png` · `l62_08_todo_after_reload.png` · `l62_10_insights_cta_post_reload.png`
+
+**What already works well (regression anchors)** ✓
+
+- `I1 NO_KEY_CTA_PRESENT`: /insights in no-key state shows the "Add your OpenAI key" hint +
+  a "Settings" button — NOT a dead-end blank chat (C59 ✓). (`l62_01_insights_no_key.png`)
+- `STARTER_CHIPS_PRESENT`: Starter question chips (`.chip-suggest`) are visible even without an
+  AI key, so a new user sees what they can ask before committing to a key (L8 ✓).
+- `I2 SETTINGS_URL`: Clicking the Settings CTA changes the URL to `/settings` (C59 URL
+  contract ✓). (`l62_02_after_settings_click.png`)
+- `SETTINGS_AI_KEY_FIELD`: The global settings modal (opened via the household-selector button)
+  contains a password input for the OpenAI API key (`placeholder="OpenAI API key (sk-…)"`).
+  (`l62_03_settings_modal.png`)
+- `I4 AFFORD_NO_KEY`: The affordability fast-path ("Can I afford $500?") fires without an AI
+  key, returning a grounded `[data-cf="afford-result"]` card computed from real figures. ✓
+  (`l62_04_afford_result.png`)
+- `I5 CONTEXT_GROUNDED`: Real dollar figures appear in the insights thread — the financial
+  context (net worth, income, expense, accounts) is not empty. ✓
+- `I3 TODO_ROUNDTRIP`: A task added via the /todo form ("L62 Review food spending from Insights")
+  appears in the list immediately and persists across a full page reload. ✓
+  (`l62_07_todo_after_add.png`, `l62_08_todo_after_reload.png`)
+- `CTA_STABLE_POST_RELOAD`: The no-key CTA is still present after reload — no state leak or
+  premature key-detection. ✓ (`l62_10_insights_cta_post_reload.png`)
+- `NO_JS_ERRORS`: Zero page-level JavaScript errors across the full ritual. ✓
+
+**Mechanical gaps** (model → logic+tests → persistence → state → UI → e2e)
+
+**⚠ TOP GAP — GAP-A: /settings is NOT a registered route (C59 CTA broken for the user).**
+The insights "Settings" CTA calls `nav.Navigate(uistate.RoutePath("/settings"))`. However
+`/settings` is NOT registered in `internal/app/app.go`'s `screens.All()` route table. The router
+falls back to the `"*"` wildcard catch-all, which renders the **dashboard** — NOT the settings
+modal. The URL changes to `/settings` (which is why the existing `insights_keyhint_check.mjs`
+PASSES — it only asserts the URL change), but the settings panel does NOT open.
+
+- Confirmed by the probe: after clicking the CTA, `panel=false`, `heading=null`,
+  `aiKeyField=false`. The user lands on the dashboard with no visible path to the AI key.
+- The settings modal is only accessible via the household-selector button (gear icon in the top
+  bar), which is NOT visible from the `/settings` URL since the dashboard renders the usual shell.
+  In practice the user IS on the dashboard shell so the gear IS there, but the user has no signal
+  to look for it — the CTA gave them no indication it wouldn't open settings directly.
+- **Fix spec (state → UI):** In `internal/screens/insights.go`, replace
+  `nav.Navigate(uistate.RoutePath("/settings"))` with a direct `uistate.UseSettings()` atom write:
+  `settingsAtom.Set(uistate.Global())`. This opens the global settings modal in-place without a
+  navigation, which is what the user expects. Alternatively, register a `/settings` route in
+  `app.go` that renders the Shell with a `SettingsHost` auto-open effect.
+
+**⚠ SECOND GAP — GAP-B: save-as-task from Insights requires an AI key (no direct UI path).**
+The "save as task" affordance for an Insights answer is implemented as an agent tool (`add_task`
+in `internal/screens/chat_agent.go`) that the model invokes in response to a user request. There
+is NO direct UI button on any bubble to save an answer as a /todo item. The `AssistantBubble`
+has a "Pin" button (saves to `SavedInsight`, not `/todo`). `AffordResultBubble` has no Pin button
+at all — offline affordability answers have no persistent save path whatsoever.
+
+- **Fix spec (UI):** Add a "Save as task" button to `AssistantBubble` and `AffordResultBubble`
+  that calls `app.PutTask(domain.Task{...})` directly, without needing the model. Text of the
+  task is pre-filled from the answer content (truncated). The model's `add_task` tool path stays
+  as the conversational route; this button is the one-click shortcut.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **`l62_02_after_settings_click.png`:** After clicking "Settings" CTA on /insights, the
+  user lands on the Dashboard (dashboard shell visible) at URL `/settings`. There is no "Settings"
+  modal open, no heading, no key field. The CTA is misleading — it looks like a dead-end redirect.
+  The household-selector gear button IS visible in the shell header, but there is no visual cue
+  connecting it to "the place to add your AI key."
+- **`l62_05_after_pin.png`:** After submitting "Can I afford $500?" (which uses the offline
+  fast-path), the `AffordResultBubble` card appears with only a Delete button. There is no Pin,
+  no Copy, no "Save as task" action. Offline answers are ephemeral — they vanish when the
+  conversation is cleared or the page reloads (the conversation is only persisted if there are
+  assistant turns, not afford-result turns, to trigger the `persist()` effect). Verified: after
+  reload, the affordability card is gone.
+
+**Probe hardening**
+
+- **B1 SPA fallback required:** `goto(page, "/insights")` 404s. Used `goto("/")` then
+  `navTo("Insights")` throughout.
+- **Todo title input selector:** The task title input has `id="task-add"` and
+  `placeholder="What needs doing?"` (i18n key `todo.titlePlaceholder`). Initial probe used
+  placeholder-text matching for "title"/"task" — did not match. Fixed to `getElementById("task-add")`
+  + placeholder substring fallback `"needs doing"`.
+- **Settings CTA detection:** The Settings button text is `uistate.T("nav.settings")` = "Settings".
+  Detected as `button.textContent.trim() === "Settings"`. Stable.
+
+**Cross-references:**
+- C59: No-key CTA links to Settings — passes URL test but modal-open is broken (GAP-A above).
+- C81: Multi-provider settings exist — key field confirmed present via gear button.
+- L8: Starter chips on /insights — confirmed working (regression anchor).
+- L26: Tasks lifecycle — /todo add + persist confirmed (regression anchor).
 
 ---
 

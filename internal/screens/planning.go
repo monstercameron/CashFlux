@@ -380,7 +380,38 @@ func Planning() ui.Node {
 				var verdict ui.Node
 				if proj.WillBreach() {
 					breachDate := time.Now().AddDate(0, 0, proj.BreachDay).Format("Jan 2")
-					verdict = P(css.Class("err"), Attr("role", "alert"), uistate.T("planning.runwayBreach", breachDate, fmtMoney(money.New(proj.BreachShortfall, base))))
+					// Build the suggested-action line alongside the warning.
+					sug := runway.SuggestCover(proj.BreachShortfall, app.Accounts(), app.Transactions(), rates)
+					var sugNode ui.Node
+					switch {
+					case sug.Found && sug.AmountMinor >= proj.BreachShortfall:
+						sugNode = Div(css.Class("runway-suggest"),
+							Attr("data-testid", "runway-suggest"),
+							Span(uistate.T("planning.runwaySuggest",
+								fmtMoney(money.New(sug.AmountMinor, base)),
+								sug.SourceName,
+							)),
+							A(css.Class("btn btn-sm"), Href("/transactions"), uistate.T("planning.runwaySuggestAction")),
+						)
+					case sug.Found:
+						sugNode = Div(css.Class("runway-suggest"),
+							Attr("data-testid", "runway-suggest"),
+							Span(uistate.T("planning.runwaySuggestPartial",
+								fmtMoney(money.New(sug.AmountMinor, base)),
+								sug.SourceName,
+							)),
+							A(css.Class("btn btn-sm"), Href("/transactions"), uistate.T("planning.runwaySuggestAction")),
+						)
+					default:
+						sugNode = P(css.Class("muted"),
+							Attr("data-testid", "runway-suggest"),
+							uistate.T("planning.runwaySuggestNone"),
+						)
+					}
+					verdict = Div(
+						P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "runway-breach"), uistate.T("planning.runwayBreach", breachDate, fmtMoney(money.New(proj.BreachShortfall, base)))),
+						sugNode,
+					)
 				} else {
 					verdict = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("planning.runwaySafe", runwayDays))
 				}
