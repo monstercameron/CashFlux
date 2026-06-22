@@ -4265,16 +4265,16 @@ the **Emergency Fund** pace → eyeball **upcoming bills** — without hunting.
       +$304 over) Maya needs to pull from an under-budget envelope (e.g. Shopping, 72%) to cover it.
       Budgets today support add / inline-edit / delete / rollover toggle only — there is **no
       inter-budget transfer**. Build bottom-up:
-  - [ ] **Model/logic** `internal/budgeting` (pure, no `syscall/js`): a `Transfer(from, to BudgetID, amt money.Money)`
+  - [x] **Model/logic** `internal/budgeting` (pure, no `syscall/js`): a `Transfer(from, to BudgetID, amt money.Money)`
         that produces a balanced, explainable adjustment (records both legs, never lets a source go
         negative unless allowed), table-tested incl. overspend-cover and insufficient-source cases.
-  - [ ] **Persistence** `internal/store`: persist the adjustment/transfer as first-class data so it
+  - [x] **Persistence** `internal/store`: persist the adjustment/transfer as first-class data so it
         survives reload and round-trips through export/import (lossless test).
-  - [ ] **State** `internal/appstate`: a single covering action + atom refresh.
-  - [ ] **UI** `internal/screens/budgets.go`: a "Cover…" action on an over-budget row that opens a
+  - [x] **State** `internal/appstate`: a single covering action + atom refresh.
+  - [x] **UI** `internal/screens/budgets.go`: a "Cover…" action on an over-budget row that opens a
         small form (pick source budget + amount, with "cover the full $X over" one-tap), plain-English,
         keyboard-reachable, light/dark. Show the resulting balance change inline (determinism rule).
-  - [ ] **E2E** story test: overspend Groceries, cover from Shopping, assert both budgets re-balance,
+  - [x] **E2E** story test: overspend Groceries, cover from Shopping, assert both budgets re-balance,
         the projected-over line clears, and it survives a reload.
 
 **UI/UX defect (real, screenshot-confirmed):**
@@ -4304,20 +4304,20 @@ so nobody chases receipts.
 - [x] **"Settle up" — the reverse ledger of who owes whom.** (Shipped: internal/settle minimal-transfer logic + SharedExpense/Settlement persistence + record-settlement UI; e2e story_settle_up.test.mjs.) Split today only computes a *single*
       expense's shares; there is **no running net-balance across many split expenses** and **no way to
       record a settlement**. Build bottom-up:
-  - [ ] **Model/logic** `internal/settle` (pure, no `syscall/js`): given a set of shared expenses
+  - [x] **Model/logic** `internal/settle` (pure, no `syscall/js`): given a set of shared expenses
         (payer + per-member shares) and any recorded settlements, compute each member's **net balance**
         and a **minimal set of "X pays Y $Z" transfers** to zero everyone out (classic debt
         simplification). Table-tested: 3-way uneven shares, a partial settlement, rounding to minor
         units (no lost/created cents), already-settled = empty.
-  - [ ] **Persistence** `internal/store`: persist shared expenses + settlements as first-class records;
+  - [x] **Persistence** `internal/store`: persist shared expenses + settlements as first-class records;
         export/import round-trips losslessly (test).
-  - [ ] **State** `internal/appstate`: atoms for shared-expense list + settlements; one record-settlement
+  - [x] **State** `internal/appstate`: atoms for shared-expense list + settlements; one record-settlement
         action.
-  - [ ] **UI** `internal/screens/split_screen.go`: after the forward split, **save the split** to the
+  - [x] **UI** `internal/screens/split_screen.go`: after the forward split, **save the split** to the
         shared ledger; add a **"Settle up"** panel listing each member's net (you owe / owes you) and
         the minimal transfer list, with a **"Record settlement"** action per suggested transfer. Plain
         English, light/dark, keyboard-reachable; show the math (determinism rule).
-  - [ ] **E2E**: log 3 shared expenses with different payers, assert net balances + minimal transfers,
+  - [x] **E2E**: log 3 shared expenses with different payers, assert net balances + minimal transfers,
         record one settlement, assert the ledger re-balances and survives reload.
 - [ ] **Sample data is a single-member household** ("Michael Brooks", footer "1 member"), so every
       multi-person tool (Split, member filters, per-member budgets/goals owners) is undemoable from the
@@ -4350,19 +4350,19 @@ in one tap — no typing.
 - Clean, readable layout in **light theme** (app default when no theme is persisted). ✓
 
 **Mechanical gaps (block / weaken the ritual):**
-- [ ] **A receipt is ONE bank charge with MANY lines — import it as a split, not N transactions.**
+- [x] **A receipt is ONE bank charge with MANY lines — import it as a split, not N transactions.**
       Today vision extraction yields N independent transaction rows; importing a grocery receipt that
       way creates many standalone transactions that (a) **double-count** against the single bank/card
       charge the user will also see, and (b) **break dedupe** against that one charge. Build the
       "receipt mode" bottom-up:
-  - [ ] **Model/logic** `internal/extract` (+ `internal/domain`): distinguish a *statement* (many
+  - [x] **Model/logic** `internal/extract` (+ `internal/domain`): distinguish a *statement* (many
         charges → many transactions) from a *receipt* (one charge → one transaction **split across
         categories**). Add a receipt result shape: a single total + categorized line splits that sum to
         the total (table-tested: splits reconcile to the total to the cent; mixed/discount lines).
-  - [ ] **Persistence/state** `internal/store` + `internal/appstate`: import a receipt as one
+  - [x] **Persistence/state** `internal/store` + `internal/appstate`: import a receipt as one
         transaction carrying category splits (reuse/extend the category-split model from the budgets
         "cover"/Split work in L1/L2); export/import round-trips.
-  - [ ] **UI** `internal/screens/documents.go`: a **Receipt vs Statement** toggle on the AI import; in
+  - [x] **UI** `internal/screens/documents.go`: a **Receipt vs Statement** toggle on the AI import; in
         receipt mode the review table shows one transaction with editable per-line category splits that
         must sum to the total before Import enables. Plain English; show the running remainder.
 - [ ] **Extracted category is free text — map it to a real category + run Rules.** The model returns a
@@ -4396,7 +4396,7 @@ consolidated **net worth in her base currency (EUR)** via an FX table she contro
 - Net worth is rolled up **through the FX table** (`accounts.go:263`, `currency.Rates{Base, FXRates}`). ✓
 
 **Gaps (UX-refinement + one correctness edge — this is a strong area, refine it):**
-- [ ] **Account currency is a free-text field — make it a validated picker.** Typing "EUR" works but is
+- [x] **Account currency is a free-text field — make it a validated picker.** Typing "EUR" works but is
       typo-prone (unknown/lowercase codes silently break conversion). Replace the text input with a
       **searchable currency dropdown** sourced from the known ISO list / the FX-table currencies, with
       validation. Bottom-up:
@@ -4411,7 +4411,7 @@ consolidated **net worth in her base currency (EUR)** via an FX table she contro
   - [x] **Logic** `internal/currency.RateStale` + `DefaultRateMaxAge` (30d), table-tested.
   - [x] **State/UI** `internal/app/settings.go`: each FX rate row shows a "Stale" badge past the threshold.
         (An online "Refresh rates" action remains a future enhancement.)
-- [ ] **Correctness: net worth with a currency that has NO FX rate must NOT silently miscompute.**
+- [x] **Correctness: net worth with a currency that has NO FX rate must NOT silently miscompute.**
       Determinism/explainability rule. Add a logic test in `internal/currency` / the net-worth
       aggregation for the missing-rate case (account in GBP, no GBP rate): it must **warn / show a
       breakdown / exclude-with-notice**, never treat it as base or zero. Surface the warning on the
@@ -4443,22 +4443,22 @@ amount to commit, and to **track progress** as balances fall.
         month/date, and expose per-debt clear months from `BuildPlan`; table-test.
   - [x] **UI** `internal/screens/planning.go`: renders the debt-free **date** ("Debt-free by May 2028") beside the months (payoff.DebtFreeMonth). e2e payoff_debtfree_date_check.mjs. A
         per-debt "cleared by" date in the order list.
-- [ ] **Strategy comparison is useless at $0 extra (shows "170 vs 170 months").** Snowball/avalanche
+- [x] **Strategy comparison is useless at $0 extra (shows "170 vs 170 months").** Snowball/avalanche
       only differ when there's extra to allocate; the default extra is empty. Default/prompt a sensible
       **extra-per-month**, and when the two strategies tie, **explain why** ("Add an extra monthly
       amount to see snowball vs avalanche diverge"). UX + a small empty/equal state in planning.go.
-- [ ] **Exclude the mortgage (and any chosen debt) from the payoff plan.** Including the mortgage makes
+- [x] **Exclude the mortgage (and any chosen debt) from the payoff plan.** Including the mortgage makes
       it 170 months and dominates the plan; real debt-crusher tools target revolving/consumer debt and
       exclude the mortgage. Bottom-up:
-  - [ ] **Model/store** `internal/domain`/`internal/store`: a per-account **"include in payoff"** flag
+  - [x] **Model/store** `internal/domain`/`internal/store`: a per-account **"include in payoff"** flag
         (default: exclude mortgage-type / long-term loans), persisted + round-tripped.
   - [x] **Logic**: the `BuildPlan` caller filters by the flag; test that excluding the mortgage changes
         months/order as expected.
-  - [ ] **UI**: a checkbox per liability in the debt-strategy card ("include in payoff plan").
-- [ ] **Per-debt month-by-month schedule / payoff timeline chart.** Surface which debt the rolling
+  - [x] **UI**: a checkbox per liability in the debt-strategy card ("include in payoff plan").
+- [x] **Per-debt month-by-month schedule / payoff timeline chart.** (Shipped: payoff.BuildPlan Schedule/Order/ClearedMonths + burn-down chart + per-debt dates; e2e story_payoff_chart/story_payoff_date.) Surface which debt the rolling
       snowball targets each month and a burn-down of total balance. `BuildPlan` likely computes the
       schedule internally — expose it and render with the existing chart helpers (`ui.AreaChart`).
-- [ ] **Payoff PROGRESS tracking over time.** "Paid off $X since you started; on pace for [date]."
+- [x] **Payoff PROGRESS tracking over time.** "Paid off $X since you started; on pace for [date]."
       Needs a stored **baseline** of starting balances. Bottom-up: snapshot baseline in store →
       progress calc in `payoff` (tested) → a progress strip on the debt card + a dashboard widget.
 
@@ -4910,7 +4910,7 @@ remainder sum exactly to the input).
 - [ ] **Fill-to-target (envelope) mode.** Zero-based often means funding each budget to its limit in
       priority order (rent $1,800, groceries $600, …) rather than score-weighted spread. Add a mode that
       `Distribute`s to each destination's remaining-to-target first, then ranks the rest. Pure + tested.
-- [ ] **Save an allocation as a recurring plan** ("every paycheck, split like this") — ties to the L10
+- [x] **Save an allocation as a recurring plan** (Shipped: domain.AllocationProfile + saveProfile form on Allocate.) ("every paycheck, split like this") — ties to the L10
       income→allocate nudge so a logged paycheck can one-tap apply the saved split.
 
 **Probe note:** the reserve-input check **false-negatived** (placeholders aren't in `innerText`); the
