@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - feat: per-transaction member assignment (L21)
+
+Shared-account attribution. `Transaction.MemberID` already existed and persisted, but the only way it got set
+was `memberFor(acc)` — the account owner — so on a joint account every purchase looked like the same person's.
+Added an explicit "Who" picker to the add form and the inline row editor (only when >1 member). UX detail that
+matters: the add-form default follows the selected account's owner on change, but a sticky `whoOverridden` flag
+stops that once the user picks someone, and it resets after each submit so the next entry defaults sanely again.
+Inline edit defaults to the row's current member (or owner if empty). Respects the existing member filter and
+per-member reports for free since both key off MemberID. e2e `member_assignment_check.mjs`; no domain/store
+change. Built by a sequential sonnet sub-agent, integrated + regression-checked here (add/transfer/filter/
+duplicate stories all still green). Next: L24/L26 recurring transactions + tasks.
+
 ## 2026-06-21 - feat: apply allocation, earmark semantics (L17)
 
 Closed the loop from *suggestion* to *assignment*. Allocate ranked destinations and split dollars but nothing

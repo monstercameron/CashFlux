@@ -101,8 +101,31 @@ func Transactions() ui.Node {
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateStr.Set(v) })
 	onKind := ui.UseEvent(func(e ui.Event) { kind.Set(e.GetValue()) })
-	onAcc := ui.UseEvent(func(e ui.Event) { accID.Set(e.GetValue()) })
+	// whoMemberID tracks the "Who" picker value for the add form; whoOverridden
+	// records whether the user has explicitly chosen a member (so an account
+	// change does not silently overwrite their choice).
+	whoMemberID := ui.UseState(func() string {
+		if len(accounts) > 0 {
+			return app.MemberForNewTransaction(accounts[0])
+		}
+		return ""
+	}())
+	whoOverridden := ui.UseState(false)
+	onAcc := ui.UseEvent(func(e ui.Event) {
+		accID.Set(e.GetValue())
+		// When the user switches accounts, reset the Who picker to the new
+		// account's default owner ONLY if they haven't explicitly overridden it.
+		if !whoOverridden.Get() {
+			if a, ok := accByID[e.GetValue()]; ok {
+				whoMemberID.Set(app.MemberForNewTransaction(a))
+			}
+		}
+	})
 	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
+	onWho := ui.UseEvent(func(e ui.Event) {
+		whoMemberID.Set(e.GetValue())
+		whoOverridden.Set(true)
+	})
 	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
 	onTags := ui.UseEvent(func(v string) { tagsStr.Set(v) })
 	onFilterText := func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) }
@@ -185,6 +208,15 @@ func Transactions() ui.Node {
 			return
 		}
 		memberFor := app.MemberForNewTransaction
+		// Resolve the chosen member: use the Who picker value when the picker is
+		// shown (more than one member) and has a value; otherwise fall back to
+		// the account-owner default.
+		chosenMember := func(a domain.Account) string {
+			if len(app.Members()) > 1 && whoMemberID.Get() != "" {
+				return whoMemberID.Get()
+			}
+			return memberFor(a)
+		}
 		label := strings.TrimSpace(desc.Get())
 
 		if kind.Get() == "Transfer" {
@@ -202,7 +234,7 @@ func Transactions() ui.Node {
 			}
 			out := domain.Transaction{
 				ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
-				Amount: money.New(-amt, acc.Currency), TransferAccountID: toAcc.ID, MemberID: memberFor(acc),
+				Amount: money.New(-amt, acc.Currency), TransferAccountID: toAcc.ID, MemberID: chosenMember(acc),
 			}
 			in := domain.Transaction{
 				ID: id.New(), AccountID: toAcc.ID, Date: date, Desc: label,
@@ -218,6 +250,7 @@ func Transactions() ui.Node {
 			}
 			desc.Set("")
 			amountStr.Set("")
+			whoOverridden.Set(false)
 			errMsg.Set("")
 			bump()
 			return
@@ -228,7 +261,7 @@ func Transactions() ui.Node {
 		}
 		t := domain.Transaction{
 			ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
-			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: memberFor(acc),
+			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: chosenMember(acc),
 			Tags: textutil.CommaFields(tagsStr.Get()), Custom: customValuesToMap(txnDefs, customVals.Get()),
 		}
 		if err := app.PutTransaction(t); err != nil {
@@ -239,6 +272,7 @@ func Transactions() ui.Node {
 		amountStr.Set("")
 		tagsStr.Set("")
 		customVals.Set(map[string]string{})
+		whoOverridden.Set(false)
 		errMsg.Set("")
 		bump()
 	}))
@@ -269,7 +303,7 @@ func Transactions() ui.Node {
 		bump()
 	}
 
-	editTxn := func(orig domain.Transaction, newDesc, amountStr, catID, dateStr string) {
+	editTxn := func(orig domain.Transaction, newDesc, amountStr, catID, dateStr, memberID string) {
 		acc := accByID[orig.AccountID]
 		amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(acc.Currency))
 		if err != nil || amt <= 0 {
@@ -288,6 +322,9 @@ func Transactions() ui.Node {
 		orig.Amount = money.New(amt, orig.Amount.Currency)
 		orig.CategoryID = catID
 		orig.Date = date
+		if memberID != "" {
+			orig.MemberID = memberID
+		}
 		if err := app.PutTransaction(orig); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -432,6 +469,15 @@ func Transactions() ui.Node {
 		if isTransfer {
 			formTxnDefs = nil
 		}
+		// Build the optional "Who" member picker (only shown when there are
+		// multiple members to choose from).
+		members := app.Members()
+		var whoOptions []ui.Node
+		if len(members) > 1 {
+			for _, m := range members {
+				whoOptions = append(whoOptions, Option(Value(m.ID), SelectedIf(whoMemberID.Get() == m.ID), m.Name))
+			}
+		}
 		formCard = Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("transactions.addTitle")),
 			Form(css.Class("form-grid"), OnSubmit(add),
@@ -443,6 +489,7 @@ func Transactions() ui.Node {
 					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.toAccount")), Title(uistate.T("transactions.toAccount")), OnChange(onToAcc), toAccOptions),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
 				),
+				If(len(members) > 1, Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.whoLabel")), Attr("data-testid", "txn-who-add"), OnChange(onWho), whoOptions)),
 				If(!isTransfer, Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsStr.Get()), OnInput(onTags))),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateStr.Get()), OnInput(onDate)),
 				MapKeyed(formTxnDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
@@ -510,6 +557,7 @@ func Transactions() ui.Node {
 				acc := accByID[t.AccountID]
 				return ui.CreateElement(TransactionRow, transactionRowProps{
 					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], Categories: categories,
+					Members:  app.Members(),
 					Selected: selected.Get()[t.ID],
 					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect, OnToggleCleared: toggleCleared,
 				})
@@ -662,10 +710,11 @@ type transactionRowProps struct {
 	Account         string
 	Category        string
 	Categories      []domain.Category // for the edit-mode category picker
+	Members         []domain.Member   // for the edit-mode "Who" picker (may be empty)
 	Selected        bool
 	OnDelete        func(string)
 	OnDuplicate     func(domain.Transaction)
-	OnSave          func(orig domain.Transaction, desc, amount, categoryID, date string)
+	OnSave          func(orig domain.Transaction, desc, amount, categoryID, date, memberID string)
 	OnToggleSelect  func(string)
 	OnToggleCleared func(domain.Transaction)
 }
@@ -687,25 +736,31 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	sel := ui.UseEvent(Prevent(func() { props.OnToggleSelect(t.ID) }))
 	clr := ui.UseEvent(Prevent(func() { props.OnToggleCleared(t) }))
 	pr := uistate.UsePrefs().Get()
+	// Resolve the default member for this row: the transaction's own MemberID if
+	// set, otherwise the account owner via MemberForNewTransaction.
+	defaultRowMember := t.MemberID
 	editing := ui.UseState(false)
 	descS := ui.UseState(t.Desc)
 	amountS := ui.UseState(amountMajor)
 	catS := ui.UseState(t.CategoryID)
 	dateS := ui.UseState(dateISO)
+	memberS := ui.UseState(defaultRowMember)
 	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
 	onCat := ui.UseEvent(func(e ui.Event) { catS.Set(e.GetValue()) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
+	onMember := ui.UseEvent(func(e ui.Event) { memberS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		descS.Set(t.Desc)
 		amountS.Set(amountMajor)
 		catS.Set(t.CategoryID)
 		dateS.Set(dateISO)
+		memberS.Set(defaultRowMember)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(t, descS.Get(), amountS.Get(), catS.Get(), dateS.Get())
+		props.OnSave(t, descS.Get(), amountS.Get(), catS.Get(), dateS.Get(), memberS.Get())
 		editing.Set(false)
 	}))
 
@@ -726,6 +781,10 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		for _, c := range props.Categories {
 			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catS.Get() == c.ID), c.Name))
 		}
+		var memberOptions []ui.Node
+		for _, m := range props.Members {
+			memberOptions = append(memberOptions, Option(Value(m.ID), SelectedIf(memberS.Get() == m.ID), m.Name))
+		}
 		return Tr(css.Class("row-edit"),
 			Td(Attr("colspan", "9"),
 				Form(css.Class("form-grid"), OnSubmit(saveEdit),
@@ -733,6 +792,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
 					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate)),
+					If(len(props.Members) > 1, Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.whoLabel")), Attr("data-testid", "txn-who-edit"), OnChange(onMember), memberOptions)),
 					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 					Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 				),

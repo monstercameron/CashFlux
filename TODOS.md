@@ -5051,17 +5051,15 @@ surfaces).
 - Transactions are **member-aware**: each new transaction is stamped with a member. ✓
 
 **Gaps (the crux of "who spent what" on shared accounts):**
-- [ ] **No EXPLICIT per-transaction member assignment — it's derived from the account's owner.** The add
-      form has no "Who" picker; the member comes from `MemberForNewTransaction`/`memberFor(acc)`
-      (`transactions.go:174,218`). On a **joint/shared account** every transaction attributes to the same
-      owner, so Priya & Sam can't say "this one was Sam's." Add an optional **"Who" member select** on the
-      transaction add/edit form, defaulting to the account owner. Bottom-up:
-  - [ ] **Domain/state**: `Transaction.MemberID` already exists — expose it as an editable field (add +
-        inline edit); default to the account owner, allow override.
-  - [ ] **UI** `internal/screens/transactions.go`: a member select on the add form + in `TransactionRow`
-        edit; respects the existing member filter.
-  - [ ] **Test**: a shared-account txn overridden to Sam attributes to Sam in the ledger filter + the
-        per-member report.
+- [x] **Explicit per-transaction member assignment.** Added an optional **"Who" member select** on the
+      transaction add form AND the `TransactionRow` inline editor (rendered only when >1 member). Defaults to
+      the account owner and follows the account on change until the user overrides; persists `Transaction.MemberID`.
+  - [x] **Domain/state**: `Transaction.MemberID` exposed as editable (add + inline edit); defaults to account
+        owner, override sticky per-entry, resets to owner-default after submit.
+  - [x] **UI** `internal/screens/transactions.go`: member select on add form + in `TransactionRow` edit;
+        respects the existing member filter (keys off MemberID).
+  - [x] **Test**: `e2e/member_assignment_check.mjs` — a txn overridden to m-jordan persists memberId=m-jordan
+        and shows under that member's ledger filter.
 - [ ] **Per-member report stays hidden until ≥2 members have attributed spending.** Combined with the
       single-member sample (L2), the household-aware value is invisible out of the box. Reinforces L2's
       "add 2-3 sample members **with a few transactions each**" so /reports by-member + Split/Settle-up

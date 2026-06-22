@@ -892,6 +892,7 @@ var english = Catalog{
 	"transactions.uncategorized":       "Uncategorized",
 	"transactions.clearedMeta":         " · cleared",
 	"transactions.clearedCheck":        "Cleared ✓",
+	"transactions.whoLabel":            "Who",
 
 	// Accounts screen
 	"accounts.addTitle":           "Add account",

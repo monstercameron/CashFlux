@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Per-transaction member assignment (L21).** The transaction add form and the inline row editor now carry an
+  optional "Who" member picker (shown only when a household has more than one member). It defaults to the
+  account's owner and follows the account when you switch it, until you explicitly override — so on a shared or
+  joint account you can attribute a single purchase to a specific person instead of always inheriting the owner.
+  The choice persists to `Transaction.MemberID` and is respected by the existing ledger member filter and the
+  per-member reports. e2e `member_assignment_check.mjs` gates it.
 - **Apply allocation (L17).** The Allocate screen no longer only *suggests* — an "Apply allocation" button
   commits the plan with earmark-only semantics (no cash moves between accounts; money is never created or
   lost). Goal destinations add to the goal's saved amount, capped at target with any overflow disclosed;
