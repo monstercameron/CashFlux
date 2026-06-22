@@ -687,8 +687,7 @@ try {
     fail(`Step 10a — "${ACCT_NAME}" NOT found after hard reload`);
   }
 
-  const omarBalReloadMatch = bodyReload.match(/L44 Omar Checking[\s\S]{0,120}\$([\d,]+\.\d{2})/);
-  const omarBalReload = omarBalReloadMatch ? parseDollar(omarBalReloadMatch[1].replace(/,/g, "")) : NaN;
+  const omarBalReload = parseAccountBalance(bodyReload, ACCT_NAME);
   if (!isNaN(omarBalReload)) {
     pass(`Step 10b — "${ACCT_NAME}" balance persists after reload: $${omarBalReload}`);
   } else {

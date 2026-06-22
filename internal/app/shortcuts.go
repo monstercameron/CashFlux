@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/cmdmatch"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -332,6 +333,49 @@ func buildPaletteCommands() []paletteCmd {
 		)
 	} else {
 		cmds = append(cmds, paletteCmd{label: uistate.T("applock.cmdSet"), keywords: []string{"lock", "passcode", "password", "security"}, run: setPasscodeFlow})
+	}
+
+	// Searchable data entities (L14 dream-big): turn the user's own accounts,
+	// goals, and budgets into jump targets so the palette navigates to anything by
+	// name, not just screens and actions. Each command routes to the entity's
+	// screen; the type word is added as a keyword so "checking account" matches.
+	cmds = append(cmds, entityJumpCommands()...)
+
+	return cmds
+}
+
+// entityJumpCommands builds palette jump targets for the user's named entities
+// (accounts, goals, budgets) — each navigates to that entity's screen. Boot-safe:
+// returns nothing when the app state isn't ready.
+func entityJumpCommands() []paletteCmd {
+	app := appstate.Default
+	if app == nil {
+		return nil
+	}
+	var cmds []paletteCmd
+	jump := func(name, typeWord, route string) {
+		if name == "" {
+			return
+		}
+		path := route
+		cmds = append(cmds, paletteCmd{
+			label:    name + " · " + typeWord,
+			keywords: []string{name, typeWord, "go", "open", "jump"},
+			run:      func() { router.Navigate(uistate.RoutePath(path)) },
+		})
+	}
+	for _, a := range app.Accounts() {
+		if !a.Archived {
+			jump(a.Name, uistate.T("palette.entityAccount"), "/accounts")
+		}
+	}
+	for _, g := range app.Goals() {
+		if !g.Archived {
+			jump(g.Name, uistate.T("palette.entityGoal"), "/goals")
+		}
+	}
+	for _, b := range app.Budgets() {
+		jump(b.Name, uistate.T("palette.entityBudget"), "/budgets")
 	}
 	return cmds
 }

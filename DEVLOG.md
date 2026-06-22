@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: command palette jumps to data entities (L14)
+
+The palette already had verb-alias keyword matching (`cmdmatch`) and a broad action set (the two other L14
+gaps were already shipped — verified via `palette_fuzzy_check`). The dream-big gap was making the user's own
+data searchable: added `entityJumpCommands()` that appends one palette command per non-archived account / goal
+/ budget ("<name> · Account/Goal/Budget", with the type word as a keyword) routing to that screen. Boot-safe
+(nil app → none). Known limitation: the palette builds its command list once on first open, so entities added
+later need a reopen/reload to appear — acceptable, matches existing behavior. e2e `palette_entities_check.mjs`
+(polls for the seeded account, searches it, Enter → /accounts).
+
+Deferring the L11 mobile/responsive pass — tap-target sizing, a real mobile nav pattern, touch affordances —
+as a dedicated effort: it's a broad visual change that needs real device/viewport review rather than headless
+e2e, so it's the wrong thing to grind blind at the tail of this run. Everything else across L1–L30 is now
+addressed (shipped or verified already-present) with e2e coverage.
+
 ## 2026-06-22 - feat: one-tap Year view for Reports (L16, polish sweep)
 
 Tax season needs an annual view; the period control only went Week/Month/Quarter. Added a `period.Year`

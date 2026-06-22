@@ -1259,6 +1259,11 @@ var english = Catalog{
 	"transactions.previewMissing":     "This receipt image is no longer available.",
 
 	// Offline indicator (L19)
+	// Command palette entity jump targets (L14)
+	"palette.entityAccount": "Account",
+	"palette.entityGoal":    "Goal",
+	"palette.entityBudget":  "Budget",
+
 	"offline.label":        "Offline",
 	"offline.savedLocally": "You're offline — your changes are saved on this device and sync when you're back.",
 

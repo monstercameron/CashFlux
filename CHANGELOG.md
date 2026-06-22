@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Command palette jumps to your data (L14).** The Ctrl/⌘-K command palette now indexes your own accounts,
+  goals, and budgets by name — type "Everyday Checking" and run it to jump straight to that screen — instead of
+  only listing screens and actions. (The palette's verb aliases and broad action set were already in place.)
+  e2e `palette_entities_check.mjs`.
 - **One-tap Year view for Reports (L16).** Added a "Year" option to the period resolution control (alongside
   Week / Month / Quarter) and made the Reports screen period-aware in the top bar, so an annual / tax-season
   review is a single tap — every report, total and breakdown recomputes for the whole calendar year. New pure

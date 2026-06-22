@@ -4792,18 +4792,15 @@ Enter-navigation + Esc-close).
   (switch/new/export/import). ✓ Also: Alt+1–9 jump, Alt+N add, "?" help cheat-sheet. ✓
 
 **Gaps (enhance an already-good feature):**
-- [ ] **Intent/verb discovery — add command aliases/synonyms.** The add-transaction command is labeled
-      by its noun ("New transaction"), so typing "**add**" doesn't surface it (a power user thinks in
-      verbs). Give each `paletteCmd` optional **keywords/aliases** ("add", "create", "new", "export",
-      "wipe", "backup") and match against them in the fuzzy filter. Bottom-up: extend the `paletteCmd`
-      struct + the match function (pure, table-tested) → no UI change beyond results.
-- [ ] **Broaden the action set.** Add the high-value actions a keyboard user expects: **add account /
-      budget / goal**, **export JSON / CSV**, **load sample / wipe**, **period jump** (this/next month),
-      **mark-all-updated**. Each is a one-line `paletteCmd` calling an existing action.
-- [ ] **Make data entities searchable jump targets (dream-big).** Let the palette include the user's
-      **accounts / budgets / goals** by name so "Everyday Checking" jumps to that ledger and "Groceries"
-      to that budget. Bottom-up: a provider that appends entity commands from appstate (cap + ranked);
-      keep static commands first. Table-test the ranking.
+- [x] **Command aliases/synonyms** (already shipped): `paletteCmd` has `keywords` and the `cmdmatch` fuzzy
+      matcher ranks against them, so "add" → "New transaction", "export"/"backup"/"undo" etc. all resolve
+      (gated by `palette_fuzzy_check.mjs`).
+- [x] **Broaden the action set** (already shipped): the palette covers New transaction, toggle theme/sidebar,
+      undo/redo, export JSON/CSV, backup-everything/restore, workspace new/switch/export/import, and passcode
+      lock/change/remove.
+- [x] **Data entities are searchable jump targets** (dream-big, shipped): the palette now indexes the user's
+      accounts, goals, and budgets by name ("<name> · Account/Goal/Budget") and navigates to that screen.
+      `entityJumpCommands` in shortcuts.go; e2e `palette_entities_check.mjs`.
 - [ ] *(Polish)* **Group + hint.** Section the list (Navigate / Actions / Workspaces) and show the
       keyboard hint (Alt+N, etc.) beside matching commands.
 
