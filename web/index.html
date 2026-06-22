@@ -437,6 +437,16 @@
       .bar-fill.near { background: #f59e0b; }
       .bar-fill.over { background: var(--danger); }
 
+      /* Semantic tone classes (C91): up = positive, down = negative, warn = caution.
+         Named so they style every usage path — both literal class strings and the
+         markers tw.ColorClass emits — now that the Tailwind CDN that used to generate
+         text-up/bg-down/etc. is gone. Exact palette hex (kept in sync with internal/ui/tw). */
+      .text-up { color: #54b884; } .text-down { color: #d8716f; } .text-warn { color: #cfa14e; }
+      .text-dim { color: #ababb3; } .text-faint { color: #7d7d85; } .text-fg { color: #f4f4f5; }
+      .bg-up { background-color: #54b884; } .bg-down { background-color: #d8716f; }
+      .bg-warn { background-color: #cfa14e; } .bg-dim { background-color: #ababb3; }
+      .bg-fg { background-color: #f4f4f5; } .bg-line { background-color: #232325; }
+
       /* To-do */
       .field-wide { grid-column: 1 / -1; }
       .check { background: transparent; border: 1px solid transparent; color: var(--text-dim); cursor: pointer; font-size: 1.15rem; line-height: 1; min-width: 24px; min-height: 24px; display: inline-grid; place-items: center; margin-right: 0.4rem; box-sizing: border-box; }
