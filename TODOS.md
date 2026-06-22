@@ -5089,7 +5089,7 @@ CSS tokens, reload, assert persistence).
       read" warnings per failing token, or "all text meets the contrast guideline" (`theme_editor.go:192-203`).
 - [x] **Share a theme** (already shipped): the theme editor has **Export theme** (`cashflux-theme.json`) +
       **Import theme** buttons for the token set (`theme_editor.go:280-297`).
-- [ ] **Custom appearance in the FULL backup (cross-ref L9)** — the theme is independently exportable now
+- [x] **Custom appearance in the FULL backup (cross-ref L9)** — the theme is independently exportable now
       (above); folding the appearance keys into the L9 full-backup envelope remains a minor follow-up.
 
 **Probe note:** the "persisted across reload" check **false-negatived** — the `after` token snapshot was
