@@ -4988,7 +4988,7 @@ navigate, add a txn, verify persistence, reload offline).
       events (`wireOnlineStatus`). e2e `offline_indicator_check.mjs` (Playwright `setOffline`).
 
 **Incidental finding (a11y/semantics regression — ties to L7):**
-- [ ] **Rail nav `<a>` elements have NO `href`** (now onClick-only — confirmed by enumerating nav anchors:
+- [x] **Rail nav `<a>` elements have NO `href`** (now onClick-only — confirmed by enumerating nav anchors:
       every `href` is null). An anchor without `href` isn't a real link: not keyboard-focusable as a link,
       no middle-click / open-in-new-tab, and screen readers don't announce it as a link. Restore real
       `href` (the router already supports pushState links) or switch the role appropriately. This also
@@ -5518,14 +5518,14 @@ href/aria-current/tab-reach/skip-link/Alt-jump/collapse/mobile).
   (Alt+3 → /transactions verified), a **collapse toggle**, and a slim **55px** mobile rail. ✓
 
 **God-tier UX gaps (verified — all keyboard/a11y; the rail's biggest weakness):**
-- [ ] **HEADLINE: nav items aren't real links and aren't keyboard-focusable.** Measured **0/21 have
+- [x] **HEADLINE: nav items aren't real links and aren't keyboard-focusable.** Measured **0/21 have
       `href`**, and **Tab never reached the nav in 8 stops** — href-less click-anchors with no tabindex
       are not in the tab order. So keyboard + screen-reader users **cannot Tab to the primary
       navigation**; only the undiscoverable Alt+1–9 works. before→after: render each item as a real
       **`<a href={uistate.RoutePath(path)}>`** (the history router already supports pushState links). One
       change delivers: tab-focusability, **middle-click / open-in-new-tab / copy-link**, and correct SR
       link semantics. (`internal/app/shell.go` `navItem`/`Sidebar`.) Supersedes the L19 incidental note.
-- [ ] **No `aria-current="page"` on the active item.** It's visually distinct but SR users aren't told
+- [x] **No `aria-current="page"` on the active item.** It's visually distinct but SR users aren't told
       which screen is current. Add `aria-current="page"` when active. (`shell.go` navItem.)
 - [ ] **Alt+1–9 jumps are undiscoverable.** They work but nothing surfaces them outside the "?" help.
       Once the rail is tabbable (fix #1) they become a bonus rather than the only keyboard path; consider
@@ -5559,7 +5559,7 @@ must read in ~3s. **Drive script:** `e2e/loopstory_35_budgets_ux.mjs`.
       projects an overage, surface a distinct **"Trending over"** status (not "On track"), or fold the
       projection into the status. Bottom-up: a pure `budgeting.Status` that returns on-track / trending-
       over / near-limit / over (table-tested) → the row renders one consistent label.
-- [ ] **Progress bars aren't a11y-exposed** (`.bar` is a plain div — no `role="progressbar"` /
+- [x] **Progress bars aren't a11y-exposed** (`.bar` is a plain div — no `role="progressbar"` /
       `aria-valuenow/min/max`). Low priority (the text "79% · $61 left" already conveys it), but adding
       the role gives SR users the bar semantics. (`budgets.go` bar markup.)
 

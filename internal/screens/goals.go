@@ -5,6 +5,7 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -579,7 +580,7 @@ func GoalRow(props goalRowProps) ui.Node {
 			archiveBtn,
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
-		Div(css.Class("bar"), Div(css.Class("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
+		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(pct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")), Div(css.Class("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
 		Span(css.Class("budget-sub"), sub),
 		overfundNote,
 		whatNext,

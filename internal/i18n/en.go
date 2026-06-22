@@ -352,6 +352,7 @@ var english = Catalog{
 	"common.owner": "Owner",
 
 	// Budgets screen
+	"budgets.progressLabel":    "Budget usage",
 	"budgets.add":              "Add budget",
 	"budgets.needCategory":     "Add an expense category first, then create budgets.",
 	"budgets.limitRequired":    "Enter a positive limit.",
@@ -408,6 +409,7 @@ var english = Catalog{
 	"goals.deleteTitle":       "Delete goal",
 	"goals.progressFmt":       "%d%% · %s to go",
 	"goals.complete":          "Complete 🎉",
+	"goals.progressLabel":     "Goal progress",
 	"goals.whatNext":          "🎉 Funded — put what you were saving toward another goal?",
 	"goals.whatNextAction":    "Reallocate",
 	"goals.bySuffix":          " · by %s",

@@ -404,11 +404,20 @@ func navItem(props navItemProps) uic.Node {
 	args := []any{
 		ClassStr(cls),
 		Title(props.Label), // native tooltip + accessible name, esp. when collapsed to icons
-		OnClick(func() {
+		// A real href makes nav items keyboard-focusable links that screen readers
+		// announce and that support middle-click / open-in-new-tab (L34/L19 a11y);
+		// the click handler prevents the full-page load and does SPA navigation.
+		OnClick(Prevent(func() {
 			if path != "" {
 				nav.Navigate(uistate.RoutePath(path))
 			}
-		}),
+		})),
+	}
+	if path != "" {
+		args = append(args, Attr("href", uistate.RoutePath(path)))
+	}
+	if props.Active {
+		args = append(args, Attr("aria-current", "page"))
 	}
 	if props.Draggable {
 		onStart, onDrop := props.OnDragStart, props.OnDrop

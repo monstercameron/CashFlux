@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -621,7 +622,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
-		Div(css.Class("bar"), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
+		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 		Span(css.Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, s.Percent, fmtMoney(s.Remaining))),
 		paceLine,
 		rolloverLine,
