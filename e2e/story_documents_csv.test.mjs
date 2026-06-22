@@ -47,8 +47,12 @@ try {
   // account) and import it. The payee fills the required description (the C27 fix),
   // so this documented shape actually imports.
   const csv = `date,payee,amount,account\n2026-06-05,${PAYEE},12.34,${acctName}`;
-  await page.locator("textarea").first().fill(csv);
-  await page.locator("form", { has: page.locator("textarea") }).locator('button[type="submit"]').first().click();
+  // Target the CSV importer specifically — the Documents screen also has a bank/card
+  // statement importer with its own textarea, so .first() is ambiguous. The CSV
+  // textarea is the one whose placeholder documents the date,payee,amount,account shape.
+  const csvForm = page.locator("form", { has: page.getByPlaceholder(/date,\s*payee/i) });
+  await csvForm.locator("textarea").fill(csv);
+  await csvForm.locator('button[type="submit"]').first().click();
 
   // The imported transaction shows in the dataset (payee filled the description).
   const d1 = await waitForDataset(page, (d) => (d.transactions || []).some((t) => t.desc === PAYEE));
