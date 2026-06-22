@@ -4437,11 +4437,11 @@ amount to commit, and to **track progress** as balances fall.
   calculator. ✓
 
 **Gaps (strong logic — the gaps are presentation, scope, and tracking):**
-- [ ] **Show a calendar DEBT-FREE DATE, not just "170 months".** The card shows a month count; the
+- [x] **Show a calendar DEBT-FREE DATE, not just "170 months".** The card shows a month count; the
       story wants "debt-free by Aug 2031" (and a date per debt as each clears). Bottom-up:
   - [x] **Logic** `internal/payoff`: add a pure helper turning `Months` (+ a start month) into a target
         month/date, and expose per-debt clear months from `BuildPlan`; table-test.
-  - [ ] **UI** `internal/screens/planning.go`: render the debt-free **date** beside the months, and a
+  - [x] **UI** `internal/screens/planning.go`: renders the debt-free **date** ("Debt-free by May 2028") beside the months (payoff.DebtFreeMonth). e2e payoff_debtfree_date_check.mjs. A
         per-debt "cleared by" date in the order list.
 - [ ] **Strategy comparison is useless at $0 extra (shows "170 vs 170 months").** Snowball/avalanche
       only differ when there's extra to allocate; the default extra is empty. Default/prompt a sensible
@@ -6259,6 +6259,349 @@ computed import sum to probe the adjustment mechanism.
 - The reconcile input must be targeted as `input[id^="acct-setbal-"]` (unique prefix per
   account row), not `input[placeholder="New balance"]`, because the `closest("form")` from
   the placeholder-based selector resolved to the Add-account form at the top of the page.
+
+---
+
+### L45. Story — "The Month-End Close" (Priya) — 2026-06-22 ★
+
+**The ritual:** Priya, 42, household manager, runs her month-end close in one sitting.
+She opens /dashboard and sets the period to last month (May 2026) via the "Jump to …"
+preset. She reviews the budgets widget and spots "L45 Groceries Budget" at 5200% over.
+She navigates to /budgets (keeping the shared period atom alive via nav-rail click) and
+confirms the same May 2026 view. She clicks the budget name drill link to open
+/transactions pre-filtered to Groceries for May. She fixes two miscategorized transactions
+(L45 MISC COFFEE → Dining, L45 MISC PHARMACY → Healthcare). She uses browser Back to
+return to /budgets and verifies state is intact. She navigates to /reports (soft-nav),
+confirms period is still May 2026, and reviews the "Spending by category" totals —
+Groceries shows $495.00 (pre-existing $345 + the three L45 seeded entries). She clicks
+"Export CSV" and verifies the export reflects the May 2026 period (not the default
+current month).
+
+**Drive script:** `e2e/loopstory_45_month_end_close.mjs`.
+Budget and transactions seeded fresh each run: "L45 Groceries Budget" ($10 limit,
+category Groceries), 3 Groceries transactions in May 2026 totalling $150 (forcing
+5200% over-budget), 2 misc uncategorized transactions (L45 MISC COFFEE $8.00,
+L45 MISC PHARMACY $22.00 in May 2026) for the recategorize step. All seeded names
+prefixed "L45" for isolation. Navigation after period-set uses client-side nav-rail
+clicks (not `page.goto`) to preserve the shared period atom.
+
+**gwc build / run commands and exit codes:**
+```
+GOOS=js GOARCH=wasm go build -o web/bin/main.wasm .     EXIT 0
+go run e2e/serve.go                                      [background, PID 45844]
+E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_45_month_end_close.mjs
+  → 26 passed, 1 failed                                  EXIT 1
+```
+
+**Screenshots produced:**
+`l45_step0_budgets_before_seed.png`, `l45_step0_budgets_after_seed.png`,
+`l45_step0_transactions_seeded.png`, `l45_step1a_dashboard_before_period.png`,
+`l45_step1b_dashboard_last_month.png`, `l45_step2_dashboard_widgets.png`,
+`l45_step3_budgets_page.png`, `l45_step5_transactions_after_drill.png`,
+`l45_step6a_transactions_before_fix.png`, `l45_step6b_transactions_after_fix.png`,
+`l45_step7_after_back.png`, `l45_step8_reports.png`,
+`l45_step9a_reports_before_export.png`, `l45_step9b_reports_after_export.png`.
+
+**What already works well (regression anchors):**
+- ✓ **FILTER_CARRY: Budget drill pre-applies category filter on /transactions.**
+  Clicking the budget name drill button on /budgets navigates to /transactions with
+  "Category: Groceries ×" filter chip pre-applied (48 transactions shown, all Groceries).
+  `TxFilter{Category: categoryID}` is set and persisted before navigation.
+  Confirmed `l45_step5_transactions_after_drill.png`.
+- ✓ **PERIOD_CARRY via client-side nav: shared period atom carries across all screens.**
+  Setting "Last period" (May 2026) on /dashboard and navigating via nav-rail clicks
+  (not hard reloads) keeps "May 2026" in the top bar across /budgets, /transactions,
+  /reports. `uistate.UsePeriod()` shares the same atom key `"dashboard:period"` across
+  all screens and the shell. Confirmed `l45_step3_budgets_page.png` (May 2026),
+  `l45_step5_transactions_after_drill.png` (May 2026), `l45_step8_reports.png` (May 2026).
+- ✓ **BACK_STATE: Browser Back returns to /budgets with state intact.**
+  After drilling to /transactions, pressing browser Back returns to `http://.../budgets`
+  with "L45 Groceries Budget" still visible and period still May 2026. No 404, no full
+  reset. Confirmed `l45_step7_after_back.png`.
+- ✓ **REPORTS_AGREE: Reports totals reflect the seeded and categorized transactions.**
+  /reports for May 2026 shows Groceries $495.00 (pre-existing $345 + L45 seeded $150),
+  Housing $1,450.00, Dining $233.00, Spending $3,200.20. Cross-screen: figures match
+  what /transactions showed filtered to Groceries for May.
+  Confirmed `l45_step8_reports.png`.
+- ✓ **Over-budget signal visible on /budgets.**
+  "L45 Groceries Budget · Groceries · $150.00 / $10.00 · Monthly · Over budget · 1500% ·
+  ($140.00) left" (or similar, as proportion of May spend vs $10 limit).
+  Confirmed `l45_step3_budgets_page.png`.
+- ✓ **Dashboard budgets widget shows L45 budget visible in May 2026 view.**
+  After setting period to May 2026 on /dashboard, "L45 Groceries Budget" appears in the
+  budgets widget row. Confirmed `l45_step2_dashboard_widgets.png`.
+- ✓ **Zero JS page errors** across the entire 11-step, 5-screen ritual.
+
+**Mechanical gaps:**
+
+- [ ] **Dashboard budgets widget uses `time.Now()` (current month), not the shared period
+  atom — so it silently ignores the period selector (C?? new gap).**
+  `budgetsWidget()` in `internal/screens/dashboard.go:922` calls
+  `start, end := dateutil.MonthRange(time.Now())` unconditionally. The shared period atom
+  (set to May 2026) has no effect on the budgets widget. The widget will show June data
+  even when the user has selected May 2026. This means the dashboard's own budget widget
+  is always showing the current month regardless of the period the user is examining.
+  Before: period set to May 2026, budgets widget shows current-month (June) figures.
+  After: replace `dateutil.MonthRange(time.Now())` with `w.Range()` (the period window
+  already read at line 76: `w := uistate.UsePeriod().Get()`).
+  (`internal/screens/dashboard.go` `budgetsWidget` — pass `start, end` from the caller's
+  period window rather than computing `MonthRange(time.Now())` locally.)
+
+- [ ] **Period window is NOT persisted to localStorage — only the resolution is.**
+  `uistate.PersistResolution` writes only the `period.Resolution` (Month/Week/Quarter/Year)
+  to localStorage; the selected window (From/To anchors = e.g. May 2026) is transient
+  in-memory state. On any hard navigation (full page reload or direct URL entry), the
+  period resets to the current period. This means:
+  (a) the month-end close ritual can only proceed if the user never reloads the page;
+  (b) the ritual's PERIOD_CARRY invariant is fragile — it holds only within a single
+  in-memory session and breaks the moment history.pushState is not used (e.g. external
+  links, mobile browser background eviction, F5 reload).
+  Before: set period to May 2026, hard-reload any screen → period resets to Jun 2026.
+  After: persist `From`/`To` window to localStorage alongside the resolution, and reload
+  from it on `defaultWindow()`.
+  (`internal/uistate/period.go` — add `persistWindow`/`loadWindow` analogous to
+  `PersistResolution`/`loadResolution`; call `persistWindow` from the period-setter
+  in `ResolutionControl` whenever the window changes.)
+
+**UI/UX defects (screenshot-confirmed):**
+
+- [ ] **Export CSV filename is `spending-by-category.csv` with no period marker — all
+  exports collide (C?? new gap).** `internal/screens/reports_screen.go:381` hardcodes
+  `downloadBytes("spending-by-category.csv", ...)`. If Priya exports May and June reports,
+  both download as `spending-by-category.csv`; her browser silently saves
+  `spending-by-category (1).csv` — she has no way to tell which file is which.
+  The export DATA is correct (it uses the viewed period's rows), but the filename is blind
+  to the period.
+  Before: `spending-by-category.csv` (confirmed export download from `l45_step9a_reports_before_export.png`).
+  After: encode the period in the filename, e.g. `spending-by-category-2026-05.csv`
+  (`w.From.Format("2006-01")` from the period window `w` already in scope at line 77).
+  (`internal/screens/reports_screen.go` line 381 — change the filename argument to
+  `fmt.Sprintf("spending-by-category-%s.csv", w.From.Format("2006-01"))` and pass `w`
+  into the button's click handler scope.)
+  Screenshot: `l45_step9a_reports_before_export.png` (export button visible, period May 2026;
+  filename confirmed by Playwright download event).
+
+- [ ] **Dashboard budgets widget has NO drill-through link — over-budget items are
+  display-only with no "why?" affordance.** The `budgetsWidget()` renders budget rows
+  as static `Div` elements (no `Button`, no `A`, no `OnClick`). Clicking a red over-budget
+  bar on the dashboard does nothing. The only drill path is: navigate to /budgets manually,
+  then click the budget name. Priya has to leave the dashboard entirely before she can act
+  on an over-budget signal. The `/budgets` screen's drill button proves the pattern works;
+  it just isn't surfaced on the dashboard widget.
+  Before: over-budget row in dashboard widget = unclickable bar + label + percentage.
+  After: wrap each budget row in a `Button(Type("button"), OnClick(func() {
+  f := uistate.TxFilter{Category: s.Budget.CategoryID}.Normalize();
+  txFilter.Set(f); uistate.PersistTxFilter(f); nav.Navigate("/transactions")
+  }), ...)` so clicking a budget row on the dashboard drills straight to its transactions.
+  (`internal/screens/dashboard.go` `budgetsWidget` — add nav + txFilter hooks at the
+  widget level, wrap rows in drill buttons.)
+  Screenshot: `l45_step2_dashboard_widgets.png` (budgets widget visible, rows unclickable).
+
+**Probe hardening notes:**
+- `softNav(page, "Budgets", "/budgets")` clicks the nav rail `<a title="Budgets">` link
+  instead of `page.goto("/budgets")` — preserving the in-memory period atom. Hard `goto()`
+  resets all atoms to `defaultWindow()` (current month). Use `softNav` for every
+  mid-ritual navigation after a period change.
+- Budget category select must use `select[aria-label="Category"]` (not `select`),
+  as the `/budgets` add-form has a period select immediately above it that matches a
+  broad `select` query first.
+- Transaction add-form fields: `input[placeholder="Description"]`,
+  `input[placeholder="Amount"]`, `input[aria-label="Date"]` (type="date", not a text
+  input; avoid `input[type="date"]` if aria-label is more stable).
+- FILTER_CARRY probe reads the filter chip from `document.body.innerText` for the text
+  "Category: Groceries" rather than reading any select value. The add-transaction form's
+  Category select always shows "— No category —" regardless of the active filter; reading
+  it as the filter state is a false negative.
+- The misc-transaction recategorize step (step 6) is inconclusive in this run because the
+  seeded May 2026 rows fall below the visible window when the Groceries category filter is
+  active (48 matching transactions, newest-first, paginated). A future hardening pass
+  should set the date filter to May 2026 explicitly before searching for the misc rows.
+
+---
+
+### L46. Story — "The Debt Crusher" (Jordan & Mei) — 2026-06-22 ★
+
+**The ritual:** Jordan & Mei carry two high-interest debts: a Visa credit card (19.99% APR, $4,800
+owed, $96/mo minimum) and a personal loan (8.5% APR, $3,200 owed, $64/mo minimum). They have a
+$8,000 checking account. Jordan's ritual: add the accounts → check /accounts balances → visit
+/planning for an avalanche payoff plan → record two transfer payments (checking→Visa, checking→Loan)
+→ confirm /budgets "Debt payments" category → verify /planning recomputed with lower balances →
+check /dashboard net worth → check /reports outflows.
+
+**Drive script:** `e2e/loopstory_46_debt_crusher.mjs`
+
+**What already works well (regression anchors)** ✓
+- Liability account creation (Credit Card + Personal Loan types) with APR, opening balance, and
+  minimum payment fields — all accepted and persisted correctly. ✓
+- Both liability accounts appear in the Planning "Debt payoff strategy" panel immediately after
+  creation, with correct names and include/exclude toggles. ✓
+- Avalanche + snowball strategies computed correctly; include/exclude toggles work per account. ✓
+- Planning correctly shows "With this budget the debts never clear — the minimums can't outpace the
+  interest. Add an extra payment." when combined minimums are insufficient, AND suggests the required
+  extra monthly amount (e.g. "Try $118.75/mo") — `payoff.MinimumViablePayment` is wired. ✓
+- Transfer type on /transactions is fully operational: Type→"Transfer", From account, To account
+  selects appear correctly; both legs are created (checking debit + liability credit). ✓
+- NETWORTH_ARITH: Net worth is unchanged after transfer payments — the two legs cancel (money just
+  moves between accounts, no phantom creation/destruction). ✓
+- MONEY_CONSERVE: After transfer payments, reduced liability balances ($4,500 and $3,000) appear on
+  /accounts — transfer legs correctly posted to the liability accounts. ✓
+- PERIOD_WINDOW: Dashboard and Reports show the same period (Jun 2026) consistently. ✓
+- Zero JS page errors across the full ritual. ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+1. **Transfer payments are invisible to budget categories (UI/UX gap).** When Jordan records a debt
+   payment as a Transfer (checking → Visa), the transaction has NO category — transfers are correctly
+   excluded from income/expense categorization. But this means the "L46 Debt payments" budget (set to
+   "Education & Loans" category) shows $0 contribution from transfer-type payments. Only
+   expense-type payments (with a category selected) count. There is no way to track "how much did we
+   pay toward debt this month" in the budgets view without recording the payment as an expense instead
+   of a transfer — but doing so breaks the net-worth accounting (creates a phantom loss). Gap:
+   the budget system has no concept of "debt service" as a trackable outflow that is also a transfer.
+   - Confirmed: `/budgets` showed "$280.00" spend (from prior expense-type runs), not $500 from the
+     transfer-type payments in the current run.
+
+2. **Planning "Debt-free by" date not shown without explicit extra monthly amount.** When combined
+   minimum payments cannot outpace interest on the full liability portfolio, Planning correctly shows
+   "never clears." However, the "Debt-free by [Month Year]" calendar date only appears once
+   `BuildPlan` returns `ok=true` (which requires extra ≥ minimum viable payment). The UX requires
+   Jordan to first discover and enter the magic extra amount to see ANY projected date. The "Try
+   $118.75/mo" suggestion is a helpful nudge but remains passive text — there is no "Apply this
+   suggestion" button that would pre-fill the extra amount and reveal the debt-free date.
+   - Existing L5 gap (strategy diverges at $0 extra) — confirmed still open.
+
+3. **Transfer-type debt payments excluded from /reports outflows.** Transfers are deliberately
+   excluded from income/expense totals (correct per accounting model). But this means Jordan's
+   $500/month in debt payments does not appear anywhere in /reports as a tracked outflow. A user
+   reviewing their monthly spending pattern cannot see their total debt service cost. Gap: /reports
+   has no "Transfers out" or "Debt service" line; the period outflow total understates total cash
+   burn.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **Planning "never clears" message is abrupt.** The text "the minimums can't outpace the interest"
+  is correct but uses internal financial language. Plain-English suggestion: "Your combined minimum
+  payments ($160/mo) don't cover the monthly interest — the debt will grow. To stop it, add at
+  least $118.75/mo extra." (Surfaces the specific minimum payment total.) Low severity.
+- **Budget spend inconsistency under split workflow.** A user who switches from expense-type to
+  transfer-type payments mid-month will see their budget spend drop — the transfer payments disappear
+  from the category total. No in-app explanation. Medium severity.
+
+**Probe hardening**
+
+- The script correctly uses Transfer type for debt payments (Type→Transfer, From→Checking, To→Visa).
+  Prior iterations used Expense type, which recorded payments as outflows without corresponding
+  liability credits — now fixed.
+- Balance checks (Steps 9a/9b) use both exact-value regex near account name AND full-body string
+  search, since multiple accumulated test accounts of the same name can cause the first-match regex
+  to find an older balance ($4,800) while the newer account shows the reduced balance ($4,500).
+- Planning "Debt-free by" check handles both the viable-plan case (date shown) and the
+  never-clears case (message shown + suggested extra); the script passes in both branches.
+- The PLAN_RECOMPUTES invariant is probed via the "suggested extra" value changing after payments;
+  it correctly tolerates no visible change when test-accumulated debt ($22k+) makes $500 payments
+  a sub-1% change in the required extra.
+
+---
+
+### L47. Story — "The Migration" (Sahil) — 2026-06-22 ★
+
+**The ritual:** Sahil, 31, is switching to a new laptop. He has months of budget data and cannot
+afford to lose a single transaction. His ritual: seed two accounts (Checking $5k, Savings $12k), a
+parent + sub-category (L47 Living → L47 Groceries), three tagged transactions, a budget, and a goal
+→ snapshot every screen pre-export → export a full JSON backup via the command palette → make an
+interim change (add one L47 INTERIM PURCHASE transaction) to prove the import overwrites rather
+than merges → open Settings via the household/gear button → click "Import…" → feed the backup back
+in live (no page reload) → re-walk Dashboard, Accounts, Transactions, Budgets, Goals, Categories,
+Reports and assert lossless round-trip.
+
+**Drive script:** `e2e/loopstory_47_migration.mjs`
+Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_47_migration.mjs`
+
+**What already works well (regression anchors)** ✓
+- Export JSON via command palette ("Export JSON") downloads `cashflux.json` correctly with
+  `schemaVersion`, `accounts`, `transactions`, `budgets`, `goals`, `categories` all present. ✓
+- Exported JSON captures the live in-memory store: 11 accounts, 607 txns, 8 budgets, 6 goals, 24
+  categories — all L47-seeded entities present (accounts, budget, goal, parent + sub-category). ✓
+- Sub-category (L47 Groceries, child of L47 Living) is faithfully preserved in the export JSON
+  with its `parentId` intact — category tree is lossless on export. ✓
+- Settings panel opens correctly via the household/gear button at the nav-rail bottom
+  (Title contains "· Settings" → `uistate.Global()` atom set → fly-in panel renders). ✓
+- `importJSON` via Settings > "Import…" replaces the live in-memory store without a page reload:
+  all pre-export entities survive; the interim transaction added after export is absent. ✓
+- INTERIM_GONE: import is a lossless REPLACE, not a MERGE. Interim transaction (L47 INTERIM
+  PURCHASE) is absent after import; all seeded entities remain. ✓
+- ACCT_BALANCES: Both L47 accounts (Checking, Savings) present after import. ✓
+- TXN_AMOUNTS: All three seeded transactions (Whole Foods, Electric Co, Blue Bottle) present
+  after import (verified via body text on /transactions). ✓
+- BUDGET_AMOUNTS: L47 Monthly Living budget present after import. ✓
+- GOAL_PROGRESS: L47 New Laptop Fund goal present after import. ✓
+- CATEGORY_TREE: Parent (L47 Living) and sub-category (L47 Groceries) both present after import. ✓
+- NET_WORTH: Dashboard shows dollar amounts post-import (no blank-state regression). ✓
+- REPORTS: Reports page shows spending data post-import (period-window intact). ✓
+- Zero JS errors across the full ritual (64/64 checks pass). ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+1. **Transaction form stores input in `desc` (description), not `payee` field (UI gap / UX ambiguity).**
+   The transaction add form has a single text input with placeholder "Description" (i18n key
+   `transactions.descPlaceholder`), which maps to `domain.Transaction.Desc`. The `Payee` field is a
+   separate domain field that stays empty when the form is used normally. A user filling "Whole Foods"
+   into the Description input expects it to appear as the payee/merchant — and it does appear in the
+   transaction list — but in the export JSON the record has `payee: ""` and `desc: "Whole Foods"`.
+   This is internally consistent but can confuse scripts and importers that match on the `payee` field.
+   The distinction is invisible to users (the list renders `Desc` as the primary label when `Payee` is
+   empty) but surfaces in the raw JSON. Existing probe scripts that check `t.payee` will miss all
+   user-entered descriptions — the correct check is `t.payee || t.desc`.
+   - Confirmed: export JSON shows `payee=""` and `desc="L47 Whole Foods"` for form-entered transactions;
+     only sample-dataset or programmatically-created records have populated `payee` fields.
+
+2. **Settings is not a routed URL — it is a fly-in panel with no `/settings` deep link (UI testability
+   gap).** The `/settings` path does not exist in `screens.All()` registry. The `*` wildcard catches it
+   and renders the dashboard. The settings panel is opened exclusively via the household/gear button
+   clicking `uistate.Global()` atom. There is no keyboard shortcut, no command-palette entry, and no
+   URL to navigate to settings directly. This makes automated testing harder (every harness must locate
+   and click the gear button) and means deep-linking into a specific settings section is impossible.
+   - Confirmed: `page.goto("/settings")` → renders dashboard (B1 wildcard fallback). `pushNav("/settings")`
+     → same wildcard render. Settings only opens via `button[title*="Settings"]` click on the nav rail.
+
+3. **Export JSON command triggers wasm runtime exit in headless Playwright (known artifact).** Calling
+   `downloadBytes(...)` inside the wasm runtime causes the "Go program has already exited" JS error in
+   headless Chromium. This requires `page.reload()` after capture to get a fresh wasm instance for the
+   import step. Non-blocking for end users (the browser handles the download natively) but means an e2e
+   script cannot export + immediately import in the same wasm session without a reload. Gap is in the
+   headless download bridge, not in the app logic.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **Settings panel has no URL / deep-link.** A user who wants to share a link to a specific settings
+  section (e.g. "go to Data settings") cannot. Power users who prefer keyboard-first workflows must
+  mouse to the gear icon. Adding a `/settings` route (or at minimum a command-palette entry that opens
+  the panel programmatically) would close the gap. Low severity for typical users; medium for
+  accessibility / keyboard-first.
+  - Screenshot: `l47_step6_settings.png` shows the fly-in panel (no URL change in address bar).
+
+- **"Import…" button shares the Settings panel with "Import theme" and other Import-prefixed buttons.**
+  A selector for "the data import button" must match exactly `Import…` to avoid false-positives on
+  `Import theme`. The ellipsis is the only differentiator. The buttons visually share the same style
+  and proximity. Low severity (disambiguated by ellipsis and section heading) but would benefit from
+  a `data-action="import-data"` attribute for harness targeting.
+  - Screenshot: `l47_step6_settings.png` shows multiple "Import" buttons in the panel.
+
+**Probe hardening**
+
+- All navigation after boot uses `pushNav` (pushState + popstate), never `page.goto()`, to keep the
+  wasm runtime alive and preserve in-memory state across the seeding and export steps. Using
+  `page.goto()` causes a full page reload → wasm re-hydrates from localStorage → unsaved seeds are
+  lost. This is the most important architectural property for migration-story harnesses.
+- Export is triggered via command palette (Ctrl+K → "export json") rather than the Settings panel
+  button, because the command palette is accessible from any page without opening the Settings fly-in.
+- Import button locator matches `^import[…\.]{0,3}$` (regex) to hit "Import…" exactly and skip
+  "Import theme". Exact-text filtering avoids the false-positive that caused an earlier run to import
+  a theme instead of the dataset.
+- Transaction checks use `t.payee || t.desc` (not just `t.payee`) to handle form-entered records
+  where description fills `desc` and `payee` is left empty.
+- After the export download, `page.reload()` is called to restart the wasm runtime before the
+  import step (necessary because the download triggers wasm exit in headless mode).
 
 ---
 

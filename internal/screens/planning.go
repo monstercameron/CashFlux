@@ -226,6 +226,7 @@ func Planning() ui.Node {
 				resultBody = Div(
 					Div(css.Class("stat-grid"),
 						stat(uistate.T("planning.months"), fmt.Sprintf("%d", r.Months), ""),
+						stat(uistate.T("planning.debtFreeBy"), payoff.DebtFreeMonth(time.Now(), r.Months).Format("Jan 2006"), ""),
 						stat(uistate.T("planning.totalInterest"), fmtMoney(money.New(r.TotalInterest, base)), "neg"),
 						stat(uistate.T("planning.totalPaid"), fmtMoney(money.New(r.TotalPaid, base)), ""),
 					),

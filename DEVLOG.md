@@ -10903,3 +10903,7 @@ and `internal/currency` services with table-driven tests — before any feature 
 **Note:** a few pre-spec exploratory Go files (model/persist/dashboard/transactions/components)
 remain in the tree from early prototyping; they predate the locked spec and will be replaced to
 match it during Phase 1.
+
+## 2026-06-22 - feat: debt-free date on payoff calculator (L5, /loop iter 1)
+
+First iteration of the /loop pass over remaining L items. Small clean win: the pure `payoff.DebtFreeMonth(now, months)` helper already existed but the UI only showed the raw month count. Added a "Debt-free by <Mon YYYY>" stat beside "Months to pay off" so the finish line is a real date. e2e fills balance/APR/payment and asserts the dated stat (targets the payoff result stat-grid specifically — /planning has several .stat-grid blocks). Next loop iterations work through the rest of the open L backlog.

@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Debt-free date on the payoff calculator (L5).** The payoff result now shows a calendar "Debt-free by
+  <Mon YYYY>" date beside the month count, so "24 months" is also "May 2028" — a concrete finish line. Uses the
+  existing pure `payoff.DebtFreeMonth`. e2e `payoff_debtfree_date_check.mjs`.
+
 ### Fixed
 - **Command-palette and keyboard actions no longer crash the app.** Running the "New transaction" command,
   toggling the theme or sidebar, or pressing Alt+N called framework hooks (`UseQuickAdd`/`UseRailCollapsed`/

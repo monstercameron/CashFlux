@@ -470,6 +470,7 @@ var english = Catalog{
 	"planning.strategyRecommend":        "Avalanche pays %s less in interest — clear the highest-rate debt first.",
 	"planning.forecastChartLabel":       "12-month net-worth forecast, ending near %s",
 	"planning.months":                   "Months to pay off",
+	"planning.debtFreeBy":               "Debt-free by",
 	"planning.totalInterest":            "Total interest",
 	"planning.totalPaid":                "Total paid",
 
