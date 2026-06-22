@@ -534,7 +534,7 @@ func NotifyBell() uic.Node {
 		}
 		badge = Span(css.Class("notify-badge"), label)
 	}
-	return Button(css.Class("muzak-btn", tw.Relative), Type("button"),
+	return Button(css.Class("notify-btn", tw.Relative), Type("button"),
 		Attr("title", uistate.T("nav.notifications")), Attr("aria-label", uistate.T("nav.notifications")),
 		OnClick(open),
 		ui.Icon(icon.Bell, css.Class(tw.W18px, tw.H18px)),
