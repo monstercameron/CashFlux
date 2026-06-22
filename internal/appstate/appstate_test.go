@@ -792,3 +792,108 @@ func TestInitSetsDefault(t *testing.T) {
 		t.Error("Init should set a seeded Default app")
 	}
 }
+
+// TestRestoreTransactions verifies the undo primitive used by the bulk-action
+// undo feature: deleted transactions come back, and mutated ones revert.
+func TestRestoreTransactions(t *testing.T) {
+	a := newApp(t, false)
+
+	// Wire up a minimal account so PutTransaction validates.
+	acc := domain.Account{
+		ID: "a1", Name: "Checking", Currency: "USD",
+		Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+	}
+	if err := a.PutAccount(acc); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+
+	mk := func(id, cat string) domain.Transaction {
+		return domain.Transaction{
+			ID: id, AccountID: "a1", Desc: "test-" + id,
+			CategoryID: cat, Date: time.Now(), Amount: money.New(-100, "USD"),
+		}
+	}
+
+	t1 := mk("r1", "food")
+	t2 := mk("r2", "travel")
+	t3 := mk("r3", "")
+	for _, tx := range []domain.Transaction{t1, t2, t3} {
+		if err := a.PutTransaction(tx); err != nil {
+			t.Fatalf("PutTransaction %s: %v", tx.ID, err)
+		}
+	}
+
+	// --- Case 1: delete + restore brings deleted rows back ---
+	snapshot := []domain.Transaction{t1, t2}
+	if err := a.DeleteTransaction(t1.ID); err != nil {
+		t.Fatalf("DeleteTransaction t1: %v", err)
+	}
+	if err := a.DeleteTransaction(t2.ID); err != nil {
+		t.Fatalf("DeleteTransaction t2: %v", err)
+	}
+	got := a.Transactions()
+	if len(got) != 1 || got[0].ID != t3.ID {
+		t.Fatalf("after delete: want [r3], got %v", got)
+	}
+
+	if err := a.RestoreTransactions(snapshot); err != nil {
+		t.Fatalf("RestoreTransactions (delete undo): %v", err)
+	}
+	all := a.Transactions()
+	if len(all) != 3 {
+		t.Fatalf("after restore: want 3 transactions, got %d", len(all))
+	}
+	byID := make(map[string]domain.Transaction)
+	for _, tx := range all {
+		byID[tx.ID] = tx
+	}
+	if byID["r1"].CategoryID != "food" {
+		t.Errorf("r1 CategoryID = %q, want food", byID["r1"].CategoryID)
+	}
+	if byID["r2"].CategoryID != "travel" {
+		t.Errorf("r2 CategoryID = %q, want travel", byID["r2"].CategoryID)
+	}
+
+	// --- Case 2: mutate + restore reverts the mutation ---
+	// Capture pre-mutation copies.
+	preMutate := []domain.Transaction{byID["r1"], byID["r2"]}
+
+	// Mutate both (simulates bulkRecategorize).
+	for _, tx := range []domain.Transaction{byID["r1"], byID["r2"]} {
+		tx.CategoryID = "utilities"
+		if err := a.PutTransaction(tx); err != nil {
+			t.Fatalf("PutTransaction mutate %s: %v", tx.ID, err)
+		}
+	}
+	// Confirm mutation.
+	all = a.Transactions()
+	for _, tx := range all {
+		if tx.ID == "r1" || tx.ID == "r2" {
+			if tx.CategoryID != "utilities" {
+				t.Fatalf("expected mutation to utilities, got %q", tx.CategoryID)
+			}
+		}
+	}
+
+	// Restore pre-mutation snapshots.
+	if err := a.RestoreTransactions(preMutate); err != nil {
+		t.Fatalf("RestoreTransactions (mutate undo): %v", err)
+	}
+	all = a.Transactions()
+	byID = make(map[string]domain.Transaction)
+	for _, tx := range all {
+		byID[tx.ID] = tx
+	}
+	if byID["r1"].CategoryID != "food" {
+		t.Errorf("r1 after revert: CategoryID = %q, want food", byID["r1"].CategoryID)
+	}
+	if byID["r2"].CategoryID != "travel" {
+		t.Errorf("r2 after revert: CategoryID = %q, want travel", byID["r2"].CategoryID)
+	}
+
+	// --- Case 3: RestoreTransactions with empty slice is a no-op ---
+	if err := a.RestoreTransactions(nil); err != nil {
+		t.Errorf("RestoreTransactions(nil) returned unexpected error: %v", err)
+	}
+}

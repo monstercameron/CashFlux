@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Bulk-action undo + select-all-filtered (L25).** Destructive ledger bulk actions are now reversible: bulk
+  delete, recategorize, and mark-cleared each capture the affected rows' prior state and show an inline
+  "Deleted 5 · Undo" banner that restores them (re-creating deleted rows with their original IDs). A new
+  "Select all" button selects exactly the current filtered set in one click. New `appstate.RestoreTransactions`
+  (unit-tested); ledger rows now carry `data-id`. e2e `bulk_undo_check.mjs` + correctness gate
+  `bulk_ops_check.mjs` proving bulk ops affect exactly the selected rows.
 - **Subscription cancellation tracking + charged-after-cancel alert (L12).**
 
 ### Added

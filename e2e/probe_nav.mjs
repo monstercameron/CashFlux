@@ -1,0 +1,22 @@
+import { createRequire } from 'module';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(path.join(__dirname, '..', '.tools', 'package.json'));
+const { chromium } = require('playwright');
+const BASE = process.env.E2E_URL || 'http://127.0.0.1:8080';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+page.setViewportSize({ width: 1280, height: 900 });
+await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+// Wait up to 15 seconds for something
+await page.waitForTimeout(8000);
+const nav = await page.evaluate(() => document.querySelector('nav')?.outerHTML?.slice(0, 800) ?? 'no nav element');
+console.log('NAV:', nav);
+const navAll = await page.evaluate(() => Array.from(document.querySelectorAll('nav, [role="navigation"], header')).map(el => el.tagName + ' ' + (el.getAttribute('aria-label') ?? '') + ' ' + (el.className ?? '')).join('\n'));
+console.log('ALL NAVS:', navAll);
+const body = await page.evaluate(() => document.body.innerHTML.slice(0, 600));
+console.log('BODY SNIPPET:', body);
+await page.screenshot({ path: path.join(__dirname, 'probe-nav.png') });
+console.log('Screenshot saved');
+await browser.close();

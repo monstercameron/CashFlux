@@ -73,6 +73,14 @@ func Transactions() ui.Node {
 	selected := ui.UseState(map[string]bool{})
 	bulkCat := ui.UseState("")
 	errMsg := ui.UseState("")
+	// lastBulk holds a one-level undo snapshot for the most recent destructive bulk
+	// operation. Count == 0 means no undo is available.
+	type bulkSnapshot struct {
+		Label string
+		Prior []domain.Transaction
+	}
+	zeroBulk := bulkSnapshot{}
+	lastBulk := ui.UseState(zeroBulk)
 	noticeAtom := uistate.UseNotice()
 	notifyErr := func(text string) { noticeAtom.Set(noticeAtom.Get().With(text, true)) }
 	filterAtom := uistate.UseTxFilter()
@@ -402,13 +410,32 @@ func Transactions() ui.Node {
 		selected.Set(nm)
 	}))
 	bulkDelete := ui.UseEvent(Prevent(func() {
-		for id := range selected.Get() {
+		sel := selected.Get()
+		// Snapshot the transactions about to be deleted before removing them.
+		var prior []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] {
+				prior = append(prior, t)
+			}
+		}
+		for id := range sel {
 			deleteTxn(id)
 		}
+		lastBulk.Set(bulkSnapshot{
+			Label: uistate.T("transactions.bulkOpDeleted", len(prior)),
+			Prior: prior,
+		})
 		selected.Set(map[string]bool{})
 	}))
 	bulkSetCleared := func(val bool) {
 		sel := selected.Get()
+		// Snapshot the pre-change state of every transaction that will be mutated.
+		var prior []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && t.Cleared != val {
+				prior = append(prior, t)
+			}
+		}
 		for _, t := range app.Transactions() {
 			if !sel[t.ID] || t.Cleared == val {
 				continue
@@ -418,6 +445,14 @@ func Transactions() ui.Node {
 				notifyErr(uistate.T("transactions.bulkClearErr", err.Error()))
 			}
 		}
+		opKey := "transactions.bulkOpCleared"
+		if !val {
+			opKey = "transactions.bulkOpUncleared"
+		}
+		lastBulk.Set(bulkSnapshot{
+			Label: uistate.T(opKey, len(prior)),
+			Prior: prior,
+		})
 		selected.Set(map[string]bool{})
 		bump()
 	}
@@ -427,6 +462,13 @@ func Transactions() ui.Node {
 	bulkRecategorize := ui.UseEvent(Prevent(func() {
 		sel := selected.Get()
 		cid := bulkCat.Get()
+		// Snapshot the pre-change state of every transaction that will be mutated.
+		var prior []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && !t.IsTransfer() {
+				prior = append(prior, t)
+			}
+		}
 		for _, t := range app.Transactions() {
 			if !sel[t.ID] || t.IsTransfer() {
 				continue
@@ -436,9 +478,36 @@ func Transactions() ui.Node {
 				notifyErr(uistate.T("transactions.bulkRecatErr", err.Error()))
 			}
 		}
+		lastBulk.Set(bulkSnapshot{
+			Label: uistate.T("transactions.bulkOpRecategorized", len(prior)),
+			Prior: prior,
+		})
 		selected.Set(map[string]bool{})
 		bulkCat.Set("")
 		bump()
+	}))
+
+	// undoLastBulk reverts the most recent bulk operation using the captured snapshot.
+	undoLastBulk := ui.UseEvent(Prevent(func() {
+		snap := lastBulk.Get()
+		if len(snap.Prior) == 0 {
+			return
+		}
+		if err := app.RestoreTransactions(snap.Prior); err != nil {
+			notifyErr(err.Error())
+			return
+		}
+		lastBulk.Set(zeroBulk)
+		bump()
+	}))
+
+	// selectAllFiltered selects exactly the transactions visible under the current filter.
+	selectAllFiltered := ui.UseEvent(Prevent(func() {
+		nm := map[string]bool{}
+		for _, t := range txnfilter.Apply(app.Transactions(), filterAtom.Get()) {
+			nm[t.ID] = true
+		}
+		selected.Set(nm)
 	}))
 
 	repeatLast := ui.UseEvent(func() {
@@ -723,6 +792,9 @@ func Transactions() ui.Node {
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
 				},
 			}),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.4rem"}),
+				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.selectAllTitle")), Title(uistate.T("transactions.selectAllTitle")), OnClick(selectAllFiltered), uistate.T("transactions.selectAllFiltered")),
+			),
 			If(len(selected.Get()) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
 				Span(css.Class("muted"), uistate.T("transactions.selected", plural(len(selected.Get()), "transaction"))),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryToApply")), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
@@ -731,6 +803,10 @@ func Transactions() ui.Node {
 				Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markUnclearedTitle")), OnClick(bulkMarkUncleared), uistate.T("transactions.markUncleared")),
 				Button(css.Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
 				Button(css.Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
+			)),
+			If(len(lastBulk.Get().Prior) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
+				Span(css.Class("muted"), uistate.T("transactions.bulkUndoBanner", lastBulk.Get().Label)),
+				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.undoTitle")), Title(uistate.T("transactions.undoTitle")), OnClick(undoLastBulk), uistate.T("transactions.undoButton")),
 			)),
 			If(len(shown) > 0, P(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))))),
 			// Screen-reader live region announcing the match count as filters change
@@ -872,7 +948,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	if props.Selected {
 		rowClass += " selected"
 	}
-	return Tr(ClassStr(rowClass),
+	return Tr(ClassStr(rowClass), Attr("data-id", props.Txn.ID),
 		Td(css.Class("td-select"), Button(css.Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph)),
 		Td(css.Class("td-date fig"), pr.FormatDate(props.Txn.Date)),
 		Td(css.Class("row-desc"), props.Txn.Desc),

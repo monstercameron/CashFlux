@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: bulk-action undo + select-all-filtered (L25)
+
+Made the cleanup flow safe and fast. Undo: each bulk op (delete / recategorize / mark-cleared) snapshots the
+affected rows' prior full state into a `lastBulk` UseState *before* mutating, and an inline "<Op> N · Undo"
+banner restores them via new `appstate.RestoreTransactions` — which just upserts each snapshot, so a deleted row
+comes back with its original ID and a recategorized row reverts. One level of undo (the last op), which is the
+risk that matters. Select-all-filtered recomputes `txnfilter.Apply(txns, filterAtom.Get())` (the same filter the
+render uses) so it selects exactly what's shown.
+
+Integration: the agent's two gates both failed initially — not feature bugs. bulk_ops waited for the bulk
+category select before any row was selected (the bulk bar is hidden until selection), and bulk_undo had a
+seeding bug. The deeper problem was that ledger `Tr` rows had no stable id attribute, so "exactly these rows
+changed" was unprovable from the DOM. Added `data-id` (the txn ID) to the row — a small, justified testability
+win — then rewrote both gates to map selected rows → IDs precisely and poll with autosave flush. Now bulk_ops
+proves exactly-the-selected for recategorize and delete, and bulk_undo proves delete→restore round-trips the
+same IDs (604→602→604). Sub-agent built the feature; integrated + regressed (add/bulk-clear/filter green).
+Next: L29.
+
 ## 2026-06-22 - feat: create-rule-from-transaction + rules round-trip gate (L15)
 
 L15's engine, auto-categorize, and the match-count preview were already solid; and the richer-conditions /

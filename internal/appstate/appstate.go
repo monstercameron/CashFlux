@@ -1346,6 +1346,19 @@ func (a *App) DeleteTransaction(id string) error {
 	return a.del("transaction", id, a.store.DeleteTransaction)
 }
 
+// RestoreTransactions upserts each transaction in txns, restoring them to the
+// store regardless of whether they currently exist. Deleted transactions are
+// re-created and mutated transactions are reverted to the supplied copies.
+// This is the undo primitive for bulk operations on the Transactions ledger.
+func (a *App) RestoreTransactions(txns []domain.Transaction) error {
+	for _, t := range txns {
+		if err := a.PutTransaction(t); err != nil {
+			return fmt.Errorf("restore transaction %s: %w", t.ID, err)
+		}
+	}
+	return nil
+}
+
 // DeleteTransactionWithTransferPair removes a transaction and, when it is one
 // leg of a transfer, also removes the reciprocal leg so balances stay paired.
 func (a *App) DeleteTransactionWithTransferPair(id string) error {

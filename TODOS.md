@@ -5203,16 +5203,13 @@ bulk-marks-cleared after reconciling, and bulk-deletes duplicates — fast, idea
   exactly the selected set.
 
 **Gaps:**
-- [ ] **No undo after bulk actions (risk).** Bulk recategorize / mark-cleared / **delete** are
-      irreversible — an accidental bulk delete of N transactions or a mis-applied category can't be
-      reverted. For a cleanup flow this is dangerous. Add **Undo** (toast: "Recategorized 3 · Undo" /
-      "Deleted 5 · Undo"). Bottom-up: snapshot the affected transactions' prior state before the op →
-      an undo action that restores it → a toast with Undo (also applies to single delete). Part of a
-      broader "undo for destructive actions" theme.
-- [ ] **No "select all / select all filtered".** To recategorize 50 "Amazon" rows, Wei would filter to
-      Amazon then want **"select all shown"** — today he must click each `button.check`. There's
-      "Select duplicates" but no select-all-visible. Add a header select-all that selects the current
-      filtered set (the bulk ops already operate on the selection).
+- [x] **Bulk-action undo.** Each bulk recategorize / mark-cleared / delete snapshots the affected rows'
+      prior state into `lastBulk`; an inline "<Op> N · Undo" banner restores them via
+      `appstate.RestoreTransactions` (PutTransaction upsert re-creates deletes / reverts changes). One level
+      of undo (last op). e2e `bulk_undo_check.mjs` + correctness gate `bulk_ops_check.mjs` (recategorize/
+      delete affect EXACTLY the selected set). Rows now carry `data-id` for precise targeting.
+- [x] **Select-all-filtered.** A "Select all" button selects exactly the current filtered set
+      (`txnfilter.Apply(txns, filter)`); the bulk ops then operate on it. Verified in `bulk_ops_check.mjs`.
 
 **Probe note (IMPORTANT — not a bug):** the main script + `_bulkdiag`/`_bulkdiag2` initially showed bulk
 apply **clearing categories to empty** — that was a **test artifact**: setting the bulk `<select>` via JS
