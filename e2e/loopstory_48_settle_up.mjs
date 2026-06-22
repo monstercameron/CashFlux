@@ -46,10 +46,12 @@ const { chromium } = require("playwright");
 const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SS   = (name) => path.join(__dirname, name);
 
-const MEMBERS   = ["Priya", "Sam", "Lee"];
-const EXP_A_AMT = "90";   // paid by Priya, split 3-ways → $30 each
-const EXP_B_AMT = "60";   // paid by Sam,   split 3-ways → $20 each
-const EXP_C_AMT = "30";   // paid by Lee,   split 3-ways → $10 each
+// Use "L48 Lee" to avoid collision with demo member "Jordan Lee (roommate)".
+// Priya and Sam are short names unlikely to collide; using L48-prefix on Lee only.
+const MEMBERS   = ["Priya", "Sam", "L48 Lee"];
+const EXP_A_AMT = "90";   // paid by Priya,    split 3-ways → $30 each
+const EXP_B_AMT = "60";   // paid by Sam,      split 3-ways → $20 each
+const EXP_C_AMT = "30";   // paid by L48 Lee,  split 3-ways → $10 each
 
 const browser = await chromium.launch({ headless: true });
 let passed = 0, failed = 0;
@@ -97,7 +99,9 @@ try {
 
   const existingText0 = await bodyText(page);
   for (const name of MEMBERS) {
-    if (existingText0.includes(name)) {
+    // Use exact-word check: " name\n" or start-of-line to avoid e.g. "Lee" matching "Jordan Lee (roommate)"
+    const exactMatch = new RegExp(`(^|\\s|\\n)${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|\\n|$)`).test(existingText0);
+    if (exactMatch) {
       pass(`Step 0 — member "${name}" already in household (from demo seed or prior run)`);
       continue;
     }
@@ -137,7 +141,7 @@ try {
   } else {
     let allFound = true;
     for (const name of MEMBERS) {
-      if (payerOpts.some((o) => o === name || o.startsWith(name))) {
+      if (payerOpts.some((o) => o === name)) {
         pass(`MEMBERS_VISIBLE_IN_PICKERS — "${name}" in payer select`);
       } else {
         fail(`MEMBERS_VISIBLE_IN_PICKERS — "${name}" NOT in payer select (opts: ${JSON.stringify(payerOpts)})`);
@@ -223,7 +227,7 @@ try {
   if (summaryB !== null) pass("Step 2b — Exp B ($60 by Sam) submitted");
   await page.screenshot({ path: SS("l48_step2b_after_expB.png") });
 
-  const summaryC = await saveExpense(EXP_C_AMT, "Lee", "L48 Supplies");
+  const summaryC = await saveExpense(EXP_C_AMT, "L48 Lee", "L48 Supplies");
   if (summaryC !== null) pass("Step 2c — Exp C ($30 by Lee) submitted");
   await page.screenshot({ path: SS("l48_step2c_after_expC.png") });
 
@@ -270,26 +274,26 @@ try {
   else
     fail(`NET_BALANCE_MATH — 'Priya is owed' not found. Ledger text: ${ledgerText.slice(0, 400)}`);
 
-  if (ledgerText.includes("Lee owes"))
-    pass("NET_BALANCE_MATH — Lee owes (negative balance confirmed)");
+  if (ledgerText.includes("L48 Lee owes"))
+    pass("NET_BALANCE_MATH — L48 Lee owes (negative balance confirmed)");
   else
-    fail(`NET_BALANCE_MATH — 'Lee owes' not found. Ledger text: ${ledgerText.slice(0, 400)}`);
+    fail(`NET_BALANCE_MATH — 'L48 Lee owes' not found. Ledger text: ${ledgerText.slice(0, 400)}`);
 
   if (!ledgerText.includes("Sam owes") && !ledgerText.includes("Sam is owed"))
     pass("NET_BALANCE_MATH — Sam not in ledger (net zero, as expected)");
   else
     maybe(`NET_BALANCE_MATH — Sam appears in ledger (may include demo-seed data): ${ledgerText.slice(0, 300)}`);
 
-  if (ledgerText.includes("Lee") && ledgerText.includes("Priya") && ledgerText.includes("pays"))
-    pass("NET_BALANCE_MATH — minimal payment 'Lee pays Priya' shown");
+  if (ledgerText.includes("L48 Lee") && ledgerText.includes("Priya") && ledgerText.includes("pays"))
+    pass("NET_BALANCE_MATH — minimal payment 'L48 Lee pays Priya' shown");
   else
-    fail(`NET_BALANCE_MATH — minimal payment 'Lee pays Priya' not found: ${ledgerText.slice(0, 400)}`);
+    fail(`NET_BALANCE_MATH — minimal payment 'L48 Lee pays Priya' not found: ${ledgerText.slice(0, 400)}`);
 
   // ══════════════════════════════════════════════════════════════════════════════
   // STEP 4: Record the settlement Lee→Priya
   // ══════════════════════════════════════════════════════════════════════════════
   const recordBtn = page
-    .locator(".row", { hasText: "Lee pays Priya" })
+    .locator(".row", { hasText: "L48 Lee pays Priya" })
     .locator('button:has-text("Record settlement")')
     .first();
   const recordBtnCount = await recordBtn.count();
@@ -315,15 +319,15 @@ try {
   // INVARIANT: SETTLEMENT_ZEROES_PAIR
   // ══════════════════════════════════════════════════════════════════════════════
   const afterSettleText = await bodyText(page);
-  if (!afterSettleText.includes("Lee pays Priya"))
-    pass("SETTLEMENT_ZEROES_PAIR — Lee→Priya transfer gone from ledger after recording");
+  if (!afterSettleText.includes("L48 Lee pays Priya"))
+    pass("SETTLEMENT_ZEROES_PAIR — L48 Lee→Priya transfer gone from ledger after recording");
   else
-    fail(`SETTLEMENT_ZEROES_PAIR — 'Lee pays Priya' still present after recording`);
+    fail(`SETTLEMENT_ZEROES_PAIR — 'L48 Lee pays Priya' still present after recording`);
 
-  if (!afterSettleText.includes("Priya is owed") && !afterSettleText.includes("Lee owes"))
-    pass("SETTLEMENT_ZEROES_PAIR — Priya and Lee both zeroed out");
+  if (!afterSettleText.includes("Priya is owed") && !afterSettleText.includes("L48 Lee owes"))
+    pass("SETTLEMENT_ZEROES_PAIR — Priya and L48 Lee both zeroed out");
   else
-    maybe(`SETTLEMENT_ZEROES_PAIR — Priya/Lee still appear; may be from demo data: check screenshot`);
+    maybe(`SETTLEMENT_ZEROES_PAIR — Priya/L48 Lee still appear; may be from demo data: check screenshot`);
 
   // ══════════════════════════════════════════════════════════════════════════════
   // STEP 5: Reload — assert settlement persists (not re-shown)
@@ -344,13 +348,13 @@ try {
   await page.screenshot({ path: SS("l48_step5_after_reload.png") });
   const reloadText = (await bodyText(page)).replace(/\s+/g, " ");
 
-  if (!reloadText.includes("Lee pays Priya"))
-    pass("SETTLEMENT_SURVIVES_RELOAD — Lee→Priya absent from ledger after reload");
+  if (!reloadText.includes("L48 Lee pays Priya"))
+    pass("SETTLEMENT_SURVIVES_RELOAD — L48 Lee→Priya absent from ledger after reload");
   else {
     // The settle-up screen is partly ephemeral (the running ledger is re-computed from
     // persisted sharedExpenses + settlements on each render). If settlement didn't persist,
     // it re-appears. This is the top mechanical gap if it fires.
-    fail("SETTLEMENT_SURVIVES_RELOAD — Lee→Priya re-appeared after reload (settlement not persisted)");
+    fail("SETTLEMENT_SURVIVES_RELOAD — L48 Lee→Priya re-appeared after reload (settlement not persisted)");
   }
 
   // ══════════════════════════════════════════════════════════════════════════════

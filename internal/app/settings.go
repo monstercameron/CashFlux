@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backendauth"
@@ -436,10 +437,15 @@ func globalSettingsForm() uic.Node {
 		if s.FXRates == nil {
 			s.FXRates = map[string]float64{}
 		}
+		if s.FXUpdatedAt == nil {
+			s.FXUpdatedAt = map[string]time.Time{}
+		}
 		if rate > 0 {
 			s.FXRates[code] = rate
+			s.FXUpdatedAt[code] = time.Now() // stamp so staleness can be shown (L4)
 		} else {
 			delete(s.FXRates, code)
+			delete(s.FXUpdatedAt, code)
 		}
 		_ = a.PutSettings(s)
 		bump()
@@ -458,8 +464,12 @@ func globalSettingsForm() uic.Node {
 			if code == base {
 				continue
 			}
+			stale := false
+			if s.FXUpdatedAt != nil {
+				stale = currency.RateStale(s.FXUpdatedAt[code], time.Now(), currency.DefaultRateMaxAge)
+			}
 			fxRows = append(fxRows, uic.CreateElement(fxRateRow, fxRateRowProps{
-				Code: code, Base: base, Rate: s.FXRates[code], OnSet: setRate,
+				Code: code, Base: base, Rate: s.FXRates[code], OnSet: setRate, Stale: stale,
 			}))
 		}
 	}
@@ -943,6 +953,7 @@ type fxRateRowProps struct {
 	Code, Base string
 	Rate       float64
 	OnSet      func(code string, rate float64)
+	Stale      bool // the rate hasn't been refreshed in a while (L4)
 }
 
 // fxRateRow is one editable FX rate (1 <code> = <rate> <base>). Its own component
@@ -963,6 +974,7 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 		Span(css.Class(tw.TextFaint), uistate.T("settings.fxRateLabel", props.Code)),
 		Input(css.Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Value(val), OnChange(on)),
 		Span(css.Class(tw.TextFaint), props.Base),
+		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "#cfa14e", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
 	)
 }
 

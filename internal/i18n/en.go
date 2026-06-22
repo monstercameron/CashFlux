@@ -797,6 +797,8 @@ var english = Catalog{
 	// Settings — inline labels and data-action results (toasts/confirms)
 	"settings.freshNever":     "days · 0 means never",
 	"settings.fxRateLabel":    "1 %s =",
+	"settings.fxStale":        "Stale",
+	"settings.fxStaleTitle":   "This exchange rate hasn't been updated in over a month — refresh it so multi-currency totals stay accurate.",
 	"settings.exportedData":   "Exported your data as %s.",
 	"settings.exportDataErr":  "Couldn't export your data: %s",
 	"settings.exportedTxn":    "Exported your transactions as %s.",

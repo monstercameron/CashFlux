@@ -4404,13 +4404,13 @@ consolidated **net worth in her base currency (EUR)** via an FX table she contro
         `Valid(code)`; table-test.
   - [x] **State/UI** `internal/screens/accounts.go`: swap the currency `Input` (line 238) for a
         labelled select/searchable picker; reject/flag unknown codes before save.
-- [ ] **FX rates are fully manual with no staleness signal — net worth silently drifts.** Aisha must
-      hand-enter and maintain EUR/USD/GBP rates. Add a **last-updated timestamp per rate** + a
-      **freshness nudge** when rates are stale (reuse the existing `internal/freshness` concept), and
-      optionally an online **"Refresh rates"** action. Bottom-up:
-  - [ ] **Model** `internal/domain`/settings: store `UpdatedAt` per FX rate.
-  - [x] **Logic** `internal/freshness` (or a small `fxfreshness`): "rate is stale after N days" — tested.
-  - [x] **State/UI**: show "rates updated X days ago" in the FX table + a dashboard nudge → task.
+- [x] **FX rate staleness signal.** Settings now stamps `Settings.FXUpdatedAt` per rate on edit and shows a
+      "Stale" badge on any rate not refreshed in over 30 days, so manual rates that drift are visible (no more
+      silent net-worth drift). e2e `fx_staleness_check.mjs`.
+  - [x] **Model** `internal/store` Settings: `FXUpdatedAt map[string]time.Time` (round-trips with the dataset).
+  - [x] **Logic** `internal/currency.RateStale` + `DefaultRateMaxAge` (30d), table-tested.
+  - [x] **State/UI** `internal/app/settings.go`: each FX rate row shows a "Stale" badge past the threshold.
+        (An online "Refresh rates" action remains a future enhancement.)
 - [ ] **Correctness: net worth with a currency that has NO FX rate must NOT silently miscompute.**
       Determinism/explainability rule. Add a logic test in `internal/currency` / the net-worth
       aggregation for the missing-rate case (account in GBP, no GBP rate): it must **warn / show a
@@ -6602,6 +6602,542 @@ Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_47_migration.mjs`
   where description fills `desc` and `payee` is left empty.
 - After the export download, `page.reload()` is called to restart the wasm runtime before the
   import step (necessary because the download triggers wasm exit in headless mode).
+
+---
+
+### L48. Story — "Yours, Mine, and Ours" (Priya & Sam + Lee, shared household settle-up) — 2026-06-22 ★
+
+**The ritual:** Priya, Sam, and L48 Lee share a flat. The ritual spans ≥4 screens and 8+ actions:
+navigate to /members and add all three → navigate to /split and confirm all three appear in the
+payer select → add three shared expenses with different payers (Exp A: $90 dinner paid by Priya,
+split 3-ways → $30 each; Exp B: $60 groceries paid by Sam, split 3-ways → $20 each; Exp C: $30
+supplies paid by L48 Lee, split 3-ways → $10 each) → read the running settle-up ledger (net:
+Priya +$30 owed, Sam $0, L48 Lee -$30 owes) → record the minimal settlement (L48 Lee pays Priya
+$30) → confirm ledger re-balances → reload → confirm settlement persists → navigate /transactions,
+/dashboard, /reports to confirm no crash. Asserts 7 invariants (MEMBERS_VISIBLE_IN_PICKERS,
+SHARES_SUM_TO_EXPENSE, NET_BALANCE_MATH, SETTLEMENT_ZEROES_PAIR, SETTLEMENT_SURVIVES_RELOAD,
+MONEY_CONSERVATION, DASHBOARD_LOADS).
+
+**Drive script** `e2e/loopstory_48_settle_up.mjs`
+Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_48_settle_up.mjs`
+
+**What already works well (regression anchors)** ✓
+- MEMBERS_VISIBLE_IN_PICKERS: members added on /members appear immediately in the payer select on
+  /split within the same wasm session (pushNav keeps in-memory SQLite alive). Priya, Sam, L48 Lee
+  all confirmed in payer options. ✓
+- Three shared expenses save correctly with different payers via the /split form. ✓
+- NET_BALANCE_MATH: running settle-up ledger computes net balances correctly across multiple
+  shared expenses with different payers. Priya owed $30, L48 Lee owes $30, Sam net-zero (absent
+  from ledger) — exactly as the pure Go `settle.Net()` logic requires. ✓
+- Minimal payment row "L48 Lee pays Priya $30" rendered correctly by `settle.Minimize()`. ✓
+- SETTLEMENT_ZEROES_PAIR: clicking "Record settlement" for the L48 Lee→Priya transfer removes
+  that row from the ledger and zeroes out both Priya and L48 Lee. ✓
+- SETTLEMENT_SURVIVES_RELOAD: settlement persists after full page reload; L48 Lee→Priya row
+  does not re-appear. ✓
+- /transactions, /dashboard, /reports all load without JS crash after the settle-up ritual. ✓
+- Zero JS page errors across the full 8-screen, 24-assertion ritual. ✓ (24/24 pass, 0 fail)
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+1. **Split/settle is a completely separate sub-ledger — not integrated with the main transaction
+   ledger, Dashboard net worth, or Reports (top architectural gap).** When Priya pays $90 for
+   dinner on behalf of the household, no transaction is posted to /transactions. The $90 does not
+   appear as a debit anywhere in the personal finance ledger. Dashboard net worth, budget tracking,
+   and /reports spending totals are completely unaware of shared expenses. There is no linkage
+   between a shared expense and a real account (e.g. "paid from Priya's Checking"). MONEY_CONSERVATION
+   therefore cannot be asserted across the two ledgers — it is only internally consistent within
+   the split sub-ledger (each expense's shares sum to the expense total, enforced by the pure Go
+   `split.Equal` / `split.ByWeights` functions and their unit tests).
+   - Confirmed: MONEY_CONSERVATION logged as ABSENT. The /transactions page shows no L48 shared
+     expense entries after the /split ritual. Dashboard and Reports are unaffected.
+   - Impact: a household manager cannot track "household total spend" holistically — shared expenses
+     and personal transactions are siloed. The settle-up tool is useful for settling debts between
+     members but is invisible to the budgeting and reporting workflows.
+   - Fix path (bottom-up): (1) add `AccountID` to `domain.SharedExpense`; (2) when saving a shared
+     expense, optionally auto-post a transaction to the payer's account (debit payer, credit each
+     sharer's internal "owed" balance); (3) expose this as a toggle in Split settings; (4) wire
+     into budget tracking and reports.
+
+2. **SHARES_SUM_TO_EXPENSE: the split summary ("$90.00 split among 3 → $30.00 each") clears
+   immediately after "Save split" is clicked (ephemeral form reset), so UI-level assertion of
+   the per-expense share breakdown requires reading the summary before save, not after.** The
+   arithmetic is correct (unit-tested in `internal/split/split_test.go`), but the result is only
+   visible in the UI during the brief window between filling the form and clicking Save. Post-save
+   the form resets and the summary disappears. The persisted `SharedExpense.Shares` data is in the
+   in-memory SQLite but not surfaced in a readable history/ledger on the /split screen.
+   - Confirmed: "split summary not found in current page text; form may have reset" — ABSENT.
+   - Fix: show a persistent history of saved shared expenses below the entry form (payee, date,
+     amount, payer, per-member shares), similar to a transaction list. This doubles as a "view/
+     delete past splits" feature.
+
+3. **Demo seed data (Daniel Carter, Jordan Lee (roommate), and their shared expenses) pollutes the
+   settle-up ledger, making it impossible to assert exact dollar amounts for a fresh test run.**
+   The seeded demo creates two shared expenses (se-dinner, se-groceries) and a settle-1 settlement
+   between demo members, so the "Running balance" ledger always contains pre-existing balances
+   ($32 Daniel Carter owes Jordan Lee) mixed in with test-run data. Scripts must assert relative
+   directions ("Priya is owed") rather than exact totals ("Priya is owed $30").
+   - Confirmed: demo balances visible in ledger text during Step 3 run.
+   - Fix: either (a) provide a way to clear demo data on first use (onboarding "Start fresh" action),
+     or (b) allow the settle-up ledger to filter by member group / date range.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **Member name collision: the existing demo member "Jordan Lee (roommate)" causes "Lee" substring
+  matches to false-positive on /members page body text.** Any probe script that checks
+  `pageText.includes("Lee")` to decide whether to add a "Lee" member will skip the add because the
+  demo member "Jordan Lee (roommate)" already contains the string. Exact-word regex matching is
+  required. The UI itself does not prevent adding a member named "Lee" alongside "Jordan Lee
+  (roommate)"; the names are disambiguated by ID, but the payer select shows both (one as "Lee",
+  one as "Jordan Lee (roommate)"), which is visually clear.
+  - Screenshot: `l48_step1_split_before.png` shows the payer select with all five members.
+
+- **The /split form has no keyboard shortcut or "Select all members" default.** Each expense
+  requires manually toggling each member on — for a 3-member household, 3 clicks per expense
+  before Save. The "Select all" / "Clear" buttons exist (visible in the source) but only appear
+  when `len(members) > 1`. For a 3-person household this is correct, but the initial state is
+  always "no members selected", requiring the user to click Select all before every new expense.
+  Consider defaulting to "all members selected" for the common case.
+  - Screenshot: `l48_step2a_after_expA.png`.
+
+- **Settle-up ledger mixes demo data with live session data** — no visual separation or filter.
+  A new user sees Daniel Carter / Jordan Lee (roommate) balances from the demo alongside their
+  own household. This is likely to confuse first-time users.
+  - Screenshot: `l48_step3_settle_up_ledger.png`.
+
+**Probe hardening**
+
+- Use `pushNav` (pushState + popstate) for all navigation after boot to keep the wasm/SQLite session
+  alive. `page.goto()` anywhere after boot would flush all in-memory seeds.
+- Use L48-prefixed member names (e.g., "L48 Lee") for test isolation when demo-seed members share
+  partial name strings. Bare "Lee" substring-matches "Jordan Lee (roommate)" in page text.
+- Use exact-word regex (`/(\s|^)name(\s|$)/`) rather than `includes()` for pre-existence checks on
+  /members to avoid substring false-positives from demo member names.
+- Use exact label match (`o === name`) not `startsWith` for payer-select assertions; the demo member
+  option text "Jordan Lee (roommate)" starts with "Jordan", not "Lee", but future demo changes
+  could create new false-positive startsWith collisions.
+- Settlement UI assertions are text-based (not dataset-based) because the app stores data in an
+  in-memory SQLite (not localStorage) — there is no `cashflux:dataset` key to read from.
+
+---
+
+### L49. Story — "The Subscription Audit" (Marcus & Lin) — 2026-06-22 ★
+
+**The ritual:** Marcus and Lin live together and periodically audit their recurring charges —
+Netflix, Spotify, and a gym — to catch anything slipping past them. The ritual spans ≥4 screens
+and 8+ actions: seed several months of recurring charges plus a one-off in Transactions → open
+Subscriptions and confirm detection (recurring merchants found, one-off NOT flagged) → drill from
+a detected subscription into its underlying transactions (filter carry-over) → mark a subscription
+as cancelled (correction path) → check Budgets screen loads and Subscriptions budget is present →
+verify Reports loads and the annualized figure is correct per C57 concern → return to Dashboard
+and confirm totals are consistent across screens. Asserts 7 invariants (DETECTION_ACCURACY,
+DRILL_FILTER, CANCEL_REFLECTED, ANNUAL_MATH, BUDGETS_LOADS, REPORTS_LOADS, DASHBOARD_LOADS).
+
+**Drive script** `e2e/loopstory_49_subscription_audit.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_49_subscription_audit.mjs`
+
+**What already works well (regression anchors)** ✓
+- DETECTION_ACCURACY: all three L49 recurring merchants (Netflix $15.99, Spotify $9.99, Gym $40)
+  detected after seeding 4× monthly occurrences each (~30-day spacing). One-off charge ("L49
+  OneOff Dentist" $200, single occurrence) correctly NOT flagged as recurring. ✓
+- Monthly cadence label ("monthly") visible on each detected subscription row. ✓
+- ANNUAL_MATH: "Yearly subscriptions" stat = monthly × 12 — confirmed at $25,151.76 =
+  $2,095.98 × 12 (demo data + seeded subs). The C57 concern about a wrong annual figure does NOT
+  apply here: `AnnualAmount()` correctly returns `Amount * 12` for monthly, `Amount` for yearly
+  (already annual), and `Amount * 52` for weekly. ✓
+- DRILL_FILTER: clicking the dotted-underline subscription name navigates to /transactions with
+  the subscription's description pre-loaded in the text filter. L49 Netflix transactions visible
+  immediately after drill — filter carry-over works end-to-end. ✓
+- BUDGETS_LOADS: /budgets loads without crash; "Subscriptions" category budget from demo seed
+  is present. ✓
+- REPORTS_LOADS: /reports loads with content (no crash). ✓
+- DASHBOARD_LOADS: /dashboard loads with content after the full ritual. ✓
+- Zero JS page errors across the full 7-screen, 21-assertion ritual. ✓ (18/19 pass; 1 confirmed
+  real bug — see mechanical gaps)
+- Price-change detection section renders correctly (demo data: Household & shopping +13%, Movies
+  & fun +13%, etc.). ✓
+- "Renewing soon" section absent in the seeded sessions (next renewal dates are in May 2026,
+  outside the 7-day window from 2026-06-22), correctly omitted. ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+1. **CANCEL_REFLECTED BROKEN: `doCancel()` / `doUncancel()` write to the store but do not
+   update any reactive state atom, so the Subscriptions screen does NOT re-render after
+   "Mark as cancelled" is clicked. (Top priority bug — confirmed by probe.)**
+   - What happens: clicking "Mark as cancelled" silently writes to the SQLite cancellations
+     table (the write succeeds — log shows "subscription marked cancelled"), but the
+     `cancelMap` and `isCancelled` flag in the rendered rows are computed at render time from
+     `app.Cancellations()`. With no reactive signal fired, the component never re-executes,
+     so the row keeps showing "Mark as cancelled" instead of "Undo cancel" + "Cancelled <date>".
+   - Root cause: `doCancel` and `doUncancel` have no success path for `notice.Set()` (only
+     error paths do). `notice` is the only reactive signal the screen currently holds; without
+     a state update, GoWebComponents cannot know to re-render the screen. Compare: `remind()`
+     calls `notice.Set(... T("subs.reminderAdded", ...) ...)` on success — that DOES cause a
+     re-render and the notice banner correctly appears.
+   - Fix path (minimal): add a success `notice.Set()` in `doCancel` and `doUncancel`:
+     ```go
+     // doCancel success path:
+     notice.Set(notice.Get().With(uistate.T("subs.cancelledConfirm", name), false))
+     // doUncancel success path:
+     notice.Set(notice.Get().With(uistate.T("subs.uncancelledConfirm", name), false))
+     ```
+     Add the two i18n keys ("Marked %s as cancelled", "Removed cancellation for %s") to en.go.
+   - Alternative (stronger): add a `UseState` atom for cancellations inside Subscriptions()
+     and keep it in sync with the store write, so the component re-renders without requiring
+     a notice banner.
+   - Confirmed: probe ran "Mark as cancelled" click then polled 0–3000ms — 0 "Undo cancel"
+     buttons appeared, 0 "Cancelled <date>" labels appeared. The cancel count of "Mark as
+     cancelled" buttons remained unchanged before and after click.
+   - Screenshot: `l49_step3_subs_after_cancel.png` — all rows unchanged after cancel click.
+
+2. **Subscriptions ↔ Budgets integration is absent: the subscription monthly total is not
+   reflected in any budget figure, and there is no "Subscription" budget automatically
+   maintained from detected recurring charges.**
+   - The demo seed has a "Subscriptions" category budget ($40/month) wired to the category
+     `cat-subscriptions`, but this is a manually defined budget — it has no structural link to
+     the `/subscriptions` detection engine. A user who adds new recurring charges does not see
+     any budget automatically updated.
+   - Confirmed: /budgets shows "Subscriptions" budget of $40 (demo), not $65.98 (sum of L49
+     detected subs). BUDGETS_LOADS passes because the page loads; the integration gap is
+     architectural.
+   - Fix path: either (a) surface detected monthly total on the /budgets screen alongside the
+     category budget as an advisory note ("Your detected recurring charges total $65.98/month
+     — your Subscriptions budget is $40"), or (b) allow a budget to be backed by the
+     subscriptions detector rather than a fixed category.
+
+3. **Subscriptions screen does not expose any edit / categorize path for detected items.**
+   A subscription is detected purely from transaction history (description + amount). There
+   is no way to: (a) rename a detected subscription's display name, (b) re-assign it to a
+   different category for budget tracking, (c) merge two detected subscriptions that are the
+   same service billed under slightly different description strings. The screen is a read +
+   cancel/remind surface only.
+   - Known gap: C56 noted "read-only with no correction path" for the subscriptions screen —
+     this audit confirms that beyond cancel/remind, no mutation is possible.
+
+4. **Seeded transactions for Jan–Apr 2026 are out-of-range for the Reports current-month
+   view, so subscription amounts do not appear in reports.** The /reports screen filters to
+   the current period (June 2026 at test time). Since the seeded recurring transactions are in
+   Jan–Apr, they are excluded from the reports view and the L49 subs do not contribute to the
+   visible spend breakdown.
+   - This is expected behavior, not a bug — but it means the cross-screen consistency check
+     between Subscriptions (all-time recurring detection) and Reports (period-filtered spending)
+     requires the user to manually adjust the reports period to see their subscription spend in
+     context. No affordance exists to "show me my recurring charges in Reports" without knowing
+     to change the date range.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **CANCEL_REFLECTED: "Mark as cancelled" click produces no visible change.** After clicking
+  the button, the row is visually unchanged — it still shows "Mark as cancelled" with no
+  "Cancelled <date>" label and no "Undo cancel" button. The user receives no feedback that
+  their action succeeded. A user attempting the correction (step 4 of the ritual) would have
+  no way to know the cancel was recorded.
+  - Screenshot: `l49_step3_subs_before_cancel.png` and `l49_step3_subs_after_cancel.png`
+    show identical row states.
+
+- **Demo-seed subscriptions ("Rent", "Internet", "Student loan payment", etc.) pollute the
+  stat grid and subscription list.** "Rent" at $1,450/month dominates the Monthly/Yearly
+  totals ($2,095.98 / $25,151.88), making it difficult to isolate the effect of newly seeded
+  subs in tests and confusing for first-time users who expect to see streaming/app subscriptions,
+  not household bills. Rent is legitimately detected as "recurring" because the demo seeds 6
+  months of equal monthly rent charges — detection is correct, but "Rent" is not what most
+  users consider a "subscription". A category-based filter ("show only subscriptions-category
+  charges", or a minimum-amount toggle) would improve signal quality.
+  - Screenshot: `l49_step1_subscriptions.png`.
+
+- **"Yearly subscriptions" stat is CSS-uppercased in the DOM innerText** (reads as "YEARLY
+  SUBSCRIPTIONS" in `page.evaluate(() => document.body.innerText)`). This is a minor probe
+  friction — probes must use `.toUpperCase()` for label matching — not a user-facing bug.
+
+**Probe hardening**
+
+- Use `.toUpperCase()` when matching stat grid labels from innerText — CSS `text-transform:
+  uppercase` in the stat card renders "MONTHLY SUBSCRIPTIONS" / "YEARLY SUBSCRIPTIONS" in the
+  DOM, not the i18n string "Monthly subscriptions" / "Yearly subscriptions".
+- ANNUAL_MATH verification: extract the two dollar amounts from the stat grid via regex on the
+  raw innerText, then assert `yearly ≈ monthly × 12` with a tolerance of $0.12 (integer
+  minor-unit truncation across many subscriptions). This is robust to demo data additions.
+- CANCEL_REFLECTED: do NOT check `afterCancelTxt.includes("cancelled")` — "Mark as cancelled"
+  buttons on OTHER rows contain the substring "cancelled", producing a false positive. Check
+  specifically for `button:has-text("Undo cancel")` elements (count > 0).
+- Drill button targeting: iterate all `<button>` elements and match by `.innerText() === desc`
+  (exact string); CSS class `sub-drill` is the structural hook but may require a longer selector
+  chain depending on DOM depth.
+- Demo data contains "Gym membership" at $40/month alongside the seeded "L49 Gym" at $40 —
+  both are detected. Anchor assertions on the L49-prefixed name, not on bare "Gym".
+
+---
+
+### L50. Story — "The Cleanup" (Wei) — 2026-06-22 ★
+
+**The ritual:** Wei has a messy ledger after a busy month — uncategorized expenses, uncleared
+drafts, and junk duplicates. The ritual spans ≥4 screens and 8+ actions: seed a test account +
+12 messy transactions → /transactions: text-filter to "L50 Uncategorized" → select-all-filtered
+(5 rows) → bulk-recategorize to "Dining" → clear filter → filter to "L50 DraftExpense" →
+select-all-filtered (3 rows) → bulk-mark-cleared → navigate /accounts and verify cleared balance
+≠ current balance → return to /transactions → filter to "L50 Junk" → select both → bulk-delete
+(no confirmation) → verify 2 rows removed and control rows intact → /budgets verify "Dining"
+category visible → /reports loads → /dashboard loads. Asserts 8 invariants.
+
+**Drive script** `e2e/loopstory_50_cleanup.mjs`
+Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_50_cleanup.mjs`
+
+**What already works well (regression anchors)** ✓
+- SELECT_ALL_RESPECTS_FILTER: select-all-filtered selects exactly the 5 visible rows under
+  the "L50 Uncategorized" text filter (store has 616 total transactions); zero cross-
+  contamination of rows outside the filter set. ✓
+- RECATEGORIZE_SUM_CONSERVATION: all 5 "L50 Uncategorized" rows (total $125.00) recategorized
+  to "Dining" — confirmed in localStorage after flush. Control rows (Keeper, Income) untouched. ✓
+  Filter was respected: select-all on the filtered view did NOT bleed into the full ledger. ✓
+- CLEARED_VS_CURRENT: after bulk-marking 3 "L50 DraftExpense" rows cleared, the /accounts page
+  shows a "· cleared $X" suffix for the L50 account, confirming cleared balance ≠ current
+  balance distinction is surfaced in the UI. ✓ (`accounts.clearedSuffix` = " · cleared %s"). ✓
+- DELETE_REVERSAL: bulk-deleting 2 "L50 Junk" rows removes them from the store (confirmed via
+  localStorage after flush); control rows (Keeper + Income) survive — delete respected filter. ✓
+- BUDGETS_AGREES: /budgets loads with content; "Dining" (the recategorize target) is visible. ✓
+- REPORTS_LOADS: /reports loads without crash after the full ritual. ✓
+- DASHBOARD_LOADS: /dashboard loads without crash after the full ritual. ✓
+- CROSS_SCREEN_AGREEMENT: zero JS page errors across the full 10-step, 24-assertion ritual. ✓
+- No confirmation dialog on bulk delete — fires immediately; this is a UX note, not a bug,
+  but the one-level undo (lastBulk snapshot + Undo button) provides the safety net. ✓
+- Cleared balance suffix only appears when cleared ≠ current — the conditional in
+  `accountRowProps` render (`props.Cleared.Amount != props.Balance.Amount`) works correctly. ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+1. **No confirmation dialog before bulk delete.** `bulkDelete` fires immediately on click with no
+   "Are you sure?" guard. The one-level undo snapshot (`lastBulk`) is the sole safety net. For
+   small accidental selections this is recoverable; for a select-all on an unfiltered or
+   misconfigured view, the undo covers only the most-recent op. Consider: a count-aware confirm
+   step when ≥N rows are selected (e.g. ≥10), or a visible "Deleting N transactions — Undo"
+   banner with a grace period before the store write completes.
+   - Priority: UX / data-safety concern, not a correctness bug (undo works).
+
+2. **Bulk toolbar visibility requires at least one manual row-select before "Select all" appears.**
+   The `selectAllFiltered` button lives inside the bulk toolbar, which is conditionally rendered
+   only when `len(selected.Get()) > 0`. A new user landing on /transactions must know to click one
+   row's check button first, which is not discoverable. A "Select all" affordance that is always
+   visible (e.g. in the column header area) would be more intuitive.
+   - Drive script works around this by clicking the first check button to reveal the toolbar.
+
+3. **`selectAllFiltered` uses `txnfilter.Apply(app.Transactions(), filterAtom.Get())` — this
+   matches the live filter state, not just the paginated page.** If the filtered set spans
+   multiple pages, select-all correctly selects ALL filtered rows across all pages, not just the
+   current page. This is the right behavior but is not surfaced to the user ("Select all 47 rows
+   in this filter, not just the 25 on this page"). No explicit UI signal distinguishes
+   page-scoped vs filter-scoped selection.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- `l50_step4_accounts_cleared_balance.png`: cleared balance suffix renders as "· cleared $X"
+  in the account meta line — functionally correct, but subtle. Users who expect a dedicated
+  "Cleared balance" field (as in most reconciliation tools) may not notice the inline suffix.
+  Accessibility note: the suffix is plain text inside `row-meta`; a visually distinct cleared
+  badge or second-line value would improve scannability.
+- No visual distinction between "selected" rows in the bulk toolbar and the rest of the
+  transaction table — rows do not change background on selection. This is a CSS/UX gap;
+  confirmed by inspecting screenshots where selected rows look identical to unselected ones.
+  The check button presumably changes state but row highlighting is absent.
+
+**Probe hardening**
+
+- Add `flush()` (dispatch `visibilitychange` + wait 500ms) before every localStorage read that
+  follows a bulk op — without it, the SQLite→localStorage sync has not completed and the store
+  reflects stale data. First run without flush produced two false FAILs (Step 2b RECAT, Step 5b
+  DELETE) that disappeared after adding flush calls.
+- Snapshot `allTxnsFromStore()` for `uncatTxnIdsBefore` AFTER the second filter+select-all cycle
+  (not before the re-filter), then flush before reading — the initial snapshot was taken before
+  re-selection completed, causing the ID set to be stale.
+- `selectAllFiltered` button is only in the DOM after ≥1 row is selected; probe must click one
+  individual check button first, then poll for the "Select all" button before calling it.
+- Use `flush()` after every `deleteBtn.click()` and `markClearedBtn.click()` — these ops write
+  to the in-memory SQLite store, which persists to localStorage on visibilitychange.
+
+---
+
+### L51. Story — "The Expat" (Aisha) — 2026-06-22 ★
+
+**The ritual:** Aisha lives in Lisbon. Base currency = USD, EUR→USD rate = 1.10 set in
+Settings. She holds a USD checking account ($3,000 opening) alongside a new EUR checking
+account (€2,000 opening). Ritual spans ≥4 screens and 8+ actions: /settings (set base
+currency + EUR rate) → /accounts (add USD + EUR accounts) → /transactions (log 3 EUR
+expenses: L51-Groceries €80, L51-Rent €500, L51-Coffee €5; total €585) → /accounts (assert
+EUR shown in native currency) → /dashboard (assert net worth includes EUR converted to USD,
+not raw summed) → /budgets (assert base-currency normalized, no crash) → /reports (assert
+totals present, no crash). Asserts 8 invariants including rounding drift and rate
+consistency.
+
+**Drive script** `e2e/loopstory_51_expat_multicurrency.mjs`
+Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_51_expat_multicurrency.mjs`
+
+**What already works well (regression anchors)** ✓
+- EUR_NATIVE_DISPLAY: EUR account row shows "€" / "EUR" on /accounts (native currency label
+  present); USD account shows "$". Native display is unambiguous. ✓
+- FX_CONVERTS_NET_WORTH: Dashboard net worth includes amounts well above the USD-only
+  account balance ($3,000), confirming the EUR account is FX-converted and aggregated rather
+  than excluded. No "missing rate" warning surfaced. ✓
+- BUDGETS_NORMALIZES: /budgets loads with content after adding multi-currency accounts and
+  EUR transactions — no crash. ✓
+- REPORTS_NORMALIZES: /reports loads with content; dollar amounts visible in spending
+  breakdown. ✓
+- NATIVE_AMOUNTS_PRESERVED: all 3 EUR transaction descriptions (L51-Groceries, L51-Rent,
+  L51-Coffee) visible on /transactions; "€" symbol present in the transaction list. ✓
+- ROUNDING_DRIFT: sum-of-conversions ($643.50) exactly equals conversion-of-sum ($643.50) —
+  zero drift at these amounts; the math holds (rate 1.10 × clean EUR values produces exact
+  cent values). ✓
+- CROSS_SCREEN_AGREEMENT: zero JS page errors across the full 9-step ritual. ✓
+- EUR excluded from aggregates when rate is absent — `NetWorthExplained` reports missing
+  currencies and excluded account names rather than silently summing raw amounts. ✓ (code
+  path verified in `internal/ledger/networth_explained.go`).
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+1. **FX rate input fields have no accessible label per currency.** The Settings page renders
+   one `fxRateRow` component per currency code, but the number input for each row carries no
+   `aria-label` that includes the currency code (e.g. `aria-label="EUR exchange rate"`).
+   Programmatic access (screen readers, probes, automation) cannot distinguish which input
+   belongs to EUR vs GBP vs JPY without walking sibling DOM. The `fxRateRowProps` struct
+   carries `Code` — surfacing it as `aria-label="EUR rate"` or `id="fx-rate-EUR"` would fix
+   both accessibility and test stability.
+   - Priority: accessibility + test-stability; no correctness impact.
+
+2. **Base currency `<select>` has no accessible label matching "Base currency."** The select
+   in Settings is built via `Select(css.Class("set-input"), Attr("aria-label",
+   uistate.T("settings.baseCurrency")), ...)`. The i18n key `settings.baseCurrency` must
+   resolve to a string that matches a `*="Base"` selector — if the resolved label is e.g.
+   "Currency" or "Base" (without "Base currency"), automation cannot find it. Either the key
+   value or the aria-label should be stable and match `*="Base"`.
+   - Priority: accessibility / test-stability; no correctness impact.
+
+3. **No explicit "FX-converted" indicator on the EUR account row in /accounts.** The row
+   shows the EUR account balance in native EUR, which is correct, but there is no inline
+   note showing its USD-equivalent (e.g. "≈ $1,556.50 at 1.10"). Users cannot see what the
+   EUR account contributes to their USD net worth without navigating to the dashboard.
+   A secondary line ("≈ $X at [rate]") on the account row would close this gap.
+   - Priority: UX clarity; no correctness impact.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- `L51_01_settings.png`: FX rate number inputs are present in the settings page but carry
+  no per-currency visible label near the input (the currency code label is a sibling text
+  element, not the input's accessible label). Screen reader users cannot tell which rate
+  input belongs to EUR vs GBP without navigating the surrounding DOM.
+- `L51_02_accounts.png`: EUR account balance is shown in EUR (correct) but with no
+  converted-USD hint, while the Dashboard widgets aggregate it — the user must "trust" that
+  the dashboard conversion is correct without being able to spot-check it on the accounts
+  row itself.
+
+**Probe hardening**
+
+- The Settings page does not expose the base currency `<select>` with an aria-label matching
+  `*="Base"`. Probe falls back to checking for "USD" in page text, then injects the EUR rate
+  directly into localStorage before reloading. Always inject FX rates via localStorage when
+  the UI controls cannot be located by label — the dataset schema (`settings.fxRates`) is
+  stable.
+- EUR rate injection must be followed by a full page reload (`page.reload`) so the wasm
+  runtime reads the updated `settings.fxRates` from localStorage on boot.
+- The RATE_CONSISTENCY check (comparing the specific $1,556.50 EUR-in-USD figure across
+  Dashboard and Accounts) was marked ABSENT because the EUR account's converted figure is
+  subsumed in larger combined net-worth totals — prior loop-story runs accumulate data in
+  the same session. For rate consistency proof, run L51 in a fresh session (clear
+  localStorage before boot) or read the net-worth figure directly from the wasm appstate
+  atom rather than from page text.
+- `flush()` (dispatch `visibilitychange` + wait 500ms) is required after account adds and
+  transaction adds before reading localStorage — same pattern as L50.
+
+---
+
+### L52. Story — "The Automator" (Raj) — 2026-06-22 ★
+
+**The ritual:** Raj is a power user who sets up auto-categorization rules and
+multi-condition workflows to automate his budget hygiene. The ritual spans ≥4
+screens and 8+ actions: /rules (create rule: merchant contains "UberXXX" →
+Transport category; verify save + list appearance) → /workflows (build workflow:
+trigger=manual, action=create task "Review Uber spend"; click "Save workflow";
+RELOAD and check persistence — C37 probe) → /workflows (dry-run the saved
+workflow; capture preview) → /transactions (add 2 matching Uber transactions
+$15/$25) → confirm rule fires (both auto-categorized to Transport) → /budgets
+(Transport spend reflected) → /reports (breakdown loads) → full reload survival
+(rule + workflow + transactions all present).
+
+**Drive script:** `e2e/loopstory_52_automator.mjs`
+Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_52_automator.mjs`
+
+**What already works well (regression anchors)** ✓
+- RULE_PERSISTS: rule saves to localStorage and is visible in the /rules list
+  (body text contains the rule phrase); auto-categorization fires correctly. ✓
+- RULE_FIRES: both Uber transactions ($15 + $25) are auto-categorized to
+  `cat-transport` immediately after add — `SuggestTransactionFields` path is
+  live. Zero false negatives on a fresh phrase. ✓
+- WORKFLOW_PERSISTS **(C37 FIXED):** workflow "L52-AutoWF-…" is visible in
+  "Your workflows" both immediately after save AND after a full page reload.
+  C37 ("Save workflow does not persist") is resolved — workflows now persist
+  across reload. ✓
+- DRY_RUN_WORKS: "Dry run" button opens the preview inline showing "Would do: •
+  Create task: Review Uber spend" — the dry-run path is correct and matches the
+  saved action exactly. ✓
+- BUDGET_REFLECTS: /budgets loads with full spending summary (SPENT $1,131 /
+  BUDGETED $1,585 / LEFT $454) — no crash after auto-categorized Uber spend is
+  present. ✓
+- REPORTS_REFLECTS: /reports loads with content and spending breakdown; no
+  crash after multi-rule session. ✓
+- RELOAD_SURVIVAL: rule, workflow, and both Uber transactions all present in
+  localStorage after a hard page reload at the end of the ritual. ✓
+- Zero JS page errors across the full 10-step, 13-assertion ritual. ✓
+
+**Mechanical gaps** (model → logic+tests → persistence → state → UI → e2e)
+
+1. **Workflow "When I run it" (manual) trigger cannot be cross-tested against
+   transaction-created trigger in this ritual.** The form's trigger select
+   defaults to "When I run it" — there is no selector probe for the
+   transaction-created trigger variant in this story (it would require a
+   transaction-add that's captured before flush, which races with the wasm
+   event loop). The `workflows_staged_remove_check.mjs` (C65 gate) already
+   covers the action builder in isolation; the gap here is an end-to-end
+   "trigger fires on txn-add" test that confirms workflow actions are
+   auto-executed without a manual "Run now" click.
+   - Priority: automation correctness; moderate.
+
+2. **No "condition formula" was tested in this ritual.** The workflow condition
+   field (raw formula string, e.g. `txn_abs > 10`) was left empty. The field
+   has no help text, no variable reference, and no validation feedback (known
+   from C65). A condition-with-formula variant would stress the formula
+   evaluation path and surface silent failures.
+   - Priority: UX + correctness; C65 tracks the labelling gap.
+
+3. **Workflow "no edit" gap still open (C65).** Existing workflows offer
+   Dry run / Run now / Enable / Delete but no Edit — confirmed again in
+   `ss_L52_05_workflow_after_reload.png`. Delete-and-recreate is the only way
+   to change a saved workflow.
+   - Priority: UX / CRUD completeness; C65 owns this.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- `ss_L52_02_rule_saved.png`: after saving a rule, the page shows only "Add
+  rule" form + "Suggested rules" list above the fold. The newly saved rule
+  (visible in body text / localStorage) lives in a "Your rules" section that is
+  scrolled off-screen below the long suggested-rules list. There is no visual
+  confirmation ("Rule saved!") near the add form, and no auto-scroll to the
+  saved rule. A user who saves a rule must scroll past all suggestions to verify
+  it was accepted — confirming C64's "no save feedback / reorder" gap.
+- `ss_L52_05_workflow_after_reload.png`: the "Your workflows" section correctly
+  shows the saved workflow (C37 fixed), but the create form remains fully
+  rendered above it even when workflows exist. The form and the list compete for
+  vertical space; a collapse/toggle on the form when ≥1 workflow exists would
+  improve the layout.
+
+**Probe hardening**
+- Rule `#rule-add` input ID was stable; matched directly. Category select
+  probed for "transport"/"travel"/"auto" text first; fell back to first
+  non-empty option. Matched `cat-transport` correctly.
+- RULE_FIRES checked via localStorage (`categoryId === ruleCatId`) rather than
+  DOM, because the transaction list is sorted date-descending and the Uber
+  transactions (2026-06-01/02) are buried below 600+ seeded rows above the
+  fold. Future probes should either filter by description or scroll to the row.
+- Workflow save confirmed both by DOM visibility (immediate) and by
+  post-reload DOM check — the two-step check cleanly separates "save works" from
+  "persist works."
+- `flush()` (visibilitychange + 500 ms) required before localStorage reads after
+  rule add and transaction adds.
 
 ---
 

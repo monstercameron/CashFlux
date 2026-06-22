@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **FX rate staleness signal (L4).** Each exchange rate is now stamped with when it was last set, and the
+  Settings FX table flags any rate not refreshed in over 30 days with a "Stale" badge — so manual rates that
+  silently drift (and quietly skew every multi-currency total) become visible. Pure `currency.RateStale` +
+  `DefaultRateMaxAge`, table-tested; new `Settings.FXUpdatedAt` round-trips with the dataset. e2e
+  `fx_staleness_check.mjs`.
 - **Debt-free date on the payoff calculator (L5).** The payoff result now shows a calendar "Debt-free by
   <Mon YYYY>" date beside the month count, so "24 months" is also "May 2028" — a concrete finish line. Uses the
   existing pure `payoff.DebtFreeMonth`. e2e `payoff_debtfree_date_check.mjs`.

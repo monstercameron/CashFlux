@@ -10907,3 +10907,7 @@ match it during Phase 1.
 ## 2026-06-22 - feat: debt-free date on payoff calculator (L5, /loop iter 1)
 
 First iteration of the /loop pass over remaining L items. Small clean win: the pure `payoff.DebtFreeMonth(now, months)` helper already existed but the UI only showed the raw month count. Added a "Debt-free by <Mon YYYY>" stat beside "Months to pay off" so the finish line is a real date. e2e fills balance/APR/payment and asserts the dated stat (targets the payoff result stat-grid specifically — /planning has several .stat-grid blocks). Next loop iterations work through the rest of the open L backlog.
+
+## 2026-06-22 - feat: FX rate staleness signal (L4, /loop iter 2)
+
+Manual FX rates drift silently and skew every multi-currency total. Added `Settings.FXUpdatedAt map[string]time.Time` (stamped in the settings `setRate` handler on each edit, round-trips with the dataset), a pure tested `currency.RateStale(updatedAt, now, maxAge)` + `DefaultRateMaxAge` (30d, zero/unknown = not stale so seeded rates do not nag), and a "Stale" badge on each over-threshold FX row in Settings. e2e injects a 40-day-old EUR stamp via one-shot addInitScript, opens Settings via the household gear button, and asserts the badge. Account currency picker (same story) was already a validated select — stale gap, left marked done.
