@@ -208,6 +208,10 @@ func buildAppLockGate(doc js.Value) {
 		// Exception to C42: the lock gate is pre-Shell imperative DOM, so the in-app
 		// DialogHost isn't mounted here — a native confirm is the only option.
 		if js.Global().Call("confirm", uistate.T("applock.forgotConfirm")).Bool() {
+			// Halt the autosave first: otherwise the dying page's pagehide save would
+			// re-write the in-memory dataset back into the storage we just cleared,
+			// silently undoing the wipe (L6 — a wipe must actually stay wiped).
+			suspendAutosave = true
 			wipeAllLocalData()
 			reloadPage()
 		}

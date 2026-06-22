@@ -43,23 +43,34 @@ try {
   const seeded = await page.evaluate(() => localStorage.getItem("cashflux:seeded"));
   if (!seeded) fail("the 'seeded' flag should be set after a first-run seed");
 
-  // 2. Clear the dataset key but keep the flag (a wipe) -> reload -> STAYS EMPTY.
-  await page.evaluate(() => localStorage.removeItem("cashflux:dataset"));
+  // 2. A REAL wipe (Settings -> Wipe data) clears the in-memory store, the autosave
+  //    persists the now-empty dataset, the seeded flag stays -> reload STAYS EMPTY.
+  //    (Manually removing only the localStorage key doesn't reflect a real wipe: the
+  //    dying page's pagehide autosave would just re-write the still-in-memory data.)
+  await page.locator(".hh").click(); // household card opens Global settings
+  await page.getByRole("button", { name: "Wipe data" }).first().scrollIntoViewIfNeeded();
+  await page.getByRole("button", { name: "Wipe data" }).first().click();
+  await page.locator("#cf-dialog-confirm").click();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange"))); // flush autosave
+  await page.waitForTimeout(400);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector("#app *", { timeout: 60000 });
-  await page.waitForTimeout(5000); // let hydrate decide + autosave write the result
+  await page.waitForTimeout(2500); // let hydrate decide + autosave settle
   const d2 = await dataset(page);
   if (nAccounts(d2) !== 0) fail(`a wiped store re-seeded ${nAccounts(d2)} accounts — should stay empty`);
 
-  // 3. Clear the dataset AND the flag (a genuine fresh install) -> reload -> RE-SEEDS.
-  await page.evaluate(() => {
-    localStorage.removeItem("cashflux:dataset");
-    localStorage.removeItem("cashflux:seeded");
-  });
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#app *", { timeout: 60000 });
-  const d3 = await waitForDataset(page, (d) => nAccounts(d) > 0);
-  if (nAccounts(d3) === 0) fail("a genuine first run (no flag) should seed the sample again");
+  // 3. A genuine fresh install (a brand-new browser context = empty storage, no
+  //    in-memory data, no seeded flag) RE-SEEDS the sample. A fresh context is the
+  //    faithful simulation — manually deleting keys in the live page is undone by
+  //    the pagehide autosave re-writing the (now-empty) in-memory store on reload.
+  const ctx2 = await browser.newContext();
+  const page2 = await ctx2.newPage();
+  await page2.goto(BASE + "/accounts", { waitUntil: "domcontentloaded" });
+  await page2.waitForSelector("#app *", { timeout: 60000 });
+  const d3 = await waitForDataset(page2, (d) => nAccounts(d) > 0);
+  if (nAccounts(d3) === 0) fail("a genuine first run (fresh storage) should seed the sample");
+  await ctx2.close();
 
   if (errors.length) fail("page errors: " + errors.join(" | "));
   if (!process.exitCode) console.log("PASS: a wiped store stays empty on reload; only a true first run (no seeded flag) re-seeds the sample.");
