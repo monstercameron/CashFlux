@@ -128,6 +128,8 @@ func Transactions() ui.Node {
 	})
 	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
 	onTags := ui.UseEvent(func(v string) { tagsStr.Set(v) })
+	repeatCadence := ui.UseState("")
+	onRepeat := ui.UseEvent(func(e ui.Event) { repeatCadence.Set(e.GetValue()) })
 	onFilterText := func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) }
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Account = e.GetValue() }) })
 	onFilterCat := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue() }) })
@@ -268,9 +270,29 @@ func Transactions() ui.Node {
 			errMsg.Set(err.Error())
 			return
 		}
+		// If the user chose a repeat cadence, create a recurring schedule for
+		// the same cash flow. Post this one now (above), then auto-post the
+		// same again every <cadence> starting the next period.
+		if rc := domain.RecurringCadence(repeatCadence.Get()); rc != "" && kind.Get() != "Transfer" {
+			r := domain.Recurring{
+				ID:         id.New(),
+				Label:      label,
+				Amount:     money.New(amt, acc.Currency),
+				Cadence:    rc,
+				NextDue:    rc.Next(date),
+				AccountID:  acc.ID,
+				CategoryID: catID.Get(),
+				Autopost:   true,
+			}
+			if err := app.PutRecurring(r); err != nil {
+				errMsg.Set(err.Error())
+				// Keep the already-created transaction; don't bail.
+			}
+		}
 		desc.Set("")
 		amountStr.Set("")
 		tagsStr.Set("")
+		repeatCadence.Set("")
 		customVals.Set(map[string]string{})
 		whoOverridden.Set(false)
 		errMsg.Set("")
@@ -491,6 +513,13 @@ func Transactions() ui.Node {
 				),
 				If(len(members) > 1, Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.whoLabel")), Attr("data-testid", "txn-who-add"), OnChange(onWho), whoOptions)),
 				If(!isTransfer, Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsStr.Get()), OnInput(onTags))),
+				If(!isTransfer, Select(css.Class("field"), Attr("aria-label", uistate.T("todo.repeat")), Attr("data-testid", "txn-add-repeat"), OnChange(onRepeat),
+					Option(Value(""), SelectedIf(repeatCadence.Get() == ""), uistate.T("todo.repeatNone")),
+					Option(Value(string(domain.CadenceWeekly)), SelectedIf(repeatCadence.Get() == string(domain.CadenceWeekly)), uistate.T("recurring.cadenceWeekly")),
+					Option(Value(string(domain.CadenceMonthly)), SelectedIf(repeatCadence.Get() == string(domain.CadenceMonthly)), uistate.T("recurring.cadenceMonthly")),
+					Option(Value(string(domain.CadenceQuarterly)), SelectedIf(repeatCadence.Get() == string(domain.CadenceQuarterly)), uistate.T("recurring.cadenceQuarterly")),
+					Option(Value(string(domain.CadenceYearly)), SelectedIf(repeatCadence.Get() == string(domain.CadenceYearly)), uistate.T("recurring.cadenceYearly")),
+				)),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateStr.Get()), OnInput(onDate)),
 				MapKeyed(formTxnDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})

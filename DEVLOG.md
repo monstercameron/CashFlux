@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: "Repeat" a transaction from the add form (L24)
+
+Closes the L24/L26 recurrence cluster. The schedule engine + Planning management UI already existed; this adds
+the discoverable entry point: a Repeat select on the transaction add form that, on a non-transfer entry, posts
+the one-off now and also `PutRecurring`s an autopost schedule with NextDue = `cadence.Next(enteredDate)` — i.e.
+"this one now, then again every <cadence> starting next period," so it never double-posts today. The boot
+auto-post (shipped earlier today) then carries it forward with no further user action. Transfers excluded
+(two-leg recurring is its own problem). Reused the existing `recurring.cadence*` / `todo.repeat*` i18n keys.
+PutRecurring failure surfaces to errMsg without discarding the saved transaction. e2e `txn_add_repeat_check.mjs`.
+Sub-agent built; integrated + regressed (add/transfer/member stories green). Cluster done — next: L18.
+
 ## 2026-06-22 - feat: recurring to-do tasks (L26)
 
 Same recurrence theme as L24, applied to tasks. Added `Task.Recurrence` (reusing `domain.RecurringCadence`, so

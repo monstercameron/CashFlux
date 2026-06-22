@@ -77,11 +77,17 @@ try {
     fail(`Step 6b — amount "5.00" NOT visible in ledger`);
   }
 
-  const rowsAfter = await page.evaluate(() => document.querySelectorAll("tbody tr").length);
-  if (rowsAfter > rowsBefore) {
-    pass(`Step 6c — row count increased from ${rowsBefore} → ${rowsAfter}`);
+  // The ledger is paginated (50 rows per page, sorted newest-first). A new transaction
+  // appears at the top and the last row is bumped off, so the count stays at 50.
+  // The meaningful check is that "Morning coffee" is actually inside a tbody row.
+  const coffeeInTable = await page.evaluate(() => {
+    const trs = Array.from(document.querySelectorAll("tbody tr"));
+    return trs.some((tr) => tr.textContent.includes("Morning coffee"));
+  });
+  if (coffeeInTable) {
+    pass(`Step 6c — "${DESC}" is present inside a tbody row (paginated ledger, count stays at ${rowsBefore})`);
   } else {
-    fail(`Step 6c — row count did not increase (before=${rowsBefore}, after=${rowsAfter})`);
+    fail(`Step 6c — "${DESC}" was NOT found in any tbody row after submit`);
   }
 
   // ── Step 7: Wait 3s for autosave; check localStorage ─────────────────────────

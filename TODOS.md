@@ -5169,8 +5169,10 @@ import silently failed on the bad amount, so the delta was just the sample (57) 
   - [x] **Auto-post on app open** — `postDueRecurringOnBoot` (app.go) catches up every due autopost recurring
         at boot (after autosave is armed → persists immediately; idempotent, no double-post on reopen). e2e
         `boot_autopost_check.mjs`. Previously only a manual Planning "Post due" button did this.
-  - [ ] **"Repeat" option on the transaction add form** — let a user mark a new transaction recurring inline
-        (create the schedule from the add form), not only via the Planning screen.
+  - [x] **"Repeat" option on the transaction add form** — a Repeat select (None/Weekly/Monthly/Quarterly/
+        Yearly) creates an autopost `domain.Recurring` schedule inline (NextDue = next cadence after the
+        entered date, so today's entry isn't double-posted); boot auto-post carries it forward. e2e
+        `txn_add_repeat_check.mjs`. (Transfers excluded — two-leg recurring is future work.)
 - [ ] **Cross-currency transfer (ties L4).** A transfer assumes one amount/one currency; moving USD→EUR
       needs an FX rate (and likely a received-amount). Verify + handle: apply the FX table, optionally let
       the user set the received amount; test net-worth stays consistent in base currency.
@@ -5678,6 +5680,56 @@ contributing must be frictionless. **Drive script:** `e2e/loopstory_38_goals_ux.
 contribution actually applied (the `evaluateHandle` value-set is fragile). Re-test with a real focused
 type + a before/after progress delta + an explicit toast assertion. The inline-form + auto-focus +
 goal-row copy were measured/verified directly (solid). Add-goal field count (6) measured directly.
+
+### L39. Core flow — "Logging Today's Coffee" (everyday expense entry end-to-end) — 2026-06-22 ★
+
+**Why it matters:** adding a single expense is the most frequent action in any budgeting app — a
+$5 coffee every morning means 365 add-expense flows per year. Its friction, feedback, and cross-page
+consistency (ledger → budget spent → dashboard) define whether the app feels trustworthy day-to-day.
+**Drive script:** `e2e/loopstory_39_log_expense.mjs`.
+
+**Already god-tier (anchors — keep):**
+- ✓ **Add form is always visible** at the top of /transactions — no modal, no navigation. Single-screen
+  flow from intent to confirmation: fill description + amount, click Add, done.
+- ✓ **Transaction appears at the top of the ledger immediately** after submit (newest-first sort, 605
+  shown after add) with the correct date, description, amount ($5.00), and auto-applied category (Dining).
+- ✓ **Form clears automatically** after submit — description and amount fields reset, ready for the next entry.
+- ✓ **Autosave is reliable and fast** — `cashflux:dataset` in localStorage contains "Morning coffee" within
+  3 seconds; the transaction survives a hard page reload with no data loss.
+- ✓ **Dashboard cross-page consistency is solid** — "Morning coffee ($5.00)" appears immediately in the
+  Recent Transactions widget on /dashboard without any manual refresh.
+- ✓ **Budgets page reflects the spend** — Dining shows $160/$250 (64%), correctly incorporating the coffee
+  entry; SPENT / BUDGETED / LEFT summary header is accurate.
+- ✓ **Zero JS page errors** across the entire flow (/transactions add → /dashboard → /budgets → reload).
+- ✓ **Ledger pagination is correct** — 50 rows/page (newest first); count stays at 50 after add because the
+  oldest row rotates off the first page, not a render bug.
+
+**God-tier UX gaps (verified):**
+- [ ] **Default account is "401(k) / Brokerage"** — an investment/retirement account — not an everyday
+  checking account. Every coffee and grocery purchase defaults to an investment account, which is
+  semantically wrong and will confuse users who don't notice before submitting.
+  Before: "Add transaction" form defaults Account to `401(k) / Brokerage`.
+  After: default to the most-recently-used account, or failing that, the account flagged as primary/checking
+  (e.g. `acct-checking`). (`internal/screens/transactions.go` add-form defaulting logic.)
+- [ ] **No visible form labels** — Description and Amount inputs rely solely on placeholder text, which
+  vanishes the moment the user starts typing. Mid-entry there is no hint of what each field is.
+  Before: placeholders read "Description" / "Amount" — gone once typing starts.
+  After: persistent `<label>` above (or floating label pattern) for Description, Amount, and at least the
+  Type select. (`internal/screens/transactions.go` add-form markup; the existing `aria-required="true"`
+  on Amount shows a11y intent was there — complete it with a visible label.)
+- [ ] **No success confirmation after Add** — the row silently appears at the top of the ledger with no
+  toast, snackbar, or transient highlight. A first-time user who scrolls or blinks will miss the feedback
+  entirely and may click Add again (duplicate).
+  Before: submit triggers no user-facing confirmation signal.
+  After: a brief (2–3 s) toast "Transaction added" or a 1-second row highlight animation on the newly
+  added row. (`internal/ui/` notification / toast system, or a flash CSS class on the inserted `<tr>`.)
+
+**Probe note:**
+Step 6c initially checked `tbody tr` count before vs. after and flagged a failure when both read 50.
+This was a probe logic error: the ledger is paginated at 50 rows (page header reads "1–50 of 604"),
+sorted newest-first. Adding a transaction places it at row 1 and rotates row 50 off the visible page —
+the count correctly stays at 50. Fixed the check to assert that "Morning coffee" exists in a `tbody tr`
+cell, which passes and is the meaningful assertion. All 14 checks pass; exit code 0.
 
 ---
 

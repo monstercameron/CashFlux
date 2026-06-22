@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"Repeat" a transaction from the add form (L24).** The transaction add form now has a Repeat picker
+  (weekly/monthly/quarterly/yearly). Choosing a cadence posts the entered transaction now and creates an
+  auto-posting recurring schedule (first future due one cadence step after the entered date), so recurring
+  bills, income and "pay yourself first" can be set up inline instead of only on the Planning screen — and the
+  boot auto-post carries them forward. Transfers are excluded for now. e2e `txn_add_repeat_check.mjs`.
 - **Recurring to-do tasks (L26).** A money chore can now repeat: a "Repeat" picker (weekly/monthly/quarterly/
   yearly) on the to-do add form and inline editor marks a task recurring, and completing it automatically
   spawns the next occurrence with its due date advanced one cadence step. Recurring rows show a "↻ <cadence>"
