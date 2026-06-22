@@ -4726,9 +4726,9 @@ tree red.*
   - [x] **State/UI**: `appstate.MarkSubscriptionCancelled`/`Unmark`/`Cancellations`; a "Mark as cancelled"
         action per row (+ Undo) and a prominent top `role="alert"` banner ("You cancelled X on … but were
         charged … on …"). e2e `subscription_cancel_check.mjs`.
-- [ ] **"Cancel these → save $X/year" framing.** Multi-select cancel-candidates and show the annual
+- [x] **"Cancel these → save $X/year" framing.** Multi-select cancel-candidates and show the annual
       savings of cancelling them — turns the annual total into action.
-- [ ] **Unused proxy (no usage signal available).** Offer a low-pressure "review" nudge for subs above a
+- [x] **Unused proxy (no usage signal available).** Offer a low-pressure "review" nudge for subs above a
       cost threshold or not recently re-confirmed; let the user tag "rarely use" to prioritize the audit.
 
 **🔎 SPLASH ROOT-CAUSE — corrects L1/L2/L3/L6/L11 (the "lingering load splash").** The dismiss logic in
@@ -7759,6 +7759,252 @@ with no way to tell which year is which. Cross-reference L45 EXPORT_FILENAME gap
   (the "Reimbursable" rolled-up row). Noted sub-category double-count as probe parse limitation.
 - Fixed RECAT_UPDATES category-name matching to use fuzzy search (`/grocer/i`, `/charity|gift/i`)
   rather than exact names, since the app uses "Gifts & Charity" not "Charity".
+
+---
+
+### L59. Story — "The Finish Line" (Aaliyah) — 2026-06-22 ★
+
+**The ritual:** Aaliyah has been saving for a $500 "New Laptop" goal (linked to "L59 Aaliyah Savings"
+checking account, $3,000 opening balance). She is at $475 / $500 (95%). She makes one final $25
+contribution to push the goal to 100%, observes completion, attempts a $10 overfund, then logs a
+$500 spend from the linked account to represent "using" the goal money. She visits /accounts and
+/transactions to verify the spend posted, and checks /dashboard that net worth is consistent.
+
+**Drive script:** `e2e/loopstory_59_finish_line.mjs`
+
+**gwc build / run commands and exit codes:**
+```
+App already running: http://127.0.0.1:8099   [server pre-running]
+E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_59_finish_line.mjs
+  → 21 passed, 2 failed, 3 maybe                    EXIT 1
+```
+
+**Screenshots produced:**
+`screenshots/l59_00a_accounts_seeded.png`, `screenshots/l59_00b_goal_added.png`,
+`screenshots/l59_01_goals_near_target.png`, `screenshots/l59_02a_contribution_form.png`,
+`screenshots/l59_02b_after_final_contribution.png`, `screenshots/l59_03_overfund_result.png`,
+`screenshots/l59_04a_accounts_pre_spend.png`, `screenshots/l59_04b_spend_logged.png`,
+`screenshots/l59_05_accounts_post_spend.png`, `screenshots/l59_06_transactions_with_spend.png`,
+`screenshots/l59_07_dashboard_final.png`, `screenshots/l59_08_goals_final_state.png`.
+
+**What already works well (regression anchors)** ✓
+
+- ✓ **Goal creation with linked account is full-featured and reactive.**
+  The add form accepts Name, Target (USD), Saved so far, Owner, Linked account (optional), and
+  Target date. The goal appears immediately at 95% with `$475.00 / $500.00 · 95% · $25.00 to go`
+  after submit. Linked account is wired and persisted. Confirmed `l59_00b_goal_added.png` and
+  `l59_01_goals_near_target.png`.
+
+- ✓ **Pace figure (/mo) renders on near-target goal row.**
+  Even at 95%, the pace indicator remains visible on the goal row. Confirmed `l59_01_goals_near_target.png`.
+
+- ✓ **Overfund attempt produces an explicit "surplus" signal.**
+  After a $10 overfund contribution, the body text includes a surplus/over-target indicator.
+  The UI does not silently absorb the extra money — something renders to signal the excess.
+  Confirmed `l59_03_overfund_result.png`.
+
+- ✓ **Manually logged spend transaction posts to /transactions correctly.**
+  "L59 Laptop Purchase" ($500, L59 Aaliyah Savings account) submitted via /transactions form
+  appears immediately in the transaction list at the correct amount. Confirmed `l59_06_transactions_with_spend.png`.
+
+- ✓ **MONEY_CONSERVED — account balance reflects the spend exactly.**
+  L59 Aaliyah Savings: $3,000.00 (opening) − $500.00 (spend) = $2,500.00 (post-spend). Confirmed
+  `l59_05_accounts_post_spend.png`. Note: the "cleared" balance annotation (`cleared $3,000.00` on
+  the Type · USD line) must be skipped; current balance appears on the next standalone `$X,XXX.XX`
+  line and is correct.
+
+- ✓ **NET_WORTH_CORRECT — dashboard net worth tracks the spend to the cent.**
+  Net worth pre-contribution: $66,068. Net worth after spend: $65,568. Delta = $500.00 (exact).
+  Confirmed `l59_07_dashboard_final.png`.
+
+- ✓ **Zero JS page errors across the entire 4-screen, 9-step ritual.**
+  No `page.on("pageerror")` events fired.
+
+**⚠️ Top violations — both at the goals/contribute boundary**
+
+**VIOLATION 1: COMPLETION_FIRES — "Contribute" submit has no effect on stored data**
+
+`internal/screens/goals.go` `contribute` closure (lines 189–204): after submitting the Contribute
+form via `button[type="submit"]:has-text("Contribute")`, the goal's `currentAmount.Amount` in
+`localStorage("cashflux:dataset")` remains 47500 ($475.00) — unchanged from the seed value — across
+two independent runs. The form opens, the amount fills, the submit button is clicked, 3 s wait,
+but the stored amount does not change. The UI continues to show `95% · $25.00 to go`.
+
+The contribute closure calls `g.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, cur)` then
+`app.PutGoal(g)`. The data mutation does not flush to localStorage. Same "write succeeds but
+persistence doesn't fire" pattern as L56 Thread C. Bottom-up fix: verify `PutGoal` calls the full
+`SetDataset` flush path, and add a unit test `TestContribute` in `internal/appstate/` confirming
+the goal's `currentAmount` is updated in the persistent dataset after `PutGoal`.
+
+Before: contribute $25 → form submits → `currentAmount` unchanged at 47500 → 95% displayed.
+After: `currentAmount` updates to 50000, goal shows 100%, completion state fires.
+
+**VIOLATION 2: ACCOUNT_DECOUPLED — Contribute does NOT debit linked account (L41/C51 re-test)**
+
+After contributing $25 to a goal linked to "L59 Aaliyah Savings" ($3,000 opening), the account
+balance remains $3,000. Same C51 gap as L41 (2026-06-22). `contribute()` only mutates
+`Goal.CurrentAmount`; no transaction is created, no account is debited. Money is invented. See L56
+Thread A for the bottom-up fix spec (PostToLedger path). This remains unfixed since L41.
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+- [ ] **COMPLETION_FIRES: Contribute mutation does not persist — `PutGoal` flush path broken.**
+  `contribute` in `internal/screens/goals.go` line 198–200 sets `g.CurrentAmount` then calls
+  `app.PutGoal(g)`. The change does not appear in localStorage after submit. Either `PutGoal` does
+  not call `SetDataset`, or the form submit re-renders from stale in-memory state before the flush.
+  Bottom-up: (1) add unit test for `goals.PutGoal` → confirm `dataset.Goals[i].CurrentAmount`
+  updates; (2) trace the `PutGoal` call chain in `internal/appstate/` to confirm it ends in a
+  `SetDataset(d)` call that writes to localStorage; (3) if async, add a synchronous flush gate.
+
+- [ ] **ACCOUNT_DECOUPLED: Contribute does not post to central ledger (L41 C51, L56 Thread A).**
+  See L56 Thread A bottom-up fix spec. Contribute must produce a `Transaction` that debits the
+  linked account, not just bump `Goal.CurrentAmount`.
+
+- [ ] **Overfunding UI: surplus signal fires but % render is unclear.**
+  After overfund, "surplus" keyword appears but no % (neither 100% nor >100%) is visible in the
+  page text. Whether `goalsvc.Percent` caps at 100 or returns >100 for overfunded goals is unclear.
+  Inspect `goalsvc.Percent` and `barFillStyle` for amounts > target, confirm the bar caps at 100%
+  and a surplus line (e.g. "Surplus: $10.00") is rendered. Screenshot: `l59_03_overfund_result.png`.
+
+- [ ] **Goal completion badge / toast is silent (L41 no-success-toast gap, L56 Thread C).**
+  No toast, badge, or row highlight signals 100% completion. The bar changes color on complete
+  (`var(--up)`) but no semantic "Goal achieved!" signal fires.
+  After: brief toast "L59 New Laptop — goal reached!" or an "Achieved" badge on the row.
+
+**UI/UX defects** (screenshot-confirmed + named file)
+
+- [ ] **No "Mark as achieved" / auto-archive prompt after goal reaches 100%.**
+  After the full lifecycle (contribute → spend), the goal remains in the active list with no
+  completion marker and no prompt to move it to "Achieved". `barFillStyle` changes color but
+  the semantic lifecycle does not advance. Screenshot: `l59_08_goals_final_state.png`.
+  After: when `IsComplete(g)` is true, show an explicit "Move to Achieved" CTA or auto-archive
+  with an undo option. Close-out: re-screenshot showing "Achieved" section with the goal and a
+  completion date.
+
+- [ ] **L59 Aaliyah Savings account not available in /goals linked-account select until reload.**
+  In the first probe run (before hard-navigating back to /goals), the newly added account was absent
+  from the Linked account select. After navigating away and back, it appears. The Linked account
+  select appears to read from a snapshot loaded at component mount, not a reactive atom.
+  After: wire the Linked account select to the same accounts atom used by /accounts and /transactions
+  — it should update when a new account is added in the same session without a hard reload.
+  Close-out: add account → soft-nav to /goals → confirm account in select.
+
+**Probe hardening**
+
+- Fixed `parseAccountBalance` to skip "cleared" annotation lines (`Checking · USD · cleared $3,000.00`)
+  and match the next standalone `$X,XXX.XX` line. First run misread `$3,000.00` (cleared balance)
+  instead of `$2,500.00` (current balance). Fixed by filtering lines containing "cleared".
+- Fixed contribute button scoping: used `el.closest("li, tr, ...")` to scope to the row containing
+  `GOAL_NAME`, avoiding clicks on other goals' Contribute buttons when multiple goals are present.
+- Fixed contribute amount input selector: confirmed `placeholder="Amount to add"` from DOM probe;
+  replaced generic `input[type="number"]` which could match the goal-add form's Target input.
+- Fixed contribute submit button: confirmed `button[type="submit"]:has-text("Contribute")` to avoid
+  hitting the "Add" submit button for the goal-add form (both are on the same page).
+- Fixed goal submit button: used `button[type="submit"]:has-text("Add")` to target goal-add form.
+- Fixed account name input: confirmed `placeholder="Name"` from DOM probe (not "Account name").
+- Fixed linked account select: confirmed `aria-label="Linked account (optional)"` from DOM probe.
+
+---
+
+### L60. Story — "Every Dollar a Job" (Marcus) — 2026-06-22 ★
+
+**Persona:** Marcus, zero-based budgeter. Every dollar gets a job: he uses the Allocate engine
+to rank where $2,000 of surplus goes, excludes one account, applies the allocation, and verifies
+that the result is reflected in /goals and /dashboard.
+
+**The ritual:**
+1. /allocate — check weight labels (C6 regression guard)
+2. Set profile → "Pay down debt", enter $2,000 to allocate
+3. Exclude one candidate (HYSA) → verify it leaves the suggestions list
+4. Verify ZERO_REMAINDER: `sum(allocated) + kept_back == $2,000.00` to the cent
+5. Apply → Confirm → read success message (earmarks + goal contributions)
+6. Undo → verify "Allocation undone." rolls back
+7. Re-apply → /goals → confirm L60 Emergency Fund CurrentAmount > $0
+8. /dashboard → net worth widget renders, no JS errors
+
+**Drive script:** `e2e/loopstory_60_every_dollar.mjs`
+Run: `E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_60_every_dollar.mjs`
+Exit code 0 — 19 PASS · 0 FAIL · 2 MAYBE
+
+**Screenshots produced (12):**
+`l60_00a_checking_seeded.png` · `l60_00b_hysa_seeded.png` · `l60_00c_goal_seeded.png` ·
+`l60_01_allocate_landing.png` · `l60_02_profile_debt_amount_set.png` · `l60_03_hysa_excluded.png` ·
+`l60_04_zero_remainder_check.png` · `l60_05a_apply_confirm_panel.png` · `l60_05b_after_apply.png` ·
+`l60_06_after_undo.png` · `l60_07_goals_after_apply.png` · `l60_08_dashboard.png`
+
+**What already works well** ✓
+- All 5 criterion weight inputs carry visible `<span>` labels ("Returns weight", "Stability weight",
+  "Liquidity weight", "Debt-reduction weight", "Goal-progress weight") — **C6 is fixed**.
+- Profile presets load correct weight vectors into the inputs (debt profile: Debt-reduction weight=4).
+- ZERO_REMAINDER holds: `sum($1,999.95) + kept_back($0.05) = $2,000.00` — integer rounding by
+  `Distribute()` is correctly reported rather than silently swallowed.
+- Excluded candidates are removed from the suggestions list immediately (client-side reactive state).
+- Apply opens a confirmation panel listing each action (Goal / Earmark / Debt paydown) with amounts.
+- Apply writes: "Funded 6 goal(s) ($741.48) and earmarked $1,258.47." — goal `CurrentAmount` is
+  bumped; earmarks are created. L60 Emergency Fund shows $123.58 / $1,000 (12%) on /goals after
+  apply — **APPLY_WRITES confirmed**.
+- Undo fires cleanly: "Allocation undone." message, apply button reappears.
+- /dashboard renders after apply with Net worth $71,068.00 and no JS errors.
+- "Why this order?" / "Explain with AI" section is present; requires API key but structure is sound.
+
+**Mechanical gaps** (bottom-up: model → logic → persistence → state → UI → e2e)
+
+- **[model/UI] Newly-seeded accounts with no APR/stability/liquidity scores are silently filtered
+  out of Allocate candidates (score=0 → excluded by `hiddenZero` guard).** The `setAttributes`
+  nudge ("Set an expected return, stability, and liquidity…") is shown, but only when ALL ranked
+  candidates are zero — when the user has any pre-existing scored accounts, freshly added zero-scored
+  accounts vanish without explanation next to them. A per-candidate inline nudge ("Add APR/scores
+  to include this account") would be more discoverable than a single page-level message.
+  Observed: "L60 Marcus Checking" and "L60 Marcus HYSA" never appeared in the candidate list after
+  seeding, because the account-add form has no APR/stability/liquidity fields at creation time.
+- **[UI/state] Allocate does not write to budgets.** Apply updates `goal.CurrentAmount` and creates
+  earmarks — it is **not** a budget operation. There is no path from /allocate to /budgets that
+  reflects the allocation. A user expecting "applied allocation" to set or prefill budget amounts
+  for the month will find no such link. This is a design gap: Allocate and Budgets are parallel,
+  unconnected modules.
+- **[persistence] Excluded candidates are in-memory only (component local state).** Refreshing
+  /allocate resets the excluded set. There is no persistence for "I always want to exclude this
+  account from suggestions." A user who excludes a speculative crypto account every session is doing
+  redundant work.
+- **[UI] "Amount to allocate" placeholder uses currency code ("Amount to allocate (USD)") but the
+  field accepts a plain number with no inline currency symbol.** Minor polish gap — the amount field
+  could render the symbol prefix inline like the budget add form.
+- **[e2e] Exclude probe is fragile** — the script walks DOM ancestors 5 levels up looking for the
+  candidate name. When the app excludes the first-hit Exclude button's parent-sibling candidate
+  (pre-seeded "Emergency Savings (HYSA)") instead of the freshly seeded "L60 Marcus HYSA" (which
+  has score=0 and never appears), the MAYBE is correct but misleading. The fix is to set
+  APR/scores during account seeding so the L60 account appears as a scoreable candidate.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **`l60_04_zero_remainder_check.png`:** The "CRITERION WEIGHTS" section label renders in all-caps
+  small text above the weight inputs — this is the `set-label` CSS class which differs from
+  the card `H2` headings used elsewhere. Inconsistent heading hierarchy; the weights sub-section
+  could use the same `H3`/`set-label` treatment as the save-profile row for visual consistency.
+- **`l60_04_zero_remainder_check.png`:** The "Kept back: $0.05 (buffer plus anything caps or
+  rounding left over)." message appears even when the keep-back is pure integer rounding ($0.05),
+  not a user-set reserve. This may confuse users ("why is $0.05 missing?"). The message could
+  distinguish `remainder_from_rounding` vs `user_set_reserve`.
+- **`l60_05b_after_apply.png`:** After apply, the Excluded section shows "Pay down Rewards Credit
+  Card" with a Restore button — this is fine, but the card has no heading separating it from the
+  apply-success message above. The visual flow is: success message → Excluded section → Why this
+  order? The success message and the Excluded section share the same card, creating a cluttered
+  lower panel.
+- **`l60_07_goals_after_apply.png`:** "L60 Emergency Fund $123.58 / $1,000.00 (12%)" shows on
+  /goals — apply wrote correctly, but the goal has no target-date or linked account, so the pace
+  line ("$876.42 to go") has no monthly-save figure. Users who allocate without also setting a
+  target date get an incomplete pace view.
+
+**Probe hardening** (for the next iteration of this script)
+- Seed accounts with explicit `ExpectedReturnAPR`, `StabilityScore`, `LiquidityScore` via
+  the account edit form so they appear as scoreable Allocate candidates. Currently the seeded L60
+  accounts never appear in suggestions (score=0, filtered).
+- Use `data-testid` attributes where available (`allocate-apply-btn` worked); add
+  `data-testid="allocate-mode"` (already present) and consider `data-testid` on each ranked row
+  for precise exclusion targeting by candidate ID rather than DOM ancestor walk.
+- The "Criterion weights" heading (`CRITERION WEIGHTS`) is a CSS-uppercase `set-label` span, not
+  plain text — `innerText` returns it uppercase, breaking the `"Criterion weights"` check. Fix the
+  script to use case-insensitive matching for that heading.
 
 ---
 

@@ -25,9 +25,19 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// nameSlug returns a stable, lowercase, hyphen-separated slug from a subscription
+// name — used in data-testid attributes so selectors are readable and URL-safe.
+func nameSlug(name string) string {
+	s := strings.ToLower(strings.TrimSpace(name))
+	return strings.NewReplacer(" ", "-", "/", "-", ".", "-", "'", "", "\"", "").Replace(s)
+}
+
 // Subscriptions lists recurring charges detected from transaction history (B25):
 // each subscription's cadence, charge, normalized monthly cost, and next renewal,
-// plus the total monthly/annual burden. Read-only over the pure detection core.
+// plus the total monthly/annual burden. Includes:
+//   - Per-row cancel-candidate selection with running "save $X/year" summary.
+//   - Bulk "mark selected as cancelled" action.
+//   - Quiet "worth reviewing?" badge on subscriptions not seen in 2+ cadence intervals.
 func Subscriptions() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -114,6 +124,84 @@ func Subscriptions() ui.Node {
 		}
 	}
 
+	// --- Cancel-candidates multi-select (L12) ---
+	// Session state: map of sub Name → selected. All mutations copy-on-write so
+	// UseState detects the change and re-renders.
+	selectedState := ui.UseState(map[string]bool{})
+
+	toggle := func(name string) {
+		cur := selectedState.Get()
+		next := make(map[string]bool, len(cur)+1)
+		for k, v := range cur {
+			next[k] = v
+		}
+		next[name] = !next[name]
+		selectedState.Set(next)
+	}
+
+	// Bulk cancel: mark every selected (non-cancelled) subscription as cancelled,
+	// then clear the selection so the UI resets cleanly.
+	doBulkCancel := func() {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		sel := selectedState.Get()
+		now := time.Now()
+		for name, isSelected := range sel {
+			if !isSelected {
+				continue
+			}
+			key := strings.ToLower(strings.TrimSpace(name))
+			if _, alreadyCancelled := cancelMap[key]; alreadyCancelled {
+				continue
+			}
+			if err := app.MarkSubscriptionCancelled(name, now); err != nil {
+				notice.Set(notice.Get().With(err.Error(), true))
+				return
+			}
+		}
+		selectedState.Set(map[string]bool{})
+	}
+
+	// Derive savings and count from current selection for the summary bar.
+	sel := selectedState.Get()
+	savings := subscriptions.AnnualSavings(subs, sel)
+	selectedCount := 0
+	for _, v := range sel {
+		if v {
+			selectedCount++
+		}
+	}
+
+	// Build the savings summary bar (only shown when ≥1 subscription is selected).
+	var savingsSummary ui.Node
+	if selectedCount > 0 {
+		savingsLabel := uistate.T("subs.cancelSavings", selectedCount, fmtMoney(money.New(savings, base)))
+		if selectedCount > 1 {
+			savingsLabel = uistate.T("subs.cancelSavingsMany", selectedCount, fmtMoney(money.New(savings, base)))
+		}
+		savingsSummary = Div(
+			css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Py1)+" savings-summary"),
+			Attr("data-testid", "subs-cancel-savings"),
+			Attr("role", "status"),
+			Attr("aria-live", "polite"),
+			Span(css.Class(tw.Fold(tw.FontMedium, tw.Text14)), savingsLabel),
+			Button(
+				css.Class("btn btn-danger"),
+				Type("button"),
+				Title(uistate.T("subs.cancelSelectedTitle")),
+				Attr("aria-label", uistate.T("subs.cancelSelectedTitle")),
+				Attr("data-testid", "subs-bulk-cancel-btn"),
+				OnClick(ui.UseEvent(Prevent(doBulkCancel))),
+				uistate.T("subs.cancelSelected"),
+			),
+		)
+	} else {
+		savingsSummary = Fragment()
+	}
+
+	now := time.Now()
 	rows := MapKeyed(subs,
 		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
 		func(s subscriptions.Subscription) ui.Node {
@@ -123,15 +211,18 @@ func Subscriptions() ui.Node {
 				cancelledDate = pr.FormatDate(cancelledOn)
 			}
 			return ui.CreateElement(SubscriptionRow, subscriptionRowProps{
-				Sub:         s,
-				Base:        base,
-				NextDate:    pr.FormatDate(s.NextRenewal),
-				Cancelled:   isCancelled,
-				CancelledOn: cancelledDate,
-				OnRemind:    remind,
-				OnDrill:     viewCharges,
-				OnCancel:    doCancel,
-				OnUncancel:  doUncancel,
+				Sub:            s,
+				Base:           base,
+				NextDate:       pr.FormatDate(s.NextRenewal),
+				Cancelled:      isCancelled,
+				CancelledOn:    cancelledDate,
+				Selected:       sel[s.Name],
+				NeedsReview:    !isCancelled && subscriptions.NeedsReview(s, now),
+				OnRemind:       remind,
+				OnDrill:        viewCharges,
+				OnCancel:       doCancel,
+				OnUncancel:     doUncancel,
+				OnToggleSelect: toggle,
 			})
 		},
 	)
@@ -221,6 +312,7 @@ func Subscriptions() ui.Node {
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("nav.subscriptions")),
 			body,
+			savingsSummary,
 			If(len(subs) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 				Button(css.Class("btn"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")), OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
@@ -250,16 +342,20 @@ func Subscriptions() ui.Node {
 	)
 }
 
+// subscriptionRowProps holds the props for a single subscription row.
 type subscriptionRowProps struct {
-	Sub         subscriptions.Subscription
-	Base        string
-	NextDate    string // pre-formatted next-renewal date
-	Cancelled   bool
-	CancelledOn string // pre-formatted cancellation date, set when Cancelled is true
-	OnRemind    func(subscriptions.Subscription)
-	OnDrill     func(payee string) // open Transactions searched for this subscription's payee
-	OnCancel    func(name string)
-	OnUncancel  func(name string)
+	Sub            subscriptions.Subscription
+	Base           string
+	NextDate       string // pre-formatted next-renewal date
+	Cancelled      bool
+	CancelledOn    string // pre-formatted cancellation date, set when Cancelled is true
+	Selected       bool   // whether the row's cancel-candidate checkbox is checked
+	NeedsReview    bool   // whether the subscription hasn't been charged in 2+ cadence intervals
+	OnRemind       func(subscriptions.Subscription)
+	OnDrill        func(payee string) // open Transactions searched for this subscription's payee
+	OnCancel       func(name string)
+	OnUncancel     func(name string)
+	OnToggleSelect func(name string) // toggle cancel-candidate selection for this row
 }
 
 // SubscriptionRow renders one detected subscription with cancel/uncancel and
@@ -267,6 +363,12 @@ type subscriptionRowProps struct {
 // On*-hooks-in-loops rule), so the list renders many rows without reordering
 // hooks. A cancelled subscription shows its cancel date and an Undo action
 // instead of the standard remind button.
+//
+// When NeedsReview is true a quiet "worth reviewing?" badge appears on the row —
+// a low-pressure cue that the subscription hasn't been charged recently.
+//
+// The cancel-candidate checkbox (data-testid="sub-cancel-select-<slug>") lets the
+// user build up a selection; the parent renders the savings summary + bulk action.
 func SubscriptionRow(props subscriptionRowProps) ui.Node {
 	s := props.Sub
 	remind := ui.UseEvent(Prevent(func() { props.OnRemind(s) }))
@@ -285,8 +387,26 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			props.OnUncancel(s.Name)
 		}
 	}))
+	toggleSelect := ui.UseEvent(Prevent(func() {
+		if props.OnToggleSelect != nil {
+			props.OnToggleSelect(s.Name)
+		}
+	}))
 
+	slug := nameSlug(s.Name)
 	meta := subscriptionCadenceLabel(s.Cadence) + " · " + uistate.T("subs.next", props.NextDate)
+
+	// Quiet "worth reviewing?" nudge — only shown for non-cancelled rows where the
+	// last charge is suspiciously old (2+ cadence intervals). Not shown for
+	// cancelled subs (the user already knows they cancelled it).
+	reviewBadge := Fragment()
+	if props.NeedsReview {
+		reviewBadge = Span(
+			css.Class(tw.Fold(tw.TextXs, tw.FontMedium)+" review-nudge"),
+			Attr("title", uistate.T("subs.needsReviewTitle")),
+			uistate.T("subs.needsReview"),
+		)
+	}
 
 	var statusArea ui.Node
 	if props.Cancelled {
@@ -322,13 +442,30 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 		)
 	}
 
+	// Cancel-candidate checkbox. Not shown for already-cancelled subs (they are
+	// already tracked in the cancellations store; selecting them would be a no-op).
+	var selectCheckbox ui.Node
+	if !props.Cancelled {
+		selectCheckbox = Input(
+			Type("checkbox"),
+			Attr("aria-label", uistate.T("subs.selectCancel")+" "+s.Name),
+			Attr("data-testid", "sub-cancel-select-"+slug),
+			Checked(props.Selected),
+			OnClick(toggleSelect),
+		)
+	} else {
+		selectCheckbox = Fragment()
+	}
+
 	return Div(css.Class("row"),
+		selectCheckbox,
 		Div(css.Class("row-main"),
 			Button(css.Class("row-desc sub-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
 				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
 				s.Name),
 			Span(css.Class("row-meta"), meta),
 			statusArea,
+			reviewBadge,
 		),
 		// Only show the normalized "/mo" figure when it differs from the actual
 		// charge (i.e. weekly/yearly). For monthly subs they're identical, so
