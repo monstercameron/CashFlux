@@ -35,6 +35,14 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/planning", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("h1, h2", { timeout: 60000 });
+  // The seeded sample already ships a payoff baseline (so the strip reads "Paid off …"
+  // with a Reset). Reset it first so we exercise the start-tracking flow from scratch.
+  const reset = page.getByText("Reset progress", { exact: false });
+  if ((await reset.count()) > 0) {
+    await reset.first().click();
+    await page.waitForTimeout(300);
+  }
   await page.waitForSelector("text=Start tracking progress", { timeout: 60000 });
 
   await page.getByText("Start tracking progress", { exact: false }).first().click();

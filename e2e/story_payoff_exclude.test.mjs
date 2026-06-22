@@ -10,7 +10,7 @@ const require = createRequire(path.join(__dirname, "..", ".tools", "package.json
 const { chromium } = require("playwright");
 
 const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
-const DEBT = "Auto Loan"; // a seeded non-mortgage liability, included by default
+const DEBT = "Rewards Credit Card"; // a seeded non-mortgage liability, included by default
 
 const browser = await chromium.launch({ headless: true });
 const fail = (m) => {
