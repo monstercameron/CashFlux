@@ -20,7 +20,36 @@ const (
 // each boot, so preferences persist here, not in the store). Screens read it to
 // format dates; the settings form writes it back via PersistPrefs.
 func UsePrefs() state.Atom[prefs.Prefs] {
-	return state.UseAtom(prefsAtomID, loadPrefs())
+	a := state.UseAtom(prefsAtomID, loadPrefs())
+	capturedPrefs = a
+	prefsCaptured = true
+	return a
+}
+
+var (
+	capturedPrefs state.Atom[prefs.Prefs]
+	prefsCaptured bool
+)
+
+// CurrentPrefs returns the live preferences from the captured atom, for global
+// callbacks (keyboard shortcuts / command palette) that can't call the UsePrefs
+// hook. Falls back to the persisted prefs before the first render.
+func CurrentPrefs() prefs.Prefs {
+	if prefsCaptured {
+		return capturedPrefs.Get()
+	}
+	return loadPrefs()
+}
+
+// SetPrefs writes preferences from outside a component render and persists +
+// applies them. Routes through the captured atom so the change re-renders
+// subscribers; a hook call from such a callback would panic.
+func SetPrefs(p prefs.Prefs) {
+	if prefsCaptured {
+		capturedPrefs.Set(p)
+	}
+	PersistPrefs(p)
+	ApplyPrefs(p)
 }
 
 // PersistPrefs saves preferences to localStorage. Call it after writing the atom

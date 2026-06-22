@@ -114,7 +114,7 @@ const parseDashNetWorth = (text) => {
 
 try {
   const page = await browser.newPage();
-  page.setViewportSize({ width: 1280, height: 900 });
+  page.setViewportSize({ width: 1280, height: 1200 }); // tall enough to see Import button on /documents
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
 
@@ -249,34 +249,46 @@ try {
     fail(`Step 3c — No textarea found on /documents`);
   }
 
-  // Click the "Import" button (near the CSV textarea, not "Parse statement")
-  const importBtn = await page.$('button:has-text("Import")');
+  // Click the "Import" submit button (type="submit", not the nav toggle).
+  // The sidebar has a nav group button labeled "DATA & IMPORT"; we must select
+  // only the form submit button to avoid clicking the wrong element.
+  const importBtn = await page.$('button[type="submit"]:has-text("Import")');
   if (importBtn) {
+    await importBtn.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
     await importBtn.click();
     await page.waitForTimeout(1500);
-    pass(`Step 3d — "Import" button clicked`);
+    pass(`Step 3d — "Import" submit button clicked`);
   } else {
-    fail(`Step 3d — "Import" button not found on /documents`);
+    fail(`Step 3d — "Import" submit button (type=submit) not found on /documents`);
   }
 
   await page.screenshot({ path: SS("l44_step3_documents_after_import.png") });
   const bodyDocsAfter = await page.evaluate(() => document.body.innerText);
 
-  // Check for import success/count message
-  const importMsg = bodyDocsAfter.match(/imported?\s+(\d+)\s+(transaction|row)|(\d+)\s+(transaction|row)\s+imported?/i);
+  // Check for import success message. The Documents screen renders the result
+  // as a <p class="muted"> with text "Imported N transactions." (i18n key documents.importedCsv).
+  // We also check for the message via a DOM query in case the body text regex misses it.
+  const importResultMsg = await page.evaluate(() => {
+    const muteEls = document.querySelectorAll("p.muted, p[class*='muted'], .msg, [class*='msg']");
+    return Array.from(muteEls).map(el => el.textContent?.trim()).filter(Boolean).join(" | ");
+  });
+  console.log(`Import result message: "${importResultMsg}"`);
+
+  const importMsg = importResultMsg.match(/Imported\s+(\d+)/i) || bodyDocsAfter.match(/Imported\s+(\d+)\s+(transaction|row)/i);
   if (importMsg) {
-    const cnt = parseInt(importMsg[1] || importMsg[3]);
+    const cnt = parseInt(importMsg[1]);
     if (cnt >= 4) {
       pass(`Step 3e — Import succeeded: ${cnt} transactions imported`);
     } else if (cnt > 0) {
-      maybe(`Step 3e — Import returned ${cnt} transactions (expected 5; header row may have been counted or some skipped)`);
+      maybe(`Step 3e — Import returned ${cnt} transactions (expected 5; some may have been skipped)`);
     } else {
       fail(`Step 3e — Import count is 0`);
     }
-  } else if (/error|fail|invalid/i.test(bodyDocsAfter)) {
-    fail(`Step 3e — Import returned an error message`);
+  } else if (/error|fail|invalid/i.test(importResultMsg + bodyDocsAfter)) {
+    fail(`Step 3e — Import returned an error: "${importResultMsg}"`);
   } else {
-    maybe(`Step 3e — Import message not in expected format; checking /transactions for evidence`);
+    maybe(`Step 3e — Import message not found; msg: "${importResultMsg.slice(0, 100)}"; checking /transactions for evidence`);
   }
 
   // Dedupe probe: opening balance is $1,000 — not in the CSV, so no dedupe expected here
@@ -331,11 +343,14 @@ try {
     maybe(`Step 4c — SUPERMARKET row not visible to check account assignment`);
   }
 
-  // Money conservation: check all 5 amounts appear somewhere in transactions
+  // Money conservation: check all 5 amounts appear somewhere in transactions.
+  // Amounts may appear as "$95.00" or "($95.00)" (parenthesized for expenses).
   let amountsFound = 0;
   for (const amt of EXPECTED_AMOUNTS) {
     if (bodyTxn.includes(amt.toFixed(2))) amountsFound++;
   }
+  // If some weren't found, they might be displayed as whole numbers (147.50 → $147.50)
+  // The check above already handles exact decimal match.
   if (amountsFound === 5) {
     pass(`Step 4d — INVARIANT B (MONEY CONSERVATION): All 5 imported amounts present in /transactions (no cents lost)`);
   } else if (amountsFound > 0) {
@@ -422,30 +437,38 @@ try {
     fail(`Step 5b — Could not open "Update balance" for L44 Omar Checking`);
   }
 
-  // The reconcile form: should show current balance + a new balance input
-  // From the source: setBal opens an inline edit on the account row, setting editingBal
+  // The reconcile form opens inline: shows "New balance" input + Save/Cancel buttons.
+  // The input has id="acct-setbal-{accountID}" (unique per account row).
+  // We target it by id prefix to avoid matching the "Opening balance" add-account input.
   await page.screenshot({ path: SS("l44_step5_accounts_reconcile_form.png") });
-  const reconcileInput = await page.$('input[type="number"]');
+  const reconcileInput = await page.$('input[id^="acct-setbal-"]');
   if (reconcileInput) {
-    // Clear and fill with the bank's ending figure
-    await reconcileInput.fill("");
     await reconcileInput.fill(RECONCILE_BAL);
-    pass(`Step 5c — Reconcile balance input filled with $${RECONCILE_BAL}`);
+    const reconcileId = await reconcileInput.getAttribute("id");
+    pass(`Step 5c — Reconcile "New balance" input filled with $${RECONCILE_BAL} (id: ${reconcileId})`);
 
-    // Submit
-    const saveBtn = await page.$('button[type="submit"], button:has-text("Save"), button:has-text("Update"), button:has-text("OK"), button:has-text("Set")');
-    if (saveBtn) {
-      await saveBtn.click();
-      await page.waitForTimeout(1000);
-      pass(`Step 5d — Reconcile submitted`);
+    // Submit by clicking the Save button that is a direct sibling within the same form.
+    // The structure is: form > label > input[placeholder="New balance"]
+    //                           form > button[type="submit"] "Save"
+    // We use input.closest("form").querySelector('button[type="submit"]') to find Save,
+    // then dispatch a click on it. This avoids matching unrelated submit buttons.
+    const reconcileSaved = await page.evaluate((inputEl) => {
+      const form = inputEl.closest("form");
+      if (!form) return "NO_FORM";
+      const saveBtn = form.querySelector('button[type="submit"]');
+      if (!saveBtn) return "NO_SAVE_BTN";
+      saveBtn.click();
+      return saveBtn.textContent?.trim() || "CLICKED";
+    }, reconcileInput);
+    console.log(`Reconcile save result: "${reconcileSaved}"`);
+    await page.waitForTimeout(1200);
+    if (reconcileSaved && reconcileSaved !== "NO_FORM" && reconcileSaved !== "NO_SAVE_BTN") {
+      pass(`Step 5d — Reconcile Save clicked: "${reconcileSaved}"`);
     } else {
-      // Try pressing Enter on the input
-      await reconcileInput.press("Enter");
-      await page.waitForTimeout(800);
-      maybe(`Step 5d — No explicit Save button; submitted via Enter`);
+      fail(`Step 5d — Could not click reconcile Save: ${reconcileSaved}`);
     }
   } else {
-    fail(`Step 5c — No number input found after clicking "Update balance"`);
+    fail(`Step 5c — "New balance" input not found after clicking "Update balance"`);
   }
 
   await page.screenshot({ path: SS("l44_step5_accounts_after_reconcile.png") });

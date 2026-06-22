@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Command-palette and keyboard actions no longer crash the app.** Running the "New transaction" command,
+  toggling the theme or sidebar, or pressing Alt+N called framework hooks (`UseQuickAdd`/`UseRailCollapsed`/
+  `UsePrefs`) from inside a JS event callback — outside any component render — which panicked the whole wasm
+  app (`GoUseAtom called outside component context`). These now route through captured-atom setters
+  (`SetQuickAdd`/`ToggleRailCollapsed`/`SetPrefs`), the same pattern as the toast notice. New e2e
+  `palette_toggle_action_check.mjs` covers Ctrl/⌘+K open/close/Escape toggling and that direct actions
+  actually fire (quick-add opens, sidebar collapses).
+
 ### Added
 - **Command palette jumps to your data (L14).** The Ctrl/⌘-K command palette now indexes your own accounts,
   goals, and budgets by name — type "Everyday Checking" and run it to jump straight to that screen — instead of

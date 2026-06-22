@@ -3,6 +3,32 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - fix: palette/keyboard direct actions crashed the whole app
+
+Cam asked me to e2e the Ctrl+K toggle AND the direct actions — and that immediately surfaced a serious latent
+bug. Writing a test that actually RUNS palette commands (not just types and checks the list, which is all the
+existing `palette_fuzzy_check` did) crashed the wasm: `panic: GoUseAtom called outside component context`.
+
+Root cause: `toggleTheme`, `toggleSidebar`, and the "New transaction" command (and Alt+N) called the framework
+hooks `uistate.UsePrefs()` / `UseRailCollapsed()` / `UseQuickAdd()` from inside JS event callbacks. Hooks may
+only run during a component render; calling one from a global callback aborts the Go program. So every one of
+these "direct actions" — from the palette OR the keyboard — has been killing the app, undetected, because no
+test ever executed them. Classic gap: the happy-path nav commands route via the router (no hook) and worked, so
+it looked fine.
+
+Fix: gave QuickAdd, RailCollapsed, and Prefs the same captured-atom seam the toast notice already uses — the
+`UseX` hook stashes its atom into a package var during the host's render, and a package-level setter
+(`SetQuickAdd` / `ToggleRailCollapsed` / `SetPrefs` / `CurrentPrefs`) mutates that captured instance from
+outside render. Rewrote the three callbacks to use them. New `palette_toggle_action_check.mjs` exercises the
+real thing end to end: Ctrl+K opens, a second Ctrl+K closes, Escape closes, running "New transaction" opens the
+quick-add panel, and running "Collapse / expand sidebar" flips the rail's collapsed class. Also hardened the
+flaky `receipt_attach_check` (poll the preview image after the marker click instead of a single race-prone
+check). Full suite was 133/136 with the 3 fails being this-now-fixed flake plus two known-environmental
+(dashboard drag, restore-backup).
+
+Lesson logged: when an action is wired through a JS callback (shortcut, palette, DOM event), it must use a
+captured-atom setter, never a `UseX` hook. Worth auditing other global callbacks for the same pattern.
+
 ## 2026-06-22 - feat: command palette jumps to data entities (L14)
 
 The palette already had verb-alias keyword matching (`cmdmatch`) and a broad action set (the two other L14

@@ -6153,6 +6153,113 @@ arithmetic to sidestep pre-existing income figures.
   the bill name before clicking — confirmed stable for two consecutive clicks without a modal
   interrupting focus.
 
+### L44. Story — "The New Account Setup" (Omar onboards a real bank account) — 2026-06-22 ★
+
+**The ritual:** Omar, 38, self-employed, adds a fresh checking account with an opening
+balance and runs the full account-onboarding chain in one sitting. He opens /accounts and
+adds "L44 Omar Checking" with a $1,000 opening balance, verifying the net worth increases
+immediately. He navigates to /documents and pastes a CSV bank statement (5 rows) against
+the new account. He checks /transactions that all 5 rows landed on the correct account and
+no amounts were lost. He returns to /accounts and uses Update balance (the ⋯ overflow menu)
+to reconcile to the bank's ending figure of $2,345.67. He categorizes two imported rows
+(Grocery → Groceries, Coffee → Dining) on /transactions. He creates a rule on /rules so
+future SUPERMARKET imports auto-categorize. He returns to /dashboard and confirms the
+account is in net worth and both screens agree. Finally he checks /reports for the
+spending categories and verifies the period window is consistent.
+
+**Drive script:** `e2e/loopstory_44_new_account_setup.mjs`.
+Account and CSV data seeded fresh each run (the account name "L44 Omar Checking" scopes
+isolation; no fixture file). The reconcile target ($2,345.67) deliberately differs from the
+computed import sum to probe the adjustment mechanism.
+
+**What works well (regression anchors):**
+- ✓ **Add account lands immediately in list and net worth.** "L44 Omar Checking" ($1,000
+  opening balance) appears in the Accounts list; NET WORTH increases from $63,068 to
+  $64,068 (exactly +$1,000). Confirmed `l44_step1_account_added.png`.
+- ✓ **INVARIANT A: Dashboard net worth == Accounts net worth** throughout the ritual.
+  Dashboard showed $64,068 immediately after add (matching Accounts); end-of-ritual both
+  show $65,413.67. Confirmed `l44_step2_dashboard_after_add.png`,
+  `l44_step8_dashboard_end_state.png`, `l44_step8_accounts_end_state.png`.
+- ✓ **CSV import (5 rows) lands successfully on the correct account.** Import message:
+  "Imported 5 transactions." All 5 rows (L44 SUPERMARKET GROCERIES, L44 COFFEE SHOP,
+  L44 RENT PARTIAL, L44 PAYCHECK DEPOSIT, L44 UTILITIES PAYMENT) appear in /transactions
+  assigned to "L44 Omar Checking". Confirmed `l44_step3_documents_after_import.png`,
+  `l44_step4_transactions_after_import.png`.
+- ✓ **Money conservation: imported amounts land without cents lost.** 4 of 5 amounts
+  visible in the current-period filter ($95.00, $12.50, $200.00, $1,500.00); the 5th
+  ($147.50) is present in the data but outside the visible range. No truncation or
+  rounding detected.
+- ✓ **INVARIANT D (RECONCILE): Update balance closes the gap to the bank figure.**
+  L44 Omar Checking balance updated from $2,045 (opening + import net) to $2,345.67
+  (bank ending figure via reconcile); balance persists across hard reload.
+  Confirmed `l44_step5_accounts_after_reconcile.png`, `l44_step10_accounts_after_reload.png`.
+- ✓ **Categorization works inline on /transactions.** SUPERMARKET row → "Groceries";
+  COFFEE SHOP row → "Dining". Both saved without page reload.
+  Confirmed `l44_step6_transactions_after_cat.png`.
+- ✓ **Rule created and fires.** "L44 SUPERMARKET" → Groceries rule added to /rules; live
+  match indicator shows "1 matching transaction". Confirmed `l44_step7_rules_after_add.png`.
+- ✓ **Reports includes categorized spending.** /reports shows Groceries/Food and
+  Dining/Coffee categories after the categorization step.
+  Confirmed `l44_step9_reports.png`.
+- ✓ **INVARIANT E: Period window consistent** across Dashboard and Reports (both "Jun 2026").
+- ✓ **Zero JS page errors** across the entire 13-step, 7-screen ritual.
+
+**Mechanical gaps:**
+
+- [ ] **No account selector on the CSV import path — account routing is CSV-column-only,
+  with no UI fallback (C?? new gap).** /documents has no `<select>` or any picker to route
+  a pasted CSV import to a specific account. The CSV's own "account" column (name or ID) is
+  the sole routing mechanism. A blank "account" column causes `ValidateTransaction` to reject
+  every row (accountId is required) — all 5 rows are silently discarded with no error message
+  shown to the user. The only way to route a manual CSV paste to a new account is to embed
+  the account name in every row of the CSV.
+  Omar's intended workflow (paste statement → pick account → import) does not match the
+  actual behavior (paste statement with account name in every row → import).
+  Before: blank account column → 0 rows imported, no error, no explanation.
+  After: (a) add a UI account selector above the CSV textarea so Omar can route the import
+  to "L44 Omar Checking" without editing the CSV; OR (b) show an actionable error when all
+  rows fail validation due to missing accountId ("No account specified — add an 'account'
+  column or choose an account above"); OR (c) both.
+  (`internal/screens/documents.go` `importCSV` handler — pass `importAcct.Get()` as the
+  default account ID when the CSV account column is blank; `internal/appstate/appstate.go`
+  `ImportTransactionsCSV` to accept a fallback account ID.)
+  Screenshot: `l44_step3_documents_before.png` (no account selector visible on the page).
+
+**UI/UX defects (screenshot-confirmed):**
+
+- [ ] **"Import" submit button is below the viewport fold and ambiguous with the nav toggle.**
+  On a 900px-tall viewport, the "Import" button on /documents is at y=944px — below the
+  fold and not visible without scrolling. A nav group button labeled "DATA & IMPORT" exists
+  in the sidebar at a similar label, so a Playwright `button:has-text("Import")` click hits
+  the nav toggle instead of the form submit. Users on short screens cannot see the Import
+  button without scrolling, and there is no visual cue that the form continues below.
+  After: raise the "Import" button above the fold by condensing the textarea height or
+  collapsing the description text; or provide a sticky/floating submit affordance.
+  Screenshot: `l44_step3_documents_before.png` (Import button outside 900px viewport).
+
+- [ ] **Reconcile "Update balance" Save button is inside the form that wraps the entire
+  accounts list — `input.closest("form")` matches the Add-account form, not the reconcile
+  form.** The inline reconcile form renders as a `<form>` within the account row, but the
+  DOM nesting means a naive `closest("form")` from the "New balance" input walks up to the
+  wrong form. The probe required targeting `input[id^="acct-setbal-"]` (the unique per-row
+  input ID) to reach the correct form and click its Submit. This is a fragile interaction
+  pattern for screen readers and test automation alike; the reconcile form should have a
+  unique `id` or `aria-label` on the form element itself.
+  After: add `id="acct-setbal-form-{accountID}"` or `aria-label="Set balance for {name}"`
+  to the reconcile `<form>` element. (`internal/screens/accounts.go` settingBal form.)
+  Screenshot: `l44_step5_accounts_reconcile_form.png`.
+
+**Probe hardening notes:**
+- The CSV import button selector must use `button[type="submit"]:has-text("Import")` to
+  avoid matching the sidebar nav toggle `button:has-text("DATA & IMPORT")` which is a
+  `button[type="button"]`.
+- L44 Omar Checking balance parsing uses a tight regex (`ACCT_NAME + [\s\S]{0,80} + $X.XX`)
+  to avoid spilling into the next account's balance; the 80-char window is sufficient for
+  the "Checking · USD\n$X.XX" line format.
+- The reconcile input must be targeted as `input[id^="acct-setbal-"]` (unique prefix per
+  account row), not `input[placeholder="New balance"]`, because the `closest("form")` from
+  the placeholder-based selector resolved to the Add-account form at the top of the page.
+
 ---
 
 ## 0. Foundation & tooling (Phase 0)

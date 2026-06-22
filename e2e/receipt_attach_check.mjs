@@ -83,10 +83,15 @@ try {
   const marker = page.locator('[data-testid="txn-attach-marker"]').first();
   await marker.waitFor({ state: "visible", timeout: 10000 });
 
-  // Clicking it opens an image preview.
-  await marker.click();
+  // Clicking it opens an image preview. Poll for the overlay image rather than
+  // checking once — the wasm re-render + data-URL decode can lag the click.
   const previewImg = page.locator('[role="dialog"] img');
-  const seen = await previewImg.first().isVisible().catch(() => false);
+  let seen = false;
+  for (let i = 0; i < 15 && !seen; i++) {
+    await marker.click();
+    seen = await previewImg.first().isVisible().catch(() => false);
+    if (!seen) await page.waitForTimeout(300);
+  }
   if (!seen) fail("receipt preview image not shown after clicking the paperclip");
 
   // The Artifacts screen lists the transaction reference.

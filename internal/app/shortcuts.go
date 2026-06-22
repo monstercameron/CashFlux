@@ -92,7 +92,7 @@ func wireKeyboardShortcuts() {
 		// Alt+N opens the quick-add transaction panel.
 		if code == "KeyN" {
 			e.Call("preventDefault")
-			uistate.UseQuickAdd().Set(true)
+			uistate.SetQuickAdd(true)
 			return nil
 		}
 		if len(code) != 6 || code[:5] != "Digit" {
@@ -270,7 +270,7 @@ func buildPaletteCommands() []paletteCmd {
 	add(toolsNav())
 	add(systemNav())
 	cmds = append(cmds,
-		paletteCmd{label: uistate.T("addmenu.transaction"), keywords: []string{"add", "new", "create", "transaction", "expense", "income", "spend"}, run: func() { uistate.UseQuickAdd().Set(true) }},
+		paletteCmd{label: uistate.T("addmenu.transaction"), keywords: []string{"add", "new", "create", "transaction", "expense", "income", "spend"}, run: func() { uistate.SetQuickAdd(true) }},
 		paletteCmd{label: uistate.T("cmd.toggleTheme"), keywords: []string{"theme", "dark", "light", "appearance"}, run: toggleTheme},
 		paletteCmd{label: uistate.T("cmd.toggleSidebar"), keywords: []string{"sidebar", "rail", "collapse", "expand"}, run: toggleSidebar},
 		paletteCmd{label: uistate.T("shortcuts.title"), keywords: []string{"help", "keyboard", "shortcuts", "keys"}, run: toggleHelpOverlay},
@@ -383,24 +383,22 @@ func entityJumpCommands() []paletteCmd {
 // toggleTheme flips between light and dark themes (anything non-light becomes
 // dark), persisting and applying the choice immediately.
 func toggleTheme() {
-	a := uistate.UsePrefs()
-	p := a.Get()
+	// Runs from a JS callback (palette/shortcut), not a component render, so it
+	// must use the captured-atom setters — calling the UsePrefs hook here panics.
+	p := uistate.CurrentPrefs()
 	if p.Theme == prefs.ThemeLight {
 		p.Theme = prefs.ThemeDark
 	} else {
 		p.Theme = prefs.ThemeLight
 	}
-	a.Set(p)
-	uistate.PersistPrefs(p)
-	uistate.ApplyPrefs(p)
+	uistate.SetPrefs(p)
 }
 
 // toggleSidebar collapses or expands the left rail, persisting the choice.
 func toggleSidebar() {
-	a := uistate.UseRailCollapsed()
-	v := !a.Get()
-	a.Set(v)
-	uistate.PersistRailCollapsed(v)
+	// Global callback (not a render) — route through the captured-atom toggle so
+	// the UseRailCollapsed hook isn't called outside a component context.
+	uistate.ToggleRailCollapsed()
 }
 
 // toggleCommandPalette shows or hides the command palette, building it on first
