@@ -69,8 +69,28 @@ func Transactions() ui.Node {
 	desc := ui.UseState("")
 	amountStr := ui.UseState("")
 	kind := ui.UseState("Expense")
+	// Default the add form to an everyday spending account (checking/cash), not
+	// whatever sorts first — an investment/retirement account is a poor default for
+	// logging a purchase (L39).
 	defaultAcc := ""
-	if len(accounts) > 0 {
+	for _, a := range accounts {
+		if a.Archived {
+			continue
+		}
+		if a.Type == domain.TypeChecking || a.Type == domain.TypeCash {
+			defaultAcc = a.ID
+			break
+		}
+	}
+	if defaultAcc == "" {
+		for _, a := range accounts {
+			if !a.Archived && a.Class == domain.ClassAsset {
+				defaultAcc = a.ID
+				break
+			}
+		}
+	}
+	if defaultAcc == "" && len(accounts) > 0 {
 		defaultAcc = accounts[0].ID
 	}
 	accID := ui.UseState(defaultAcc)

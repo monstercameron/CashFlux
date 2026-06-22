@@ -271,8 +271,8 @@ try {
     pass(`Step 1 — submitted "${txn.desc}" ${txn.amount}`);
   }
 
-  // Verify all 4 seeded in dataset
-  await page.waitForTimeout(800);
+  // Verify all 4 seeded in dataset — wait for autosave ticker
+  await page.waitForTimeout(3000);
   const seededTxns = await txnsByDescPrefix(page, "L57");
   const nonAdjSeeded = seededTxns.filter((t) => !t.desc.includes("adjustment") && !t.desc.includes("Balance"));
   console.log(`  INFO  Seeded ${nonAdjSeeded.length} L57 transactions in dataset`);

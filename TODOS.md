@@ -5618,7 +5618,7 @@ common. **Drive script:** `e2e/loopstory_37_accounts_ux.mjs`.
       only when >1 currency is in use), and tuck Return%/Liquidity/Stability/Locked-until/Owner behind a
       **"More options"** expander (collapsed by default, sane defaults). (`internal/screens/accounts.go`
       add-form → essential block + `If(showAdvanced)` + a toggle state.)
-- [ ] **Field labels use finance jargon** — "**Liquidity (1–5)**", "**Stability (1–5)**", "**Return %**"
+- [x] **Field labels use finance jargon** — "**Liquidity (1–5)**", "**Stability (1–5)**", "**Return %**"
       are allocation-modeling inputs that a normal user can't decode (violates CLAUDE.md "plain, friendly
       English, no jargon"). Even once disclosed, relabel with plain English + a one-line hint, e.g.
       Liquidity → "How fast can you get this money? (1 locked … 5 instant)". (`accounts.go` labels + the
@@ -5684,7 +5684,7 @@ consistency (ledger → budget spent → dashboard) define whether the app feels
   oldest row rotates off the first page, not a render bug.
 
 **God-tier UX gaps (verified):**
-- [ ] **Default account is "401(k) / Brokerage"** — an investment/retirement account — not an everyday
+- [x] **Default account is "401(k) / Brokerage"** — an investment/retirement account — not an everyday
   checking account. Every coffee and grocery purchase defaults to an investment account, which is
   semantically wrong and will confuse users who don't notice before submitting.
   Before: "Add transaction" form defaults Account to `401(k) / Brokerage`.
@@ -7533,6 +7533,79 @@ $920/month outflow seeded in this story. This is the same gap as L54 ⚠ SECOND 
 **Resolved backlog items from this sweep:**
 - **C37** (workflow Save does not persist) — **CONFIRMED FIXED in L52** (2026-06-22): L52 verified that a workflow saves, persists across reload, and fires correctly on a matching transaction. The bug described in C37 no longer reproduces.
 - **C57** (Bills "annual" figure suspect) — **CLEARED in L49** (2026-06-22): L49 confirmed that `bills.AnnualAmounts` uses cadence-normalized amounts, not a raw `total * 12`. The correctness concern in C57 is resolved by the shipped `appstate.RecordBillPayment` + cadence-correct annual calculation.
+
+---
+
+### L57. Story — "Reconciliation Day" (Omar) — 2026-06-22 ★
+
+**The ritual** — Omar opens his checking account (L57 Omar Checking, $1,000.00 opening balance),
+seeds four transactions (-$50, -$30, +$200, -$10; current balance = $710), then marks them cleared
+one by one in /transactions while watching the cleared balance track only the cleared subset. He then
+uses the "Update balance" affordance to lock in the bank's ending figure of $1,115.00. He expects:
+(a) an explicit adjustment transaction in the ledger (not a silent overwrite of the balance),
+(b) the adjustment to post to /transactions, net worth, and /reports,
+(c) mathematical precision — adjustment == bank_figure − prior_current_balance, to the cent.
+
+**Drive script** — `e2e/loopstory_57_reconciliation_day.mjs`
+
+**What already works well (regression anchors)** ✓
+- **ADJUSTMENT_EXISTS** confirmed: `setBalance` in `internal/screens/accounts.go` calls
+  `ledger.AdjustmentToTarget(currentBal, target)` and posts a `domain.Transaction` with
+  `Desc: "Balance adjustment"`, `Cleared: true`. No silent overwrite.
+- **ADJUSTMENT_MATH** correct to the cent: bank $1,115.00 − current $710.00 = **+$405.00**
+  (40,500 minor units). Verified in dataset.
+- **LEDGER_COUPLING** confirmed: "Balance adjustment" appears in /transactions list (text-filtered).
+- **CURRENT_FIXED** confirmed: current balance does not change when marking individual transactions
+  cleared — it only changes after the adjustment is posted.
+- **NET_WORTH_UPDATED**: /dashboard net worth reflects the reconciled balance.
+- **REPORTS_LOADS**: /reports loads without crash.
+- Reconcile confirmation toast fires ("Updated X to $Y") — not a silent success.
+- `ledger.AdjustmentToTarget` unit-tested (`TestAdjustmentToTarget`). ✓
+
+**⚠️ No silent-overwrite / no decoupled-adjustment** (clean pass on L56 Thread A)
+The reconcile mechanism is sound: it posts a real ledger entry, does not force-write the opening
+balance, and the adjustment flows into net worth. This is a Thread A regression anchor.
+
+**Mechanical gaps** (bottom-up: model → logic → UI)
+- [ ] **No delta preview before saving** (L30 gap, still open): The "Update balance" form shows only
+      a "New balance" field; it does not display "current $710.00 → new $1,115.00 = **+$405.00
+      adjustment**" before the user hits Save. The delta is computed in `ledger.AdjustmentToTarget`
+      and could be surfaced inline. Bottom-up: thread the current balance into the form and render the
+      computed delta.
+- [ ] **Adjustment is uncategorized** (L30 gap, still open): The adjustment transaction lands as
+      generic "Balance adjustment" with no category, skewing spending/reports. Add an optional
+      category/note field to the Update Balance form; pass it to the adjustment txn. Bottom-up: extend
+      the `setBalance` handler signature; add a category selector to the inline form.
+- [ ] **No guided statement reconciliation (tick-off mode)** (L30 gap, still open): True reconcile =
+      check off each txn on the bank statement until cleared-balance == statement balance (no
+      adjustment needed). The pieces exist (`Cleared` flag, `ClearedBalance`), but there is no
+      "Reconcile to statement" UI mode. Bottom-up: `reconcile.Diff(clearedTxns, statementBalance)`
+      (tested) → guided UI.
+
+**UI/UX defects** (screenshot-confirmed)
+- `e2e/l57_01_accounts_initial.png` — baseline accounts + cleared balance displayed.
+- `e2e/l57_02_cleared_first.png` — after clearing transaction 1 (toggle).
+- `e2e/l57_03_cleared_all.png` — after clearing all (some toggle confusion — see probe note).
+- `e2e/l57_04_after_reconcile_accts.png` — accounts page after reconcile.
+- `e2e/l57_04_after_reconcile_txn_list.png` — "Balance adjustment" visible in /transactions.
+- `e2e/l57_05_dashboard.png` — dashboard net worth reflects reconciled balance.
+- `e2e/l57_06_reports.png` — reports page loads cleanly.
+
+**Accessibility gap (new, screenshot-deferred)**
+- The per-row "Toggle reconciled (cleared) status" button does not reliably expose `aria-pressed`
+  in Playwright (all buttons returned `aria-pressed=false` even for cleared transactions during the
+  probe). Either the attribute is not toggled on clear, or it is set via class/visual only. This
+  makes programmatic "is this already cleared?" checks unreliable, and screen-reader users lose the
+  state announcement. Bottom-up: ensure the toggle button sets `aria-pressed="true"` when cleared.
+
+**Probe hardening**
+- Fixed `pushNav` → `goto` for all navigation steps (WASM must be fully mounted before querying DOM).
+- Added 3-second autosave wait after seeding (localStorage ticker lag).
+- Fixed dataset Money struct parsing: `amount.Amount` (capital A) not `amount` (Go JSON serialization
+  of `money.Money` uses exported field names).
+- Fixed `computeCurrentBalance` to handle Money structs and the `accountId` JSON tag.
+- Used `txnsByDescPrefix` + dataset read for balance verification (avoids sample-data text-parse
+  collisions on the Accounts page which has 10+ accounts).
 
 ---
 
