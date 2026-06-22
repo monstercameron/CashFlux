@@ -5978,7 +5978,7 @@ All 28 checks pass; exit code 0.
   (`domain.KindExpense`) in the `add` handler alongside `name.Set("")`.
   (`internal/screens/categories.go` `add` closure.)
 
-- [ ] **Color picker does NOT reset after category add.** The color input retains whatever
+- [x] **Color picker does NOT reset after category add.** The color input retains whatever
   color was last chosen; a new category starts with that color rather than the default
   `#7c83ff`. A user adding several categories without thinking about color will get identical
   colors on all of them, making the Mermaid category chart indistinguishable by color.

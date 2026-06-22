@@ -64,6 +64,7 @@ func Categories() ui.Node {
 		}
 		name.Set("")
 		parentID.Set("")
+		color.Set("#7c83ff") // reset the color picker to the default after add (L42)
 		errMsg.Set("")
 		bump()
 		uistate.PostNotice(uistate.T("categories.addedToast", n), false) // L42 success confirmation
