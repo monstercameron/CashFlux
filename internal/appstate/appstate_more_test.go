@@ -212,7 +212,7 @@ func TestTransactionsCSVAndImport(t *testing.T) {
 	if err := b.PutAccount(domain.Account{ID: "a1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}); err != nil {
 		t.Fatalf("PutAccount(b): %v", err)
 	}
-	n, err := b.ImportTransactionsCSV(csv)
+	n, _, err := b.ImportTransactionsCSV(csv)
 	if err != nil {
 		t.Fatalf("ImportTransactionsCSV: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestTransactionsCSVAndImport(t *testing.T) {
 		t.Fatalf("PutMember(b): %v", err)
 	}
 	reordered := []byte("amount,member,category,account,date,payee,desc,tags,cleared\n-12.34,alex,dining,checking,2026-06-18,Bistro,Dinner,meal;work,true\n")
-	n, err = b.ImportTransactionsCSV(reordered)
+	n, _, err = b.ImportTransactionsCSV(reordered)
 	if err != nil {
 		t.Fatalf("ImportTransactionsCSV reordered: %v", err)
 	}

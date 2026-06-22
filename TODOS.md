@@ -4400,17 +4400,17 @@ consolidated **net worth in her base currency (EUR)** via an FX table she contro
       typo-prone (unknown/lowercase codes silently break conversion). Replace the text input with a
       **searchable currency dropdown** sourced from the known ISO list / the FX-table currencies, with
       validation. Bottom-up:
-  - [ ] **Logic** `internal/currency`: expose a known-currency list (code + name + decimals) and a
+  - [x] **Logic** `internal/currency`: expose a known-currency list (code + name + decimals) and a
         `Valid(code)`; table-test.
-  - [ ] **State/UI** `internal/screens/accounts.go`: swap the currency `Input` (line 238) for a
+  - [x] **State/UI** `internal/screens/accounts.go`: swap the currency `Input` (line 238) for a
         labelled select/searchable picker; reject/flag unknown codes before save.
 - [ ] **FX rates are fully manual with no staleness signal — net worth silently drifts.** Aisha must
       hand-enter and maintain EUR/USD/GBP rates. Add a **last-updated timestamp per rate** + a
       **freshness nudge** when rates are stale (reuse the existing `internal/freshness` concept), and
       optionally an online **"Refresh rates"** action. Bottom-up:
   - [ ] **Model** `internal/domain`/settings: store `UpdatedAt` per FX rate.
-  - [ ] **Logic** `internal/freshness` (or a small `fxfreshness`): "rate is stale after N days" — tested.
-  - [ ] **State/UI**: show "rates updated X days ago" in the FX table + a dashboard nudge → task.
+  - [x] **Logic** `internal/freshness` (or a small `fxfreshness`): "rate is stale after N days" — tested.
+  - [x] **State/UI**: show "rates updated X days ago" in the FX table + a dashboard nudge → task.
 - [ ] **Correctness: net worth with a currency that has NO FX rate must NOT silently miscompute.**
       Determinism/explainability rule. Add a logic test in `internal/currency` / the net-worth
       aggregation for the missing-rate case (account in GBP, no GBP rate): it must **warn / show a
@@ -4439,7 +4439,7 @@ amount to commit, and to **track progress** as balances fall.
 **Gaps (strong logic — the gaps are presentation, scope, and tracking):**
 - [ ] **Show a calendar DEBT-FREE DATE, not just "170 months".** The card shows a month count; the
       story wants "debt-free by Aug 2031" (and a date per debt as each clears). Bottom-up:
-  - [ ] **Logic** `internal/payoff`: add a pure helper turning `Months` (+ a start month) into a target
+  - [x] **Logic** `internal/payoff`: add a pure helper turning `Months` (+ a start month) into a target
         month/date, and expose per-debt clear months from `BuildPlan`; table-test.
   - [ ] **UI** `internal/screens/planning.go`: render the debt-free **date** beside the months, and a
         per-debt "cleared by" date in the order list.
@@ -4452,7 +4452,7 @@ amount to commit, and to **track progress** as balances fall.
       exclude the mortgage. Bottom-up:
   - [ ] **Model/store** `internal/domain`/`internal/store`: a per-account **"include in payoff"** flag
         (default: exclude mortgage-type / long-term loans), persisted + round-tripped.
-  - [ ] **Logic**: the `BuildPlan` caller filters by the flag; test that excluding the mortgage changes
+  - [x] **Logic**: the `BuildPlan` caller filters by the flag; test that excluding the mortgage changes
         months/order as expected.
   - [ ] **UI**: a checkbox per liability in the debt-strategy card ("include in payoff plan").
 - [ ] **Per-debt month-by-month schedule / payoff timeline chart.** Surface which debt the rolling
@@ -4562,16 +4562,16 @@ month?", "Can we afford a $2,000 vacation in August?" — and save the useful an
 - [ ] **Suggested/example questions (beat blank-box paralysis).** There's only a single placeholder
       hint; offer 3–4 **tappable starter questions** that fill the input ("How much did we spend on
       dining last month?", "Where did our money go?", "Can we afford $2,000 in August?"). Bottom-up:
-  - [ ] **Logic** (pure): a small generator that picks starters, ideally tailored to the user's data
+  - [x] **Logic** (pure): a small generator that picks starters, ideally tailored to the user's data
         (their top category / a near-limit budget / an upcoming goal); table-test.
   - [ ] **UI** `internal/screens/insights.go`: clickable chips above the question box.
 - [ ] **Grounded affordability check (dream-big, determinism rule).** "Can we afford $X by [date]?" is
       a *forward-looking* question; today it just goes to the LLM as free text. Back it with the
       existing **`forecast`/`planning`** engine so the answer shows the math (projected surplus by the
       date, minus commitments + goal contributions), not an LLM guess. Bottom-up:
-  - [ ] **Logic** `internal/forecast` (or a new `internal/afford`): `CanAfford(amount, byDate)` →
+  - [x] **Logic** `internal/forecast` (or a new `internal/afford`): `CanAfford(amount, byDate)` →
         {affordable, projectedSurplus, shortfall, impactedGoals}, pure + table-tested.
-  - [ ] **State/UI**: an "Affordability" insight card (or wire the Q&A to call it when it detects an
+  - [x] **State/UI**: an "Affordability" insight card (or wire the Q&A to call it when it detects an
         affordability question) that renders the breakdown; the LLM only narrates the computed result.
 - [ ] **Testability: a stub/mock AI provider behind a flag.** The answer surface, save-as-task, the
       vision receipt import (L3), and Explain-my-month can't be e2e-driven without a live key. Add a
@@ -4608,7 +4608,7 @@ entity counts, opens Settings data section).
     LoadTheme/LoadPrefs`), not part of `ExportJSON`.
   The B28 reminder ("A quick backup keeps your data safe") makes users trust this as a full backup, so
   the omission is a silent trap. Fix bottom-up:
-  - [ ] **Logic** (pure, `internal/store` or a new `internal/backup`): a versioned **full-backup
+  - [x] **Logic** (pure, `internal/store` or a new `internal/backup`): a versioned **full-backup
         envelope** `{schemaVersion, datasets[] (all workspaces), workspaceRegistry, appearance{theme,
         fonts, banner, prefs}, fxRates}`; `MarshalBackup` / `UnmarshalBackup`; **round-trip test**
         (build → marshal → unmarshal → deep-equal).
@@ -4618,7 +4618,7 @@ entity counts, opens Settings data section).
         per-workspace "Export JSON" for sharing a single household) + an import that detects a full
         backup vs a single dataset and restores accordingly. Plain-English copy stating exactly what's
         included.
-  - [ ] **E2E gate** (`e2e/backup_roundtrip_check.mjs`, run by `run-stories.mjs`): seed sample, customize
+  - [x] **E2E gate** (`e2e/backup_roundtrip_check.mjs`, run by `run-stories.mjs`): seed sample, customize
         appearance + add a 2nd workspace, **full-backup → wipe → import**, assert entity counts, the 2nd
         workspace, and the appearance all survive. Make it CI-blocking (lossless round-trip is a
         non-negotiable per CLAUDE.md).
@@ -4655,9 +4655,9 @@ the chain reacts via client-side navigation, NOT a reload).
       ledger; the **Allocate** flow (rank budgets/goals, split an amount) is a separate manual screen she
       has to remember to visit. Offer a low-pressure nudge after an **income** transaction: "Allocate
       this $3,200 to your budgets & goals?" → opens Allocate pre-filled with that amount. Bottom-up:
-  - [ ] **Logic** `internal/allocate`: already supports amount-split + ranking — add/confirm an entry
+  - [x] **Logic** `internal/allocate`: already supports amount-split + ranking — add/confirm an entry
         that takes a single income amount as the pool (tested).
-  - [ ] **State/UI** `internal/screens/transactions.go` + `allocate.go`: a dismissible post-income nudge
+  - [x] **State/UI** `internal/screens/transactions.go` + `allocate.go`: a dismissible post-income nudge
         (friendly, never naggy — per UI rules) that deep-links to Allocate with the amount prefilled.
 
 **Probe note:** rail nav links are `<a href title>` (not `role=link` with a clean name) — drive them by
@@ -4720,9 +4720,9 @@ tree red.*
 - [ ] **Make it actionable: mark-to-cancel + "charged after cancel" alert** (the real money-saver).
   - [ ] **Model/store** `internal/domain`+`internal/store`: a cancellations record (sub identity +
         cancelled-on date), persisted + round-tripped.
-  - [ ] **Logic** `internal/subscriptions`: `ChargedAfterCancel(txns, cancellations)` → flag any charge
+  - [x] **Logic** `internal/subscriptions`: `ChargedAfterCancel(txns, cancellations)` → flag any charge
         matching a cancelled sub after its cancel date; table-tested.
-  - [ ] **State/UI**: a "Mark as cancelled" action per row + a prominent **alert** when a cancelled sub
+  - [x] **State/UI**: a "Mark as cancelled" action per row + a prominent **alert** when a cancelled sub
         bills again ("You cancelled Netflix on Mar 2 but were charged $15.99 on Apr 2").
 - [ ] **"Cancel these → save $X/year" framing.** Multi-select cancel-candidates and show the annual
       savings of cancelling them — turns the annual total into action.
@@ -4760,10 +4760,10 @@ screenshot).
       account's balance day-by-day over the next N days from known **upcoming bills** (due date+amount)
       and **expected income** (recurring paychecks), and flag the first day any account dips below zero
       (or below a user-set **buffer**). Bottom-up:
-  - [ ] **Logic** `internal/forecast` (or new `internal/cashflow`, pure): `DailyBalances(startBal, bills,
+  - [x] **Logic** `internal/forecast` (or new `internal/cashflow`, pure): `DailyBalances(startBal, bills,
         income, days, buffer)` → daily series + first-below-buffer date + the shortfall amount.
         Table-tested: rent-before-payday → negative on day X; buffer threshold; multiple accounts.
-  - [ ] **State/UI**: a **"Cash-flow runway"** card (Bills and/or Dashboard) — a daily balance line with
+  - [x] **State/UI**: a **"Cash-flow runway"** card (Bills and/or Dashboard) — a daily balance line with
         a red marker on the danger day and a plain-English warning. Determinism: show the contributing
         bills/income.
 - [ ] **Warning → suggested action.** On a detected dip: "Checking dips to -$240 on Jul 2 — move $X from
@@ -4904,7 +4904,7 @@ remainder sum exactly to the input).
 - [ ] **"Apply this allocation" — actually commit the dollars.** Today Allocate only *suggests*; nothing
       moves. Zero-based budgeting means the dollars get assigned. Add an **Apply** action that turns the
       plan into real **goal contributions / budget fundings / transfers**. Bottom-up:
-  - [ ] **Logic** `internal/allocate`: a `Plan → []Action` mapping (contribute-to-goal / fund-budget /
+  - [x] **Logic** `internal/allocate`: a `Plan → []Action` mapping (contribute-to-goal / fund-budget /
         transfer-to-account), pure + tested (sum of actions == distributed).
   - [ ] **State** `internal/appstate`: apply all actions atomically (reuse the L1 cover/move + L5 goal
         contribute + L10 income paths); single undo.
@@ -4939,9 +4939,9 @@ renders in the transaction form, probe filter/report by it).
 - [ ] **Filter lists by a custom field.** Dana can tag "Property = Maple St" but can't list all Maple St
       transactions. The transactions filter set (account/category/cleared/tags) has **no custom-field
       predicate**. Bottom-up:
-  - [ ] **Logic** (pure, tested): extend the transaction filter to match custom-field values
+  - [x] **Logic** (pure, tested): extend the transaction filter to match custom-field values
         (equals / one-of for select, range for number, true/false for bool).
-  - [ ] **State/UI** `internal/screens/transactions.go`: a filter control per filterable custom field
+  - [x] **State/UI** `internal/screens/transactions.go`: a filter control per filterable custom field
         (persisted with the other filters, per C-section).
 - [ ] **Report / total by a custom field.** No way to see "spending per Property" or a "Deductible"
       total. Bottom-up: `reports.ByCustomField(txns, fieldKey, rates)` roll-up (pure, table-tested) → a
@@ -5111,7 +5111,7 @@ read before the accent swatch's live update fully propagated, so it compared the
 accent is non-default, confirming persistence works. Fix `loopstory_22` to re-read tokens after a short
 settle before snapshotting, and assert against the swatch's known color.
 
-### L23. Story — "The Decade Importer" (Hector, bulk CSV import resilience) — 2026-06-20 ★
+### L23. Story — "The Decade Importer" (Hector, bulk CSV import resilience) — 2026-06-20 ✅ DONE
 
 **The ritual:** Hector pastes 10 years of transactions — a big, slightly messy CSV (hundreds of rows,
 a few with missing/garbage fields) — and expects valid rows imported with correct totals, bad rows
@@ -5123,19 +5123,19 @@ handled gracefully, and the app to stay snappy.
   dates are each handled fine. ✓
 
 **🔴 CONFIRMED BUG (high value — precisely root-caused):**
-- [ ] **One row with a non-numeric amount ABORTS the ENTIRE CSV import — silently.** Isolated by trials:
+- [x] **One row with a non-numeric amount ABORTS the ENTIRE CSV import — silently.** Isolated by trials:
       `clean=10/10`, **`+1 row "amount=not-a-number" → 0/10 imported`**, `+huge=10/10`, `+empty=10/10`,
       `+missing-date=10/10`. So a single bad **amount** discards *all* valid rows, with **no page error
       and no toast**. This is exactly why a 600-row paste containing one `not-a-number` imported nothing.
       For a "paste my old data" flow this is the worst failure mode. Fix bottom-up:
-  - [ ] **Logic** (the CSV parser — `internal/extract` / the documents import path): parse **row-by-row**;
+  - [x] **Logic** (the CSV parser — `internal/extract` / the documents import path): parse **row-by-row**;
         a bad row is **skipped, not fatal**. Return a structured `{imported:int, skipped:[{line, field,
         reason}]}`. Table-test: bad amount, missing required field, empty line, extra columns, huge value
         — assert valid rows still import and each bad row is reported with its line + reason.
-  - [ ] **State/UI** `internal/screens/documents.go`: after import show **"Imported 598 of 600. 2 skipped:
+  - [x] **State/UI** `internal/screens/documents.go`: after import show **"Imported 598 of 600. 2 skipped:
         line 12 — amount 'not-a-number' isn't a number; line 45 — …"** in plain English, so Hector can fix
         and re-import. (Today there is no success/skip feedback at all.)
-  - [ ] **E2E gate** (`e2e/import_resilience_check.mjs`): valid+malformed CSV → valid rows imported, bad
+  - [x] **E2E gate** (`e2e/import_resilience_check.mjs`): valid+malformed CSV → valid rows imported, bad
         rows reported, no silent loss.
 
 **Unverified (blocked by the bug above):**
@@ -5346,7 +5346,7 @@ for warranty/tax proof — a paperclip on the row, retrieve/preview later, survi
 - [ ] **No per-transaction receipt attachment in the UI.** `transactions.go` has **no attach code** — you
       can't attach an artifact to a specific transaction, there's **no paperclip indicator** on rows, and
       no transaction→receipt navigation. The `Attachments` field is unused by the UI. Build bottom-up:
-  - [ ] **State/UI** `internal/screens/transactions.go`: an **"Attach receipt"** action (add/edit/row)
+  - [x] **State/UI** `internal/screens/transactions.go`: an **"Attach receipt"** action (add/edit/row)
         that uploads via `pickFile` → creates an Artifact → appends an `AttachmentRef`; a **paperclip
         marker** on rows with attachments; click → preview the image.
   - [ ] **Artifacts↔txn linkage** `internal/screens/artifacts.go`: each artifact row shows **which

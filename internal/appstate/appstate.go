@@ -143,18 +143,19 @@ func (a *App) TransactionsCSV(txns []domain.Transaction) ([]byte, error) {
 }
 
 // ImportTransactionsCSV parses CSV transaction rows and stores each via the
-// validated write path (best-effort: invalid rows are skipped), returning how
-// many were imported. A parse error (malformed CSV) is returned as-is. Missing
-// currencies default to the household base currency, and account/category/member
-// cells given as names (a hand-written CSV) are resolved to ids (C27).
-func (a *App) ImportTransactionsCSV(data []byte) (int, error) {
+// validated write path, returning how many were imported, which rows were
+// skipped (per-row parse failures), and any structural error (malformed CSV).
+// Missing currencies default to the household base currency, and
+// account/category/member cells given as names (a hand-written CSV) are
+// resolved to ids (C27).
+func (a *App) ImportTransactionsCSV(data []byte) (imported int, skipped []store.CSVRowError, err error) {
 	base := "USD"
 	if s := a.Settings(); s.BaseCurrency != "" {
 		base = s.BaseCurrency
 	}
-	txns, err := store.TransactionsFromCSV(data, base)
+	txns, skipped, err := store.TransactionsFromCSVResilient(data, base)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	accPairs := make([][2]string, 0, len(a.Accounts()))
@@ -183,13 +184,13 @@ func (a *App) ImportTransactionsCSV(data []byte) (int, error) {
 	// the txn-added trigger once afterward instead of once per imported row.
 	a.WithoutTriggers(func() {
 		for _, t := range txns {
-			if err := a.PutTransaction(t); err == nil {
+			if putErr := a.PutTransaction(t); putErr == nil {
 				n++
 			}
 		}
 	})
-	a.log.Info("imported transactions from CSV", "imported", n, "rows", len(txns))
-	return n, nil
+	a.log.Info("imported transactions from CSV", "imported", n, "parsed", len(txns), "skipped", len(skipped))
+	return n, skipped, nil
 }
 
 // idResolver builds a function that maps a CSV reference cell to an entity id:

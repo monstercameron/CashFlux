@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **CSV import is now row-resilient (L23).** A single malformed row (non-numeric amount, missing required
+  field) no longer aborts the entire paste. The parser (`store.TransactionsFromCSVResilient`) processes
+  rows independently — valid rows import, bad rows are collected as `{line, reason}` and skipped — and the
+  Documents importer reports "Imported N. Skipped K row(s) (couldn't be read)." in plain English. Table
+  tests cover all-valid / some-bad / empty / header-only / totally-malformed; e2e gate
+  (`import_resilience_check.mjs`) pastes 3 valid + 2 malformed rows and asserts exactly the 3 land.
+
 ### Changed
 - **Unified top-bar controls into consistent filled icon buttons.** The notification bell, music play/pause
   toggle, and the "+ Add" control now share one borderless, filled icon-button style (the Add control is now a

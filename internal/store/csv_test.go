@@ -147,3 +147,87 @@ func TestCSVImportErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestTransactionsFromCSVResilient(t *testing.T) {
+	t.Run("all_valid", func(t *testing.T) {
+		in := "date,payee,amount,currency\n2026-06-01,Coffee,-4.50,USD\n2026-06-02,Salary,2000.00,USD\n"
+		txns, skipped, err := TransactionsFromCSVResilient([]byte(in), "")
+		if err != nil {
+			t.Fatalf("unexpected structural error: %v", err)
+		}
+		if len(txns) != 2 {
+			t.Errorf("got %d txns, want 2", len(txns))
+		}
+		if len(skipped) != 0 {
+			t.Errorf("got %d skipped, want 0: %+v", len(skipped), skipped)
+		}
+	})
+
+	t.Run("some_bad_rows", func(t *testing.T) {
+		// Row on line 2 = missing amount, line 3 = valid, line 4 = non-numeric amount, lines 5+6 = valid.
+		in := strings.Join([]string{
+			"date,payee,amount,currency",
+			"2026-06-01,Bad1,,USD",           // line 2: missing amount
+			"2026-06-02,Good1,-4.50,USD",     // line 3: valid
+			"2026-06-03,Bad2,notanumber,USD", // line 4: non-numeric amount
+			"2026-06-04,Good2,100.00,USD",    // line 5: valid
+			"2026-06-05,Good3,-22.00,USD",    // line 6: valid
+		}, "\n") + "\n"
+
+		txns, skipped, err := TransactionsFromCSVResilient([]byte(in), "")
+		if err != nil {
+			t.Fatalf("unexpected structural error: %v", err)
+		}
+		if len(txns) != 3 {
+			t.Errorf("got %d valid txns, want 3", len(txns))
+		}
+		if len(skipped) != 2 {
+			t.Errorf("got %d skipped, want 2: %+v", len(skipped), skipped)
+		}
+		// Check line numbers.
+		lines := make(map[int]bool, len(skipped))
+		for _, s := range skipped {
+			lines[s.Line] = true
+		}
+		if !lines[2] {
+			t.Errorf("expected line 2 in skipped; got %+v", skipped)
+		}
+		if !lines[4] {
+			t.Errorf("expected line 4 in skipped; got %+v", skipped)
+		}
+		// Reasons must be non-empty.
+		for _, s := range skipped {
+			if s.Reason == "" {
+				t.Errorf("skipped row at line %d has empty reason", s.Line)
+			}
+		}
+	})
+
+	t.Run("empty_input", func(t *testing.T) {
+		txns, skipped, err := TransactionsFromCSVResilient([]byte(""), "USD")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(txns) != 0 || len(skipped) != 0 {
+			t.Errorf("expected empty results, got txns=%d skipped=%d", len(txns), len(skipped))
+		}
+	})
+
+	t.Run("header_only", func(t *testing.T) {
+		txns, skipped, err := TransactionsFromCSVResilient([]byte("date,payee,amount,currency\n"), "USD")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(txns) != 0 || len(skipped) != 0 {
+			t.Errorf("expected empty results for header-only, got txns=%d skipped=%d", len(txns), len(skipped))
+		}
+	})
+
+	t.Run("totally_malformed", func(t *testing.T) {
+		// A bare quote triggers a CSV parse error — structural failure, not a skipped row.
+		_, _, err := TransactionsFromCSVResilient([]byte("date,amount\n\"unclosed\n"), "USD")
+		if err == nil {
+			t.Error("expected structural error for malformed CSV")
+		}
+	})
+}

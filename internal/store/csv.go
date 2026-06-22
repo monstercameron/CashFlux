@@ -55,6 +55,128 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// CSVRowError records a single row that could not be parsed during a resilient
+// CSV import. Line is the 1-based CSV line number (header = 1).
+type CSVRowError struct {
+	Line   int
+	Reason string
+}
+
+// TransactionsFromCSVResilient parses transactions from CSV without aborting on
+// per-row problems. Structural failures (unreadable CSV, missing or empty file)
+// are returned as err. Per-row problems (missing amount, bad number, bad date)
+// are collected in skipped so the caller can report them without losing the
+// valid rows. The semantics of column matching, id generation, and currency
+// defaulting are identical to TransactionsFromCSV.
+func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []domain.Transaction, skipped []CSVRowError, err error) {
+	r := csv.NewReader(bytes.NewReader(data))
+	r.FieldsPerRecord = -1
+	records, csvErr := r.ReadAll()
+	if csvErr != nil {
+		return nil, nil, fmt.Errorf("store: csv read: %w", csvErr)
+	}
+	if len(records) == 0 {
+		return nil, nil, nil
+	}
+
+	idx := make(map[string]int, len(records[0]))
+	for i, name := range records[0] {
+		idx[strings.ToLower(strings.TrimSpace(name))] = i
+	}
+	col := func(row []string, name string) string {
+		if i, ok := idx[name]; ok && i < len(row) {
+			return strings.TrimSpace(row[i])
+		}
+		return ""
+	}
+	colID := func(row []string, base string) string {
+		if v := col(row, base+"_id"); v != "" {
+			return v
+		}
+		return col(row, base)
+	}
+
+	out := make([]domain.Transaction, 0, len(records)-1)
+	for n, row := range records[1:] {
+		line := n + 2
+
+		amtStr := col(row, "amount")
+		if amtStr == "" {
+			skipped = append(skipped, CSVRowError{Line: line, Reason: "amount is required"})
+			continue
+		}
+		curr := col(row, "currency")
+		if curr == "" {
+			curr = defaultCurrency
+		}
+		if curr == "" {
+			skipped = append(skipped, CSVRowError{Line: line, Reason: "currency is required (add a currency column or set a base currency)"})
+			continue
+		}
+		amt, parseErr := money.ParseMinor(amtStr, currency.Decimals(curr))
+		if parseErr != nil {
+			skipped = append(skipped, CSVRowError{Line: line, Reason: parseErr.Error()})
+			continue
+		}
+
+		var date time.Time
+		if ds := col(row, "date"); ds != "" {
+			var dateErr error
+			if date, dateErr = dateutil.ParseDate(ds); dateErr != nil {
+				skipped = append(skipped, CSVRowError{Line: line, Reason: dateErr.Error()})
+				continue
+			}
+		}
+
+		cleared := false
+		if cs := col(row, "cleared"); cs != "" {
+			var clearErr error
+			if cleared, clearErr = strconv.ParseBool(cs); clearErr != nil {
+				skipped = append(skipped, CSVRowError{Line: line, Reason: fmt.Sprintf("invalid cleared %q", cs)})
+				continue
+			}
+		}
+
+		var tags []string
+		if ts := col(row, "tags"); ts != "" {
+			for _, tg := range strings.Split(ts, ";") {
+				if tg = strings.TrimSpace(tg); tg != "" {
+					tags = append(tags, tg)
+				}
+			}
+		}
+
+		tid := col(row, "id")
+		if tid == "" {
+			tid = id.New()
+		}
+
+		// The documented "date,payee,amount,account" shape (C27) has no desc
+		// column, but the ledger requires a description — so fall back to the
+		// payee, which is the human-facing label, when desc is absent. An explicit
+		// desc column still takes precedence.
+		desc := col(row, "desc")
+		if desc == "" {
+			desc = col(row, "payee")
+		}
+
+		out = append(out, domain.Transaction{
+			ID:                tid,
+			AccountID:         colID(row, "account"),
+			Date:              date,
+			Payee:             col(row, "payee"),
+			Desc:              desc,
+			CategoryID:        colID(row, "category"),
+			Amount:            money.New(amt, curr),
+			TransferAccountID: colID(row, "transfer_account"),
+			Cleared:           cleared,
+			Tags:              tags,
+			MemberID:          colID(row, "member"),
+		})
+	}
+	return out, skipped, nil
+}
+
 // TransactionsFromCSV parses transactions from CSV. Columns are matched by their
 // header name (case-insensitive), so column order and extra columns are
 // tolerated. Rows missing an id get a fresh one. Only amount is required: when a

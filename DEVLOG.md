@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-21 - fix: row-resilient CSV import (L23)
+
+First feature of the "build every L-story" pass. The decade-importer bug: one non-numeric amount aborted the
+whole paste (the parser `return nil, err`'d on the first bad row), so a 600-row paste with one garbage cell
+imported nothing — silently.
+
+- **Logic.** Added `store.TransactionsFromCSVResilient(data, base) ([]Transaction, []CSVRowError, error)` next
+  to the original (kept for callers that want strict parsing). It parses row-by-row: a bad row becomes a
+  `CSVRowError{Line, Reason}` and is skipped, valid rows accumulate. Table tests: all-valid, some-bad (asserts
+  correct line numbers 2 & 4), empty, header-only, totally-malformed.
+- **State/UI.** `appstate.ImportTransactionsCSV` now returns `(imported, skipped, err)`; `documents.go` appends
+  "Skipped K row(s) (couldn't be read)." to the success line (new i18n key `documents.importedCsvSkipped`).
+- **E2E.** `import_resilience_check.mjs` pastes 3 valid + 2 malformed rows and asserts exactly the 3 land and a
+  "Skipped 2" message shows. Two gotchas fixed in the gate: unique `ZZRESIL-` payee markers (the seeded sample
+  already has Salary/Groceries/Gas, which polluted the count to 72), and the valid rows need a real `account`
+  column or the validated write path rejects them (imported 0) — the check now discovers a live account name
+  first. Full `go test ./...` green; `story_documents_csv` + `first_run_no_reseed` still pass.
+- **Process.** Built by a sequential sonnet sub-agent (worktree), integrated here. Next: L17 apply-allocation.
+
 ## 2026-06-21 - feat: remove the Tailwind CDN via a typed CSS migration (C91)
 
 Retired `cdn.tailwindcss.com` — the last styling dependency — by migrating every utility class to a typed Go

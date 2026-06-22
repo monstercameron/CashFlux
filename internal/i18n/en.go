@@ -512,6 +512,7 @@ var english = Catalog{
 	"documents.csvEmpty":             "Paste some CSV first.",
 	"documents.csvError":             "Couldn't read that CSV: %s",
 	"documents.importedCsv":          "Imported %s.",
+	"documents.importedCsvSkipped":   "Skipped %s (couldn't be read).",
 	"documents.needKey":              "Add your OpenAI key in Settings to read images.",
 	"documents.chooseImageFirst":     "Choose an image first.",
 	"documents.noneFound":            "No transactions were found in that image.",

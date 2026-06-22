@@ -109,7 +109,7 @@ func Documents() ui.Node {
 			msg.Set(uistate.T("documents.csvEmpty"))
 			return
 		}
-		n, err := app.ImportTransactionsCSV([]byte(data))
+		n, skipped, err := app.ImportTransactionsCSV([]byte(data))
 		if err != nil {
 			// Don't surface the internal "store:" package prefix to the user (C27).
 			friendly := strings.TrimPrefix(err.Error(), "store: ")
@@ -119,7 +119,11 @@ func Documents() ui.Node {
 		if n > 0 {
 			recordDocument(domain.DocCSV, "", nil)
 		}
-		msg.Set(uistate.T("documents.importedCsv", plural(n, "transaction")))
+		summary := uistate.T("documents.importedCsv", plural(n, "transaction"))
+		if len(skipped) > 0 {
+			summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
+		}
+		msg.Set(summary)
 		rev.Set(rev.Get() + 1)
 	}))
 
