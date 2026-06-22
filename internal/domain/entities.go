@@ -447,4 +447,8 @@ type Task struct {
 	MemberID    string         `json:"memberId,omitempty"`
 	Source      TaskSource     `json:"source,omitempty"`
 	Custom      map[string]any `json:"custom,omitempty"`
+	// Recurrence controls auto-spawning: when a recurring task is completed,
+	// a fresh open occurrence is created with Due advanced one cadence step.
+	// Empty (zero value) means the task is a one-shot and no successor is spawned.
+	Recurrence RecurringCadence `json:"recurrence,omitempty"`
 }

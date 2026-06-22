@@ -5244,8 +5244,11 @@ with due dates, marks them done, and expects overdue ones surfaced + a hide-done
       that entity's screen (`/accounts`,`/budgets`,`/goals`,`/transactions`). New pure `internal/tasklink`
       (Route/TypeLabel/EntityName, tested); deleted-entity links degrade to "(linked item removed)". e2e
       `task_entity_link_check.mjs`.
-- [ ] **No recurring tasks** ("rebalance 401k" quarterly, "review budget" monthly) — same recurrence
-      theme as L24. Reuse `RecurringCadence` to auto-recreate a task on completion/schedule.
+- [x] **Recurring tasks.** Added `Task.Recurrence` (reuses `RecurringCadence`); a "Repeat" select on the
+      add form + inline editor; completing a recurring task spawns its next occurrence (Due advanced one
+      cadence step, open) via pure `internal/taskrecur.NextOccurrence` + atomic `appstate.CompleteTask`;
+      recurring rows show a "↻ <cadence>" badge. Re-opening a done task does not spawn. e2e
+      `recurring_task_check.mjs`.
 
 **Probe note:** two checks **false-negatived on autosave timing** — "status=open persists" and
 "status=done persists" read `localStorage` at 700ms, before the ~2.5s autosave; the hide-done behavior

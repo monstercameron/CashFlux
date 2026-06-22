@@ -30,6 +30,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
+	"github.com/monstercameron/CashFlux/internal/taskrecur"
 	"github.com/monstercameron/CashFlux/internal/validate"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
@@ -1478,6 +1479,40 @@ func (a *App) CreateFreshnessReminderTask(title string) (domain.Task, error) {
 	return t, nil
 }
 func (a *App) DeleteTask(id string) error { return a.del("task", id, a.store.DeleteTask) }
+
+// CompleteTask marks the task identified by id as done and, if the task has a
+// non-empty Recurrence, atomically saves a fresh open successor via
+// taskrecur.NextOccurrence. nextID must be a freshly-generated ID (e.g.
+// id.New()); now is the reference time used when the task has no Due date.
+//
+// Re-opening a done task (StatusDone → StatusOpen) must go through PutTask
+// directly; only the open→done transition spawns a successor.
+func (a *App) CompleteTask(taskID, nextID string, now time.Time) error {
+	tasks := a.Tasks()
+	var found domain.Task
+	var ok bool
+	for _, t := range tasks {
+		if t.ID == taskID {
+			found = t
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("task %q not found", taskID)
+	}
+	found.Status = domain.StatusDone
+	if err := a.PutTask(found); err != nil {
+		return fmt.Errorf("complete task: %w", err)
+	}
+	if next, spawn := taskrecur.NextOccurrence(found, nextID, now); spawn {
+		if err := a.PutTask(next); err != nil {
+			return fmt.Errorf("spawn next occurrence: %w", err)
+		}
+		a.log.Info("spawned recurring task", "from", taskID, "next", next.ID, "due", next.Due)
+	}
+	return nil
+}
 
 // PutCustomFieldDef validates and saves a custom-field definition. The Def must
 // be sound (id, entity type, key, label, known type; choice fields need options).

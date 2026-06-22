@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Recurring to-do tasks (L26).** A money chore can now repeat: a "Repeat" picker (weekly/monthly/quarterly/
+  yearly) on the to-do add form and inline editor marks a task recurring, and completing it automatically
+  spawns the next occurrence with its due date advanced one cadence step. Recurring rows show a "↻ <cadence>"
+  badge. Re-opening a completed task does not spawn a duplicate. New pure `internal/taskrecur` package
+  (next-occurrence logic, unit-tested) + atomic `appstate.CompleteTask`; e2e `recurring_task_check.mjs`.
 - **To-do items can link to the entity they're about (L26).** A money chore ("pay the credit card", "rebalance
   the 401k") can now be attached to a specific account, budget, goal or transaction via a "Link to" picker on
   the to-do add form and inline editor. The task row then shows a clickable "→ <name>" deep-link that navigates

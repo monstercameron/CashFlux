@@ -47,6 +47,8 @@ func Todo() ui.Node {
 	// Link-to fields for the add form.
 	addLinkType := ui.UseState(string(domain.RelatedNone))
 	addLinkID := ui.UseState("")
+	// Recurrence for the add form (defaults to no repeat).
+	addRecur := ui.UseState("")
 
 	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueStr.Set(v) })
@@ -58,6 +60,7 @@ func Todo() ui.Node {
 		addLinkID.Set("") // reset entity selection when type changes
 	})
 	onAddLinkID := ui.UseEvent(func(e ui.Event) { addLinkID.Set(e.GetValue()) })
+	onAddRecur := ui.UseEvent(func(e ui.Event) { addRecur.Set(e.GetValue()) })
 
 	add := ui.UseEvent(Prevent(func() {
 		var due time.Time
@@ -78,6 +81,7 @@ func Todo() ui.Node {
 			ID: id.New(), Title: strings.TrimSpace(title.Get()), Notes: strings.TrimSpace(notes.Get()),
 			Status: domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
 			RelatedType: rt, RelatedID: rid,
+			Recurrence: domain.RecurringCadence(addRecur.Get()),
 		}
 		if err := app.PutTask(t); err != nil {
 			errMsg.Set(err.Error())
@@ -88,6 +92,7 @@ func Todo() ui.Node {
 		notes.Set("")
 		addLinkType.Set(string(domain.RelatedNone))
 		addLinkID.Set("")
+		addRecur.Set("")
 		errMsg.Set("")
 		bump()
 	}))
@@ -108,13 +113,19 @@ func Todo() ui.Node {
 			return
 		}
 		if t.Status == domain.StatusDone {
+			// Re-opening a done task: plain status flip, no spawn.
 			t.Status = domain.StatusOpen
+			if err := app.PutTask(t); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
 		} else {
-			t.Status = domain.StatusDone
-		}
-		if err := app.PutTask(t); err != nil {
-			errMsg.Set(err.Error())
-			return
+			// Completing an open task: route through CompleteTask so recurring
+			// tasks spawn their next occurrence atomically.
+			if err := app.CompleteTask(taskID, id.New(), time.Now()); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
 		}
 		bump()
 	}
@@ -145,7 +156,7 @@ func Todo() ui.Node {
 			bump()
 		})
 	}
-	saveTask := func(taskID, newTitle, prio, dueStr, newNotes, relType, relID string) {
+	saveTask := func(taskID, newTitle, prio, dueStr, newNotes, relType, relID, recur string) {
 		t, ok := byID[taskID]
 		if !ok {
 			return
@@ -175,6 +186,7 @@ func Todo() ui.Node {
 			t.RelatedType = rt
 			t.RelatedID = relID
 		}
+		t.Recurrence = domain.RecurringCadence(recur)
 		if err := app.PutTask(t); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -209,6 +221,9 @@ func Todo() ui.Node {
 			labeledField("Due date",
 				Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueStr.Get()), OnInput(onDue))),
 			Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
+			labeledField(uistate.T("todo.repeat"),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.repeat")), Attr("data-testid", "task-add-repeat"), OnChange(onAddRecur),
+					cadenceOptions(addRecur.Get()))),
 			labeledField(uistate.T("todo.linkTo"),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkTo")), OnChange(onAddLinkType), addLinkTypeOpts)),
 			addEntitySelect,
@@ -264,7 +279,7 @@ type taskRowProps struct {
 	Depth        int // nesting depth (0 = top level) → indentation (C72)
 	OnToggle     func(string)
 	OnDelete     func(string)
-	OnSave       func(id, title, priority, due, notes, relType, relID string)
+	OnSave       func(id, title, priority, due, notes, relType, relID, recurrence string)
 	OnAddSub     func(parentID string)
 	Accounts     []domain.Account
 	Budgets      []domain.Budget
@@ -299,6 +314,7 @@ func TaskRow(props taskRowProps) ui.Node {
 	// Inline-edit link state — initialised from the task's persisted values.
 	editLinkType := ui.UseState(string(t.RelatedType))
 	editLinkID := ui.UseState(t.RelatedID)
+	editRecur := ui.UseState(string(t.Recurrence))
 	onTitle := ui.UseEvent(func(v string) { titleS.Set(v) })
 	onPrio := ui.UseEvent(func(e ui.Event) { prioS.Set(e.GetValue()) })
 	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
@@ -308,6 +324,7 @@ func TaskRow(props taskRowProps) ui.Node {
 		editLinkID.Set("") // reset entity when type changes
 	})
 	onEditLinkID := ui.UseEvent(func(e ui.Event) { editLinkID.Set(e.GetValue()) })
+	onEditRecur := ui.UseEvent(func(e ui.Event) { editRecur.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		titleS.Set(t.Title)
 		prioS.Set(string(t.Priority))
@@ -315,12 +332,13 @@ func TaskRow(props taskRowProps) ui.Node {
 		notesS.Set(t.Notes)
 		editLinkType.Set(string(t.RelatedType))
 		editLinkID.Set(t.RelatedID)
+		editRecur.Set(string(t.Recurrence))
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
 		props.OnSave(t.ID, titleS.Get(), prioS.Get(), dueS.Get(), notesS.Get(),
-			editLinkType.Get(), editLinkID.Get())
+			editLinkType.Get(), editLinkID.Get(), editRecur.Get())
 		editing.Set(false)
 	}))
 
@@ -361,6 +379,9 @@ func TaskRow(props taskRowProps) ui.Node {
 				labeledField("Due date",
 					Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueS.Get()), OnInput(onDue))),
 				Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
+				labeledField(uistate.T("todo.repeat"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("todo.repeat")), Attr("data-testid", "task-edit-repeat-"+t.ID), OnChange(onEditRecur),
+						cadenceOptions(editRecur.Get()))),
 				labeledField(uistate.T("todo.linkTo"),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkTo")), OnChange(onEditLinkType),
 						linkTypeOptions(editLinkType.Get()))),
@@ -412,6 +433,11 @@ func TaskRow(props taskRowProps) ui.Node {
 	}
 	if t.Notes != "" {
 		meta = append(meta, Span(css.Class("row-meta"), t.Notes))
+	}
+	if t.Recurrence != "" {
+		recurLabel := taskCadenceLabel(t.Recurrence)
+		meta = append(meta, Span(ClassStr("row-meta badge badge-recur"), Attr("data-testid", "recur-badge-"+t.ID),
+			uistate.T("todo.recurBadge", recurLabel)))
 	}
 	if linkNode != nil {
 		meta = append(meta, linkNode)
@@ -498,4 +524,34 @@ func buildEntityOptions(
 		}
 	}
 	return opts
+}
+
+// cadenceOptions builds the <option> list for a recurrence cadence selector.
+// selectedVal is the current RecurringCadence string (empty = no repeat).
+func cadenceOptions(selectedVal string) []ui.Node {
+	none := ""
+	return []ui.Node{
+		Option(Value(none), SelectedIf(selectedVal == none), uistate.T("todo.repeatNone")),
+		Option(Value(string(domain.CadenceWeekly)), SelectedIf(selectedVal == string(domain.CadenceWeekly)), uistate.T("todo.repeatWeekly")),
+		Option(Value(string(domain.CadenceMonthly)), SelectedIf(selectedVal == string(domain.CadenceMonthly)), uistate.T("todo.repeatMonthly")),
+		Option(Value(string(domain.CadenceQuarterly)), SelectedIf(selectedVal == string(domain.CadenceQuarterly)), uistate.T("todo.repeatQuarterly")),
+		Option(Value(string(domain.CadenceYearly)), SelectedIf(selectedVal == string(domain.CadenceYearly)), uistate.T("todo.repeatYearly")),
+	}
+}
+
+// taskCadenceLabel returns the human-readable label for a RecurringCadence
+// value, used in the recurring-task add/edit selects and the row badge.
+func taskCadenceLabel(c domain.RecurringCadence) string {
+	switch c {
+	case domain.CadenceWeekly:
+		return uistate.T("todo.repeatWeekly")
+	case domain.CadenceMonthly:
+		return uistate.T("todo.repeatMonthly")
+	case domain.CadenceQuarterly:
+		return uistate.T("todo.repeatQuarterly")
+	case domain.CadenceYearly:
+		return uistate.T("todo.repeatYearly")
+	default:
+		return string(c)
+	}
 }

@@ -1167,6 +1167,13 @@ var english = Catalog{
 	"todo.linkEntity":       "— Choose —",
 	"todo.linkAriaLabel":    "Go to linked item: %s",
 	"todo.linkRemoved":      "(linked item removed)",
+	"todo.repeat":           "Repeat",
+	"todo.repeatNone":       "— No repeat —",
+	"todo.repeatWeekly":     "Weekly",
+	"todo.repeatMonthly":    "Monthly",
+	"todo.repeatQuarterly":  "Quarterly",
+	"todo.repeatYearly":     "Yearly",
+	"todo.recurBadge":       "↻ %s",
 
 	// Custom pages
 	"pages.notFound":       "That page doesn't exist. It may have been deleted.",

@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-22 - feat: recurring to-do tasks (L26)
+
+Same recurrence theme as L24, applied to tasks. Added `Task.Recurrence` (reusing `domain.RecurringCadence`, so
+zero new cadence math) and pure `internal/taskrecur.NextOccurrence(done, newID, now)` — base date = the done
+task's Due if set (keeps the calendar anchor when you finish late), else now. Completion routes through a new
+atomic `appstate.CompleteTask(id, nextID, now)` that flips status and PutTasks the successor in one path; the
+open→done transition is the only thing that spawns (re-opening doesn't), which the e2e pins by re-completing
+and asserting no runaway multiplication. UI: a "Repeat" select on add + inline edit, a "↻ cadence" row badge.
+Integration snag: the agent added a package-level `cadenceLabel` that collided with the existing one in
+planning.go — renamed the task one to `taskCadenceLabel`. Sub-agent built; integrated + regressed here. This
+closes the L26 task-lifecycle gaps (overdue already shipped, links + recurrence now done). Next: L24 add-form
+repeat affordance, then L18.
+
 ## 2026-06-22 - feat: to-do items link to their entity (L26)
 
 `domain.Task` already carried `RelatedType`/`RelatedID` (account/budget/goal/transaction/document) and the
