@@ -7252,6 +7252,18 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 ---
 
 ### C91. Migrate Tailwind CDN → gwc typed CSS classes (Tailwind interop) ★ (prod/security, user-requested 2026-06-21) — FINAL TODO
+**DONE (2026-06-21):** The `cdn.tailwindcss.com` `<script>` + inline `tailwind.config` are removed from
+`web/index.html`. Upgraded GoWebComponents to v3.2.0 (typed `css`/`css/u` engine) and migrated its breaking
+`shorthand.Class`→`ClassStr` rename (~1,526 sites). Built `internal/ui/tw` — a typed, Tailwind-compatible
+vocabulary (each utility emits the exact Tailwind-default CSS via the gwc registry/Sink into `<style id=gwc-css>`,
+exact-value tested). Converted all ~1,450 literal utility sites to `css.Class("semantic", tw.Util…)` and typed
+the ~40 dynamically composed strings via `tw.Fold`/`tw.ColorClass`. Restored a minimal Tailwind-preflight
+equivalent (the CDN had shipped one) — notably `svg{display:block}`, which fixed the trend-chart tile overflow.
+Added stable test hooks (`cf-shell`, `active`, `dash-task`, tone markers) and updated the e2es that were coupled
+to now-folded utility class names. Verified: 0 `cdn.tailwindcss.com` requests, 0 console errors, correct computed
+styles, full e2e re-run with no port regressions; SW bumped to v246. Remaining: optionally reconcile the palette
+tokens with the theme-engine CSS vars (kept as exact hex here for parity), and vendor Google Fonts for a fully
+offline build (the only remaining external asset).
 **Why:** the app currently loads **`https://cdn.tailwindcss.com`** at runtime — a JIT compiler that can't be
 SRI-pinned, depends on a third-party CDN, and won't work offline (OWASP A08; the last external script after D3
 was vendored in **C44**). A naive static `tailwindcss` compile is unsafe here because the UI composes utility
