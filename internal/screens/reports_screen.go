@@ -394,6 +394,14 @@ func Reports() ui.Node {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 					downloadBytes("spending-by-category.csv", "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
 				}), uistate.T("reports.downloadCsv")),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-tax-summary"), Title(uistate.T("reports.taxSummaryTitle")), OnClick(func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					yr := time.Now().Year()
+					ys := time.Date(yr, time.January, 1, 0, 0, 0, 0, time.UTC)
+					ye := time.Date(yr+1, time.January, 1, 0, 0, 0, 0, time.UTC)
+					summary, _ := reports.YearTax(txns, yr, ys, ye, rates)
+					downloadBytes("tax-summary.csv", "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
+				}), uistate.T("reports.taxSummary")),
 			)),
 		),
 		If(len(moneyFlows) > 1, Section(css.Class("card"),

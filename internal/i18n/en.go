@@ -1025,6 +1025,8 @@ var english = Catalog{
 	"reports.downloadCsvTitle":         "Download the spending-by-category breakdown as a CSV file",
 	"reports.empty":                    "No spending in this period yet.",
 	"reports.uncategorized":            "Uncategorized",
+	"reports.taxSummary":               "Tax summary (year)",
+	"reports.taxSummaryTitle":          "Download this year's income and expenses by category as a CSV for your accountant.",
 	"reports.byCustomField":            "Spending by %s",
 	"reports.customFieldSelectLabel":   "Group spending by",
 	"reports.customFieldNoValue":       "(no value)",

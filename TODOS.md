@@ -4864,7 +4864,7 @@ breakdown for the **year**, deductible categories called out, and a clean export
       "Year" segment to the top-bar resolution control; also made `/reports` period-aware so the annual review
       is one tap there. Period label reads the calendar year (e.g. "2026"). e2e `reports_year_view_check.mjs`.
       (Fiscal-month-start offset for the year boundary is a future refinement.)
-- [ ] **No deductible/tax tagging or tax-summary export.** Add a category **"tax group / deductible"**
+- [x] **No deductible/tax tagging or tax-summary export.** Add a category **"tax group / deductible"**
       attribute, a Reports **"Deductible totals"** section, and a single **annual tax-summary export**
       (all sections, year-stamped) to hand to an accountant. Bottom-up: `Deductible`/`TaxGroup` on the
       category domain type (additive, store round-trip) → a pure totals roll-up in `internal/reports`

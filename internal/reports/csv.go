@@ -58,3 +58,20 @@ func CustomFieldCSV(rows []CustomFieldSpend, fieldLabel string, amount func(int6
 	w.Flush()
 	return buf.Bytes()
 }
+
+// YearTaxCSV renders a year-end / tax summary (L16) as CSV: a per-category block
+// (Category, Income, Expense, Net) followed by a TOTAL row with the headline
+// income/expense/net. name resolves a category id to a label; amount renders
+// minor units as a plain decimal. Pure, standard-library only.
+func YearTaxCSV(s YearTaxSummary, name func(id string) string, amount func(int64) string) []byte {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{"Tax year", strconv.Itoa(s.Year)})
+	_ = w.Write([]string{"Category", "Income", "Expense", "Net"})
+	for _, r := range s.Rows {
+		_ = w.Write([]string{name(r.CategoryID), amount(r.Income), amount(r.Expense), amount(r.Net)})
+	}
+	_ = w.Write([]string{"TOTAL", amount(s.TotalIncome), amount(s.TotalExpense), amount(s.NetIncome)})
+	w.Flush()
+	return buf.Bytes()
+}
