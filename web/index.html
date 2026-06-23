@@ -283,9 +283,28 @@
       [data-theme="light"] .bento, [data-theme="light"] .bento + *, [data-theme="light"] main > div { background-color: var(--bg); }
       /* G23 T1-B: shell/nav backgrounds switch to light tokens — eliminates dark bands between cards
          and the dark topbar/rail stripe in light mode. */
-      [data-theme="light"] .topbar { background: rgba(247,246,243,0.92); }
-      [data-theme="light"] aside.rail, [data-theme="light"] .rail { background: var(--bg-elev); }
-      [data-theme="light"] main { background: var(--bg); }
+      /* GX1: the theme engine emits runtime backgrounds that outrank these shell
+         overrides, leaving the whole chrome (topbar, rail, icon buttons, +Add menu,
+         active nav chip) DARK in light mode. Strengthen with !important + add the
+         missing surfaces so the shell is correct in light. All [CSS-ONLY]. */
+      [data-theme="light"] .topbar { background: rgba(247,246,243,0.92) !important; color: #1c1c1e; border-color: #e4e2dd; }
+      [data-theme="light"] aside.rail, [data-theme="light"] .rail { background: var(--bg-elev) !important; color: #1c1c1e; }
+      [data-theme="light"] main { background: var(--bg) !important; }
+      /* GX1-F2: active nav chip was dark-on-dark → invisible on the warm-white rail. */
+      [data-theme="light"] aside.rail .nv.active, [data-theme="light"] aside.rail .nv[aria-current="page"] {
+        background: var(--accent-dim) !important; color: #1c1c1e !important; }
+      [data-theme="light"] aside.rail .nv { color: #3c3c43; }
+      [data-theme="light"] aside.rail .nv:hover { background: #efede8 !important; color: #1c1c1e; }
+      [data-theme="light"] aside.rail .rail-section { color: #6a6a72; }
+      /* GX1-F3: topbar icon buttons rendered on a dark rgb(32,32,34) surface in light. */
+      [data-theme="light"] .muzak-btn, [data-theme="light"] .notify-btn, [data-theme="light"] .add-btn {
+        background: #ffffff !important; color: #3c3c43; border: 1px solid #e4e2dd; }
+      [data-theme="light"] .muzak-btn:hover, [data-theme="light"] .notify-btn:hover, [data-theme="light"] .add-btn:hover {
+        background: #efede8 !important; color: #1c1c1e; }
+      /* GX1-F4: +Add menu + notices popover panels were near-black in light. */
+      [data-theme="light"] .add-menu, [data-theme="light"] .notify-menu, [data-theme="light"] .muzak-menu {
+        background: #ffffff !important; border-color: #e4e2dd !important; color: #1c1c1e; }
+      [data-theme="light"] .add-item:hover, [data-theme="light"] .notify-item:hover { background: #efede8 !important; color: #1c1c1e; }
       /* G22: darken .empty text in light for WCAG AA compliance (~3.5:1 → ~5.4:1). */
       [data-theme="light"] .empty { color: #56565c; }
       /* Widget shell, segmented + stepper pills, nav hover */

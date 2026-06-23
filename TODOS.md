@@ -17493,6 +17493,14 @@ The following C-tickets were confirmed fixed by the GLAMOR drive scripts:
 
 # GX1. App shell (top bar + rail + breadcrumb) — "Twenty Trips a Day" — 2026-06-23 ★
 
+✅ RESOLVED (2026-06-23). All four critical light-mode shell fixes (GX1-F1 through GX1-F4) are
+implemented in `web/index.html` under `[data-theme="light"]` with `!important` overrides:
+- **GX1-F1:** topbar + rail backgrounds switch to warm-white (`rgba(247,246,243,0.92)` / `var(--bg-elev)`).
+- **GX1-F2:** active nav chip uses accent-dim tint (`var(--accent-dim)`) instead of the dark `rgb(28,28,30)` chip.
+- **GX1-F3:** `.muzak-btn`/`.notify-btn`/`.add-btn` get white fill + `#e4e2dd` border so they read on the light topbar.
+- **GX1-F4:** `.add-menu`/`.notify-menu`/`.muzak-menu` panels switch to white with a light border and softer shadow.
+Dark mode unchanged; all rules are additive CSS-only, scoped to `[data-theme="light"]`.
+
 ## The story
 
 A user who navigates the rail and top bar constantly — twenty trips a day. She opens
