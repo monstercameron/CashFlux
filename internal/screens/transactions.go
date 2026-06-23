@@ -424,6 +424,15 @@ func Transactions() ui.Node {
 		}
 		curPage := pagination.Clamp(f.Page, total, pageSize)
 		page := pagination.Slice(shown, curPage, pageSize)
+		// Hide the Tags column when nothing on this page is tagged (G2 §6): tags are
+		// sparse, so an always-on empty column just wastes scan width.
+		anyTags := false
+		for _, t := range page {
+			if len(t.Tags) > 0 {
+				anyTags = true
+				break
+			}
+		}
 		rows := MapKeyed(page,
 			func(t domain.Transaction) any { return t.ID },
 			func(t domain.Transaction) ui.Node {
@@ -432,24 +441,33 @@ func Transactions() ui.Node {
 					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], Categories: categories,
 					Members:  app.Members(),
 					Selected: selected.Get()[t.ID],
+					ShowTags: anyTags,
 					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect, OnToggleCleared: toggleCleared, OnCreateRule: createRuleFromTxn,
 					OnAttach: attachReceipt, OnViewReceipt: viewReceipt,
 				})
 			},
 		)
+		// Column order (G2 §5): Amount promoted to position 3 (right after Date) so
+		// the dollar figure is on Nadia's natural scan path Date → Amount → Desc,
+		// instead of buried at column 7 behind Category/Account/Tags.
+		cols := []uiw.Column{
+			{Head: Span(css.Class(tw.SrOnly), "Select")},
+			{Label: "Date", SortKey: "date"},
+			{Label: "Amount", SortKey: "amount", Class: "td-amount"},
+			{Label: "Description", SortKey: "payee"},
+			{Label: "Category", SortKey: "category"},
+			{Label: "Account", SortKey: "account"},
+		}
+		if anyTags {
+			cols = append(cols, uiw.Column{Label: "Tags"})
+		}
+		cols = append(cols,
+			uiw.Column{Head: Span(Attr("aria-label", "Cleared status"), "✓"), Class: "td-cleared"},
+			uiw.Column{Label: "Actions", Class: "td-actions"},
+		)
 		listBody = uiw.DataTable(uiw.DataTableProps{
-			Class: "txn-table",
-			Columns: []uiw.Column{
-				{Head: Span(css.Class(tw.SrOnly), "Select")},
-				{Label: "Date", SortKey: "date"},
-				{Label: "Description", SortKey: "payee"},
-				{Label: "Category", SortKey: "category"},
-				{Label: "Account", SortKey: "account"},
-				{Label: "Tags"},
-				{Label: "Amount", SortKey: "amount", Class: "td-amount"},
-				{Label: "Cleared"},
-				{Label: "Actions", Class: "td-actions"},
-			},
+			Class:      "txn-table",
+			Columns:    cols,
 			Body:       rows,
 			Sort:       f.Sort,
 			Dir:        f.Dir,
@@ -625,9 +643,6 @@ func Transactions() ui.Node {
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
 				},
 			}),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.4rem"}),
-				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.selectAllTitle")), Title(uistate.T("transactions.selectAllTitle")), OnClick(selectAllFiltered), uistate.T("transactions.selectAllFiltered")),
-			),
 			If(len(selected.Get()) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
 				Span(css.Class("muted"), uistate.T("transactions.selected", plural(len(selected.Get()), "transaction"))),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryToApply")), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
@@ -641,7 +656,13 @@ func Transactions() ui.Node {
 				Span(css.Class("muted"), uistate.T("transactions.bulkUndoBanner", lastBulk.Get().Label)),
 				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.undoTitle")), Title(uistate.T("transactions.undoTitle")), OnClick(undoLastBulk), uistate.T("transactions.undoButton")),
 			)),
-			If(len(shown) > 0, P(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))))),
+			// Summary + select-all on one line (G2 §7): the select-all button used to
+			// sit orphaned above the table, costing ~40px of vertical space; it now
+			// rides alongside the count/net summary.
+			If(len(shown) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"margin-bottom": "0.4rem"}),
+				Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base))))),
+				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.selectAllTitle")), Title(uistate.T("transactions.selectAllTitle")), OnClick(selectAllFiltered), uistate.T("transactions.selectAllFiltered")),
+			)),
 			// Screen-reader live region announcing the match count as filters change
 			// (stays mounted across renders, so the zero-results case is announced too).
 			P(css.Class(tw.SrOnly), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus)),
@@ -661,6 +682,7 @@ type transactionRowProps struct {
 	Categories      []domain.Category // for the edit-mode category picker
 	Members         []domain.Member   // for the edit-mode "Who" picker (may be empty)
 	Selected        bool
+	ShowTags        bool // whether the Tags column is present this render (G2 §6)
 	OnDelete        func(string)
 	OnDuplicate     func(domain.Transaction)
 	OnSave          func(orig domain.Transaction, desc, amount, categoryID, date, memberID string)
@@ -762,8 +784,12 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		for _, m := range props.Members {
 			memberOptions = append(memberOptions, Option(Value(m.ID), SelectedIf(memberS.Get() == m.ID), m.Name))
 		}
+		editColspan := "8"
+		if props.ShowTags {
+			editColspan = "9"
+		}
 		return Tr(css.Class("row-edit"),
-			Td(Attr("colspan", "9"),
+			Td(Attr("colspan", editColspan),
 				Form(css.Class("form-grid"), OnSubmit(saveEdit),
 					Input(css.Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
 					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
@@ -793,29 +819,43 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	if props.Selected {
 		selectGlyph = "☑"
 	}
-	clearedLabel := uistate.T("transactions.markCleared")
-	if t.Cleared {
-		clearedLabel = uistate.T("transactions.clearedCheck")
-	}
 	rowClass := "row"
 	if props.Selected {
 		rowClass += " selected"
 	}
+	if t.Cleared {
+		rowClass += " cleared"
+	}
+	// Cleared state reads as a distinct icon button (G2 §5): a green ✓ when cleared
+	// (click to unclear), a dim ○ when not (click to clear) — so Nadia can tell
+	// reconciled rows apart at a glance instead of every cell saying "Mark cleared".
+	clearedGlyph, clearedTitle := "○", uistate.T("transactions.markCleared")
+	clearedCls := "clr-toggle"
+	if t.Cleared {
+		clearedGlyph, clearedTitle = "✓", uistate.T("transactions.clearedCheck")
+		clearedCls = "clr-toggle is-cleared"
+	}
+	// Tags collapse to an inline #chip on the Description cell when the column is
+	// hidden, so a tagged row still shows its tags (G2 §6).
+	var descTags ui.Node = Fragment()
+	if !props.ShowTags && tagsText != "" {
+		descTags = Span(css.Class("td-tags-inline"), " "+tagsText)
+	}
 	return Tr(ClassStr(rowClass), Attr("data-id", props.Txn.ID),
 		Td(css.Class("td-select"), Button(css.Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph)),
 		Td(css.Class("td-date fig"), pr.FormatDate(props.Txn.Date)),
-		Td(css.Class("row-desc"), props.Txn.Desc),
+		Td(ClassStr("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
+		Td(css.Class("row-desc"), Span(props.Txn.Desc), descTags),
 		Td(css.Class("td-cat"), cat),
 		Td(css.Class("td-acct"), props.Account),
-		Td(css.Class("td-tags"), tagsText),
-		Td(ClassStr("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
-		Td(css.Class("td-cleared"), Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.toggleClearedTitle")), OnClick(clr), clearedLabel)),
+		If(props.ShowTags, Td(css.Class("td-tags"), tagsText)),
+		Td(css.Class("td-cleared"), Button(ClassStr(clearedCls), Type("button"), Title(clearedTitle), Attr("aria-pressed", ariaBool(t.Cleared)), Attr("aria-label", clearedTitle), OnClick(clr), clearedGlyph)),
 		Td(css.Class("td-actions"),
-			If(!props.Txn.IsTransfer(), Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
-			If(!props.Txn.IsTransfer(), Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uistate.T("transactions.duplicate"))),
-			If(!props.Txn.IsTransfer(), Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.createRuleTitle")), Title(uistate.T("transactions.createRuleTitle")), Attr("data-testid", "txn-create-rule"), OnClick(createRule), uistate.T("transactions.createRule"))),
-			If(!props.Txn.IsTransfer(), Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("transactions.attachReceiptTitle")), Title(uistate.T("transactions.attachReceiptTitle")), Attr("data-testid", "txn-attach"), OnClick(attach), uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("transactions.attachReceipt")))),
-			If(len(props.Txn.Attachments) > 0, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", receiptCountLabel(len(props.Txn.Attachments))), Title(receiptCountLabel(len(props.Txn.Attachments))), Attr("data-testid", "txn-attach-marker"), OnClick(viewReceipt), uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(len(props.Txn.Attachments))))),
+			If(!props.Txn.IsTransfer(), Button(css.Class("btn btn-icon"), Type("button"), Attr("aria-label", uistate.T("transactions.editTitle")), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+			If(!props.Txn.IsTransfer(), Button(css.Class("btn btn-icon"), Type("button"), Attr("aria-label", uistate.T("transactions.duplicateTitle")), Title(uistate.T("transactions.duplicateTitle")), OnClick(dup), uiw.Icon(icon.Copy, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+			If(!props.Txn.IsTransfer(), Button(css.Class("btn btn-icon"), Type("button"), Attr("aria-label", uistate.T("transactions.createRuleTitle")), Title(uistate.T("transactions.createRuleTitle")), Attr("data-testid", "txn-create-rule"), OnClick(createRule), uiw.Icon(icon.Filter, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+			If(!props.Txn.IsTransfer(), Button(css.Class("btn btn-icon"), Type("button"), Attr("aria-label", uistate.T("transactions.attachReceiptTitle")), Title(uistate.T("transactions.attachReceiptTitle")), Attr("data-testid", "txn-attach"), OnClick(attach), uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+			If(len(props.Txn.Attachments) > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", receiptCountLabel(len(props.Txn.Attachments))), Title(receiptCountLabel(len(props.Txn.Attachments))), Attr("data-testid", "txn-attach-marker"), OnClick(viewReceipt), uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(len(props.Txn.Attachments))))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 	)

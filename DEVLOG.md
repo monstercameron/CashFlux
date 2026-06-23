@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series — G2 Transactions "The Reconciler"
+
+The dense one. The audit's DOM measurements were damning: the Actions column was 560px (44% of a
+1280 table) because every row carried four full-text buttons ("Edit", "Duplicate", "Always
+categorize like this", "Attach receipt"). Collapsed them to an icon strip (`.btn-icon`, label →
+title/aria) — that single change reclaims most of the width and lets Description breathe.
+
+Reordered the columns so Amount is position 3 (the dollar figure was buried at column 7 behind
+empty Tags). Did it in both the `cols` array and the row `<td>` order, with a dynamic colspan on the
+inline-edit row since the Tags column is now conditional — it only renders when something on the
+page is actually tagged (otherwise tags fold into a `#chip` on the Description cell). Added zebra +
+themed hover, a real ✓/○ cleared toggle (cleared rows dim), tighter row padding + single-line
+ellipsis on Description, and moved the orphaned Select-all onto the summary line.
+
+Next: G1 Dashboard and G6 To-do to finish the series.
+
 ## 2026-06-23 - feat: GLAMOR series — G3 Accounts "The Net-Worth Check"
 
 Third screen. Biggest pieces were the summary redesign and an honest trend number. Net worth was an

@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Transactions screen glamor pass (G2).** The ledger is far denser and faster to scan: the
+  **Actions column collapses to an icon strip** (was ~44% of table width), **Amount moves to
+  column 3** (Date → Amount → Description), rows get **zebra striping + a themed hover band**,
+  cleared state shows a **green ✓ / dim ○ toggle** (cleared rows dim) instead of a "Mark cleared"
+  button in every cell, the **Tags column hides when empty** (tagged rows show an inline #chip),
+  the **"Select all" button moves onto the summary line**, and tighter row padding + a single-line
+  ellipsised Description lift the visible row count.
 - **Accounts screen glamor pass (G3).** The summary now leads with a **dominant net-worth hero
   tile** (larger figure, full-height) beside smaller asset/liability tiles, with a **month-to-date
   trend subtitle** (↑/↓ signed delta from two net-worth snapshots). Accounts within each group

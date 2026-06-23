@@ -11611,6 +11611,17 @@ LIGHT-THEME RECIPE (not yet solved in G3 — same issue as G1/G2, deferred):
 
 ### G2. Transactions — "The Reconciler" (Nadia) — 2026-06-22 ★
 
+**✅ RESOLVED (2026-06-23).** All 8 consolidated defects shipped:
+1 (Actions 560px) — Edit/Duplicate/Rule/Attach collapsed to an icon strip (`.btn-icon`, labels → title/aria).
+2 (only 6–8 rows) — tighter `td` padding + single-line ellipsised Description cell shrinks row height.
+3 (no zebra/hover) — `tr.row:nth-child(even)` tint (dark + light) + themed `:hover` band.
+4 (Amount buried col 7) — column + cell reordered so Amount is position 3 (Date → Amount → Description).
+5 (no cleared state) — `.clr-toggle` ✓/○ glyph (green when cleared) replacing the "Mark cleared" text in every cell; cleared rows dim.
+6 (empty Tags col) — Tags column hidden when no row on the page is tagged; tagged rows show an inline `#chip` on the Description.
+7 (orphaned Select-all) — moved onto the summary line, reclaiming the ~40px band.
+8 (light unconfirmed) — zebra/hover carry explicit light-theme tints; global `--text` contrast pins apply.
+View in `transactions.go`; CSS in `web/index.html`.
+
 **The story**
 Nadia opens the ledger every few days to spot anything wrong: a miscategorized charge, a
 duplicate, an unexpectedly large amount. She has 612 transactions and needs to scan 50 rows
