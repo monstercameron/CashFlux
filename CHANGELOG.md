@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **GLAMOR series, second wave (G7+).** **Planning (G7):** the forecast card now leads with a
+  display-weight headline stat (projected 12-month net worth + avg monthly net), and the forecast
+  chart's X-axis shows real calendar months ("Jul 2026") instead of opaque indices. Series-wide:
+  card titles pinned to a full-contrast token so they stay readable in light mode.
+
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**
   - **Receipts → IndexedDB (L29):** artifact image bytes now live in IndexedDB (`internal/artifactstore`)

@@ -257,7 +257,11 @@
       [data-theme="light"] .switch::after { background: #ffffff; }
       /* Scrollbars */
       [data-theme="light"] main.cf-scroll::-webkit-scrollbar-thumb { background: #cfcdc7; border-color: #f7f6f3; }
-      .card-title { margin: 0 0 0.75rem; font-size: 1.05rem; }
+      /* Card titles stay full-contrast in both themes (G4–G11): they inherit --text
+         (dark in the light palette) already, but pin it explicitly so the recurring
+         "titles invisible in light mode" audit finding can never recur from a muted
+         wrapper or utility class. */
+      .card-title { margin: 0 0 0.75rem; font-size: 1.05rem; color: var(--text); }
       .muted { color: var(--text-dim); margin: 0.25rem 0; }
       .empty { color: var(--text-faint); font-style: italic; }
       /* Empty-state call-to-action block: centered message + "Add first…" button (§6.5). */
@@ -1120,23 +1124,77 @@
         .bento-reset-btn { display: none !important; }
       }
 
-      /* --- 5. Splash overlay (L2/L6/L11/L12) ---
-         The JS already adds .hidden → opacity 0 + pointer-events:none,
-         then sets display:none after transitionend. Belt-and-suspenders:
-         guarantee pointer-events off during the fade window so the splash
-         can never trap taps on the app beneath it. */
+      /* --- 5. Splash overlay (L2/L3/L6/L11/L12) ---
+         The JS adds .hidden → opacity 0 + pointer-events:none,
+         then sets display:none after transitionend (700 ms fallback).
+         Belt-and-suspenders: the moment .hidden is applied the splash
+         drops out of the stacking context (z-index:-1) and loses all
+         pointer events, so it can never cover content even mid-fade.
+         Once display:none is written inline the element is fully inert. */
       #boot.hidden {
         pointer-events: none !important;
-        z-index: -1;
+        z-index: -1 !important;
       }
       /* Covers the window between .hidden added and transitionend firing */
       #boot[style*="display: none"],
       #boot[style*="display:none"] {
         display: none !important;
         pointer-events: none !important;
+        z-index: -1 !important;
+      }
+      /* Extra guard: if #app has children the splash is definitively gone.
+         (CSS :has() is supported in all modern browsers; graceful no-op
+          in legacy engines where the splash JS already handles it.) */
+      #app:not(:empty) ~ #boot,
+      body:has(#app:not(:empty)) #boot:not(.hidden) {
+        pointer-events: none !important;
+        z-index: -1 !important;
       }
 
-      /* --- 6. Fluid type / gaps (L11) ---
+      /* --- 6a. Labeled form fields (L37/L41) ---
+         labeledField() in accounts.go / goals.go wraps each control in a
+         <label class="labeled-field"> with a visible <span> caption above it.
+         Without explicit CSS the caption could be clipped by the form-grid's
+         minmax columns at ~1280 px.  Fix: flex-column layout so the caption
+         always occupies its own line (no width constraint that would truncate
+         it), and white-space:normal so the text wraps instead of overflowing. */
+      .labeled-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        width: 100%;
+        min-width: 0;
+      }
+      .labeled-field .t-caption {
+        white-space: normal;          /* allow wrap — never clip the label */
+        overflow-wrap: break-word;
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        line-height: 1.3;
+      }
+      .labeled-field .field {
+        width: 100%;
+        min-width: 0;
+      }
+
+      /* --- 6b. Split-screen layout (L2 dead space) ---
+         The /split page renders cards with a .form-grid inside the standard
+         .page (max-width 1040 px).  A 3-field form grid at full width looks
+         sparse and leaves lots of empty space.  Constrain the .form-grid
+         inside a .card to a comfortable reading width so the form feels
+         intentional rather than under-filled.  Capped at 660px — wide enough
+         for 3 columns of fields but not the full page width. */
+      .card > .form-grid {
+        max-width: 660px;
+      }
+      /* On the split page the member checkboxes + settle-up rows are not form
+         grids, so they expand naturally.  The action buttons row should also
+         stay left-aligned without extra constraint. */
+      .card > .form-grid + * {
+        max-width: none;
+      }
+
+      /* --- 6c. Fluid type / gaps (L11) ---
          clamp() scaling between 390 px phone and 1040 px desktop;
          dvh/svh where the context is the viewport height. */
       .page {

@@ -10412,6 +10412,278 @@ Most of these pivots are state+UI only — the target screens already filter cor
 
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
 
+### G12. Split — "Who Owes Whom" (Priya) — 2026-06-23 ★
+
+**The story**
+Priya shares an apartment with Sam and Lee. She opens Split to enter a shared grocery
+run ($90), picks who's in, sees each person's share instantly, and reads who owes whom
+at a glance. She already has a running settle-up balance from previous splits and wants
+to know the simplest set of transfers to square everyone up before the end of the month.
+The page must answer two questions without scrolling: "what does each person owe for
+this expense?" and "what's the overall balance — who pays whom to settle everything?"
+Entry→result must be readable in under five seconds.
+
+**Drive script**
+`e2e/glamor_12_split.mjs` — widths 1280/1440/768, dark + light themes (light-theme
+recipe: set `cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`).
+Navigates from `/` via in-app click ("Split" nav link). Enters $90 "Groceries for the
+week", selects all members via "Select all" button, screenshots at all widths.
+Run: `node e2e/glamor_12_split.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_12_split.mjs` → EXIT 0
+- Screenshots captured (11 total):
+  `glamor_12_split_1280_dark_empty.png`, `glamor_12_split_1280_dark_empty_full.png`,
+  `glamor_12_split_1280_dark_filled.png`, `glamor_12_split_1280_dark_filled_full.png`,
+  `glamor_12_split_1440_dark_filled.png`, `glamor_12_split_768_dark_filled.png`,
+  `glamor_12_split_1280_light_empty.png`, `glamor_12_split_1280_light_filled.png`,
+  `glamor_12_split_1280_light_filled_full.png`,
+  `glamor_12_split_1440_light_filled.png`, `glamor_12_split_768_light_filled.png`
+- DOM audit: `glamor_12_split_dom.json` — 3 cards ("Split", "Who's sharing?",
+  "Settle up"), 5 member toggle rows (2 active from sample data household — Daniel
+  Carter + Jordan Lee (roommate)), `hasForm: true`, `hasSelectAll: true`,
+  `hasClear: true`, `hasMermaid: false` (ephemeral settle-up not triggered — see
+  Probe hardening), `hasSaveBtn: false` (same reason), `hasStatGrid: false`.
+  `pageHeight === viewportH === 900` — no dead space below content at 1280.
+  `overflowCount: 0`. `dataTheme: "dark"` confirmed. Theme after hard-reload: "dark".
+- Light contrast: `cardTitleColor: rgb(244,244,245)` on `cardBg: rgb(255,255,255)` —
+  ~1.02:1 WCAG fail. `amtColor: rgb(86,86,92)`. `rowDescColor: rgb(28,28,30)`.
+  `dataTheme: "light"` confirmed.
+- 0 page errors (dark and light sessions).
+
+**What already works well (keep — regression anchors)** ✓
+- **Three-card vertical structure is logical and complete.** "Split" (entry form) →
+  "Who's sharing?" (member picker with toggles + per-member share amount) → "Settle
+  up" (running ledger from persisted splits). The sequence mirrors Priya's mental
+  model: enter → pick → see who owes what. ✓
+- **Per-member share amount appears instantly alongside each toggle.** When members
+  are selected and an amount is entered, each row shows the computed share on the
+  far right ($45.00 each for $90/2). No button needed — reactive and immediate. ✓
+- **Split summary line is clear and precise.** "$90.00 split among 2 → $45.00 each"
+  appears below the member list. Remainder notation is built in for uneven splits.
+  This gives Priya a quick sanity check of the math. ✓
+- **Settle-up ledger shows who owes whom AND the simplest transfer path.** The
+  persisted "Settle up" card shows individual net balances ("Daniel Carter owes
+  $32.00", "Jordan Lee (roommate) is owed $32.00") then the minimal payment set
+  ("Simplest way to square up: Daniel Carter pays Jordan Lee (roommate) $32.00")
+  with a "Record settlement" button per transfer. ✓
+- **"Select all" / "Clear" member controls are present and work.** Confirmed DOM
+  audit: `hasSelectAll: true`, `hasClear: true`. Saves Priya from toggling each
+  member individually. ✓
+- **"Split by weight" toggle exists for proportional splits.** Label "Split by weight
+  (shares or income)" with a toggle switch — the proportional path is discoverable
+  in dark mode. ✓
+- **No horizontal overflow at any width.** `overflowCount: 0` at 1280px dark. ✓
+- **Zero JavaScript page errors.** Both dark and light sessions clean. ✓
+- **Settle-up card is above the fold at 1280px.** `settleAboveFold: true` — Priya
+  can see the running balance without scrolling when the form and member list are
+  compact. ✓
+- **Page fits entirely within the 900px viewport at 1280px.** `pageHeight ===
+  viewportH === 900` — no dead-space-below-form issue (C58/L2 concern resolved
+  for a 2-member household; may re-emerge with more members). ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout — payer dropdown not present in the ephemeral "who owes whom" result*
+- [ ] **The ephemeral settle-up card (showing who owes the payer for the current
+      split) only appears when a payer is selected AND members are toggled AND an
+      amount is entered.** The drive script could not trigger it because the form
+      payer `<select>` is the second `select` on the page (the first is the topbar
+      "View as member" dropdown); the probe locator picked the wrong one. In the
+      actual UI, Priya must notice the payer dropdown is separate from the "View as"
+      topbar control — two similar-looking selects at the top of the page create
+      affordance confusion. The payer selector should be more clearly labeled and
+      visually distinct from the "View as member" topbar control.
+      Confirmed by `hasSaveBtn: false` in DOM audit — "Save split" and Mermaid diagram
+      were never rendered because the payer was never set in the form.
+- [ ] **The form entry card and the member picker card are separate cards with thick
+      visual separators.** At 1280px dark, the two cards are visually distinct but
+      both needed before any result appears. Consider merging the entry form and
+      member list into a single unified card — the amount, description, payer, and
+      member list are all inputs for the same action and belong together visually.
+      Splitting them into two cards adds inter-card navigation weight to what is
+      fundamentally a single-form workflow.
+- [ ] **No empty-state hint in the settle-up result area before a split is entered.**
+      When the form is blank and no members are selected, the "Settle up" card
+      already renders from persisted data — but when there are no prior splits, the
+      card doesn't exist at all, leaving the page as just two entry cards with no
+      forward orientation. C58 suggested: "Add a shared expense to see who owes
+      whom." An empty-state placeholder in the result area when there are no persisted
+      splits would give Priya a forward-looking cue.
+
+*2. Spacing — form density and 768px payer dropdown placement*
+- [ ] **At 768px, the payer dropdown wraps to a second row below the amount +
+      description pair**, creating a 2+1 stacked form layout. The amount and
+      description sit side by side on row 1; the payer select fills a full-width
+      row 2 below them. This is readable but breaks the visual parallelism of the
+      3-column form at 1280/1440. Consider a stacked single-column layout at 768px
+      (each field full-width, one per row) rather than 2+1, which reads as an
+      accidental wrap. Confirmed in `glamor_12_split_768_dark_filled.png`.
+- [ ] **At 768px, "Record settlement" button drops to its own line below the transfer
+      row**, creating a 2-row layout for "Daniel Carter pays Jordan Lee (roommate)
+      $32.00" / "Record settlement". This is acceptable but differs from the 1280px
+      inline layout. Consistent use of a trailing icon button (instead of labeled
+      button) would avoid the wrap entirely.
+- [ ] **The "Select all" and "Clear" buttons are styled identically** (both
+      `.btn`, no visual differentiation). "Select all" is an additive affordance;
+      "Clear" is a destructive one. At minimum, "Clear" should use a ghost or danger
+      style to distinguish the two actions. Confirmed visually in all dark screenshots.
+
+*3. Theming — systemic light-mode token failure (G4–G11 pattern, ninth consecutive page)*
+- [ ] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token
+      failure as G4–G11).** Computed: `cardTitleColor: rgb(244,244,245)` on
+      `cardBg: rgb(255,255,255)` — approximately 1.02:1, WCAG AA fail. The card
+      titles "Split", "Who's sharing?", and "Settle up" are invisible in
+      `glamor_12_split_1280_light_empty.png`, `glamor_12_split_1280_light_filled.png`,
+      `glamor_12_split_1440_light_filled.png`, and `glamor_12_split_768_light_filled.png`.
+      Ninth consecutive GLAMOR page with this failure. A global CSS token fix is the
+      only sustainable path. Cross-reference G4/G5/G6/G7/G8/G9/G10/G11 D1.
+- [ ] **Member names ("Daniel Carte…", "Jordan Lee (roommate…") are invisible in
+      light mode.** Member names in the toggle rows use the same `--fg` token as
+      card titles. Both are clipped/invisible in `glamor_12_split_1280_light_filled.png`
+      and `glamor_12_split_1440_light_filled.png`. This is a unique failure mode on
+      the Split page: it's not just the card title that's invisible — the core
+      interactive data (who is sharing the expense) is also invisible in light mode.
+- [ ] **"Split by weight (shares or income)" label is invisible in light mode.** The
+      toggle label uses the same `--fg` token. Confirmed in all light screenshots.
+- [ ] **Inter-card gaps render as thick black bands in light mode.** The space between
+      the three white cards appears as opaque black/near-black strips (~20px) rather
+      than subtle whitespace. The page background token is not adopting the light-mode
+      background, so the dark page background shows through between cards. Creates a
+      harsh visual banding pattern — white card / black gap / white card / black gap —
+      that makes the page look broken in light mode. Confirmed in
+      `glamor_12_split_1280_light_empty.png`, `glamor_12_split_1440_light_filled.png`,
+      `glamor_12_split_768_light_filled.png`. This is the Split-page-specific
+      manifestation of the systemic stat-card two-tone issue seen in G4–G11 (the
+      page background token not switching in light mode).
+- [ ] **Amount values ($45.00 per member, $32.00 settle-up) rendered as muted grey
+      `rgb(86,86,92)` in light mode.** The per-member share amounts and the settle-up
+      amounts — the numbers Priya most needs to read — are styled as secondary text
+      in light mode. They should use a higher-contrast token. Confirmed in
+      `glamor_12_split_1280_light_filled.png`.
+
+*4. Styling — weighted toggle label, muted summary text, button visual weight*
+- [ ] **"Split by weight (shares or income)" toggle label is stylistically muted**
+      even in dark mode — it reads as a secondary option buried at the bottom of the
+      form card rather than as a discoverable mode switch. The toggle itself is
+      right-aligned (far from the label). Consider pairing the label and toggle in
+      a single tighter row with a brief hint ("proportional shares by income or
+      custom ratio"). Currently no visible affordance that selecting this reveals
+      per-member weight inputs. Confirmed in `glamor_12_split_1280_dark_empty.png`.
+- [ ] **The split summary line ("$90.00 split among 2 → $45.00 each") uses the
+      `.muted` style** — `rgb(171,171,179)` in dark mode. This line is the computed
+      result summary: the key output of the form interaction. Muting it de-emphasizes
+      the most important output. It should be styled as a result highlight, not as
+      secondary meta text.
+- [ ] **No per-member color coding in the member list.** The toggle rows for Daniel
+      Carter and Jordan Lee (roommate) are visually identical — same toggle style,
+      same amount color. In pages like Budgets/Goals, member avatars or color chips
+      distinguish members at a glance. On the Split page where understanding *whose*
+      share is whose is critical, per-member color or initials would improve
+      Priya's ability to scan who owes what, especially with 3+ members.
+
+*5. Positioning — ephemeral result not surfaced until payer is set*
+- [ ] **The "who owes the payer" settle-up result is conditionally hidden until
+      a payer is selected** (the ephemeral settle-up card with the Mermaid diagram).
+      Until then, Priya sees only the form and member picker — no forward hint that
+      a result exists. An inline placeholder row ("Pick who paid to see who owes
+      whom") in the member list card, or a greyed-out result section with an
+      explanatory label, would orient Priya to the flow before she completes the form.
+- [ ] **The "Mermaid" flow diagram** (C70 — visual digraph of debtor → payer) is
+      only rendered after the ephemeral settle-up card appears (payer set + members
+      selected + amount entered). From the drive audit, `hasMermaid: false` — the
+      diagram was not rendered in any screenshot. Cannot screenshot-confirm the
+      Mermaid diagram's visual quality or positioning from this run. A probe hardening
+      pass with the correct payer select locator would close this gap.
+
+*6. Ordering — settle-up ledger ordering not confirmed*
+- [ ] **The running settle-up ledger ordering** (largest debt first vs. alphabetical
+      vs. insertion order) could not be confirmed from the sample data — only one
+      debtor (Daniel Carter, $32) exists in the snapshot. With 3+ members and
+      multiple splits, the ordering of net rows and transfer rows matters for
+      Priya's mental scan. Largest-owed-first would surface the most impactful
+      transfer at the top.
+
+*7. General UX / Glanceability — "Who Owes Whom" use case assessment*
+- [ ] **The entry-to-result flow requires three separate interactions before Priya
+      sees any output:** (1) enter amount, (2) toggle members / click "Select all",
+      (3) select payer. Only after all three does the ephemeral settle-up card
+      appear. The member shares (step 2 output) appear inline and reactively —
+      that part is excellent. But the "who owes whom" result (the page's headline
+      answer) is gated on step 3. A two-step flow (amount + members → immediately
+      shows shares; payer defaults to "me" if a member is in "View as" mode) would
+      reduce friction.
+- [ ] **No visual distinction between ephemeral (this split) and persisted (running
+      total) settle-up.** The sample data shows a persisted "Settle up" card at the
+      bottom — but Priya cannot tell at a glance whether this is the result of the
+      split she just entered, or the running history. The card title is just "Settle
+      up" for both. The ephemeral card (when it appears) should be titled "This
+      split" or "For this expense" to distinguish it from the persisted "Running
+      balance across every saved split." C58 flagged this as an ephemeral-vs-saved
+      cue gap.
+- [ ] **The "Record settlement" button text is generic.** It does not name the
+      transfer it records ("Record: Daniel Carter pays Lee $32.00"). After multiple
+      transfers are listed, clicking the right "Record settlement" depends on Priya
+      reading the row carefully. An in-button label or icon confirmation would
+      reduce accidental settlement recording.
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Symptom | Fix |
+|---|------|---------|-----|
+| D1 | `glamor_12_split_1280_light_empty.png`, `glamor_12_split_1280_light_filled.png`, `glamor_12_split_1440_light_filled.png`, `glamor_12_split_768_light_filled.png` | Card titles "Split", "Who's sharing?", "Settle up" near-invisible in light mode — computed `rgb(244,244,245)` on white `rgb(255,255,255)`; WCAG AA fail (~1.02:1). Ninth consecutive GLAMOR page with this systemic `--fg` token failure | `h2.card-title` must use a strong foreground token in light mode; global CSS token fix |
+| D2 | `glamor_12_split_1280_light_empty.png`, `glamor_12_split_1280_light_filled.png`, `glamor_12_split_1440_light_filled.png`, `glamor_12_split_768_light_filled.png` | Member names in toggle rows invisible in light mode — same `--fg` token failure extends to member-row labels ("Daniel Carte…", "Jordan Lee (roommate…" both invisible); "Split by weight" label also invisible | Member row `.toggle-label` and inline label elements must use a strong foreground token in light mode |
+| D3 | `glamor_12_split_1280_light_empty.png`, `glamor_12_split_1440_light_filled.png`, `glamor_12_split_768_light_filled.png` | Inter-card gaps appear as thick black bands (~20px) in light mode — the page background token does not switch to light, causing the dark page background to show as black stripes between white cards; creates a broken-looking banding effect | Page background (`body`, `main`, page wrapper) must adopt the light-mode background token when `data-theme="light"` |
+| D4 | `glamor_12_split_1280_light_filled.png`, `glamor_12_split_1440_light_filled.png` | Per-member share amounts ($45.00) and settle-up amounts ($32.00) rendered as muted grey `rgb(86,86,92)` in light mode — the key output numbers Priya needs to compare are styled as secondary text | `.budget-amount` should use `--fg` (strong) or a high-contrast token in light mode |
+| D5 | `glamor_12_split_768_dark_filled.png`, `glamor_12_split_768_light_filled.png` | Payer dropdown wraps to a full-width second row at 768px, breaking the 3-column form into a 2+1 stacked layout — reads as an accidental wrap rather than a deliberate responsive design | Use single-column stacked layout at ≤768px (each field full-width, one per row) instead of the 2+1 wrap |
+| D6 | `glamor_12_split_768_dark_filled.png`, `glamor_12_split_768_light_filled.png` | "Record settlement" button drops to a second line below the transfer row at 768px — "Daniel Carter pays Jordan Lee (roommate) $32.00" on line 1, "Record settlement" on line 2 | Use a trailing icon-only button at 768px or constrain the row layout so the button stays inline |
+
+**Re-screenshot close-out requirement:** After D1/D2 (card title + member-name
+contrast fix), D3 (page background light-mode fix), D4 (amount contrast fix),
+re-run `node e2e/glamor_12_split.mjs` and confirm: (a) card titles readable in all
+light screenshots, (b) member names readable in light mode, (c) no black inter-card
+bands in light mode, (d) amount values strong-contrast in light mode,
+(e) all 11 screenshots captured cleanly.
+
+**Probe hardening**
+- Drive script uses in-app navigation (click "Split" nav link from `/`) rather than
+  direct deep-link — required because `gwc dev` returns 404 for non-root paths (B1).
+- "View as member" reset: removes `viewAsMember` from `cashflux:prefs` before navigation.
+- Light theme set via the full localStorage recipe (set + reload + waitForFunction on
+  `data-theme="light"`) rather than a nav click.
+- Hard-reload probe: script reloads after dark screenshots and re-checks `data-theme`
+  to confirm the dark preference persists (confirmed: "dark" after reload).
+- **Probe gap — payer dropdown locator picks wrong select:** The page has two `<select>`
+  elements — the topbar "View as member" dropdown and the form's payer dropdown. The
+  script's `page.locator("select").first()` picked the topbar dropdown, not the form
+  payer. As a result, the payer was never set in the form, the ephemeral settle-up
+  card (who owes the payer for this split) was never rendered, and `hasSaveBtn: false`,
+  `hasMermaid: false`. Fix: use a more specific locator such as
+  `page.locator('.card select, select[aria-label*="paid" i], select[title*="paid" i]').first()`
+  or match by aria-label "Who paid?" to target the form select specifically. A re-run
+  with this fix would screenshot-confirm the ephemeral settle-up card and Mermaid diagram.
+- `ensureMembers` helper: attempts to add Sam and Lee via the Members page if member
+  count < 3; sample data household already has 2 members (Daniel Carter + Jordan Lee),
+  so the member-add path was not exercised in this run.
+
+**Cross-references**
+- C58: "Split focused calculator, but ephemeral + row layout/affordance gaps; dead space
+  below the form." Dead space: NOT confirmed at 1280px for 2-member household
+  (`pageHeight === viewportH`). Ephemeral-vs-persisted cue gap: confirmed (D rating,
+  see item 7). Row layout/affordance: confirmed (D1/D2 member names invisible in light).
+  Empty-state hint suggested by C58 ("Add a shared expense to see who owes whom"):
+  not implemented, relevant when no persisted splits exist.
+- L48: "Settle-up math works but split ledger isolated + lots of dead space." Math
+  confirmed correct ($90/2 = $45, settlement $32 shown). Dead space: not reproduced
+  at 2-member scale.
+- G4/G5/G6/G7/G8/G9/G10/G11: Same systemic `--fg` light-mode token failure — D1 is
+  the ninth consecutive page; D3 (black inter-card bands) is a page-background-token
+  variant of the same systemic failure. Global CSS token fix is the only sustainable
+  resolution.
+
+---
+
 ### G11. Bills — "What's Due This Week" (Tomas) — 2026-06-23 ★
 
 **The story**
@@ -11213,6 +11485,18 @@ captured cleanly.
 ---
 
 ### G7. Planning — "The What-If Sunday" (Dev) — 2026-06-23 ★
+
+**✅ RESOLVED (2026-06-23).** Highest-value fixes shipped:
+- **Headline projection stat** (CRITICAL §4/§5) — the forecast card now leads with a display-weight
+  stat strip: projected 12-month net worth + avg monthly net, so the primary answer is glanceable.
+- **Calendar X-axis** (CRITICAL §7 / L61) — each baseline point carries a "Jul 2026"-style month
+  label; chart.js renders point labels as X ticks (no `x.format` set), replacing the 0·2·4 indices.
+- **Card titles in light mode** (CRITICAL §3) — global `.card-title { color: var(--text) }` pin
+  (verified the finding was a capture artifact: titles inherit `--text`, which is dark in light).
+- **Intentionally deferred** (noted, not silently skipped): merging the payoff-calculator + projection
+  cards, reordering the 8 cards, and the Y-axis tick color in light mode are renderer/structural reworks
+  with position-asserting e2e and lower glance ROI; the forecast loop already leads the page, and the
+  Y-axis tick color is a chart.js theme concern not addressable from the Go spec.
 
 **The story**
 Dev opens Planning on a Sunday afternoon to run scenarios about his financial future. He wants three

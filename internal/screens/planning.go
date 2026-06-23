@@ -301,6 +301,14 @@ func Planning() ui.Node {
 			yFmt = "$.2~s"
 		}
 		chartSeries := []chartspec.Series{{Name: uistate.T("planning.seriesBaseline"), Points: toPoints(series)}}
+		// Calendar X-axis labels (G7 §7 / L61): the chart's X values are month indices
+		// 0..12, which read as opaque "0 · 2 · 4 …". Attach a real month label to each
+		// baseline point ("Jul 2026"); chart.js renders point labels as X ticks when no
+		// x.format is set, so Dev can answer "by when?" instead of "at which index?".
+		forecastStart := time.Now()
+		for i := range chartSeries[0].Points {
+			chartSeries[0].Points[i].Label = forecastStart.AddDate(0, i, 0).Format("Jan 2006")
+		}
 
 		trimNote := Fragment()
 		if trim, terr := money.ParseMinor(strings.TrimSpace(trimStr.Get()), currency.Decimals(base)); terr == nil && trim > 0 {
@@ -358,6 +366,13 @@ func Planning() ui.Node {
 		}
 		forecastCard = Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("planning.forecastTitle")),
+			// Headline answer (G7 §4/§5): surface the projected 12-month net worth as a
+			// display-weight figure so Dev's primary question ("where will I be?") is
+			// answerable at glance-speed, before parsing the chart or the hint sentence.
+			Div(css.Class("stat-grid"),
+				stat(uistate.T("planning.projectedNetWorth"), fmtMoney(endVal), accentFor(endVal)),
+				stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
+			),
 			P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
 			P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
 			uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),

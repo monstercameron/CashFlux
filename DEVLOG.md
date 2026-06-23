@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series wave 2 — G7 Planning "The What-If Sunday"
+
+Cam extended the glamor sweep to G7–G11 (Planning, Allocate, Reports, Subscriptions, Bills). Starting
+G7. Two genuinely high-value fixes: a headline projection stat (the forecast card had Dev's primary
+answer — projected 12-month net worth — buried in a muted hint sentence; promoted it to a display
+stat strip), and calendar X-axis labels (the chart read "0·2·4·6"; chart.js already renders
+`Point.Label` as X ticks when no `x.format` is set, so attaching "Jul 2026"-style labels to the
+baseline points was a clean one-loop fix — no renderer change).
+
+Confirmed the recurring "card titles invisible in light mode" finding across G7/G9/G10/G11 is a
+capture artifact, not a CSS bug: `.card-title` inherits `--text`, which the light palette sets dark.
+Added an explicit pin anyway to close it for good. Deferred the card-merge/reorder/Y-axis-tick-color
+items (renderer/structural, position-asserting e2e, lower ROI) with a note in TODOS.
+
 ## 2026-06-23 - feat: GLAMOR series — G6 To-do "The Money To-Do List" (series complete)
 
 Final screen. Small, contained pass: a header "+ Add task" button (the global "+" was ~700px from

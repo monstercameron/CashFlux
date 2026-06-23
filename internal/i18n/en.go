@@ -466,6 +466,8 @@ var english = Catalog{
 
 	// Planning screen
 	"planning.forecastTitle":            "Net worth in 12 months",
+	"planning.projectedNetWorth":        "Projected in 12 months",
+	"planning.avgMonthlyNet":            "Avg monthly net",
 	"planning.forecastHint":             "Based on your last 3 months' average net cash flow (%s/month), projected to %s.",
 	"planning.forecastBasis":            "3-month trailing average",
 	"planning.trimPlaceholder":          "What if I trim monthly spending by… (%s)",
