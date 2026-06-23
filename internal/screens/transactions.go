@@ -18,7 +18,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
-	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -41,13 +40,6 @@ func Transactions() ui.Node {
 	rev := state.UseAtom("rev:transactions", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 
-	// Land focus on the Description field when the ledger opens, so logging a
-	// purchase is type-immediately (L32 "three seconds at the register").
-	ui.UseEffect(func() func() {
-		focusByID("txn-add")
-		return nil
-	}, []any{})
-
 	accounts := app.Accounts()
 	categories := app.Categories()
 
@@ -63,43 +55,6 @@ func Transactions() ui.Node {
 	for _, a := range accounts {
 		accName[a.ID] = a.Name
 	}
-	// Auto-categorization: the user's saved rules take priority (first match wins,
-	// and they can also assign tags), then fall back to implicit rules that treat
-	// each category name as a match — so typing "Groceries" suggests that category.
-	desc := ui.UseState("")
-	amountStr := ui.UseState("")
-	kind := ui.UseState("Expense")
-	// Default the add form to an everyday spending account (checking/cash), not
-	// whatever sorts first — an investment/retirement account is a poor default for
-	// logging a purchase (L39).
-	defaultAcc := ""
-	for _, a := range accounts {
-		if a.Archived {
-			continue
-		}
-		if a.Type == domain.TypeChecking || a.Type == domain.TypeCash {
-			defaultAcc = a.ID
-			break
-		}
-	}
-	if defaultAcc == "" {
-		for _, a := range accounts {
-			if !a.Archived && a.Class == domain.ClassAsset {
-				defaultAcc = a.ID
-				break
-			}
-		}
-	}
-	if defaultAcc == "" && len(accounts) > 0 {
-		defaultAcc = accounts[0].ID
-	}
-	accID := ui.UseState(defaultAcc)
-	catID := ui.UseState("")
-	toAccID := ui.UseState("")
-	receivedAmtStr := ui.UseState("") // override for cross-currency received amount
-	tagsStr := ui.UseState("")
-	dateStr := ui.UseState(time.Now().Format(dateutil.Layout))
-	customVals := ui.UseState(map[string]string{})
 	selected := ui.UseState(map[string]bool{})
 	bulkCat := ui.UseState("")
 	errMsg := ui.UseState("")
@@ -137,49 +92,6 @@ func Transactions() ui.Node {
 	setPage := func(p int) { setFilter(func(x *uistate.TxFilter) { x.Page = p }) }
 	setPageSize := func(s int) { setFilter(func(x *uistate.TxFilter) { x.PageSize, x.Page = s, 1 }) }
 
-	onDesc := ui.UseEvent(func(v string) {
-		desc.Set(v)
-		// Auto-suggest from the description via the matching rule, but never override
-		// a category or tags the user already entered.
-		nextCat, nextTags := app.SuggestTransactionFields(v, catID.Get(), textutil.CommaFields(tagsStr.Get()))
-		catID.Set(nextCat)
-		if len(nextTags) > 0 && strings.TrimSpace(tagsStr.Get()) == "" {
-			tagsStr.Set(strings.Join(nextTags, ", "))
-		}
-	})
-	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
-	onDate := ui.UseEvent(func(v string) { dateStr.Set(v) })
-	onKind := ui.UseEvent(func(e ui.Event) { kind.Set(e.GetValue()) })
-	// whoMemberID tracks the "Who" picker value for the add form; whoOverridden
-	// records whether the user has explicitly chosen a member (so an account
-	// change does not silently overwrite their choice).
-	whoMemberID := ui.UseState(func() string {
-		if len(accounts) > 0 {
-			return app.MemberForNewTransaction(accounts[0])
-		}
-		return ""
-	}())
-	whoOverridden := ui.UseState(false)
-	onAcc := ui.UseEvent(func(e ui.Event) {
-		accID.Set(e.GetValue())
-		// When the user switches accounts, reset the Who picker to the new
-		// account's default owner ONLY if they haven't explicitly overridden it.
-		if !whoOverridden.Get() {
-			if a, ok := accByID[e.GetValue()]; ok {
-				whoMemberID.Set(app.MemberForNewTransaction(a))
-			}
-		}
-	})
-	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
-	onWho := ui.UseEvent(func(e ui.Event) {
-		whoMemberID.Set(e.GetValue())
-		whoOverridden.Set(true)
-	})
-	onToAcc := ui.UseEvent(func(e ui.Event) { toAccID.Set(e.GetValue()) })
-	onReceivedAmt := ui.UseEvent(func(v string) { receivedAmtStr.Set(v) })
-	onTags := ui.UseEvent(func(v string) { tagsStr.Set(v) })
-	repeatCadence := ui.UseState("")
-	onRepeat := ui.UseEvent(func(e ui.Event) { repeatCadence.Set(e.GetValue()) })
 	onFilterText := func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) }
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Account = e.GetValue() }) })
 	onFilterCat := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue() }) })
@@ -222,15 +134,6 @@ func Transactions() ui.Node {
 	}
 
 	txnDefs := app.CustomFieldDefsFor("transaction")
-	onCustom := func(key, value string) {
-		m := customVals.Get()
-		nm := make(map[string]string, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[key] = value
-		customVals.Set(nm)
-	}
 	clearFilters := ui.UseEvent(Prevent(func() {
 		cleared := uistate.TxFilter{}.Normalize()
 		filterAtom.Set(cleared)
@@ -250,141 +153,6 @@ func Transactions() ui.Node {
 		downloadBytes("transactions.csv", "text/csv", data)
 	}))
 
-	add := ui.UseEvent(Prevent(func() {
-		acc, ok := accByID[accID.Get()]
-		if !ok {
-			errMsg.Set(uistate.T("transactions.chooseAccount"))
-			return
-		}
-		amt, err := money.ParseMinor(strings.TrimSpace(amountStr.Get()), currency.Decimals(acc.Currency))
-		if err != nil || amt <= 0 {
-			errMsg.Set(uistate.T("transactions.positiveAmount"))
-			return
-		}
-		date, derr := dateutil.ParseDate(strings.TrimSpace(dateStr.Get()))
-		if derr != nil {
-			errMsg.Set(uistate.T("transactions.invalidDate"))
-			return
-		}
-		memberFor := app.MemberForNewTransaction
-		// Resolve the chosen member: use the Who picker value when the picker is
-		// shown (more than one member) and has a value; otherwise fall back to
-		// the account-owner default.
-		chosenMember := func(a domain.Account) string {
-			if len(app.Members()) > 1 && whoMemberID.Get() != "" {
-				return whoMemberID.Get()
-			}
-			return memberFor(a)
-		}
-		label := strings.TrimSpace(desc.Get())
-
-		if kind.Get() == "Transfer" {
-			toAcc, ok := accByID[toAccID.Get()]
-			if !ok || toAcc.ID == acc.ID {
-				errMsg.Set(uistate.T("transactions.diffDestination"))
-				return
-			}
-			if label == "" {
-				label = uistate.T("transactions.transfer")
-			}
-
-			// Determine how many minor units the destination account receives.
-			// For same-currency transfers the amount is identical; for cross-currency
-			// transfers we convert via the FX table, or accept a user-supplied override.
-			var receivedAmt int64
-			if toAcc.Currency == acc.Currency {
-				receivedAmt = amt
-			} else {
-				// Check for a user-supplied override first.
-				if override := strings.TrimSpace(receivedAmtStr.Get()); override != "" {
-					parsed, perr := money.ParseMinor(override, currency.Decimals(toAcc.Currency))
-					if perr != nil || parsed <= 0 {
-						errMsg.Set(uistate.T("transactions.positiveAmount"))
-						return
-					}
-					receivedAmt = parsed
-				} else {
-					base := app.Settings().BaseCurrency
-					if base == "" {
-						base = "USD"
-					}
-					rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-					converted, cerr := currency.ConvertBetween(amt, acc.Currency, toAcc.Currency, rates)
-					if cerr != nil {
-						errMsg.Set(uistate.T("transactions.fxRateMissing", acc.Currency, toAcc.Currency))
-						return
-					}
-					receivedAmt = converted
-				}
-			}
-
-			out := domain.Transaction{
-				ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
-				Amount: money.New(-amt, acc.Currency), TransferAccountID: toAcc.ID, MemberID: chosenMember(acc),
-			}
-			in := domain.Transaction{
-				ID: id.New(), AccountID: toAcc.ID, Date: date, Desc: label,
-				Amount: money.New(receivedAmt, toAcc.Currency), TransferAccountID: acc.ID, MemberID: memberFor(toAcc),
-			}
-			if err := app.PutTransaction(out); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
-			if err := app.PutTransaction(in); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
-			desc.Set("")
-			amountStr.Set("")
-			receivedAmtStr.Set("")
-			whoOverridden.Set(false)
-			errMsg.Set("")
-			bump()
-			return
-		}
-
-		if kind.Get() == "Expense" {
-			amt = -amt
-		}
-		t := domain.Transaction{
-			ID: id.New(), AccountID: acc.ID, Date: date, Desc: label,
-			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: chosenMember(acc),
-			Tags: textutil.CommaFields(tagsStr.Get()), Custom: customValuesToMap(txnDefs, customVals.Get()),
-		}
-		if err := app.PutTransaction(t); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		// If the user chose a repeat cadence, create a recurring schedule for
-		// the same cash flow. Post this one now (above), then auto-post the
-		// same again every <cadence> starting the next period.
-		if rc := domain.RecurringCadence(repeatCadence.Get()); rc != "" && kind.Get() != "Transfer" {
-			r := domain.Recurring{
-				ID:         id.New(),
-				Label:      label,
-				Amount:     money.New(amt, acc.Currency),
-				Cadence:    rc,
-				NextDue:    rc.Next(date),
-				AccountID:  acc.ID,
-				CategoryID: catID.Get(),
-				Autopost:   true,
-			}
-			if err := app.PutRecurring(r); err != nil {
-				errMsg.Set(err.Error())
-				// Keep the already-created transaction; don't bail.
-			}
-		}
-		desc.Set("")
-		amountStr.Set("")
-		tagsStr.Set("")
-		repeatCadence.Set("")
-		customVals.Set(map[string]string{})
-		whoOverridden.Set(false)
-		errMsg.Set("")
-		bump()
-		uistate.PostNotice(uistate.T("transactions.addedToast"), false) // success confirmation (L39)
-		focusByID("txn-add")                                            // return focus for rapid back-to-back logging (L32)
-	}))
 
 	// Receipt attachments (L29): the preview holds the currently-open attachment
 	// ("" ArtifactID = closed). attachReceipt uploads an image and links it.
@@ -608,140 +376,6 @@ func Transactions() ui.Node {
 		selected.Set(nm)
 	}))
 
-	repeatLast := ui.UseEvent(func() {
-		all := app.Transactions()
-		if len(all) == 0 {
-			return
-		}
-		newest := all[0]
-		for _, t := range all[1:] {
-			if t.Date.After(newest.Date) {
-				newest = t
-			}
-		}
-		desc.Set(newest.Desc)
-		accID.Set(newest.AccountID)
-		catID.Set(newest.CategoryID)
-		switch {
-		case newest.IsTransfer():
-			kind.Set("Transfer")
-			toAccID.Set(newest.TransferAccountID)
-		case newest.Amount.IsNegative():
-			kind.Set("Expense")
-		default:
-			kind.Set("Income")
-		}
-		amt := newest.Amount.Amount
-		if amt < 0 {
-			amt = -amt
-		}
-		amountStr.Set(money.FormatMinor(amt, currency.Decimals(accByID[newest.AccountID].Currency)))
-	})
-
-	var formCard ui.Node
-	if len(accounts) == 0 {
-		formCard = Section(css.Class("card"), P(css.Class("empty"), uistate.T("transactions.needAccount")))
-	} else {
-		isTransfer := kind.Get() == "Transfer"
-		kindOptions := []ui.Node{
-			Option(Value("Expense"), SelectedIf(kind.Get() == "Expense"), uistate.T("category.expense")),
-			Option(Value("Income"), SelectedIf(kind.Get() == "Income"), uistate.T("category.income")),
-			Option(Value("Transfer"), SelectedIf(isTransfer), uistate.T("transactions.transfer")),
-		}
-		accOptions := make([]ui.Node, 0, len(accounts))
-		for _, a := range accounts {
-			accOptions = append(accOptions, Option(Value(a.ID), SelectedIf(accID.Get() == a.ID), a.Name))
-		}
-		catOptions := []ui.Node{Option(Value(""), SelectedIf(catID.Get() == ""), uistate.T("transactions.noCategory"))}
-		for _, c := range categories {
-			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
-		}
-		toAccOptions := []ui.Node{Option(Value(""), SelectedIf(toAccID.Get() == ""), uistate.T("transactions.toAccountOpt"))}
-		for _, a := range accounts {
-			toAccOptions = append(toAccOptions, Option(Value(a.ID), SelectedIf(toAccID.Get() == a.ID), a.Name))
-		}
-		accLabel := uistate.T("transactions.account")
-		if isTransfer {
-			accLabel = uistate.T("transactions.fromAccount")
-		}
-
-		// Determine whether the two selected accounts have different currencies so
-		// we can show (or hide) the "Received amount" override field.
-		srcAcc := accByID[accID.Get()]
-		dstAcc := accByID[toAccID.Get()]
-		isCrossCurrency := isTransfer && toAccID.Get() != "" && dstAcc.Currency != "" && dstAcc.Currency != srcAcc.Currency
-
-		// Pre-compute the FX preview value that pre-fills the received-amount field.
-		// We only do this when both sides are resolved; errors are silently omitted
-		// because the field is just a convenience default.
-		fxPreview := receivedAmtStr.Get()
-		if isCrossCurrency && fxPreview == "" {
-			base := app.Settings().BaseCurrency
-			if base == "" {
-				base = "USD"
-			}
-			rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-			if srcAmtRaw, perr := money.ParseMinor(strings.TrimSpace(amountStr.Get()), currency.Decimals(srcAcc.Currency)); perr == nil && srcAmtRaw > 0 {
-				if converted, cerr := currency.ConvertBetween(srcAmtRaw, srcAcc.Currency, dstAcc.Currency, rates); cerr == nil {
-					fxPreview = money.FormatMinor(converted, currency.Decimals(dstAcc.Currency))
-				}
-			}
-		}
-		// Custom fields apply to income/expense entries, not transfer legs.
-		formTxnDefs := txnDefs
-		if isTransfer {
-			formTxnDefs = nil
-		}
-		// Build the optional "Who" member picker (only shown when there are
-		// multiple members to choose from).
-		members := app.Members()
-		var whoOptions []ui.Node
-		if len(members) > 1 {
-			for _, m := range members {
-				whoOptions = append(whoOptions, Option(Value(m.ID), SelectedIf(whoMemberID.Get() == m.ID), m.Name))
-			}
-		}
-		formCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("transactions.addTitle")),
-			Form(css.Class("form-grid"), OnSubmit(add),
-				Input(append([]any{css.Class("field"), Attr("id", "txn-add"), Attr("aria-label", uistate.T("transactions.descPlaceholder")), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)}, errAttrs("txn-err", errMsg.Get())...)...),
-				Input(css.Class("field"), Type("number"), Attr("inputmode", "decimal"), Attr("aria-required", "true"), Attr("aria-label", uistate.T("transactions.amountPlaceholder")), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.kindLabel")), OnChange(onKind), kindOptions),
-				Select(css.Class("field"), Attr("aria-label", accLabel), Title(accLabel), OnChange(onAcc), accOptions),
-				IfElse(isTransfer,
-					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.toAccount")), Title(uistate.T("transactions.toAccount")), OnChange(onToAcc), toAccOptions),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
-				),
-				If(isCrossCurrency,
-					Input(css.Class("field"), Type("number"), Attr("inputmode", "decimal"),
-						Attr("aria-label", uistate.T("transactions.receivedAmount")),
-						Attr("data-testid", "txn-xfer-received"),
-						Placeholder(uistate.T("transactions.receivedAmount")),
-						Value(fxPreview),
-						Step("0.01"),
-						OnInput(onReceivedAmt),
-					),
-				),
-				If(len(members) > 1, Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.whoLabel")), Attr("data-testid", "txn-who-add"), OnChange(onWho), whoOptions)),
-				If(!isTransfer, Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsStr.Get()), OnInput(onTags))),
-				If(!isTransfer, Select(css.Class("field"), Attr("aria-label", uistate.T("todo.repeat")), Attr("data-testid", "txn-add-repeat"), OnChange(onRepeat),
-					Option(Value(""), SelectedIf(repeatCadence.Get() == ""), uistate.T("todo.repeatNone")),
-					Option(Value(string(domain.CadenceWeekly)), SelectedIf(repeatCadence.Get() == string(domain.CadenceWeekly)), uistate.T("recurring.cadenceWeekly")),
-					Option(Value(string(domain.CadenceMonthly)), SelectedIf(repeatCadence.Get() == string(domain.CadenceMonthly)), uistate.T("recurring.cadenceMonthly")),
-					Option(Value(string(domain.CadenceQuarterly)), SelectedIf(repeatCadence.Get() == string(domain.CadenceQuarterly)), uistate.T("recurring.cadenceQuarterly")),
-					Option(Value(string(domain.CadenceYearly)), SelectedIf(repeatCadence.Get() == string(domain.CadenceYearly)), uistate.T("recurring.cadenceYearly")),
-				)),
-				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateStr.Get()), OnInput(onDate)),
-				MapKeyed(formTxnDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
-				}),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.repeatLastTitle")), OnClick(repeatLast), uistate.T("transactions.repeatLast")),
-			),
-			errText("txn-err", errMsg.Get()),
-		)
-	}
-
 	txns := app.Transactions()
 	shown := txnfilter.ApplyWithLabels(txns, f, txnfilter.Labels{Account: accName, Category: catName})
 
@@ -778,7 +412,7 @@ func Transactions() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(txns) == 0:
-		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), FocusID: "txn-add"})
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst")})
 	case len(shown) == 0:
 		listBody = P(css.Class("empty"), uistate.T("transactions.noMatch"))
 	default:
@@ -973,7 +607,6 @@ func Transactions() ui.Node {
 
 	return Div(
 		previewNode,
-		formCard,
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("transactions.listTitle")),
 			uiw.FilterToolbar(uiw.FilterToolbarProps{

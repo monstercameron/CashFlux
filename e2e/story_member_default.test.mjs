@@ -35,11 +35,20 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/members", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#member-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
-  // Add a member (not the default yet).
+  // Add a member (not the default yet) via +Add modal.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /member/i }).first().click();
+  await page.waitForSelector("#member-add", { timeout: 10000 });
   await page.locator("#member-add").fill(MEM);
-  await page.locator('button[type="submit"]').first().click();
+  await page.locator('[data-testid="member-add-form"] button[type="submit"]').first().click();
+  await page.waitForTimeout(400);
+  // Navigate away and back so the members list re-reads the updated state.
+  await page.locator('nav[aria-label="Main navigation"] a[title="Accounts"]').click();
+  await page.waitForTimeout(400);
+  await page.locator('nav[aria-label="Main navigation"] a[title="Members"]').click();
+  await page.waitForTimeout(600);
   const added = await waitForMembers(page, (ms) => ms.some((m) => m.name === MEM));
   const mem = added.find((m) => m.name === MEM);
   if (!mem) fail("member not created");

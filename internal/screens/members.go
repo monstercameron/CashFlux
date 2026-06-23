@@ -7,10 +7,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -34,47 +32,11 @@ func Members() ui.Node {
 	rev := state.UseAtom("rev:members", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 
-	name := ui.UseState("")
-	color := ui.UseState("#7c83ff")
-	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 	reassignID := ui.UseState("") // member awaiting reassignment before delete
 	reassignTo := ui.UseState(domain.GroupOwnerID)
 
-	onName := ui.UseEvent(func(v string) { name.Set(v) })
-	onColor := ui.UseEvent(func(v string) { color.Set(v) })
 	onReassignTo := ui.UseEvent(func(e ui.Event) { reassignTo.Set(e.GetValue()) })
-
-	memberDefs := app.CustomFieldDefsFor("member")
-	onCustom := func(key, value string) {
-		m := customVals.Get()
-		nm := make(map[string]string, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[key] = value
-		customVals.Set(nm)
-	}
-
-	add := ui.UseEvent(Prevent(func() {
-		n := strings.TrimSpace(name.Get())
-		if n == "" {
-			errMsg.Set(uistate.T("members.nameRequired"))
-			return
-		}
-		m := domain.Member{
-			ID: id.New(), Name: n, Color: strings.TrimSpace(color.Get()),
-			Custom: customValuesToMap(memberDefs, customVals.Get()),
-		}
-		if err := app.PutMember(m); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		name.Set("")
-		customVals.Set(map[string]string{})
-		errMsg.Set("")
-		bump()
-	}))
 
 	ownedCount := func(memberID string) int {
 		owned := 0
@@ -239,24 +201,10 @@ func Members() ui.Node {
 	}
 
 	return Div(
-		uiw.Card(uiw.CardProps{
-			Title: uistate.T("members.add"),
-			Body: Fragment(
-				Form(css.Class("form-grid"), OnSubmit(add),
-					Input(append([]any{css.Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-label", uistate.T("members.name")), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...),
-					Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor)),
-					MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-						return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
-					}),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("members.add")),
-				),
-				errText("member-err", errMsg.Get()),
-			),
-		}),
 		reassignPanel,
 		uiw.Card(uiw.CardProps{
 			Title: uistate.T("members.listTitle"),
-			Body:  IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), FocusID: "member-add"}), Div(css.Class("rows"), MapKeyed(members, keyOf, renderRow))),
+			Body:  IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}), Div(css.Class("rows"), MapKeyed(members, keyOf, renderRow))),
 		}),
 		If(len(members) > 0, uiw.Card(uiw.CardProps{
 			Title: uistate.T("members.netWorthTitle"),

@@ -41,20 +41,27 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/categories", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#cat-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
   // 1. Add a top-level parent (expense is the default kind; no parent chosen).
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /category/i }).first().click();
+  await page.waitForSelector("#cat-add", { timeout: 10000 });
   await page.locator("#cat-add").fill(PARENT);
-  await page.locator('button[type="submit"]').first().click();
+  await page.locator('[data-testid="category-add-form"] button[type="submit"]').first().click();
+  await page.waitForTimeout(500);
   const parent = await waitForCat(page, PARENT);
   if (!parent) fail("parent category not created");
   else if (parent.parentId) fail("parent should be top-level (no parentId)");
 
   // 2. Add a child under that parent (pick it in the parent select).
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /category/i }).first().click();
+  await page.waitForSelector("#cat-add", { timeout: 10000 });
   await page.locator("#cat-add").fill(CHILD);
-  const parentSelect = page.locator("select").filter({ has: page.getByRole("option", { name: PARENT, exact: true }) });
+  const parentSelect = page.locator('[role="dialog"] select').filter({ has: page.getByRole("option", { name: PARENT, exact: true }) });
   await parentSelect.first().selectOption({ label: PARENT });
-  await page.locator('button[type="submit"]').first().click();
+  await page.locator('[data-testid="category-add-form"] button[type="submit"]').first().click();
 
   // 3. The child is linked to the parent.
   const child = await waitForCat(page, CHILD, (c) => c && c.parentId);

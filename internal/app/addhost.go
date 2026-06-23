@@ -49,6 +49,34 @@ func AddHost() uic.Node {
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close}),
 		})
+	case "task":
+		return uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:     uistate.T("todo.addTitle"),
+			CloseOnly: true,
+			OnClose:   close,
+			Back:      uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{OnDone: close}),
+		})
+	case "category":
+		return uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:     uistate.T("categories.add"),
+			CloseOnly: true,
+			OnClose:   close,
+			Back:      uic.CreateElement(screens.CategoryAddForm, screens.CategoryAddFormProps{OnDone: close}),
+		})
+	case "member":
+		return uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:     uistate.T("members.add"),
+			CloseOnly: true,
+			OnClose:   close,
+			Back:      uic.CreateElement(screens.MemberAddForm, screens.MemberAddFormProps{OnDone: close}),
+		})
+	case "rule":
+		return uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:     uistate.T("rules.add"),
+			CloseOnly: true,
+			OnClose:   close,
+			Back:      uic.CreateElement(screens.RuleAddForm, screens.RuleAddFormProps{OnDone: close}),
+		})
 	default:
 		return Fragment()
 	}

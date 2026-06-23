@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **"+ Add" modal-in-place completed for all entities (C73/C79, C72A).** To-do task, Category, Member,
+  and Rule add forms now open in the +Add FlipPanel modal too, and the inline add card was removed from
+  every screen (including Transactions, which uses quick-add) so each page leads with its content. New
+  reusable `TaskAddForm`/`CategoryAddForm`/`MemberAddForm`/`RuleAddForm`; menu items + i18n added. Quick-add
+  now applies auto-categorization rules on save (restoring the inline form's behaviour now that it is the
+  sole manual add path). Gate: `e2e/add_modal_entities_check.mjs`; ~23 add-form e2es updated to open the modal.
+
+### Changed
 - **"+ Add" opens entity modals in place (C73/C79, foundation + Goal/Account/Budget).** The top-bar
   "+ Add" menu now opens Goal, Account, and Budget add forms in a centered **FlipPanel modal** instead
   of navigating to their screens, and those screens no longer carry an inline add card (they lead with

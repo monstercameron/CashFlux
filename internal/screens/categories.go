@@ -10,7 +10,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/mermaid"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -33,42 +32,12 @@ func Categories() ui.Node {
 	rev := state.UseAtom("rev:categories", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 
-	name := ui.UseState("")
-	kind := ui.UseState(string(domain.KindExpense))
-	parentID := ui.UseState("")
-	color := ui.UseState("#7c83ff")
 	errMsg := ui.UseState("")
 	reassignID := ui.UseState("") // category awaiting reassignment before delete
 	reassignTo := ui.UseState("")
 	collapsed := ui.UseState(map[string]bool{}) // id → collapsed; session state
 
-	onName := ui.UseEvent(func(v string) { name.Set(v) })
-	onColor := ui.UseEvent(func(v string) { color.Set(v) })
-	onKind := ui.UseEvent(func(e ui.Event) {
-		kind.Set(e.GetValue())
-		parentID.Set("") // a parent must share the new kind; clear the stale choice
-	})
-	onParent := ui.UseEvent(func(e ui.Event) { parentID.Set(e.GetValue()) })
 	onReassignTo := ui.UseEvent(func(e ui.Event) { reassignTo.Set(e.GetValue()) })
-
-	add := ui.UseEvent(Prevent(func() {
-		n := strings.TrimSpace(name.Get())
-		if n == "" {
-			errMsg.Set(uistate.T("categories.nameRequired"))
-			return
-		}
-		c := domain.Category{ID: id.New(), Name: n, Kind: domain.CategoryKind(kind.Get()), ParentID: parentID.Get(), Color: color.Get()}
-		if err := app.PutCategory(c); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		name.Set("")
-		parentID.Set("")
-		color.Set("#7c83ff") // reset the color picker to the default after add (L42)
-		errMsg.Set("")
-		bump()
-		uistate.PostNotice(uistate.T("categories.addedToast", n), false) // L42 success confirmation
-	}))
 
 	categoryUsage := func(catID string) int {
 		used := 0
@@ -137,35 +106,6 @@ func Categories() ui.Node {
 		errMsg.Set("")
 		bump()
 	}))
-
-	kindOptions := []ui.Node{
-		Option(Value(string(domain.KindExpense)), SelectedIf(kind.Get() == string(domain.KindExpense)), uistate.T("category.expense")),
-		Option(Value(string(domain.KindIncome)), SelectedIf(kind.Get() == string(domain.KindIncome)), uistate.T("category.income")),
-	}
-
-	// Parent options: existing categories of the chosen kind, indented by depth.
-	var kindCats []domain.Category
-	for _, c := range app.Categories() {
-		if string(c.Kind) == kind.Get() {
-			kindCats = append(kindCats, c)
-		}
-	}
-	parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentID.Get() == ""), uistate.T("categories.noParentTop"))}
-	for _, f := range categorytree.Flatten(kindCats) {
-		parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentID.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
-	}
-
-	form := Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("categories.add")),
-		Form(css.Class("form-grid"), OnSubmit(add),
-			Input(append([]any{css.Class("field"), Attr("id", "cat-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
-			Select(css.Class("field"), Attr("aria-label", "Category type"), OnChange(onKind), kindOptions),
-			Select(css.Class("field"), Attr("aria-label", "Parent category (optional)"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
-			Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(color.Get()), OnInput(onColor)),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
-		),
-		errText("cat-err", errMsg.Get()),
-	)
 
 	cats := app.Categories()
 	var incomeList, expenseList []domain.Category
@@ -261,15 +201,14 @@ func Categories() ui.Node {
 	}
 
 	return Div(
-		form,
 		reassignPanel,
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("categories.expenseTitle")),
-			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), FocusID: "cat-add"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(expenseList), categorytree.VisibleUnderCollapsed(expenseList, collapsed.Get())), flatKey, renderFlat))),
+			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(expenseList), categorytree.VisibleUnderCollapsed(expenseList, collapsed.Get())), flatKey, renderFlat))),
 		),
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("categories.incomeTitle")),
-			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), FocusID: "cat-add"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(incomeList), categorytree.VisibleUnderCollapsed(incomeList, collapsed.Get())), flatKey, renderFlat))),
+			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(incomeList), categorytree.VisibleUnderCollapsed(incomeList, collapsed.Get())), flatKey, renderFlat))),
 		),
 		// Visual category map: the hierarchy as a Mermaid graph (C70/C63 tree view).
 		If(len(cats) > 0, Section(css.Class("card"),

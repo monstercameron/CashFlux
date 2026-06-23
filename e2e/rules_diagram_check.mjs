@@ -18,9 +18,13 @@ const fail = (m) => {
 };
 
 const addRule = async (page, match) => {
-  await page.locator("#rule-add").fill(match);
-  await page.locator("form select").first().selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Add", exact: true }).first().click();
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /rule/i }).first().click();
+  await page.waitForSelector("#rule-add", { timeout: 10000 });
+  const dialog = page.locator('[role="dialog"]');
+  await dialog.locator("#rule-add").fill(match);
+  await dialog.locator("form select").first().selectOption({ index: 1 });
+  await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(400);
 };
 
@@ -30,7 +34,7 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/rules", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#rule-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
   await addRule(page, "ZZDIAGRULE-A");
   await addRule(page, "ZZDIAGRULE-B");

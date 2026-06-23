@@ -38,20 +38,28 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/categories", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#cat-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
-  // 1. Add an expense category (the default kind).
+  // 1. Add an expense category (the default kind) via +Add modal.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /category/i }).first().click();
+  await page.waitForSelector("#cat-add", { timeout: 10000 });
   await page.locator("#cat-add").fill(CAT);
-  await page.locator('button[type="submit"]').first().click();
+  await page.locator('[data-testid="category-add-form"] button[type="submit"]').first().click();
   await page.waitForTimeout(500);
 
   // 2. Assign a transaction to it (so deleting must reassign).
   await railTo(page, "Transactions");
-  await page.waitForSelector("#txn-add", { timeout: 8000 });
-  await page.locator("#txn-add").fill(TXN);
-  await page.locator('input[type="number"][aria-required="true"]').fill("7.50");
-  await page.locator('select[aria-label="Category"]').selectOption({ label: CAT });
-  await page.locator('button[type="submit"]').first().click();
+  await page.waitForSelector(".add-btn", { timeout: 8000 });
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /transaction/i }).first().click();
+  await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+  const txnDialog = page.locator('[role="dialog"]');
+  await txnDialog.locator('input[placeholder="What was it for?"]').fill(TXN);
+  await txnDialog.locator('input[type="number"]').first().fill("7.50");
+  // Category is the second select (index 1) in the transaction add form.
+  await txnDialog.locator('select').nth(1).selectOption({ label: CAT });
+  await txnDialog.locator('button.save, button[type="submit"]').first().click();
   await page.waitForTimeout(500);
 
   // Confirm the category is in use.
@@ -66,7 +74,7 @@ try {
 
   // 3. Delete it -> the reassign panel opens (it is in use).
   await railTo(page, "Categories");
-  await page.waitForSelector("#cat-add", { timeout: 8000 });
+  await page.waitForSelector(".add-btn", { timeout: 8000 });
   await page.locator(".rows .row", { hasText: CAT }).locator('button[aria-label="Delete category"]').first().click();
   await page.getByRole("button", { name: "Move and delete", exact: true }).waitFor({ timeout: 8000 });
 

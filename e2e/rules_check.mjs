@@ -36,13 +36,17 @@ try {
 
   // 1) Create a rule: match PHRASE → the first real category.
   await page.goto(BASE + "/rules", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#rule-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /rule/i }).first().click();
+  await page.waitForSelector("#rule-add", { timeout: 10000 });
   await page.fill("#rule-add", PHRASE);
   // The rule form's category <select> is the form-grid select; pick the first
   // non-empty option and remember its id + label.
-  const catSelect = page.locator("form .field").locator("xpath=self::select").first();
+  const dialog = page.locator('[role="dialog"]');
+  const catSelect = dialog.locator("form .field").locator("xpath=self::select").first();
   // Fall back to the first <select> in the add form.
-  const select = (await catSelect.count()) ? catSelect : page.locator("form select").first();
+  const select = (await catSelect.count()) ? catSelect : dialog.locator("form select").first();
   const catId = await select.evaluate((el) => {
     const opt = [...el.options].find((o) => o.value);
     el.value = opt.value;
@@ -51,7 +55,7 @@ try {
   });
   if (!catId) { fail("no real category option to build the rule with"); process.exit(1); }
   // Submit the rule.
-  await page.locator('form button[type="submit"]').first().click();
+  await dialog.locator('button[type="submit"]').first().click();
   // Confirm the rule persisted.
   const dRule = await waitDS(page, (d) => (d.rules || []).some((r) => r.Match === PHRASE || r.match === PHRASE));
   const rule = (dRule.rules || []).find((r) => (r.Match || r.match) === PHRASE);
@@ -62,14 +66,18 @@ try {
   // 2) Add a transaction whose description contains PHRASE — leave the category
   // for the rule to fill.
   await page.goto(BASE + "/transactions", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('input[aria-label]', { timeout: 60000 });
-  // Description field, then amount; the add form's first text input is the desc.
-  const descInput = page.getByPlaceholder(/description|payee|what/i).first();
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /transaction/i }).first().click();
+  await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+  const txnDialog2 = page.locator('[role="dialog"]');
+  // Description field, then amount; SuggestTransactionFields fires on input change.
+  const descInput = txnDialog2.getByPlaceholder(/description|payee|what/i).first();
   await descInput.fill(`Coffee at ${PHRASE} downtown`);
   await page.waitForTimeout(400); // let SuggestTransactionFields run
-  const amountInput = page.locator('input[type="number"]').first();
+  const amountInput = txnDialog2.locator('input[type="number"]').first();
   await amountInput.fill("4.50");
-  await page.locator('form button[type="submit"]').first().click();
+  await txnDialog2.locator('button.save, button[type="submit"]').first().click();
 
   // 3) The new transaction persists with the rule's category.
   const d2 = await waitDS(page, (d) => (d.transactions || []).some((t) => (t.desc || "").includes(PHRASE)));

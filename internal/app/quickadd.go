@@ -99,6 +99,11 @@ func QuickAddHost() uic.Node {
 			ID: id.New(), AccountID: acc.ID, Date: d, Desc: strings.TrimSpace(desc.Get()),
 			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: member,
 		}
+		// Apply auto-categorization rules on save (it won't overwrite a manual
+		// category). Quick-add is now the sole manual-add path after the inline
+		// transaction form was removed (C73/C79), so without this a rule-matching
+		// payee would no longer be auto-filed the way the inline form did (L15).
+		t = app.AutoCategorizeTransaction(t)
 		if err := app.PutTransaction(t); err != nil {
 			post(err.Error(), true)
 			return

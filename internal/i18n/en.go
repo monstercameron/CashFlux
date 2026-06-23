@@ -27,6 +27,10 @@ var english = Catalog{
 	"addmenu.account":     "New account",
 	"addmenu.budget":      "New budget",
 	"addmenu.goal":        "New goal",
+	"addmenu.task":        "New task",
+	"addmenu.category":    "New category",
+	"addmenu.member":      "New member",
+	"addmenu.rule":        "New rule",
 	"addmenu.document":    "Scan a document",
 
 	// Quick-add transaction panel

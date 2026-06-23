@@ -34,61 +34,15 @@ func Rules() ui.Node {
 	rev := state.UseAtom("rev:rules", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 
-	// Consume any pending prefill set by "Always categorize like this" on a
-	// transaction row. UseRuleDraft reads the atom; if a draft is present we
-	// seed the form states from it and clear the atom so a later visit is blank.
-	// This must happen before the UseState calls whose initial values we want to
-	// override, but the states themselves are declared first so hook order is
-	// stable — we call Set on them right after, which is fine.
-	match := ui.UseState("")
-	categoryID := ui.UseState("")
-	tags := ui.UseState("")
 	errMsg := ui.UseState("")
 	dragSrc := ui.UseState("") // id of the rule being dragged (precedence reorder, C64)
 	notice := uistate.UseNotice()
-
-	// Prefill from a pending rule draft (set by the transactions screen). UseAtom
-	// here re-uses the same key as UseRuleDraft, so this component subscribes to
-	// the atom and re-renders when it changes. On the first render where the draft
-	// is non-nil we seed the form and clear the atom.
-	draftAtom := uistate.UseRuleDraft()
-	if draft := draftAtom.Get(); draft != nil {
-		match.Set(draft.Match)
-		categoryID.Set(draft.CategoryID)
-		uistate.ClearRuleDraft()
-	}
-
-	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
-	onCategory := ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })
-	onTags := ui.UseEvent(func(v string) { tags.Set(v) })
 
 	cats := app.Categories()
 	catName := make(map[string]string, len(cats))
 	for _, c := range cats {
 		catName[c.ID] = c.Name
 	}
-
-	add := ui.UseEvent(Prevent(func() {
-		if errKey := validateRuleInput(match.Get(), categoryID.Get()); errKey != "" {
-			errMsg.Set(uistate.T(errKey))
-			return
-		}
-		r := rules.Rule{
-			ID:            id.New(),
-			Match:         strings.TrimSpace(match.Get()),
-			SetCategoryID: categoryID.Get(),
-			SetTags:       textutil.CommaFields(tags.Get()),
-		}
-		if err := app.PutRule(r); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		match.Set("")
-		categoryID.Set("")
-		tags.Set("")
-		errMsg.Set("")
-		bump()
-	}))
 
 	deleteRule := func(ruleID string) {
 		if err := app.DeleteRule(ruleID); err != nil {
@@ -113,33 +67,12 @@ func Rules() ui.Node {
 	}
 
 	// Text each rule is matched against (payee + description), mirroring the engine
-	// at entry/import. Computed once and reused for the per-rule counts below and
-	// the live authoring preview.
+	// at entry/import. Computed once and reused for the per-rule counts below.
 	txns := app.Transactions()
 	texts := make([]string, len(txns))
 	for i, t := range txns {
 		texts[i] = t.Payee + " " + t.Desc
 	}
-	// Live match-count preview while authoring: how many existing transactions the
-	// phrase being typed would hit, so the user can trust a rule before saving (C64).
-	liveMatch := strings.TrimSpace(match.Get())
-	liveCount := 0
-	if liveMatch != "" {
-		liveCount = rules.Rule{Match: liveMatch}.MatchCount(texts)
-	}
-
-	form := Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("rules.add")),
-		P(css.Class("muted"), uistate.T("rules.hint")),
-		Form(css.Class("form-grid"), OnSubmit(add),
-			Input(append([]any{css.Class("field"), Attr("id", "rule-add"), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("rules.categoryFieldLabel")), OnChange(onCategory), categoryOptions(cats, categoryID.Get())),
-			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
-		),
-		If(liveMatch != "" && len(texts) > 0, P(css.Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))),
-		errText("rule-err", errMsg.Get()),
-	)
 
 	applyExisting := ui.UseEvent(Prevent(func() {
 		n, err := app.ApplyRules()
@@ -195,7 +128,7 @@ func Rules() ui.Node {
 	}
 
 	list := IfElse(len(rs) == 0,
-		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), FocusID: "rule-add"}),
+		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), AddTarget: "rule"}),
 		Div(css.Class("rows"), MapKeyed(rs,
 			func(r rules.Rule) any { return r.ID },
 			func(r rules.Rule) ui.Node {
@@ -240,7 +173,6 @@ func Rules() ui.Node {
 	}
 
 	return Div(
-		form,
 		suggestCard,
 		Section(css.Class("card"),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),

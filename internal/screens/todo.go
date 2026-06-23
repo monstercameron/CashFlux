@@ -38,64 +38,10 @@ func Todo() ui.Node {
 	// the list reflects external changes, not just this screen's own mutations.
 	_ = uistate.UseDataRevision().Get()
 
-	title := ui.UseState("")
-	priority := ui.UseState(string(domain.PriorityMedium))
-	dueStr := ui.UseState("")
-	notes := ui.UseState("")
 	hideDone := ui.UseState(false)
 	errMsg := ui.UseState("")
-	// Link-to fields for the add form.
-	addLinkType := ui.UseState(string(domain.RelatedNone))
-	addLinkID := ui.UseState("")
-	// Recurrence for the add form (defaults to no repeat).
-	addRecur := ui.UseState("")
 
-	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
-	onDue := ui.UseEvent(func(v string) { dueStr.Set(v) })
-	onNotes := ui.UseEvent(func(v string) { notes.Set(v) })
-	onPriority := ui.UseEvent(func(e ui.Event) { priority.Set(e.GetValue()) })
 	toggleHideDone := ui.UseEvent(func() { hideDone.Set(!hideDone.Get()) })
-	onAddLinkType := ui.UseEvent(func(e ui.Event) {
-		addLinkType.Set(e.GetValue())
-		addLinkID.Set("") // reset entity selection when type changes
-	})
-	onAddLinkID := ui.UseEvent(func(e ui.Event) { addLinkID.Set(e.GetValue()) })
-	onAddRecur := ui.UseEvent(func(e ui.Event) { addRecur.Set(e.GetValue()) })
-
-	add := ui.UseEvent(Prevent(func() {
-		var due time.Time
-		if ds := strings.TrimSpace(dueStr.Get()); ds != "" {
-			d, err := dateutil.ParseDate(ds)
-			if err != nil {
-				errMsg.Set(uistate.T("todo.invalidDue"))
-				return
-			}
-			due = d
-		}
-		rt := domain.RelatedType(addLinkType.Get())
-		rid := addLinkID.Get()
-		if rt == domain.RelatedNone || rt == "" {
-			rid = ""
-		}
-		t := domain.Task{
-			ID: id.New(), Title: strings.TrimSpace(title.Get()), Notes: strings.TrimSpace(notes.Get()),
-			Status: domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
-			RelatedType: rt, RelatedID: rid,
-			Recurrence: domain.RecurringCadence(addRecur.Get()),
-		}
-		if err := app.PutTask(t); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		title.Set("")
-		dueStr.Set("")
-		notes.Set("")
-		addLinkType.Set(string(domain.RelatedNone))
-		addLinkID.Set("")
-		addRecur.Set("")
-		errMsg.Set("")
-		bump()
-	}))
 
 	tasks := app.Tasks()
 	accounts := app.Accounts()
@@ -195,43 +141,6 @@ func Todo() ui.Node {
 		bump()
 	}
 
-	prioOptions := []ui.Node{
-		Option(Value(string(domain.PriorityHigh)), SelectedIf(priority.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
-		Option(Value(string(domain.PriorityMedium)), SelectedIf(priority.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
-		Option(Value(string(domain.PriorityLow)), SelectedIf(priority.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
-	}
-
-	// "Link to" type selector for the add form.
-	addLinkTypeOpts := linkTypeOptions(addLinkType.Get())
-	// Entity selector — only shown when a non-None type is chosen.
-	curAddType := domain.RelatedType(addLinkType.Get())
-	var addEntitySelect ui.Node
-	if curAddType != domain.RelatedNone && curAddType != "" {
-		addEntitySelect = labeledField(uistate.T("todo.linkEntity"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkEntity")), OnChange(onAddLinkID),
-				buildEntityOptions(curAddType, addLinkID.Get(), accounts, budgets, goals, txns)))
-	}
-
-	form := Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("todo.addTitle")),
-		Form(css.Class("form-grid"), OnSubmit(add),
-			Input(append([]any{css.Class("field field-wide"), Attr("id", "task-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
-			labeledField("Priority",
-				Select(css.Class("field"), Attr("aria-label", "Priority"), OnChange(onPriority), prioOptions)),
-			labeledField("Due date",
-				Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueStr.Get()), OnInput(onDue))),
-			Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
-			labeledField(uistate.T("todo.repeat"),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.repeat")), Attr("data-testid", "task-add-repeat"), OnChange(onAddRecur),
-					cadenceOptions(addRecur.Get()))),
-			labeledField(uistate.T("todo.linkTo"),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkTo")), OnChange(onAddLinkType), addLinkTypeOpts)),
-			addEntitySelect,
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
-		),
-		errText("todo-err", errMsg.Get()),
-	)
-
 	// Order + filter, then nest into the parent/child tree (C72). hide-done filters
 	// first so a done parent's open child surfaces as a root (tasktree handles it).
 	visible := tasksort.Visible(tasks, hideDone.Get())
@@ -240,7 +149,7 @@ func Todo() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(tasks) == 0:
-		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("todo.empty"), CTALabel: uistate.T("todo.addFirst"), FocusID: "task-add"})
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("todo.empty"), CTALabel: uistate.T("todo.addFirst"), AddTarget: "task"})
 	case len(nodes) == 0:
 		listBody = P(css.Class("empty"), uistate.T("todo.allDone"))
 	default:
@@ -262,15 +171,12 @@ func Todo() ui.Node {
 		hideLabel = uistate.T("todo.showAll")
 	}
 
-	return Div(
-		form,
-		Section(css.Class("card"),
-			Div(css.Class("budget-head"),
-				H2(css.Class("card-title"), uistate.T("todo.listTitle")),
-				Button(css.Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
-			),
-			listBody,
+	return Section(css.Class("card"),
+		Div(css.Class("budget-head"),
+			H2(css.Class("card-title"), uistate.T("todo.listTitle")),
+			Button(css.Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
 		),
+		listBody,
 	)
 }
 

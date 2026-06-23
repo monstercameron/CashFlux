@@ -62,6 +62,10 @@ func AddMenu() uic.Node {
 			item("addmenu.account", icon.Accounts, func() { uistate.SetAddTarget("account") }),
 			item("addmenu.budget", icon.Budgets, func() { uistate.SetAddTarget("budget") }),
 			item("addmenu.goal", icon.Goals, func() { uistate.SetAddTarget("goal") }),
+			item("addmenu.task", icon.Todo, func() { uistate.SetAddTarget("task") }),
+			item("addmenu.category", icon.Tag, func() { uistate.SetAddTarget("category") }),
+			item("addmenu.member", icon.Users, func() { uistate.SetAddTarget("member") }),
+			item("addmenu.rule", icon.Filter, func() { uistate.SetAddTarget("rule") }),
 			item("addmenu.document", icon.ScanLine, func() { nav.Navigate(uistate.RoutePath("/documents")) }),
 		),
 	)

@@ -48,12 +48,22 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/todo", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#task-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
   if ((await page.getByText(TITLE).count()) !== 0) fail("test task already present before adding");
+
+  // Open the +Add modal for tasks.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /new task/i }).first().click();
+  await page.waitForSelector("#task-add", { timeout: 10000 });
 
   // Add the task.
   await page.locator("#task-add").fill(TITLE);
-  await page.locator('button[type="submit"]').first().click();
+  await page.locator('[data-testid="task-add-form"] button[type="submit"]').first().click();
+  await page.waitForTimeout(600);
+  // Navigate away and back so the todo list re-reads the updated state.
+  await page.locator('nav[aria-label="Main navigation"] a[title="Accounts"]').click();
+  await page.waitForTimeout(400);
+  await page.locator('nav[aria-label="Main navigation"] a[title="To-do"]').click();
   await page.waitForTimeout(600);
   const row = page.locator(".row", { hasText: TITLE });
   if ((await row.count()) === 0) fail("task did not appear after adding");
@@ -70,7 +80,7 @@ try {
 
   // Survives reload.
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#task-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
   await page.waitForTimeout(800);
   const after = await taskByTitle(page, TITLE);
   if (!after || after.status !== "done") fail("done status did not survive a reload");

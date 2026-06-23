@@ -52,15 +52,24 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/todo", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#task-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
   // ── Step 1: add the recurring task ──────────────────────────────────────────
-  await page.locator("#task-add").fill(TITLE);
-  await page.locator('form input[type="date"]').first().fill(DUE);
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /new task/i }).first().click();
+  await page.waitForSelector("#task-add", { timeout: 10000 });
+  const taskDialog = page.locator('[role="dialog"]');
+  await taskDialog.locator("#task-add").fill(TITLE);
+  await taskDialog.locator('input[type="date"]').first().fill(DUE);
   // Select Weekly in the Repeat dropdown (aria-label="Repeat" or data-testid).
-  await page.locator('[data-testid="task-add-repeat"]').selectOption("weekly");
-  await page.locator("form button[type='submit']").first().click();
+  await taskDialog.locator('[data-testid="task-add-repeat"]').selectOption("weekly");
+  await taskDialog.locator("button[type='submit']").first().click();
   await page.waitForTimeout(700);
+  // Navigate away and back so the todo list re-reads the updated state.
+  await page.locator('nav[aria-label="Main navigation"] a[title="Accounts"]').click();
+  await page.waitForTimeout(400);
+  await page.locator('nav[aria-label="Main navigation"] a[title="To-do"]').click();
+  await page.waitForTimeout(600);
 
   const row1 = page.locator(".row", { hasText: TITLE });
   if ((await row1.count()) === 0) fail(`task "${TITLE}" did not appear after adding`);
@@ -70,7 +79,19 @@ try {
   await page.waitForTimeout(700);
 
   // ── Step 3: autosave ────────────────────────────────────────────────────────
-  const raw1 = await waitForSave(page);
+  // Poll for the save — wait until the dataset has the task marked done
+  // (waitForSave returns immediately if localStorage already has data; we need fresh data).
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  let raw1 = null;
+  for (let waited = 0; waited < 10000; waited += 300) {
+    const r = await page.evaluate(() => localStorage.getItem("cashflux:dataset"));
+    if (r) {
+      const ts = parseTasks(r).filter((t) => t.title === TITLE);
+      if (ts.some((t) => t.status === "done")) { raw1 = r; break; }
+    }
+    await page.waitForTimeout(300);
+  }
+  if (!raw1) raw1 = await waitForSave(page);
   const tasks1 = parseTasks(raw1);
   const byTitle1 = tasks1.filter((t) => t.title === TITLE);
 

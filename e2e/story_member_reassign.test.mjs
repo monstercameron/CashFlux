@@ -38,20 +38,27 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/members", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#member-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
-  // 1. Add a member.
+  // 1. Add a member via +Add modal.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /member/i }).first().click();
+  await page.waitForSelector("#member-add", { timeout: 10000 });
   await page.locator("#member-add").fill(MEM);
-  await page.locator('button[type="submit"]').first().click();
+  await page.locator('[data-testid="member-add-form"] button[type="submit"]').first().click();
   await page.waitForTimeout(500);
 
-  // 2. Give them an account (so deleting must reassign).
+  // 2. Give them an account (so deleting must reassign) via +Add modal.
   await railTo(page, "Accounts");
-  await page.waitForSelector('input[type="text"][aria-required="true"]', { timeout: 8000 });
-  await page.locator('input[type="text"][aria-required="true"]').fill(ACCT);
-  await page.locator('input[type="number"]').first().fill("100");
-  await page.locator('select[aria-label="Owner"]').selectOption({ label: MEM });
-  await page.locator('button[type="submit"]').first().click();
+  await page.waitForSelector(".add-btn", { timeout: 8000 });
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /account/i }).first().click();
+  await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+  const acctDialog = page.locator('[role="dialog"]');
+  await acctDialog.locator('input[type="text"][placeholder="Name"]').fill(ACCT);
+  await acctDialog.locator('input[type="number"]').first().fill("100");
+  await acctDialog.locator('select[aria-label="Owner"]').selectOption({ label: MEM });
+  await acctDialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(500);
 
   // Confirm the member owns the account.
@@ -66,7 +73,7 @@ try {
 
   // 3. Delete the member -> reassign panel opens (they own an entity).
   await railTo(page, "Members");
-  await page.waitForSelector("#member-add", { timeout: 8000 });
+  await page.waitForSelector(".add-btn", { timeout: 8000 });
   const memRow = page
     .locator(".row")
     .filter({ hasText: MEM })

@@ -11001,3 +11001,11 @@ AddTarget that opens the modal. Fixed the agent's over-eager removal of the `id`
 (still used by the reconcile adjustment). Updated 16 e2e gates that added via the old inline forms to
 open the modal first (same field ids). add_modal_check + a11y + all 16 regressions green. Task/Category/
 Member/Rule + transaction-inline removal are the follow-up (agent 2).
+
+## 2026-06-22 — C73/C79 + C72A complete: all entity adds are modal-in-place
+Replicated the add-modal pattern for Task (C72A), Category, Member, Rule and removed the inline add card
+from todo/categories/members/rules/transactions so every page leads with content. Caught + fixed a real
+regression: removing the inline transaction form lost rule auto-categorization on manual entry, since
+quick-add (now the only manual path) called PutTransaction directly — quick-add now runs
+AutoCategorizeTransaction first (rules_check green again). Updated ~23 add-form e2es to open the +Add
+modal. add_modal_entities + 10 regression gates + a11y all green.

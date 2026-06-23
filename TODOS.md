@@ -2497,16 +2497,16 @@ menu: *Money* — transaction/account/budget/goal · *Organize* — category/mem
   `screens.AccountAddForm`, …) so both the host modal and the (now-removed) inline section share one
   source — and so logic stays put. Ties into **C73** component-ization.
 **Per entity (each its own commit):**
-- [ ] **Account** — extract add form → modal; menu item opens it (was: navigate `/accounts`).
-- [ ] **Budget** — same (was: navigate `/budgets`).
-- [ ] **Goal** — same (was: navigate `/goals`). **(reference entity — do first.)**
-- [ ] **To-do task** — extract `todo.go:137` add form → modal; **new** menu item. Coordinate with
+- [x] **Account** — extract add form → modal; menu item opens it (was: navigate `/accounts`).
+- [x] **Budget** — same (was: navigate `/budgets`).
+- [x] **Goal** — same (was: navigate `/goals`). **(reference entity — do first.)**
+- [x] **To-do task** — extract `todo.go:137` add form → modal; **new** menu item. Coordinate with
       **C72** (To-do v2 add-modal + nested subtasks): build the modal once.
-- [ ] **Category** — extract `categories.go:136` → modal; **new** menu item.
-- [ ] **Member** — extract `members.go:231` → modal; **new** menu item.
-- [ ] **Rule** — extract `rules.go:113` → modal; **new** menu item.
-- [ ] **Transaction** — already opens quick-add; just remove the inline add at `transactions.go:435`.
-- [ ] **Remove inline add Sections** from all 8 screens so content leads (accounts:239, budgets:200,
+- [x] **Category** — extract `categories.go:136` → modal; **new** menu item.
+- [x] **Member** — extract `members.go:231` → modal; **new** menu item.
+- [x] **Rule** — extract `rules.go:113` → modal; **new** menu item.
+- [x] **Transaction** — already opens quick-add; just remove the inline add at `transactions.go:435`.
+- [x] **Remove inline add Sections** from all 8 screens so content leads (accounts:239, budgets:200,
       goals:200, todo:137, categories:136, members:231, rules:113, transactions:435).
 **Already compliant (precedent):** Custom pages "Add widget" reveal (`custompage.go:602-708`) — leave
 as-is (it's page-scoped widget config, not a global entity add).
