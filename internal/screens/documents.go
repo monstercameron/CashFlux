@@ -970,62 +970,65 @@ func wizardCard(
 ) ui.Node {
 	colOpts := func(sel string) []ui.Node { return wizardColumnOptions(header, sel) }
 
-	return Section(css.Class("card"), Attr("data-testid", "import-wizard"),
-		H2(css.Class("card-title"), uistate.T("documents.wizardTitle")),
-		P(css.Class("muted"), uistate.T("documents.wizardDesc")),
-		P(css.Class("muted"), uistate.T("documents.wizardOrAI")),
-		Form(OnSubmit(onApply),
-			Div(css.Class("form-grid"),
-				Div(
-					Label(For("wiz-date"), uistate.T("documents.wizardDate")),
-					Select(css.Class("field"), Attr("id", "wiz-date"),
-						Attr("aria-label", uistate.T("documents.wizardDate")),
-						OnChange(onDate), colOpts(selDate)),
+	return uiw.Card(uiw.CardProps{
+		TestID: "import-wizard",
+		Header: H2(css.Class("card-title"), uistate.T("documents.wizardTitle")),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("documents.wizardDesc")),
+			P(css.Class("muted"), uistate.T("documents.wizardOrAI")),
+			Form(OnSubmit(onApply),
+				Div(css.Class("form-grid"),
+					Div(
+						Label(For("wiz-date"), uistate.T("documents.wizardDate")),
+						Select(css.Class("field"), Attr("id", "wiz-date"),
+							Attr("aria-label", uistate.T("documents.wizardDate")),
+							OnChange(onDate), colOpts(selDate)),
+					),
+					Div(
+						Label(For("wiz-desc"), uistate.T("documents.wizardDesc2")),
+						Select(css.Class("field"), Attr("id", "wiz-desc"),
+							Attr("aria-label", uistate.T("documents.wizardDesc2")),
+							OnChange(onDesc), colOpts(selDesc)),
+					),
+					Div(
+						Label(For("wiz-amount"), uistate.T("documents.wizardAmount")),
+						Select(css.Class("field"), Attr("id", "wiz-amount"),
+							Attr("aria-label", uistate.T("documents.wizardAmount")),
+							OnChange(onAmount), colOpts(selAmount)),
+					),
+					Div(
+						Label(For("wiz-debit"), uistate.T("documents.wizardDebit")),
+						Select(css.Class("field"), Attr("id", "wiz-debit"),
+							Attr("aria-label", uistate.T("documents.wizardDebit")),
+							OnChange(onDebit), colOpts(selDebit)),
+					),
+					Div(
+						Label(For("wiz-credit"), uistate.T("documents.wizardCredit")),
+						Select(css.Class("field"), Attr("id", "wiz-credit"),
+							Attr("aria-label", uistate.T("documents.wizardCredit")),
+							OnChange(onCredit), colOpts(selCredit)),
+					),
 				),
-				Div(
-					Label(For("wiz-desc"), uistate.T("documents.wizardDesc2")),
-					Select(css.Class("field"), Attr("id", "wiz-desc"),
-						Attr("aria-label", uistate.T("documents.wizardDesc2")),
-						OnChange(onDesc), colOpts(selDesc)),
-				),
-				Div(
-					Label(For("wiz-amount"), uistate.T("documents.wizardAmount")),
-					Select(css.Class("field"), Attr("id", "wiz-amount"),
-						Attr("aria-label", uistate.T("documents.wizardAmount")),
-						OnChange(onAmount), colOpts(selAmount)),
-				),
-				Div(
-					Label(For("wiz-debit"), uistate.T("documents.wizardDebit")),
-					Select(css.Class("field"), Attr("id", "wiz-debit"),
-						Attr("aria-label", uistate.T("documents.wizardDebit")),
-						OnChange(onDebit), colOpts(selDebit)),
-				),
-				Div(
-					Label(For("wiz-credit"), uistate.T("documents.wizardCredit")),
-					Select(css.Class("field"), Attr("id", "wiz-credit"),
-						Attr("aria-label", uistate.T("documents.wizardCredit")),
-						OnChange(onCredit), colOpts(selCredit)),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt2),
+					Button(css.Class("btn btn-primary"), Type("submit"),
+						Attr("data-testid", "wizard-apply-btn"),
+						uistate.T("documents.wizardApply")),
 				),
 			),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt2),
-				Button(css.Class("btn btn-primary"), Type("submit"),
-					Attr("data-testid", "wizard-apply-btn"),
-					uistate.T("documents.wizardApply")),
+			Div(css.Class(tw.Mt2),
+				H3(css.Class("card-title"), uistate.T("documents.profileSaveTitle")),
+				Form(css.Class("form-grid"), OnSubmit(onSaveProfile),
+					Input(css.Class("field"), Type("text"),
+						Attr("aria-label", uistate.T("documents.profileSaveTitle")),
+						Placeholder(uistate.T("documents.profileNamePlaceholder")),
+						Value(profileNameVal),
+						OnInput(onProfileName),
+					),
+					Button(css.Class("btn"), Type("submit"), uistate.T("documents.profileSave")),
+				),
 			),
 		),
-		Div(css.Class(tw.Mt2),
-			H3(css.Class("card-title"), uistate.T("documents.profileSaveTitle")),
-			Form(css.Class("form-grid"), OnSubmit(onSaveProfile),
-				Input(css.Class("field"), Type("text"),
-					Attr("aria-label", uistate.T("documents.profileSaveTitle")),
-					Placeholder(uistate.T("documents.profileNamePlaceholder")),
-					Value(profileNameVal),
-					OnInput(onProfileName),
-				),
-				Button(css.Class("btn"), Type("submit"), uistate.T("documents.profileSave")),
-			),
-		),
-	)
+	})
 }
 
 // savedProfilesCard renders the saved-profile picker. It is shown alongside
@@ -1041,13 +1044,13 @@ func savedProfilesCard(
 	onDelete func(string),
 ) ui.Node {
 	profiles := app.ImportProfiles()
-	return Section(css.Class("card"),
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+	return uiw.Card(uiw.CardProps{
+		Header: Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 			H2(css.Class("card-title"), uistate.T("documents.profileLoadTitle")),
 			Button(css.Class("btn btn-sm"), Type("button"), OnClick(func() { onToggle() }),
 				IfElse(shown, Text("Hide"), Text("Show"))),
 		),
-		If(shown,
+		Body: If(shown,
 			IfElse(len(profiles) == 0,
 				P(css.Class("empty"), uistate.T("documents.profileNone")),
 				Div(css.Class("rows"), MapKeyed(profiles,
@@ -1062,7 +1065,7 @@ func savedProfilesCard(
 				)),
 			),
 		),
-	)
+	})
 }
 
 // profileRowProps configures a ProfileRow component.

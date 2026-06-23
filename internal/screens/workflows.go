@@ -202,72 +202,74 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		}
 	}
 
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("workflows.create")),
-		Div(css.Class("form-grid"),
-			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName)),
-			Select(css.Class("field"), Attr("aria-label", "Trigger"), OnChange(onTrigger),
-				Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
-				Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
-				Option(Value(string(workflow.TriggerScheduled)), SelectedIf(trigger.Get() == string(workflow.TriggerScheduled)), uistate.T("workflows.triggerScheduled")),
-				Option(Value(string(workflow.TriggerBudgetExceeded)), SelectedIf(trigger.Get() == string(workflow.TriggerBudgetExceeded)), uistate.T("workflows.triggerBudgetExceeded")),
-				Option(Value(string(workflow.TriggerGoalReached)), SelectedIf(trigger.Get() == string(workflow.TriggerGoalReached)), uistate.T("workflows.triggerGoalReached")),
-				Option(Value(string(workflow.TriggerBillDue)), SelectedIf(trigger.Get() == string(workflow.TriggerBillDue)), uistate.T("workflows.triggerBillDue")),
-			),
-			If(trigger.Get() == string(workflow.TriggerScheduled),
-				Select(css.Class("field"), OnChange(onCadence),
-					Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.cadenceWeekly")),
-					Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.cadenceMonthly")),
-					Option(Value(string(domain.CadenceQuarterly)), SelectedIf(cadence.Get() == string(domain.CadenceQuarterly)), uistate.T("workflows.cadenceQuarterly")),
-					Option(Value(string(domain.CadenceYearly)), SelectedIf(cadence.Get() == string(domain.CadenceYearly)), uistate.T("workflows.cadenceYearly")),
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("workflows.create"),
+		Body: Fragment(
+			Div(css.Class("form-grid"),
+				Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName)),
+				Select(css.Class("field"), Attr("aria-label", "Trigger"), OnChange(onTrigger),
+					Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
+					Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
+					Option(Value(string(workflow.TriggerScheduled)), SelectedIf(trigger.Get() == string(workflow.TriggerScheduled)), uistate.T("workflows.triggerScheduled")),
+					Option(Value(string(workflow.TriggerBudgetExceeded)), SelectedIf(trigger.Get() == string(workflow.TriggerBudgetExceeded)), uistate.T("workflows.triggerBudgetExceeded")),
+					Option(Value(string(workflow.TriggerGoalReached)), SelectedIf(trigger.Get() == string(workflow.TriggerGoalReached)), uistate.T("workflows.triggerGoalReached")),
+					Option(Value(string(workflow.TriggerBillDue)), SelectedIf(trigger.Get() == string(workflow.TriggerBillDue)), uistate.T("workflows.triggerBillDue")),
+				),
+				If(trigger.Get() == string(workflow.TriggerScheduled),
+					Select(css.Class("field"), OnChange(onCadence),
+						Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.cadenceWeekly")),
+						Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.cadenceMonthly")),
+						Option(Value(string(domain.CadenceQuarterly)), SelectedIf(cadence.Get() == string(domain.CadenceQuarterly)), uistate.T("workflows.cadenceQuarterly")),
+						Option(Value(string(domain.CadenceYearly)), SelectedIf(cadence.Get() == string(domain.CadenceYearly)), uistate.T("workflows.cadenceYearly")),
+					),
 				),
 			),
-		),
-		// Condition input in its own full-width row so it has room to breathe and
-		// isn't truncated to ~10 chars inside a 3-column form-grid cell (GI3).
-		Div(css.Class("form-grid", tw.Mt1),
-			Input(css.Class("field", "field-wide"), Attr("placeholder", uistate.T("workflows.condition")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition)),
-		),
-		// Inline variable reference for the condition formula (C65). Lists every
-		// available variable with a click-to-insert button so users don't need to
-		// memorise the names. Each variable is its own component (condVarButton) so
-		// its OnClick hook never runs inside a variable-length loop (framework rule).
-		// Transaction-context variables are only injected when the trigger is
-		// "transaction added"; all four are always shown here as reference since users
-		// can test conditions with "run now" on any trigger.
-		Div(css.Class(tw.Mt2),
-			P(css.Class("muted"), uistate.T("workflows.conditionHint")),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap15, tw.Mt1),
-				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_abs", Desc: uistate.T("workflows.varTxnAbs"), OnInsert: insertVar}),
-				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_amount", Desc: uistate.T("workflows.varTxnAmount"), OnInsert: insertVar}),
-				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_payee", Desc: uistate.T("workflows.varTxnPayee"), OnInsert: insertVar}),
-				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_category", Desc: uistate.T("workflows.varTxnCategory"), OnInsert: insertVar}),
+			// Condition input in its own full-width row so it has room to breathe and
+			// isn't truncated to ~10 chars inside a 3-column form-grid cell (GI3).
+			Div(css.Class("form-grid", tw.Mt1),
+				Input(css.Class("field", "field-wide"), Attr("placeholder", uistate.T("workflows.condition")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition)),
 			),
-			P(css.Class("muted", tw.Mt1), uistate.T("workflows.conditionExamples")),
-		),
-		// Action builder. The parameter control depends on the chosen action:
-		// a category picker for "set category", a text field for create-task /
-		// notify / add-tag, and nothing for apply-rules / flag-for-review.
-		Div(css.Class("form-grid", tw.Mt2),
-			Select(css.Class("field"), Attr("aria-label", "Action type"), OnChange(onDraftKind),
-				Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
-				Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
-				Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
-				Option(Value(string(workflow.ActionFlagReview)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagReview)), uistate.T("workflows.actFlagReview")),
-				Option(Value(string(workflow.ActionApplyRules)), SelectedIf(draftKind.Get() == string(workflow.ActionApplyRules)), uistate.T("workflows.actApplyRules")),
-				Option(Value(string(workflow.ActionNotify)), SelectedIf(draftKind.Get() == string(workflow.ActionNotify)), uistate.T("workflows.actNotify")),
-				Option(Value(string(workflow.ActionPostRecurring)), SelectedIf(draftKind.Get() == string(workflow.ActionPostRecurring)), uistate.T("workflows.actPostRecurring")),
-				Option(Value(string(workflow.ActionFlagBudgetOver)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagBudgetOver)), uistate.T("workflows.actFlagBudgetOver")),
+			// Inline variable reference for the condition formula (C65). Lists every
+			// available variable with a click-to-insert button so users don't need to
+			// memorise the names. Each variable is its own component (condVarButton) so
+			// its OnClick hook never runs inside a variable-length loop (framework rule).
+			// Transaction-context variables are only injected when the trigger is
+			// "transaction added"; all four are always shown here as reference since users
+			// can test conditions with "run now" on any trigger.
+			Div(css.Class(tw.Mt2),
+				P(css.Class("muted"), uistate.T("workflows.conditionHint")),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap15, tw.Mt1),
+					ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_abs", Desc: uistate.T("workflows.varTxnAbs"), OnInsert: insertVar}),
+					ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_amount", Desc: uistate.T("workflows.varTxnAmount"), OnInsert: insertVar}),
+					ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_payee", Desc: uistate.T("workflows.varTxnPayee"), OnInsert: insertVar}),
+					ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_category", Desc: uistate.T("workflows.varTxnCategory"), OnInsert: insertVar}),
+				),
+				P(css.Class("muted", tw.Mt1), uistate.T("workflows.conditionExamples")),
 			),
-			paramControl,
-			Button(css.Class("btn"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
+			// Action builder. The parameter control depends on the chosen action:
+			// a category picker for "set category", a text field for create-task /
+			// notify / add-tag, and nothing for apply-rules / flag-for-review.
+			Div(css.Class("form-grid", tw.Mt2),
+				Select(css.Class("field"), Attr("aria-label", "Action type"), OnChange(onDraftKind),
+					Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
+					Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
+					Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
+					Option(Value(string(workflow.ActionFlagReview)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagReview)), uistate.T("workflows.actFlagReview")),
+					Option(Value(string(workflow.ActionApplyRules)), SelectedIf(draftKind.Get() == string(workflow.ActionApplyRules)), uistate.T("workflows.actApplyRules")),
+					Option(Value(string(workflow.ActionNotify)), SelectedIf(draftKind.Get() == string(workflow.ActionNotify)), uistate.T("workflows.actNotify")),
+					Option(Value(string(workflow.ActionPostRecurring)), SelectedIf(draftKind.Get() == string(workflow.ActionPostRecurring)), uistate.T("workflows.actPostRecurring")),
+					Option(Value(string(workflow.ActionFlagBudgetOver)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagBudgetOver)), uistate.T("workflows.actFlagBudgetOver")),
+				),
+				paramControl,
+				Button(css.Class("btn"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
+			),
+			If(len(staged) > 0, Div(css.Class("rows"), staged)),
+			If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
+			Div(css.Class(tw.Mt2),
+				Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.save")),
+			),
 		),
-		If(len(staged) > 0, Div(css.Class("rows"), staged)),
-		If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
-		Div(css.Class(tw.Mt2),
-			Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.save")),
-		),
-	)
+	})
 }
 
 type workflowRowProps struct {
@@ -436,10 +438,10 @@ func workflowHistory(_ workflowHistoryProps) ui.Node {
 			Span(css.Class("row-meta"), r.At+" · "+strconv.Itoa(len(r.Effects))+" "+uistate.T("workflows.effectsWord")),
 		))
 	}
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("workflows.history")),
-		Div(css.Class("rows"), rows),
-	)
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("workflows.history"),
+		Rows:  rows,
+	})
 }
 
 // --- label helpers ---
