@@ -14424,6 +14424,14 @@ _7 · General UX / Glanceability_
 
 ### G17. Categories — "The Category Nerd" (Tomás) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** (Card titles/rows already pass light contrast; em-dash nesting + usage
+counts + drill already shipped per C63.)
+- **§1: no in-card add affordance** — added a **"+ Add category"** header button (in a `.card-head`)
+  to *both* the Expense and Income kind cards, matching the Accounts/Goals/Budgets pattern, so Tomás
+  can add in-context instead of hunting the command palette.
+- **Intentionally deferred**: usage-badge muted-grey contrast (borderline but passing), the
+  management-vs-map card hierarchy, and the systemic shell inter-card background bleed.
+
 **The story**
 Tomás opens Categories to organize a clean expense/income tree. He wants to add a
 sub-category under Transportation, see at a glance which categories carry transactions

@@ -40,6 +40,8 @@ and every commit updates this file under `Unreleased`.
   page (above the custom-fields manager, behind a section divider) instead of being buried below the
   fold, and the variable-reference amounts are readable in light mode. **Members (G16):** the
   net-worth-by-member amounts are now readable in light mode (they were inheriting the dark `--text`).
+  **Categories (G17):** added an in-card "+ Add category" button to both the Expense and Income kind
+  cards (add was previously only reachable from the command palette).
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**

@@ -36,6 +36,15 @@ func Categories() ui.Node {
 	reassignID := ui.UseState("") // category awaiting reassignment before delete
 	reassignTo := ui.UseState("")
 	collapsed := ui.UseState(map[string]bool{}) // id → collapsed; session state
+	// In-context add (G17 §1): an "+ Add category" header button on each kind card,
+	// so Tomás isn't forced to discover the command-palette / global "+".
+	addCategory := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("category") }))
+	addCatBtn := func() ui.Node {
+		return Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "categories-add"), Title(uistate.T("categories.add")), OnClick(addCategory),
+			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T("categories.addCategory")))
+	}
 
 	onReassignTo := ui.UseEvent(func(e ui.Event) { reassignTo.Set(e.GetValue()) })
 
@@ -204,11 +213,17 @@ func Categories() ui.Node {
 	return Div(
 		reassignPanel,
 		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("categories.expenseTitle")),
+			Div(css.Class("card-head"),
+				H2(css.Class("card-title"), uistate.T("categories.expenseTitle")),
+				addCatBtn(),
+			),
 			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(expenseList), categorytree.VisibleUnderCollapsed(expenseList, collapsed.Get())), flatKey, renderFlat))),
 		),
 		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("categories.incomeTitle")),
+			Div(css.Class("card-head"),
+				H2(css.Class("card-title"), uistate.T("categories.incomeTitle")),
+				addCatBtn(),
+			),
 			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(incomeList), categorytree.VisibleUnderCollapsed(incomeList, collapsed.Get())), flatKey, renderFlat))),
 		),
 		// Visual category map: the hierarchy as a Mermaid graph (C70/C63 tree view).

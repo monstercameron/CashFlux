@@ -315,6 +315,7 @@ var english = Catalog{
 
 	// Categories screen
 	"categories.add":             "Add category",
+	"categories.addCategory":     "+ Add category",
 	"categories.nameRequired":    "Enter a category name.",
 	"categories.pickDifferent":   "Pick a different category to move these into.",
 	"categories.noParentTop":     "— No parent (top level) —",
@@ -1396,6 +1397,11 @@ var english = Catalog{
 	"nav.widgetManager":               "Widget manager",
 	"widgetBuilder.title":             "Widget builder",
 	"widgetBuilder.empty":             "Widget creation is coming soon.",
+	"widgetBuilder.stageTitle":        "Preview",
+	"widgetBuilder.sampleTitle":       "Sample widget",
+	"widgetBuilder.sampleSub":         "Pick a data source next",
+	"widgetBuilder.sizeTitle":         "Size",
+	"widgetBuilder.sizeHint":          "Set how many columns wide (1–4) and rows tall (1–3) the widget takes on the dashboard.",
 	"widgetManager.title":             "Widget manager",
 	"widgetManager.empty":             "Widget management is coming soon.",
 	"widgetManager.layoutTitle":       "Layout",
