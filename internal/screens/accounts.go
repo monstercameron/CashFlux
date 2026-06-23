@@ -134,6 +134,32 @@ func Accounts() ui.Node {
 			assetList = append(assetList, ac)
 		}
 	}
+	// Sort assets and liabilities by current balance, largest first (G3 §7), so the
+	// accounts that move net worth most sit at the top of each group instead of in
+	// insertion order. Balances are converted to base so multi-currency rows sort
+	// comparably; a missing FX rate falls back to raw minor units.
+	convBal := func(ac domain.Account) int64 {
+		bal, _ := ledger.Balance(ac, txns)
+		if c, err := rates.Convert(bal, base); err == nil {
+			return c.Amount
+		}
+		return bal.Amount
+	}
+	sort.SliceStable(assetList, func(i, j int) bool { return convBal(assetList[i]) > convBal(assetList[j]) })
+	sort.SliceStable(liabList, func(i, j int) bool { return convBal(liabList[i]) > convBal(liabList[j]) })
+
+	// Net-worth month-to-date delta (G3 §3): the change in net worth since the
+	// first of the current month, so Theo can answer "up or down this month?" at a
+	// glance. Computed honestly from the two net-worth snapshots — no proxy.
+	nowTS := time.Now()
+	monthStart := time.Date(nowTS.Year(), nowTS.Month(), 1, 0, 0, 0, 0, nowTS.Location())
+	var nwDelta money.Money
+	haveDelta := false
+	if series, err := ledger.NetWorthSeries(accounts, txns, []time.Time{monthStart, nowTS.AddDate(0, 0, 1)}, rates); err == nil && len(series) == 2 {
+		if d, derr := series[1].Sub(series[0]); derr == nil {
+			nwDelta, haveDelta = d, true
+		}
+	}
 
 	saveAccount := func(ac domain.Account) {
 		if err := app.PutAccount(ac); err != nil {
@@ -250,15 +276,23 @@ func Accounts() ui.Node {
 			P(css.Class("muted"), uistate.T("accounts.welcomeDesc")),
 			Button(css.Class("btn btn-primary"), Type("button"), OnClick(loadSample), uistate.T("accounts.loadSample")),
 		)),
-		Div(css.Class("stat-grid"),
-			stat(uistate.T("dashboard.netWorth"), fmtMoney(net), accentFor(net)),
+		// Net-worth-dominant summary (G3 §2/§3): net worth is the household's
+		// north-star figure, so it gets a larger hero tile spanning the full height
+		// with a month-to-date trend subtitle; assets and liabilities sit beside it
+		// as secondary tiles.
+		Div(css.Class("nw-summary"),
+			Div(css.Class("stat stat-hero"),
+				Div(css.Class("stat-label"), uistate.T("dashboard.netWorth")),
+				Div(ClassStr("stat-value "+accentFor(net)), fmtMoney(net)),
+				netWorthDeltaLine(nwDelta, haveDelta),
+			),
 			stat(uistate.T("accounts.assets"), fmtMoney(assets), "pos"),
 			stat(uistate.T("dashboard.liabilities"), fmtMoney(liabilities), "neg"),
 		),
 		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
 			"Net worth excludes "+plural(len(nw.ExcludedAccounts), "account")+" — no exchange rate for "+strings.Join(nw.MissingCurrencies, ", ")+". Add it in Settings to include them.")),
 		If(staleCount > 0, Div(Style(map[string]string{"margin-bottom": "0.6rem"}),
-			Button(css.Class("btn"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
+			Button(css.Class("btn btn-stale"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
 				Text(uistate.T("accounts.markAll", plural(staleCount, "account")))),
 		)),
 		Section(css.Class("card"),
@@ -332,6 +366,49 @@ func currencyOptions(app *appstate.App, selected string) []ui.Node {
 		opts = append(opts, Option(Value(c), SelectedIf(selected == c), label))
 	}
 	return opts
+}
+
+// netWorthDeltaLine renders the month-to-date net-worth change as a small trend
+// subtitle under the hero figure: a colored ↑/↓ glyph + the signed amount + "this
+// month" (G3 §3). A zero or unknown delta reads as a calm "no change" caption.
+func netWorthDeltaLine(delta money.Money, have bool) ui.Node {
+	if !have || delta.Amount == 0 {
+		return Span(css.Class("stat-sub", tw.TextDim), uistate.T("accounts.noChangeMonth"))
+	}
+	up := delta.Amount > 0
+	tone, glyph := tw.TextUp, icon.TrendingUp
+	if !up {
+		tone, glyph = tw.TextDown, icon.TrendingDown
+	}
+	abs := delta
+	if !up {
+		abs = money.New(-delta.Amount, delta.Currency)
+	}
+	sign := "+"
+	if !up {
+		sign = "−"
+	}
+	return Span(css.Class("stat-sub", tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tone),
+		uiw.Icon(glyph, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(uistate.T("accounts.deltaThisMonth", sign+fmtMoney(abs))))
+}
+
+// accountTypeIcon maps an account type to a small leading glyph so Checking /
+// Investment / Credit Card are distinguishable at a glance without reading the
+// meta-line (G3 §5). Unknown types fall back to the generic accounts glyph.
+func accountTypeIcon(t domain.AccountType) icon.Name {
+	switch t {
+	case domain.TypeCreditCard, domain.TypeLineOfCredit:
+		return icon.CreditCard
+	case domain.TypeLoan, domain.TypePersonalLoan, domain.TypeMortgage:
+		return icon.Landmark
+	case domain.TypeInvestment:
+		return icon.Reports
+	case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings:
+		return icon.Landmark
+	default:
+		return icon.Accounts
+	}
 }
 
 // accountMeta builds an account row's subtitle: type · currency, plus credit
@@ -785,6 +862,10 @@ func AccountRow(props accountRowProps) ui.Node {
 		menuHidden = " hidden-menu"
 	}
 	return Div(css.Class("row"),
+		// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
+		// Credit Card are distinguishable without reading the meta-line.
+		Span(css.Class("acct-type-icon", tw.TextDim), Attr("aria-hidden", "true"),
+			uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), a.Name,
 				If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("accounts.stale"))),
@@ -792,6 +873,10 @@ func AccountRow(props accountRowProps) ui.Node {
 			Span(css.Class("row-meta"), meta),
 		),
 		Span(ClassStr(amountClass(props.Balance)), fmtMoney(props.Balance)),
+		// Stale accounts get the reconcile action surfaced inline (G3 §6) rather than
+		// buried in the ⋯ menu, since "update my balance" is the whole reason a stale
+		// account is flagged.
+		If(props.Stale && !a.Archived, Button(css.Class("btn btn-stale", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.updateBalance")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("accounts.updateBalance")))),
 		// Primary actions inline; everything else in the ⋯ menu.
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),

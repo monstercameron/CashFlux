@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Accounts screen glamor pass (G3).** The summary now leads with a **dominant net-worth hero
+  tile** (larger figure, full-height) beside smaller asset/liability tiles, with a **month-to-date
+  trend subtitle** (↑/↓ signed delta from two net-worth snapshots). Accounts within each group
+  sort by **balance, largest first**; each row gains an **account-type glyph**; stale accounts get
+  an inline amber **"Update balance"** action and the "Mark all updated" button is restyled to tie
+  it to the STALE badge; list rows reflow cleanly below 760px so long names no longer collide with
+  the action buttons.
 - **Budgets screen glamor pass (G4).** Budget rows now sort **health-first** — Over → Near/At-risk →
   On track, then percent-used descending — so the budgets that need action rise to the top. The
   over/near **summary pills** (previously unstyled bare text) get a proper filled-chip treatment;

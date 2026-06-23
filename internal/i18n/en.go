@@ -1010,6 +1010,8 @@ var english = Catalog{
 	"accounts.welcomeDesc":        "No accounts yet. Add one below, or load some sample data to explore.",
 	"accounts.loadSample":         "Load sample data",
 	"accounts.assets":             "Assets",
+	"accounts.deltaThisMonth":     "%s this month",
+	"accounts.noChangeMonth":      "No change this month",
 	"accounts.noAssets":           "No asset accounts yet.",
 	"accounts.noLiabilities":      "No liabilities — nice.",
 	"accounts.archived":           "Archived",

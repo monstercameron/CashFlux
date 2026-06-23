@@ -10412,6 +10412,230 @@ Most of these pivots are state+UI only — the target screens already filter cor
 
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
 
+### G7. Planning — "The What-If Sunday" (Dev) — 2026-06-23 ★
+
+**The story**
+Dev opens Planning on a Sunday afternoon to run scenarios about his financial future. He wants three
+things in one session: see the net-worth forecast ("where am I headed at my current rate?"), try a
+what-if ("what if I cut spending by $300/mo, or get a raise?"), and read the projected outcome plus
+a debt-free date. He is not managing recurring items or running a formal plan today — he is using
+the forecast chart and its levers as a live calculator. The page must make that core loop (chart →
+lever → updated curve) the focal point, and must not bury it under six other tools he isn't here
+for. He also wants to confirm the forecast is reading real calendar months, not opaque index numbers.
+
+**Drive script**
+`e2e/glamor_07_planning.mjs` — widths 1280/1440/768, dark + light themes (light-theme recipe:
+set `cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`). Navigates from `/`
+via in-app click ("Planning" nav link) to avoid the wasm deep-link 404 (B1). Captures 7
+screenshots and a DOM audit JSON. Run: `node e2e/glamor_07_planning.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_07_planning_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_07_planning.mjs` → EXIT 0
+- Screenshots captured:
+  `glamor_07_planning_1280_dark.png`, `glamor_07_planning_1280_dark_full.png`,
+  `glamor_07_planning_1440_dark.png`, `glamor_07_planning_768_dark.png`,
+  `glamor_07_planning_1280_light.png`, `glamor_07_planning_1440_light.png`,
+  `glamor_07_planning_768_light.png`
+- DOM audit: `glamor_07_planning_dom.json` — 8 cards, chart SVG confirmed, xAxisLabels []
+  (indices not calendar dates confirmed visually), 1 stat grid (Cash runway only), 3 cards above
+  fold at 1280px, no unlabelled selects, breadcrumb confirmed, 0 page errors.
+- Light theme confirmed: `data-theme="light"` on `<html>` for all three light captures.
+
+**What already works well (keep — regression anchors)** ✓
+- **Forecast card is the first card on the page — the primary tool leads.** "Net worth in 12
+  months" renders at position 0, above all other tools. C53 concern partially addressed: the
+  forecast is first. Confirmed in all viewport/theme screenshots. ✓
+- **Forecast chart is above the fold at all widths.** At 1280px dark, the full chart (Y-axis
+  labels $61k/$62k/$63k, the green projection line) is visible within the first viewport without
+  scrolling. At 768px it is still above the fold. ✓
+- **The what-if lever is co-located with the forecast chart.** The trim input and "Compare with
+  plan" selector sit in the same card, immediately below the chart. Lever and output are in one
+  view — the correct UX pattern for a live what-if tool. ✓
+- **Y-axis labels are compact-currency formatted ($61k, $62k, $63k) and readable in dark mode.**
+  Confirmed in `glamor_07_planning_1280_dark.png`. ✓
+- **Hint text explains the forecast basis inline.** "Based on your last 3 months' average net
+  cash flow ($266.93/month), projected to $63,589.16" — determinism surfaced. ✓
+- **"3-month trailing average" basis label is present** (`data-testid="forecast-basis"`). ✓
+- **"Can I afford it?" is card 2 — affordability check is near the top.** L8 feature positioned
+  above fold at 1280px, three inputs in a clean form-grid. ✓
+- **No unlabelled select controls found.** DOM audit: `unlabelledSelects: []`. ✓
+- **Breadcrumb "Dashboard › Planning" is present.** DOM-confirmed. ✓
+- **Zero JavaScript page errors** — dark and light sessions both clean. ✓
+- **Plan rows render inline mini-sparklines.** DOM confirms `hasMiniChart: true` on each plan
+  row (Domain & hosting, Gym membership, Car insurance, Rent, Paycheck net). ✓
+- **Cash runway stat grid is present with real figures.** "STARTING BALANCE $85,813.00" and
+  "PROJECTED LOW $85,813.00" confirmed in DOM. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout*
+- [ ] **Eight cards stacked vertically with no visual grouping by purpose — the page reads as a
+      single undifferentiated scroll of tools (CRITICAL overload — C53 confirmed still present
+      beyond the forecast).** Card order: Net worth forecast → Can I afford it? → Cash runway →
+      Recurring cash flows → Savings & spending plans → Debt payoff strategy → Debt payoff
+      calculator → Projection. No visual chunking between "analytical tools" (forecast,
+      affordability) and "management tools" (recurring, plans). Dev, here for the what-if loop,
+      must scroll past five cards before reaching the payoff strategy and seven before the payoff
+      calculator. DOM confirms only 3 cards above fold at 1280px. A section-header or grouped-
+      card pattern with a compact anchor bar would let Dev jump directly to the tool he needs.
+- [ ] **"Debt payoff calculator" (card 6) and "Projection" (card 7) are split across two cards
+      with a card boundary between inputs and results.** The manual payoff calc and its result
+      panel are separate cards — typing a balance into card 6 shows the result in a detached
+      card 7 below. Inputs and results for the same calculation must be in the same card. Merge
+      these two into a single "Debt payoff calculator" card with the form at top and the result
+      inline below the form.
+- [ ] **Input fields have no placeholder text inside the box** — the label floats above, the
+      number input is blank at rest. At 1280px dark, the "What if I trim monthly spending by..."
+      label is above an empty `<input type="number">` with no in-field cue. Minor, but reduces
+      scannability when multiple adjacent number fields have no in-field identity.
+
+*2. Spacing*
+- [ ] **Inter-card gap is approximately 8px — eight tightly-packed cards read as one continuous
+      dense block.** At 1280px dark, card borders are nearly flush. Increasing the inter-card gap
+      to 16–20px would give each tool visual breathing room and make the page read as distinct
+      sections rather than a single overloaded pane. Confirmed in `glamor_07_planning_1280_dark.png`.
+- [ ] **The forecast chart has minimal top padding from the hint-text above it** — the chart
+      starts approximately 10px below the last hint line. A 16px gap between the hint text block
+      and the chart plot area would give the chart visual separation from its explanatory text.
+- [ ] **The what-if inputs sit directly below the chart's X-axis line (~6px gap)** — at 1440px
+      the trim input looks like it is inside the chart rather than beneath it. An 8–12px gap
+      between chart bottom and the input row would clarify the spatial relationship.
+
+*3. Theming*
+- [ ] **Card titles near-invisible in light mode (CRITICAL — same blanket `--fg` token failure
+      as G4/G5/G6).** In `glamor_07_planning_1280_light.png` and `glamor_07_planning_1440_light.png`:
+      "Net worth in 12 months", "Can I afford it?", and "Cash runway" all render in extremely
+      faint grey on white — effectively invisible. Card `<h2>` elements must use `--fg` or a
+      full-weight token passing WCAG AA (4.5:1) on white. Screenshots: `glamor_07_planning_1280_light.png`,
+      `glamor_07_planning_1440_light.png`, `glamor_07_planning_768_light.png`.
+- [ ] **Input field labels near-invisible in light mode.** In `glamor_07_planning_1440_light.png`,
+      all `labeledField` label texts above number inputs ("What if I trim monthly spending by...",
+      "Purchase amount (USD)", "In how many months?", "Warn me below, optional (USD)") render in
+      the same faint grey as card titles — the field context is completely invisible to Dev in
+      light mode. The `labeledField` component must apply `--fg` for label text in light mode.
+      Screenshots: `glamor_07_planning_1280_light.png`, `glamor_07_planning_1440_light.png`.
+- [ ] **Y-axis labels render in amber/orange in light mode — semantically misleading.** In
+      `glamor_07_planning_1280_light.png`, the Y-axis tick labels ($61k, $62k, $63k) render in
+      a warm amber/orange color — the same accent used for links and highlighted text elsewhere —
+      rather than neutral grey. On a financial chart, orange implies a warning or negative
+      condition. Axis tick labels should use `--text-dim` (neutral grey), not the accent color.
+- [ ] **Chart projection line desaturates in light mode.** The green line is bold on the dark
+      chart background but thinner/lighter against white. Increasing stroke weight to ~2px in
+      light mode would maintain visual weight of the primary data element.
+
+*4. Styling*
+- [ ] **Terminal projection value ($63,589.16) is buried in a hint-text sentence, not surfaced
+      as a headline stat (CRITICAL glanceability gap).** "$63,589.16" is Dev's primary answer
+      ("where will I be in 12 months?") but sits embedded in a muted sentence at the same visual
+      weight as surrounding text. A display-weight figure ("$63,589" in large type) at the top
+      of the card or beside the card title would make the answer instantly scannable — before
+      reading the chart, before parsing the hint text.
+- [ ] **"Compare with plan" selector is styled as a full-width dropdown equal in visual weight
+      to the primary trim input.** The compare dropdown is a secondary action (overlay a saved
+      plan curve). It should be styled subordinately — compact inline select, chip, or label-
+      above-select with smaller width — not a 40%-wide equal sibling to the primary number input.
+- [ ] **"Projection" card is an orphaned result panel with no visible connection to its input
+      card above it.** At rest state it shows only a muted placeholder text. As a detached
+      result pane it looks like an empty card. Merging with the payoff calculator card (see
+      Layout fix) eliminates this.
+
+*5. Positioning*
+- [ ] **Terminal projection value is not positioned as a headline figure.** Unlike every other
+      CashFlux page (Accounts: total assets; Budgets: spent/budgeted/left; Goals: overall
+      progress), the forecast card has no headline stat strip. The single most actionable number
+      — projected net worth at month 12 — is derivable only from the chart end-point or inline
+      hint text. Placing it as a display-weight figure in the card header gives Dev his answer
+      at glance-speed, before processing the chart.
+- [ ] **Payoff calculator inputs and their results are separated by a card boundary and buried
+      seven cards below the fold.** Inputs in card 6, results in card 7 — the user must hold the
+      mental context of their inputs across a card break to interpret the results. Merge into one
+      card and promote both above the recurring/plans management tools.
+
+*6. Ordering*
+- [ ] **Card order does not match the analytical-to-operational priority for Dev's session.**
+      Current: forecast → affordability → runway → recurring → plans → debt strategy →
+      debt calc → projection. A more glanceable order: 1. Net worth forecast + what-if levers
+      (keep), 2. Debt payoff calculator + projection (merged, promoted), 3. Debt payoff strategy
+      (automated multi-debt), 4. Can I afford it?, 5. Cash runway, 6. Savings & spending plans,
+      7. Recurring cash flows. The analytical/interactive tools lead; the operational/management
+      tools follow.
+- [ ] **Manual "Debt payoff calculator" (simple, single-debt) appears after the automated "Debt
+      payoff strategy" (complex, multi-debt).** The simpler tool should come first — most users
+      reach for the single-debt calc before building a full multi-debt strategy. Swap their order.
+
+*7. General UX / Glanceability*
+- [ ] **X-axis tick labels show month indices (0, 2, 4, 6, 8, 10) not calendar month labels —
+      L61 CONFIRMED STILL PRESENT.** DOM audit: `xAxisLabels: []`; visual inspection of
+      `glamor_07_planning_1280_dark.png` confirms the X-axis reads `0 · 2 · 4 · 6 · 8 · 10`.
+      Dev cannot answer "by when will I reach $63k?" from the chart — he sees only "at month
+      10." The forecast's core value proposition (answering "by when?") is blocked without
+      calendar labels. Fix: replace index ticks with calendar month labels ("Jul 2026",
+      "Sep 2026", "Nov 2026", "Jan 2027", "Mar 2027", "May 2027") in the chart spec or renderer.
+      This is the single highest-priority glanceability fix on this page. Screenshots:
+      `glamor_07_planning_1280_dark.png`, `glamor_07_planning_1440_dark.png`.
+- [ ] **No headline stat above the chart — Dev has no at-a-glance answer to "where am I headed?"
+      without parsing the hint sentence or reading the chart end-point.** A compact stat chip
+      "Projected net worth in 12 months: $63,589 ↑" in the card header would give Dev his answer
+      at glance-speed, before any chart processing. Cross-reference Positioning #1 and Styling #1.
+- [ ] **The what-if trim input has no contextual hint about the current monthly net.** The input
+      is an empty number box with no pre-fill, no ghost text, and no mention of the current
+      average ($266.93/mo). Dev's first experiment has no calibration point — he doesn't know if
+      trimming $50 or $500 is meaningful without doing the mental math from the hint text. A
+      ghost-text ("e.g. $100") or inline note ("your current monthly net: $266.93") near the
+      input would give Dev an anchoring reference for his first what-if attempt. Screenshots:
+      `glamor_07_planning_1280_dark.png`.
+- [ ] **No in-page section anchors or jump links for the 8-card page.** A user who wants the
+      "Cash runway" tool must scroll past the forecast and affordability cards. A compact anchor
+      bar at the top of the content area ("Forecast · Affordability · Runway · Recurring · Plans
+      · Payoff · Strategy") would give power users direct access and implicitly communicate the
+      full scope of the page — so Dev knows the payoff calc exists without scrolling to find it.
+- [ ] **At 768px, the "What if I trim monthly spending by... (USD)" label wraps mid-phrase.**
+      In `glamor_07_planning_768_dark.png`, the label reads "What if I trim monthly spending
+      by... / (USD)" across two lines at 768px. Shorten to "Trim monthly spending (USD)" or
+      structure the label so only the unit "(USD)" wraps, keeping the action phrase intact.
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Symptom | Fix |
+|---|------|---------|-----|
+| D1 | `glamor_07_planning_1280_light.png`, `glamor_07_planning_1440_light.png`, `glamor_07_planning_768_light.png` | Card titles ("Net worth in 12 months", "Can I afford it?", "Cash runway") near-invisible in light mode — blanket `--fg` token failure (G4/G5/G6 systemic) | Card titles must use `--fg` or full-weight token in light mode |
+| D2 | `glamor_07_planning_1280_light.png`, `glamor_07_planning_1440_light.png` | Input field labels ("What if I trim...", "Purchase amount (USD)", etc.) near-invisible in light mode | `labeledField` label text must use `--fg` in light mode |
+| D3 | `glamor_07_planning_1280_dark.png`, `glamor_07_planning_1440_dark.png` | X-axis tick labels show month indices (0, 2, 4, 6, 8, 10) not calendar dates — L61 still open | Replace index ticks with calendar month labels (Jul 2026, Aug 2026…) in chart spec/renderer |
+| D4 | All screenshots (requires full-page scroll) | "Debt payoff calculator" + "Projection" cards buried at positions 6–7 of 8; result card detached from input card | Merge calculator + projection into one card; promote above recurring/plans |
+| D5 | `glamor_07_planning_1280_dark.png`, `glamor_07_planning_1440_dark.png` | Terminal projection value ($63,589.16) embedded in hint-text sentence, not surfaced as headline stat | Surface as display-weight figure in card header or above chart |
+| D6 | `glamor_07_planning_1280_light.png`, `glamor_07_planning_1440_light.png` | Y-axis labels render in amber/orange in light mode — semantically misleading on a financial chart | Axis tick labels use `--text-dim` (neutral grey), not accent color |
+| D7 | All screenshots | No section anchors or jump links on 8-card page | Add compact anchor bar at page top or section headings with jump links |
+| D8 | `glamor_07_planning_768_dark.png`, `glamor_07_planning_768_light.png` | "What if I trim monthly spending by... (USD)" label wraps mid-phrase at 768px | Shorten to "Trim monthly spending (USD)" |
+
+**Re-screenshot close-out requirement:** After D1 (light-mode contrast fix), D3 (calendar X-axis
+labels), and D4 (payoff calc merge + promotion), re-run `node e2e/glamor_07_planning.mjs` and
+confirm: (a) card titles readable in light mode, (b) X-axis shows "Jul 2026"/"Aug 2026" etc.,
+(c) payoff calculator and projection are one card and above-fold within the first three cards.
+
+**Probe hardening**
+- The drive script correctly uses in-app navigation (click "Planning" nav link from `/`) rather
+  than a direct deep-link to `/planning` — required because `gwc dev` returns 404 for non-root
+  paths (B1).
+- DOM audit `xAxisLabels: []` because the chart SVG tick labels are not generated with class
+  `.x-axis text` or `.tick text`. Future probes should query all `svg text` elements; note that
+  `allSVGText` also returned [] in the DOM snapshot, which may indicate the chart renders via
+  canvas or that SVG text nodes are clipped/deferred until after the audit runs. Increase settle
+  delay or add an explicit chart-ready wait before the DOM evaluation.
+- Wait condition is `.card` with a 1200ms settle — necessary for D3 chart rendering (D3.js
+  renders asynchronously after wasm mounts the chart spec). Insufficient settle time produces
+  a blank SVG in the screenshot.
+
+**Cross-references**
+- C53: "Planning overloaded — primary calc buried" — forecast now leads (partial fix ✓); payoff
+  calc still buried at cards 6–7 (D4 open); 8-card overload unaddressed (Layout #1 open).
+- L61: "Forecast chart X-axis shows month indices not calendar labels" — STILL OPEN (D3,
+  confirmed visually in all dark screenshots).
+- L8: "Can I afford it?" affordability check — card present at position 1, above fold ✓.
+- L13: "Cash runway" — card present at position 2 ✓.
+- L5: "Debt payoff strategy" — snowball/avalanche comparison card present ✓.
+- L27: "Plan comparison overlay" — compare-with-plan select confirmed present in DOM ✓.
+
 ### G6. To-do — "The Money To-Do List" (Nina) — 2026-06-22 ★
 
 **The story**
@@ -11193,6 +11417,16 @@ LIGHT-THEME RECIPE — **CONFIRMED WORKING in G4** (first successful light captu
 ---
 
 ### G3. Accounts — "The Net-Worth Check" (Theo) — 2026-06-22 ★
+
+**✅ RESOLVED (2026-06-23).** All 7 consolidated fixes shipped:
+1 (768 row collide) — `@media (max-width:760px) .row { flex-wrap }`; name/meta full-width, figure+actions wrap below.
+2 (no NW dominance) — `.nw-summary` grid: a hero net-worth tile (2.1rem figure) spanning both rows beside smaller asset/liability tiles.
+3 (no trend) — month-to-date net-worth delta from `ledger.NetWorthSeries([monthStart, now+1])`, rendered as a ↑/↓ colored `.stat-sub`.
+4 (muted Mark-all) — `.btn-stale` amber-bordered style tying it to the STALE badge.
+5 (no type icons) — `accountTypeIcon` glyph (Landmark/CreditCard/chart) left of each name.
+6 (Update balance buried) — surfaced inline as a `.btn-stale` action on stale rows (still in ⋯ menu too).
+7 (insertion order) — assets + liabilities sorted by base-converted balance, largest first.
+View in `accounts.go`; CSS in `web/index.html`; i18n `accounts.deltaThisMonth/noChangeMonth`.
 
 **The story**
 Theo, a 40-year-old household CFO, opens Accounts once a week. He needs three things in under

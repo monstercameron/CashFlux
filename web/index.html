@@ -283,6 +283,28 @@
       .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; }
       .stat-value.pos { color: var(--accent); }
       .stat-value.neg { color: var(--danger); }
+      .stat-sub { display: block; margin-top: 0.3rem; font-size: 0.82rem; }
+
+      /* Net-worth-dominant summary (G3): a hero net-worth tile beside smaller
+         assets/liabilities tiles. The hero spans both rows and reads larger so the
+         north-star figure lands first. Collapses to a single column when narrow. */
+      .nw-summary { display: grid; grid-template-columns: 1.6fr 1fr; grid-auto-rows: 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+      .nw-summary .stat-hero { grid-row: 1 / 3; display: flex; flex-direction: column; justify-content: center; }
+      .nw-summary .stat-hero .stat-value { font-size: 2.1rem; }
+      @media (max-width: 640px) {
+        .nw-summary { grid-template-columns: 1fr; }
+        .nw-summary .stat-hero { grid-row: auto; }
+      }
+
+      /* Stale-action buttons (G3 §4/§6): tie "Mark all updated" and the per-row
+         "Update balance" to the amber STALE badge so they read as the resolving
+         action, not muted chrome. */
+      .btn-stale { border: 1px solid #c2870b; color: #d98c00; }
+      .btn-stale:hover { background: rgba(245,158,11,0.12); }
+      [data-theme="light"] .btn-stale { color: #b45309; border-color: #d39200; }
+
+      /* Account-type glyph slot (G3 §5). */
+      .acct-type-icon { display: inline-flex; align-items: center; flex: none; }
 
       /* Rows */
       .rows { display: flex; flex-direction: column; }
@@ -291,6 +313,14 @@
          the list is easier to scan (§6.16). Inset slightly so it reads as a band. */
       .row:hover { background: var(--bg-elev); }
       .row:first-child { border-top: 0; }
+      /* Narrow reflow (G3 §1): below ~760px a list row wraps so a long account name
+         + STALE badge no longer collide with the action buttons — the name/meta take
+         the full first line, the figure + actions wrap beneath, left-aligned. */
+      @media (max-width: 760px) {
+        .row { flex-wrap: wrap; row-gap: 0.4rem; }
+        .row .row-main { flex: 1 1 100%; }
+        .row .acct-type-icon { order: -1; }
+      }
       /* Inline-edit rows: a full-width block (not the flex .row) so the nested
          .form-grid expands to multiple columns and editing looks like adding,
          instead of collapsing into a tall single column (C18). */

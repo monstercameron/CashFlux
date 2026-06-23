@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series — G3 Accounts "The Net-Worth Check"
+
+Third screen. Biggest pieces were the summary redesign and an honest trend number. Net worth was an
+equal sibling to Income/Liabilities; promoted it to a hero tile in a 2-col grid (`.nw-summary`) with
+the figure scaled up and spanning both rows.
+
+The "up or down this month?" delta is the kind of thing that's easy to fake badly. Rather than a
+proxy (income − expense ignores transfers and debt paydown), I used `ledger.NetWorthSeries` with
+cutoffs [first-of-month, tomorrow] and subtracted the two snapshots — that's the *actual* net-worth
+change, transfers and liability movements included. Rendered as a colored ↑/↓ caption.
+
+Rest was mechanical but high-value: type glyphs per row (`accountTypeIcon`), balance-desc sort within
+each group, an amber `.btn-stale` treatment shared by "Mark all updated" and a new inline per-row
+"Update balance" on stale rows, and a `.row` flex-wrap at ≤760px (shared across list screens) so long
+names stop colliding with buttons.
+
+Next: G2 Transactions — the dense one (Actions column eats 44% of width, no zebra, amount buried).
+
 ## 2026-06-23 - feat: GLAMOR series — G4 Budgets "The Mid-Month Pulse"
 
 Second glamor screen. Headline gap was ordering: budget rows came out in insertion order, so Renu
