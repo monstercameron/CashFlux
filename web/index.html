@@ -337,6 +337,132 @@
       [data-wonder="off"] .toast:not(.toast-err)::before { animation: none; }
       @media (prefers-reduced-motion: reduce) { .toast:not(.toast-err)::before { animation: none; } }
 
+      /* W-11 · List stagger — rows fade-rise in a fast cascade on first paint.
+         Stagger caps at 8 items (≤320ms total) so long lists don't lag; nth-child > 8
+         get delay 0 via the base rule and enter together. Disabled under off+reduce.
+         Only non-table rows stagger (table rows excluded to preserve column alignment). */
+      @keyframes wonder-row-enter {
+        from { opacity: 0; transform: translateY(calc(6px * var(--wonder-on))); }
+        to   { opacity: 1; transform: none; }
+      }
+      .rows .row:not(.txn-table .row),
+      .list-rows .row:not(.txn-table .row) {
+        animation: wonder-row-enter var(--wonder-dur) var(--wonder-ease-out) both;
+      }
+      .rows .row:nth-child(1):not(.txn-table .row),
+      .list-rows .row:nth-child(1):not(.txn-table .row) { animation-delay: calc(0ms  + 0ms * var(--wonder-on)); }
+      .rows .row:nth-child(2):not(.txn-table .row),
+      .list-rows .row:nth-child(2):not(.txn-table .row) { animation-delay: calc(40ms * var(--wonder-on)); }
+      .rows .row:nth-child(3):not(.txn-table .row),
+      .list-rows .row:nth-child(3):not(.txn-table .row) { animation-delay: calc(80ms * var(--wonder-on)); }
+      .rows .row:nth-child(4):not(.txn-table .row),
+      .list-rows .row:nth-child(4):not(.txn-table .row) { animation-delay: calc(110ms * var(--wonder-on)); }
+      .rows .row:nth-child(5):not(.txn-table .row),
+      .list-rows .row:nth-child(5):not(.txn-table .row) { animation-delay: calc(140ms * var(--wonder-on)); }
+      .rows .row:nth-child(6):not(.txn-table .row),
+      .list-rows .row:nth-child(6):not(.txn-table .row) { animation-delay: calc(165ms * var(--wonder-on)); }
+      .rows .row:nth-child(7):not(.txn-table .row),
+      .list-rows .row:nth-child(7):not(.txn-table .row) { animation-delay: calc(190ms * var(--wonder-on)); }
+      .rows .row:nth-child(8):not(.txn-table .row),
+      .list-rows .row:nth-child(8):not(.txn-table .row) { animation-delay: calc(210ms * var(--wonder-on)); }
+      [data-wonder="off"] .rows .row,
+      [data-wonder="off"] .list-rows .row { animation: none; }
+      @media (prefers-reduced-motion: reduce) {
+        .rows .row, .list-rows .row { animation: none; }
+      }
+
+      /* W-12 · Card/bento entrance — dashboard tiles scale-in (0.98→1) + fade on mount.
+         Plays once per load via @keyframes; scale uses --wonder-on so intensity dial works.
+         Disabled under off+reduce. */
+      @keyframes wonder-bento-enter {
+        from { opacity: 0; transform: scale(calc(1 - 0.02 * var(--wonder-on))); }
+        to   { opacity: 1; transform: none; }
+      }
+      .bento .w {
+        animation: wonder-bento-enter var(--wonder-dur-slow) var(--wonder-ease-out) both;
+      }
+      [data-wonder="off"] .bento .w { animation: none; }
+      @media (prefers-reduced-motion: reduce) { .bento .w { animation: none; } }
+
+      /* W-13 · Modal/flip backdrop — on top of existing 3D flip, the backdrop now
+         blur-eases in (blur 0→4px over --wonder-dur-slow) and the content stagger is
+         addressed via the flip-inner scale (already .86→1 on .flipped which is a nice
+         entrance). We layer a transition on backdrop-filter for the blur-in.
+         Under off+reduce the existing `transition: none` on .flip-backdrop covers it. */
+      .flip-backdrop {
+        transition: opacity .28s var(--wonder-ease),
+                    backdrop-filter var(--wonder-dur-slow) var(--wonder-ease-out);
+        backdrop-filter: blur(0px);
+      }
+      .flip-backdrop.show {
+        backdrop-filter: blur(calc(3px * var(--wonder-on)));
+      }
+
+      /* W-14 · Toast spring — replace the bare ease-out entrance with a spring
+         cubic-bezier and add a smooth exit transition on opacity+transform.
+         The existing toast-in keyframe is redefined here with spring easing.
+         Exit is handled via the .toast.hide class (set by Go before removal). */
+      @keyframes wonder-toast-in {
+        from { opacity: 0; transform: translate(-50%, calc(0.6rem * var(--wonder-on))); }
+        50%  { transform: translate(-50%, calc(-0.15rem * var(--wonder-on))); }
+        to   { opacity: 1; transform: translate(-50%, 0); }
+      }
+      @keyframes toast-in {
+        from { opacity: 0; transform: translate(-50%, calc(0.6rem * var(--wonder-on))); }
+        50%  { transform: translate(-50%, calc(-0.15rem * var(--wonder-on))); }
+        to   { opacity: 1; transform: translate(-50%, 0); }
+      }
+      .toast {
+        animation: toast-in var(--wonder-dur-slow) cubic-bezier(.34,1.56,.64,1) both;
+      }
+      .toast.hide {
+        animation: none;
+        transition: opacity var(--wonder-dur-fast) var(--wonder-ease),
+                    transform var(--wonder-dur-fast) var(--wonder-ease);
+        opacity: 0;
+        transform: translate(-50%, 0.3rem);
+      }
+      [data-wonder="off"] .toast { animation: none; }
+      [data-wonder="off"] .toast.hide { transition: none; }
+      @media (prefers-reduced-motion: reduce) { .toast { animation: none; } .toast.hide { transition: none; } }
+
+      /* W-16 · Progress-bar fill ease — .bar-fill already has the eased width transition
+         under no-preference. The goals page and allocate page use .bar-fill too and inherit
+         the same rule. This comment documents the verification: all bar variants (.near,
+         .over, .done, .final, .overdue, .soon, .storage-bar-fill) only change background
+         colour — they share .bar-fill which already carries the width transition.
+         No additional rules needed; this item is a pass-through verification. */
+
+      /* W-19 · Skeleton shimmer — reusable loading placeholder. A shimmering gradient
+         sweeps left-to-right over the block. Under reduce → static muted block, no sweep.
+         Usage: add class="skeleton" (or "skeleton shimmer") to placeholder elements. */
+      @keyframes wonder-shimmer {
+        from { background-position: -200% 0; }
+        to   { background-position: 200% 0; }
+      }
+      .skeleton {
+        background: var(--bg-elev, rgba(255,255,255,0.04));
+        border-radius: 6px;
+        color: transparent !important;
+        pointer-events: none;
+      }
+      .skeleton.shimmer,
+      .shimmer {
+        background: linear-gradient(
+          90deg,
+          var(--bg-elev, rgba(255,255,255,0.04)) 25%,
+          rgba(255,255,255,0.08) 50%,
+          var(--bg-elev, rgba(255,255,255,0.04)) 75%
+        );
+        background-size: 200% 100%;
+        animation: wonder-shimmer calc(var(--wonder-dur-slow) * 4) linear infinite;
+      }
+      [data-wonder="off"] .shimmer,
+      [data-wonder="off"] .skeleton.shimmer { animation: none; background: var(--bg-elev, rgba(255,255,255,0.04)); }
+      @media (prefers-reduced-motion: reduce) {
+        .shimmer, .skeleton.shimmer { animation: none; background: var(--bg-elev, rgba(255,255,255,0.04)); }
+      }
+
       /* ========================== /WONDER ============================ */
 
       #boot-error {

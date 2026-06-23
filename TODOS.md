@@ -21810,6 +21810,7 @@ These are the values `chart.js` reads for `fg` (`--text-faint` → `#686870`) an
 
 
 ## W. WONDER — configurable animated flourishes (theme-engine driven) ★★
+<!-- Batch 2 landed 2026-06-23: W-11 list stagger, W-12 bento entrance, W-13 modal backdrop blur, W-14 toast spring, W-16 progress ease (verified), W-19 skeleton shimmer, W-20 focus ring ease. W-21 deferred (needs IntersectionObserver JS). -->
 
 ### W1. WONDER — animated-flourish system: architecture + token layer (theme-engine driven) — 2026-06-23 ★★
 
@@ -21851,22 +21852,21 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 *Entrance / reveal*
 - [x] W-9 Page-enter transition — on route change the page content fades + rises quickly. **LANDED 2026-06-23** — Approach A: `triggerPageEnter()` (pageenter.go, js+wasm build tag) does a double-rAF class toggle on `#cf-page-view`; `@keyframes wonder-page-enter` in index.html uses `--wonder-dur-slow`/`--wonder-ease-out`/`--wonder-on`; gated off under `[data-wonder="off"]` and `prefers-reduced-motion`; cold-boot excluded via existing firstRender guard in shell.go UseEffect.
 - [ ] W-10 Route cross-fade — outgoing/incoming pages cross-fade (advanced; GO-STRUCTURAL + view-transition API).
-- [ ] W-11 List stagger — list/table rows fade-rise in a fast cascade on first paint (CSS `animation-delay`
-      by nth-child, capped; or GO if rows are virtualized).
-- [ ] W-12 Card/bento entrance — tiles scale-in 0.98→1 + fade on dashboard mount.
-- [ ] W-13 Modal/flip — already has the 3D flip (GM); add a subtle backdrop blur-in + content stagger.
-- [ ] W-14 Toast — already slides in (GX5); add a spring + exit animation.
+- [x] W-11 List stagger — `.rows .row` / `.list-rows .row` fade-rise cascade on first paint via `@keyframes wonder-row-enter` + `animation-delay` by `:nth-child(1..8)` (cap 210ms); nth-child > 8 enter together; delays scale by `--wonder-on` → 0ms when off; `animation:none` under `[data-wonder="off"]` and `prefers-reduced-motion`. **LANDED 2026-06-23**
+- [x] W-12 Card/bento entrance — `.bento .w` tiles scale-in (`1 - 0.02 * --wonder-on` → 1) + fade via `@keyframes wonder-bento-enter` (`--wonder-dur-slow`); scale uses `--wonder-on`; `animation:none` under off+reduce. **LANDED 2026-06-23**
+- [x] W-13 Modal/flip backdrop blur-in — `.flip-backdrop` now transitions `backdrop-filter` (`blur(0)` → `blur(3px * --wonder-on)`) over `--wonder-dur-slow` in addition to existing opacity; existing `transition:none` in reduce block covers it. **LANDED 2026-06-23**
+- [x] W-14 Toast spring — `toast-in` keyframe redefined with spring overshoot (mid-frame -0.15rem bounce) + `cubic-bezier(.34,1.56,.64,1)` easing; `.toast.hide` class adds smooth exit (opacity+transform over `--wonder-dur-fast`); `animation:none`/`transition:none` under off+reduce. **LANDED 2026-06-23**
 *Value / state changes*
 - [ ] W-15 Number count-up — KPI/stat values tween from old→new on change (net worth, totals). [GO-STRUCTURAL:
       needs a JS tween or a Go-driven interpolation; high delight on the dashboard.]
-- [ ] W-16 Progress-bar fill ease — already eased (GX8 `.bar-fill` cubic-bezier); extend to goals/allocate.
+- [x] W-16 Progress-bar fill ease — verified: all bar variants (`.near`/`.over`/`.done`/`.final`/`.overdue`/`.soon`/`.storage-bar-fill`) share `.bar-fill` which already carries `width 0.45s cubic-bezier(.2,.75,.2,1)` under `no-preference`; no additional rules needed. **LANDED 2026-06-23** (pass-through verification)
 - [x] W-17 Success pulse — **LANDED 2026-06-23** `@keyframes wonder-success-pulse` (scale .6→1.15→1) on `.toast:not(.toast-err)::before`; duration `calc(--wonder-dur-slow * --wonder-on)` → instant/static when off; `animation:none` under `[data-wonder="off"]` and `prefers-reduced-motion`.
 - [ ] W-18 Chart draw-in — area/line charts animate their path on first render; donut sweeps; bars grow.
       [GO-STRUCTURAL: the D3/chartspec renderer must animate; pairs with G9.1a.]
 *Polish*
-- [ ] W-19 Skeleton shimmer — loading placeholders shimmer (ties to GX2 loading-states gap).
+- [x] W-19 Skeleton shimmer — `.skeleton` + `.shimmer` classes added: `@keyframes wonder-shimmer` sweeps a gradient left-to-right at `4 * --wonder-dur-slow`; under off+reduce → static `--bg-elev` block, no sweep. **LANDED 2026-06-23**
 - [x] W-20 Focus ring ease — `:focus-visible` ring now transitions `outline-offset` + `box-shadow` over 100ms `var(--wonder-ease)`; ring remains fully visible (a11y preserved), onset only is eased; reduced-motion neutralises via universal 0.001ms rule. **LANDED 2026-06-23**
-- [ ] W-21 Scroll-reveal — long pages (Reports) reveal sections as they enter the viewport (IntersectionObserver).
+- [ ] W-21 Scroll-reveal — long pages (Reports) reveal sections as they enter the viewport (IntersectionObserver). **DEFERRED** — requires IntersectionObserver JS; not trivially CSS-only; will ship in a future JS-scripting pass.
 
 **Theme-engine integration (GO-STRUCTURAL, build-gated GI0):**
 - [x] Add a motion field to `theme.Theme` (e.g. `Motion: off|subtle|full` or a 0..1 intensity) +

@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — feat: WONDER W-11..W-20 — entrance/reveal/polish flourishes (token-driven, reduced-motion safe)
+
+Batch 2 of the WONDER series — all CSS-only, no JS.
+
+**W-11 List stagger:** `@keyframes wonder-row-enter` (opacity 0→1 + `translateY(6px * --wonder-on)`) applied to `.rows .row` / `.list-rows .row`; `:nth-child(1..8)` get increasing delays (0..210ms × `--wonder-on`) capping total cascade at ~320ms; items 9+ enter together. Table rows excluded (`.txn-table .row`) to preserve column alignment.
+
+**W-12 Bento entrance:** `@keyframes wonder-bento-enter` (scale `1 - 0.02 * --wonder-on` → 1, opacity 0→1) on `.bento .w`; plays once per page load over `--wonder-dur-slow`.
+
+**W-13 Modal backdrop blur:** `.flip-backdrop` now transitions `backdrop-filter` (blur 0 → `3px * --wonder-on`) alongside the existing opacity, giving a clean blur-in as the settings panel opens. The existing `transition:none` in the reduce block covers it.
+
+**W-14 Toast spring:** redefined `toast-in` with a mid-frame bounce (-0.15rem × `--wonder-on`) and spring cubic-bezier `(.34,1.56,.64,1)`; added `.toast.hide` class for smooth exit (opacity+transform over `--wonder-dur-fast`). Duration uses `--wonder-dur-slow` so it's 0ms when off.
+
+**W-16 Progress-bar ease:** verified pass-through — all bar colour variants share `.bar-fill` which already carries `width 0.45s cubic-bezier(.2,.75,.2,1)` under `no-preference`; no new CSS needed.
+
+**W-19 Skeleton shimmer:** `.skeleton` + `.shimmer` reusable classes; `@keyframes wonder-shimmer` sweeps a 3-stop gradient at `4 × --wonder-dur-slow` (≈1.2s). Under `[data-wonder="off"]` and `prefers-reduced-motion: reduce` → static `--bg-elev` block, no animation.
+
+**W-21 deferred:** requires `IntersectionObserver` JS to trigger per-section entrance; not achievable with CSS alone. Noted in TODOS.md.
+
+All new keyframe animations have explicit `animation: none` guards under `[data-wonder="off"]` and `@media (prefers-reduced-motion: reduce)`, and the existing `--wonder-on: 0` + `transition-duration: 0.001ms !important` universals backstop anything missed. Build passes (GOOS=js GOARCH=wasm).
+
 ## 2026-06-23 — feat: WONDER W-3..W-8 — interaction-feedback flourishes (token-driven, reduced-motion safe)
 
 W-3 and W-4 were the remaining items in Batch 1. W-3 adds bento `.w` tile hover lift: transition + `translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on)))` + shadow, gated via `.w:not(.drag)` so the ghost tile during drag doesn't fight the drag transform. W-4 adds a 2px `translateX` nudge on list `.row` hover, scoped to `:not(.txn-table .row)` so table rows stay column-aligned. Both transitions use `--wonder-dur`/`--wonder-dur-fast` and `--wonder-ease`; at `--wonder-on:0` (off/reduced-motion) both transforms collapse to zero. W-5..W-8 were already shipped in the prior session; this commit closes out Batch 1 (W-3..W-8) fully.
