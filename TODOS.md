@@ -16536,6 +16536,12 @@ _7 · General UX / Glanceability_
 
 ### G23. Epic — "GLAMOR design-system: cross-page fixes for a world-class, glanceable, enterprise app" (synthesis of G1-G22) — 2026-06-23 ★★
 
+**✅ RESOLVED (2026-06-23).** Tier 1 global CSS fixes shipped:
+- **T1-A (foreground token invisibility):** `.card-title`, `.row-desc`, `.stat-value`, `.budget-amount`, `.amount`, `.toggle-row span`, `.wh h2/.wh h3` pinned to `#1c1c1e` under `[data-theme="light"]`. Resolved in earlier waves (G9–G22). Verified present.
+- **T1-B (shell/nav background):** `.topbar` overridden to `rgba(247,246,243,0.92)`; `aside.rail`/`.rail` to `var(--bg-elev)` (#efede8); `main` to `var(--bg)` (#f7f6f3) — eliminates dark bands and dark topbar stripe in light mode. Shipped this wave.
+- **T1-C (primary button contrast):** `.btn-primary { color: #ffffff }` in light mode. Resolved in G19. Verified present.
+- **T1-D (muted text AA compliance):** `.muted`/`.row-meta`/`.budget-sub`/`.stat-label`/`.page-sub`/`.set-label`/`.t-caption` bumped from `#56565c` to `#3c3c43` for better WCAG AA contrast. Shipped this wave.
+
 #### Summary
 
 The GLAMOR sweep across all 22 pages confirms that CashFlux has genuinely strong structural bones: the bento-card grid is coherent, dark mode is solid, semantic color (income green / expense red / muted amber) is consistently applied, and the core information architecture is sound. However, a small cluster of SYSTEMIC token and CSS failures recurs on nearly every page — light mode is essentially broken at the foreground-token level, and the body/card background does not switch. These are not 22 separate bugs; they are 4–6 root-cause failures in the design-token layer that, once fixed, lift all 22 pages at once. Alongside those global fixes sits a consistent structural pattern: primary user tasks (the user's own rules, the formula calculator, the calendar) are positioned below secondary/suggestive content on arrival, and interactive management pages lack discoverable "Add" entry points. Fixing the token layer first (an afternoon of global CSS work) is the highest-leverage change in the entire backlog and unlocks the rest of the Tier 2 structural work on a visually sound foundation.

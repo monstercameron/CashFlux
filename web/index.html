@@ -263,7 +263,7 @@
       [data-theme="light"] .muted, [data-theme="light"] .row-meta,
       [data-theme="light"] .budget-sub,
       [data-theme="light"] .stat-label, [data-theme="light"] .page-sub,
-      [data-theme="light"] .set-label, [data-theme="light"] .t-caption { color: #56565c; }
+      [data-theme="light"] .set-label, [data-theme="light"] .t-caption { color: #3c3c43; }
       [data-theme="light"] .border-line, [data-theme="light"] .border-r, [data-theme="light"] .border-b { border-color: #e4e2dd; }
       [data-theme="light"] .bg-\[\#1c1c1e\] { background-color: #ececec; color: #1c1c1e; }
       [data-theme="light"] .bg-fg { background-color: #1c1c1e; }
@@ -277,6 +277,11 @@
          body dark bg bled through the transparent content div as a near-black void. Apply
          the warm-white body bg so bento and empty-state cards sit on the correct surface. */
       [data-theme="light"] .bento, [data-theme="light"] .bento + *, [data-theme="light"] main > div { background-color: var(--bg); }
+      /* G23 T1-B: shell/nav backgrounds switch to light tokens — eliminates dark bands between cards
+         and the dark topbar/rail stripe in light mode. */
+      [data-theme="light"] .topbar { background: rgba(247,246,243,0.92); }
+      [data-theme="light"] aside.rail, [data-theme="light"] .rail { background: var(--bg-elev); }
+      [data-theme="light"] main { background: var(--bg); }
       /* G22: darken .empty text in light for WCAG AA compliance (~3.5:1 → ~5.4:1). */
       [data-theme="light"] .empty { color: #56565c; }
       /* Widget shell, segmented + stepper pills, nav hover */
