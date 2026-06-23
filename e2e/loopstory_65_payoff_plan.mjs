@@ -30,7 +30,7 @@
 //   I6: DASHBOARD_DEBT_DOWN — Dashboard total debt decreases, net worth increases
 //   I7: MONEY_CONSERVE — sum of payments = sum of account debits; no cents lost
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_65_payoff_plan.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_65_payoff_plan.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
@@ -40,7 +40,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SS = (name) => path.join(__dirname, name);
 
 const browser = await chromium.launch({ headless: true });

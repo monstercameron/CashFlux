@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, '..', '.tools', 'package.json'));
 const { chromium } = require('playwright');
-const BASE = process.env.E2E_URL || 'http://127.0.0.1:8080';
+const BASE = process.env.E2E_URL || 'http://127.0.0.1:8099';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 page.setViewportSize({ width: 1280, height: 900 });

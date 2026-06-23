@@ -7,7 +7,7 @@ const require = createRequire(path.join(__dirname, "..", ".tools", "package.json
 const { chromium } = require("playwright");
 
 mkdirSync(path.join(__dirname, "screenshots"), { recursive: true });
-const BASE = "http://127.0.0.1:8080";
+const BASE = "http://127.0.0.1:8099";
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 page.setViewportSize({ width: 1280, height: 900 });

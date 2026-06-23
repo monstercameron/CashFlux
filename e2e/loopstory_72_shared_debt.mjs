@@ -15,7 +15,7 @@
 //
 // Screens exercised (≥4): /members → /accounts → /transactions → /split (settle-up) → /dashboard
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_72_shared_debt.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_72_shared_debt.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath }  from "url";
@@ -26,7 +26,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require   = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE  = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE  = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SSDIR = path.join(__dirname, "screenshots");
 if (!fs.existsSync(SSDIR)) fs.mkdirSync(SSDIR, { recursive: true });
 const SS = (name) => path.join(SSDIR, name);

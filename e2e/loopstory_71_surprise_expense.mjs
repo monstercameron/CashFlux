@@ -27,7 +27,7 @@
 //
 // The charge: $600 expense on L71 Jamie CC, category "Auto" / "Car repair"
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_71_surprise_expense.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_71_surprise_expense.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath }  from "url";
@@ -38,7 +38,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require   = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE  = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE  = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SSDIR = path.join(__dirname, "screenshots");
 if (!fs.existsSync(SSDIR)) fs.mkdirSync(SSDIR, { recursive: true });
 const SS = (name) => path.join(SSDIR, name);

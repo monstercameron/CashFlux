@@ -1,0 +1,99 @@
+{
+  "rowHeights": [
+    68.46875,
+    68.46875,
+    68.46875
+  ],
+  "colWidths": [
+    {
+      "label": "Select",
+      "width": 50
+    },
+    {
+      "label": "Date ▼",
+      "width": 108
+    },
+    {
+      "label": "Description",
+      "width": 110
+    },
+    {
+      "label": "Category",
+      "width": 115
+    },
+    {
+      "label": "Account",
+      "width": 92
+    },
+    {
+      "label": "Tags",
+      "width": 86
+    },
+    {
+      "label": "Amount",
+      "width": 100
+    },
+    {
+      "label": "Cleared",
+      "width": 98
+    },
+    {
+      "label": "Actions",
+      "width": 560
+    }
+  ],
+  "amountAlign": [
+    "right",
+    "right",
+    "right"
+  ],
+  "amountFont": "tabular-nums",
+  "amountFontFamily": "Inter, Inter, ui-sans-serif, system-ui, sans-serif",
+  "amountClass": "td-amount fig amount amount-expense",
+  "actionTexts": [
+    "Actions",
+    "Edit | DuplicateAlways categorize like this | Attach receipt"
+  ],
+  "actionBtnCounts": [
+    0,
+    5,
+    5
+  ],
+  "incomeColor": "rgb(46, 139, 87)",
+  "expenseColor": "rgb(216, 113, 111)",
+  "paginationText": null,
+  "summaryTexts": [
+    "612 transactions shown · net $16,586.00",
+    "1–50 of 612",
+    "Rows per page"
+  ],
+  "clearedCells": [
+    "Mark cleared",
+    "Mark cleared",
+    "Mark cleared"
+  ],
+  "row0bg": "rgba(0, 0, 0, 0)",
+  "row1bg": "rgba(0, 0, 0, 0)",
+  "row2bg": "rgba(0, 0, 0, 0)",
+  "tagCells": [
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "tableHasThead": true,
+  "tableHasTbody": true,
+  "toolbarBtns": [
+    "Filters",
+    "Clear",
+    "Export CSV"
+  ],
+  "cardTitle": "All transactions",
+  "pageSizeOptions": [
+    "25",
+    "50",
+    "100",
+    "-1"
+  ]
+}

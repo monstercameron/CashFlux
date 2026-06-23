@@ -26,7 +26,7 @@
 // Screens exercised (≥7): /dashboard → /reports → /transactions → /budgets → /goals →
 //                          /bills → /accounts → /insights
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_74_sunday_review.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_74_sunday_review.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath }  from "url";
@@ -37,7 +37,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require   = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE  = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE  = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SSDIR = path.join(__dirname, "screenshots");
 if (!fs.existsSync(SSDIR)) fs.mkdirSync(SSDIR, { recursive: true });
 const SS = (name) => path.join(SSDIR, name);

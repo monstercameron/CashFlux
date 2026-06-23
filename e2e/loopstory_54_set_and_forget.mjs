@@ -11,7 +11,7 @@
 //   I5: Planning forecast net-worth chart EXISTS (bonus: assert whether it incorporates recurring bills or is pure historical)
 //   I6: Money / period consistency across Bills, Transactions, Dashboard
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_54_set_and_forget.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_54_set_and_forget.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
@@ -21,7 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SS = (name) => path.join(__dirname, name);
 
 const browser = await chromium.launch({ headless: true });

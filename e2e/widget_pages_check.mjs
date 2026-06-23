@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 const browser = await chromium.launch({ headless: true });
 const fail = (m) => { console.error("FAIL: " + m); process.exitCode = 1; };
 

@@ -28,7 +28,7 @@
 //   /accounts (verify card drops $2,000→$1,800) →
 //   /dashboard (net worth after each scenario)
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_69_goal_vs_debt.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_69_goal_vs_debt.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
@@ -39,7 +39,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 
 // Screenshots go in e2e/screenshots/
 const SSDIR = path.join(__dirname, "screenshots");

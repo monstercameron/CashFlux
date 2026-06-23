@@ -53,7 +53,7 @@
 //   GAP-B: save-as-task requires an AI key; there is no direct UI button to
 //           save an Insights Q&A answer as a /todo item without the model.
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_62_money_question.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_62_money_question.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
@@ -64,7 +64,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SS = (name) => path.join(__dirname, name);
 
 // ── helpers ───────────────────────────────────────────────────────────────────

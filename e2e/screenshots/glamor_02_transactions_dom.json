@@ -1,0 +1,25 @@
+{
+  "headers": [
+    "Select",
+    "Date ▼",
+    "Description",
+    "Category",
+    "Account",
+    "Tags",
+    "Amount",
+    "Cleared",
+    "Actions"
+  ],
+  "rowCount": 50,
+  "toolbarText": "Filters\nClear\nExport CSV",
+  "tableClass": "data-table txn-table",
+  "amountCells": [
+    "Amount",
+    "($215.00)",
+    "$175.00",
+    "($235.00)",
+    "($105.00)"
+  ],
+  "chips": [],
+  "selectAllBtnText": "Select all"
+}

@@ -1,0 +1,55 @@
+{
+  "confirmed": "dark",
+  "headings": [
+    "Accounts",
+    "Assets",
+    "Liabilities",
+    "Archived"
+  ],
+  "balances": [
+    "$45,092.00",
+    "$200.00",
+    "$5,000.00",
+    "$5,121.00",
+    "$12,200.00",
+    "$18,200.00",
+    "($7,427.00)",
+    "($18,000.00)",
+    "$0.00"
+  ],
+  "groups": [
+    "rail-section c-2fofzwzqb2rs8: TOOLS",
+    "rail-subhead rail-section c-3641tof8gvbwa: PLAN & ANALYZE",
+    "rail-subhead rail-section c-3641tof8gvbwa: BILLS & RECURRING",
+    "rail-subhead rail-section c-3641tof8gvbwa: DATA & IMPORT",
+    "rail-subhead rail-section c-3641tof8gvbwa: BUILD",
+    "rail-subhead rail-section c-3641tof8gvbwa: SYSTEM",
+    "rail-subhead rail-section c-3641tof8gvbwa: MY PAGES",
+    "rail-section c-1vgwj4vp79sqg: "
+  ],
+  "accountNames": [],
+  "buttons": [
+    "Default",
+    "PLAN & ANALYZE",
+    "BILLS & RECURRING",
+    "DATA & IMPORT",
+    "BUILD",
+    "SYSTEM",
+    "MY PAGES",
+    "Page options",
+    "Your household\n2 members · USD base",
+    "Collapse menu",
+    "Dashboard",
+    "Notifications",
+    "Turn music off",
+    "Add something new",
+    "New transaction",
+    "New account",
+    "New budget",
+    "New goal",
+    "New task",
+    "New category"
+  ],
+  "netWorthText": "(not found by selector)",
+  "stale": []
+}

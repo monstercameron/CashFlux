@@ -25,7 +25,7 @@
 //   /accounts → /planning (recurring bills) → /bills → /transactions → /accounts →
 //   /dashboard
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_70_payment_plan.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_70_payment_plan.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
@@ -36,7 +36,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 
 // Screenshots go in e2e/screenshots/
 const SSDIR = path.join(__dirname, "screenshots");

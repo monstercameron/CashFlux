@@ -37,7 +37,7 @@
 //       flow"), not the scheduled recurring store. Confirmed if hint shows the
 //       historical figure without referencing recurring schedules.
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_61_what_if.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_61_what_if.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
@@ -48,7 +48,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SS = (name) => path.join(__dirname, "screenshots", name);
 
 // ── helpers ───────────────────────────────────────────────────────────────────

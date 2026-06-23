@@ -25,7 +25,7 @@
 //  LL-15 /goals → contributions/transactions (button "Transactions" on goals page)
 //  BC-1..9 BREADCRUMBS per screen (already confirmed present for all main screens)
 //
-// Run: E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_76_following_the_thread.mjs
+// Run: E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_76_following_the_thread.mjs
 
 import { createRequire } from "module";
 import { fileURLToPath }  from "url";
@@ -36,7 +36,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require   = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
 
-const BASE  = process.env.E2E_URL || "http://127.0.0.1:8080";
+const BASE  = process.env.E2E_URL || "http://127.0.0.1:8099";
 const SSDIR = path.join(__dirname, "screenshots");
 if (!fs.existsSync(SSDIR)) fs.mkdirSync(SSDIR, { recursive: true });
 const SS = (name) => path.join(SSDIR, name);

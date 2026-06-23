@@ -1,0 +1,80 @@
+{
+  "rowCount": 6,
+  "checkboxCount": 6,
+  "subTaskCount": 0,
+  "dueDateCount": 9,
+  "overdueCount": 1,
+  "hasAddForm": false,
+  "hasAddInput": false,
+  "hasPrioritySelect": false,
+  "hasDueDateInput": false,
+  "unlabelledSelects": [],
+  "unlabelledButtons": [],
+  "filterControls": [
+    {
+      "tag": "SELECT",
+      "aria": "View as member",
+      "id": "",
+      "class": "member-switcher c-109mf7uucn6q3"
+    },
+    {
+      "tag": "SELECT",
+      "aria": "Filter by priority",
+      "id": "",
+      "class": "field"
+    }
+  ],
+  "completedRowCount": 1,
+  "sortControls": [
+    {
+      "tag": "SELECT",
+      "text": "EveryoneDaniel CarterJordan Lee (roommate)",
+      "aria": "View as member"
+    },
+    {
+      "tag": "SELECT",
+      "text": "All prioritiesHighMediumLow",
+      "aria": "Filter by priority"
+    }
+  ],
+  "cbRect": null,
+  "aboveFoldRows": 6,
+  "dataTheme": "dark",
+  "sampleRows": [
+    {
+      "text": "☐Schedule annual physicalLowdue 2026-05-01 · overdue+ SubEdit",
+      "class": "row",
+      "hasMeta": true,
+      "metaText": "due 2026-05-01 · overdue",
+      "metaClass": "row-meta text-down"
+    },
+    {
+      "text": "☐Pay credit card before the 22ndHighdue 2026-06-22Autopay covers the minimum; pay the statement balance.→ Rewards Credit",
+      "class": "row",
+      "hasMeta": true,
+      "metaText": "due 2026-06-22",
+      "metaClass": "row-meta"
+    },
+    {
+      "text": "☐Top up Roth IRA to hit the annual maxMediumdue 2026-12-15→ Max out Roth IRA+ SubEdit",
+      "class": "row",
+      "hasMeta": true,
+      "metaText": "due 2026-12-15",
+      "metaClass": "row-meta"
+    },
+    {
+      "text": "☐Groceries trending over budget — reviewMedium→ Groceries+ SubEdit",
+      "class": "row",
+      "hasMeta": true,
+      "metaText": "→ Groceries",
+      "metaClass": "btn row-meta"
+    },
+    {
+      "text": "☐Update 401(k) balance (stale)Low→ 401(k) / Brokerage+ SubEdit",
+      "class": "row",
+      "hasMeta": true,
+      "metaText": "→ 401(k) / Brokerage",
+      "metaClass": "btn row-meta"
+    }
+  ]
+}
