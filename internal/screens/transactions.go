@@ -153,7 +153,6 @@ func Transactions() ui.Node {
 		downloadBytes("transactions.csv", "text/csv", data)
 	}))
 
-
 	// Receipt attachments (L29): the preview holds the currently-open attachment
 	// ("" ArtifactID = closed). attachReceipt uploads an image and links it.
 	previewRef := ui.UseState(domain.AttachmentRef{})
@@ -688,7 +687,13 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	amountMajor := money.FormatMinor(txnfilter.AbsAmount(t), currency.Decimals(t.Amount.Currency))
 	dateISO := dateutil.FormatDate(t.Date)
 
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
+	del := ui.UseEvent(Prevent(func() {
+		uistate.ConfirmModal(uistate.T("transactions.deleteConfirm", t.Desc), true, func(ok bool) {
+			if ok {
+				props.OnDelete(t.ID)
+			}
+		})
+	}))
 	dup := ui.UseEvent(Prevent(func() { props.OnDuplicate(t) }))
 	sel := ui.UseEvent(Prevent(func() { props.OnToggleSelect(t.ID) }))
 	clr := ui.UseEvent(Prevent(func() { props.OnToggleCleared(t) }))

@@ -1142,8 +1142,17 @@ func (a *App) applyEffect(e workflow.Effect) {
 		}
 	case workflow.ActionSetCategory:
 		a.mutateTxn(e.TxnID, func(t *domain.Transaction) { t.CategoryID = e.CategoryID })
-	case workflow.ActionAddTag, workflow.ActionFlagReview:
+	case workflow.ActionAddTag:
 		a.mutateTxn(e.TxnID, func(t *domain.Transaction) { t.Tags = addTagUnique(t.Tags, e.Tag) })
+	case workflow.ActionFlagReview:
+		// Skip the auto review-tag when the user explicitly confirmed the entry
+		// (L43): a confident manual add shouldn't be re-flagged for review.
+		a.mutateTxn(e.TxnID, func(t *domain.Transaction) {
+			if t.Reviewed {
+				return
+			}
+			t.Tags = addTagUnique(t.Tags, e.Tag)
+		})
 	case workflow.ActionNotify:
 		a.log.Info("workflow notice", "message", e.Message)
 		if a.Notifier != nil {

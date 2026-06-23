@@ -11019,3 +11019,18 @@ localStorage then navigating clobbers the injection via the in-memory store's pa
 all by switching to the codebase's one-shot addInitScript document-start injection. Also fixed the
 pre-existing todo_nesting gate (port 8080→8099 + open the +Add task modal + nav-away/back to refresh
 the list after a modal add). All lane-D gates + a11y green; en.go merged by disjoint key prefix.
+
+## 2026-06-22 — L-series 6-agent parallel sweep (single main tree)
+Ran 6 sonnet agents in parallel on the single main branch (no worktrees — the CC update broke worktree
+resolution from the non-git Desktop cwd), each confined to a disjoint file set and forbidden from editing
+the shared en.go (they reported keys; I merged ~28). Disjoint partitioning worked: the combined tree
+compiled clean on first build. Lanes: txn delete-confirm + reactivity gate; accounts transfer + reconcile
+delta/category; goals contribute-ledger + completion; onboarding/sample/CSV; period-window persistence +
+export filenames + prior-year; palette grouping + Alt-hints + dashboard transfer + mock AI. I then did the
+cross-lane L43 needs-review opt-out myself (domain.Transaction.Reviewed + quickadd checkbox + appstate
+FlagReview skip) since it spanned shared files. Integration fixes: wired period.PriorYear into shell's
+Jump-To, added nav-alt-hint CSS, and repaired the agents' e2e gates — many shared root causes (row ⋯-menu
+not opened, goal add now in the +Add modal, money field serialized as .Amount not .amount, FlipPanel
+.set-btn.save vs type=submit, localStorage cold-reads needing a flush, and a fleet-wide port 8080→8099
+default across 55 e2e files). All 9 new gates + regression sweep (a11y, modals, drills, lifecycle) green;
+combined wasm builds clean; only the pre-existing internal/icon test fails.

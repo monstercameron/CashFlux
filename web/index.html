@@ -634,6 +634,11 @@
       aside.rail.collapsed nav .rail-section,
       aside.rail.collapsed .hh-text { display:none; }
       aside.rail.collapsed .nv { justify-content:center; gap:0; padding-left:0; padding-right:0; position:relative; }
+      /* Alt+1–9 keyboard-jump hint at the trailing edge of each primary nav item (L34).
+         Surfaces the otherwise-undiscoverable shortcut; hidden when the rail is collapsed. */
+      .nav-alt-hint { margin-left:auto; font-size:0.7rem; line-height:1; color:var(--muted); opacity:0.7;
+        border:1px solid var(--border); border-radius:4px; padding:1px 4px; }
+      aside.rail.collapsed .nav-alt-hint { display:none; }
       aside.rail.collapsed .railhead { padding-left:0; padding-right:0; justify-content:center; }
       aside.rail.collapsed .hh { justify-content:center; padding-left:0; padding-right:0; }
       /* Collapsed rail: reveal the label as a flyout on hover/focus without widening the rail. */

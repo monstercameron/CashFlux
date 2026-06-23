@@ -36,7 +36,9 @@ func QuickAddHost() uic.Node {
 	desc := uic.UseState("")
 	catID := uic.UseState("")
 	date := uic.UseState("")
+	reviewed := uic.UseState(false) // L43: mark a confident entry as already reviewed
 
+	onReviewed := uic.UseEvent(func(e uic.Event) { reviewed.Set(e.IsChecked()) })
 	onAcct := uic.UseEvent(func(e uic.Event) { acctID.Set(e.GetValue()) })
 	onAmount := uic.UseEvent(func(v string) { amount.Set(v) })
 	onDesc := uic.UseEvent(func(v string) { desc.Set(v) })
@@ -68,6 +70,7 @@ func QuickAddHost() uic.Node {
 		desc.Set("")
 		catID.Set("")
 		date.Set("")
+		reviewed.Set(false)
 	}
 	closePanel := func() {
 		reset()
@@ -98,6 +101,7 @@ func QuickAddHost() uic.Node {
 		t := domain.Transaction{
 			ID: id.New(), AccountID: acc.ID, Date: d, Desc: strings.TrimSpace(desc.Get()),
 			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: member,
+			Reviewed: reviewed.Get(),
 		}
 		// Apply auto-categorization rules on save (it won't overwrite a manual
 		// category). Quick-add is now the sole manual-add path after the inline
@@ -123,6 +127,12 @@ func QuickAddHost() uic.Node {
 		catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
 	}
 
+	// "Mark as reviewed" checkbox: a confident entry skips the auto review-tag (L43).
+	reviewedArgs := []any{Type("checkbox"), OnChange(onReviewed)}
+	if reviewed.Get() {
+		reviewedArgs = append(reviewedArgs, Attr("checked", ""))
+	}
+
 	body := Div(css.Class("form-grid"),
 		Select(css.Class("field"), Attr("title", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts),
 		ui.Segmented(ui.SegmentedProps{
@@ -138,6 +148,9 @@ func QuickAddHost() uic.Node {
 		Input(css.Class("field"), Type("text"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)),
 		Select(css.Class("field"), Attr("title", uistate.T("quickAdd.category")), OnChange(onCat), catOpts),
 		Input(css.Class("field"), Type("date"), Attr("title", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate)),
+		Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
+			Input(reviewedArgs...),
+			uistate.T("quickAdd.reviewed")),
 	)
 
 	return ui.FlipPanel(ui.FlipPanelProps{

@@ -82,6 +82,10 @@ type Transaction struct {
 	SourceDocID       string          `json:"sourceDocId,omitempty"`
 	Attachments       []AttachmentRef `json:"attachments,omitempty"`
 	Custom            map[string]any  `json:"custom,omitempty"`
+	// Reviewed marks an entry the user has explicitly confirmed on entry, so
+	// auto-review workflows (ActionFlagReview) skip tagging it "needs-review"
+	// (L43 — suppress the auto-tag on confident manual entry).
+	Reviewed bool `json:"reviewed,omitempty"`
 }
 
 // AttachmentRef links a transaction to an Artifact-backed receipt, document, or

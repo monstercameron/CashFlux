@@ -7,6 +7,23 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **L-series 6-lane parallel sweep (2026-06-22).**
+  - **Transactions:** single-row delete now asks for confirmation (L36); a "Mark as reviewed" checkbox
+    on quick-add suppresses the auto `needs-review` tag on confident entry (L43, new `Transaction.Reviewed`).
+  - **Accounts:** a dedicated **Transfer** action (`appstate.CreateTransferPair`); reconcile **Update balance**
+    now previews the computed delta and lets you categorize the adjustment (L57/L30); Save-button form id (L44).
+  - **Goals:** optional **ledger posting** on contribute (debit the linked account, `appstate.ContributeToGoal`);
+    completion prompt + archive on reaching 100% (L59).
+  - **Onboarding/data:** wipe→reload no longer re-seeds the sample (verified, L6); seeded members now carry
+    attributed spend so per-member Reports/Split demo out of the box (L16); 600-row + malformed CSV import
+    resilience test (L23).
+  - **Reports/period:** the period **window** (not just resolution) persists to localStorage (L45/L58);
+    CSV exports get **period-stamped filenames** (`reports.ExportFilename`); a **Prior year** Jump-To preset.
+  - **Navigation/AI:** the ⌘K palette groups results (Navigate/Actions/Workspaces) with hints (L14);
+    Alt+1–9 rail hints (L34); a Dashboard **Transfer** shortcut; a deterministic **mock AI provider** for
+    testing the ask→answer flow without a key (L8).
+
+### Added
 - **Dashboard/To-do/Documents/Artifacts polish (L-series lane D).** Custom pages gain a **Bills** list
   source (`widgetdata` SourceBills, table-tested); the To-do screen gains a **priority filter**; the
   Documents importer shows an **image preview** of the picked receipt; Artifacts get **inline rename**,

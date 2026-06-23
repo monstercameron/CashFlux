@@ -41,6 +41,7 @@ var english = Catalog{
 	"quickAdd.income":            "Income",
 	"quickAdd.amount":            "Amount",
 	"quickAdd.descPlaceholder":   "What was it for?",
+	"quickAdd.reviewed":          "I've reviewed this — don't flag it",
 	"quickAdd.category":          "Category",
 	"quickAdd.noCategory":        "— No category —",
 	"quickAdd.date":              "Date",
@@ -1472,6 +1473,35 @@ var english = Catalog{
 
 	// Widget list source for bills (L63 GAP-A)
 	"widget.sourceBills": "Bills",
+
+	// L-series 6-lane sweep (2026-06-22)
+	"transactions.deleteConfirm":       "Delete \"%s\"? This can't be undone.",
+	"goals.contributePostLedger":       "Also debit %s (move money from this account)",
+	"goals.contributedLedger":          "Transaction posted to linked account.",
+	"goals.completionPrompt":           "Goal funded! Move it to Achieved when you're ready.",
+	"palette.groupNavigate":            "Navigate",
+	"palette.groupActions":             "Actions",
+	"palette.groupWorkspaces":          "Workspaces",
+	"dashboard.transfer":               "Transfer",
+	"dashboard.transferTitle":          "Make a transfer between accounts",
+	"resolution.presetPriorYear":       "Prior year",
+	"accounts.setBalanceFormLabel":     "Set balance for %s",
+	"accounts.setBalanceDeltaPreview":  "Current %s → entered %s = %s adjustment",
+	"accounts.setBalanceNoAdjNeeded":   "No adjustment needed — balance already matches.",
+	"accounts.setBalanceNoCategory":    "No category (uncategorized)",
+	"accounts.setBalanceCategoryLabel": "Category for adjustment",
+	"accounts.transferAction":          "Transfer…",
+	"accounts.transferTitle":           "Transfer from %s",
+	"accounts.transferFormLabel":       "Transfer from %s",
+	"accounts.transferAmount":          "Amount",
+	"accounts.transferToLabel":         "To account",
+	"accounts.transferToPlaceholder":   "Choose destination account",
+	"accounts.transferDateLabel":       "Date",
+	"accounts.transferDescLabel":       "Description",
+	"accounts.transferDefaultDesc":     "Transfer",
+	"accounts.transferSubmit":          "Transfer",
+	"accounts.transferDone":            "Transfer recorded.",
+	"accounts.transferInvalidAmount":   "Enter a valid amount greater than zero.",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.
