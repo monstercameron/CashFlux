@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series wave 2 — G11 Bills (series G1–G11 complete)
+
+Last screen, and a light one: the audit confirmed Bills already nails the core loop (mark-paid per
+row, urgency tones wired, soonest-due sort, visible names). The G9 light-mode root-cause fix already
+repaired the card titles here. Two small remaining bits: amounts were rendering in the muted-grey
+light token (they're primary data Tomas compares, so I promoted `.budget-amount` to the strong
+#1c1c1e light group), and a "Next due" ISO date was hyphenating at 768 (`.stat-value { white-space:
+nowrap }`). Deferred the two-column list+calendar and the 90-day-horizon behavior change.
+
+That closes the GLAMOR per-page review series end to end: G1 Dashboard, G2 Transactions, G3 Accounts,
+G4 Budgets, G5 Goals, G6 To-do, G7 Planning, G8 Allocate, G9 Reports, G10 Subscriptions, G11 Bills.
+
 ## 2026-06-23 - feat: GLAMOR series wave 2 — G10 Subscriptions "The Subscription Audit"
 
 The audit flagged a genuinely-broken CRITICAL: subscription names invisible at 1280/1440 (visible only

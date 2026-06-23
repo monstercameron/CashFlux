@@ -11021,6 +11021,18 @@ bands in light mode, (d) amount values strong-contrast in light mode,
 
 ### G11. Bills — "What's Due This Week" (Tomas) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** Most of this page already worked (mark-paid, urgency tones, soonest-due
+sort, visible names — all confirmed by the audit). Remaining fixes shipped:
+- **Card titles in light mode** (CRITICAL §3) — fixed by the G9 definitive `[data-theme="light"]`
+  contrast fix (this was the 8th screen to flag it; now closed series-wide).
+- **Dollar amounts too muted in light** (§3) — `.budget-amount` moved to the strong (`#1c1c1e`)
+  light-mode group so the figures Tomas compares are full-contrast, not secondary grey.
+- **"Next due" date hyphenating at 768** (§2) — `.stat-value { white-space: nowrap }` keeps the ISO
+  date ("2026-07-01") on one line instead of breaking to "2026-07-" / "01".
+- **Intentionally deferred**: two-column list+calendar layout (calendar above the fold), a default
+  90-day horizon with "Show all", and a fixed trailing action-button group are larger layout/behavior
+  reworks; the page's core "what's due, how urgent, mark paid" loop already works above the fold.
+
 **The story**
 Tomas opens Bills on a Monday morning to know exactly what he owes and when. His goal in
 under ten seconds: see the total he needs to cover this cycle, spot any bill due today or

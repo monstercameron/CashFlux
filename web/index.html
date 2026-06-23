@@ -257,9 +257,9 @@
          to. This is the definitive fix for the recurring G4–G11 light-mode finding. */
       [data-theme="light"] .card-title, [data-theme="light"] .page-title,
       [data-theme="light"] .row-desc, [data-theme="light"] .stat-value,
-      [data-theme="light"] .budget .row-desc { color: #1c1c1e; }
+      [data-theme="light"] .budget-amount, [data-theme="light"] .budget .row-desc { color: #1c1c1e; }
       [data-theme="light"] .muted, [data-theme="light"] .row-meta,
-      [data-theme="light"] .budget-amount, [data-theme="light"] .budget-sub,
+      [data-theme="light"] .budget-sub,
       [data-theme="light"] .stat-label, [data-theme="light"] .page-sub,
       [data-theme="light"] .set-label, [data-theme="light"] .t-caption { color: #56565c; }
       [data-theme="light"] .border-line, [data-theme="light"] .border-r, [data-theme="light"] .border-b { border-color: #e4e2dd; }
@@ -308,7 +308,9 @@
       .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
       .stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
       .stat-label { color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
-      .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; }
+      /* Keep stat figures on one line (G11): a "Next due" ISO date was hyphenating to
+         "2026-07-" / "01" in the narrow single-column 768px stat card. */
+      .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; white-space: nowrap; }
       .stat-value.pos { color: var(--accent); }
       .stat-value.neg { color: var(--danger); }
       .stat-sub { display: block; margin-top: 0.3rem; font-size: 0.82rem; }

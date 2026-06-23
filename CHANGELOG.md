@@ -21,7 +21,9 @@ and every commit updates this file under `Unreleased`.
   engine) on white cards. **Subscriptions (G10):** fixed the critical bug where subscription names
   were squeezed to invisible at 1280/1440 (the action buttons claimed the whole row) — the name now
   keeps a reserved width and the actions sit in a fixed trailing group with a compact ghost-danger
-  Cancel button.
+  Cancel button. **Bills (G11):** dollar amounts now render full-contrast in light mode, and the
+  "Next due" stat date no longer hyphenates across two lines at 768px. This completes the GLAMOR
+  per-page review series (G1–G11).
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**
