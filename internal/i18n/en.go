@@ -455,7 +455,8 @@ var english = Catalog{
 
 	// Planning screen
 	"planning.forecastTitle":            "Net worth in 12 months",
-	"planning.forecastHint":             "If this month's net cash flow (%s) continues, projected to %s.",
+	"planning.forecastHint":             "Based on your last 3 months' average net cash flow (%s/month), projected to %s.",
+	"planning.forecastBasis":            "3-month trailing average",
 	"planning.trimPlaceholder":          "What if I trim monthly spending by… (%s)",
 	"planning.trimNote":                 "With %s/month less spending, projected to %s — %s more.",
 	"planning.seriesBaseline":           "Baseline",
@@ -566,6 +567,12 @@ var english = Catalog{
 	"plans.runwayMonths":         "Money lasts ~%s months",
 	"plans.runwayDanger":         "Balance crosses zero",
 	"plans.staysPositive":        "Stays positive through %d months",
+	"plans.compareLabel":         "Compare with plan",
+	"plans.compareNone":          "— None (baseline only) —",
+	"plans.seriesCompare":        "Compared plan",
+	"plans.compareNote":          "Comparing \"%s\" (ends %s) vs baseline (ends %s), a difference of %s.",
+	"plans.prefillAccount":       "Prefill start from account",
+	"plans.prefillNone":          "— Choose account —",
 
 	// Documents screen
 	"documents.csvEmpty":             "Paste some CSV first.",

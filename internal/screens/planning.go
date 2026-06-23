@@ -54,6 +54,11 @@ func Planning() ui.Node {
 	onExtra := ui.UseEvent(func(v string) { extraStr.Set(v) })
 	trimStr := ui.UseState("")
 	onTrim := ui.UseEvent(func(v string) { trimStr.Set(v) })
+	// compareID is the ID of the saved plan whose projection curve is overlaid on
+	// the 12-month forecast chart for side-by-side comparison (L27 enhancement).
+	// Empty string means baseline-only (no overlay).
+	compareID := ui.UseState("")
+	onCompare := ui.UseEvent(func(e ui.Event) { compareID.Set(e.GetValue()) })
 	dsExtra := ui.UseState("")
 	onDsExtra := ui.UseEvent(func(v string) { dsExtra.Set(v) })
 
@@ -138,6 +143,10 @@ func Planning() ui.Node {
 	plName := ui.UseState("")
 	plHorizon := ui.UseState("12")
 	plStart := ui.UseState("")
+	// plAccount prefills the starting balance from a chosen account's current
+	// balance; selecting one overwrites plStart with the account's balance in
+	// minor units formatted as a major-unit decimal (L27 enhancement).
+	plAccount := ui.UseState("")
 	plMonthly := ui.UseState("")
 	plOnceAmt := ui.UseState("")
 	plOnceMonth := ui.UseState("")
@@ -148,6 +157,25 @@ func Planning() ui.Node {
 	onPlMonthly := ui.UseEvent(func(v string) { plMonthly.Set(v) })
 	onPlOnceAmt := ui.UseEvent(func(v string) { plOnceAmt.Set(v) })
 	onPlOnceMonth := ui.UseEvent(func(v string) { plOnceMonth.Set(v) })
+	// onPlAccount prefills the starting balance from a chosen account's balance.
+	// Selecting an account calculates its current balance via the ledger and sets
+	// plStart so the user doesn't need to look it up manually (L27 enhancement).
+	onPlAccount := ui.UseEvent(func(e ui.Event) {
+		aid := e.GetValue()
+		plAccount.Set(aid)
+		if app == nil || aid == "" {
+			return
+		}
+		for _, a := range app.Accounts() {
+			if a.ID != aid {
+				continue
+			}
+			if bal, err := ledger.Balance(a, app.Transactions()); err == nil {
+				plStart.Set(money.FormatMinor(bal.Abs().Amount, currency.Decimals(a.Currency)))
+			}
+			return
+		}
+	})
 	addPlan := ui.UseEvent(Prevent(func() {
 		if app == nil {
 			return
@@ -282,6 +310,46 @@ func Planning() ui.Node {
 			trimNote = P(css.Class("muted"), uistate.T("planning.trimNote",
 				fmtMoney(money.New(trim, base)), fmtMoney(money.New(end2, base)), fmtMoney(money.New(end2-series[len(series)-1], base))))
 		}
+
+		// Side-by-side plan comparison overlay (L27 enhancement): when a saved plan is
+		// selected in the compare-with picker, project its monthly change from the same
+		// baseline and overlay its curve on the forecast chart in a distinct color.
+		compareNote := Fragment()
+		savedPlans := app.Plans()
+		cid := compareID.Get()
+		if cid != "" {
+			for _, cp := range savedPlans {
+				if cp.ID != cid {
+					continue
+				}
+				cMonthly := planning.MonthlyNet(cp)
+				cSeries := forecast.Project(net.Amount, []forecast.Recurring{{Monthly: cMonthly}}, nil, 12)
+				chartSeries = append(chartSeries, chartspec.Series{
+					Name:   cp.Name,
+					Color:  "#7b68ee",
+					Points: toPoints(cSeries),
+				})
+				cEnd := cSeries[len(cSeries)-1]
+				baseEnd := series[len(series)-1]
+				diff := cEnd - baseEnd
+				compareNote = P(css.Class("muted"),
+					Attr("data-testid", "plan-compare-note"),
+					uistate.T("plans.compareNote", cp.Name,
+						fmtMoney(money.New(cEnd, base)),
+						fmtMoney(money.New(baseEnd, base)),
+						fmtMoney(money.New(diff, base)),
+					),
+				)
+				break
+			}
+		}
+
+		// Build compare-with plan select options.
+		compareOpts := []ui.Node{Option(Value(""), SelectedIf(cid == ""), uistate.T("plans.compareNone"))}
+		for _, cp := range savedPlans {
+			compareOpts = append(compareOpts, Option(Value(cp.ID), SelectedIf(cid == cp.ID), cp.Name))
+		}
+
 		spec := chartspec.Spec{
 			Kind:   chartspec.Line,
 			Series: chartSeries,
@@ -291,11 +359,19 @@ func Planning() ui.Node {
 		forecastCard = Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("planning.forecastTitle")),
 			P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
+			P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
 			uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
 			Form(css.Class("form-grid"),
 				labeledField(uistate.T("planning.trimPlaceholder", base), Input(css.Class("field"), Type("number"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim))),
+				If(len(savedPlans) > 0,
+					Label(css.Class("field-label"), uistate.T("plans.compareLabel"),
+						Select(css.Class("field"), Attr("aria-label", uistate.T("plans.compareLabel")),
+							Attr("data-testid", "plan-compare-select"), OnChange(onCompare), compareOpts),
+					),
+				),
 			),
 			trimNote,
+			compareNote,
 		)
 	}
 
@@ -495,6 +571,15 @@ func Planning() ui.Node {
 	plansCard := Fragment()
 	if app != nil {
 		plans := app.Plans()
+		// Account prefill options: any non-archived account lets the user seed the
+		// plan's starting balance from its current ledger balance (L27 enhancement).
+		plAcctOpts := []ui.Node{Option(Value(""), SelectedIf(plAccount.Get() == ""), uistate.T("plans.prefillNone"))}
+		for _, a := range app.Accounts() {
+			if a.Archived {
+				continue
+			}
+			plAcctOpts = append(plAcctOpts, Option(Value(a.ID), SelectedIf(plAccount.Get() == a.ID), a.Name))
+		}
 		list := IfElse(len(plans) == 0,
 			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("plans.empty"), CTALabel: uistate.T("plans.add"), FocusID: "plan-add"}),
 			Div(css.Class("rows"), MapKeyed(plans,
@@ -510,6 +595,12 @@ func Planning() ui.Node {
 			Form(css.Class("form-grid"), OnSubmit(addPlan),
 				Input(append([]any{css.Class("field"), Attr("id", "plan-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
 				labeledField(uistate.T("plans.horizonPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon))),
+				// Account prefill: selecting an account fills the start-balance input
+				// from that account's current balance so the user doesn't look it up.
+				Label(css.Class("field-label"), uistate.T("plans.prefillAccount"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("plans.prefillAccount")),
+						Attr("data-testid", "plan-prefill-account"), OnChange(onPlAccount), plAcctOpts),
+				),
 				labeledField(uistate.T("plans.startPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart))),
 				labeledField(uistate.T("plans.monthlyPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly))),
 				labeledField(uistate.T("plans.onceAmtPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plOnceAmt.Get()), Step("0.01"), OnInput(onPlOnceAmt))),
