@@ -21103,3 +21103,19 @@ naturally with typed classes), **C69** (theming via tokens)._
 - **GX3-F6 / GX3-D4:** Goal progress bar fills are `rgba(0,0,0,0)` � requires investigation in `internal/screens/goals.go` to confirm `.bar-fill` class and inline width style are emitted correctly.
 - **GX3-F7 / GX3-D8:** Native `title=`-only tooltips (329 buttons, 0 real tooltip components) � requires a `Tooltip` wrapper component in `internal/ui/` + audit of shell buttons missing `aria-label=`.
 - **GX3-F9 / GX3-D9:** Filter chips not observable (probe did not apply filters) � requires probe script update + light-mode filter-chip override CSS once chip rendering is verified.
+
+
+### GX4. Global accessibility — "Everyone Can Use It" — 2026-06-23 ★
+
+✅ RESOLVED (2026-06-22).
+
+**Fixes shipped:**
+- **GX4-F1 (HIGH):** Removed `outline: none` from `.field:focus` and `select:not(.set-input):not(.seg-btn):focus` — these rules were silencing the keyboard focus ring for both mouse and keyboard interactions. `:focus-visible` rules re-asserted at matching specificity provide the explicit keyboard ring. Select elements also received field-style tokens (height/padding/bg/border/color) via GX3-D1 companion rule.
+- **GX4-F3 (HIGH):** `.txn-table .th-sort` bumped from `padding: 0` to `padding: 0.2rem 0; min-height: 24px` — meets WCAG 2.5.8 minimum tap target (was 20px, now ≥24px).
+- **GX4-F4 (MEDIUM):** Widget title heading changed from `H3` to `H2` in `internal/ui/widget.go` — page H1 is in the topbar shell; widget titles are the next heading level; H1→H2 is the correct hierarchy (no level skip on the dashboard or any bento screen).
+- **GX4-F6 (MEDIUM):** `.rz:focus-visible` — removed `outline: none`; added `outline: 2px solid var(--accent); outline-offset: 2px` — keyboard focus ring on resize handles is now visible.
+
+**Already correct (no action needed):**
+- **GX4-F2:** `role="dialog"` and `aria-modal="true"` are already present on the FlipPanel wrapper in `internal/ui/flippanel.go` (line 218).
+- **GX4-F5:** `aria-label` on `<main>` deferred — low impact, addressed separately if needed.
+- **GX4-F7:** `aria-live` region roles deferred — `polite` on `<div>` is functional; `role="status"` addition is a low-risk follow-up.

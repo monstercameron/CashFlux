@@ -485,7 +485,8 @@
       /* Transactions table (C47): a dense, sortable, column-aligned ledger. */
       .txn-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
       .txn-table thead th { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); color: var(--text-dim); font-weight: 600; white-space: nowrap; position: sticky; top: 0; background: var(--bg); z-index: 1; }
-      .txn-table .th-sort { background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 0.15rem; }
+      /* GX4-F3: padding-block lifts .th-sort from 20px to ≥24px — meets WCAG 2.5.8 minimum tap target. */
+      .txn-table .th-sort { background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 0.2rem 0; display: inline-flex; align-items: center; gap: 0.15rem; min-height: 24px; }
       .txn-table .th-sort:hover { color: var(--text); }
       .txn-table th[aria-sort="ascending"] .th-sort, .txn-table th[aria-sort="descending"] .th-sort { color: var(--accent); }
       .txn-table tr { display: table-row; }                 /* override the legacy .row flex */
@@ -561,9 +562,15 @@
       /* Forms */
       .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; align-items: end; }
       .field { width: 100%; padding: 0.5rem 0.6rem; min-height: 44px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: inherit; }
-      .field:focus { outline: none; border-color: var(--accent); }
-      /* Keyboard focus keeps a visible ring (the bare border-tint above is too subtle for
-         keyboard-only users); :focus-visible scopes it to keyboard focus, not mouse clicks (L7). */
+      /* GX4-F1: removed outline:none — was silencing the keyboard focus ring for both mouse and
+         keyboard focus. Border-color tint on :focus is a subtle mouse hint; the explicit ring
+         on :focus-visible is the keyboard indicator and must not be overridden. */
+      .field:focus { border-color: var(--accent); }
+      /* GX4-F1 (select): bare <select> elements also need field-style tokens and a visible
+         keyboard ring. No .set-input / .seg-btn so native caret is preserved. */
+      select:not(.set-input):not(.seg-btn) { min-height: 44px; padding: 0.5rem 0.6rem; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: inherit; cursor: pointer; }
+      select:not(.set-input):not(.seg-btn):focus { border-color: var(--accent); }
+      select:not(.set-input):not(.seg-btn):focus-visible,
       .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       /* Native color picker rendered as a proper swatch (a bare-width text field
          clipped it to a thin line). */
@@ -900,7 +907,10 @@
       .rz[data-dir="t"]::after, .rz[data-dir="b"]::after { content:""; position:absolute; left:50%; width:0; height:0; transform:translateX(-50%); border-left:4px solid transparent; border-right:4px solid transparent; }
       .rz[data-dir="t"]::after { top:3px; border-bottom:5px solid currentColor; }
       .rz[data-dir="b"]::after { bottom:3px; border-top:5px solid currentColor; }
-      .rz:hover, .rz:focus-visible { opacity:1; color:#fff; background:rgba(244,244,245,.045); outline:none; }
+      /* GX4-F6: removed outline:none from :focus-visible — never suppress the keyboard ring.
+         Hover keeps its appearance; keyboard focus gets the global accent ring. */
+      .rz:hover, .rz:focus-visible { opacity:1; color:#fff; background:rgba(244,244,245,.045); }
+      .rz:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
       .rz:hover::before, .rz:focus-visible::before { background:rgba(244,244,245,.78); }
       .rz.off { opacity:0 !important; pointer-events:none !important; }
 

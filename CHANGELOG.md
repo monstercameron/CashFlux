@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Accessibility (GX4):** visible focus rings on inputs/selects (removed `outline:none` from `:focus` overrides — `:focus-visible` ring now displays correctly for keyboard users), larger sort tap-targets (`.th-sort` meets WCAG 2.5.8 24px minimum), heading-hierarchy fix (widget titles are now H2, not H3, so H1→H2 is correct on dashboard and all bento screens), and resize-handle keyboard ring (`.rz:focus-visible` no longer suppresses `outline`).
 - **Component primitives (GX3):** selects now match inputs; consistent button/input/badge states. Unified `--btn-py`/`--btn-px` tokens bring `.btn` and `.set-btn` to a shared 44px touch target. Select elements styled to match `.field` (eliminates white-box-in-dark glitch). DataTable light-mode pinned. Modal Save button now reads as primary. Pace badges get consistent 1px border ring.
 - **C73 Phase 3 — big-row extraction (2026-06-23).** `AccountRow`, `BudgetRow`, and `GoalRow` each moved out of
   their screen file into a self-contained `*_row.go` (accounts_row.go / budgets_row.go / goals_row.go), matching

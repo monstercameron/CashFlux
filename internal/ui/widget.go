@@ -375,7 +375,9 @@ func widget(props WidgetProps) uic.Node {
 	}
 	// The title drills into the tile's data screen when one exists (C30); it stays
 	// a plain heading otherwise. Distinct from the grip (drag) and gear (settings).
-	var titleNode uic.Node = H3(props.Title)
+	// GX4-F4: H2 (not H3) — page H1 is in the topbar shell; widget titles are the
+	// next heading level, so H1→H2 is the correct hierarchy (no level skip).
+	var titleNode uic.Node = H2(props.Title)
 	if route := widgetRoute(props.ID); route != "" {
 		titleNode = uic.CreateElement(viewTitle, viewTitleProps{Title: props.Title, Route: route})
 	}
