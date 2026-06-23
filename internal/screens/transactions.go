@@ -276,21 +276,33 @@ func Transactions() ui.Node {
 	}))
 	bulkDelete := ui.UseEvent(Prevent(func() {
 		sel := selected.Get()
-		// Snapshot the transactions about to be deleted before removing them.
-		var prior []domain.Transaction
-		for _, t := range app.Transactions() {
-			if sel[t.ID] {
-				prior = append(prior, t)
-			}
-		}
-		for id := range sel {
-			deleteTxn(id)
-		}
-		lastBulk.Set(bulkSnapshot{
-			Label: uistate.T("transactions.bulkOpDeleted", len(prior)),
-			Prior: prior,
-		})
-		selected.Set(map[string]bool{})
+		count := len(sel)
+		// Gate bulk deletes behind a count-aware confirm dialog (GM3 D1 / L50 safety gap):
+		// firing immediately with 50+ rows selected would be irreversible in one click.
+		uistate.ConfirmModal(
+			uistate.T("transactions.bulkDeleteConfirm", count),
+			true,
+			func(ok bool) {
+				if !ok {
+					return
+				}
+				// Snapshot the transactions about to be deleted before removing them.
+				var prior []domain.Transaction
+				for _, t := range app.Transactions() {
+					if sel[t.ID] {
+						prior = append(prior, t)
+					}
+				}
+				for id := range sel {
+					deleteTxn(id)
+				}
+				lastBulk.Set(bulkSnapshot{
+					Label: uistate.T("transactions.bulkOpDeleted", len(prior)),
+					Prior: prior,
+				})
+				selected.Set(map[string]bool{})
+			},
+		)
 	}))
 	bulkSetCleared := func(val bool) {
 		sel := selected.Get()

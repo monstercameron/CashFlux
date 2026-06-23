@@ -139,9 +139,30 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			return nil
 		})
 		doc.Call("addEventListener", "keydown", cb)
+
+		// GM4-19: clicking the blurred backdrop (outside the panel card) closes the
+		// panel. Implemented here (rather than as an OnClick prop) so we can check
+		// event.target against the backdrop element and ignore clicks on the card.
+		backdropCb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if len(args) == 0 {
+				return nil
+			}
+			t := args[0].Get("target")
+			bd := doc.Call("querySelector", ".flip-backdrop")
+			if !bd.IsNull() && !bd.IsUndefined() && t.Equal(bd) {
+				if onCloseRef != nil {
+					onCloseRef()
+				}
+			}
+			return nil
+		})
+		doc.Call("addEventListener", "click", backdropCb)
+
 		return func() {
 			doc.Call("removeEventListener", "keydown", cb)
 			cb.Release()
+			doc.Call("removeEventListener", "click", backdropCb)
+			backdropCb.Release()
 			if !prevFocus.IsNull() && !prevFocus.IsUndefined() {
 				prevFocus.Call("focus")
 			}
@@ -205,7 +226,10 @@ func flipPanel(props FlipPanelProps) uic.Node {
 					Div(css.Class("set-h"),
 						Span(Style(map[string]string{"width": "1.5rem"})), // balance the close button so the title centers
 						H3(props.Title),
-						Button(css.Class("set-close"), Type("button"), Attr("title", "Close"),
+						// GM4-17: tabindex="-1" removes the close button from the Tab order so
+						// initial focus lands on the first form control (a setting), not the ×
+						// button. The button remains fully mouse/click accessible.
+						Button(css.Class("set-close"), Type("button"), Attr("title", "Close"), Attr("tabindex", "-1"),
 							OnClick(func() {
 								if onClose != nil {
 									onClose()

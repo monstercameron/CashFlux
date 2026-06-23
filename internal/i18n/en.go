@@ -331,6 +331,9 @@ var english = Catalog{
 	"action.close":   "Close",
 	"action.dismiss": "Dismiss",
 
+	// Dialog chrome
+	"dialog.deleteTitle": "Are you sure?",
+
 	// Shared
 	"common.yes":           "Yes",
 	"common.no":            "No",
@@ -957,6 +960,7 @@ var english = Catalog{
 	"transactions.bulkClearErr":        "Couldn't update some transactions: %s",
 	"transactions.bulkRecatErr":        "Couldn't recategorize some transactions: %s",
 	"transactions.bulkUndoBanner":      "%s · Undo",
+	"transactions.bulkDeleteConfirm":   "Delete %d transactions? This can't be undone.",
 	"transactions.bulkOpDeleted":       "Deleted %d",
 	"transactions.bulkOpRecategorized": "Recategorized %d",
 	"transactions.bulkOpCleared":       "Marked %d cleared",

@@ -17943,6 +17943,44 @@ Fix priority: D1 then D2 then D3/D4 (a11y), then CSS-only D5/D6.
 
 _Cross-links: C42 (replace native popups — DONE), L50 (bulk delete had no confirmation — this review confirms still open)._
 
+---
+
+### ✅ RESOLVED (2026-06-23).
+
+**Shipped:**
+- **D1 — Bulk-delete confirmation dialog** (`internal/screens/transactions.go`): `bulkDelete`
+  now calls `uistate.ConfirmModal` before executing. Message is count-aware ("Delete N
+  transactions? This can't be undone."). New i18n key `transactions.bulkDeleteConfirm`.
+- **D2 — Default focus to Cancel for destructive confirms** (`internal/app/dialoghost.go`):
+  `focusID` now falls back to `"cf-dialog-cancel"` when `req.Destructive` is true; Cancel button
+  given `id="cf-dialog-cancel"` so focus lands correctly.
+- **D3 — Auto-derived title for destructive confirms** (`internal/app/dialoghost.go`): when
+  `req.Title == ""` and `req.Destructive`, title is set to `dialog.deleteTitle` ("Are you
+  sure?"). New i18n key `dialog.deleteTitle`.
+- **D4 — `aria-labelledby` on dialog backdrop** (`internal/app/dialoghost.go`): backdrop now
+  carries `aria-labelledby="cf-dialog-title"`; `<h3>` gets `id="cf-dialog-title"`. Role
+  upgraded to `alertdialog` for destructive confirms.
+- **D5/D6 — Scrim blur + theme-ring shadow** (already shipped in prior CSS patch; verified in
+  `web/index.html` lines ~338–341).
+- **D7 (item 7) — Dialog padding / min-height** (`web/index.html`): override block updated to
+  `padding:1.5rem 1.5rem 1.25rem; min-height:6rem` to relieve cramped 110px layout.
+
+**Verified already done (no change needed):**
+- No native `window.confirm/prompt/alert` dialogs — C42 stable. ✓
+- Danger button carries `btn-danger` (red/crimson in both themes). ✓
+- Backdrop + scrim present; click-outside cancels. ✓
+- Dialog centered at 1280 and 768. ✓
+- ARIA `role=dialog` + `aria-modal=true` present (now upgraded for destructive). ✓
+- Enter confirms, Escape cancels, Tab trapped. ✓
+- Prompt dialog auto-focuses input + `.select()`. ✓
+- Light-mode contrast correct. ✓
+- Undo button retained as post-hoc safety net (D8). ✓
+
+**Deferred:**
+- Custom-page delete path (P3 probe note) — probe skipped when no custom page seeded;
+  the dialog host is shared, so fix propagates automatically; no custom-page-specific
+  change needed here.
+- Frosted scrim was already patched (GM3-5 block) — no further work.
 
 ### GM4. FlipPanel system + widget gear + command palette — UX review — 2026-06-23 ★
 
@@ -18180,6 +18218,35 @@ The probe script (`gm_04_palette_gear.mjs`) correctly:
 - Palette in the context of a non-Dashboard route (should still open via global Ctrl+K)
 
 Cross-references: **C68** (command palette done, a11y gaps remain), **B12** (per-widget gear settings wired and functional; save feedback gap), **C11** (CloseOnly empty-panel — structurally present; visual quality unreviewed).
+
+---
+
+### ✅ RESOLVED (2026-06-23).
+
+**Shipped (GO-STRUCTURAL — `shortcuts.go` + `flippanel.go`):**
+- **GM4-1** — `role="dialog"` + `aria-modal="true"` + `aria-label` on palette card div. Also added `aria-label` on backdrop (GM4-3). (`buildCommandPalette`)
+- **GM4-2** — `role="listbox"` on `#cf-cmd-list`; `aria-selected="true/false"` on each result row (emitted in `renderPalette`; updated in `movePaletteSel`).
+- **GM4-11** — Keyboard hint footer `↑↓ navigate · ↵ select · Esc close` added below the result list in `buildCommandPalette`.
+- **GM4-12** — Entity-jump commands capped at 8 (`entityJumpMaxUnfiltered = 8`) in `entityJumpCommands`; unfiltered palette drops from 58 rows to ≤ core nav + actions + 8 entity jumps. Typing any query still surfaces all matches.
+- **GM4-17** — Close (×) button in `FlipPanel` given `tabindex="-1"` so initial focus lands on the first form control (a setting), not the dismiss button. (`flippanel.go`)
+- **GM4-19** — Backdrop click-to-close for the gear panel: `UseEffect` in `flipPanel` adds a `click` listener on `document`; checks `event.target == .flip-backdrop` and calls `onClose`. Removed on unmount. (`flippanel.go`)
+- **movePaletteSel bug fix** — Previously `i == cmdPaletteSel` was compared against DOM child index, which is wrong when group-header divs are interleaved. Fixed to count only `[data-cmd-row]` children via a separate `rowPos` counter.
+
+**Verified already done (CSS in `web/index.html` — no changes needed):**
+- **GM4-6 / GM4-16** — `--hover: #e8e6e1` already in `[data-theme="light"]` block.
+- **GM4-7** — `[data-theme="light"] #cf-cmd-palette { background: rgba(239,237,232,0.72) !important; }` already present.
+- **GM4-8** — `.set-h` / `.set-foot` light-mode border overrides already present.
+- **GM4-9** — Save/Cancel button light-mode overrides already present.
+
+**Deferred:**
+- **GM4-4** (palette 768 spotlight width) — CSS-only, low priority; deferred to next CSS pass.
+- **GM4-5** (gear panel height responsiveness) — no defect at tested sizes; deferred.
+- **GM4-10** (C11 CloseOnly UX quality) — requires a settingless widget to probe; deferred.
+- **GM4-13** (section label contrast) — visually adequate; deferred.
+- **GM4-14** (number input label wrapping in gear) — panel layout CSS; deferred to next CSS pass.
+- **GM4-15** (no post-save toast after gear Save) — GO-STRUCTURAL; deferred (needs `paletteNotify` call in widget save callback, a separate concern).
+- **GM4-18** (palette + gear mutual exclusion) — low-priority edge case; deferred.
+- **GM4-20** (focus-visible outline on palette card) — low priority; deferred.
 
 ---
 

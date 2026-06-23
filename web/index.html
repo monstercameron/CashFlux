@@ -335,10 +335,12 @@
       /* GM4-7: command-palette backdrop used a harsh dark scrim in light while the
          FlipPanel uses a warm tint. Match it (inline 0,0,0,.5 needs !important). */
       [data-theme="light"] #cf-cmd-palette { background: rgba(239,237,232,0.72) !important; }
-      /* GM3-5/GM3-6: confirm-dialog scrim had no blur (inconsistent with FlipPanel)
-         and the dialog box-shadow was not theme-aware. Add blur + a hairline ring. */
+      /* GM3-5/GM3-6/GM3-7: confirm-dialog scrim had no blur (inconsistent with FlipPanel),
+         the box-shadow was not theme-aware, and the panel was cramped at 110px.
+         Add blur + hairline ring + breathing room. */
       .cf-dialog-scrim { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-      .cf-dialog { box-shadow: 0 12px 40px rgba(0,0,0,.35), 0 0 0 1px var(--border,#2a2a2c); }
+      .cf-dialog { box-shadow: 0 12px 40px rgba(0,0,0,.35), 0 0 0 1px var(--border,#2a2a2c);
+                   padding: 1.5rem 1.5rem 1.25rem; min-height: 6rem; }
       /* GM1-S5: at 768 the flip panel sat 15px from the viewport edge. Give it a
          comfortable gutter without exceeding its design width. */
       .flip-wrap { max-width: min(760px, calc(100vw - 24px)); }

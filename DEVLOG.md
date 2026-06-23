@@ -3,6 +3,49 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — feat: GLAMOR GM4 palette/gear — a11y, keyboard hints, entity cap, backdrop close
+
+GM4 audit (20 screenshots, 4 DOM sessions) surfaced 20 findings across the command palette and widget gear panel. Six structural Go fixes shipped today; all CSS fixes were already landed from prior waves.
+
+**Palette (shortcuts.go):** Added `role="dialog"` + `aria-modal` + `aria-label` to the card div (GM4-1), `role="listbox"` on `#cf-cmd-list` with live `aria-selected` per row (GM4-2). Added keyboard-hint footer `↑↓ navigate · ↵ select · Esc close` to `buildCommandPalette` (GM4-11). Capped `entityJumpCommands` at 8 via `entityJumpMaxUnfiltered` const — the unfiltered list was 58+ rows with 10 accounts; typing still fuzzy-matches all entities (GM4-12). Also fixed a latent bug in `movePaletteSel`: the code compared `i == cmdPaletteSel` against the DOM child index but group-header `<div>` elements were interleaved, so the index was wrong whenever headers were present. Introduced a separate `rowPos` counter that only increments on `[data-cmd-row]` children.
+
+**Gear/FlipPanel (flippanel.go):** Close (×) button given `tabindex="-1"` so `focusables()` in UseEffect skips it and focus lands on the first toggle/input (GM4-17). Backdrop click-to-close added via a second `js.FuncOf` click listener on `document` in the same UseEffect, checking `event.target == .flip-backdrop`; listener is released in the cleanup func (GM4-19).
+
+**CSS verified already done:** GM4-6/16 (`--hover` light token), GM4-7 (palette backdrop light override), GM4-8 (set-h/foot border light), GM4-9 (Save/Cancel button light). No CSS changes needed.
+
+**Deferred:** GM4-4 (768 card width), GM4-14 (number-input label wrap), GM4-15 (post-save toast), GM4-18 (mutual-exclusion), GM4-20 (focus-visible ring) — low priority or requires separate probing setup.
+
+## 2026-06-23 — feat: GLAMOR GM3 confirm dialogs — bulk-delete gate, safe focus, aria
+
+GM3 audit surfaced 7 defects across the cf-dialog system. All 4 structural ones are fixed in
+this commit; the CSS-only D5/D6 were already landed in the prior patch block.
+
+**D1 — Bulk-delete had no confirmation (CRITICAL / L50):** `bulkDelete` in `screens/transactions.go`
+previously executed immediately after "Delete selected" — no dialog, no count, one mis-click nukes
+all selected rows. Wrapped the delete logic in `uistate.ConfirmModal` with a count-aware message
+("Delete N transactions? This can't be undone."). The existing undo button is kept as a secondary
+safety net. New i18n key: `transactions.bulkDeleteConfirm`.
+
+**D2 — Wrong default focus on destructive confirms:** All 4 audit runs showed `focusedId:
+"cf-dialog-confirm"` — the red danger button was receiving default focus. Added a third branch to
+the focus-id logic in `dialoghost.go`: when `req.Destructive`, point focus to `"cf-dialog-cancel"`
+instead. Added `id="cf-dialog-cancel"` to the Cancel button element.
+
+**D3 — No title on destructive confirm dialogs:** `ConfirmModal` has no `title` parameter (no
+API change wanted). In `DialogHost`, when `req.Destructive && req.Title == ""`, the title is
+auto-derived to `dialog.deleteTitle` ("Are you sure?"). This also enables D4.
+
+**D4 — No `aria-labelledby`:** `<h3>` gets `id="cf-dialog-title"`, backdrop gets
+`aria-labelledby="cf-dialog-title"`. Role upgraded from `dialog` to `alertdialog` for
+destructive confirms (screen-reader urgency signal per ARIA APG).
+
+**D7 — Cramped dialog at 110px:** CSS override block updated with `padding:1.5rem 1.5rem 1.25rem`
+and `min-height:6rem` so the dialog has breathing room at 768 and 1280.
+
+Trade-off on D3: chose Option B (auto-derive in DialogHost) over Option A (add `title` param to
+`ConfirmModal`) to keep API surface stable and avoid updating ~10 call sites.
+
+
 ## 2026-06-23 - feat: GLAMOR GM1 Settings modal — 768px collapse, h4 headings, password aria-labels
 
 GM1 audit of the Settings FlipPanel surfaced ~10 open items after the G21 global light-mode fix
