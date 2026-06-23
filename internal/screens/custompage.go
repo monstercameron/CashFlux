@@ -215,15 +215,15 @@ func customTile(props customTileProps) ui.Node {
 				props.OnDrop()
 			}
 		})),
-		Span(css.Class("grip", tw.CursorGrab), "⠿"),
-		H3(title),
-		Button(css.Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeWidth")),
+		Span(css.Class("grip", tw.CursorGrab), Attr("aria-label", "Drag to reorder"), Attr("role", "button"), "⠿"),
+		H2(title),
+		Button(css.Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeWidth")), Attr("aria-label", uistate.T("pages.resizeWidth")),
 			OnClick(func() {
 				if props.OnResizeW != nil {
 					props.OnResizeW()
 				}
 			}), "↔"),
-		Button(css.Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeHeight")),
+		Button(css.Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeHeight")), Attr("aria-label", uistate.T("pages.resizeHeight")),
 			OnClick(func() {
 				if props.OnResizeH != nil {
 					props.OnResizeH()
@@ -481,7 +481,9 @@ func findArtifact(arts []domain.Artifact, id string) (domain.Artifact, bool) {
 func cpKPIBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	val, err := widgetspec.EvalKPI(w.Binding.Expr, ctx.Vars)
 	if err != nil {
-		return P(css.Class("err"), Attr("role", "alert"), err.Error())
+		// Show a friendly muted placeholder rather than the raw error string, so a
+		// KPI added without a formula doesn't alarm the user with developer text.
+		return P(css.Class("empty"), uistate.T("pages.kpiNoFormula"))
 	}
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.JustifyCenter, tw.HFull),
 		Div(css.Class("fig", tw.FontDisplay, tw.Text28), widgetdata.KPIText(val, w.Config["format"], ctx.Base)),
@@ -707,8 +709,8 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 
 	return Section(css.Class("card", tw.Mb3),
 		Div(css.Class("form-grid"),
-			Select(css.Class("field"), OnChange(onType), typeOpts),
-			Input(css.Class("field"), Attr("placeholder", uistate.T("pages.widgetTitle")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("pages.labelType")), OnChange(onType), typeOpts),
+			Input(css.Class("field"), Attr("aria-label", uistate.T("pages.widgetTitle")), Attr("placeholder", uistate.T("pages.widgetTitle")),
 				Value(title.Get()), OnInput(onTitle)),
 			bindControl,
 		),

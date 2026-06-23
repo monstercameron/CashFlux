@@ -16508,6 +16508,31 @@ _7 · General UX / Glanceability_
   wide viewports → defect #9.
 - B15: systemic a11y — heading levels, label elements, resize button ARIA → defects #7, #8.
 
+✅ RESOLVED (2026-06-23).
+
+**Shipped:**
+- **CRITICAL: Rail gap fixed** — `custompagesnav.go` `create()` now calls `bump()` before `nav.Navigate`; the nav version atom increments, forcing a re-render that adds the new page to MY PAGES immediately (C32 gap #67 closed).
+- **CRITICAL: Tile title invisible in light mode** — added `[data-theme="light"] .wh h2, [data-theme="light"] .wh h3 { color: #1c1c1e }` CSS rule; tile headers are now readable on white tile backgrounds.
+- **CRITICAL: Content-area background transparent in light** — added `[data-theme="light"] .bento, [data-theme="light"] main > div { background-color: var(--bg) }` so the warm-white body bg is applied instead of the dark bleed.
+- **Empty-state text contrast** — `[data-theme="light"] .empty { color: #56565c }` lifts contrast from ~3.5:1 to ~5.4:1 (WCAG AA pass).
+- **KPI friendly error** — `cpKPIBody` now renders the `pages.kpiNoFormula` i18n string in muted style instead of the raw `"widgetspec: no formula set"` error in red.
+- **Heading hierarchy H3→H2** — `customTile` widget title changed from `H3` to `H2`, correcting the H1→H3 skip (defect #7).
+- **Resize button aria-labels** — added `aria-label` (mirroring `Title`) to the ↔ and ↕ resize buttons (defect styling only; they already had `Title`).
+- **Grip accessible label** — drag handle `Span` now carries `aria-label="Drag to reorder"` and `role="button"` (defect #8 partial).
+- **Add-widget form aria-labels** — type `<select>` and title `<input>` now carry `aria-label` attributes so assistive tech can name the fields (defect #8).
+- `.wh h2` added to the base `.wh h2, .wh h3` CSS rule so the new heading level inherits the display-font style.
+- i18n: added `pages.kpiNoFormula` and `pages.labelType` keys to `internal/i18n/en.go`.
+
+**Deferred:**
+- *Black bands / systemic shell bg in light mode between cards* — body-level theming gap systemic across G12–G22; addressed per `.bento` scope here but full shell fix belongs in G23 global sweep.
+- *`.btn-primary` contrast-aware text for custom accents* — systemic G4–G22 finding; tracked in G23.
+- *Two-column layout / sticky toolbar / drag-grid rework* — structural rewrites; G23 scope.
+- *1440px bento column-grid gap* — cross-ref B2/C14; G23 scope.
+- *Drill-in links on tile titles (L63 GAP-B)* — C30 pattern; separate ticket.
+- *B12 flip panel on custom tiles (L63 GAP-C)* — acceptable alternative path; documented.
+- *Per-page icon/color picker* — future enhancement.
+- *Visible labels above form fields* (vs aria-label only) — layout change; G23 scope.
+
 
 ### G23. Epic — "GLAMOR design-system: cross-page fixes for a world-class, glanceable, enterprise app" (synthesis of G1-G22) — 2026-06-23 ★★
 

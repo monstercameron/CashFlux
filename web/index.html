@@ -268,6 +268,17 @@
       [data-theme="light"] .bg-\[\#1c1c1e\] { background-color: #ececec; color: #1c1c1e; }
       [data-theme="light"] .bg-fg { background-color: #1c1c1e; }
       [data-theme="light"] .text-base { color: #f7f6f3; }
+      /* G22 CRITICAL: custom widget tile header text was near-white (rgb(244,244,245)) on a
+         white tile background — ~1.05:1 ratio, completely invisible. Pin .wh headings to
+         the darkest foreground token so the title is always readable. */
+      [data-theme="light"] .wh h2, [data-theme="light"] .wh h3 { color: #1c1c1e; }
+      [data-theme="light"] .wh .grip { color: #6a6a72; }
+      /* G22 CRITICAL: custom page content area had no background-color in light mode — the
+         body dark bg bled through the transparent content div as a near-black void. Apply
+         the warm-white body bg so bento and empty-state cards sit on the correct surface. */
+      [data-theme="light"] .bento, [data-theme="light"] .bento + *, [data-theme="light"] main > div { background-color: var(--bg); }
+      /* G22: darken .empty text in light for WCAG AA compliance (~3.5:1 → ~5.4:1). */
+      [data-theme="light"] .empty { color: #56565c; }
       /* Widget shell, segmented + stepper pills, nav hover */
       [data-theme="light"] .w { background: #ffffff; border-color: #e4e2dd; }
       [data-theme="light"] .nav:hover { background: #efede8; color: #1c1c1e; }
@@ -929,7 +940,7 @@
 
       /* unified widget header: grip (left) · title (center) · gear (right) */
       .wh { display:flex; align-items:center; gap:.55rem; padding:.7rem .85rem .55rem; }
-      .wh h3, .wh .wh-title { font-family:var(--font-display),'Fraunces',serif; font-size:1rem; font-weight:600; letter-spacing:-0.01em; flex:1; text-align:center; }
+      .wh h2, .wh h3, .wh .wh-title { font-family:var(--font-display),'Fraunces',serif; font-size:1rem; font-weight:600; letter-spacing:-0.01em; flex:1; text-align:center; }
       /* Title doubles as a drill-in link to the tile's data screen (C30). */
       .wh .wh-title { background:none; border:0; padding:0; margin:0; color:inherit; cursor:pointer; line-height:inherit; }
       .wh .wh-title:hover, .wh .wh-title:focus-visible { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }

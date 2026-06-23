@@ -103,6 +103,9 @@ func CustomPagesNav() uic.Node {
 			if err := app.PutCustomPage(p); err != nil {
 				return
 			}
+			// bump() re-renders the nav so the new page appears in MY PAGES
+			// immediately after navigation (C32 gap #67).
+			bump()
 			nav.Navigate(uistate.RoutePath("/p/" + p.Slug))
 		})
 	}

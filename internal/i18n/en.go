@@ -1353,6 +1353,8 @@ var english = Catalog{
 	"pages.resizeWidth":    "Cycle width",
 	"pages.resizeHeight":   "Cycle height",
 	"pages.unknownWidget":  "Unknown widget type.",
+	"pages.kpiNoFormula":   "No formula yet — click Edit (✏) to add one.",
+	"pages.labelType":      "Widget type",
 	"pages.pickSource":     "Pick a data source.",
 	"pages.noData":         "Nothing to show yet.",
 	"pages.emptyText":      "No text set.",
