@@ -241,6 +241,10 @@
         --bg: #f7f6f3; --bg-elev: #efede8; --bg-card: #ffffff;
         --border: #e4e2dd; --text: #1c1c1e; --text-dim: #56565c; --text-faint: #686870;
         --accent-dim: #e4f3ea;
+        /* GM4-6: --hover was undefined in light, so .add-item / command-palette
+           selected rows fell back to the dark #1c1c1e (near-black on near-black text
+           = ~1:1). Define a light hover surface so selection is visible. */
+        --hover: #e8e6e1;
       }
       [data-theme="light"] .bg-base { background-color: #f7f6f3; }
       [data-theme="light"] .bg-tile { background-color: #ffffff; }
@@ -301,6 +305,32 @@
       [data-theme="light"] .badge-soon { background: #e8f2ff; color: #1d4ed8; border-color: #bfdbfe; }
       [data-theme="light"] .switch { background: #d4d2cc; }
       [data-theme="light"] .switch::after { background: #ffffff; }
+      /* GM (modal UX) light-mode + polish fixes — landable CSS, no wasm rebuild.
+         GM2-1: modal/flip-panel title (.set-h h3) was near-white on the now-white
+         face → invisible across ALL entity modals. Pin to dark foreground. */
+      [data-theme="light"] .set-h h3 { color: #1c1c1e; }
+      /* GM2-2 / GM4-9: footer Save/Cancel buttons were hardcoded dark-green/dark on a
+         white face. Light: accent-filled Save with white label, neutral Cancel. */
+      [data-theme="light"] .set-btn.save { background: var(--accent,#2e8b57); border-color: transparent; color: #ffffff; }
+      [data-theme="light"] .set-btn.save:hover { filter: brightness(0.95); }
+      [data-theme="light"] .set-btn.cancel { background: #ffffff; border-color: #e4e2dd; color: #1c1c1e; }
+      [data-theme="light"] .set-btn.cancel:hover { border-color: #cfcdc7; color: #000; }
+      /* GM4-8: flip/settings panel header + footer separators were dark hex in light. */
+      [data-theme="light"] .set-h { border-bottom-color: #e4e2dd; }
+      [data-theme="light"] .set-foot { border-top-color: #e4e2dd; }
+      /* GM2-6: the top-bar "+" Add button had no border/fill in light and read as
+         invisible. Give it a subtle outline so the primary entry point is findable. */
+      [data-theme="light"] .add-btn { border: 1px solid var(--border); border-radius: 6px; }
+      /* GM4-7: command-palette backdrop used a harsh dark scrim in light while the
+         FlipPanel uses a warm tint. Match it (inline 0,0,0,.5 needs !important). */
+      [data-theme="light"] #cf-cmd-palette { background: rgba(239,237,232,0.72) !important; }
+      /* GM3-5/GM3-6: confirm-dialog scrim had no blur (inconsistent with FlipPanel)
+         and the dialog box-shadow was not theme-aware. Add blur + a hairline ring. */
+      .cf-dialog-scrim { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+      .cf-dialog { box-shadow: 0 12px 40px rgba(0,0,0,.35), 0 0 0 1px var(--border,#2a2a2c); }
+      /* GM1-S5: at 768 the flip panel sat 15px from the viewport edge. Give it a
+         comfortable gutter without exceeding its design width. */
+      .flip-wrap { max-width: min(760px, calc(100vw - 24px)); }
       /* Scrollbars */
       [data-theme="light"] main.cf-scroll::-webkit-scrollbar-thumb { background: #cfcdc7; border-color: #f7f6f3; }
       /* Card titles stay full-contrast in both themes (G4–G11): they inherit --text
@@ -493,6 +523,18 @@
       /* Small color dot shown beside a category name. */
       .cat-swatch { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0;
         display: inline-block; align-self: center; }
+      /* GI2 — Category page affordances. */
+      /* btn-link: inline text that acts as a link/button (usage count drill). */
+      .btn-link { background: none; border: none; padding: 0; font: inherit;
+        color: var(--accent); text-decoration: underline; cursor: pointer; }
+      .btn-link:hover { opacity: 0.8; }
+      /* cat-child-row: subtle fill on indented sub-category rows so nesting is
+         visible, especially at 768px where the left border alone is missed. */
+      .cat-child-row { background: rgba(255,255,255,0.02); }
+      [data-theme="light"] .cat-child-row { background: rgba(0,0,0,0.02); }
+      /* cat-zero-usage: dim rows with no transactions so safe-to-delete categories
+         are spottable at a glance without hiding them entirely. */
+      .cat-zero-usage { opacity: 0.55; }
       .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; transition: filter 0.12s; }
       .btn:hover { filter: brightness(1.12); }
       .btn:disabled, .btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; filter: none; }

@@ -76,7 +76,13 @@ and every commit updates this file under `Unreleased`.
   collapsed to 5 by default with a "Show all (N)" / "Show fewer" toggle; suggestion Add buttons
   demoted from `.btn-primary` to `.btn` (secondary); inline-edit Save/Cancel size to content
   (`.fit` class); drag-reorder hint "Drag ⠿ to reorder — first match wins" shown under the heading
-  when ≥2 rules exist. **Workflows (G19):** primary buttons
+  when ≥2 rules exist. **Categories (GI2):** Category map card moved first (above the list cards)
+  so it's visible on arrival; usage count styled as `.btn-link` (accent color + underline + pointer)
+  so "26 transactions" reads as a drill-through; sub-category rows get `.cat-child-row` background
+  fill (dual-theme: `rgba(255,255,255,0.02)` dark / `rgba(0,0,0,0.02)` light) so nesting is
+  visible at 768px; zero-usage rows get `.cat-zero-usage` (opacity 0.55) so safe-to-delete
+  categories are spottable; sort-by-usage toggle (`sortByUsage` state) in the Expense card header
+  flattens and sorts by descending transaction count for cleanup audits. **Workflows (G19):** primary buttons
   ("Run now" etc.) now use white text in light mode — the previous dark-green-on-green failed AA
   (~2.1:1); this fix applies app-wide. **Artifacts (G20):** row meta reordered (ref status leads),
   "Referenced by N" shown in green vs neutral-muted "not referenced", upload date added per row,

@@ -18102,16 +18102,25 @@ build environment).
 
 ### GI2. IMPLEMENT — Categories page glamor (from G17) ★
 
-- [ ] **Add an in-card "+ Add category" button** in each kind card header (today the only entry is the command
+- [x] **Add an in-card "+ Add category" button** in each kind card header (today the only entry is the command
       palette — invisible to most users; every other CRUD screen has one).
-- [ ] **Move "Category map"** above/beside the lists (today it's card 3, below 22+ rows — never seen on arrival).
-- [ ] **Afford the usage count as clickable** (button/link style) — "26 transactions" reads identically to the
+- [x] **Move "Category map"** above/beside the lists (today it's card 3, below 22+ rows — never seen on arrival).
+- [x] **Afford the usage count as clickable** (button/link style) — "26 transactions" reads identically to the
       kind label; the drill works but isn't discoverable.
-- [ ] **Sub-category nesting cue**: add a subtle background fill on child rows (current ~2-3px left border is
+- [x] **Sub-category nesting cue**: add a subtle background fill on child rows (current ~2-3px left border is
       missed, esp. at 768px).
-- [ ] **Dim zero-usage categories** ("· No transactions") so safe-to-delete ones are spottable at a glance.
-- [ ] **Add a "sort by usage" toggle** for cleanup audits (currently alphabetical only).
+- [x] **Dim zero-usage categories** ("· No transactions") so safe-to-delete ones are spottable at a glance.
+- [x] **Add a "sort by usage" toggle** for cleanup audits (currently alphabetical only).
 - [ ] Verify in BOTH themes after GI0; re-screenshot.
+
+✅ RESOLVED (2026-06-23). Shipped: (a) `+ Add category` header button — already done in G17 prior to this ticket;
+(b) **Category map moved first** — Mermaid card now renders above the list cards so it's visible on arrival;
+(c) **Usage count afforded** — `.btn-link` CSS added (`color: var(--accent); text-decoration: underline;
+cursor: pointer`) so "N transactions" reads as interactive; (d) **Sub-category nesting cue** — `.cat-child-row`
+adds `rgba(255,255,255,0.02)` fill (dark) / `rgba(0,0,0,0.02)` (light) via `[data-theme="light"]` scoping;
+(e) **Zero-usage dim** — `.cat-zero-usage` reduces opacity to 0.55 so "No transactions" categories are spottable;
+(f) **Sort-by-usage toggle** — `sortByUsage` `ui.UseState` + `toggleSort` in Expense card header; on=flatten+sort
+descending by txn count, off=default tree order. Deferred: theme verification (blocked on GI0 build environment).
 
 ### GI3. IMPLEMENT — Workflows page glamor (from G19) ★
 

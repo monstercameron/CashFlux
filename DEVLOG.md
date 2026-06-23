@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR GI2 Categories — map-first, clickable usage, nesting cue, dim zero-usage, sort-by-usage
+
+GI2 polish pass on the Categories screen. Five items shipped (one was already done in G17):
+(1) Category map moved first — the Mermaid hierarchy card now leads the page instead of being buried
+below 22+ expense rows; users see the tree structure immediately on arrival. (2) Usage count afforded
+as a link — added `.btn-link` CSS class (`color: var(--accent); text-decoration: underline;
+cursor: pointer`) so "N transactions" reads as a drill-through, not inert metadata. (3) Sub-category
+nesting cue — `.cat-child-row` class on rows with `Depth > 0` adds a subtle background fill
+(`rgba(255,255,255,0.02)` dark / `rgba(0,0,0,0.02)` light, scoped with `[data-theme="light"]`) that
+makes nesting visible especially at 768px where the left border alone gets missed. (4) Zero-usage dim
+— `.cat-zero-usage` (opacity 0.55) applied to rows with `TxnCount == 0` so safe-to-delete categories
+stand out during cleanup audits. (5) Sort-by-usage toggle — `sortByUsage ui.UseState(false)` +
+`toggleSort` event in the Expense card header; when on, flattens the tree and sorts by descending
+transaction count (ties by name) so heavy hitters surface at the top; when off, restores tree order.
+The `+ Add category` button was already done in G17.
+
 ## 2026-06-23 - feat: GLAMOR GI1 Rules — collapse suggestions, demote add buttons, fit-content save, drag hint
 
 GI1 polish pass on the Rules screen. Four items shipped: (1) Suggested rules now caps at 5 visible rows

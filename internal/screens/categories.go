@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -36,9 +37,11 @@ func Categories() ui.Node {
 	reassignID := ui.UseState("") // category awaiting reassignment before delete
 	reassignTo := ui.UseState("")
 	collapsed := ui.UseState(map[string]bool{}) // id → collapsed; session state
+	sortByUsage := ui.UseState(false)           // sort-by-usage toggle (GI2)
 	// In-context add (G17 §1): an "+ Add category" header button on each kind card,
 	// so Tomás isn't forced to discover the command-palette / global "+".
 	addCategory := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("category") }))
+	toggleSort := ui.UseEvent(Prevent(func() { sortByUsage.Set(!sortByUsage.Get()) }))
 	addCatBtn := func() ui.Node {
 		return Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "categories-add"), Title(uistate.T("categories.add")), OnClick(addCategory),
@@ -177,11 +180,38 @@ func Categories() ui.Node {
 			TxnCount:      txnByCat[f.Category.ID],
 			HasChildren:   hasChildrenSet[f.Category.ID],
 			Collapsed:     collapsed.Get()[f.Category.ID],
+			IsChild:       f.Depth > 0,
+			IsZeroUsage:   txnByCat[f.Category.ID] == 0,
 			OnView:        viewTxns,
 			OnDelete:      deleteCat,
 			OnSave:        saveCat,
 			OnToggle:      toggleCollapse,
 		})
+	}
+	// flattenSortedByUsage produces a flat list sorted by descending transaction
+	// count (ties broken by name). Used when the sort-by-usage toggle is on.
+	flattenSortedByUsage := func(list []domain.Category) []categorytree.Flat {
+		flats := make([]categorytree.Flat, len(list))
+		for i, c := range list {
+			flats[i] = categorytree.Flat{Category: c, Depth: 0}
+		}
+		sort.SliceStable(flats, func(i, j int) bool {
+			ci, cj := txnByCat[flats[i].Category.ID], txnByCat[flats[j].Category.ID]
+			if ci != cj {
+				return ci > cj
+			}
+			return flats[i].Category.Name < flats[j].Category.Name
+		})
+		return flats
+	}
+	// sortToggleBtn renders the sort-by-usage toggle in a card header (GI2).
+	sortToggleBtn := func() ui.Node {
+		label := "Sort by usage"
+		if sortByUsage.Get() {
+			label = "Sort: alphabetical"
+		}
+		return Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Title(label), OnClick(toggleSort), Span(label))
 	}
 	flatKey := func(f categorytree.Flat) any { return f.Category.ID }
 
@@ -210,27 +240,39 @@ func Categories() ui.Node {
 		)
 	}
 
+	// Resolve the current flat lists once (respects sort-by-usage toggle).
+	var expenseFlats, incomeFlats []categorytree.Flat
+	if sortByUsage.Get() {
+		expenseFlats = flattenSortedByUsage(expenseList)
+		incomeFlats = flattenSortedByUsage(incomeList)
+	} else {
+		expenseFlats = visibleFlats(categorytree.Flatten(expenseList), categorytree.VisibleUnderCollapsed(expenseList, collapsed.Get()))
+		incomeFlats = visibleFlats(categorytree.Flatten(incomeList), categorytree.VisibleUnderCollapsed(incomeList, collapsed.Get()))
+	}
+
 	return Div(
 		reassignPanel,
+		// Visual category map (GI2): moved first so it's visible on arrival
+		// without scrolling past the full expense/income lists (C70/C63 tree view).
+		If(len(cats) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), "Category map"),
+			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.FromCategories(cats), Label: "Category hierarchy diagram"}),
+		)),
 		Section(css.Class("card"),
 			Div(css.Class("card-head"),
 				H2(css.Class("card-title"), uistate.T("categories.expenseTitle")),
+				sortToggleBtn(),
 				addCatBtn(),
 			),
-			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(expenseList), categorytree.VisibleUnderCollapsed(expenseList, collapsed.Get())), flatKey, renderFlat))),
+			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(expenseFlats, flatKey, renderFlat))),
 		),
 		Section(css.Class("card"),
 			Div(css.Class("card-head"),
 				H2(css.Class("card-title"), uistate.T("categories.incomeTitle")),
 				addCatBtn(),
 			),
-			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(visibleFlats(categorytree.Flatten(incomeList), categorytree.VisibleUnderCollapsed(incomeList, collapsed.Get())), flatKey, renderFlat))),
+			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(incomeFlats, flatKey, renderFlat))),
 		),
-		// Visual category map: the hierarchy as a Mermaid graph (C70/C63 tree view).
-		If(len(cats) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), "Category map"),
-			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.FromCategories(cats), Label: "Category hierarchy diagram"}),
-		)),
 	)
 }
 
@@ -241,6 +283,8 @@ type categoryRowProps struct {
 	TxnCount      int               // transactions filed under this category
 	HasChildren   bool              // true when this category has at least one child
 	Collapsed     bool              // true when this category's children are hidden
+	IsChild       bool              // true when depth > 0 (sub-category nesting cue, GI2)
+	IsZeroUsage   bool              // true when TxnCount == 0 (dim treatment, GI2)
 	OnView        func(string)      // drill into Transactions filtered by category
 	OnDelete      func(string)
 	OnSave        func(id, name, kind, parent, color string, deductible bool)
@@ -399,7 +443,15 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		toggleBtn = Span(Style(map[string]string{"display": "inline-block", "width": "1.5rem", "flex-shrink": "0"}))
 	}
 
-	return Div(css.Class("row"),
+	// Build row class: base "row" + optional child/zero-usage modifiers (GI2).
+	rowClass := "row"
+	if props.IsChild {
+		rowClass += " cat-child-row"
+	}
+	if props.IsZeroUsage {
+		rowClass += " cat-zero-usage"
+	}
+	return Div(css.Class(rowClass),
 		Span(css.Class("cat-swatch"), Style(map[string]string{"background": catColor(c.Color)})),
 		toggleBtn,
 		Div(css.Class("row-main"),
