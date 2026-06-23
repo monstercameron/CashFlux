@@ -96,6 +96,7 @@ and every commit updates this file under `Unreleased`.
   a shared e2e `ready()` helper + forms-a11y gate (L12/L7). Confirmed many items already shipped.
 
 ### Changed
+- **Systemic light-mode tokens (GX14):** CSS `!important` surface/text pins verified live across all surfaces; theme-engine root fix deferred (build-gated).
 - **GLAMOR series, GX13 budgets re-check (2026-06-23).** **Budgets re-check (GX13):** light-mode stat tiles, bar tracks, category-name .budget-drill contrast, row separators.
 - **GLAMOR series, GX12 transactions re-check (2026-06-23).** **Transactions re-check (GX12):** uniform row height, stronger zebra, narrower actions column.
 - **GLAMOR series, GX11 dashboard re-check (2026-06-23).** **Dashboard re-check (GX11):** alert-chip + widget-card surfaces, light-mode widget titles, padding.

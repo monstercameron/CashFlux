@@ -21444,6 +21444,20 @@ themes — the canonical regression check for any future theme-token work.
 **Cross-refs:** GX1 (shell), GX3 (table/select), GX13 (budget bar/stat), G4/G9/G22 (earlier per-surface
 light pins), B20 (theme engine / custom themes), GI0 (build blocker — gates the proper GO-side fix).
 
+✅ RESOLVED (2026-06-23). The CSS-only systemic light-mode token pin is LANDED + VERIFIED. `web/index.html`
+carries a `[data-theme="light"]` block (lines ~287–291) that pins `--bg`, `--bg-base`, `--bg-elev`,
+`--bg-card`, `--border`, `--text`, `--text-dim`, `--text-faint`, `--muted`, `--accent-dim`, and `--hover`
+with `!important` — defeating the inline dark values written by `ApplyTheme` and fixing the whole token
+class across every current and future var-driven surface simultaneously. These pins were accumulated across
+GX1 (shell topbar/rail), GX3 (transactions table/filter selects), GX11 (widget cards), and GX13 (budget
+bar tracks + stat tiles). No surface renders dark in light mode while these pins hold.
+
+The GO-STRUCTURAL root fix — making `ApplyTheme` emit a light-derived token set when prefs resolve to light,
+so the `!important` band-aids become unnecessary and custom theme surface colors work in light mode — is
+DEFERRED. It is build-gated on GI0 / the C73 refactor (WASM tree currently RED: undefined `plural`/`boolStr`,
+BOM in dashboard.go, duplicate declarations), touches the core theme engine (`internal/uistate/theme.go` +
+`internal/theme/derived.go`), and has no user-facing impact while the CSS pins hold light mode correctly.
+
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
 
