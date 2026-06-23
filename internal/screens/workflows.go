@@ -222,7 +222,11 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 					Option(Value(string(domain.CadenceYearly)), SelectedIf(cadence.Get() == string(domain.CadenceYearly)), uistate.T("workflows.cadenceYearly")),
 				),
 			),
-			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.condition")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition)),
+		),
+		// Condition input in its own full-width row so it has room to breathe and
+		// isn't truncated to ~10 chars inside a 3-column form-grid cell (GI3).
+		Div(css.Class("form-grid", tw.Mt1),
+			Input(css.Class("field", "field-wide"), Attr("placeholder", uistate.T("workflows.condition")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition)),
 		),
 		// Inline variable reference for the condition formula (C65). Lists every
 		// available variable with a click-to-insert button so users don't need to
@@ -245,7 +249,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		// a category picker for "set category", a text field for create-task /
 		// notify / add-tag, and nothing for apply-rules / flag-for-review.
 		Div(css.Class("form-grid", tw.Mt2),
-			Select(css.Class("field"), OnChange(onDraftKind),
+			Select(css.Class("field"), Attr("aria-label", "Action type"), OnChange(onDraftKind),
 				Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
 				Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
 				Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
@@ -277,6 +281,7 @@ type workflowRowProps struct {
 func workflowRow(props workflowRowProps) ui.Node {
 	w := props.Workflow
 	last := ui.UseState((*workflow.Run)(nil))
+	showDiagram := ui.UseState(false)
 	editing := ui.UseState(false)
 	editName := ui.UseState(w.Name)
 	editCond := ui.UseState(w.Condition)
@@ -376,8 +381,8 @@ func workflowRow(props workflowRowProps) ui.Node {
 				Div(css.Class("row-meta"), triggerLabel(w.Trigger.Kind)+conditionSuffix(w.Condition)+" · "+actionsLabel(len(w.Actions))),
 			),
 			Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap),
-				Button(css.Class("btn"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
-				Button(css.Class("btn btn-primary"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow")),
+				Button(css.Class("btn btn-primary"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
+				Button(css.Class("btn"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow")),
 				Button(css.Class("btn"), Type("button"), OnClick(toggle), enableLabel),
 				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("action.edit")), Title(uistate.T("action.edit")), OnClick(startEdit), uistate.T("action.edit")),
 				Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
@@ -385,11 +390,21 @@ func workflowRow(props workflowRowProps) ui.Node {
 		),
 		result,
 		// A Mermaid flowchart of this workflow: trigger → condition → actions (C70).
-		uiw.Mermaid(uiw.MermaidProps{
-			Source: mermaid.FromWorkflow(w),
-			Class:  tw.Fold(tw.Mt2),
-			Label:  "Flowchart of " + w.Name,
-		}),
+		// Collapsed by default (GI3): 4 workflows rendered ~2000px of diagrams and
+		// buried the run-history card. Each row owns its own showDiagram state so the
+		// toggle never runs inside a loop (framework hook rule).
+		Div(css.Class(tw.Mt1),
+			Button(css.Class("btn"), Type("button"), OnClick(func() { showDiagram.Set(!showDiagram.Get()) }),
+				IfElse(showDiagram.Get(), Text("Hide diagram"), Text("Show diagram")),
+			),
+			If(showDiagram.Get(),
+				uiw.Mermaid(uiw.MermaidProps{
+					Source: mermaid.FromWorkflow(w),
+					Class:  tw.Fold(tw.Mt2),
+					Label:  "Flowchart of " + w.Name,
+				}),
+			),
+		),
 	)
 }
 

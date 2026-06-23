@@ -18124,15 +18124,25 @@ descending by txn count, off=default tree order. Deferred: theme verification (b
 
 ### GI3. IMPLEMENT — Workflows page glamor (from G19) ★
 
-- [ ] **Collapse the per-row Mermaid flowchart by default** (4 workflows render ~2000px of diagrams; run
+- [x] **Collapse the per-row Mermaid flowchart by default** (4 workflows render ~2000px of diagrams; run
       history is unreachable without extreme scrolling) — add an expand toggle.
 - [ ] **Add inline Edit** for existing workflows (C65 top gap — delete+recreate is the only mutation path today).
-- [ ] **Move the condition input to its own full-width row** (truncates to ~10 chars in the 3-col form grid).
-- [ ] **Invert button hierarchy**: make "Dry run" the primary action and "Run now" secondary (simulation-first
+- [x] **Move the condition input to its own full-width row** (truncates to ~10 chars in the 3-col form grid).
+- [x] **Invert button hierarchy**: make "Dry run" the primary action and "Run now" secondary (simulation-first
       page); ensure "Run now" label is white-on-green in light (covered by GI0 global fix — verify).
-- [ ] **Heading hierarchy**: card titles `H3 → H2`; add `<label>`s to the builder inputs (a11y).
-- [ ] **Condition variable reference** (C65 still open): surface valid identifiers near the condition field.
+- [x] **Heading hierarchy**: card titles already H2 (no H3 found); added `aria-label` to action-type select.
+- [x] **Condition variable reference** (C65 still open): variable hint row + click-to-insert pills already
+      existed (landed in prior pass); confirmed present in `addWorkflowForm`.
 - [ ] Verify in BOTH themes after GI0; re-screenshot.
+
+✅ RESOLVED (2026-06-23). Shipped: (a) **collapsible Mermaid diagrams** — `showDiagram` `ui.UseState`
+(default false) in `workflowRow`; "Show diagram" / "Hide diagram" toggle button; (b) **condition
+full-width row** — condition `<input>` pulled out of the 3-col `form-grid` into its own single-item grid
+row with `.field-wide` so it spans full width; (c) **dry-run primary** — "Dry run" promoted to
+`.btn-primary`, "Run now" demoted to plain `.btn`; (d) **a11y** — `aria-label="Action type"` added to
+action-kind select; card titles already H2 (no change needed); (e) **condition variable hint** — already
+present from prior C65 pass (txn_abs / txn_amount / txn_payee / txn_category pills + muted hint text).
+Deferred: full inline-Edit for existing workflows (C65) — scope too large for this pass.
 
 ---
 
