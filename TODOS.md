@@ -21075,6 +21075,8 @@ Upgrade the B6 probe if GX6-F2 ships SVG carets.
 
 ### GX13. Budgets re-check (post-fixes) — "The Mid-Month Pulse, Revisited" — 2026-06-22 ★
 
+✅ RESOLVED (2026-06-23). Shipped: F1 (stat tile bg), F2 (bar track), F3 (.budget-drill color), F5 (row separator border). Deferred: F4 (Go-structural pace-only "at risk" pill count — build red from C73).
+
 ---
 
 ## The story

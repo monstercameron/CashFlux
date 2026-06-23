@@ -272,14 +272,23 @@
       /* Light theme (set via data-theme="light" on <html>). Overrides the legacy
          palette variables, the shell's Tailwind utility colors, and the widgets'
          hardcoded surface hexes. The user accent (--accent) is left untouched. */
+      /* GX14 SYSTEMIC ROOT FIX: internal/uistate/theme.go ApplyTheme writes the (dark,
+         candidate-C) theme's surface/text tokens as INLINE custom properties on <html>
+         via style.setProperty — REGARDLESS of the light/dark prefs. So data-theme="light"
+         triggers the hex-pinned overrides, but every element using var(--bg-elev)/(--bg-card)/
+         (--text) reads the INLINE DARK value and renders dark in light mode (the recurring
+         shell/table/budgets "var resolves dark in light" class — GX1/GX3/GX13). The inline
+         vars are set WITHOUT !important, so pinning the light token values with !important here
+         (stylesheet-!important beats inline-non-important) fixes the WHOLE class in one place.
+         The proper fix is GO-side (ApplyTheme should derive light tokens in light mode) — build-
+         gated behind GI0; this is the landable mitigation. Trade-off: a user's CUSTOM theme
+         surface colors won't apply in LIGHT mode while this is active (acceptable — light was
+         broken before). --accent / --danger / --warn are intentionally NOT pinned. */
       [data-theme="light"] {
-        --bg: #f7f6f3; --bg-elev: #efede8; --bg-card: #ffffff;
-        --border: #e4e2dd; --text: #1c1c1e; --text-dim: #56565c; --text-faint: #686870;
-        --accent-dim: #e4f3ea;
-        /* GM4-6: --hover was undefined in light, so .add-item / command-palette
-           selected rows fell back to the dark #1c1c1e (near-black on near-black text
-           = ~1:1). Define a light hover surface so selection is visible. */
-        --hover: #e8e6e1;
+        --bg: #f7f6f3 !important; --bg-base: #f7f6f3 !important; --bg-elev: #efede8 !important; --bg-card: #ffffff !important;
+        --border: #e4e2dd !important; --text: #1c1c1e !important; --text-dim: #56565c !important; --text-faint: #686870 !important;
+        --muted: #56565c !important; --accent-dim: #e4f3ea !important;
+        --hover: #e8e6e1 !important;
       }
       [data-theme="light"] .bg-base { background-color: #f7f6f3; }
       [data-theme="light"] .bg-tile { background-color: #ffffff; }
@@ -299,6 +308,15 @@
       [data-theme="light"] .budget-amount,
       [data-theme="light"] .amount:not(.amount-income):not(.amount-expense),
       [data-theme="light"] .budget .row-desc { color: #1c1c1e; }
+      /* GX13-F3: budget category names render as <button class="row-desc budget-drill"> —
+         the button node wasn't covered and inherited near-white. Pin it. */
+      [data-theme="light"] .budget-drill, [data-theme="light"] button.row-desc { color: #1c1c1e !important; }
+      /* GX13-F1/F2: progress-bar tracks (.bar) and stat tiles (.stat) read a runtime
+         --bg-elev/--bg-card that resolved DARK in light on this screen. Pin light surfaces. */
+      [data-theme="light"] .bar { background: #efede8 !important; border-color: #e4e2dd !important; }
+      [data-theme="light"] .stat { background: #ffffff !important; border-color: #e4e2dd; }
+      /* GX13-F5: budget row separators (.budget border-top) used var(--border) which resolved dark in light. */
+      [data-theme="light"] .budget { border-color: #e4e2dd; }
       [data-theme="light"] .muted, [data-theme="light"] .row-meta,
       [data-theme="light"] .budget-sub,
       [data-theme="light"] .stat-label, [data-theme="light"] .page-sub,
