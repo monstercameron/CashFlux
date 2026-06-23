@@ -707,16 +707,19 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 		bindControl = P(css.Class("muted"), uistate.T("pages.chartDefault"))
 	}
 
-	return Section(css.Class("card", tw.Mb3),
-		Div(css.Class("form-grid"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("pages.labelType")), OnChange(onType), typeOpts),
-			Input(css.Class("field"), Attr("aria-label", uistate.T("pages.widgetTitle")), Attr("placeholder", uistate.T("pages.widgetTitle")),
-				Value(title.Get()), OnInput(onTitle)),
-			bindControl,
+	return uiw.Card(uiw.CardProps{
+		Attrs: []any{css.Class(tw.Mb3)},
+		Body: Fragment(
+			Div(css.Class("form-grid"),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("pages.labelType")), OnChange(onType), typeOpts),
+				Input(css.Class("field"), Attr("aria-label", uistate.T("pages.widgetTitle")), Attr("placeholder", uistate.T("pages.widgetTitle")),
+					Value(title.Get()), OnInput(onTitle)),
+				bindControl,
+			),
+			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt2),
+				Button(css.Class("btn btn-primary"), Type("button"), OnClick(addWidget), uistate.T("action.add")),
+				Button(css.Class("btn"), Type("button"), OnClick(func() { open.Set(false) }), uistate.T("action.cancel")),
+			),
 		),
-		Div(css.Class(tw.Flex, tw.Gap2, tw.Mt2),
-			Button(css.Class("btn btn-primary"), Type("button"), OnClick(addWidget), uistate.T("action.add")),
-			Button(css.Class("btn"), Type("button"), OnClick(func() { open.Set(false) }), uistate.T("action.cancel")),
-		),
-	)
+	})
 }

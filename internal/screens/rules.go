@@ -177,19 +177,21 @@ func Rules() ui.Node {
 			}
 			toggleBtn = Button(css.Class("btn"), Type("button"), OnClick(toggleShowAll), label)
 		}
-		suggestCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("rules.suggestedTitle")),
-			P(css.Class("muted"), uistate.T("rules.suggestedHint")),
-			Div(css.Class("rows"), MapKeyed(visible,
-				func(s rulesuggest.Suggestion) any { return s.Rule.Match },
-				func(s rulesuggest.Suggestion) ui.Node {
-					return ui.CreateElement(SuggestionRow, suggestionRowProps{
-						Suggestion: s, CategoryName: catName[s.Rule.SetCategoryID], OnAdd: acceptSuggestion,
-					})
-				},
-			)),
-			toggleBtn,
-		)
+		suggestCard = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("rules.suggestedTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("rules.suggestedHint")),
+				Div(css.Class("rows"), MapKeyed(visible,
+					func(s rulesuggest.Suggestion) any { return s.Rule.Match },
+					func(s rulesuggest.Suggestion) ui.Node {
+						return ui.CreateElement(SuggestionRow, suggestionRowProps{
+							Suggestion: s, CategoryName: catName[s.Rule.SetCategoryID], OnAdd: acceptSuggestion,
+						})
+					},
+				)),
+				toggleBtn,
+			),
+		})
 	}
 
 	// Lead with the user's own rules (G18 §1): the 15-row suggestions card used to
@@ -213,14 +215,16 @@ func Rules() ui.Node {
 			list,
 		),
 		// Precedence chain: first match wins, top to bottom; shadowed rules flagged (C70/C64).
-		If(len(rs) > 1, Section(css.Class("card"),
-			H2(css.Class("card-title"), "Rule order"),
-			P(css.Class("muted"), "First match wins, top to bottom."),
-			uiw.Mermaid(uiw.MermaidProps{
-				Source: mermaid.FromRules(rs, func(id string) string { return catName[id] }),
-				Label:  "Rule precedence chain",
-			}),
-		)),
+		If(len(rs) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: "Rule order",
+			Body: Fragment(
+				P(css.Class("muted"), "First match wins, top to bottom."),
+				uiw.Mermaid(uiw.MermaidProps{
+					Source: mermaid.FromRules(rs, func(id string) string { return catName[id] }),
+					Label:  "Rule precedence chain",
+				}),
+			),
+		})),
 		suggestCard,
 	)
 }
