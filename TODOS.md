@@ -20149,6 +20149,13 @@ The probe at `e2e/gx_08_motion.mjs` is solid but has three limitations worth not
 
 All fixes are [CSS-ONLY] and landable in `web/index.html` now (GI0 does not block them).
 
+✅ RESOLVED (2026-06-23). Shipped:
+- **F1 (reduced-motion guards):** Universal `*, *::before, *::after { transition-duration: 0.001ms !important; }` inside `@media (prefers-reduced-motion: reduce)` — covers all interactive element transitions including `.btn`, `.w`, `.row`, `.nav-link`, `.attention-item`, `.gear-inline`, `.rz`, and any future additions, with a single rule.
+- **F2 (unified hover timing):** `.nav-link` transition changed from `0.15s` → `0.12s`; `.w` border-color transition changed from `.15s` → `.12s`. Fast interactive tier is now uniformly `0.12s ease`.
+- **F3 (light-mode row hover bg):** `[data-theme="light"] .row:hover { background: #efede8; }` added — non-transaction rows (Goals, Planning, etc.) now use the same warm hover bg as transaction rows in light mode.
+- **F4 (draggable :active feedback):** `.row[draggable="true"]:active` now also applies `background: var(--bg-elev); opacity: .85` alongside the existing `cursor: grabbing` — subtle visual press state when picking up a row.
+- Deferred: none — all four fixes shipped.
+
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
 

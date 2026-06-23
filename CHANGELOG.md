@@ -82,6 +82,7 @@ and every commit updates this file under `Unreleased`.
   a shared e2e `ready()` helper + forms-a11y gate (L12/L7). Confirmed many items already shipped.
 
 ### Changed
+- **GLAMOR series, GX8 motion (2026-06-23).** **Motion (GX8):** reduced-motion guards on all interactive transitions, unified hover timing, light hover bg, draggable :active feedback.
 - **GLAMOR series, GX6 iconography (2026-06-23).** **Iconography (GX6):** replaced stray Unicode glyphs (grip/carets/alert-triangle) with the SVG icon registry.
 - **Empty states (GX2):** Transactions/Accounts/Insights now show a proper EmptyStateCTA with icon + action instead of a bare line.
 - **App shell (GX1):** light-mode topbar/rail-active-chip/+Add button now switch correctly.

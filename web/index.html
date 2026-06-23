@@ -203,7 +203,7 @@
       .nav-link {
         appearance: none; border: 0; background: transparent; color: var(--text-dim);
         font: inherit; font-size: 0.9rem; padding: 0.4rem 0.7rem; border-radius: 8px;
-        cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s;
+        cursor: pointer; white-space: nowrap; transition: background 0.12s, color 0.12s; /* GX8-F2 */
       }
       .nav-link:hover { background: var(--bg-elev); color: var(--text); }
       .nav-link.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
@@ -470,6 +470,9 @@
       /* Row hover affordance: a subtle highlight so the cursor's row is obvious and
          the list is easier to scan (§6.16). Inset slightly so it reads as a band. */
       .row:hover { background: var(--bg-elev); }
+      /* GX8-F3: warm hover bg for non-transaction rows in light mode (txn rows already
+         have an explicit #efede8 override; this aligns generic .row:hover to match). */
+      [data-theme="light"] .row:hover { background: #efede8; }
       .row:first-child { border-top: 0; }
       /* Narrow reflow (G3 §1): below ~760px a list row wraps so a long account name
          + STALE badge no longer collide with the action buttons — the name/meta take
@@ -884,7 +887,7 @@
       /* Bento grid — square outlined cells with a small gap.
          One base cell unit; every row is exactly one unit so widgets integer-scale. */
       .bento { display:grid; --cell:152px; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap:10px; overflow-anchor:none; }
-      .w { position:relative; background:#121214; border:1px solid #34343a; overflow:hidden; display:flex; flex-direction:column; transition: border-color .15s ease; will-change: transform; }
+      .w { position:relative; background:#121214; border:1px solid #34343a; overflow:hidden; display:flex; flex-direction:column; transition: border-color .12s ease; will-change: transform; } /* GX8-F2 */
       .w:hover { border-color:#44444c; }
       .w.drag { opacity:.35; pointer-events:none; cursor:grabbing; }
       [data-bento-dragging] .bento { cursor:grabbing; }
@@ -1311,7 +1314,9 @@
       .btn-danger:hover { filter:brightness(1.05); }
       .row.subtask { border-left:2px solid var(--line,#e5e7eb); }
       .rule-grip { display:inline-flex; align-items:center; color:var(--faint,#9ca3af); cursor:grab; flex:none; margin-right:.25rem; }
-      .row[draggable="true"]:active { cursor:grabbing; }
+      /* GX8-F4: add subtle visual press state to draggable rows — bg tint signals the
+         row is being picked up, complementing the cursor:grabbing already in place. */
+      .row[draggable="true"]:active { cursor:grabbing; background:var(--bg-elev); opacity:.85; }
 
       /* ============================================================
          RESPONSIVE / MOBILE — L11, L32, L33, L36 (2026-06-23)
