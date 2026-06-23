@@ -50,7 +50,9 @@ try {
   await drill.first().click();
 
   await page.waitForFunction(() => location.pathname.endsWith("/transactions"), { timeout: 5000 }).catch(() => fail("did not navigate to /transactions"));
-  await page.waitForSelector("#txn-add", { timeout: 60000 });
+  // The inline add form moved to the +Add modal (C73); use the ledger table as the
+  // "transactions screen loaded" marker.
+  await page.waitForSelector("tr.row[data-id], .txn-table, [data-testid='txn-search']", { timeout: 60000 });
 
   const acct = await page.evaluate(() => {
     try {
