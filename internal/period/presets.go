@@ -26,3 +26,11 @@ func YearToDate(now time.Time, weekStart time.Weekday) Window {
 		WeekStart: weekStart,
 	}
 }
+
+// PriorYear returns a Year-resolution window covering the full calendar year
+// immediately before the one containing now (e.g. if now is in 2026 it returns
+// the 2025 window). This is the primary quick-pick for tax-prep workflows
+// (L58) where the user needs the complete prior year in one tap.
+func PriorYear(now time.Time, weekStart time.Weekday) Window {
+	return NewWindow(Year, now, weekStart).Shift(-1)
+}

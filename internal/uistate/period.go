@@ -19,12 +19,19 @@ const (
 	periodStoreID = "cashflux:period-res"
 )
 
-// defaultWindow is the initial dashboard selection: the current period at the
-// last-used resolution (restored from localStorage), re-anchored to today. Only
-// the resolution persists — the From/To anchors are transient navigation, so a
-// reload always lands on the current period rather than a stale one.
+// defaultWindow is the initial dashboard selection. It restores the full
+// persisted window (resolution + From/To anchors) when a recent one is stored,
+// so /reports reopens on the last-viewed period after a hard reload. When no
+// persisted window exists, is stale (>366 days old), or is malformed it falls
+// back to the current period at the saved resolution — the prior behaviour.
 func defaultWindow() period.Window {
-	return period.NewWindow(loadResolution(), time.Now(), loadPrefs().WeekStartWeekday())
+	now := time.Now()
+	if w, ok := LoadPeriodWindow(now); ok {
+		// Honour the user's week-start preference even if it changed since the
+		// window was saved.
+		return w.WithWeekStart(loadPrefs().WeekStartWeekday())
+	}
+	return period.NewWindow(loadResolution(), now, loadPrefs().WeekStartWeekday())
 }
 
 // UsePeriod returns the shared dashboard time-window atom. Every component that

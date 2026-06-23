@@ -78,8 +78,11 @@ func Reports() ui.Node {
 	onToggleRollup := ui.UseEvent(func() { rollupCats.Set(!rollupCats.Get()) })
 
 	// The viewed period is the shared top-bar window; the comparison is the
-	// immediately preceding window of the same length.
+	// immediately preceding window of the same length. Persist the full window
+	// (resolution + anchors) so /reports reopens on the last-viewed period
+	// after a hard reload (L45/L58).
 	w := uistate.UsePeriod().Get()
+	uistate.PersistPeriodWindow(w)
 	cs, ce := w.Range()
 	ps, pe := w.Shift(-1).Range()
 
@@ -396,15 +399,21 @@ func Reports() ui.Node {
 			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					downloadBytes("spending-by-category.csv", "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
+					downloadBytes(reports.ExportFilename("spending-by-category", w.Res, w.From), "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
 				}), uistate.T("reports.downloadCsv")),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-tax-summary"), Title(uistate.T("reports.taxSummaryTitle")), OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					yr := time.Now().Year()
+					// Tax summary always covers a full calendar year. When viewing
+					// a Year window use that year; otherwise fall back to the current
+					// calendar year so the export is always a complete annual set.
+					yr := w.From.Year()
+					if w.Res != period.Year {
+						yr = time.Now().Year()
+					}
 					ys := time.Date(yr, time.January, 1, 0, 0, 0, 0, time.UTC)
 					ye := time.Date(yr+1, time.January, 1, 0, 0, 0, 0, time.UTC)
 					summary, _ := reports.YearTax(txns, yr, ys, ye, rates)
-					downloadBytes("tax-summary.csv", "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
+					downloadBytes(reports.ExportFilename("tax-summary", period.Year, ys), "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
 				}), uistate.T("reports.taxSummary")),
 			)),
 		),
@@ -422,7 +431,7 @@ func Reports() ui.Node {
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					downloadBytes("income-by-source.csv", "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
+					downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
 				}), uistate.T("reports.downloadCsv")),
 			),
 		)),
@@ -435,7 +444,7 @@ func Reports() ui.Node {
 					Title(uistate.T("reports.downloadCsvTitle")),
 					OnClick(func() {
 						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes("top-payees.csv", "text/csv", reports.PayeeCSV(payees, csvAmount))
+						downloadBytes(reports.ExportFilename("top-payees", w.Res, w.From), "text/csv", reports.PayeeCSV(payees, csvAmount))
 					}),
 					uistate.T("reports.downloadCsv")),
 			),
@@ -449,7 +458,7 @@ func Reports() ui.Node {
 					Title(uistate.T("reports.downloadCsvTitle")),
 					OnClick(func() {
 						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes("largest-expenses.csv", "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
+						downloadBytes(reports.ExportFilename("largest-expenses", w.Res, w.From), "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
 					}),
 					uistate.T("reports.downloadCsv")),
 			),
@@ -470,7 +479,7 @@ func Reports() ui.Node {
 						}
 						return uistate.T("reports.noMember")
 					}
-					downloadBytes("spending-by-member.csv", "text/csv", reports.MemberCSV(memberSpend, nm, csvAmount))
+					downloadBytes(reports.ExportFilename("spending-by-member", w.Res, w.From), "text/csv", reports.MemberCSV(memberSpend, nm, csvAmount))
 				}), uistate.T("reports.downloadCsv")),
 			),
 		)),
@@ -497,7 +506,7 @@ func Reports() ui.Node {
 			P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
 			uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
 		)),
-		If(len(cfDefs) > 0, customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor)),
+		If(len(cfDefs) > 0, customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w)),
 	)
 }
 
@@ -515,6 +524,7 @@ func customFieldSpendSection(
 	rates currency.Rates,
 	base string,
 	fmtMinor func(int64) string,
+	win period.Window,
 ) ui.Node {
 	// Resolve the active definition; fall back to the first if selectedKey is stale.
 	activeDef := defs[0]
@@ -586,7 +596,7 @@ func customFieldSpendSection(
 				Attr("aria-label", uistate.T("reports.customFieldDownloadTitle")),
 				OnClick(func() {
 					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					filename := "spending-by-" + activeDef.Key + ".csv"
+					filename := reports.ExportFilename("spending-by-"+activeDef.Key, win.Res, win.From)
 					downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
 				}),
 				uistate.T("reports.downloadCsv"),

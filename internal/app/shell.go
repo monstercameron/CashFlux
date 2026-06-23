@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"strconv"
 	"syscall/js"
 	"time"
 
@@ -350,11 +351,21 @@ func Sidebar(props sidebarProps) uic.Node {
 				func(it railItem) any { return it.Path },
 				func(it railItem) uic.Node {
 					p := it.Path
+					// Find the 1-based position of this item in the ordered primary nav
+					// so the Alt+N hint (L34) matches what Alt+N actually does.
+					hint := 0
+					for idx, v := range visibleNav {
+						if v.Path == it.Path && idx < 9 {
+							hint = idx + 1
+							break
+						}
+					}
 					return uic.CreateElement(navItem, navItemProps{
 						Label:       uistate.T(it.Key),
 						Path:        it.Path,
 						Icon:        it.Icon,
 						Active:      current == it.Path,
+						AltHint:     hint,
 						Draggable:   true,
 						OnDragStart: func() { dragSrc.Set(p) },
 						OnDrop:      func() { reorderNav(p) },
@@ -378,6 +389,10 @@ type navItemProps struct {
 	IconClass string // defaults to "w-4 h-4 shrink-0"
 	Active    bool
 	Muted     bool // faint styling for low-emphasis actions ("New page")
+	// AltHint is the digit shown at the trailing edge of the item to advertise the
+	// Alt+<digit> jump shortcut (L34). 0 means no hint. Only the first nine primary
+	// nav items receive a hint; the value is the 1-based position (1–9).
+	AltHint int
 	// Drag-reorder (B8): when Draggable, the item can be dragged onto another to
 	// reorder the primary nav. OnDragStart marks this item as the drag source;
 	// OnDrop fires when another item is dropped onto this one.
@@ -438,7 +453,19 @@ func navItem(props navItemProps) uic.Node {
 			})),
 		)
 	}
-	args = append(args, ui.Icon(props.Icon, ClassStr(iconClass)), Span(props.Label))
+	args = append(args, ui.Icon(props.Icon, ClassStr(iconClass)), Span(css.Class(tw.Flex1), props.Label))
+	// Alt+N digit badge (L34): shown in the expanded rail so users discover the
+	// shortcut without opening the help overlay. Hidden via CSS when collapsed (the
+	// badge class is omitted on the icon-only rail to avoid clutter). The kbd tag
+	// is purely decorative (aria-hidden) because the Title tooltip already names
+	// the shortcut. Only positions 1–9 are labeled; beyond that there's no shortcut.
+	if props.AltHint >= 1 && props.AltHint <= 9 {
+		args = append(args, Span(css.Class("nav-alt-hint"),
+			Attr("aria-hidden", "true"),
+			Attr("title", fmt.Sprintf("Alt + %d", props.AltHint)),
+			Text(strconv.Itoa(props.AltHint)),
+		))
+	}
 	return A(args...)
 }
 
@@ -646,6 +673,9 @@ func ResolutionControl() uic.Node {
 		case "ytd":
 			uistate.PersistResolution(period.Month)
 			atom.Set(period.YearToDate(now, w.WeekStart))
+		case "lastyear":
+			uistate.PersistResolution(period.Year)
+			atom.Set(period.PriorYear(now, w.WeekStart))
 		}
 	})
 
@@ -704,6 +734,7 @@ func ResolutionControl() uic.Node {
 			Option(Value("last"), uistate.T("resolution.presetLast")),
 			Option(Value("quarter"), uistate.T("resolution.presetQuarter")),
 			Option(Value("ytd"), uistate.T("resolution.presetYTD")),
+			Option(Value("lastyear"), uistate.T("resolution.presetPriorYear")),
 		),
 		stepper,
 		If(!isCurrent, Button(css.Class(tw.Px2, tw.Py1, tw.TextDim, tw.HoverTextFg, tw.Text12), Type("button"),
