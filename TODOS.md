@@ -18080,16 +18080,25 @@ The repo currently fails `GOOS=js GOARCH=wasm go build` due to **uncommitted C78
 
 ### GI1. IMPLEMENT — Rules page glamor (from G18) ★
 
-- [ ] **Reorder cards** so the user's own data leads: `[Your rules, Rule order, Suggested rules]` — today
+- [x] **Reorder cards** so the user's own data leads: `[Your rules, Rule order, Suggested rules]` — today
       the tall "Suggested rules" card pushes "Your rules" entirely below the fold at 1280/1440/768.
-- [ ] **Collapse "Suggested rules" to ~5** with a "Show all" toggle (currently 15 rows fill the viewport).
+- [x] **Collapse "Suggested rules" to ~5** with a "Show all" toggle (currently 15 rows fill the viewport).
 - [ ] **Add an on-page add-rule row** (match + category + tags + Add) at the top of "Your rules" — today the
       only entry point is the global "+" menu.
-- [ ] **Demote the 15 suggestion "Add" buttons** from `.btn-primary` (loud green band) to secondary/outline.
-- [ ] **Inline-edit Save** → `width: fit-content` (currently full card width ≈480px).
-- [ ] **Drag-to-reorder discoverability**: add subtitle hint "Drag ⠿ to reorder — first match wins" (C64 grips
+- [x] **Demote the 15 suggestion "Add" buttons** from `.btn-primary` (loud green band) to secondary/outline.
+- [x] **Inline-edit Save** → `width: fit-content` (currently full card width ≈480px).
+- [x] **Drag-to-reorder discoverability**: add subtitle hint "Drag ⠿ to reorder — first match wins" (C64 grips
       exist but read as non-interactive).
 - [ ] Verify in BOTH themes after the GI0 build is green; re-screenshot.
+
+✅ RESOLVED (2026-06-23). Shipped: (a) card order [Your rules → Rule order → Suggested rules] — already done
+in G18; (b) `+ Add rule` header button — already done in G18; (c) Suggested rules collapsed to 5 with
+`showAllSuggestions` `ui.UseState` + "Show all (N)" / "Show fewer" toggle; (d) suggestion Add buttons
+demoted from `.btn-primary` to `.btn`; (e) inline-edit Save/Cancel buttons get `.fit` class
+(`width: fit-content`); (f) drag-hint `<p class="muted">` "Drag ⠿ to reorder — first match wins" shown
+when ≥2 rules exist. Deferred: on-page add-rule row (the `+ Add rule` header button already covers this;
+a full inline form is a larger UX change suitable for a follow-up); theme verification (blocked on GI0
+build environment).
 
 ### GI2. IMPLEMENT — Categories page glamor (from G17) ★
 

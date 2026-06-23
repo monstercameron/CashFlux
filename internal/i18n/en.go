@@ -391,6 +391,9 @@ var english = Catalog{
 	"rules.acceptTitle":        "Add this as a rule",
 	"rules.matchCountMeta":     "Matches %s",
 	"rules.coverage":           "Your rules auto-file %d of %d transactions.",
+	"rules.suggestShowAll":     "Show all (%d)",
+	"rules.suggestShowFewer":   "Show fewer",
+	"rules.dragHint":           "Drag ⠿ to reorder — first match wins",
 
 	"common.owner": "Owner",
 

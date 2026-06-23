@@ -158,13 +158,29 @@ func Rules() ui.Node {
 	}
 
 	// Suggested rules from past categorizations (excluding ones a rule already covers).
+	// Collapsed to 5 by default; "Show all" toggle reveals the rest.
+	const suggestCap = 5
+	showAllSuggestions := ui.UseState(false)
+	toggleShowAll := ui.UseEvent(Prevent(func() { showAllSuggestions.Set(!showAllSuggestions.Get()) }))
 	suggestions := rulesuggest.Suggest(app.Transactions(), rs, 3)
 	suggestCard := Fragment()
 	if len(suggestions) > 0 {
+		visible := suggestions
+		if !showAllSuggestions.Get() && len(suggestions) > suggestCap {
+			visible = suggestions[:suggestCap]
+		}
+		var toggleBtn ui.Node = Fragment()
+		if len(suggestions) > suggestCap {
+			label := uistate.T("rules.suggestShowAll", len(suggestions))
+			if showAllSuggestions.Get() {
+				label = uistate.T("rules.suggestShowFewer")
+			}
+			toggleBtn = Button(css.Class("btn"), Type("button"), OnClick(toggleShowAll), label)
+		}
 		suggestCard = Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("rules.suggestedTitle")),
 			P(css.Class("muted"), uistate.T("rules.suggestedHint")),
-			Div(css.Class("rows"), MapKeyed(suggestions,
+			Div(css.Class("rows"), MapKeyed(visible,
 				func(s rulesuggest.Suggestion) any { return s.Rule.Match },
 				func(s rulesuggest.Suggestion) ui.Node {
 					return ui.CreateElement(SuggestionRow, suggestionRowProps{
@@ -172,6 +188,7 @@ func Rules() ui.Node {
 					})
 				},
 			)),
+			toggleBtn,
 		)
 	}
 
@@ -182,6 +199,7 @@ func Rules() ui.Node {
 		Section(css.Class("card"),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
 				H2(css.Class("card-title"), uistate.T("rules.listTitle")),
+
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 					If(len(rs) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
 					Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
@@ -190,6 +208,7 @@ func Rules() ui.Node {
 						Span(uistate.T("rules.addRule"))),
 				),
 			),
+			If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
 			If(len(rs) > 0 && hasTxns, P(css.Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
 			list,
 		),
@@ -250,7 +269,7 @@ func SuggestionRow(props suggestionRowProps) ui.Node {
 			Span(css.Class("row-desc"), uistate.T("rules.suggestionDesc", s.Rule.Match, cat)),
 			Span(css.Class("row-meta"), uistate.T("rules.suggestionMeta", s.Total)),
 		),
-		Button(css.Class("btn btn-primary"), Type("button"), Title(uistate.T("rules.acceptTitle")), OnClick(add), uistate.T("rules.accept")),
+		Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.acceptTitle")), OnClick(add), uistate.T("rules.accept")),
 	)
 }
 
@@ -309,8 +328,8 @@ func RuleRow(props ruleRowProps) ui.Node {
 				Input(css.Class("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch)),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("rules.categoryFieldLabel")), OnChange(onCat), categoryOptions(props.Categories, catS.Get())),
 				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags)),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				Button(css.Class("btn btn-primary fit"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn fit"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}

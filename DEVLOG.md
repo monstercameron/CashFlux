@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR GI1 Rules — collapse suggestions, demote add buttons, fit-content save, drag hint
+
+GI1 polish pass on the Rules screen. Four items shipped: (1) Suggested rules now caps at 5 visible rows
+with a `showAllSuggestions` `ui.UseState(false)` + "Show all (N)" / "Show fewer" toggle button — avoids
+the 15-row wall that pushed user content off screen. (2) Suggestion Add buttons demoted from `.btn-primary`
+(loud green) to plain `.btn` so they don't compete visually with real user actions. (3) Inline-edit
+Save/Cancel get the `.fit` class (`width: fit-content` already in index.html) so they size to label
+width instead of stretching full card width. (4) Drag hint "Drag ⠿ to reorder — first match wins" shown
+as a `.muted` `<p>` under the heading when ≥2 rules exist — makes the C64 grips readable as interactive.
+Two GI1 items were already done in G18: card reorder and the `+ Add rule` header button. On-page inline
+add-rule row deferred (the header button covers the entry point; a full inline form is a larger change).
+
 ## 2026-06-23 - feat: C74 Tier 2/3 — OFX parser, import mapping, categorizer, ParseAny
 
 Three new pure-logic packages land the Tier 2/3 import engine infrastructure.

@@ -72,7 +72,11 @@ and every commit updates this file under `Unreleased`.
   **Categories (G17):** added an in-card "+ Add category" button to both the Expense and Income kind
   cards (add was previously only reachable from the command palette). **Rules (G18):** "Your rules"
   now leads the page (precedence chain next, the 15-row suggestions card last) instead of being
-  pushed below the fold, plus an in-card "+ Add rule" button. **Workflows (G19):** primary buttons
+  pushed below the fold, plus an in-card "+ Add rule" button. **Rules (GI1):** suggested rules
+  collapsed to 5 by default with a "Show all (N)" / "Show fewer" toggle; suggestion Add buttons
+  demoted from `.btn-primary` to `.btn` (secondary); inline-edit Save/Cancel size to content
+  (`.fit` class); drag-reorder hint "Drag ⠿ to reorder — first match wins" shown under the heading
+  when ≥2 rules exist. **Workflows (G19):** primary buttons
   ("Run now" etc.) now use white text in light mode — the previous dark-green-on-green failed AA
   (~2.1:1); this fix applies app-wide. **Artifacts (G20):** row meta reordered (ref status leads),
   "Referenced by N" shown in green vs neutral-muted "not referenced", upload date added per row,
