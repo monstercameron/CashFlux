@@ -207,7 +207,16 @@ func Members() ui.Node {
 		reassignPanel,
 		uiw.Card(uiw.CardProps{
 			Title: uistate.T("members.listTitle"),
-			Body:  IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}), Div(css.Class("rows"), MapKeyed(members, keyOf, renderRow))),
+			// G16: orientation description so the page self-explains on first visit.
+			// i18n key to add: "members.desc" → "Manage who's in your household. Each
+			// member can own accounts, budgets, and goals."
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("members.desc")),
+				IfElse(len(members) == 0,
+					ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}),
+					Div(css.Class("rows"), MapKeyed(members, keyOf, renderRow)),
+				),
+			),
 		}),
 		If(len(members) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("members.netWorthTitle"),

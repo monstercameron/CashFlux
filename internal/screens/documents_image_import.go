@@ -32,10 +32,16 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 		Title: uistate.T("documents.imageTitle"),
 		Body: Fragment(
 			P(css.Class("muted"), uistate.T("documents.imageDesc")),
+			// G14 §4: "Choose image" is primary until an image is selected; once
+			// imageURL is set the user is ready to run AI — swap weights so the
+			// affordance tracks the user's current action step.
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-				Button(css.Class("btn"), Type("button"), OnClick(props.OnChoose), uistate.T("documents.chooseImage")),
 				Button(
-					css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+					css.Class(chooseImageBtnClass(props.ImageURL)),
+					Type("button"), OnClick(props.OnChoose), uistate.T("documents.chooseImage"),
+				),
+				Button(
+					css.Class(readAIBtnClass(props.ImageURL), tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
 					Type("button"), OnClick(props.OnReadAI), Disabled(props.AILoading),
 					uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 					IfElse(props.AILoading,
@@ -74,4 +80,22 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 			If(props.AIErr != "", P(css.Class("err"), Attr("role", "alert"), props.AIErr)),
 		),
 	})
+}
+
+// chooseImageBtnClass returns the button class for "Choose image": primary
+// when no image is chosen yet (first step), secondary after one is loaded.
+func chooseImageBtnClass(imageURL string) string {
+	if imageURL == "" {
+		return "btn btn-primary"
+	}
+	return "btn"
+}
+
+// readAIBtnClass returns the button class for "Read with AI": secondary until
+// an image is loaded, then primary (user's next logical step).
+func readAIBtnClass(imageURL string) string {
+	if imageURL != "" {
+		return "btn btn-primary"
+	}
+	return "btn"
 }

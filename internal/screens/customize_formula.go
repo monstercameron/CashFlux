@@ -153,9 +153,13 @@ func FormulaCalculator() ui.Node {
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("customize.calcDesc")),
 				Form(css.Class("form-grid"),
-					Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
+					Label(css.Class("labeled-field"),
+						Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
+						Span(css.Class("muted"), uistate.T("customize.exprLabel")),
+						Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
+					),
 				),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt2, tw.ItemsCenter),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt3, tw.ItemsCenter),
 					Span(css.Class("muted"), uistate.T("customize.try")),
 					Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round((income - expense) / income * 100)") }), uistate.T("customize.exSavings")),
 					Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round(expense / income * 100)") }), uistate.T("customize.exSpending")),
@@ -163,8 +167,14 @@ func FormulaCalculator() ui.Node {
 					Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("if(expense > income, 1, 0)") }), uistate.T("customize.exOverBudget")),
 				),
 				Form(css.Class("form-grid", tw.Mt2), OnSubmit(saveFormula),
-					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("customize.savePlaceholder")), Value(fName.Get()), OnInput(onFName)),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("customize.save")),
+					Label(css.Class("labeled-field"),
+						Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
+						Span(css.Class("muted"), uistate.T("customize.nameLabel")),
+						Input(css.Class("field"), Type("text"), Placeholder(uistate.T("customize.savePlaceholder")), Value(fName.Get()), OnInput(onFName)),
+					),
+					Button(css.Class("btn btn-primary"), Type("submit"),
+						Style(map[string]string{"width": "fit-content", "align-self": "flex-end"}),
+						uistate.T("customize.save")),
 				),
 				If(fMsg.Get() != "", P(css.Class("muted"), fMsg.Get())),
 			),
@@ -173,7 +183,6 @@ func FormulaCalculator() ui.Node {
 			Title: uistate.T("customize.resultTitle"),
 			Body:  resultBody,
 		}),
-		savedFormulasCard(app.Formulas(), vars, loadFormula, deleteFormula),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("customize.varsTitle"),
 			Body: Fragment(
@@ -181,6 +190,7 @@ func FormulaCalculator() ui.Node {
 				Div(css.Class("rows"), varRows),
 			),
 		}),
+		savedFormulasCard(app.Formulas(), vars, loadFormula, deleteFormula),
 	)
 }
 

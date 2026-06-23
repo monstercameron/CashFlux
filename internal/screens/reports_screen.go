@@ -261,7 +261,7 @@ func Reports() ui.Node {
 		if pct > 100 {
 			pct = 100
 		}
-		return Div(css.Class("share-bar"), Style(map[string]string{"height": "4px", "max-width": "260px", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+		return Div(css.Class("share-bar"), Style(map[string]string{"height": "4px", "max-width": "100%", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
 			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
 	}
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
@@ -427,6 +427,12 @@ func Reports() ui.Node {
 	for _, m := range app.Members() {
 		memberName[m.ID] = m.Name
 	}
+	var maxMember int64
+	for _, ms := range memberSpend {
+		if a := absI64(ms.Amount); a > maxMember {
+			maxMember = a
+		}
+	}
 	var memberNodes []ui.Node
 	for _, ms := range memberSpend {
 		name := memberName[ms.MemberID]
@@ -434,13 +440,19 @@ func Reports() ui.Node {
 			name = uistate.T("reports.noMember")
 		}
 		memberNodes = append(memberNodes, Div(css.Class("row"),
-			Div(css.Class("row-main"), Span(css.Class("row-desc"), name)),
+			Div(css.Class("row-main"), Span(css.Class("row-desc"), name), shareBar(ms.Amount, maxMember)),
 			Span(css.Class("budget-amount"), fmtMinor(ms.Amount)),
 		))
 	}
 
 	// Biggest deposits: the largest individual income transactions this period.
 	bigIncome, _ := reports.LargestIncome(txns, cs, ce, rates, 8)
+	var maxBigIncome int64
+	for _, e := range bigIncome {
+		if a := absI64(e.Amount); a > maxBigIncome {
+			maxBigIncome = a
+		}
+	}
 	var bigIncomeNodes []ui.Node
 	for _, e := range bigIncome {
 		desc := e.Desc
@@ -451,6 +463,7 @@ func Reports() ui.Node {
 			Div(css.Class("row-main"),
 				Span(css.Class("row-desc"), desc),
 				Span(css.Class("row-meta"), pr.FormatDate(e.Date)),
+				shareBar(e.Amount, maxBigIncome),
 			),
 			Span(css.Class("budget-amount"), fmtMinor(e.Amount)),
 		))
@@ -615,7 +628,7 @@ func Reports() ui.Node {
 		uiw.Card(uiw.CardProps{
 			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
 				H2(css.Class("card-title"), uistate.T("reports.byCategory")),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
+				Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
 					Attr("aria-pressed", boolStr(rollupCats.Get())),
 					Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
 					uistate.T(rollupLabelKey(rollupCats.Get()))),
@@ -829,7 +842,7 @@ func customFieldSpendSection(
 		if pct > 100 {
 			pct = 100
 		}
-		bar := Div(Style(map[string]string{"height": "4px", "max-width": "260px", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+		bar := Div(Style(map[string]string{"height": "4px", "max-width": "100%", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
 			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
 		rowNodes = append(rowNodes, Div(css.Class("row"),
 			Div(css.Class("row-main"), Span(css.Class("row-desc"), label), bar),
@@ -988,7 +1001,7 @@ func deductibleSection(
 		if pct > 100 {
 			pct = 100
 		}
-		bar := Div(Style(map[string]string{"height": "4px", "max-width": "260px", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+		bar := Div(Style(map[string]string{"height": "4px", "max-width": "100%", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
 			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
 		rowNodes = append(rowNodes, Div(css.Class("row"),
 			Div(css.Class("row-main"), Span(css.Class("row-desc"), nameOf(r.CategoryID)), bar),

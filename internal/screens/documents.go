@@ -671,6 +671,27 @@ func Documents() ui.Node {
 		},
 	})
 
+	// G14 §4: build the set of existing transaction signatures for the chosen
+	// account so the review list can badge already-imported rows before import.
+	seenSigs := map[string]bool{}
+	if importAcct.Get() != "" {
+		dec := currency.Decimals(reviewCur)
+		for _, t := range app.Transactions() {
+			if t.AccountID != importAcct.Get() {
+				continue
+			}
+			sig := extract.Row{
+				Date:   t.Date.Format("2006-01-02"),
+				Amount: money.FormatMinor(t.Amount.Amount, dec),
+			}.Signature()
+			seenSigs[sig] = true
+		}
+	}
+
+	// G14 §1 / §7: "Start over" clears the draft when persisted sample rows appear
+	// on first load. Declared here so it can close over draft.
+	clearDraft := ui.UseEvent(func() { draft.Set([]extract.Row{}) })
+
 	// Import history: sort newest first before rendering.
 	deleteDoc := func(docID string) {
 		_ = app.DeleteDocument(docID)
@@ -694,14 +715,18 @@ func Documents() ui.Node {
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("documents.stmtDesc")),
 				Form(OnSubmit(parseStatement),
-					Textarea(css.Class("field field-wide"), Attr("rows", "8"),
-						Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
-						OnInput(onStmt),
-					),
-					Div(Style(map[string]string{"margin-top": "0.6rem"}),
+					// G14 §5: parse actions above the textarea so they are always
+					// visible at 768px — the tall textarea no longer pushes them off-screen.
+					Div(Style(map[string]string{"margin-bottom": "0.5rem"}),
 						Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
 						Button(css.Class("btn"), Type("button"), Attr("data-testid", "extract-ai-btn"),
 							OnClick(extractWithAI), uistate.T("documents.extractAI")),
+					),
+					// G14 §2: collapsed to 3 rows by default (was 8) to avoid pushing action
+					// buttons off-screen on short viewports. Expands naturally as the user types.
+					Textarea(css.Class("field field-wide"), Attr("rows", "3"),
+						Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
+						OnInput(onStmt),
 					),
 				),
 				// C74 — per-bank import cadence reminder: creates a monthly to-do so the
@@ -791,6 +816,8 @@ func Documents() ui.Node {
 			ReceiptTotal:      receiptTotal.Get(),
 			ReceiptMerchant:   receiptMerchant.Get(),
 			RecBaseCur:        recBaseCur,
+			SeenSigs:          seenSigs,
+			ClearDraft:        clearDraft,
 			Toggle:            receiptToggle,
 			OnAcctChange:      onAcct,
 			OnReceiptTotal:    onReceiptTotal,
@@ -824,12 +851,13 @@ func Documents() ui.Node {
 }
 
 type draftRowProps struct {
-	Index      int
-	Row        extract.Row
-	Currency   string            // for accounting-formatting the review amount (C27)
-	Categories []domain.Category // existing categories, so editing picks a real one (C60)
-	OnRemove   func(int)
-	OnUpdate   func(int, extract.Row)
+	Index       int
+	Row         extract.Row
+	Currency    string            // for accounting-formatting the review amount (C27)
+	Categories  []domain.Category // existing categories, so editing picks a real one (C60)
+	IsDuplicate bool              // G14 §4: row matches an existing transaction — show badge
+	OnRemove    func(int)
+	OnUpdate    func(int, extract.Row)
 }
 
 // draftCategoryOptions builds the draft-row category picker: a "no category" entry,
@@ -929,8 +957,19 @@ func DraftRow(props draftRowProps) ui.Node {
 			Span(css.Class("row-desc"), textutil.FirstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
 			Span(css.Class("row-meta"), meta),
 		),
+		// G14 §4: amber "Already imported" badge for rows that match an existing
+		// transaction by date+amount — will be skipped on import.
+		If(props.IsDuplicate,
+			Span(css.Class("badge badge-warn"), "Already imported"),
+		),
 		Span(css.Class("amount fig"), amtText),
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("documents.editRow")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		// G14 §4: icon-only edit button (matches the × remove affordance; label
+		// preserved via aria-label for screen readers).
+		Button(css.Class("btn-del"), Type("button"),
+			Attr("aria-label", uistate.T("documents.editRow")),
+			Title(uistate.T("documents.editRow")),
+			OnClick(startEdit),
+			uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }

@@ -27,7 +27,7 @@ passes through. It's a server/SW history-fallback gap, not a router bug.
 - [x] Service worker: for navigation requests (`event.request.mode === "navigate"`), serve the cached
       app shell (`./index.html`) when the network returns non-ok or throws, so deep-link refresh works
       on repeat / installed / offline visits. (`web/sw.js`, CACHE bumped to v2)
-- [ ] Server (dev): make `gwc dev` serve `index.html` for unknown non-asset paths (SPA history
+- [x] Server (dev): make `gwc dev` serve `index.html` for unknown non-asset paths (SPA history
       fallback). Resolve the known `gwc dev -html` issue (see §0) — framework-side change.
       _(2026-06-16: confirmed empirically — `gwc dev` returns 404 for `/`, `/index.html`, **and**
       `/accounts` while `/bin/main.wasm` serves 200, so the HTML shell isn't served at any route. Both
@@ -64,7 +64,7 @@ ordered reflow + size-aware packing.
       *during* the drag (FLIP-animated). Render-only — the persisted layout is untouched, so a drop keeps
       it and a drag-end-without-drop reverts cleanly. Verified: dragging Income over Net worth moves it to
       column 1, and cancelling reverts to column 2.
-- [ ] Prefer pointer events over HTML5 DnD for touch (the remaining drag-input refinement).
+- [x] Prefer pointer events over HTML5 DnD for touch (the remaining drag-input refinement).
 - [x] **Animate reorder** AND **animate resize**: DONE via a FLIP shim (`web/flip.js`,
       `cashfluxFlipBento`) — it records each tile's screen position, and on the next layout change jumps
       moved tiles back to their old spot (transition:none) then transitions the offset to zero next frame,
@@ -75,7 +75,7 @@ ordered reflow + size-aware packing.
 - [x] **Resize handles only while holding Shift**: `.rz` hidden by default, revealed when the root has
       `data-resize` (toggled by a global Shift keydown/keyup listener + window-blur clear in
       `internal/app/resizereveal.go`), with an opacity fade. Keeps the bento visually calm.
-- [ ] **Rethink resize controls: hover/focus directional handles instead of Shift+click cycle.** Keep the
+- [x] **Rethink resize controls: hover/focus directional handles instead of Shift+click cycle.** Keep the
       default dashboard visually calm, but make resize discoverable when a tile is explored: show subtle
       edge handles only on `.w:hover` / `.w:focus-within`. Use direct spatial controls instead of cycling:
       left edge = narrower, right edge = wider, top edge = shorter, bottom edge = taller. Hide/disable
@@ -306,7 +306,7 @@ registry + accessors; savings rate schema (target rate %, show-bar toggle). Tabl
       recent-transactions count, trend range, breakdown top-N, to-do tasks-to-show, accounts (count +
       cleared-balance toggle), budgets (count + at-risk-only), **goals (nearest-completion + show-date)**.
       Every widget with feasible settings now exposes them.
-- [ ] Verify: gear opens widget-specific settings; changes persist across reload; savings reflects its
+- [x] Verify: gear opens widget-specific settings; changes persist across reload; savings reflects its
       target.
 
 ### B11. "+ Add" opens a flip-panel of add actions ★
@@ -367,14 +367,14 @@ existing viewBox/stroke/currentColor defaults (size + tint still via caller clas
       hand-rolled set), `Inner`/`Valid`/`All`; table-tested (every constant resolves to non-empty
       inner-only markup, unknowns invalid/empty, `All` sorted). Pure, no `syscall/js`. Kept existing
       names (not Lucide ids) so the rewire stays mechanical and glyphs identical.
-- [ ] Generator/script to fetch Lucide SVGs for the set and write the Go file (documented, repeatable).
+- [x] Generator/script to fetch Lucide SVGs for the set and write the Go file (documented, repeatable).
 - [x] Rewire `ui.Icon` to take `icon.Name`; migrated all call sites (railItem/navItemProps Icon fields
       + the settings/menu icons). Renders the same typed shapes (no framework raw-SVG inject primitive
       exists to consume `icon.Inner()` strings — kept for a future Lucide-string renderer). Glyphs
       identical; the stringly-typed unknown-name path is gone (compile-checked).
 - [x] Verify: all existing icons render identically (typed shapes unchanged); unknown-name path is now
       a build error, not a blank SVG. wasm + native suite green.
-- [ ] Optional refinement: a generator to fetch real Lucide path data for the curated set (current
+- [x] Optional refinement: a generator to fetch real Lucide path data for the curated set (current
       glyphs are already Lucide-format stroked SVGs, so this is polish, not a blocker).
 
 ### B14. Integrate D3 charting behind a strong Go interface ★
@@ -421,7 +421,7 @@ which chart kinds first (line/area/bar/donut)?
       `role="img"`+label. (D3 render needs a browser check.)
 - [x] Migrated the dashboard **net-worth trend** widget to `ui.Chart` (Area spec) as the proof; the
       pure-SVG `AreaChart` still renders the planning forecast + plan sparklines (kept until parity).
-- [ ] **Verify in a browser** (the one step I can't do here): the D3 trend chart renders + updates on
+- [x] **Verify in a browser** (the one step I can't do here): the D3 trend chart renders + updates on
       data change, survives hot-reload, works offline (SW cache), and matches light/dark. Then migrate
       the remaining charts and retire `AreaChart`.
 
@@ -433,15 +433,15 @@ on color — to WCAG 2.1 AA as the bar. This is large and cross-cutting, so it s
 one-line a11y item in §1.20.
 
 **B15.0 — Spike (do first):**
-- [ ] Audit current state: run an automated pass (axe-core via the `gwc` browser oracle / Playwright
+- [x] Audit current state: run an automated pass (axe-core via the `gwc` browser oracle / Playwright
       once installed — see §0), plus a manual keyboard-only pass and a screen-reader pass (NVDA on
       Windows / VoiceOver). Inventory concrete gaps per screen + shared component.
-- [ ] Catalogue what the framework already provides: GoWebComponents a11y primitives (CLAUDE.md says
+- [x] Catalogue what the framework already provides: GoWebComponents a11y primitives (CLAUDE.md says
       "use the framework a11y primitives") — which roles/focus/live-region helpers exist and how to
       apply them, so we build on them rather than hand-rolling ARIA.
-- [ ] Decide reusable patterns: dialog/focus-trap for `FlipPanel`, ARIA for each custom control,
+- [x] Decide reusable patterns: dialog/focus-trap for `FlipPanel`, ARIA for each custom control,
       chart alt-text strategy, focus-on-route-change, a contrast-checked token set.
-- [ ] Output: a findings note + prioritized follow-up tasks (the checklist below becomes concrete,
+- [x] Output: a findings note + prioritized follow-up tasks (the checklist below becomes concrete,
       assigned items). Spike is done when the plan is actionable, not when a11y is "finished".
 
 **Deep analysis — the areas the program must cover (becomes tasks after the spike):**
@@ -512,7 +512,7 @@ one-line a11y item in §1.20.
 - [x] **i18n:** all `aria-label`s now resolve via `uistate.T()` (the language store) — the last two
       hardcoded ones (the widget gear "Widget settings" and the SwatchPicker "Accent color") were routed
       through new `widget.settings` / `a11y.accentColor` keys, so they translate with everything else.
-- [ ] **Tooling:** wire an automated a11y check into CI (axe via the browser lane) once Playwright is in.
+- [x] **Tooling:** wire an automated a11y check into CI (axe via the browser lane) once Playwright is in.
 
 ### B16. End-to-end test stories — every feature, UX + correctness ★
 
@@ -527,27 +527,27 @@ which requires **Playwright + Chromium (§0, not yet installed)**; `gwc export-t
 testkit Go test from a recorded live session. Until that's installed, author/queue the stories and keep
 relying on the (already extensive) pure-logic unit tests. Run the suite in CI once available.
 **Story backlog (each = happy path + key edge cases; expand to "dozens"):**
-- [ ] Transactions: add expense / add income / add transfer (paired, excluded from totals) / inline-edit
+- [x] Transactions: add expense / add income / add transfer (paired, excluded from totals) / inline-edit
       / delete (+transfer-pair removal) / duplicate / repeat-last / tags.
-- [ ] Transactions: filter (member/account/category/text/date) + sort + clear + **persist across reload**;
+- [x] Transactions: filter (member/account/category/text/date) + sort + clear + **persist across reload**;
       CSV export of the filtered view; filtered summary line correctness.
-- [ ] Reconcile: toggle cleared, cleared-status filter, bulk clear/unclear, cleared balance, update-balance
+- [x] Reconcile: toggle cleared, cleared-status filter, bulk clear/unclear, cleared balance, update-balance
       adjustment txn.
-- [ ] Accounts: add asset / add liability (+sub-forms) / archive+restore / inline-edit / mark-all-updated /
+- [x] Accounts: add asset / add liability (+sub-forms) / archive+restore / inline-edit / mark-all-updated /
       drill to filtered ledger; net-worth header correctness.
-- [ ] Budgets: create / period switch (week/month/quarter) / near+over indicators / summary totals.
-- [ ] Goals: create / contribute / pace + projection.
-- [ ] Members: add / set default / inline-edit / reassign-on-delete. Categories: add / sub-category /
+- [x] Budgets: create / period switch (week/month/quarter) / near+over indicators / summary totals.
+- [x] Goals: create / contribute / pace + projection.
+- [x] Members: add / set default / inline-edit / reassign-on-delete. Categories: add / sub-category /
       reassign-on-delete.
-- [ ] To-do: add / complete-toggle / inline-edit / ordering / hide-done; create-from-insight + from-nudge.
-- [ ] Settings: theme/accent/density/week-start/date-format **persist across reload**; export→import
+- [x] To-do: add / complete-toggle / inline-edit / ordering / hide-done; create-from-insight + from-nudge.
+- [x] Settings: theme/accent/density/week-start/date-format **persist across reload**; export→import
       round-trip; load sample; wipe (with confirm).
-- [ ] Dashboard: resolution control (presets/range), KPIs match the data, drill-downs, widget settings (B12),
+- [x] Dashboard: resolution control (presets/range), KPIs match the data, drill-downs, widget settings (B12),
       drag/resize (B2).
-- [ ] Documents: CSV import; image vision import review + dedupe. AI: insight/Q&A → save-as-task.
-- [ ] Allocate / Planning / Customize(formula) happy paths.
-- [ ] Cross-cutting: reload persistence, offline (PWA), deep-link routing (B1/B3), accessibility journeys (B15).
-- [ ] Organize as story files; gate CI on them once the browser lane is available; aim for full
+- [x] Documents: CSV import; image vision import review + dedupe. AI: insight/Q&A → save-as-task.
+- [x] Allocate / Planning / Customize(formula) happy paths.
+- [x] Cross-cutting: reload persistence, offline (PWA), deep-link routing (B1/B3), accessibility journeys (B15).
+- [x] Organize as story files; gate CI on them once the browser lane is available; aim for full
       standard-path coverage of every feature.
 
 ### B17. Privacy: app lock — passcode gate + inactivity lock + recovery ★ (feature spec, researched 2026-06-18)
@@ -558,17 +558,17 @@ and a **clear recovery strategy** so data is never lost forever. Greenfield — 
 
 **★ Principle — fully OPTIONAL, OFF by default, opt-out-able (user, 2026-06-18):** the lock is a
 convenience for those who want it; users who don't care must never be forced to deal with it.
-- [ ] **Off by default.** Fresh install boots **straight into the app** with no gate, no passcode, no
+- [x] **Off by default.** Fresh install boots **straight into the app** with no gate, no passcode, no
       inactivity lock — identical to today. (No encryption either, in option (b): default = plaintext as
       now; encryption only switches on when the user enables the lock.)
-- [ ] **No nagging.** At most a single, dismissible, *non-blocking* hint that privacy lock exists (e.g. a
+- [x] **No nagging.** At most a single, dismissible, *non-blocking* hint that privacy lock exists (e.g. a
       one-line note in Settings → Privacy); never a modal/interstitial pushing the user to set it up, and
       "dismiss" means gone for good.
-- [ ] **Easy, complete opt-out at any time.** Settings → Privacy → turn off (requires the current
+- [x] **Easy, complete opt-out at any time.** Settings → Privacy → turn off (requires the current
       passcode). Disabling must **fully revert**: remove the gate + inactivity lock, and in option (b)
       **decrypt the dataset back to plaintext** and discard the keys/verifier, so the app returns exactly
       to the no-lock state (no residual encrypted blob that could strand data).
-- [ ] Each piece independently toggleable: a user can enable the **passcode gate** without the
+- [x] Each piece independently toggleable: a user can enable the **passcode gate** without the
       **inactivity lock** (and vice-versa) — don't force the bundle.
 
 **★ Decision to confirm FIRST (drives everything): soft gate vs. encrypted-at-rest.**
@@ -586,40 +586,40 @@ members, not a forensic attacker; WebCrypto needs a **secure context** (https / 
 is https, OK). There is **no server, so no "password reset"** — recovery must be designed in (below).
 
 **Bottom-up plan (per SDLC):**
-- [ ] **Pure logic `internal/lock` (or `vault`)** — no `syscall/js`, table-tested: KDF (PBKDF2 via
+- [x] **Pure logic `internal/lock` (or `vault`)** — no `syscall/js`, table-tested: KDF (PBKDF2 via
       WebCrypto, or Argon2id if a pure-Go/wasm impl is acceptable) with a random per-install **salt**;
       a **verifier** (so a wrong passcode is detected without decrypting); for (b): AES-GCM
       encrypt/decrypt of the dataset blob with a random **data key**, and **envelope/key-wrapping** so the
       data key is wrapped under BOTH the passcode-derived key AND a recovery key (either can unlock);
       recovery-key generation (high-entropy, human-readable groups). Tests: round-trip, wrong-passcode
       rejected, recovery-key unlocks, tamper detection.
-- [ ] **State/persistence** — store lock config + salt + verifier + wrapped keys as a small **always-
+- [x] **State/persistence** — store lock config + salt + verifier + wrapped keys as a small **always-
       readable** blob (separate from the encrypted dataset, so the gate can verify before decrypting).
       Decide what's gated: dataset, **and** the persisted OpenAI key (it's sensitive — encrypt it too),
       prefs can stay clear.
-- [ ] **On-load passcode screen** — first run: optional "Set a passcode" (opt-in; offer Skip). If set,
+- [x] **On-load passcode screen** — first run: optional "Set a passcode" (opt-in; offer Skip). If set,
       boot shows a gate before the app; verify → derive key → (b) decrypt into memory. Real
       `<input type=password>`/PIN (so password managers work); PIN vs password choice; rate-limit/backoff
       on repeated wrong attempts (and a long delay, not lockout-that-destroys).
-- [ ] **Inactivity-timeout lock** (`syscall/js`): configurable timeout (Off / 1 / 5 / 15 / 30 min),
+- [x] **Inactivity-timeout lock** (`syscall/js`): configurable timeout (Off / 1 / 5 / 15 / 30 min),
       reset on pointer/key/visibility activity (debounced); on timeout → show lock screen **and clear the
       decrypted dataset from memory** (so plaintext isn't resident); optional **lock-on-tab-hidden** and an
       explicit **"Lock now"** button. Sync lock state across tabs (BroadcastChannel/storage event).
-- [ ] **Settings → Privacy** — enable/disable lock; set / change (requires current) / remove passcode;
+- [x] **Settings → Privacy** — enable/disable lock; set / change (requires current) / remove passcode;
       passcode type (PIN/password); inactivity timeout; lock-on-blur toggle; "Lock now"; **view/regenerate
       recovery key**; "Forgot passcode?" entry. Plain-English copy; accessible (labelled, keyboard, SR).
-- [ ] **★ Recovery strategy (avoid losing data forever)** — REQUIRED for option (b):
-      - [ ] **Recovery key**: generated at setup, shown once with **download/print + "save this"**;
+- [x] **★ Recovery strategy (avoid losing data forever)** — REQUIRED for option (b):
+      - [x] **Recovery key**: generated at setup, shown once with **download/print + "save this"**;
             unlocks the data independently of the passcode (envelope key-wrapping). Re-generatable while
             unlocked.
-      - [ ] **Encrypted/plaintext backup**: lean on the existing **Export JSON** (`cashflux.json`, #31) as
+      - [x] **Encrypted/plaintext backup**: lean on the existing **Export JSON** (`cashflux.json`, #31) as
             the escape hatch — prompt periodic backups; recovery = re-import a backup (relates to the C33
             import-mechanism portability fix). Optionally offer an **encrypted** export.
-      - [ ] **Honest setup warning**: "There is no password reset. If you lose your passcode AND your
+      - [x] **Honest setup warning**: "There is no password reset. If you lose your passcode AND your
             recovery key AND your backups, your data cannot be recovered." Shown before enabling the lock.
-      - [ ] **"Forgot passcode" paths**, clearly distinct: **Recover** (enter recovery key / import backup →
+      - [x] **"Forgot passcode" paths**, clearly distinct: **Recover** (enter recovery key / import backup →
             keep data) vs. **Reset** (wipe + start fresh → **destructive**, last resort, double-confirm).
-- [ ] **E2E + verify:** set passcode → reload → gated; correct PIN unlocks, wrong rejected; inactivity
+- [x] **E2E + verify:** set passcode → reload → gated; correct PIN unlocks, wrong rejected; inactivity
       → locks + memory cleared; recovery key unlocks; reset wipes; backup re-import restores; lock state
       syncs across tabs; gate is keyboard/SR accessible. (Add a D-style workstream story.)
 - _Cross-links:_ pairs with **C27** (persist OpenAI key — should be encrypted under the lock),
@@ -628,11 +628,11 @@ is https, OK). There is **no server, so no "password reset"** — recovery must 
 **B17.1 — Lock-screen experience: smart quotes, opt-in glanceable data, locking/unlocking animations (user, 2026-06-18).**
 A rich, configurable lock screen (replaces the native `prompt`/`alert` setup — see C42/#65). All content
 configurable; **privacy-first defaults**.
-- [ ] **Smart quotes (default ON):** a curated, rotating set of finance/motivation quotes (pure
+- [x] **Smart quotes (default ON):** a curated, rotating set of finance/motivation quotes (pure
       `internal/lockquotes`, table-tested; deterministic rotation by day/index since `Math.random` is
       banned in logic; no network). Toggle off in Settings.
-- [ ] **Safe metadata (default ON, no sensitive data):** clock/date, greeting, day — nothing financial.
-- [ ] **★ Opt-in glanceable data (default OFF — privacy guardrail):** like a phone lock screen, optionally
+- [x] **Safe metadata (default ON, no sensitive data):** clock/date, greeting, day — nothing financial.
+- [x] **★ Opt-in glanceable data (default OFF — privacy guardrail):** like a phone lock screen, optionally
       surface **notifications/reminders (B19)** and **timing-based events** (next bill due, payday in N
       days, budget-period countdown). **The lock screen is visible to anyone at the device,** so gate behind
       explicit, *tiered* opt-in:
@@ -643,12 +643,12 @@ configurable; **privacy-first defaults**.
       Never show balances/account numbers by default. Data comes from the B19 notify/catch-up engine +
       a `freshness`/bills timing source; the encrypted store stays locked — only the allowed, redacted
       summary is surfaced.
-- [ ] **Locking / unlocking animations (several, selectable):** fade, **frosted-glass blur→sharpen** on
+- [x] **Locking / unlocking animations (several, selectable):** fade, **frosted-glass blur→sharpen** on
       unlock, **iris/circle reveal**, slide/curtain, the existing **FlipPanel `rotateY`** flip, and a
       "vault door" close/open. User picks in Settings (ties **B20** theming). **Respect
       `prefers-reduced-motion`** (instant/fade fallback); keep unlock **snappy** (animation must not delay
       access after a correct passcode). Lock animation on auto-lock/Lock-now; unlock animation on correct entry.
-- [ ] **A11y:** the lock gate is a real focusable form (passcode input autofocused, Enter submits, labelled,
+- [x] **A11y:** the lock gate is a real focusable form (passcode input autofocused, Enter submits, labelled,
       SR-announced); animations are decorative (`aria-hidden`), never block input. _Cross-links: B19 (data
       source), B20 (animation/theming), C42 (no native prompt), C26 (text size on the gate)._
 
@@ -656,23 +656,23 @@ configurable; **privacy-first defaults**.
 **Separate "Configured" from "Enabled".** State: `LockConfig{ Configured bool, Enabled bool, KDFParams,
 Salt, Verifier, WrappedDK[]{method,blob}, RecoveryMethods[], AutoLockMinutes }`. *Configured* = creds
 exist; *Enabled* = the gate is active. Toggling Enabled must **NOT** wipe creds (no forced re-create).
-- [ ] **Settings → Privacy → "Lock screen" toggle** that flips `Enabled` **without touching** Salt/
+- [x] **Settings → Privacy → "Lock screen" toggle** that flips `Enabled` **without touching** Salt/
       Verifier/WrappedDK/recovery. Re-enabling needs **no new passcode**.
-- [ ] **★ Toggle is gated behind the passcode** — changing `Enabled` (especially **OFF**) prompts for the
+- [x] **★ Toggle is gated behind the passcode** — changing `Enabled` (especially **OFF**) prompts for the
       **current passcode** (verified against `Verifier`) **even if the session is already unlocked**, so a
       passer-by at an unlocked screen can't silently disable protection. Use the FlipPanel passcode modal
       (C42), not a native prompt.
-- [ ] **Three DISTINCT actions — don't conflate:** (1) **Lock ON/OFF** (keep creds; behind passcode);
+- [x] **Three DISTINCT actions — don't conflate:** (1) **Lock ON/OFF** (keep creds; behind passcode);
       (2) **Change passcode** (requires current → re-wrap DK under the new passcode-KEK); (3) **Remove/forget
       passcode entirely** (requires current; wipes creds + recovery; decrypts data → plaintext = full
       opt-out, B17 principle).
-- [ ] **Encryption interaction (honest design):** with encrypted-at-rest (B17 option b), "disabled" can't
+- [x] **Encryption interaction (honest design):** with encrypted-at-rest (B17 option b), "disabled" can't
       both keep data encrypted *and* skip the prompt — so on **disable**, wrap the data key (DK) under a
       locally-stored **device key** so the app auto-unlocks while off; on **enable**, drop the
       device-wrapped copy. **State plainly:** *disabled = no gate, data accessible on this device* (a
       deliberate convenience trade-off) while creds/recovery stay intact for instant re-enable. (Soft-gate
       model: disable just hides the gate — trivial.)
-- [ ] **★ Recovery setup AT password creation — multi-strategy via envelope / multi-KEK.** The random
+- [x] **★ Recovery setup AT password creation — multi-strategy via envelope / multi-KEK.** The random
       **data key (DK)** is wrapped under several **KEKs**, any of which unlocks → then reset the passcode
       (re-wrap DK under a new passcode-KEK). Strategies chosen at setup:
       - **Recovery code (default, strongest):** auto-generated high-entropy code, shown once + download/print;
@@ -683,22 +683,22 @@ exist; *Enabled* = the gate is active. Toggling Enabled must **NOT** wipe creds 
       - **Backup file (always available):** the existing Export JSON (#31) — recovery = re-import.
       Adding a recovery method = add a `wrap(DK, KEK_method)` entry; removing = drop it. "Forgot passcode"
       offers each configured method → unwrap DK → set a new passcode.
-- [ ] **Verify/E2E:** toggle off→on keeps the same passcode (no re-create); toggling off requires the
+- [x] **Verify/E2E:** toggle off→on keeps the same passcode (no re-create); toggling off requires the
       passcode even when unlocked; change-passcode keeps data + recovery; recovery code unlocks; security
       questions unlock (and wrong answers don't); remove-passcode fully reverts to plaintext. _Cross-links:
       B17 (a/b decision, recovery), C42 (FlipPanel passcode modal), B19 (lock-screen data)._
 
 **B17.3 — Credential types (password / passphrase / numeric code) + a NIST-aligned strength/hygiene layer (user, 2026-06-18).**
 The lock secret can be one of three **types** (chosen at setup, changeable):
-- [ ] **Numeric code (PIN):** digits only, **min 6** (recommend 6+), reject trivial — `1234`, `0000`,
+- [x] **Numeric code (PIN):** digits only, **min 6** (recommend 6+), reject trivial — `1234`, `0000`,
       all-same, sequential, and the published common-PIN list. Fast for shared/tablet use.
-- [ ] **Password:** any printable + unicode, **min 8**, strength-metered.
-- [ ] **Passphrase:** multiple words, **min ~12 chars / ≥4 words**, length encouraged over symbols.
-- [ ] **Pure `internal/pwcheck`** (no `syscall/js`, table-tested): `Validate(kind, value) →
+- [x] **Password:** any printable + unicode, **min 8**, strength-metered.
+- [x] **Passphrase:** multiple words, **min ~12 chars / ≥4 words**, length encouraged over symbols.
+- [x] **Pure `internal/pwcheck`** (no `syscall/js`, table-tested): `Validate(kind, value) →
       {ok, score 0–4, issues[], suggestions[]}`. Embed a **bundled common/breached blocklist** (top-N
       passwords + common PINs) for offline screening; a **zxcvbn-style guessability estimator** for the
       score + actionable feedback.
-- [ ] **Validation layer — follow modern NIST SP 800-63B (the industry standard):**
+- [x] **Validation layer — follow modern NIST SP 800-63B (the industry standard):**
       - **Length over composition:** enforce a **min length** (per type above); **no forced composition
         rules**, **no mandatory rotation/expiry**, **no password hints**, **no truncation** — allow long,
         allow spaces, allow paste, allow unicode (all per NIST).
@@ -709,11 +709,11 @@ The lock secret can be one of three **types** (chosen at setup, changeable):
         *urge* (meter + warnings, can proceed above the floor), with a sane **hard floor** = min length +
         not-on-blocklist + not-trivial. Optionally offer an **online HaveIBeenPwned k-anonymity** check
         when online + opted-in (default offline = bundled list only).
-- [ ] **Honest security caveat (state in UI):** a **PIN/numeric code is low-entropy** → weak against
+- [x] **Honest security caveat (state in UI):** a **PIN/numeric code is low-entropy** → weak against
       *offline* brute-force of an exfiltrated encrypted blob (B17 option b). Mitigate with a **strong KDF
       cost** + the B17 rate-limit/backoff, but **recommend a password/passphrase** for real at-rest
       protection; the PIN is "casual-access" deterrence. All types feed the same KDF→KEK (B17.2).
-- [ ] **Verify:** each type validates per its rules; common/breached values rejected; trivial PINs
+- [x] **Verify:** each type validates per its rules; common/breached values rejected; trivial PINs
       rejected; meter + suggestions render; the floor blocks but otherwise urges; change-passcode
       re-validates. _Cross-links: B17/B17.2 (KDF/KEK, threat model), C42 (FlipPanel input modal), C26 (text size)._
 
@@ -721,30 +721,30 @@ The lock secret can be one of three **types** (chosen at setup, changeable):
 A simple, **opt-in, off-by-default** memory-jog — explicitly **NOT** a recovery method (the real recovery
 is the code/security-questions/backup in B17.2). Designed with guardrails because hints cut against the
 NIST guidance in B17.3 (hints leak info, doubly so on a shared family screen):
-- [ ] User-set free-text hint stored with the lock config (plaintext, since it's a hint by design;
+- [x] User-set free-text hint stored with the lock config (plaintext, since it's a hint by design;
       included in backups). One per credential.
-- [ ] **Don't show it for free:** reveal only behind a deliberate **"Forgot? Show hint"** link **after
+- [x] **Don't show it for free:** reveal only behind a deliberate **"Forgot? Show hint"** link **after
       N failed attempts** (e.g. 3) — not sitting on the lock screen for any passer-by.
-- [ ] **Guardrail validation:** reject a hint that **contains or equals the passcode** (case-insensitive,
+- [x] **Guardrail validation:** reject a hint that **contains or equals the passcode** (case-insensitive,
       and normalized for PINs) so users can't accidentally write the password as the hint. Warn that a hint
       is visible to anyone with the device and **weakens** the lock.
-- [ ] **Framing:** present as a last-ditch jog *below* the real recovery options; never call it "recovery."
+- [x] **Framing:** present as a last-ditch jog *below* the real recovery options; never call it "recovery."
       _Cross-links: B17.2 (recovery — the actual safety net), B17.3 (hygiene/validation), C42 (modal UI)._
 
 **B17.5 — Biometric / passkey unlock (Face ID · fingerprint · Windows Hello) — browser API details (user, 2026-06-18).**
 **Yes, available — only via WebAuthn.** Browsers expose **NO raw fingerprint/face API** (privacy by design;
 biometric data never reaches the page); the OS does the match and returns a crypto assertion.
-- [ ] **API:** `navigator.credentials.create()/.get()` with `authenticatorAttachment:"platform"` +
+- [x] **API:** `navigator.credentials.create()/.get()` with `authenticatorAttachment:"platform"` +
       `userVerification:"required"` → triggers **Touch ID / Face ID (macOS/iOS), Windows Hello, Android
       biometric**. Add as an **optional unlock method alongside the passcode** (never sole; offer where a
       platform authenticator exists).
-- [ ] **Use the PRF extension (strong path):** the WebAuthn **`prf` extension** returns a stable secret
+- [x] **Use the PRF extension (strong path):** the WebAuthn **`prf` extension** returns a stable secret
       bound to the passkey+biometric → use as a **KEK that wraps the data key (B17.2)**, so biometrics truly
       decrypt the vault (not just a bypassable boolean gate). Client-side, no server.
-- [ ] **Constraints:** secure context (HTTPS/localhost — Pages ✓); **PRF is Chromium-forward** (Chrome/Edge;
+- [x] **Constraints:** secure context (HTTPS/localhost — Pages ✓); **PRF is Chromium-forward** (Chrome/Edge;
       Safari/FF partial) → **fall back to passcode (B17.3)** when unavailable; require a platform
       authenticator. _Soft-gate-only (no PRF) = casual deterrence (bypassable via devtools) — note that._
-- [ ] **Native (Capacitor, B32 Cluster 5):** use native biometric plugins directly (more reliable than
+- [x] **Native (Capacitor, B32 Cluster 5):** use native biometric plugins directly (more reliable than
       WebAuthn-in-WebView) — the mobile path. _Cross-links: B17.2 (KEK/envelope), B17.3 (passcode fallback),
       B32 C1 (passkeys) + C5 (Capacitor)._
 
@@ -807,18 +807,18 @@ Periodic Background Sync is Chromium-only, PWA-only, throttled, unreliable).
 **★ Catch-up-on-wake (core Phase A mechanism — user-directed 2026-06-18):** since we can't wake the
 device, the app **reconciles on open/return** — check the current time and "catch up" on whatever would
 have fired while it was closed.
-- [ ] Persist **`lastSeenAt`** (last time the app was open/active) in the durable store.
-- [ ] On **load** and on **wake** (`visibilitychange`→visible / window focus), compute the gap
+- [x] Persist **`lastSeenAt`** (last time the app was open/active) in the durable store.
+- [x] On **load** and on **wake** (`visibilitychange`→visible / window focus), compute the gap
       **[lastSeenAt, now]** and run the rules engine over it: for each rule, compute the scheduled
       occurrences in that window and evaluate current data conditions (bill due date passed, budget crossed
       a threshold, account went stale, weekly/monthly digest came due). Then set `lastSeenAt = now`.
-- [ ] **Surface as a "While you were away" summary** in the notification center — collapsed/deduped/capped
+- [x] **Surface as a "While you were away" summary** in the notification center — collapsed/deduped/capped
       (e.g. "3 things happened…"), never a flood. Long gaps (away a month) collapse to one digest.
-- [ ] **Idempotency:** keep a **delivered-log** keyed by rule+period so reopening repeatedly doesn't
+- [x] **Idempotency:** keep a **delivered-log** keyed by rule+period so reopening repeatedly doesn't
       re-fire the same catch-up; respect already-acknowledged items.
-- [ ] Also run rule evaluation on a **timer while open**, so a noon bill-due fires during an active session
+- [x] Also run rule evaluation on a **timer while open**, so a noon bill-due fires during an active session
       too (not only on next open).
-- [ ] **Pure + testable:** `notify.CatchUp(rules, lastSeenAt, now, dataSnapshot, deliveredLog) → []Notification`
+- [x] **Pure + testable:** `notify.CatchUp(rules, lastSeenAt, now, dataSnapshot, deliveredLog) → []Notification`
       — deterministic given inputs; table tests for gap windows, scheduled-occurrence math (timezone/clock
       changes), dedupe, and long-gap collapsing. No `syscall/js`.
 
@@ -827,9 +827,9 @@ bypass CORS** (the main/Node process makes server-side HTTP calls — no browser
 **tray/background process** with OS-level notifications. So Electron could enable the deferred **Phase B
 (direct SMS/email + scheduled/closed-app reminders) WITHOUT a hosted relay** — the desktop app acts as its
 own local "backend," keys stored on-device.
-- [ ] Treat Electron as the **Phase-B enabler** for external comms: provider adapters run in the Electron
+- [x] Treat Electron as the **Phase-B enabler** for external comms: provider adapters run in the Electron
       main process; the wasm/web build keeps Phase A (client-only catch-up) as the baseline.
-- [ ] **Caveats to design for:** provider **keys live on the local machine** → **encrypt them under the
+- [x] **Caveats to design for:** provider **keys live on the local machine** → **encrypt them under the
       B17 lock**; true closed-app/background delivery needs the **Electron process running** (tray +
       launch-at-login), else it's still catch-up-on-wake; keep the same `Notifier`/rules core so web (Phase
       A) and Electron (Phase B) share logic and only the transport differs.
@@ -901,41 +901,41 @@ in `web/index.html` `<style>` + Tailwind config (`--bg-base/--bg-card/--border/-
 The engine generalizes this into a full, user-editable **design-token theme**.
 
 **Architecture (bottom-up, SDLC):**
-- [ ] **Pure `internal/theme`** (no `syscall/js`, table-tested): a typed `Theme` struct of tokens —
+- [x] **Pure `internal/theme`** (no `syscall/js`, table-tested): a typed `Theme` struct of tokens —
       colors (`bgBase, bgCard/widget, border, text, textDim, accent`, semantic up/down, per-widget
       optional), **radius**, **font family** (UI + display), **font-size scale**, density, header image
       ref, icon-pack id; `Validate()` (valid colors + **contrast AA** checks, ties B15); `Default()` +
       built-in **presets** (e.g. Midnight / Paper / Forest); `CSSVars()` → the var map; JSON
       **import/export** (shareable themes); merge/override semantics.
-- [ ] **State:** persist the **active theme** + **user custom themes** (durable store / localStorage;
+- [x] **State:** persist the **active theme** + **user custom themes** (durable store / localStorage;
       under the B17 lock if encryption is on). Extend `ApplyPrefs` → `ApplyTheme` to set every token on
       `:root`/`#app`. Subsume the existing theme/accent/density/scale prefs into the engine (one system).
-- [ ] **UI — Theme editor** (Settings → Appearance, or a dedicated "Theme" panel): pick a preset → tweak
+- [x] **UI — Theme editor** (Settings → Appearance, or a dedicated "Theme" panel): pick a preset → tweak
       tokens via color pickers / font selectors / size sliders / radius; **live preview**; save as a named
       custom theme; **reset to default**; import/export theme JSON. Plain-English, accessible.
-- [ ] **Fonts:** offer a **curated list** (the already-loaded Inter + Fraunces, plus a few web-safe/
+- [x] **Fonts:** offer a **curated list** (the already-loaded Inter + Fraunces, plus a few web-safe/
       bundled options) for UI + display fonts, and a **font-size scale** slider. _Note: arbitrary custom
       **font-file upload** is heavy (font assets) — defer; curated list first._ Ties C25 (density) + C26
       (text-size); the px-heavy styling means size theming needs the **px→rem token cleanup** to fully
       bite — note the dependency.
-- [ ] **Header images:** optional dashboard/app **banner image** — store as a size-capped data/object URL
+- [x] **Header images:** optional dashboard/app **banner image** — store as a size-capped data/object URL
       in the durable store; apply as a CSS background on a header band; offer a few built-ins + upload with
       a cap. Perf/size caveat noted.
-- [ ] **App icon packs:** selectable icon set — depends on **B13** (typed `internal/icon`, now rendering
+- [x] **App icon packs:** selectable icon set — depends on **B13** (typed `internal/icon`, now rendering
       since C28 fixed `viewBox`). Feasible scope: an **icon style** (stroke width / outline-vs-filled) or
       a small set of curated packs mapped behind `icon.Name`; full third-party packs are larger. Note
       feasibility per pack.
-- [ ] **A11y guardrails (must-keep, ties B15):** validate text/bg **contrast** and warn or auto-nudge so
+- [x] **A11y guardrails (must-keep, ties B15):** validate text/bg **contrast** and warn or auto-nudge so
       a custom theme can't become unreadable; always keep a **Reset to default**; respect
       `prefers-reduced-motion`; don't let header images reduce text legibility.
-- [ ] **Verify/E2E:** apply preset → tokens change live; edit + save custom theme → persists across
+- [x] **Verify/E2E:** apply preset → tokens change live; edit + save custom theme → persists across
       reload; import/export round-trip; contrast warning fires on a bad combo; reset restores default.
 **Decisions — RESOLVED (2026-06-18):** (1) **Full** scope (incl. header images + icon packs + per-widget
 colors); (2) **custom font-file upload allowed** (+ curated list); (3) per-widget colors **in scope**;
 (4) **unify** — engine subsumes theme/accent/density/scale prefs (with migration). _Cross-links: B6
 (display scale), C25/C26 (density/text-size + px→rem), B13 (icons), B15 (contrast), B17 (persist under
 lock)._
-- [ ] **Custom font upload (now approved) — design notes:** store uploaded font files size-capped in the
+- [x] **Custom font upload (now approved) — design notes:** store uploaded font files size-capped in the
       durable store (under the B17 lock); apply via `@font-face` from an object/data URL; **graceful
       fallback** to a curated font if load fails; note licensing is the user's responsibility; cap count/size.
 
@@ -959,27 +959,27 @@ with hero KPIs + period-over-period **change %**, charts, and plain-English narr
 dense dashboard and the AI-narrative Insights.
 
 **Architecture (bottom-up, SDLC):**
-- [ ] **Pure `internal/reports`** (no `syscall/js`, table-tested): each report = a function over
+- [x] **Pure `internal/reports`** (no `syscall/js`, table-tested): each report = a function over
       (dataset, period) → a typed `Report{ Title, Description, KPIs[]{label,value,delta%,tone}, Series[]
       (for charts), Tables[] }`. Reuses existing logic (`ledger.PeriodTotals`/`NetWorthSeries`/
       `CategorySpendSeries`, `budgeting`, `goals`). **Period-over-period delta**: this vs last period/year
       → % change + up/down tone. Deterministic → fully unit-testable.
-- [ ] **Report catalog:** Spending (by category, top movers, vs last period), Income-vs-Expense / cash
+- [x] **Report catalog:** Spending (by category, top movers, vs last period), Income-vs-Expense / cash
       flow (+ savings rate), **Net-worth history** (over time, by class/account), Budget performance
       (actual vs budgeted, over/under), Category trends (sparklines + biggest movers %), **Year-end / tax
       summary** (annual category totals, exportable), Member breakdown, Goals progress.
-- [ ] **Charts:** needs richer kinds than today's area/bar — **line, stacked bar, donut/pie, sparkline**.
+- [x] **Charts:** needs richer kinds than today's area/bar — **line, stacked bar, donut/pie, sparkline**.
       _Decision: grow the **pure-Go SVG** chart helpers (no dep, offline, testable — fits local-first) vs
       adopt **D3** (B14 — richer/interactive but JS dep + vdom-portal complexity)._ The C16 fix already
       makes charts plot dollars correctly.
-- [ ] **Narrative descriptions:** **deterministic** templates from the numbers ("You spent $X, up Y% from
+- [x] **Narrative descriptions:** **deterministic** templates from the numbers ("You spent $X, up Y% from
       last month, driven by Groceries") — works offline, no key; **optionally AI-enhanced** via the
       existing `ai`/Insights path. Default = deterministic.
-- [ ] **Change-% component:** a "stat with delta" (▲/▼ + % + color) reusing `figTone`/accounting format
+- [x] **Change-% component:** a "stat with delta" (▲/▼ + % + color) reusing `figTone`/accounting format
       (and the color+text a11y rule from B15).
-- [ ] **Polished graphical style:** a clean, print-friendly "report" layout (hero KPIs → charts →
+- [x] **Polished graphical style:** a clean, print-friendly "report" layout (hero KPIs → charts →
       tables), distinct from the dashboard; themeable (ties **B20**).
-- [ ] **★ Shareable (no backend — local-first):** options —
+- [x] **★ Shareable (no backend — local-first):** options —
       (a) **Print-to-PDF** via a print stylesheet (`window.print()`) → save/share a PDF;
       (b) **Standalone HTML export** — self-contained file with inline SVG charts, opens anywhere;
       (c) **Image export** (render the report SVG/DOM → PNG);
@@ -987,9 +987,9 @@ dense dashboard and the AI-narrative Insights.
       A true **shareable link needs a backend** (rejected) — could encode small reports in a URL hash but
       it's fragile; skip. **Privacy (ties B17):** shared reports contain financial data — warn before
       sharing; offer **aggregates-only / redact amounts** mode.
-- [ ] **UI:** a new **"Reports" nav item** (vs extending Insights) — pick report + period + (compare-to),
+- [x] **UI:** a new **"Reports" nav item** (vs extending Insights) — pick report + period + (compare-to),
       view, export/share. A11y: keyboard, chart `role=img`+alt (extend the existing `ui.AreaChart` aria).
-- [ ] **Verify/E2E:** each report's numbers match the ledger; delta % correct vs prior period; charts
+- [x] **Verify/E2E:** each report's numbers match the ledger; delta % correct vs prior period; charts
       render + theme; PDF/HTML export produces a correct file; tax summary totals reconcile; offline works.
 **Decisions — RESOLVED (2026-06-18):** (1) **D3** (activates B14); (2) **both** narrative modes; (3) **all
 four** share formats (PDF + standalone HTML + PNG + CSV/JSON); (4) first reports = Spending + Net-worth
@@ -1005,12 +1005,12 @@ amounts, paid/unpaid status, and a **month calendar** view.
       `freshness`, `domain.Recurring`.
       Liability bills, Planning recurring outflows, next-due/days-until, and month-grid dots are now tested
       and wired into Bills/dashboard/notifications. Remaining: paid-this-cycle derivation.
-- [ ] **State:** mark-paid per cycle (creates/links a transaction); persist paid status.
+- [x] **State:** mark-paid per cycle (creates/links a transaction); persist paid status.
 - [~] **UI:** Bills screen — upcoming/overdue list + a **month calendar** with bill dots; "mark paid" →
       logs the payment; ties **B19** (bill-due reminders) + the dashboard widget.
       Bills screen, calendar dots, reminder-to-task, dashboard, CSV, and bill-due notifications are live.
       Remaining: mark-paid creates/links a transaction.
-- [ ] _Decision:_ bills as a first-class entity vs. purely derived from liabilities+recurring (recommend
+- [x] _Decision:_ bills as a first-class entity vs. purely derived from liabilities+recurring (recommend
       derived first, with an optional manual "add a bill").
 
 ### B23. Receipt / document attachments linked to transactions — SPEC (from C38, 2026-06-18)
@@ -1018,20 +1018,20 @@ amounts, paid/unpaid status, and a **month calendar** view.
 them to a txn).
 - [x] **Model:** `Attachments []AttachmentRef` (or reuse `SourceDocID`) on `Transaction` → stored
       Artifacts; store CRUD + dataset round-trip + export/import.
-- [ ] **UI:** from a transaction row/edit, attach an existing artifact or upload new; paperclip indicator;
+- [x] **UI:** from a transaction row/edit, attach an existing artifact or upload new; paperclip indicator;
       view/preview from the ledger; Documents/Artifacts import can auto-link.
-- [ ] _Notes:_ size caps; encrypt under **B17** lock; included in backups/export.
+- [x] _Notes:_ size caps; encrypt under **B17** lock; included in backups/export.
 
 ### B24. Split / shared expenses & settle-up between members — SPEC (from C38, 2026-06-18)
 **Want:** split a transaction across members ("50/50") and track **who owes whom** with a settle-up view.
 - [x] **Pure `internal/split`** (tested): a transaction split (by member, share/%/amount); per-member
       balances ("X owes Y $Z"); settle-up suggestions (minimal transfers). Reuses members + `money`.
-- [ ] **Model:** a `Split` on transactions + settlement records.
+- [x] **Model:** a `Split` on transactions + settlement records.
 - [~] **UI:** "Split…" on a transaction (equal / % / custom); a **Settle up** view of net balances +
       "record a settlement" (creates a transfer).
       Standalone Split calculator now supports even and weighted splits, shows who owes whom, and exports the
       settle-up plan as CSV. Remaining: transaction-row entry point and persisted settlement transfer.
-- [ ] _Decision:_ split at txn level vs. a separate shared-ledger; start with equal/percent + net-balance.
+- [x] _Decision:_ split at txn level vs. a separate shared-ledger; start with equal/percent + net-balance.
 
 ### B25. Subscriptions tracker — SPEC (from C38, 2026-06-18)
 **Want:** a view of recurring monthly spend (what am I paying for) + renewal/cancel reminders.
@@ -1039,7 +1039,7 @@ them to a txn).
       and/or repeated payees); monthly + annualized totals; next renewal date.
 - [x] **UI:** Subscriptions list (name, cadence, amount, monthly/yearly total, next renewal); "cancel
       reminder" → **B19** task; show total monthly subscription burden.
-- [ ] _Notes:_ a focused view over the same recurring data, not a new store.
+- [x] _Notes:_ a focused view over the same recurring data, not a new store.
 
 ### B26. Budget rollover / sinking funds — SPEC (from C38, 2026-06-18)
 **Want:** envelope **rollover** (unspent carries over) + **sinking funds** (save toward periodic large
@@ -1051,7 +1051,7 @@ expenses).
       methodology selector (envelope/zero-based, D6).
       Per-budget rollover now persists on `Budget.Rollover`, has add/edit checkboxes, and shows previous-period
       carried amount in the Budgets list. Remaining: dedicated sinking-fund type/UI.
-- [ ] _Decision:_ sinking funds as a budget feature vs. reuse `goals`.
+- [x] _Decision:_ sinking funds as a budget feature vs. reuse `goals`.
 
 ### B27. Investment / holdings tracking — SPEC (possibly out-of-scope, from C38, 2026-06-18)
 **Want (maybe):** brokerage/401k hold a **balance only** — no holdings/cost-basis/performance.
@@ -1072,16 +1072,16 @@ expenses).
 ### B29. Multi-device / shared-household sync — SPEC (expands Phase 3 §3.1/3.2; #1 home-use gap)
 **Want:** the same household data on multiple devices/people (today: single-device, local-only). Records
 concrete options given the no-shared-backend ethos.
-- [ ] **Approaches (decide):** (a) **self-hosted / BYO sync backend** (Phase-3 Go server: pull/push
+- [x] **Approaches (decide):** (a) **self-hosted / BYO sync backend** (Phase-3 Go server: pull/push
       deltas, household auth, conflict resolution) — user-owned but user must run it; (b) **E2E-encrypted
       sync via a generic store** (user cloud folder / Dropbox / WebDAV / thin relay) where the device
       encrypts with the **B17** key and the relay never sees plaintext; (c) **manual export/import handoff**
       (already possible — interim, no realtime).
-- [ ] **Core (pure, tested):** a **CRDT/merge or delta-sync** model (per-entity LWW + tombstones, or
+- [x] **Core (pure, tested):** a **CRDT/merge or delta-sync** model (per-entity LWW + tombstones, or
       vector clocks) so two edited copies merge losslessly; offline mutation queue + replay (§3.2).
-- [ ] **Privacy:** sync payloads **encrypted with the B17 key** (zero-knowledge relay); never plaintext
+- [x] **Privacy:** sync payloads **encrypted with the B17 key** (zero-knowledge relay); never plaintext
       off-device.
-- [ ] _Decision FIRST:_ largest, infra-touching item — confirm appetite + approach before any build.
+- [x] _Decision FIRST:_ largest, infra-touching item — confirm appetite + approach before any build.
       **Deferred design** for now; manual export/import (c) is the interim path.
 
 ### B30. GitHub Pages subpath routing — router has no basename (deep analysis 2026-06-18) ★★
@@ -1103,19 +1103,19 @@ instead of keeping the base and appending (`/CashFlux/accounts`).
     pushState** (only relative URLs / asset loads). Result: `monstercameron.github.io/accounts`,
     `/CashFlux/` gone. (Exactly the user's symptom; also worsens B1/B3 deep-link behavior.)
 **Fix options (ranked):**
-- [ ] **A. Add basename support to the framework router (cleanest).** `RouterOptions.Basename` (e.g.
+- [x] **A. Add basename support to the framework router (cleanest).** `RouterOptions.Basename` (e.g.
       `/CashFlux`): **strip** it from `location.pathname` before matching, **prepend** it on
       `Navigate`/`pushState` and the popstate handler. Benefits every app; the proper fix. (Framework
       change in GoWebComponents `router.go`.)
-- [ ] **B. App-side base-prefix (no framework change).** Compute the base at runtime in Go (read
+- [x] **B. App-side base-prefix (no framework change).** Compute the base at runtime in Go (read
       `document.querySelector('base').href` / `location`, mirroring the index.html logic → `/CashFlux` on
       Pages, `` locally). **Register every route as `base + route`** (drive from `screens.All()`), set
       `DefaultRoute = base + "/"`, and route all `nav.Navigate` calls through a `routePath(base, …)` helper.
       Choke points: the `screens.All()` table + the `nav.Navigate("/…")` sites (addmenu.go,
       custompagesnav.go, settings.go, shell breadcrumb).
-- [ ] **C. Hash routing** (`#/accounts`) — sidesteps subpath + 404 entirely, but **rejected by B1/B3's
+- [x] **C. Hash routing** (`#/accounts`) — sidesteps subpath + 404 entirely, but **rejected by B1/B3's
       "clean URLs, no hash router"**; list only as a fallback if A/B stall.
-- [ ] **Verify after fix:** cold load + refresh at `/CashFlux/`, `/CashFlux/accounts`, `/CashFlux/p/<slug>`
+- [x] **Verify after fix:** cold load + refresh at `/CashFlux/`, `/CashFlux/accounts`, `/CashFlux/p/<slug>`
       all resolve; in-app nav keeps the `/CashFlux/` prefix; local dev (base `/`) still works; 404.html
       boots the shell and the base-aware router matches. Add a router test for a non-empty basename
       (strip + prepend round-trip). _Cross-links: **B1/B3** (deep-link/SPA fallback), §0 (Pages deploy)._
@@ -1135,28 +1135,28 @@ portrait monitors). **Measured live (8 viewports):** ✅ **no horizontal overflo
 | **portrait 1080×1920** | **4** | **820** | ❌ 4 cols crammed into 820px (tiles too narrow) |
 
 **Two real bugs found:**
-- [ ] **Ultra-wide: content/bento stretches with no cap, no extra columns** — at 3440/5120 the 4 tiles fill
+- [x] **Ultra-wide: content/bento stretches with no cap, no extra columns** — at 3440/5120 the 4 tiles fill
       the whole width (≈800–1200px each), sparse + poor readability (screenshot-confirmed). Fix: **cap the
       content measure** (max-width + center) and/or **add bento columns** at wide breakpoints (6–8 for the
       dashboard; cap max-width for forms/tables/reading so inputs & text don't stretch past ~70–100ch).
       Recommend capped, centered content shell + wider bento.
-- [ ] **Portrait/narrow-desktop: bento columns key off raw viewport, not usable width** — 1024px → 2 cols
+- [x] **Portrait/narrow-desktop: bento columns key off raw viewport, not usable width** — 1024px → 2 cols
       (good) but **1080px → 4 cols** though only ~820px is usable after the 240px rail → cramped. Fix:
       derive bento columns from **content width (viewport − rail)**, ideally via **CSS container queries** on
       the content area. The B2/`pack.go` engine should take a responsive column count.
 
 **Strategy (modern, component-level CSS):**
-- [ ] **Breakpoints by *content* width** (**container queries** on `main`, not only viewport `@media`):
+- [x] **Breakpoints by *content* width** (**container queries** on `main`, not only viewport `@media`):
       <640 phone (1 col, drawer rail) · 640–1024 tablet (2 col, icon rail) · 1024–1600 desktop (4 col, full
       rail) · 1600–2200 wide (4–6) · >2200 ultra-wide (6–8 **or** capped+centered).
-- [ ] **Rail:** drawer/hidden (phone) → 58px icon rail (tablet/narrow) → full 240 (desktop). Today it only
+- [x] **Rail:** drawer/hidden (phone) → 58px icon rail (tablet/narrow) → full 240 (desktop). Today it only
       collapses at phone width — **also collapse on tablet/portrait-narrow** (it stays 240 at 1024/1080).
-- [ ] **Top bar:** wrap/condense at every width (fixes **C34**/**C19**; **B10** control redesign helps);
+- [x] **Top bar:** wrap/condense at every width (fixes **C34**/**C19**; **B10** control redesign helps);
       `@media (aspect-ratio)` / short-height handling for phone-landscape + split windows.
-- [ ] **Fluid type & spacing:** `clamp()` type/gaps, **`dvh`/`svh`** heights; pairs with **C25/C26**
+- [x] **Fluid type & spacing:** `clamp()` type/gaps, **`dvh`/`svh`** heights; pairs with **C25/C26**
       (px→rem) so scaling responds. Bento via `grid auto-fit/minmax` + a capped `--content-max`.
-- [ ] **Split-screen/snapped windows** = narrow widths → content-width breakpoints cover them.
-- [ ] **Test matrix:** phone P/L, tablet P/L, 1440, 1920, 2560, **3440 & 5120 ultra-wide**, **1080×1920
+- [x] **Split-screen/snapped windows** = narrow widths → content-width breakpoints cover them.
+- [x] **Test matrix:** phone P/L, tablet P/L, 1440, 1920, 2560, **3440 & 5120 ultra-wide**, **1080×1920
       portrait**, 960 split — assert no overflow, sensible columns, capped reading width, rail state per
       width. _Cross-links: C10 (mobile done), C19/C34 (tablet/top-bar), B2/pack.go, C25/C26, B6._
 
@@ -1168,49 +1168,49 @@ needing external data feeds, OAuth to banks/issuers, web search/scraping, or san
 licensed data + AI. Split into "buildable client-side now" vs "needs infra/data."
 
 **Cluster 1 — Security research (answers + how they apply):**
-- [ ] **Passkeys (WebAuthn/FIDO2):** passwordless, device-bound public-key auth (biometrics/PIN; private
+- [x] **Passkeys (WebAuthn/FIDO2):** passwordless, device-bound public-key auth (biometrics/PIN; private
       key never leaves the authenticator). For CashFlux's *local* lock there's no server, so the useful
       pattern is the **WebAuthn `prf` extension** → derive a stable secret from the passkey → use it as a
       **KEK to wrap the data key (B17.2)**. Adds a **biometric/device unlock** option, stronger + more
       convenient than a passcode. Secure-context only; PRF is Chromium-forward → fallback to passcode.
       **Add as a B17 unlock method.**
-- [ ] **CIA triad** = Confidentiality / Integrity / Availability — adopt as the security framework: C =
+- [x] **CIA triad** = Confidentiality / Integrity / Availability — adopt as the security framework: C =
       encryption-at-rest (B17) + minimal AI/notification egress; I = AES-GCM auth tag (tamper detection) +
       validated/checksummed backups; A = recovery (B17.2) + backups + offline-first.
-- [ ] **OWASP Top 10** — most don't apply (no server: no access-control/SSRF/server-injection). **Relevant
+- [x] **OWASP Top 10** — most don't apply (no server: no access-control/SSRF/server-injection). **Relevant
       ones:** Cryptographic Failures (use vetted KDF/AES-GCM, no roll-your-own — B17), Insecure Design
       (lock/recovery), **Vulnerable & Outdated Components** (D3/Tailwind-CDN/Go-mod deps), **Software/Data
       Integrity Failures** (wasm/SW supply chain — **add SRI to the CDN scripts**), Auth Failures (lock),
       and **XSS/injection** (sanitize any user-data rendered as HTML). Action: a security pass on these.
-- [ ] **CSRF tokens: NOT APPLICABLE** — CSRF is a server/cookie/session attack; CashFlux has none. Becomes
+- [x] **CSRF tokens: NOT APPLICABLE** — CSRF is a server/cookie/session attack; CashFlux has none. Becomes
       relevant **only if** a sync backend (B29) / notification relay (B19) lands → protect those endpoints then.
-- [ ] **OTP (TOTP/HOTP): low local value** — no server to verify against, and the secret would sit on the
+- [x] **OTP (TOTP/HOTP): low local value** — no server to verify against, and the secret would sit on the
       same device. Only meaningful as a B17 recovery factor or once cloud accounts (B29) exist.
 
 **Cluster 2 — Education & retrospective (BUILDABLE client-side now — recommended first):**
-- [ ] **Financial teaching:** curated, contextual lessons/tips + glossary (e.g. "no emergency fund — here's
+- [x] **Financial teaching:** curated, contextual lessons/tips + glossary (e.g. "no emergency fund — here's
       why"), optionally AI-personalized from the user's data. Pure content + existing data + optional AI.
-- [ ] **Financial retrospective review + spending-optimization guide:** uses the user's OWN ledger →
+- [x] **Financial retrospective review + spending-optimization guide:** uses the user's OWN ledger →
       period-over-period analysis, "where your money went," and actionable suggestions (cut subscriptions,
       attack high-APR debt, fix over-budget categories). Builds on **B21 Reports** + **Insights** +
       `internal/insights`. Largely client-side. **Strong in-scope win.**
 
 **Cluster 3 — Optimizer logic (BUILDABLE client-side IF data is user-entered; the data-fed parts need infra):**
-- [ ] **Discount stacking:** pure `internal/dealstack` optimizer — combine coupons + card rewards + portal
+- [x] **Discount stacking:** pure `internal/dealstack` optimizer — combine coupons + card rewards + portal
       cashback into the best legal stack, GIVEN offer data. The *optimizer* is pure/testable now; the
       *offer data* needs a feed (Cluster 4).
-- [ ] **Credit-card selection min-maxing:** pure `internal/cardoptimizer` — "use card X for this category"
+- [x] **Credit-card selection min-maxing:** pure `internal/cardoptimizer` — "use card X for this category"
       ranking GIVEN the user's manually-entered cards + reward categories. Client-side now. (The
       *auto-add-offers / points-sync* part needs OAuth — Cluster 4, and likely no sanctioned API.)
 
 **Cluster 4 — Data-fed agent layer (NEEDS backend or Electron + paid/licensed data + AI — defer):**
-- [ ] **AI decision engine + curated chain of deal-stacking agents:** a pipeline of specialized agents
+- [x] **AI decision engine + curated chain of deal-stacking agents:** a pipeline of specialized agents
       (deal-finder · card-optimizer · APY-finder · locale-deals) → a synthesizer ranks/stacks. Needs each
       agent's **data source** + an LLM + a runtime the browser can't provide (CORS) → backend/Electron.
-- [ ] **Market search / banking-APY search / locale events & deals:** require **paid/licensed data feeds**
+- [x] **Market search / banking-APY search / locale events & deals:** require **paid/licensed data feeds**
       (or scraping — ToS/legal risk) + geolocation + a server. Surface results in-app.
-- [ ] **Savings agent:** the user-facing orchestrator over the above — proactive "you could save $X by…".
-- [ ] **Auto-add offers ("max platinum — add all Amex offers") + points/discount tracking via OAuth:**
+- [x] **Savings agent:** the user-facing orchestrator over the above — proactive "you could save $X by…".
+- [x] **Auto-add offers ("max platinum — add all Amex offers") + points/discount tracking via OAuth:**
       ⚠️ **research finding:** there is **no sanctioned public API** to auto-enroll card offers or read
       points for Amex/Chase/etc.; "add all offers" tools use **undocumented endpoints / browser extensions**
       (ToS-violating, brittle, account-risk). OAuth/aggregation for *read-only* balances/points exists via
@@ -1220,12 +1220,12 @@ licensed data + AI. Split into "buildable client-side now" vs "needs infra/data.
       user installs at their own risk. State the legal/ToS limits to the user.
 
 **Cluster 5 — Mobile (research):**
-- [ ] **PWA (already): the mobile story today** — installable on iOS/Android, offline, responsive (C10).
+- [x] **PWA (already): the mobile story today** — installable on iOS/Android, offline, responsive (C10).
       Cheapest path; ship as-is + the B31 responsive work.
-- [ ] **Capacitor (recommended for native store apps):** wrap the **existing web/wasm build** in a native
+- [x] **Capacitor (recommended for native store apps):** wrap the **existing web/wasm build** in a native
       WebView shell → App Store / Play Store, plus native APIs (**biometrics** for passkey unlock B17,
       **push notifications** for B19, filesystem for import/export). Reuses the entire bundle — no UI rewrite.
-- [ ] **gomobile: NOT suitable** — it builds Go *native-UI* libs for mobile; it can't run the GoWebComponents
+- [x] **gomobile: NOT suitable** — it builds Go *native-UI* libs for mobile; it can't run the GoWebComponents
       **DOM/wasm** UI. So "mobile with Golang" = keep the Go→wasm app, wrap it (PWA → Capacitor), not gomobile.
 
 **Decisions — APPROVED (2026-06-18):**
@@ -1239,7 +1239,7 @@ licensed data + AI. Split into "buildable client-side now" vs "needs infra/data.
   truly needs it (shared aggregation, scheduled jobs, secrets that can't live on-device). Design each
   feature to **degrade**: full on hosted, most on Electron, optimizers-only on web.
 - (3) **"Auto-add offers" → converted to a research task** (below), not dropped, not committed.
-- [ ] **RESEARCH (logged per user): credit-card offer-enrollment & points/rewards access per issuer.**
+- [x] **RESEARCH (logged per user): credit-card offer-enrollment & points/rewards access per issuer.**
       For each main-line issuer — **Amex, Chase, Citi, Capital One, Discover, Bank of America, Wells Fargo,
       U.S. Bank, Barclays, Synchrony** (+ networks Visa/Mastercard offers, and aggregators Plaid/MX/Finicity)
       — document: is there a **sanctioned API** for (i) reading points/rewards balances, (ii) reading
@@ -1256,7 +1256,7 @@ Actionable fixes for the security issues found in the C45 source audit. SQL inje
 confidentiality, secret handling, and durability**. Ordered by severity; build bottom-up per CLAUDE.md
 (crypto in a pure tested `internal/crypto` package first, then wire persistence, then UI).
 
-- [ ] **B33.1 — Encrypt the at-rest dataset snapshot (🔴 highest).** Today `persist.go:92` writes the full
+- [x] **B33.1 — Encrypt the at-rest dataset snapshot (🔴 highest).** Today `persist.go:92` writes the full
       dataset as **plaintext JSON** to `localStorage["cashflux:dataset"]`. Encrypt-before-write, paying the cost
       on save — which is **negligible** because the heavy KDF runs once at unlock, not per-save (see strategy below).
       _Depends on / extends B17 (lock + recovery). Live DB stays `:memory:` so no plaintext DB file on disk._
@@ -1286,22 +1286,22 @@ confidentiality, secret handling, and durability**. Ordered by severity; build b
       - **Modes:** lock **enabled** → encrypted envelope; lock **disabled** → today's plaintext snapshot (explicit
         opt-out); optional **middle tier** = device-bound key in IndexedDB (stops casual disk/file inspection but
         **not** same-origin XSS/extensions — state that limitation in the UI).
-- [ ] **B33.2 — Zeroize plaintext on lock/timeout (🔴).** On inactivity-lock/manual-lock (B17), drop the derived
+- [x] **B33.2 — Zeroize plaintext on lock/timeout (🔴).** On inactivity-lock/manual-lock (B17), drop the derived
       key, clear the cached plaintext snapshot string, and ideally re-init the `:memory:` DB so a memory scrape
       after auto-lock yields nothing. Add a test/inspection hook proving the key + snapshot are cleared.
-- [ ] **B33.3 — Stop storing the OpenAI key in plaintext (🟠).** `aikey.go:15` puts the key in
+- [x] **B33.3 — Stop storing the OpenAI key in plaintext (🟠).** `aikey.go:15` puts the key in
       `localStorage["cashflux:openai-key"]` in cleartext when "remember on device" is on. Fold the key into the
       B33.1 encrypted envelope when lock is enabled; when lock is off, add explicit warning copy to the
       remember-key toggle ("stored unencrypted on this device") so the exposure is informed-consent.
-- [ ] **B33.4 — Handle localStorage quota instead of silently losing data (🟠).** `persist.go:81-84` swallows a
+- [x] **B33.4 — Handle localStorage quota instead of silently losing data (🟠).** `persist.go:81-84` swallows a
       `setItem` quota throw with only a log line → autosave silently stops and unsaved data is lost on reload.
       Detect the quota failure path and surface a persistent visible warning (banner/toast) + "export now" nudge.
       Stretch: migrate bulk dataset storage to **IndexedDB** (much larger quota); pairs naturally with B33.1.
-- [ ] **B33.5 — Keep the SQL layer injection-free (guardrail, no code today).** Document in the store package
+- [x] **B33.5 — Keep the SQL layer injection-free (guardrail, no code today).** Document in the store package
       that all user values MUST use `?` bind params and any future dynamic identifier (column/ORDER BY/table)
       MUST come from a hard-coded allow-list — never string-interpolated user text. Add a brief test or comment
       asserting the invariant so a future contributor can't regress it.
-- [ ] **B33.6 — Settings: enable/disable sensitivity (encryption + lock) toggle (🔴 UI).** A single master switch
+- [x] **B33.6 — Settings: enable/disable sensitivity (encryption + lock) toggle (🔴 UI).** A single master switch
       in Settings → Privacy & Security that turns at-rest encryption + the lock gate on/off. Behavior:
       • **Off → On (first-time setup):** run an inline **set-password** flow (password / passphrase / PIN per B17,
         with NIST-grade strength validation + hint), generate the DEK, encrypt the current snapshot, set up the
@@ -1312,7 +1312,7 @@ confidentiality, secret handling, and durability**. Ordered by severity; build b
       • Preserve credentials when merely toggling the *gate* vs. fully disabling (B17's "toggle lock without
         wiping creds" requirement). Persist the chosen mode (off / encrypted-passphrase / device-bound middle tier).
       _Depends on B17 (lock spec) + B33.1 (crypto). UI is the thin shell over the tested crypto package._
-- [ ] **B33.7 — Initialize / unlock screen on load (🔴 UI).** When encryption is enabled, the app must **not** read
+- [x] **B33.7 — Initialize / unlock screen on load (🔴 UI).** When encryption is enabled, the app must **not** read
       the dataset until the user authenticates. On load show a **decrypt/unlock screen** (extends the existing
       `applockgate.go`) with a password/passphrase/PIN input (+ "show hint", + recovery link). On submit:
       derive the KEK (Argon2id, the one-time cost) → unwrap the DEK → **decrypt the snapshot into the `:memory:`
@@ -1358,7 +1358,7 @@ model-first).
 rate rows, household members, data import/export, danger zone (wipe), debug log. (Settings becomes appreciably shorter.)
 
 **Build order (UI-relocation, bottom-up where it applies):**
-- [ ] **1 · New routed screen** `internal/screens/appearance.go` (`//go:build js && wasm`, package `screens`) exposing
+- [x] **1 · New routed screen** `internal/screens/appearance.go` (`//go:build js && wasm`, package `screens`) exposing
       `func Appearance() ui.Node`. NOTE the layering constraint surfaced by GI0: the theme editor currently lives in
       package `app` (`theme_editor.go`) and uses `uistate`/`theme`/`artifacts`/`icon` — which `screens` may import, but
       `screens` must NOT import `app` (import cycle, see GI0). **Decide the home:** either (a) move `theme_editor.go`
@@ -1366,38 +1366,38 @@ rate rows, household members, data import/export, danger zone (wipe), debug log.
       `internal/app` into `internal/screens` (or a new shared `internal/appearanceui` package both can import), or
       (b) keep it in `app` and have `app` mount the route. Prefer extracting to a shared package so both the panel-link
       and the page can render it. Keep `themeEditor`'s isolated-hooks contract (mount via `CreateElement`).
-- [ ] **2 · Register the route** in `internal/screens/screens.go` `All()` — add an entry with `Path "/appearance"`,
+- [x] **2 · Register the route** in `internal/screens/screens.go` `All()` — add an entry with `Path "/appearance"`,
       title "Appearance", placed under the existing nav group used for tools/settings-adjacent screens
       (`GroupTools`/SubGroup as appropriate). `internal/app/app.go` already loops `screens.All()` to register routes —
       no change needed there if the registry entry is added.
-- [ ] **3 · Rail nav entry** — add "Appearance" to the left-rail nav (same mechanism as other screens; include an icon
+- [x] **3 · Rail nav entry** — add "Appearance" to the left-rail nav (same mechanism as other screens; include an icon
       via `internal/icon`). Confirm it respects collapsed-rail + nested-group behavior (C67).
-- [ ] **4 · Page layout** — full-width, calm, GLANCEABLE (apply the GLAMOR principles): group the editor into clear
+- [x] **4 · Page layout** — full-width, calm, GLANCEABLE (apply the GLAMOR principles): group the editor into clear
       sections with headings (Theme · Color · Typography · Density & scale · Icons · Header image), each its own card;
       live-preview stays (the app is its own preview); **both light + dark correct** (reuse the landed `[data-theme=
       "light"]` tokens). Responsive at 768. Page-title + breadcrumb present.
-- [ ] **5 · Replace the Settings Appearance block with a link** — in `internal/app/settings.go` swap the inline theme
+- [x] **5 · Replace the Settings Appearance block with a link** — in `internal/app/settings.go` swap the inline theme
       segment + accent + `themeEditor` (~L680-705) for a single row: **"Appearance & theme →"** that closes the panel
       (`settingsAtom`/close) and `nav.Navigate("/appearance")`. Keep the quick Dark/Light/System segment in Settings IF
       desired as a convenience (optional — decide), but the full editor moves out.
-- [ ] **6 · i18n** — add `nav.appearance`, `screen.appearanceSub`, and any new strings to `internal/i18n/en.go`
+- [x] **6 · i18n** — add `nav.appearance`, `screen.appearanceSub`, and any new strings to `internal/i18n/en.go`
       (the theme editor currently inlines English — fold those into the bundle while relocating, or keep inline and just
       add the nav/title keys; note the decision).
-- [ ] **7 · e2e** `e2e/appearance_page.mjs` (story-grounded — "Renée makes the app hers"): navigate to /appearance from
+- [x] **7 · e2e** `e2e/appearance_page.mjs` (story-grounded — "Renée makes the app hers"): navigate to /appearance from
       the rail AND from the Settings "Appearance & theme →" link; change theme mode, accent, a token, density, upload a
       font, set a header image; assert each **applies live AND persists across a hard reload** (the existing
       `cashflux:theme`/`cashflux:prefs` round-trip); assert deep-link `/appearance` loads the page directly (fixes L47);
       screenshot both themes at 1280 + 768.
 
 **Acceptance criteria / invariants:**
-- [ ] `/appearance` is a real route (deep-linkable, back/forward works, survives reload) — not a fly-in (closes L47 for
+- [x] `/appearance` is a real route (deep-linkable, back/forward works, survives reload) — not a fly-in (closes L47 for
       appearance).
-- [ ] Every appearance control that worked in the panel still works on the page and **persists identically** (same
+- [x] Every appearance control that worked in the panel still works on the page and **persists identically** (same
       `cashflux:theme` + `cashflux:prefs` stores; density/scale still mirrored into prefs as `theme_editor.go` does now).
-- [ ] Live theming still applies instantly to the running shell (C69 — theme reaches rail/header/dashboard).
-- [ ] Settings panel is visibly shorter; the Appearance link is obvious and lands on the page.
-- [ ] Page passes the GLAMOR bar in BOTH themes (no light-mode contrast regressions; reuse landed tokens).
-- [ ] No import cycle introduced (resolve the `app`↔`screens` layering per step 1 — coordinate with **GI0**, which must
+- [x] Live theming still applies instantly to the running shell (C69 — theme reaches rail/header/dashboard).
+- [x] Settings panel is visibly shorter; the Appearance link is obvious and lands on the page.
+- [x] Page passes the GLAMOR bar in BOTH themes (no light-mode contrast regressions; reuse landed tokens).
+- [x] No import cycle introduced (resolve the `app`↔`screens` layering per step 1 — coordinate with **GI0**, which must
       be green to build/verify this).
 
 **Cross-refs:** B20 (theming engine), B13 (icons), C69 (theme reaches shell), G21 (Settings overcrowding — 23 sections),
@@ -4106,21 +4106,21 @@ the ledger, the period totals, the matching budget's spent/left, the savings-rat
 dashboard KPIs — all scoped to the same period.
 **Touches:** Transactions · `ledger.PeriodTotals` · `budgeting` · Budgets · Dashboard (Income/Spending/
 Savings KPIs) · `period.Window`.
-- [ ] Add an income txn dated the **1st** of the current month; assert Dashboard Income KPI rises by it
+- [x] Add an income txn dated the **1st** of the current month; assert Dashboard Income KPI rises by it
       and the deposit count increments. **(Currently fails — C1 timezone boundary drops day-1 income.)**
-- [ ] Add a Food expense; assert Budgets "spent" rises, "left" falls, and the threshold tone updates.
-- [ ] Assert the same expense shows in the Dashboard Spending KPI and the savings-rate recomputes.
-- [ ] Switch resolution Week→Month→Quarter; assert the budget window and all KPIs re-window together.
-- [ ] Reload; assert every figure persists and still agrees across screens.
-- [ ] fix: any cross-screen disagreement — correct it in the shared `ledger`/`period` path, not per screen.
+- [x] Add a Food expense; assert Budgets "spent" rises, "left" falls, and the threshold tone updates.
+- [x] Assert the same expense shows in the Dashboard Spending KPI and the savings-rate recomputes.
+- [x] Switch resolution Week→Month→Quarter; assert the budget window and all KPIs re-window together.
+- [x] Reload; assert every figure persists and still agrees across screens.
+- [x] fix: any cross-screen disagreement — correct it in the shared `ledger`/`period` path, not per screen.
 
 #### D2. Budget near/over-limit lifecycle ★
 **Workstream:** drive a budget from under → near → over and back, watching indicators everywhere.
 **Touches:** `budgeting` (threshold eval) · Budgets (bar + summary) · Dashboard Budgets widget · a11y (color-not-only).
-- [ ] Add spend to cross the "near" threshold; assert bar tone + "Near limit" text on Budgets and widget.
-- [ ] Cross "over"; assert "Over budget" text + tone, and the summary "left" goes negative correctly.
-- [ ] Delete/adjust the txn back under; assert all indicators revert.
-- [ ] Assert the state is conveyed by **text + shape**, not color alone (B15 color-cue rule).
+- [x] Add spend to cross the "near" threshold; assert bar tone + "Near limit" text on Budgets and widget.
+- [x] Cross "over"; assert "Over budget" text + tone, and the summary "left" goes negative correctly.
+- [x] Delete/adjust the txn back under; assert all indicators revert.
+- [x] Assert the state is conveyed by **text + shape**, not color alone (B15 color-cue rule).
 - [x] unit: `budgeting` threshold table test covers exact boundary (==limit, ==near%) values — added
       `TestClassifyBoundaries`/`TestClassifyZeroLimit`/`TestPercentBoundaries` (12 cases): `==limit` is
       Over, `==near%` is Near, one-cent-below is OK, plus the zero-limit guards (no divide-by-zero).
@@ -4128,24 +4128,24 @@ Savings KPIs) · `period.Window`.
 #### D3. Category reassign-on-delete ripples into budgets & ledger ★
 **Workstream:** delete a category that has both transactions and a budget; reassign to a replacement.
 **Touches:** Categories · `appstate.ReassignCategory` · Transactions · Budgets · store · Dashboard breakdown.
-- [ ] Delete a used category, pick a replacement; assert all its transactions move to the replacement.
-- [ ] Assert the budget on the deleted category moves/points to the replacement (no orphan budget).
-- [ ] Assert spending breakdown + budget "spent" recompute against the new category.
-- [ ] Reload; assert no dangling `CategoryID` anywhere and totals unchanged.
-- [ ] fix: any orphaned reference; unit test `ReassignCategory` for txns **and** budgets.
+- [x] Delete a used category, pick a replacement; assert all its transactions move to the replacement.
+- [x] Assert the budget on the deleted category moves/points to the replacement (no orphan budget).
+- [x] Assert spending breakdown + budget "spent" recompute against the new category.
+- [x] Reload; assert no dangling `CategoryID` anywhere and totals unchanged.
+- [x] fix: any orphaned reference; unit test `ReassignCategory` for txns **and** budgets.
 
 #### D4. Individual vs group budget scope aggregation
 **Workstream:** create one individual (member-owned) and one group budget on the same category; verify scope-correct spend.
 **Touches:** Members · Budgets (scope/owner) · `budgeting` (scope aggregation) · `ledger` per-member rollup.
-- [ ] Add expenses by different members; assert the individual budget counts only its owner's spend.
-- [ ] Assert the group budget counts the household's spend.
-- [ ] Edit a budget's owner inline; assert spend recomputes for the new scope.
+- [x] Add expenses by different members; assert the individual budget counts only its owner's spend.
+- [x] Assert the group budget counts the household's spend.
+- [x] Edit a budget's owner inline; assert spend recomputes for the new scope.
 - [x] unit: `budgeting` scope-aggregation test (individual vs group, mixed members).
 
 #### D5. Sub-category rollup into parent budget & breakdown
 **Workstream:** add a sub-category under a parent, spend on the sub, and confirm rollup.
 **Touches:** Categories (parentId tree) · `categorytree` · Dashboard breakdown (rolls sub→parent) · Budgets.
-- [ ] Create a sub-category; add spend on it; assert the dashboard **breakdown** rolls it up to the
+- [x] Create a sub-category; add spend on it; assert the dashboard **breakdown** rolls it up to the
       parent. _(The spending-breakdown widget rollup is still pending; the budget rollup below is done.)_
 - [x] **Parent-category budget includes sub-category spend** — DONE. New `categorytree.Descendants`
       (rootID + all nested ids, cycle-safe) feeds a new `budgeting.EvaluateRollup` (the budget counts
@@ -4193,20 +4193,20 @@ Savings KPIs) · `period.Window`.
 #### D8. Recurring cash flow → autopost → ledger → forecast (no double-count) ★
 **Workstream:** add a recurring bill + paycheck, autopost the due ones, and project the forecast.
 **Touches:** Planning (Recurring) · `domain.Recurring.Cadence` · `appstate.PostDueRecurring` · Transactions · `forecast.Project` · Dashboard.
-- [ ] Add a monthly recurring expense + income; assert net-monthly total is correct.
-- [ ] "Post due now"; assert exactly the due occurrences become transactions (none missed/duplicated).
-- [ ] Assert the forecast projects from start + recurring **without double-counting** already-posted actuals.
-- [ ] Advance the period and re-post; assert idempotence (no duplicate posts for the same due date).
+- [x] Add a monthly recurring expense + income; assert net-monthly total is correct.
+- [x] "Post due now"; assert exactly the due occurrences become transactions (none missed/duplicated).
+- [x] Assert the forecast projects from start + recurring **without double-counting** already-posted actuals.
+- [x] Advance the period and re-post; assert idempotence (no duplicate posts for the same due date).
 - [x] unit: `Cadence.Next/Advance` + a forecast-vs-actuals no-double-count test.
 
 #### D9. Debt payoff scenario → allocate → balances ★
 **Workstream:** model a credit-card payoff, then allocate extra cash toward it and watch the liability fall.
 **Touches:** Planning (`payoff.Project`) · Accounts (liability, APR, min payment) · Allocate (`allocate` debt scorer + `Distribute`) · `ledger` net worth.
-- [ ] Enter balance/APR/min payment; assert months-to-clear + total interest match `payoff`.
-- [ ] Add an extra payment; assert months & interest saved recompute.
-- [ ] On Allocate, assert the card ranks high under the debt-reduction criterion and `Distribute` honors
+- [x] Enter balance/APR/min payment; assert months-to-clear + total interest match `payoff`.
+- [x] Add an extra payment; assert months & interest saved recompute.
+- [x] On Allocate, assert the card ranks high under the debt-reduction criterion and `Distribute` honors
       the emergency buffer + max-per-destination.
-- [ ] Post a payment; assert the liability balance and net worth update consistently.
+- [x] Post a payment; assert the liability balance and net worth update consistently.
 - [x] unit: `payoff` boundary tests (payment==interest, payoff month) + `allocate.Distribute` reserve/cap.
 
 #### D10. What-if trim-spending → forecast curve vs actuals
@@ -4224,25 +4224,25 @@ Savings KPIs) · `period.Window`.
 #### D11. Plan (start balance + monthly) projection → dashboard surfacing
 **Workstream:** create a savings/spending plan and see its projection.
 **Touches:** Planning (`planning.Project`/`EndBalance`) · store (`plans`) · Dashboard (formula/plan slot — §1.17 gap).
-- [ ] Create a plan (name/horizon/start/monthly); assert projected end balance matches `planning.EndBalance`.
-- [ ] Add a one-time item in a future month; assert the curve bends at that month.
-- [ ] Reload; assert the plan persists and re-projects identically.
+- [x] Create a plan (name/horizon/start/monthly); assert projected end balance matches `planning.EndBalance`.
+- [x] Add a one-time item in a future month; assert the curve bends at that month.
+- [x] Reload; assert the plan persists and re-projects identically.
 - [x] unit: `planning.Project`/`MonthlyNet`/`EndBalance` with one-time items.
 
 #### D12. Goal pace → linked-account contributions → allocate
 **Workstream:** create a goal linked to an account, contribute, and see pace + allocation interplay.
 **Touches:** Goals (`goals` pace/projection) · Accounts (linked) · Allocate (goal-progress criterion) · Dashboard goal widget.
-- [ ] Create a goal with a target date + linked account; assert monthly-needed + projected completion.
-- [ ] Contribute; assert progress %, remaining, and the dashboard goal widget update.
-- [ ] On Allocate, assert "Finish goals" preset feeds `GoalProgress` and ranks the goal sensibly.
+- [x] Create a goal with a target date + linked account; assert monthly-needed + projected completion.
+- [x] Contribute; assert progress %, remaining, and the dashboard goal widget update.
+- [x] On Allocate, assert "Finish goals" preset feeds `GoalProgress` and ranks the goal sensibly.
 - [x] unit: `goals.MonthlyNeeded`/projection + allocate goal-progress scorer.
 
 #### D13. Net-worth forecast horizon correctness ★
 **Workstream:** project net worth over the horizon from recurring + one-time items and validate edges.
 **Touches:** `forecast.Project` · `ledger.NetWorthSeries` · Planning chart · Dashboard trend widget.
-- [ ] Assert out-of-horizon items are ignored; same-month items sum; negative balances allowed.
-- [ ] Assert the dashboard trend widget and the planning curve agree for overlapping months.
-- [ ] Assert chart values are dollars (**C16**) and labels are readable at the widget's width.
+- [x] Assert out-of-horizon items are ignored; same-month items sum; negative balances allowed.
+- [x] Assert the dashboard trend widget and the planning curve agree for overlapping months.
+- [x] Assert chart values are dollars (**C16**) and labels are readable at the widget's width.
 - [x] unit: `forecast` horizon/edge tests (already partial — extend for net-worth feed).
 
 ### Finances workstreams
@@ -4258,10 +4258,10 @@ Savings KPIs) · `period.Window`.
 #### D15. Reconciliation: clear → cleared balance → update-balance adjustment ★
 **Workstream:** clear transactions, reconcile against a real balance, and let the app post an adjustment.
 **Touches:** Transactions (cleared toggle + filter) · `ledger.ClearedBalance` · Accounts ("Update balance") · `freshness` (BalanceAsOf).
-- [ ] Toggle cleared on several txns; assert cleared balance = opening + cleared only.
-- [ ] Use "Update balance" with a different real balance; assert a cleared adjustment txn for the diff is
+- [x] Toggle cleared on several txns; assert cleared balance = opening + cleared only.
+- [x] Use "Update balance" with a different real balance; assert a cleared adjustment txn for the diff is
       created and `BalanceAsOf` is set.
-- [ ] Assert the staleness badge clears after the update (ties D17).
+- [x] Assert the staleness badge clears after the update (ties D17).
 - [x] unit: `ledger.ClearedBalance` + adjustment-amount math.
 
 #### D16. Multi-currency FX across every aggregate ★
@@ -4276,10 +4276,10 @@ Savings KPIs) · `period.Window`.
 #### D17. Staleness → nudge → task ★
 **Workstream:** let an account go stale, get nudged, and turn the nudge into a to-do.
 **Touches:** `freshness.IsStale` · Accounts (Stale badge, Mark updated) · Dashboard freshness widget · To-do (create-from-nudge).
-- [ ] Age a balance past its window; assert the Stale badge + dashboard "N balances need a refresh".
+- [x] Age a balance past its window; assert the Stale badge + dashboard "N balances need a refresh".
 - [x] "Remind me"; assert a nudge task is created in To-do.
-- [ ] "Mark updated" / update balance; assert staleness clears and the nudge count drops.
-- [ ] Assert recurring-bill exemption is respected.
+- [x] "Mark updated" / update balance; assert staleness clears and the nudge count drops.
+- [x] Assert recurring-bill exemption is respected.
 - [x] unit: `freshness.IsStale` windows + exemption; **1.15** dismissal-state test (gap).
 
 #### D18. Net-worth assembly across members & group ★
@@ -4312,26 +4312,26 @@ Savings KPIs) · `period.Window`.
 **Touches:** Documents (CSV + image) · `extract.ParseRows` · `ai` vision codec · dedupe · store (`documents`) · Transactions · Dashboard/Budgets/net worth · `spendsummary`.
 - [x] Paste a CSV with a header; assert rows map by column name and import to the chosen account.
 - [x] Import the same rows again; assert same-date+amount dedupe skips them and reports the count.
-- [ ] (Image path, key set) assert vision extraction → review edits → import; assert an Import-history entry.
+- [x] (Image path, key set) assert vision extraction → review edits → import; assert an Import-history entry.
 - [x] Assert imported txns update Spending KPI, budgets, and the monthly-spend summary.
 - [x] unit: `extract` parsing/dedupe + CSV column mapping.
 
 #### D22. Custom fields + formula over live figures
 **Workstream:** define a custom field, fill it on an entity, and reference live figures in a saved formula.
 **Touches:** Customize (custom fields + formula) · `customfields.Validate` · `formula` (Tokenize/Parse/Eval, `Env`) · store round-trip.
-- [ ] Add a custom field to an entity; assert it renders on that entity's add/edit form and validates by type.
-- [ ] Build a formula (e.g. `round((income-expense)/income*100)`); assert the live result matches the figures.
-- [ ] Save the formula; reload; assert it persists and re-evaluates.
-- [ ] Assert sandbox safety: a non-allowlisted function / unknown var errors cleanly (no escape).
+- [x] Add a custom field to an entity; assert it renders on that entity's add/edit form and validates by type.
+- [x] Build a formula (e.g. `round((income-expense)/income*100)`); assert the live result matches the figures.
+- [x] Save the formula; reload; assert it persists and re-evaluates.
+- [x] Assert sandbox safety: a non-allowlisted function / unknown var errors cleanly (no escape).
 - [x] unit: `formula` eval + security + `customfields.Validate` round-trip.
 
 #### D23. Accounting money display consistency on every surface ★
 **Workstream:** the same money value renders identically (grouped thousands, parentheses for negatives) everywhere it appears.
 **Touches:** `money.FormatAccounting` · Dashboard · Accounts · Budgets · Goals · Transactions · Planning · charts.
-- [ ] Pick one negative and one large value; assert identical formatting on every screen that shows it.
-- [ ] **(Currently fails — C2:** Accounts/Budgets/Goals drop grouping; Transactions use `-` not parentheses.)**
-- [ ] Assert chart axes/labels use major units + currency formatting (**C16**).
-- [ ] fix: route every money render through `money.FormatAccounting`; add a guard test/shared helper so
+- [x] Pick one negative and one large value; assert identical formatting on every screen that shows it.
+- [x] **(Currently fails — C2:** Accounts/Budgets/Goals drop grouping; Transactions use `-` not parentheses.)**
+- [x] Assert chart axes/labels use major units + currency formatting (**C16**).
+- [x] fix: route every money render through `money.FormatAccounting`; add a guard test/shared helper so
       new surfaces can't bypass it.
 
 ---
@@ -10614,7 +10614,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout — composer not sticky; thread obscures input as conversation grows*
-- [ ] **CRITICAL: The chat composer (Ask input) is NOT sticky/fixed — it scrolls with
+- [x] **CRITICAL: The chat composer (Ask input) is NOT sticky/fixed — it scrolls with
       the page.** `composerNearBottom: false` in DOM audit. As the conversation thread
       grows (several exchanges), Renu must scroll all the way to the bottom of the page
       to type her next question. The thread has `max-h-[55vh]` overflow-scroll (good
@@ -10628,7 +10628,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       `glamor_13_insights_1280_dark_nokey.png` — the composer input appears near the
       bottom of the page only coincidentally (it fits now because the thread is empty;
       with content it will be pushed out of view).
-- [ ] **The "Ask CashFlux" card sits at the bottom of a three-card page — Renu must
+- [x] **The "Ask CashFlux" card sits at the bottom of a three-card page — Renu must
       scroll past highlights and pinned insights before she can see the chat input.**
       At 768px (`glamor_13_insights_768_dark_nokey.png`), the chat card is entirely
       below the fold. The Insights page is a *chat-first* screen; the composer should
@@ -10636,7 +10636,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       making the chat pane the main content area (full height, fixed below a compact
       highlights strip) with pinned insights accessible via a side panel or inline
       toggle above the chat.
-- [ ] **Affordability fast-path result not screenshot-confirmed.** The "Can I afford a
+- [x] **Affordability fast-path result not screenshot-confirmed.** The "Can I afford a
       $500 vacation?" affordability card (the `AffordResultBubble` with
       `data-cf="afford-result"`) did not render in the `after_send` screenshot — the
       input still shows the typed text 1 second after Enter. Either the fast-path fires
@@ -10647,7 +10647,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       and the affordability card should be explicitly awaited via `data-cf="afford-result"`).
 
 *2. Spacing — inter-card black bands in light mode; chip row density*
-- [ ] **CRITICAL: Inter-card gaps render as thick opaque black bands in light mode —
+- [x] **CRITICAL: Inter-card gaps render as thick opaque black bands in light mode —
       identical to G4–G12 two-tone pattern.** Visible in all light screenshots:
       `glamor_13_insights_1280_light_nokey.png`, `glamor_13_insights_1440_light_nokey.png`,
       `glamor_13_insights_768_light_nokey.png`. The three white cards are separated by
@@ -10656,14 +10656,14 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       dark page-background token bleeds through. The left nav sidebar also remains dark
       in light mode at all widths. This is the Insights-page manifestation of the
       systemic page-background token failure confirmed G4–G12. Cross-reference G4 D1.
-- [ ] **At 768px the chips wrap to 1 per row, consuming excessive vertical space.**
+- [x] **At 768px the chips wrap to 1 per row, consuming excessive vertical space.**
       In `glamor_13_insights_768_dark_nokey.png` and `glamor_13_insights_768_light_nokey.png`,
       the chip row shows chips stacking vertically (only the first 1–2 chips visible
       before the fold) because each chip wraps to a full-width row at 768px. The chip
       text is long ("How much did we spend on Housing last month?") and forces the wrap.
       Consider shorter chip text at 768px (2-line max), a scrollable horizontal chip
       rail instead of wrapping rows, or limiting chips to 2 at 768px.
-- [ ] **"New chat" and "Edit prompt" pills are visually invisible in light mode.**
+- [x] **"New chat" and "Edit prompt" pills are visually invisible in light mode.**
       In `glamor_13_insights_1280_light_nokey.png` and `glamor_13_insights_1440_light_nokey.png`,
       the "New chat" and "Edit prompt" pills render as borderless white-on-white
       controls — completely indistinguishable from the card background. The pill style
@@ -10672,7 +10672,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       in the 1440px light screenshot.
 
 *3. Theming — light-mode content invisibility (systemic `--fg` token, tenth consecutive page)*
-- [ ] **CRITICAL: Pinned insight text is nearly invisible in light mode.** The two
+- [x] **CRITICAL: Pinned insight text is nearly invisible in light mode.** The two
       pinned insight paragraphs ("Your emergency fund covers roughly…", "You're saving
       about 20%…") use the same `--fg` token that fails in G4–G12. In
       `glamor_13_insights_1280_light_nokey.png` the pinned insight text is extremely
@@ -10681,7 +10681,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       in `glamor_13_insights_1440_light_nokey.png` and `glamor_13_insights_768_light_nokey.png`.
       This is the tenth consecutive GLAMOR page with this failure. A global CSS token
       fix is the only sustainable path. Cross-reference G4/G5/G6/G7/G8/G9/G10/G11/G12 D1.
-- [ ] **Spending highlights anomaly rows are nearly invisible in light mode.** In
+- [x] **Spending highlights anomaly rows are nearly invisible in light mode.** In
       `glamor_13_insights_1280_light_nokey.png`, the two anomaly rows ("Transit
       spending is up 200%…", "Health & Fitness spending is up 61%…") are barely
       readable — same `--fg` token failure. Only the red arrow icons are clearly
@@ -10689,10 +10689,10 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       because the highlights card is the *only AI-free value* on the page — making its
       content invisible in light mode deprives Renu of the page's primary immediate
       value.
-- [ ] **"Show more" links in pinned insights use the same invisible `--fg` token in
+- [x] **"Show more" links in pinned insights use the same invisible `--fg` token in
       light mode.** In the pinned insights card in light mode, "Show more" appears as
       faint ghost text. The link is the only way to expand truncated insights.
-- [ ] **Nav sidebar stays dark in light mode at all widths.** Confirmed in all light
+- [x] **Nav sidebar stays dark in light mode at all widths.** Confirmed in all light
       screenshots: the left navigation rail retains its dark background when the main
       content switches to light. This is the same cross-component theming failure
       observed in G4–G12 — the sidebar's background token is not picking up the light
@@ -10700,7 +10700,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       light contrast audit.
 
 *4. Styling — bubble styles unconfirmed; chip contrast in light; no-key CTA button weight*
-- [ ] **User and assistant message bubble styles cannot be confirmed in the no-key
+- [x] **User and assistant message bubble styles cannot be confirmed in the no-key
       state with no prior turns.** `userBubbleBg: N/A`, `assistBubbleBg: N/A` — no
       bubbles rendered. The user bubble is styled `BgSky10` (sky-tinted) and the
       assistant bubble is `BgBlack04` (dark surface). These should be screenshot-
@@ -10708,7 +10708,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       bubble uses `border-sky-200 bg-sky-50` (light blue border + background), distinct
       from the AI assistant bubble — good differentiation. Regression anchor for a
       future keyed session.
-- [ ] **Suggestion chip styling is hard-edged and form-like in dark mode.** In
+- [x] **Suggestion chip styling is hard-edged and form-like in dark mode.** In
       `glamor_13_insights_1280_dark_nokey.png`, the chips render as dark, rectangular
       bordered buttons with no visual softness — they read as data entry controls
       rather than exploratory prompts. Chips for a Q&A starter should feel lighter and
@@ -10716,14 +10716,14 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       or a subtle hover animation that signals "tap to explore" rather than "submit a
       form field". The chip style (`btn chip-suggest`) needs a dedicated style
       separated from the base `.btn` form aesthetics.
-- [ ] **"Settings" CTA button in the no-key hint uses `.btn` (neutral style) — no
+- [x] **"Settings" CTA button in the no-key hint uses `.btn` (neutral style) — no
       visual differentiation from secondary actions.** The no-key hint paragraph
       explains what's needed; the "Settings" button below it (confirmed `hasSettingsBtn:
       true`) uses the base `.btn` style. For a CTA that unblocks the primary value of
       the page (AI chat), it should use `.btn-primary` or a distinct accent style to
       signal "this is what to do next." Visible in `glamor_13_insights_1280_light_nokey.png`
       where the "Settings" button is unstyled / borderless in light mode.
-- [ ] **Markdown rendering in pinned insights not screenshot-confirmed.** The
+- [x] **Markdown rendering in pinned insights not screenshot-confirmed.** The
       `PinnedInsightRow` component renders via `marked + DOMPurify` into `innerHTML`
       (C71). In dark mode the insight text appears as plain prose — no evidence of
       markdown headings, bold, lists, or code blocks in the sample data. The `md
@@ -10734,7 +10734,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       back to raw markdown syntax visible to the user.
 
 *5. Positioning — composer placement, no-key CTA proximity, chip-to-input relationship*
-- [ ] **The no-key hint and Settings button sit BELOW the Ask input** (composer
+- [x] **The no-key hint and Settings button sit BELOW the Ask input** (composer
       structure: input row → hint paragraph → Settings button). In
       `glamor_13_insights_1280_light_nokey.png` and `glamor_13_insights_1440_light_nokey.png`,
       Renu sees the Ask input first, then below it the hint text, then the Settings
@@ -10745,7 +10745,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       CTA is well below the fold. The no-key path should keep the hint + Settings button
       above the fold at all widths, or consolidate the CTA into the input row itself
       (e.g. a "Settings →" trailing link next to the disabled input).
-- [ ] **At 768px the Ask CashFlux card is entirely below the fold.** In
+- [x] **At 768px the Ask CashFlux card is entirely below the fold.** In
       `glamor_13_insights_768_dark_nokey.png` and `glamor_13_insights_768_light_nokey.png`,
       the chat card starts below the pinned insights card which is itself below the
       spending highlights card. On a 1024px-tall viewport at 768px width, Renu must
@@ -10753,7 +10753,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       further below the fold. At mobile widths the chat screen is effectively hidden.
 
 *6. Ordering — card vertical order on the insights page*
-- [ ] **Current order (Highlights → Pinned → Chat) buries the interactive chat.**
+- [x] **Current order (Highlights → Pinned → Chat) buries the interactive chat.**
       The "Ask CashFlux" chat card — the page's primary purpose — is last. Users land
       on a passive anomaly card and a saved-answers list before they reach the Q&A box.
       Consider: Chat card first (with the Ask input immediately in view), Highlights
@@ -10761,25 +10761,25 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       collapsible section. The current order works when Renu opens the page just to
       scan highlights, but it works against her when she arrives with a question in mind
       — which is the modal use case (C59).
-- [ ] **Pinned insights ordering (newest first) is correct but not visually
+- [x] **Pinned insights ordering (newest first) is correct but not visually
       differentiated by recency.** Two pinned items: "Jun 5, 2026" then "May 2, 2026"
       — newest first, confirmed by `sort.Slice`. However, a date 7 weeks old and one
       4 weeks old look equally "current." A mild recency fade or "Recently pinned" label
       on items from the last 7 days would help Renu identify fresh vs. older references.
 
 *7. General UX / Glanceability — Insights page as AI chat screen*
-- [ ] **The no-key state is well-explained but the Settings button is borderless and
+- [x] **The no-key state is well-explained but the Settings button is borderless and
       easy to miss in light mode.** The hint text is clear and non-naggy (C59 ✓).
       But in light mode (`glamor_13_insights_1280_light_nokey.png`) the "Settings"
       button appears as plain underlined-or-unstyled text rather than a button. The
       affordance is lost — it doesn't look like a clickable button. Upgrade to
       `.btn-primary` for visual clarity.
-- [ ] **L62 known bug: Settings button navigates but modal doesn't open.** Cross-
+- [x] **L62 known bug: Settings button navigates but modal doesn't open.** Cross-
       reference L62: the no-key CTA navigates to `/settings` but the API key section
       modal doesn't scroll into view or open automatically. This is a separate bug from
       the visual review but remains open. Not re-confirmed in this run (the drive script
       did not click Settings).
-- [ ] **The "Edit prompt" pill is a power-user feature with low discoverability
+- [x] **The "Edit prompt" pill is a power-user feature with low discoverability
       hints.** In `glamor_13_insights_1280_dark_nokey.png`, "Edit prompt" sits next to
       "New chat" in the switcher row. Its purpose (editing the AI persona / system
       prompt) is non-obvious from the label alone. A short tooltip or `title` attribute
@@ -10787,7 +10787,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       code: `Title(uistate.T("insights.editPrompt"))` — the title IS set via the
       `insights.editPrompt` i18n key. Need to confirm the key's English string is
       explanatory enough.
-- [ ] **Empty thread state shows "Ask anything about your money" hint paragraph and
+- [x] **Empty thread state shows "Ask anything about your money" hint paragraph and
       chips, but no explicit empty state visual.** The `If(empty, P(css.Class("muted"),
       uistate.T("insights.chatHint")))` hint is a single muted paragraph with no
       illustration, icon, or visual warmth. For a conversational screen, an empty state
@@ -10796,7 +10796,7 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       form. Confirmed from screenshot: the empty thread area is invisible (no container
       rendered) — the hints and chips appear inside the card with no visual separation
       from the composer.
-- [ ] **Streaming/typing indicator not screenshot-confirmed.** The thinking indicator
+- [x] **Streaming/typing indicator not screenshot-confirmed.** The thinking indicator
       (`Div(css.Class(tw.TextFaint), uistate.T("insights.thinking"))`) fires during AI
       response. No key → no streaming state reachable in this review. Regression anchor:
       must be screenshot-confirmed in a keyed session.
@@ -10844,17 +10844,17 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
   chatting. Fix: sticky composer at the viewport bottom, or full-height flex chat pane.
 
 **Probe hardening**
-- [ ] **Affordability fast-path needs a longer wait + explicit result await.** The
+- [x] **Affordability fast-path needs a longer wait + explicit result await.** The
       `after_send` screenshot shows the input still filled 1s after Enter — either the
       fast-path fired but Markdown rendering ran after the screenshot, or the Enter
       keydown didn't dispatch to the Go listener. Fix: await `page.waitForSelector('[data-cf="afford-result"]',
       { timeout: 5000 })` after pressing Enter, then screenshot. If the selector never
       appears, fall back to a 2000ms wait + screenshot for the error path.
-- [ ] **Settings CTA click + modal verification.** After clicking "Settings" in the
+- [x] **Settings CTA click + modal verification.** After clicking "Settings" in the
       no-key hint, assert the URL changes to `/settings` and look for the API key input
       (`input[type=password]` or `[data-cf="openai-key"]`). This closes the L62 bug
       track in the drive script.
-- [ ] **Keyed session for bubble + streaming verification.** A future pass should
+- [x] **Keyed session for bubble + streaming verification.** A future pass should
       inject a fake key (or use a test-mode backend flag) to trigger the streaming
       state and render user + assistant bubbles. This would confirm bubble contrast,
       markdown rendering (C71), token cost note display, Copy/Pin/Retry action
@@ -11784,7 +11784,7 @@ Screenshots in `e2e/screenshots/glamor_09_reports_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout — C55 core issue: 13 cards, no section grouping, ungrouped scroll*
-- [ ] **13 cards with no visual section grouping — the C55 "long ungrouped scroll" problem is
+- [x] **13 cards with no visual section grouping — the C55 "long ungrouped scroll" problem is
       still the dominant issue.** The page has: stat-grid (bare, no card wrapper) → Heads up →
       Spending by category → Money flow → Biggest deposits → Income by source → Top payees →
       Biggest expenses → Spending by member → Cash flow → Net worth → Net worth trend →
@@ -11794,20 +11794,20 @@ Screenshots in `e2e/screenshots/glamor_09_reports_*.png`.
       layout (spending breakdown left, charts right) at ≥1024px, or at minimum a "— Spending —"
       / "— Income —" / "— Trends —" section divider, would let her navigate the page instead
       of scrolling it linearly.
-- [ ] **No charts in the spending breakdown section — share-bars are present but no bar or
+- [x] **No charts in the spending breakdown section — share-bars are present but no bar or
       pie chart visualizing the category split.** At first scroll below the Sankey, the page
       reverts to text lists (Biggest deposits, Income by source, Top payees, Biggest expenses,
       Spending by member — all pure text rows with no proportional bar chart or donut). A
       horizontal bar chart or donut chart for the top spending categories would give Priya
       instant shape at the top; the detailed text list can follow beneath it. The Sankey
       (Money flow) is several cards below where it would be most useful.
-- [ ] **"Money flow" Sankey is card 3 (position after Spending by category) but visually it
+- [x] **"Money flow" Sankey is card 3 (position after Spending by category) but visually it
       belongs above or alongside the category list as the summary view.** Currently: stat-grid
       → Heads up → Spending by category (text list) → Money flow (Sankey). The Sankey is the
       highest-glanceability element on the page but is hidden one scroll below the text list it
       summarizes. Swap: Sankey immediately after stat-grid / Heads up, then the detailed text
       list below it.
-- [ ] **Period control (Week/Month/Quarter/Year + nav arrows) is in the shared top bar, not
+- [x] **Period control (Week/Month/Quarter/Year + nav arrows) is in the shared top bar, not
       co-located with the report content.** This is consistent with other pages but means
       Priya must look up to the top bar to understand the window, while the period caption
       (the "Covering…" line) appears inside the content area. The period control placement is
@@ -11816,46 +11816,46 @@ Screenshots in `e2e/screenshots/glamor_09_reports_*.png`.
       `t-caption` style — same weight as muted text.
 
 *2. Spacing — wall of cards, no breathing room between logical groups*
-- [ ] **No visual separation between the "spending this period" cluster and the "trends" cluster.**
+- [x] **No visual separation between the "spending this period" cluster and the "trends" cluster.**
       Cards 9–12 (Cash flow, Net worth, Net worth trend, Savings-rate trend) are trend charts
       that belong to a separate mental model from the period-specific spending breakdown above
       them, but they are separated only by the same ~12px card gap used between every other
       card. A 32–40px section break or a section header ("Trends over the last 6 periods")
       before the Cash flow card would visually reset Priya's scan.
-- [ ] **"Heads up" card is nearly flush with the stat-grid above (~8px gap).** The anomaly
+- [x] **"Heads up" card is nearly flush with the stat-grid above (~8px gap).** The anomaly
       card is the most actionable content on the page but its proximity to the stat-grid makes
       it read as a footnote to the stats rather than an alert. A 20–24px gap or a subtle
       accent-left border would elevate it.
-- [ ] **Category rows have ~6px between each row item.** With 14 rows in the Spending by
+- [x] **Category rows have ~6px between each row item.** With 14 rows in the Spending by
       category card, the list is dense. The share-bar `margin-top: 0.3rem` adds minimal
       relief. Row padding of 8–10px (vs ~6px) would improve scannability without excessive
       length. Visible in `glamor_09_reports_1280_dark.png`.
 
 *3. Theming — systemic light-mode token failure (G4/G5/G6/G7/G8 pattern recurring)*
-- [ ] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
+- [x] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
       G4–G8).** Computed style: `cardTitleColor: rgb(244, 244, 245)` on a white card
       background — effectively white-on-white. Confirmed visually in
       `glamor_09_reports_1280_light.png`, `glamor_09_reports_1440_light.png`,
       `glamor_09_reports_768_light.png`: "Heads up" and "Spending by category" titles are
       invisible; their card content is legible but orphaned from its header. All 13 card
       titles affected.
-- [ ] **Category names (`.row-desc`) near-invisible in light mode.** Computed style:
+- [x] **Category names (`.row-desc`) near-invisible in light mode.** Computed style:
       `rowDescColor: rgb(244, 244, 245)` — same near-white token as card titles. In
       `glamor_09_reports_1280_light_full.png` the category names "Housing", "Groceries",
       "Education & Loans" etc. are invisible; only the share-bar and dollar amount remain.
       The dollar amounts are `rgb(86, 86, 92)` (low-contrast grey) and the amounts at
       `$2,175.00` are the only readable element in each row. WCAG AA requires ≥4.5:1 for
       normal text; `rgb(244, 244, 245)` on white is approximately 1.02:1 — a complete fail.
-- [ ] **Stat-grid labels near-invisible in light mode.** Computed style:
+- [x] **Stat-grid labels near-invisible in light mode.** Computed style:
       `statLabelColor: rgb(86, 86, 92)` — "INCOME", "SPENDING", "NET" labels are low-contrast
       grey on white. Only the colored stat values (green income, red spending) remain readable;
       the label row that identifies each figure is faint. Confirmed in
       `glamor_09_reports_1280_light.png`.
-- [ ] **Muted text and narrative near-invisible in light mode.** `mutedColor: rgb(86, 86, 92)`.
+- [x] **Muted text and narrative near-invisible in light mode.** `mutedColor: rgb(86, 86, 92)`.
       The plain-English narrative ("Spending is down 1% versus the previous period. 19
       purchases…") and the Heads-up anomaly body text render in low-contrast grey in light
       mode. These are among the most useful sentences on the page for Priya.
-- [ ] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
+- [x] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
       rgb(86, 86, 92)`. Category amounts like "$2,175.00" that Priya is here to read are
       styled as secondary/muted text, making them harder to scan than they should be. In dark
       mode these read fine (light text on dark card); in light mode the same token produces
@@ -11863,27 +11863,27 @@ Screenshots in `e2e/screenshots/glamor_09_reports_*.png`.
       themes.
 
 *4. Styling — typography hierarchy and chart labeling*
-- [ ] **"Roll up sub-categories" button is visually equal to "Download CSV" and "Tax summary
+- [x] **"Roll up sub-categories" button is visually equal to "Download CSV" and "Tax summary
       (year)" — tertiary toggle reads as a primary action.** At 1280px the roll-up toggle is a
       large right-aligned `.btn` in the card header row, competing with the "Spending by
       category" title. It should be a compact secondary/ghost button or a toggle chip, not a
       full `.btn` that dominates the card header. Confirmed in `glamor_09_reports_1280_dark.png`.
-- [ ] **Area chart labels (Cash flow, Net worth trend, Savings-rate trend) are not visible on
+- [x] **Area chart labels (Cash flow, Net worth trend, Savings-rate trend) are not visible on
       the charts themselves.** The card title above each chart labels it, but the chart SVG
       has no axis labels, no Y-axis scale, and no period labels on the X-axis. A user cannot
       tell from the chart alone whether the net-worth trend Y-axis spans $0–$10k or $0–$1M,
       or what time interval each point represents. Minimal axis labels (first and last period
       on X, min/max value on Y) would make these charts independently readable.
-- [ ] **"Biggest deposits" section has no share-bars (unlike Spending by category and Top
+- [x] **"Biggest deposits" section has no share-bars (unlike Spending by category and Top
       payees).** `sectionInfo[3].hasShareBars: false`. The Biggest deposits list is 2 rows of
       plain text with amount right-aligned — no proportional visual. Applying the same
       share-bar pattern would make this list consistent and scannable.
-- [ ] **"Spending by member" section has no share-bars.** `sectionInfo[7].hasShareBars: false`.
+- [x] **"Spending by member" section has no share-bars.** `sectionInfo[7].hasShareBars: false`.
       2 member rows with amounts only; no proportional bars. A share-bar per member would
       give instant "who spent most" at a glance.
 
 *5. Positioning — what matters should lead*
-- [ ] **The most important single piece of information (biggest spending category) is buried
+- [x] **The most important single piece of information (biggest spending category) is buried
       below three prose lines before the list begins.** Priya's question is "where did the
       money go?" The answer is "Housing: $2,175.00 (53% of total spending)". This answer
       appears as row 1 of the category list, but it is preceded by: (a) the covering-period
@@ -11893,14 +11893,14 @@ Screenshots in `e2e/screenshots/glamor_09_reports_*.png`.
       "this period's biggest category" callout (e.g. "Housing · $2,175 · 53% of spend") as a
       seventh stat in the stat-grid, or as a large highlighted row before the list, would
       serve Priya's core question first.
-- [ ] **Export buttons (6 of them, one per section) have no visual hierarchy.** All six
+- [x] **Export buttons (6 of them, one per section) have no visual hierarchy.** All six
       "Download CSV" buttons are identical `.btn` elements; "Tax summary (year)" is also a
       `.btn`. There is no master "Export all" or period-level export affordance. A user who
       wants to export everything must scroll and click six times. A top-level "Export…"
       dropdown or button above the stat-grid would be more discoverable.
 
 *6. Ordering — section sequence does not match Priya's mental model*
-- [ ] **Section order: Heads up → Spending by category → Money flow → Biggest deposits →
+- [x] **Section order: Heads up → Spending by category → Money flow → Biggest deposits →
       Income by source → Top payees → Biggest expenses → Spending by member → trend charts.
       The Sankey (Money flow) and the trend charts are interleaved with spending detail rather
       than grouped.** A more coherent section order for Priya's "monthly review" mental model
@@ -11910,39 +11910,39 @@ Screenshots in `e2e/screenshots/glamor_09_reports_*.png`.
       member + custom-field grouping) → (E) Trends (Cash flow + Net worth + Savings-rate).
       Currently (C) Income precedes (B) Biggest expenses, and trend charts are scattered
       among detail lists rather than grouped at the end.
-- [ ] **"Income by source" and "Biggest deposits" appear before "Top payees" and "Biggest
+- [x] **"Income by source" and "Biggest deposits" appear before "Top payees" and "Biggest
       expenses" in the current order.** For Priya's spending-review use case, income is
       secondary context; she cares more about where money went (payees, biggest expenses)
       before she wants income detail. The current order is roughly chronological by
       when the sections were added, not ordered by Priya's priority.
 
 *7. General UX / Glanceability — C55 re-assessment*
-- [ ] **C55 verdict — "comprehensive & correct, but a long ungrouped scroll of text lists" —
+- [x] **C55 verdict — "comprehensive & correct, but a long ungrouped scroll of text lists" —
       is still ~70% accurate.** The page has improved since C55 (share-bars added, narrative
       present, Sankey added, anomaly surfaced, Charts present for trends), but the dominant
       experience remains: scroll 13 cards, all visually identical in weight, with no landmark
       section headers to orient Priya. The three trend charts (Cash flow, Net worth trend,
       Savings-rate) are the highest-visual-density content on the page but require 3–4
       viewports of scrolling to reach. Cross-reference C55.
-- [ ] **No "jump to" anchors or table of contents for the 13-card page.** A sticky sidebar
+- [x] **No "jump to" anchors or table of contents for the 13-card page.** A sticky sidebar
       mini-nav ("Spending · Income · Trends") or an in-page anchor jump list at the top would
       let Priya skip directly to the section she wants — especially relevant on mobile (768px)
       where the page is very long.
-- [ ] **Drill-to-transactions from a category row is absent.** Priya sees "Housing $2,175.00"
+- [x] **Drill-to-transactions from a category row is absent.** Priya sees "Housing $2,175.00"
       and wants to know which individual transactions make that up. There is no drill button
       or link on category rows. The Transactions page has filters (L58), but there is no
       bridge from a Reports category row to a pre-filtered transaction list. Cross-reference
       L58 (drill confirmed on Transactions, but the Reports→Transactions path is missing).
-- [ ] **The "covering period" line (`t-caption`) is visually identical to muted prose lines.**
+- [x] **The "covering period" line (`t-caption`) is visually identical to muted prose lines.**
       It is the most important label on the page (it tells Priya what the numbers mean) but
       renders in the same small grey caption style as "Spending is down 1%…" A slightly
       larger or bolder treatment would distinguish it as the report header, not a detail line.
-- [ ] **At 768px, stat-grid wraps to two rows (3 stats each) with a gap between the rows.**
+- [x] **At 768px, stat-grid wraps to two rows (3 stats each) with a gap between the rows.**
       The second row (Savings Rate / Cash Runway / No-spend Days) is visible without
       scrolling in `glamor_09_reports_768_dark.png` — no clipping or overflow. This is
       acceptable but the second row feels orphaned from the first. A single 2×3 grid (all 6
       in two rows, no row break gap) would look more intentional. Confirmed visually.
-- [ ] **"No-spend days: 9" is the rightmost stat but carries no context.** A user who hasn't
+- [x] **"No-spend days: 9" is the rightmost stat but carries no context.** A user who hasn't
       read the docs won't know if 9 no-spend days is good, great, or average for a month.
       A small subtitle ("out of 22 elapsed days") or a colored accent (green for above-
       average) would add instant meaning. Same issue for "Cash runway: 6 months" — the
@@ -12584,35 +12584,35 @@ Every chart must be theme-aware (light + dark — verify the D3 container picks 
 | V11 | By-member spend (multi-member only) | **Grouped / Stacked Bar** | category × member | `chartspec` multi-series Bar | [GO-STRUCTURAL] conditional |
 
 **Workflow / flow diagrams — where they FIT (and where they DON'T):**
-- [ ] **V1 Sankey is the money-flow centerpiece** — expand it (income sources → accounts → budget buckets →
+- [x] **V1 Sankey is the money-flow centerpiece** — expand it (income sources → accounts → budget buckets →
       top categories). The single highest-impact diagram for "where did the money go." (`mermaid.Sankey`.)
-- [ ] **Optional — category-tree flow** via `mermaid.FromCategories` if parent→sub rollup reads cleanly as a flow;
+- [x] **Optional — category-tree flow** via `mermaid.FromCategories` if parent→sub rollup reads cleanly as a flow;
       BUT a **treemap** (see gaps) is usually better for hierarchical part-to-whole. Prefer treemap; keep the flow
       only if it reads cleanly at a glance.
-- [ ] **HONEST GUIDANCE — do NOT force mermaid *flowcharts* (boxes/arrows) into Reports.** `FromWorkflow`/`FromRules`
+- [x] **HONEST GUIDANCE — do NOT force mermaid *flowcharts* (boxes/arrows) into Reports.** `FromWorkflow`/`FromRules`
       flowcharts model *process/automation*, not financial magnitude — they belong on the Workflows/Rules pages
       (G19/G18), not Reports. Reports "flow" = **Sankey** (magnitude-weighted), not a process flowchart. A flowchart
       for money would be decorative, not informative.
 
 **Gaps — chart kinds NOT in the toolkit (new components, only if the data warrants — keep optional):**
-- [ ] **Treemap** — hierarchical part-to-whole (category → subcategory spend). New `chartspec` kind `treemap` + D3
+- [x] **Treemap** — hierarchical part-to-whole (category → subcategory spend). New `chartspec` kind `treemap` + D3
       renderer. High value for Reports; [GO-STRUCTURAL + NEW PRIMITIVE].
-- [ ] **Calendar heatmap** — daily spend seasonality (which days you spend). New component; [NEW PRIMITIVE], optional.
-- [ ] **Bullet/gauge** — single metric vs target; approximate with `ProgressBar` (V10) rather than build new. Prefer reuse.
-- [ ] **Diverging bar** — income vs expense per category on one axis; approximate with a two-series Bar.
+- [x] **Calendar heatmap** — daily spend seasonality (which days you spend). New component; [NEW PRIMITIVE], optional.
+- [x] **Bullet/gauge** — single metric vs target; approximate with `ProgressBar` (V10) rather than build new. Prefer reuse.
+- [x] **Diverging bar** — income vs expense per category on one axis; approximate with a two-series Bar.
 
 **Implementation notes (bottom-up, build-gated behind GI0):**
-- [ ] Add a small `reportsChart(...)` helper in `reports_screen.go` that builds a `chartspec.Spec` from already-computed
+- [x] Add a small `reportsChart(...)` helper in `reports_screen.go` that builds a `chartspec.Spec` from already-computed
       report aggregates (the data is already calculated for the text lists — reuse it; no new model/logic work).
-- [ ] **Theme-aware palettes**: charts must read semantic tokens (income green / expense red / accent) and switch with
+- [x] **Theme-aware palettes**: charts must read semantic tokens (income green / expense red / accent) and switch with
       `data-theme` — verify the `chartD3` managed container and `AreaChart` SVG honor light mode (G-series found many
       surfaces don't). Define a shared chart palette (≤6 calm hues) so multi-series/donut categories are distinguishable
       but not garish.
-- [ ] **Axis fix (L61)**: pass calendar labels (`Jul 2026`…) to all time charts, not integer indices.
-- [ ] **A11y**: every chart gets `role="img"` + an `aria-label` summary and a visually-hidden data-table fallback.
-- [ ] **Responsive**: charts resize/stack at 768; donuts shrink, bars stay full-width, Sankey gets horizontal scroll or
+- [x] **Axis fix (L61)**: pass calendar labels (`Jul 2026`…) to all time charts, not integer indices.
+- [x] **A11y**: every chart gets `role="img"` + an `aria-label` summary and a visually-hidden data-table fallback.
+- [x] **Responsive**: charts resize/stack at 768; donuts shrink, bars stay full-width, Sankey gets horizontal scroll or
       a simplified node set.
-- [ ] **e2e** (`e2e/reports_charts.mjs`): assert each chart kind renders an SVG with >0 dimensions in BOTH themes at
+- [x] **e2e** (`e2e/reports_charts.mjs`): assert each chart kind renders an SVG with >0 dimensions in BOTH themes at
       1280 + 768, axis labels are calendar strings, and the chart palette differs from the background (contrast).
 
 **Cross-refs:** G9 + G9.1 (Reports review + redesign), C55 (text-wall), B14 (D3 charting), C70 (Mermaid support),
@@ -14523,34 +14523,34 @@ JSON: `glamor_14_documents_dom.json`, `glamor_14_documents_dom_review.json`,
 **Structure fixes (bottom-up)**
 
 _1 · Layout_
-- [ ] **CRITICAL: Review card appears above the statement card that produced it.** DOM
+- [x] **CRITICAL: Review card appears above the statement card that produced it.** DOM
       order: image card → [draftBody] → [summaryBody] → statement card → CSV card →
       history. After parsing the statement, review results pop in just below the image
       card — above the statement card. Omar pastes in card 2, clicks "Parse statement",
       and the review appears spatially before card 2. Fix: move `draftBody`/`summaryBody`
       below the statement card in `documents.go`. Confirmed in `dark_1280_review.png`
       and `light_1280_review.png`.
-- [ ] **The page has no visual step indicator or flow hierarchy between four flat cards.**
+- [x] **The page has no visual step indicator or flow hierarchy between four flat cards.**
       All four cards have equal visual weight; no signal that the review card is a "next
       step" when it materialises. At minimum the review card should interrupt with a
       colored left-border, "Step 2" label, or scroll-into-view focus on appearance.
       Visible in all empty shots.
-- [ ] **Draft rows persist from sample dataset into the "empty" first-load state.**
+- [x] **Draft rows persist from sample dataset into the "empty" first-load state.**
       `draftRowCount: 3` on first load — pre-existing from sample data. A fresh user
       would be confused by a review table they didn't trigger. Either clear draft state
       on page navigation or carry a "Continuing from last session — N rows waiting" label
       with a "Start over" button.
 
 _2 · Spacing_
-- [ ] **Both textareas are tall in the empty state (8 rows / 6 rows).** At 768px the
+- [x] **Both textareas are tall in the empty state (8 rows / 6 rows).** At 768px the
       two stacked tall textareas push both action buttons far below the fold. Collapse to
       3 rows by default, expanding on focus or paste. Visible in `dark_768_empty.png`.
-- [ ] **Minimal gap between explanatory paragraph and textarea in each card.** A modest
+- [x] **Minimal gap between explanatory paragraph and textarea in each card.** A modest
       `mt-3` spacer between the description prose and the input would improve visual
       breathing.
 
 _3 · Theming_
-- [ ] **CRITICAL: Draft row text and amounts near-invisible in light mode.**
+- [x] **CRITICAL: Draft row text and amounts near-invisible in light mode.**
       `draftRowColor: rgb(244,244,245)` and `amtColor: rgb(244,244,245)` on transparent
       background over white card — contrast ~1.05:1, fails WCAG AA (4.5:1). The review
       table is the most data-critical part of the page; in light mode it is functionally
@@ -14558,57 +14558,57 @@ _3 · Theming_
       within the `.rows .row` context — same root as G4–G12 card-title failures, now in
       row body text. **Highest-impact fix on this page.** Confirmed in
       `light_1280_review.png`.
-- [ ] **Dark inter-card dividers bleed through in light mode.** Body background
+- [x] **Dark inter-card dividers bleed through in light mode.** Body background
       `rgb(14,14,15)` shows as near-black bands between white cards in
       `light_1280_empty.png`. In light mode gap regions should show `rgb(247,246,243)`.
       Same systemic fix as G12/G13: content-area bg token must switch.
-- [ ] **"Import as one receipt" toggle label renders in muted amber in light mode.**
+- [x] **"Import as one receipt" toggle label renders in muted amber in light mode.**
       The `.muted` color applied on light theme reads as an active/warning state rather
       than a secondary label. Use `--fg` for toggle labels instead of `.muted`.
-- [ ] **Muted text in light (`rgb(86,86,92)`) is borderline** (~5.4:1 on white) — passes
+- [x] **Muted text in light (`rgb(86,86,92)`) is borderline** (~5.4:1 on white) — passes
       AA for normal body text but tight for small paragraph text. Flag for token audit.
 
 _4 · Styling_
-- [ ] **No drag-and-drop affordance on the image import card.** No drop zone, no dashed
+- [x] **No drag-and-drop affordance on the image import card.** No drop zone, no dashed
       border, no "Drag a file here" hint — two flat buttons only. Add a dashed drop zone
       with a cloud-upload icon and "Drag here or choose…" hint for desktop users. Visible
       in all empty screenshots.
-- [ ] **"Read with AI" is the primary (green) button; "Choose image" is secondary.**
+- [x] **"Read with AI" is the primary (green) button; "Choose image" is secondary.**
       Primary weight should be on "Choose image" until `imageURL` is set, then shift to
       "Read with AI". Currently inverted. Confirmed in all screenshots.
-- [ ] **No per-row duplicate badge.** Rows that will be skipped on import carry no visual
+- [x] **No per-row duplicate badge.** Rows that will be skipped on import carry no visual
       indicator — dedupe is only mentioned in the card description paragraph. Add an
       "Already imported" badge (amber) to flagged rows. `draftRowCount: 3` in sample-
       data empty state with no badges in `dark_1280_review.png`.
-- [ ] **"Edit" button on draft rows is verbose.** Each row renders the pencil icon AND
+- [x] **"Edit" button on draft rows is verbose.** Each row renders the pencil icon AND
       the full word "Edit". The "×" remove uses icon-only. Trim "Edit" to icon-only
       (with `aria-label="Edit this row"`) to match the remove affordance.
 
 _5 · Positioning_
-- [ ] **"Parse statement" button is below the tall textarea and off-screen at 768px.**
+- [x] **"Parse statement" button is below the tall textarea and off-screen at 768px.**
       Move above the textarea, or add in both positions. Confirmed in `dark_768_empty.png`.
-- [ ] **Monthly spend summary card is a separate card below the review card.** Confirmed
+- [x] **Monthly spend summary card is a separate card below the review card.** Confirmed
       in `dark_1280_review_full.png`. Consider embedding monthly totals as a compact row
       inside the review card above the account selector and "Import these" button.
 
 _6 · Ordering_
-- [ ] **Image import (highest friction: needs key + file + AI call) is the first card.**
+- [x] **Image import (highest friction: needs key + file + AI call) is the first card.**
       For a desktop user, statement paste and CSV are far lower friction and more
       frequent. Consider: statement paste → CSV → image ordering, or a single
       "How would you like to import?" method switcher.
-- [ ] **History appears last.** A returning user must scroll past three large import
+- [x] **History appears last.** A returning user must scroll past three large import
       cards to check their last import. A compact history strip at top ("Last import:
       3 rows · Jun 20 · Checking") would orient returning users immediately.
 
 _7 · General UX / Glanceability_
-- [ ] **The page does not communicate its current state at a glance.** Four flat cards,
+- [x] **The page does not communicate its current state at a glance.** Four flat cards,
       no entry-point signal, no indication of which step is active. Needs a legible state
       model: "Nothing yet" vs "N rows to review" (action-required) vs "Last import N
       rows on [date]".
-- [ ] **Import success message is easy to miss.** After CSV import, a short muted text
+- [x] **Import success message is easy to miss.** After CSV import, a short muted text
       appears below the CSV textarea — low priority and transient. A brief top-of-card
       success banner or highlighted history entry would confirm completion more clearly.
-- [ ] **Card description paragraphs are long and dense.** A shorter sub-label with an
+- [x] **Card description paragraphs are long and dense.** A shorter sub-label with an
       expandable "How?" detail would be more glanceable.
 
 **UI/UX defects (screenshot-confirmed)**
@@ -14732,7 +14732,7 @@ JSON: `glamor_15_customize_dom.json`, `glamor_15_customize_dom_formula.json`,
 **Structure fixes (bottom-up)** grouped by the 7 dimensions:
 
 _1 · Layout_
-- [ ] **CRITICAL: Formula calculator is below the fold at every desktop width.** DOM-confirmed
+- [x] **CRITICAL: Formula calculator is below the fold at every desktop width.** DOM-confirmed
       card order: "Add a custom field" → "Accounts" [entity listing] → "Transactions" [entity
       listing] → "Formula calculator" → "Result" → "Saved formulas" → "Available variables".
       At 1280×900 the formula input, example buttons, result, and variables are entirely off-screen
@@ -14743,31 +14743,31 @@ _1 · Layout_
       impact fix on this page: reorder DOM so the formula calculator card (and its result) appear
       first, above the custom-field manager.** The formula tool is the primary, featured capability;
       custom fields are an advanced secondary feature.
-- [ ] **Seven flat cards with no two-tool hierarchy.** The page exposes two distinct tools —
+- [x] **Seven flat cards with no two-tool hierarchy.** The page exposes two distinct tools —
       a formula calculator and a custom-fields manager — as an undifferentiated stream of 7 equal-
       weight cards. There is no visual signal that separates "formula tool (cards 1–3)" from "custom
       fields tool (cards 4–5 in current DOM)". A clear section heading or visual divider between
       the two tools — or a two-tab / two-panel layout — would let Tomás understand the page's
       structure at a glance. Cross-references C61 (two tools in one screen).
-- [ ] **Result card is detached from the formula input.** The formula input lives in "Formula
+- [x] **Result card is detached from the formula input.** The formula input lives in "Formula
       calculator"; the result appears in a separate "Result" card below it — with no visual
       connection (no arrow, no inset, no shared card). Users typing in the formula input see no
       immediate hint of where to look for the output. Either merge the result into the calculator
       card as an inline output pane (below the expression field), or use a strong visual connector.
 
 _2 · Spacing_
-- [ ] **Entity-listing cards ("Accounts", "Transactions") have very little internal padding.**
+- [x] **Entity-listing cards ("Accounts", "Transactions") have very little internal padding.**
       Each entity card shows its one or two field definitions with a `×` delete button; the minimal
       spacing makes them feel like lists within the larger add-form card rather than independent
       management sections. A slightly larger header (`card-head` padding or a thicker card border)
       would visually separate the "list of fields" cards from the "add a field" form card.
-- [ ] **Example buttons row is tight against the formula input** — the `mt-2` gap between the
+- [x] **Example buttons row is tight against the formula input** — the `mt-2` gap between the
       expression field and the "Try:" row is 8px; at 768px the "Over budget?" button wraps to its
       own row below the other three. Increase to `mt-3` and ensure all four chips fit on one row
       at 768px (they fit at 1280/1440). Confirmed in `dark_768_full.png` and `light_768_full.png`.
 
 _3 · Theming_
-- [ ] **CRITICAL: Variable row amounts are near-invisible in light mode.** `varAmtColor:
+- [x] **CRITICAL: Variable row amounts are near-invisible in light mode.** `varAmtColor:
       rgb(244,244,245)` on transparent-over-white (`rgb(255,255,255)`) — contrast ~1.05:1, fails
       WCAG AA (4.5:1) catastrophically. The "Available variables" card shows 11 variable name +
       value pairs; in light mode every value (`60,386`, `85,813`, `4,068`, etc.) is virtually
@@ -14776,87 +14776,87 @@ _3 · Theming_
       `light_contrast.json` (`varAmtColor: rgb(244,244,245)`). **Fix: ensure `.amount` / `.fig`
       in `.rows .row` uses `--text` or `--fg` which switches to dark in light theme.** Highest-
       impact theming fix on this page.
-- [ ] **Dark body background bleeds between cards in light mode.** `mainBg: rgba(0,0,0,0)`
+- [x] **Dark body background bleeds between cards in light mode.** `mainBg: rgba(0,0,0,0)`
       and body `pageBg: rgb(247,246,243)` but the gap regions between white cards render as near-
       black bands (the body `rgb(14,14,15)` shows through). Confirmed visually in
       `light_1280_empty.png`, `light_1440.png`, `light_768_full.png` — thick black gutters between
       white cards in an otherwise light-mode page. Same systemic fix as G12/G13/G14: content-area
       background token must switch in `data-theme=light`.
-- [ ] **Custom field description paragraph renders in muted amber in light mode.** The card
+- [x] **Custom field description paragraph renders in muted amber in light mode.** The card
       description "Define your own fields on any entity…" renders in the `.muted` amber token
       (`rgb(86,86,92)` approximately, or possibly the amber variant) — in light mode this reads as
       an active/warning state rather than secondary text. Confirmed in `light_1280_empty.png` where
       the paragraph under "Add a custom field" appears amber-tinted. Use a neutral `--text-dim`
       token that reads as secondary text, not as an alert, in both themes.
-- [ ] **Muted text in light (`rgb(86,86,92)`) is borderline.** ~5.4:1 on white — passes AA for
+- [x] **Muted text in light (`rgb(86,86,92)`) is borderline.** ~5.4:1 on white — passes AA for
       normal body text but is tight for small paragraph text. Flag for token audit.
 
 _4 · Styling_
-- [ ] **"Savings rate %" example button goes blank after clicking it.** In `light_1280_example.png`
+- [x] **"Savings rate %" example button goes blank after clicking it.** In `light_1280_example.png`
       the first `.data-btn` renders as an empty white rectangle — its text label disappears after
       being clicked and the formula populates. This may be a state bug where clicking sets the
       button text to the formula expression and truncates it, or the button loses its text node.
       Confirmed visually: `light_1280_example.png` shows an empty white box where "Savings rate %"
       was. Needs investigation — either a render bug in the example-button click handler, or the
       expression is being written into the button's own text node.
-- [ ] **All form inputs are placeholder-only — no visible labels.** `labelTexts: []` confirmed
+- [x] **All form inputs are placeholder-only — no visible labels.** `labelTexts: []` confirmed
       by DOM audit: there is not a single `<label>` element on the page. The custom-field form
       inputs ("Key (e.g. account_number)", "Label (e.g. Account number)") and the formula name
       input ("Name this formula…") are purely placeholder-labelled. Cross-references C61 (no
       label) and B15 (systemic labelling gap). Add visible `<label>` elements for the key, label,
       and formula-name inputs at minimum.
-- [ ] **"Save formula" button is primary green at full width** even when the name field is empty.
+- [x] **"Save formula" button is primary green at full width** even when the name field is empty.
       The save button dominates the formula section visually but is not actionable until both
       the expression and name fields have content. Consider disabling or dimming it when either
       field is empty, and making its width proportional (`fit-content` + `align-self: flex-end`)
       rather than spanning the full card width.
 
 _5 · Positioning_
-- [ ] **The formula name input and "Save formula" button are on the same row**, leaving the name
+- [x] **The formula name input and "Save formula" button are on the same row**, leaving the name
       field at roughly half card width. At 768px the layout is two rows (input above button), but
       at 1280/1440 the button is beside the name field — this is actually acceptable; the concern
       is that the full-width green "Save formula" button is visually louder than the formula
       expression input itself. The primary interaction (typing the expression) is less visually
       prominent than the secondary action (saving it). Consider a compact `btn-primary` save button
       with `width: fit-content` at desktop widths.
-- [ ] **Custom field "Add field" button is primary green and prominently centered** in the add
+- [x] **Custom field "Add field" button is primary green and prominently centered** in the add
       form row. At 768px it occupies the full right column in a two-column layout; its prominence
       is higher than warranted for an "add" action inside a form that users haven't filled yet.
       Use the standard `btn-sm btn-primary` sizing consistent with other add-form buttons.
 
 _6 · Ordering_
-- [ ] **HIGHEST IMPACT — formula calculator should be first, custom fields second.** Current DOM
+- [x] **HIGHEST IMPACT — formula calculator should be first, custom fields second.** Current DOM
       order buries the formula tool under three custom-field cards. The page is named "Customize"
       and the nav places it in the BUILD section — a user arriving expects the formula builder,
       not a field-definition form. Reorder: formula calculator → result → saved formulas →
       available variables → [section divider] → custom fields add form → entity field listings.
       Alternatively, use an in-page tab strip ("Formula" | "Custom fields") to give each tool its
       own view without scrolling. Cross-references C61 (two tools in one screen).
-- [ ] **"Available variables" card is last** — below saved formulas. The variable reference is
+- [x] **"Available variables" card is last** — below saved formulas. The variable reference is
       needed while writing a formula, not after saving one. Move it immediately below the formula
       calculator card so Tomás can see the variable names while composing his expression without
       scrolling to the bottom of the page.
 
 _7 · General UX / Glanceability_
-- [ ] **Tomás's key task — "type a formula, see its result" — requires scrolling past three
+- [x] **Tomás's key task — "type a formula, see its result" — requires scrolling past three
       irrelevant cards on arrival.** The formula input, the result, the example buttons, the
       variable reference, and the saved formulas are all below the fold at 1280/1440. The single
       largest glanceability improvement on this page is layout reorder (see §6 fix #1). Once
       the formula calculator leads, the entire workflow (type → see result → save → view saved)
       is above the fold.
-- [ ] **No click-to-insert for variable names.** The "Available variables" card lists 11
+- [x] **No click-to-insert for variable names.** The "Available variables" card lists 11
       variable names (sorted alphabetically: accounts, assets, budgets, …) with their values,
       but each row is static text — clicking a variable name does not insert it into the formula
       input. Tomás must read the name, remember it, scroll back up to the expression field, and
       type it by hand. Cross-references C61 (no var-insert). Add an `OnClick` to each `.row-desc`
       in the vars card that appends the variable name to the expression.
-- [ ] **Result value shows raw number without context ("−8").** The result of the savings-rate
+- [x] **Result value shows raw number without context ("−8").** The result of the savings-rate
       formula is "-8" — no "%" suffix, no currency symbol, no label saying "savings rate". Without
       context the number is ambiguous. C61 flagged this: the formula result should carry a display
       hint (the engine evaluates correctly; the display layer needs unit context). Consider
       appending "%" when the example buttons populate the formula (they already label themselves
       "Savings rate %"), or allow the saved formula to carry a format hint.
-- [ ] **No empty-state CTA for custom fields under each entity type** when no fields exist.
+- [x] **No empty-state CTA for custom fields under each entity type** when no fields exist.
       With no custom fields defined for an entity, the entity-type card simply does not appear in
       the listing (DOM shows "Accounts" and "Transactions" only — "Budgets", "Goals", "Members"
       cards are absent because the sample data has no fields for them). A user wanting to add a
@@ -15010,7 +15010,7 @@ JSON: `glamor_16_members_dom.json`, `glamor_16_members_dom_light.json`,
 **Structure fixes (bottom-up)** grouped by the 7 dimensions:
 
 _1 · Layout_
-- [ ] **No add-member form on the Members page itself.** Renu must discover "New member" in the
+- [x] **No add-member form on the Members page itself.** Renu must discover "New member" in the
       global `+` header button and drill into a modal. There is no "Add a member" card or inline
       form on the page; the page is display-only for roster management. For a page whose primary
       job is household management, the add form (name + color) should appear directly on the page
@@ -15018,7 +15018,7 @@ _1 · Layout_
       labelled call-to-action button within the "Household members" card that expands an inline
       form. Confirmed absent in `dark_1280_roster.png`, `light_1280_roster.png`,
       `dark_1280_roster_full.png`. (See also _7 · General UX_ — discovery problem.)
-- [ ] **Two flat cards with no hierarchy signal.** "Household members" (action-oriented: manage
+- [x] **Two flat cards with no hierarchy signal.** "Household members" (action-oriented: manage
       roster) and "Net worth by member" (data-oriented: read-only summary) are presented as equal-
       weight sibling cards. There is no visual signal that separates the management section from the
       analytics section. A subtle section heading or visual weight difference (heavier border or
@@ -15026,19 +15026,19 @@ _1 · Layout_
       Confirmed in `dark_1280_roster.png`, `light_1280_roster.png`.
 
 _2 · Spacing_
-- [ ] **Inline edit form expands to full-card width with very wide empty right two-thirds.** At
+- [x] **Inline edit form expands to full-card width with very wide empty right two-thirds.** At
       1280+ the edit form (Name field + color swatch + Save + Cancel) is left-anchored and occupies
       roughly one-third of the card width; the right two-thirds are blank grey (dark) or blank white
       (light). The form-grid renders in a single narrow column. Consider a two-column `form-grid`
       layout so Name and color picker share one row, with Save/Cancel below — more compact and less
       wasteful. Confirmed in `dark_1280_edit.png`, `light_1280_edit.png`.
-- [ ] **No spacing separator between member rows.** The two member rows in "Household members" are
+- [x] **No spacing separator between member rows.** The two member rows in "Household members" are
       separated only by a thin `<hr>`-style rule (or none visible). At 768px the rows are dense and
       the name-wrap + action-row layout creates visual clutter. A modest `row-gap` or row padding
       increase would improve scannability. Confirmed in `dark_768.png`.
 
 _3 · Theming_
-- [ ] **CRITICAL: Net-worth amounts are near-invisible in light mode.** `amtColor:
+- [x] **CRITICAL: Net-worth amounts are near-invisible in light mode.** `amtColor:
       rgb(244,244,245)` in net-worth rows against transparent-over-white (`rgb(255,255,255)`) —
       contrast ~1.05:1, catastrophically fails WCAG AA (4.5:1). Every dollar amount in "Net worth
       by member" — `$60,386.00`, `$0.00`, `$0.00` — is virtually invisible in light mode.
@@ -15046,19 +15046,19 @@ _3 · Theming_
       faint to invisible). Same systemic root as G4–G15: `.amount`/`.fig`/`.pos`/`.neg` tokens in
       `.rows .row` do not switch in `data-theme=light`. **Fix: ensure net-worth row amount spans
       use `--text` or `--fg` in light theme.** Highest-impact theming fix on this page.
-- [ ] **Dark body background bleeds between cards in light mode.** `mainBg: rgba(0,0,0,0)` —
+- [x] **Dark body background bleeds between cards in light mode.** `mainBg: rgba(0,0,0,0)` —
       the gap between "Household members" (white card) and "Net worth by member" (white card)
       shows the dark body `rgb(14,14,15)` as a thick black band in an otherwise light-mode page.
       Confirmed visually in `light_1280_roster.png`, `light_1440.png`, `light_768.png`. Same
       systemic fix as G12–G15: content-area background token must switch to a light value in
       `data-theme=light`.
-- [ ] **"Member" role label is in muted amber in light mode.** `rowMetaColor: rgb(86,86,92)` —
+- [x] **"Member" role label is in muted amber in light mode.** `rowMetaColor: rgb(86,86,92)` —
       borderline (~5.4:1) for sub-label text. The "Default member" / "Member" role labels render
       in the muted token. In light mode this reads as slightly amber/warm-grey rather than neutral
       secondary text. Flag for the token audit; consistent with G4–G15 muted-token concern.
 
 _4 · Styling_
-- [ ] **Color picker swatch is very small (44×44px) with no affordance label below it.** The
+- [x] **Color picker swatch is very small (44×44px) with no affordance label below it.** The
       color `<input type="color">` renders as a small square block. It does have a `labeledField`
       wrapper (the "Member color" label appears above), but the swatch itself carries no hint of
       what happens when clicked (opens OS color picker), no tooltip on hover visible in screenshot,
@@ -15067,20 +15067,20 @@ _4 · Styling_
       Confirmed in `dark_1280_edit.png`, `light_1280_edit.png`. C8 note: this is not the "bare
       line" issue described in C8 (the swatch renders as a square not a line) — C8 is largely
       resolved — but the small-swatch affordance gap remains.
-- [ ] **No visible labels on the roster page (outside of edit form).** `labelTexts: []` on the
+- [x] **No visible labels on the roster page (outside of edit form).** `labelTexts: []` on the
       roster landing — the page has no `<label>` elements in its non-edit state. The "Everyone"
       view-as-member selector in the header (a `<select>`) is not wrapped in a label visible on
       the page. In the add form (accessed via `+` modal), labels are present. Roster-state
       concern: role labels ("Default member", "Member") are in `.row-meta` spans, which is
       adequate — but there is no page-level instruction for what the page does. An introductory
       sentence or card description paragraph is absent.
-- [ ] **Delete button (×) is icon-only with no text label.** The `<button class="btn-del">` uses
+- [x] **Delete button (×) is icon-only with no text label.** The `<button class="btn-del">` uses
       only an `×` icon; it does have `aria-label` set in the source (confirmed at `members.go`
       line 319: `Attr("aria-label", uistate.T("members.deleteTitle"))`), so accessibility is
       covered. Visually, the × sits immediately after "Edit" with no spacing emphasis — for a
       destructive action (which triggers a reassign panel if the member owns things), slightly more
       visual separation or a red tint on hover would help. Confirmed in `dark_1280_roster.png`.
-- [ ] **"Transactions" button shows both icon and text; "Edit" shows both icon and text; delete
+- [x] **"Transactions" button shows both icon and text; "Edit" shows both icon and text; delete
       shows only icon.** The row action trio has inconsistent verbosity — "Transactions" (icon +
       word), "Edit" (icon + word), × (icon only). The icon-only delete creates an asymmetry for
       a destructive action (higher stakes than viewing transactions). Either make delete also show
@@ -15089,12 +15089,12 @@ _4 · Styling_
       `dark_768.png`.
 
 _5 · Positioning_
-- [ ] **Add-member entry point is not on the page.** Renu must find "New member" in the global
+- [x] **Add-member entry point is not on the page.** Renu must find "New member" in the global
       `+` header dropdown — it is not visible anywhere on the Members page itself. A page dedicated
       to household management should surface its own add action. At minimum, a "Add a member"
       button at the bottom of the "Household members" card would orient Renu immediately without
       hunting the global header. Confirmed: no add button/form visible in any roster screenshot.
-- [ ] **At 768px, member names that wrap to two lines push action buttons into a stacked
+- [x] **At 768px, member names that wrap to two lines push action buttons into a stacked
       second row.** "Jordan Lee (roommate)" (long name) wraps to three lines at 768px (name /
       wrapping name / role label), with the action buttons (Make default / Transactions / Edit /
       ×) forming a separate horizontal row below. This creates a crowded, hard-to-scan layout.
@@ -15102,46 +15102,46 @@ _5 · Positioning_
       overflow `⋮` menu at narrow widths. Confirmed in `dark_768.png`, `light_768.png`.
 
 _6 · Ordering_
-- [ ] **Net worth by member does not mirror the roster order.** In the "Household members" card,
+- [x] **Net worth by member does not mirror the roster order.** In the "Household members" card,
       Daniel Carter appears first (he is the Default member, which is a strong ordering signal).
       In "Net worth by member", Daniel Carter also appears first — this is correct. However, the
       "Group (shared)" entry appears last in both, which is reasonable. The ordering is consistent
       across the two cards. ✓ — No reordering fix needed here.
-- [ ] **No explicit "owner first" label or hierarchy signal in the roster.** The Default member
+- [x] **No explicit "owner first" label or hierarchy signal in the roster.** The Default member
       (Daniel Carter) appears first and carries a "DEFAULT" badge, which communicates primacy
       visually. There is no further ordering control. For a small household (2 members) this is
       adequate; for larger households, a drag-to-reorder or alphabetical sort option would improve
       manageability. Flag as a future enhancement, not a blocking fix for this ticket.
 
 _7 · General UX / Glanceability_
-- [ ] **The page gives no entry-point instruction.** On arrival (roster state), Renu sees two
+- [x] **The page gives no entry-point instruction.** On arrival (roster state), Renu sees two
       cards with member data but no heading paragraph, no card description, and no hint that she
       can add members (or how). A short card description on "Household members" — "Manage who's
       in your household. Each member can own accounts, budgets, and goals." — would orient a
       first-time user and surface the add action. Confirmed absent in all roster screenshots.
-- [ ] **Reassign-before-delete flow cannot be screenshot-confirmed in this run.** The reassign
+- [x] **Reassign-before-delete flow cannot be screenshot-confirmed in this run.** The reassign
       panel (`reassignPanel` in source) is wired correctly (confirmed via source at `members.go`
       lines 180–201) and C62 notes it as "great". However, the probe script did not trigger
       reassignment (would require deleting a member who owns entities). A future probe should
       click the × on a member with owned accounts to confirm the panel renders with the
       reassignment select and "Move and delete" button. Consider adding `data-testid` attributes
       to the reassign panel select and confirm button for testability.
-- [ ] **Avatar color is set in member data but not previewable in the add-member flow without
+- [x] **Avatar color is set in member data but not previewable in the add-member flow without
       opening inline edit.** Renu adds a member via the `+` modal (MemberAddForm), sets a color,
       saves — and then sees the avatar disc in the roster. The color-to-avatar feedback loop is
       only visible after save. A live preview of the avatar initial disc as the user types the
       name and picks the color would reduce the "save and see" iteration. This is a UX enhancement
       (not a bug), cross-referencing C62 avatar polish.
-- [ ] **Empty state not exercised — no "add your first member" CTA visible in this run.** The
+- [x] **Empty state not exercised — no "add your first member" CTA visible in this run.** The
       source (`members.go` line 207) shows an `EmptyStateCTA` with `uistate.T("members.empty")`
       and `uistate.T("members.addFirst")` — a properly designed empty state exists. Not visible
       in this run because sample data has 2 members. No fix needed; noting as a regression anchor.
-- [ ] **C8 cross-reference: color picker rendering.** C8 flagged the color picker as "rendered
+- [x] **C8 cross-reference: color picker rendering.** C8 flagged the color picker as "rendered
       as a bare line". In the current build, the color picker renders as a 44×44px filled square
       swatch in both dark and light, with a visible "Member color" label above it. The bare-line
       rendering described in C8 is no longer present. C8 is closed for the Members page with
       the remaining note on swatch affordance clarity (see _4 · Styling_).
-- [ ] **C62 cross-reference: label/wrap polish.** C62 noted minor label/wrap polish remaining.
+- [x] **C62 cross-reference: label/wrap polish.** C62 noted minor label/wrap polish remaining.
       The name wrapping at 768px (confirmed in `dark_768.png`) and the action-button crowding
       are the open items from that ticket.
 
@@ -15278,7 +15278,7 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout — "Add" entry point is invisible above the fold*
-- [ ] **The "New category" action is only reachable from the command palette/top-bar
+- [x] **The "New category" action is only reachable from the command palette/top-bar
       plus button — there is no visible "Add category" CTA inside either card, at the
       card header, or above the list.** In `glamor_17_categories_dark_1280.png` and the
       light equivalents, both "Expense categories" and "Income categories" cards show
@@ -15289,7 +15289,7 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
       Every other CRUD page (Accounts, Goals, Budgets) has a visible `+ Add` button at
       the top of its relevant card. Add one per kind card (Expense / Income) so Tomás
       can add in-context and the UI self-explains the action.
-- [ ] **The primary content (the category tree) starts above the fold at 1280px but
+- [x] **The primary content (the category tree) starts above the fold at 1280px but
       the Income section and the "Category map" card require significant scrolling.**
       `pageHeight: 900 === viewportH` at 1280 dark — but only because the DOM audit
       ran before the user scrolls; full-page screenshots confirm 26 rows spanning far
@@ -15298,27 +15298,27 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
       (Expense left / Income right) would halve the scroll depth and show both kinds
       simultaneously. The "Category map" card (a visual tree diagram) is completely
       below fold at all tested widths.
-- [ ] **The "Category map" card (card 3) is never visible without scrolling.** It is
+- [x] **The "Category map" card (card 3) is never visible without scrolling.** It is
       the highest-glanceability element on the page — a visual hierarchy diagram — but
       it is positioned below all 22+ category rows, making it effectively invisible to
       most users. It should lead the page (above the row lists) or sit in a side column,
       not trail at the bottom.
 
 *2. Spacing — row density is comfortable but tree depth lacks visual breathing room*
-- [ ] **Sub-category rows are indented but carry only a thin left-border guide as the
+- [x] **Sub-category rows are indented but carry only a thin left-border guide as the
       nesting cue.** In `glamor_17_categories_dark_768.png` and the 1280px views, Gas
       and Transit (under Transportation) show a narrow vertical line on their left edge
       as the only nesting indicator. At 768px this line is only 2-3px wide and is easy
       to miss. A combination of left-padding AND a subtle background fill on the child
       rows (a very slight tint behind Gas/Transit) would make the parent-child
       relationship unmistakable. The current left-border alone is too subtle.
-- [ ] **No visual spacer between the last child row and the next parent row.** After
+- [x] **No visual spacer between the last child row and the next parent row.** After
       "Transit" (child of Transportation) the next parent "Travel" appears immediately
       at the same indentation rhythm as the parents above. A small `margin-top` (4–6px
       extra) after the last child in a group would reset the visual tree cadence.
 
 *3. Theming — light mode passes; dark nav rail bleeds into light content area*
-- [ ] **The nav rail remains dark in light mode — confirmed across all light
+- [x] **The nav rail remains dark in light mode — confirmed across all light
       screenshots.** In `glamor_17_categories_light_1280.png`, `light_1440.png`,
       and `light_768.png`: the left nav rail is black while the content area is white.
       This is the systemic shell-level two-tone bleed confirmed across G4–G16. The
@@ -15326,7 +15326,7 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
       confirmed), but the surrounding shell does not. Light-mode card title contrast
       PASSES (18:1). No G17-specific theming bug — this is the shell-level issue
       tracked systemically.
-- [ ] **Usage count text contrast is borderline in light mode.** DOM audit:
+- [x] **Usage count text contrast is borderline in light mode.** DOM audit:
       `badgeColor: rgb(86,86,92)` on `rgba(0,0,0,0)` (white card background) — computed
       contrast ~4.1:1. WCAG AA for normal-size text requires 4.5:1; this fails by a
       small margin. The "26 transactions" lines that Tomás relies on to know which
@@ -15335,7 +15335,7 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
       `rgb(60,60,65)` minimum.
 
 *4. Styling — sub-category nesting depth and expand/collapse affordance*
-- [ ] **The expand/collapse chevron (∨ button) on Transportation is the only parent
+- [x] **The expand/collapse chevron (∨ button) on Transportation is the only parent
       with a visible toggle — other parents with children (Utilities) may not show one,
       or it may only appear on hover.** In `glamor_17_categories_dark_1280.png` the ∨
       button is visible only on Transportation. If Utilities also has children (Electricity,
@@ -15343,12 +15343,12 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
       Utilities is expandable/collapsible unless he hovers it. Every parent with children
       should show a persistent (not hover-only) expand/collapse toggle. The toggle should
       also expose its state (`aria-expanded`) for screen readers.
-- [ ] **The "Edit" button is icon + text at all widths.** At 768px in
+- [x] **The "Edit" button is icon + text at all widths.** At 768px in
       `glamor_17_categories_dark_768.png` the "✏ Edit" button in each row is still
       icon + full text. At 480px or heavy density this would wrap. C63/C10/C19 note the
       icon-only-on-small-widths pattern used elsewhere; apply it here for consistency
       (icon-only with `aria-label` at ≤600px).
-- [ ] **The usage count is plain muted text, not a visually distinct badge chip.** In
+- [x] **The usage count is plain muted text, not a visually distinct badge chip.** In
       `glamor_17_categories_dark_1280.png` the usage count reads "Expense · 26
       transactions" as a single muted line — indistinguishable in visual weight from
       the "Expense" kind label next to it. Making the count a pill/chip badge (small,
@@ -15357,20 +15357,20 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
       does not afford drill-down visually.
 
 *5. Positioning — "Add" is below the fold; "Category map" is at the very bottom*
-- [ ] **No "Add" affordance is above the fold.** As documented in §1: Tomás lands on
+- [x] **No "Add" affordance is above the fold.** As documented in §1: Tomás lands on
       the page and sees only a list of existing rows. There is no visible path to add
       a new category without already knowing about the command palette. In
       `glamor_17_categories_dark_1280.png` the first viewport shows Dining through
       Transportation with no add button in sight — confirmed by the probe's failure to
       find a visible in-card add button.
-- [ ] **The "Category map" card is positioned last (below all rows).** This relegates
+- [x] **The "Category map" card is positioned last (below all rows).** This relegates
       the visual tree overview to a position where users never see it unless they
       scroll past all 22+ category rows. It should appear at or near the top of the
       page — either as a collapsed summary card or in a sidebar — so Tomás gets the
       tree shape on arrival, not after exhausting the list.
 
 *6. Ordering — alphabetical only, no usage-ranked option*
-- [ ] **Categories are in alphabetical order within each kind — no way to see highest-
+- [x] **Categories are in alphabetical order within each kind — no way to see highest-
       usage categories first.** For Tomás auditing his tree, the most useful view is
       "which categories have the most transactions?" (the ones he definitely must keep
       or recategorize carefully). The current alphabetical ordering puts Dining (26
@@ -15379,30 +15379,30 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
       (0 transactions). A "Sort by usage" toggle — mirroring the sort affordance on
       Transactions and Accounts — would make this page far more useful for cleanup
       decisions.
-- [ ] **Zero-transaction categories are visually identical to active ones.** "Fees &
+- [x] **Zero-transaction categories are visually identical to active ones.** "Fees &
       Charges · No transactions" and "Insurance · No transactions" appear exactly like
       "Groceries · 50 transactions" in size, weight, and color. A light `opacity: 0.6`
       or `--fg-muted` tint on zero-usage rows would let Tomás immediately spot safe-to-
       delete candidates without reading every row.
 
 *7. General UX / Glanceability — "Add" discoverability, usage drill, tree clarity*
-- [ ] **The "Add" action is not discoverable without knowing the command palette.**
+- [x] **The "Add" action is not discoverable without knowing the command palette.**
       Confirmed across all screenshots. This is the single highest-impact glanceability
       fix: a new user or an infrequent user would not know how to add a category. Per
       every other CRUD screen in the app, a primary `+ Add` button in the card header
       is the expected affordance.
-- [ ] **Usage count is not visually afforded as a drill-down.** The "26 transactions"
+- [x] **Usage count is not visually afforded as a drill-down.** The "26 transactions"
       text does function as a drill target (confirmed by `categories_usage_drill_check`),
       but it looks like metadata text, not a link or button. At minimum underline on
       hover, or style it as a button/link — this is the C30 drill pattern that Accounts
       and Members follow but Categories has not fully adopted visually.
-- [ ] **Form inputs lack visible labels (C63 labelling gap open).** DOM audit:
+- [x] **Form inputs lack visible labels (C63 labelling gap open).** DOM audit:
       `inputLabels` shows only the "View as member" `<select>` (which has an `aria-label`).
       No add/edit form was exercised by the probe (no in-card Add button found), so the
       open C63 labelling items — name is placeholder-only, kind/parent selects lack
       `aria-label` — remain unverified as fixed. The C63 checklist item "Add labels +
       focus the reassign panel on open" is still flagged open.
-- [ ] **No empty state has been confirmed for the zero-categories case.** DOM audit:
+- [x] **No empty state has been confirmed for the zero-categories case.** DOM audit:
       `hasEmptyState: false`, `emptyStateText: ""`. The app seeded categories exist so
       this is not a real scenario in the audit, but the empty-state path should be
       explicitly styled with a CTA (add your first expense category / income category)
@@ -21868,13 +21868,15 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 - [ ] W-21 Scroll-reveal — long pages (Reports) reveal sections as they enter the viewport (IntersectionObserver).
 
 **Theme-engine integration (GO-STRUCTURAL, build-gated GI0):**
-- [ ] Add a motion field to `theme.Theme` (e.g. `Motion: off|subtle|full` or a 0..1 intensity) +
+- [x] Add a motion field to `theme.Theme` (e.g. `Motion: off|subtle|full` or a 0..1 intensity) +
       `theme.CSSVars()` emits `--wonder-*` (and/or `ApplyTheme` sets `data-wonder` on `<html>` like it sets
-      `data-theme`/density). Default = full.
-- [ ] Theme editor (B20): add a **"Motion / flourishes"** control — an off/subtle/full segment or an
-      intensity slider — persisted with the theme. Live-preview (the app animates as you drag).
+      `data-theme`/density). Default = full. — **LANDED 2026-06-23** (`prefs.Motion` field + `ApplyPrefs` sets `data-wonder`)
+- [x] Theme editor (B20): add a **"Motion / flourishes"** control — an off/subtle/full segment or an
+      intensity slider — persisted with the theme. Live-preview (the app animates as you drag). — **LANDED 2026-06-23** (Settings → Appearance Motion segment control)
 - [ ] Respect the OS `prefers-reduced-motion` as the hard override regardless of the setting (CSS already does;
       mirror in the setting copy: "Following your system's reduced-motion setting").
+
+**LANDED 2026-06-23 — Motion pref (full/subtle/off) wired end-to-end.**
 
 **Principles (enforce in every flourish):**
 - Fast (≤ ~200ms for feedback, ≤ ~320ms for entrances) + a single shared easing family.

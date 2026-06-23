@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -26,6 +27,13 @@ type draftReviewListProps struct {
 	ReceiptTotal    string
 	ReceiptMerchant string
 	RecBaseCur      string // base currency for receipt math
+
+	// SeenSigs holds existing transaction signatures for the chosen account so
+	// DraftReviewList can badge rows that would be skipped as duplicates (G14 §4).
+	SeenSigs map[string]bool
+
+	// ClearDraft clears all pending rows (G14 §1 / "Start over" action).
+	ClearDraft ui.Handler
 
 	// Toggle is the pre-built receipt-mode ToggleRow node (built in Documents()
 	// so the OnChange handler has direct access to state setters).
@@ -49,16 +57,21 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 		return nil
 	}
 
-	// Build per-row components.
+	// Build per-row components, flagging duplicates (G14 §4).
 	items := make([]ui.Node, 0, len(rows))
 	for i, r := range rows {
+		dup := false
+		if props.SeenSigs != nil {
+			dup = props.SeenSigs[r.Signature()]
+		}
 		items = append(items, ui.CreateElement(DraftRow, draftRowProps{
-			Index:      i,
-			Row:        r,
-			Currency:   props.ReviewCur,
-			Categories: props.Categories,
-			OnRemove:   props.OnRemoveDraft,
-			OnUpdate:   props.OnUpdateDraft,
+			Index:       i,
+			Row:         r,
+			Currency:    props.ReviewCur,
+			Categories:  props.Categories,
+			IsDuplicate: dup,
+			OnRemove:    props.OnRemoveDraft,
+			OnUpdate:    props.OnUpdateDraft,
 		}))
 	}
 
@@ -141,9 +154,33 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 		)
 	}
 
+	// G14 §1 / §7: count how many rows are already-imported duplicates so the
+	// banner can show an actionable summary.
+	dupCount := 0
+	for _, r := range rows {
+		if props.SeenSigs != nil && props.SeenSigs[r.Signature()] {
+			dupCount++
+		}
+	}
+
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("documents.reviewTitle", plural(len(rows), "transaction")),
+		// G14 §1: colored left-border step indicator — signals this card is an
+		// "action required" next step that materialised from the user's last action.
+		ClassParts: []any{"card-step-active"},
 		Body: Fragment(
+			// G14 §1 / §7: contextual state banner — tells the user whether these
+			// rows are freshly parsed or persisted from a prior session, and offers
+			// a "Start over" escape hatch so they are never stuck with stale rows.
+			If(dupCount > 0,
+				Div(css.Class("notice notice-warn", tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+					Span(plural(dupCount, "row")+" of "+plural(len(rows), "row")+" already imported — will be skipped."),
+				),
+			),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt1),
+				Button(css.Class("btn btn-sm"), Type("button"), OnClick(props.ClearDraft),
+					"Start over"),
+			),
 			P(css.Class("muted"), uistate.T("documents.reviewDesc")),
 			props.Toggle,
 			Div(css.Class("rows"), items),

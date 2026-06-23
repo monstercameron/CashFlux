@@ -117,8 +117,16 @@ func CustomFieldsManager() ui.Node {
 			P(css.Class("muted"), uistate.T("cf.addDesc")),
 			Form(css.Class("form-grid"), OnSubmit(add),
 				Select(css.Class("field"), OnChange(onEntity), entityOptions),
-				Input(append([]any{css.Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
+				Label(css.Class("labeled-field"),
+					Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
+					Span(css.Class("muted"), uistate.T("cf.keyLabel")),
+					Input(append([]any{css.Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
+				),
+				Label(css.Class("labeled-field"),
+					Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
+					Span(css.Class("muted"), uistate.T("cf.labelLabel")),
+					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
+				),
 				Select(css.Class("field"), OnChange(onType), typeOptions),
 				If(isChoice, Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
 				Select(css.Class("field"), OnChange(onRequired),
@@ -131,7 +139,8 @@ func CustomFieldsManager() ui.Node {
 		),
 	})
 
-	// Group existing defs by entity type for a tidy list.
+	// Group existing defs by entity type. Every entity type always renders so
+	// users can see what categories exist even before adding a field (G15 §7).
 	defs := app.CustomFieldDefs()
 	sections := make([]any, 0, len(cfEntities))
 	for _, e := range cfEntities {
@@ -141,25 +150,20 @@ func CustomFieldsManager() ui.Node {
 				rows = append(rows, d)
 			}
 		}
-		if len(rows) == 0 {
-			continue
-		}
 		renderRow := func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldRow, customFieldRowProps{Def: d, OnDelete: deleteDef})
 		}
 		keyOf := func(d customfields.Def) any { return d.ID }
-		sections = append(sections, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T(e.Key),
-			Rows:  MapKeyed(rows, keyOf, renderRow),
-		}))
+		props := uiw.EntityListSectionProps{Title: uistate.T(e.Key)}
+		if len(rows) == 0 {
+			props.Body = P(css.Class("empty"), uistate.T("cf.entityEmpty", uistate.T(e.Key)))
+		} else {
+			props.Rows = MapKeyed(rows, keyOf, renderRow)
+		}
+		sections = append(sections, uiw.EntityListSection(props))
 	}
 
-	list := ui.Node(nil)
-	if len(sections) == 0 {
-		list = uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("cf.empty"))})
-	} else {
-		list = Fragment(sections...)
-	}
+	list := Fragment(sections...)
 
 	return Div(form, list)
 }
