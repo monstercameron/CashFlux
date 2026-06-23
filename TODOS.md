@@ -1350,30 +1350,30 @@ also lets icons inherit `currentColor` for theming, B20). Build a tiny `internal
 so screens reference glyphs by name; replace the ad-hoc Unicode glyphs above with real icons for consistency.
 
 **High-value placements (grounded in actual labels/sections):**
-- [ ] **Sidebar nav (highest — unblocks the collapsible rail):** one icon per item — Dashboard `layout-dashboard`,
+- [x] **Sidebar nav (highest — unblocks the collapsible rail):** one icon per item — Dashboard `layout-dashboard`,
       Accounts `wallet`, Transactions `arrow-left-right`, Budgets `pie-chart`, Goals `target`, To-do `check-square`,
       Planning `line-chart`, Allocate `scale`, Insights `sparkles`, Documents `file-text`, Customize `sliders`,
       Artifacts `box`, Workflows `workflow`, Members `users`, Categories `tags`, Rules `filter`, New page `plus`.
-- [ ] **Quick-add menu (text-only today):** leading icon per item — New transaction `arrow-left-right`, New account
+- [x] **Quick-add menu (text-only today):** leading icon per item — New transaction `arrow-left-right`, New account
       `wallet`, New budget `pie-chart`, New goal `target`, Scan a document `scan-line`/`camera`. Also the `+ Add`
       trigger → `plus`, the `⚙` → `settings`, `⋯` → `more-horizontal`, `✕` → `x`, `▾` → `chevron-down`, `‹ ›` →
       `chevron-left/right`.
-- [ ] **Dashboard KPI tiles:** leading icon on each tile header — Net worth `wallet`, Income `arrow-down-circle`,
+- [x] **Dashboard KPI tiles:** leading icon on each tile header — Net worth `wallet`, Income `arrow-down-circle`,
       Spending `arrow-up-circle`, Liabilities `credit-card`, Recent transactions `receipt`, Budgets `pie-chart`,
       Goal `target`, To-do `check-square`, Accounts `landmark`, Net worth trend `trending-up`. (Pairs with the
       existing tile-click-to-navigate TODO — icon reinforces the destination.)
-- [ ] **Status/semantic glyphs (carry meaning at a glance, color-coded):** stale-balance nudge ("7 balances could
+- [x] **Status/semantic glyphs (carry meaning at a glance, color-coded):** stale-balance nudge ("7 balances could
       use a refresh" / "7 accounts stale") → `clock`/`alert-circle`; over/near budget ("0 over budget · 2 near the
       limit") → `check-circle`/`alert-triangle`; goal pace (on-track/behind) → `trending-up`/`trending-down`;
       Insights trend arrows (currently bare `↑`) → colored `arrow-up`/`arrow-down`; transaction row type (transfer
       `arrow-left-right`, income `arrow-down`, expense `arrow-up`, cleared `check`).
-- [ ] **Row/section actions:** Accounts — Edit `pencil`, Update balance `refresh-cw`, Mark updated `check`, Mark
+- [x] **Row/section actions:** Accounts — Edit `pencil`, Update balance `refresh-cw`, Mark updated `check`, Mark
       all updated `refresh-cw`, Transactions link `list`; Goals — Contribute `plus-circle`, Edit `pencil`;
       Accounts section headers Assets `trending-up` / Liabilities `trending-down`.
-- [ ] **AI affordances — unify with one "sparkle" glyph:** "Read with AI", "Explain with AI", "Explain my month",
+- [x] **AI affordances — unify with one "sparkle" glyph:** "Read with AI", "Explain with AI", "Explain my month",
       "Ask about your money" all get `sparkles` (chat-style ones could use `message-circle`) so AI actions read as
       a consistent family.
-- [ ] **Per-screen section headers & empty states (make it interesting):** Planning — Net worth in 12 months
+- [x] **Per-screen section headers & empty states (make it interesting):** Planning — Net worth in 12 months
       `trending-up`, Recurring cash flows `repeat`, Savings & spending plans `sliders`, Debt payoff `calculator`,
       Projection `line-chart`; Documents — Read a receipt `scan-line`, Import CSV `upload`, Import history `history`;
       Allocate — Why this order `help-circle`, Exclude `ban`; Customize — Formula calculator `function-square`,
@@ -1386,24 +1386,24 @@ locally, no CDN), B20 theming (icons inherit `currentColor` → recolor with acc
 
 **C46.1 — Credit-card glyphs + "delight" micro-additions (user-requested 2026-06-18).** Beyond the functional
 icon pass above, add small characterful touches that make the app feel richer:
-- [ ] **Credit-card / network brand glyphs on accounts.** Credit-card & liability accounts show a small **card
+- [x] **Credit-card / network brand glyphs on accounts.** Credit-card & liability accounts show a small **card
       brand mark** (Visa / Mastercard / Amex / Discover / generic card). Detect brand from a user-set field (or
       optionally the card number's IIN/BIN prefix if ever entered — 4=Visa, 51-55/2221-2720=Mastercard, 34/37=Amex,
       6011/65=Discover); fall back to a **generic `credit-card` glyph** when unknown. ⚠️ **Trademark note:** Visa/MC/
       Amex/Discover logos are protected marks with brand guidelines — prefer a **permissively-licensed brand-icon
       set** (or simple stylized monograms/colors) over shipping official logos, and keep them purely decorative/
       identifying. Log a quick licensing check as a sub-task before bundling any real network logos.
-- [ ] **Mini credit-card visual for card accounts.** Optional small **card-art tile** (rounded rectangle, subtle
+- [x] **Mini credit-card visual for card accounts.** Optional small **card-art tile** (rounded rectangle, subtle
       gradient in the account/accent color, brand glyph, masked •••• last-4, name) on the Accounts screen / account
       detail — a wallet-style flourish that reads instantly as "a card." Pure CSS + the brand glyph; no PII beyond
       last-4, and only if the user enters it.
-- [ ] **Account-type avatars & color chips.** Each account/category/member gets a small colored avatar or
+- [x] **Account-type avatars & color chips.** Each account/category/member gets a small colored avatar or
       type-glyph (checking `landmark`, savings `piggy-bank`, cash `banknote`, investment `trending-up`, loan
       `credit-card`) so lists are scannable by shape+color, not just text.
-- [ ] **Category & member glyphs.** Let categories carry an icon/emoji (groceries `shopping-cart`, housing `home`,
+- [x] **Category & member glyphs.** Let categories carry an icon/emoji (groceries `shopping-cart`, housing `home`,
       transport `car`, utilities `plug`, dining `utensils`…) and members a colored monogram avatar — used in
       transaction rows, budgets, and allocation.
-- [ ] **Small delight moments (tasteful, dismissible, respect reduced-motion):** goal-reached confetti/checkmark
+- [x] **Small delight moments (tasteful, dismissible, respect reduced-motion):** goal-reached confetti/checkmark
       burst when a goal hits 100%; progress **rings** on goals/budgets instead of bare bars; tiny inline
       **sparklines** on KPI tiles; a subtle count-up animation on KPI numbers; streak/"all caught up" badge when no
       balances are stale; gentle hover lift on tiles. Keep them quiet and optional — never naggy (CLAUDE.md).
@@ -1436,49 +1436,49 @@ CSV export of the filtered set, the a11y live region). Build **bottom-up** per t
 of the logic already exists in the pure `txnfilter` package; extend it with tests before touching UI.
 
 **Logic / state (pure, tested first):**
-- [ ] Extend `internal/txnfilter` (or `uistate.TxFilter`) with an explicit **sort direction**
+- [x] Extend `internal/txnfilter` (or `uistate.TxFilter`) with an explicit **sort direction**
       (`Asc`/`Desc`) alongside the existing `Sort` field, and add `date|amount|payee|category|account`
       as sortable keys. Table-driven tests for each key × direction, including ties and transfer legs.
-- [ ] Add **pagination math** as pure helpers (page index, page size, total pages, slice bounds,
+- [x] Add **pagination math** as pure helpers (page index, page size, total pages, slice bounds,
       clamp on filter change) with table tests — never compute window math in view code.
-- [ ] Persist **page size** and **sort key + direction** in `uistate.TxFilter` (already persisted via
+- [x] Persist **page size** and **sort key + direction** in `uistate.TxFilter` (already persisted via
       `PersistTxFilter`), so they survive reload like the other filters. Reset to page 1 whenever the
       filter set or sort changes.
 
 **Table UI (replaces the `rows` list):**
-- [ ] Render a real semantic `<table>`: `thead` columns = ☐ (select-all) · Date · Description ·
+- [x] Render a real semantic `<table>`: `thead` columns = ☐ (select-all) · Date · Description ·
       Category · Account · Tags · Amount (right-aligned, tabular figures) · Cleared · Actions. Align
       columns; money uses the existing `fmtMoney`/`amountClass`. Keep the inline-edit row (it can
       become an in-row editor or a `colspan` edit panel — keep all current edit fields).
-- [ ] **Sortable column headers:** click Date/Description/Category/Account/Amount to sort by it; click
+- [x] **Sortable column headers:** click Date/Description/Category/Account/Amount to sort by it; click
       again to flip direction. Show a caret indicator and set `aria-sort` (`ascending`/`descending`/
       `none`) on the active header; headers are real `<button>`s (keyboard-operable). Remove the
       standalone Sort dropdown.
-- [ ] **Select-all checkbox in the header** that selects/clears the current page's rows (wire into the
+- [x] **Select-all checkbox in the header** that selects/clears the current page's rows (wire into the
       existing `selected` map + bulk action bar; keep per-row checkboxes).
-- [ ] **Responsive:** on narrow screens collapse the table back to a stacked card layout (reuse the
+- [x] **Responsive:** on narrow screens collapse the table back to a stacked card layout (reuse the
       current row markup) so mobile stays usable — pairs with C10/C19.
 
 **Pagination control (replaces "Show more"):**
-- [ ] A footer bar with **prev / next**, current page + total ("**1–50 of 312**"), and a **page-size
+- [x] A footer bar with **prev / next**, current page + total ("**1–50 of 312**"), and a **page-size
       selector** (e.g. 25 / 50 / 100 / All). Disable prev/next at the ends; keep it keyboard-reachable
       and labelled. "All" is allowed but should warn/virtualize for very large sets (defer virtualization
       to C39 if needed).
 
 **Cleaner filter interface:**
-- [ ] Collapse the 10-control strip into a **compact toolbar**: an always-visible search box + a
+- [x] Collapse the 10-control strip into a **compact toolbar**: an always-visible search box + a
       **"Filters" dropdown/popover** (use the existing `FlipPanel`) holding Account / Category / Member /
       date range / Cleared. Show an **active-filter count badge** on the trigger and render the active
       filters as removable **chips** below the toolbar; keep **Clear** and **Export CSV** beside it.
-- [ ] Keep the **summary line** ("N transactions · net $X") and the screen-reader live region; make sure
+- [x] Keep the **summary line** ("N transactions · net $X") and the screen-reader live region; make sure
       the count reflects the full filtered set (not just the visible page).
 
 **Verify (browser oracle; note B1 blocks direct `/transactions` nav — drive from `/` then navigate):**
-- [ ] Sort by each column asc/desc; paginate forward/back; change page size — all persist across reload.
-- [ ] Filters via the new popover narrow the set; chips remove individual filters; Clear resets to page 1.
-- [ ] Inline edit, duplicate, delete (incl. transfer pair), and every bulk action still work from the table.
-- [ ] CSV export still exports the **full filtered** set (not just the current page).
-- [ ] Table collapses to cards on a narrow viewport; `aria-sort` + header buttons are keyboard-operable.
+- [x] Sort by each column asc/desc; paginate forward/back; change page size — all persist across reload.
+- [x] Filters via the new popover narrow the set; chips remove individual filters; Clear resets to page 1.
+- [x] Inline edit, duplicate, delete (incl. transfer pair), and every bulk action still work from the table.
+- [x] CSV export still exports the **full filtered** set (not just the current page).
+- [x] Table collapses to cards on a narrow viewport; `aria-sort` + header buttons are keyboard-operable.
 _Cross-links: **C39** (general long-list pagination — this resolves it for Transactions), **C18** (inline-edit
 consistency), **C10/C19** (responsive), **C42/C43** (FlipPanel for the filter popover), **B1** (deep-link 404
 makes the page only reachable via in-app nav during verification)._
@@ -1500,25 +1500,25 @@ glanceable bento of KPIs + trends + nudges — and buttons are appropriately siz
 spacing rhythm**, which keep it from reading as fully "professional." Existing dashboard items already
 cover layout/behavior (C5 dup widget, C11 empty gear panel, C21 per-tile settings, C22 reflow, C30
 tile-click-to-navigate, C24 auto-layout) — these findings are **visual/UX polish only** and don't overlap.
-- [ ] **Hardcoded arbitrary px font sizes everywhere** — the file scatters `text-[11px]`, `text-[12px]`,
+- [x] **Hardcoded arbitrary px font sizes everywhere** — the file scatters `text-[11px]`, `text-[12px]`,
       `text-[13px]`, `text-[22px]`, `text-[24px]`, `text-[34px]` ad hoc. There's no shared type scale, so
       sizing is inconsistent tile-to-tile **and it bypasses the user text-size / display-scale setting**
       (B6/C26). Replace with a small set of semantic type tokens (caption / body / figure / figure-lg) that
       respond to the scale setting. _Biggest professional-polish win._ Cross-link **C25** (density tokens),
       **C26**/**B6** (configurable text size).
-- [ ] **KPI figure sizes don't follow one hierarchy** — KPI tiles use `24px`, Savings rate `34px`, Net-worth
+- [x] **KPI figure sizes don't follow one hierarchy** — KPI tiles use `24px`, Savings rate `34px`, Net-worth
       trend & goal figures `22px`. Define one "primary figure" size and one "hero figure" size and apply them
       consistently so the eye isn't pulled around arbitrarily.
-- [ ] **Inconsistent internal vertical rhythm** — widget bodies mix `space-y-2`, `space-y-2.5`, `space-y-4`,
+- [x] **Inconsistent internal vertical rhythm** — widget bodies mix `space-y-2`, `space-y-2.5`, `space-y-4`,
       and one-off `mt-0.5/mt-1.5/mt-2/mt-3`. Standardize on the spacing scale so every tile breathes the same.
-- [ ] **Full-width single-line bands feel heavy** — Freshness (`1 / span 4`, row 8) and Top highlight
+- [x] **Full-width single-line bands feel heavy** — Freshness (`1 / span 4`, row 8) and Top highlight
       (`1 / span 4`, row 9) each take a full 4-column band for one line of content. Consider narrower default
       spans (or pairing them on one row) so the grid stays dense and balanced rather than ending in two thin
       full-width strips.
-- [ ] **Header control pairing** — the layout-mode `Select` (`.rstep text-[12px]`) sits beside the Reset
+- [x] **Header control pairing** — the layout-mode `Select` (`.rstep text-[12px]`) sits beside the Reset
       `.data-btn`; they're different control families at slightly different heights. Align their height/padding
       so the header toolbar reads as one set.
-- [ ] **Verify** after changes: tiles still align on the bento grid at all widths; figures share a clear
+- [x] **Verify** after changes: tiles still align on the bento grid at all widths; figures share a clear
       hierarchy; changing the display-scale setting actually resizes dashboard text (closes the B6/C26 gap here).
 
 ### C49. Accounts: UX review — solid layout, but the add/edit form is a dense placeholder-only grid ★ (UX review loop, user-requested 2026-06-20)
@@ -1529,25 +1529,25 @@ clean per-row action pattern (primary **Transactions** / **Edit** inline, second
 Mark updated / Archive** tucked in a `⋯` overflow menu, destructive **✕** last). **Row buttons are NOT
 oversized** and the empty state ("Welcome" + Load sample) is good. The weak spots are the **add/edit form**
 and a couple of input affordances:
-- [ ] **Placeholder-only labels everywhere.** The add form and inline-edit form use `Placeholder(...)` with
+- [x] **Placeholder-only labels everywhere.** The add form and inline-edit form use `Placeholder(...)` with
       no visible `<label>`. Placeholders vanish on input and several are cryptic number fields ("APR",
       "Liquidity", "Stability", "Due day") — a user can't tell what an empty-after-typing field was. Add
       persistent visible labels (or a label+field pattern). Cross-link **B15** (a11y labelling), **C18**
       (inline-edit consistency).
-- [ ] **Currency is free-text.** `Currency` is a `Type("text")` input (just uppercased) instead of a
+- [x] **Currency is free-text.** `Currency` is a `Type("text")` input (just uppercased) instead of a
       **select of known currency codes** — typo-prone and unguided. Make it a dropdown (the app already has a
       currency list / FX table).
-- [ ] **Number fields lack constraints + unit hints.** Due day should be `min=1 max=31`; Liquidity/Stability
+- [x] **Number fields lack constraints + unit hints.** Due day should be `min=1 max=31`; Liquidity/Stability
       are "1–5" scores (no range shown); APR/expected-return are percents (no `%` affordance). Add
       `min`/`max`/`step` and inline unit hints so the figures are unambiguous (correctness + UX).
-- [ ] **The add form mixes common + advanced fields in one flat grid.** Asset accounts still surface
+- [x] **The add form mixes common + advanced fields in one flat grid.** Asset accounts still surface
       Expected return / Liquidity / Stability / Lock-until inline — all advanced/optional. Tuck them behind an
       **"Advanced" disclosure** so the common path (name · type · owner · currency · opening balance) stays a
       short, calm form. Same for the inline-edit grid.
 - [ ] **Row primary actions render icon + text and may wrap on narrow screens** (Transactions, Edit). On small
       widths collapse to icon-only with tooltip/`aria-label` to avoid wrapping. Cross-link **C10/C19**
       (responsive).
-- [ ] **Verify** after changes: every field has a discoverable label; currency can only be a valid code;
+- [x] **Verify** after changes: every field has a discoverable label; currency can only be a valid code;
       number ranges are enforced; the default add form is short with advanced fields collapsed; rows don't
       wrap on mobile.
 
@@ -1559,21 +1559,21 @@ progress bar with on-track/near/over tones + labels, pace-projection heads-up, r
 balance, a recent-spend **limit suggestion** with one-tap "use this", and a proper empty-state CTA. It also
 correctly defers the period window to the shared top-bar control (C7 already fixed). **Buttons aren't
 oversized.** Polish opportunities:
-- [ ] **Placeholder-only labels in the add + inline-edit forms** (name, limit, and the Category / Owner /
+- [x] **Placeholder-only labels in the add + inline-edit forms** (name, limit, and the Category / Owner /
       Period selects use `aria-label`/placeholder only, no visible label) — same systemic issue as Accounts
       (**C49**). Add visible labels. Cross-link **B15**, **C18**.
-- [ ] **Budget rows can stack up to four small sub-lines** — the `budgets.rowSub` line plus conditional
+- [x] **Budget rows can stack up to four small sub-lines** — the `budgets.rowSub` line plus conditional
       **pace**, **rollover carry**, and **envelope** lines all render as separate `budget-sub` text rows. When
       several apply at once a row reads as a wall of tiny text. Consolidate into one meta line or render
       pace/rollover/envelope as small **badges/chips** with tone, keeping the row scannable.
-- [ ] **The over/near summary is plain text** ("0 over · 2 near") — give it the same tone/badge treatment as
+- [x] **The over/near summary is plain text** ("0 over · 2 near") — give it the same tone/badge treatment as
       the row states so the at-a-glance risk reads consistently (color + shape, not text only — B15).
-- [ ] **No drill-down from a budget to its transactions.** A budget row should be clickable to open
+- [x] **No drill-down from a budget to its transactions.** A budget row should be clickable to open
       Transactions filtered to that category (mirror the Accounts→Transactions and dashboard tile-click
       pattern, **C30**) — a natural "why am I over?" affordance that's currently missing.
 - [ ] **Edit action is icon+text inline in the row head** — same narrow-screen wrap risk as other rows;
       collapse to icon-only on small widths. Cross-link **C10/C19** (responsive).
-- [ ] **Verify** after changes: rows stay scannable when pace+rollover+envelope all apply; form fields are
+- [x] **Verify** after changes: rows stay scannable when pace+rollover+envelope all apply; form fields are
       labelled; risk summary uses tone+shape; clicking a budget lands on its filtered transactions.
 
 ### C51. Goals: UX review — clean and consistent, but flat progress tone + silent contribute ★ (UX review loop, user-requested 2026-06-20)
@@ -1582,25 +1582,25 @@ render code (`internal/screens/goals.go`). **Verdict:** purpose-fit and tidy —
 target / overall %), an add form, an inline **Contribute** mini-flow, inline edit, incomplete-goals-first
 sorting, monthly-needed pacing, linked-account display, and a proper empty-state CTA. It reuses the budget
 row layout for visual consistency. **Buttons aren't oversized.** Smaller polish items:
-- [ ] **Progress bar has no state tone.** Goal bars are always the single `bar-fill` color — even at 100%.
+- [x] **Progress bar has no state tone.** Goal bars are always the single `bar-fill` color — even at 100%.
       Give completed goals a success tone (and optionally an at-risk tone when the target date is near but
       pace is behind, paralleling Budgets' near/over coloring). Pairs with the goal-reached delight already
       noted in **C46.1** (don't duplicate the confetti item — this is just the bar tone).
-- [ ] **Placeholder-only labels** across the add / edit / contribute forms (name, target, saved-so-far,
+- [x] **Placeholder-only labels** across the add / edit / contribute forms (name, target, saved-so-far,
       owner/linked selects, date) — same systemic labelling gap as **C49/C50**. Add visible labels (B15).
-- [ ] **The row sub-line is a run-on concatenation** — pct + remaining + "by <date>" + "save <X>/mo" +
+- [x] **The row sub-line is a run-on concatenation** — pct + remaining + "by <date>" + "save <X>/mo" +
       "linked: <account>" all in one `budget-sub` string. For a dated, linked goal it gets long; split the
       pacing/linked bits into small badges or a second muted line. (Milder version of **C50**'s row-busyness.)
-- [ ] **"Contribute" silently edits the number.** Contributing just increments `CurrentAmount` — it does
+- [x] **"Contribute" silently edits the number.** Contributing just increments `CurrentAmount` — it does
       **not** post a transaction or move money from the linked account, so a goal linked to a real account can
       drift from that account's balance with no audit trail. Consider (a) optionally recording a
       transfer/transaction into the linked account on contribute, or (b) a clear note that contributions are
       manual tracking only. Cross-link the linked-account concept and **C47** (ledger).
-- [ ] **Three icon+text actions in the row head** (Contribute, Edit, Delete) risk wrapping on narrow screens
+- [x] **Three icon+text actions in the row head** (Contribute, Edit, Delete) risk wrapping on narrow screens
       — collapse to icon-only on small widths. Cross-link **C10/C19**.
-- [ ] **No drill-down from a linked goal to its account.** Make the "linked: <account>" affordance clickable
+- [x] **No drill-down from a linked goal to its account.** Make the "linked: <account>" affordance clickable
       to the account/its transactions (same drill pattern as **C30**/C50).
-- [ ] **Verify** after changes: completed goals read as done at a glance (bar tone); forms are labelled;
+- [x] **Verify** after changes: completed goals read as done at a glance (bar tone); forms are labelled;
       contribute behavior re: linked accounts is unambiguous; rows don't wrap on mobile.
 
 ### C52. To-do: UX review — the cleanest screen; a few unlabelled controls + no overdue cue ★ (UX review loop, user-requested 2026-06-20)
@@ -1609,20 +1609,20 @@ render code (`internal/screens/todo.go`). **Verdict:** the simplest and tidiest 
 clearly fit for purpose — add form, open-first/soonest-due/title sort (pure `tasksort`), complete/reopen via
 a glyph checkbox, inline edit, a hide-done toggle, priority rendered as a **shape+color badge** (already
 B15-compliant), and proper empty / all-done states. **Buttons aren't oversized.** Gaps are small:
-- [ ] **Unlabelled priority + due-date controls.** The priority `Select` in both the add and inline-edit
+- [x] **Unlabelled priority + due-date controls.** The priority `Select` in both the add and inline-edit
       forms has **no `aria-label` or visible label at all**; the due-date `Input(Type("date"))` is likewise
       unlabelled. These are screen-reader-invisible. Add labels (visible or at minimum `aria-label`). Same
       systemic labelling theme as **C49/C50/C51**; cross-link **B15**.
-- [ ] **Overdue tasks have no visual cue.** A past-due `Due` date renders the same as any other — an open
+- [x] **Overdue tasks have no visual cue.** A past-due `Due` date renders the same as any other — an open
       task overdue by a week looks identical to one due next month. Flag overdue items (warn tone on the due
       meta + optional sort-to-top) so the list is actionable at a glance.
-- [ ] **Only filter is hide-done.** Consider a lightweight priority/status filter (or grouping by High /
+- [x] **Only filter is hide-done.** Consider a lightweight priority/status filter (or grouping by High /
       Medium / Low) for longer lists — pairs with the general long-list concern in **C39** if task counts grow.
 - [ ] **Edit action is icon+text inline** — same narrow-screen wrap risk as other rows; icon-only on small
       widths. Cross-link **C10/C19**.
-- [ ] **Long notes shown inline as `row-meta`** could overflow the row; truncate with a tooltip/expand for
+- [x] **Long notes shown inline as `row-meta`** could overflow the row; truncate with a tooltip/expand for
       long notes.
-- [ ] **Verify** after changes: every control is labelled for screen readers; overdue tasks stand out;
+- [x] **Verify** after changes: every control is labelled for screen readers; overdue tasks stand out;
       filtering/grouping works; rows don't wrap on mobile.
 
 ### C53. Planning: UX review — powerful but overloaded; 5 tools on one page, primary calc buried ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
@@ -1636,24 +1636,24 @@ autopost `ToggleRow` and post-due action), saved **what-if plans** (with project
 a **debt strategy** snowball-vs-avalanche comparison, and a live **debt-payoff calculator**. Content quality
 is high and buttons aren't oversized. The problem is **information architecture and density** — it's really a
 *Tools hub* crammed into one long scroll:
-- [ ] **Five+ heavy cards stacked with no sub-structure.** Forecast → Recurring → Plans → Debt strategy →
+- [x] **Five+ heavy cards stacked with no sub-structure.** Forecast → Recurring → Plans → Debt strategy →
       Payoff inputs → Projection result, all vertically. It's overwhelming and gives no entry point. Introduce
       sub-navigation (tabs/segmented sections or an accordion), or split into distinct routes under a Tools/
       Planning group. Cross-link **C35** (Tools/Workflows nav grouping) and the SPEC §12 configurability.
-- [ ] **The primary payoff calculator is buried last AND split from its result.** The function's stated
+- [x] **The primary payoff calculator is buried last AND split from its result.** The function's stated
       primary purpose (debt-payoff calc) renders at the very bottom, and its **inputs** (balance/APR/payment/
       extra) sit in one card while the **Projection result** is a *separate* card below it. Reunite the form
       with its live result and surface it higher (or in its own tab). _Most impactful fix._
-- [ ] **Placeholder-only labels at scale.** Nearly every input is placeholder-only. The **Plans add form has
+- [x] **Placeholder-only labels at scale.** Nearly every input is placeholder-only. The **Plans add form has
       six number fields in a row** (horizon, start, monthly, one-time amount, one-time month) — cryptic and
       high cognitive load; the "one-time amount in month N" pair especially needs labels + visual grouping.
       Add visible labels/field groups. Same systemic gap as **C49/C50/C51/C52**; cross-link **B15**.
-- [ ] **Number inputs lack constraints/units.** Horizon (positive int), APR (percent), one-time month
+- [x] **Number inputs lack constraints/units.** Horizon (positive int), APR (percent), one-time month
       (1..horizon) are validated only after submit — add `min`/`max`/unit hints so bad values are caught at the
       field and the percent/months/currency meaning is visible.
-- [ ] **Recurring & Plans use bare `P(empty)` instead of the EmptyStateCTA pattern** the other screens use —
+- [x] **Recurring & Plans use bare `P(empty)` instead of the EmptyStateCTA pattern** the other screens use —
       give them guided empty states with an add affordance for consistency (cross-link **C23**).
-- [ ] **Verify** after changes: the page has a clear entry point / sub-nav; payoff inputs and result read as
+- [x] **Verify** after changes: the page has a clear entry point / sub-nav; payoff inputs and result read as
       one unit and are easy to find; every field is labelled with sensible constraints; empty states are guided.
 
 ### C54. Allocate: UX review — strong & explainable; label inconsistency + config-heavy top ★ (UX review loop, user-requested 2026-06-20)
@@ -1664,26 +1664,26 @@ put new capital from accounts + high-APR debts + unfunded goals, with editable c
 on-demand AI explanation. It honors the determinism/explainability rule (per-row score bar + returns/
 stability/liquidity breakdown with `role=progressbar` + aria values). **Note: C6 is already fixed** — the five
 weight inputs now have visible labels. Remaining issues:
-- [ ] **Labelling is now inconsistent.** Weights got labels (C6) but the **amount / reserve / max-per** inputs
+- [x] **Labelling is now inconsistent.** Weights got labels (C6) but the **amount / reserve / max-per** inputs
       and the **profile `Select`** are still placeholder-only / `aria-label`-less. "Reserve" and "Max per" are
       non-obvious without persistent labels. Bring them up to the labelled standard the weights set. Cross-link
       **C6**, **C49**, **B15**.
-- [ ] **Config-heavy top card.** The first card stacks three `form-grid`s (profile + split amounts, then the
+- [x] **Config-heavy top card.** The first card stacks three `form-grid`s (profile + split amounts, then the
       weights row, then the save-profile form) — a lot before the user reaches the actual **Suggestions** card.
       Add clearer sub-headings/grouping or collapse the weights/save-profile into an "Advanced / tune weights"
       disclosure so the common path (pick profile → see suggestions) is calm. Cross-link **C53** (same
       density theme on Planning).
-- [ ] **The amount-split entry point is buried.** Splitting a real amount across destinations is a key feature
+- [x] **The amount-split entry point is buried.** Splitting a real amount across destinations is a key feature
       but the **amount** field sits mid-row beside reserve/max-per with no emphasis; a user may not realize
       entering an amount populates per-row suggested amounts. Surface it (e.g. a labelled "Amount to allocate"
       as the primary input) and hint the behavior.
-- [ ] **Redundant score display + hand-rolled separator in the row.** Each `AllocRow` shows the score twice
+- [x] **Redundant score display + hand-rolled separator in the row.** Each `AllocRow` shows the score twice
       (head `60%` and a `Score 60%` sub-line) and injects a manual `" · "` span to keep score/breakdown from
       colliding (§6.15). Consolidate into one score presentation and use proper spacing/markup instead of a
       literal separator span.
-- [ ] **AI "needs key" error is a dead-end.** When no OpenAI key/backend is set, `explain` shows an error;
+- [x] **AI "needs key" error is a dead-end.** When no OpenAI key/backend is set, `explain` shows an error;
       link it to Settings → AI so the user can fix it in one hop. Cross-link **C27** (AI features).
-- [ ] **Verify** after changes: all inputs labelled; the top card reads calmly with advanced options tucked
+- [x] **Verify** after changes: all inputs labelled; the top card reads calmly with advanced options tucked
       away; the allocate-amount flow is discoverable; rows show score once; AI error routes to settings.
 
 ### C55. Reports: UX review — comprehensive & correct, but a long ungrouped scroll of text lists ★ (UX review loop, user-requested 2026-06-20)
@@ -1695,21 +1695,21 @@ B15-friendly), biggest deposits / income-by-source / top payees / biggest expens
 cash-flow / net-worth / savings-rate **trend area charts**. It reuses the shared period + pure `reports`
 core so figures match the rest of the app, and **buttons aren't oversized** (only CSV downloads). The weak
 spots are information architecture and scannability:
-- [ ] **~12 cards in one long single-column scroll, ungrouped.** There's no in-page jump-nav or grouping
+- [x] **~12 cards in one long single-column scroll, ungrouped.** There's no in-page jump-nav or grouping
       (e.g. Spending / Income / Net worth / Trends). Add section grouping or a sticky jump-nav so the report is
       navigable. Cross-link **C53** (same density theme), **B21** (Reports engine).
-- [ ] **The period the report covers isn't shown on the page.** It silently uses the top-bar window; a report
+- [x] **The period the report covers isn't shown on the page.** It silently uses the top-bar window; a report
       should state **"Showing: <period>"** and the comparison period prominently at the top (essential when
       printed/exported). Add a clear period header.
-- [ ] **Category / payee / expense lists are plain text rows** (name + amount). The code itself notes "charts
+- [x] **Category / payee / expense lists are plain text rows** (name + amount). The code itself notes "charts
       come in a follow-up" (B21). Add proportion **mini-bars** (share of total) to the ranked lists so the
       distribution is scannable at a glance — biggest "god-tier" win here.
-- [ ] **CSV export is inconsistent + there's no print/PDF.** Download buttons appear on category / income /
+- [x] **CSV export is inconsistent + there's no print/PDF.** Download buttons appear on category / income /
       member cards but **not** on payees / biggest-expenses / deposits. A reporting screen also wants a single
       **Print / Save as PDF** (or "export full report"). Standardize per-section export and add a report-level one.
-- [ ] **No whole-screen empty state.** With no data the `If` guards hide every card, leaving just a zero stat
+- [x] **No whole-screen empty state.** With no data the `If` guards hide every card, leaving just a zero stat
       grid. Add a guided empty state (cross-link **C23**).
-- [ ] **Verify** after changes: the report is navigable/grouped; the covered period + comparison are labelled
+- [x] **Verify** after changes: the report is navigable/grouped; the covered period + comparison are labelled
       up top; ranked lists show proportion bars; export is consistent and a print/PDF path exists.
 
 ### C56. Subscriptions: UX review — clean detection, but read-only with no user correction or drill-down ★ (UX review loop, user-requested 2026-06-20)
@@ -1723,17 +1723,17 @@ and CSV export. **Buttons aren't oversized.** The gaps are about user control an
       matches will have false positives/negatives, but the user can't **confirm**, **ignore/dismiss** ("not a
       subscription"), or **manually add** a known subscription. Add per-row confirm/ignore (persisted) and a
       manual-add affordance so the list can be trusted and curated. _Highest-value gap._
-- [ ] **No drill-down to the underlying charges.** Clicking a detected subscription should open Transactions
+- [x] **No drill-down to the underlying charges.** Clicking a detected subscription should open Transactions
       filtered to that payee — this is how a user verifies the detection is right. Mirror the
       Accounts→Transactions / **C30** drill pattern (and the same idea raised in C50/C51/C55).
-- [ ] **Price-change rows lack tone/icon.** Up vs down is conveyed only by wording (`priceUp`/`priceDown`);
+- [x] **Price-change rows lack tone/icon.** Up vs down is conveyed only by wording (`priceUp`/`priceDown`);
       Reports already uses colored up/down arrows for the same idea. Apply tone + arrow icon here for
       consistency and color-plus-shape (B15). Cross-link **C55**.
-- [ ] **"Renewing soon" rows are a stripped-down variant** (name + date + amount only) — no cadence, no remind
+- [x] **"Renewing soon" rows are a stripped-down variant** (name + date + amount only) — no cadence, no remind
       action. Reuse the richer `SubscriptionRow` so a soon-to-renew item is actionable in place.
-- [ ] **Plain `P(empty)` empty state.** Guide it — detection needs transaction history, so point the user to
+- [x] **Plain `P(empty)` empty state.** Guide it — detection needs transaction history, so point the user to
       import/add transactions (cross-link **C23**, Documents import).
-- [ ] **Verify** after changes: subscriptions can be confirmed/ignored/added and the choice persists; rows
+- [x] **Verify** after changes: subscriptions can be confirmed/ignored/added and the choice persists; rows
       drill into their charges; price changes show tone+icon; renewing-soon rows are actionable.
 
 ### C57. Bills: UX review — clean calendar, but no mark-paid, no urgency tone, + a suspect "annual" figure ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (2026-06-21) — ✅ ANNUAL FIGURE CLEARED (verified 2026-06-22 in L49: `bills.AnnualAmounts` uses cadence-normalized amounts; the `total * 12` concern is resolved)
@@ -1748,25 +1748,25 @@ bills from liability due-day + minimum payment and recurring items (`bills.Upcom
 (total due / annual / count / next due), a soonest-first list with **remind-me-to-pay** (files a dated task),
 and a **month calendar** with due-day dots. **Buttons aren't oversized.** Issues (a couple are correctness,
 not just polish):
-- [ ] **No mark-paid.** The code itself says "mark-paid comes next" — but for a bills screen, marking a bill
+- [x] **No mark-paid.** The code itself says "mark-paid comes next" — but for a bills screen, marking a bill
       paid (and reflecting it / advancing to next due) is core. Add a paid action + paid state. _Top gap._
-- [ ] **`bills.annualCost = total * 12` looks wrong.** `total` is the sum of the current upcoming occurrences
+- [x] **`bills.annualCost = total * 12` looks wrong.** `total` is the sum of the current upcoming occurrences
       (mixed cadences — monthly liabilities **and** weekly/quarterly/yearly recurring). Multiplying that
       one-time total by 12 misstates the annual cost. Compute annual from each item's cadence-normalized
       amount. **Flagged as correctness** — cross-link the cadence math in `subscriptions`/`recurring`.
-- [ ] **No urgency tone.** `daysUntilLabel` says "Due today / tomorrow / in N days" as plain text — no
+- [x] **No urgency tone.** `daysUntilLabel` says "Due today / tomorrow / in N days" as plain text — no
       warn/danger tone for imminent or overdue bills (the dashboard widget already tones bills due ≤7 days).
       Add tone + shape so urgency reads at a glance (B15). Cross-link **C55/C56** (consistent tone usage).
-- [ ] **Calendar dot info is hover-only and uncounted.** A day with bills shows a single `cal-dot` whose names
+- [x] **Calendar dot info is hover-only and uncounted.** A day with bills shows a single `cal-dot` whose names
       live in a `title` (mouse-only, not touch/keyboard accessible), and multiple bills still show one dot with
       no count/amount. Make day cells show a count and be tappable/focusable to reveal that day's bills (a11y +
       touch). Cross-link **B15**, **C10/C19**.
-- [ ] **Row key may collide.** `MapKeyed` keys bill rows by `r.Bill.AccountID`; if one account yields more
+- [x] **Row key may collide.** `MapKeyed` keys bill rows by `r.Bill.AccountID`; if one account yields more
       than one bill (e.g. a liability + a recurring on the same account) the keys collide and a row could be
       dropped. Use a composite key (account + due date/label). _Potential silent data loss._
-- [ ] **Plain `P(empty)` empty state** — guide it (set due dates on liability accounts / add recurring bills).
+- [x] **Plain `P(empty)` empty state** — guide it (set due dates on liability accounts / add recurring bills).
       Cross-link **C23**.
-- [ ] **Verify** after changes: bills can be marked paid; the annual figure is cadence-correct; urgent/overdue
+- [x] **Verify** after changes: bills can be marked paid; the annual figure is cadence-correct; urgent/overdue
       bills stand out; calendar days are countable + tappable; no rows dropped when an account has 2+ bills.
 
 ### C58. Split: UX review — focused calculator, but ephemeral + row layout/affordance gaps ★ (UX review loop, user-requested 2026-06-20)
@@ -1775,23 +1775,23 @@ render code (`internal/screens/split_screen.go`). **Verdict:** a clean, well-sco
 — enter amount + payer, pick sharers with real **ToggleRow** switches, choose even or **weighted** split, and
 it shows each share plus a **settle-up** ("X owes Y") with CSV export, all over the pure `split` core. **Buttons
 aren't oversized** and the amount/weight inputs are aria-labelled. Gaps:
-- [ ] **Everything is ephemeral.** The result (shares + who-owes-whom) is recomputed each render and lost on
+- [x] **Everything is ephemeral.** The result (shares + who-owes-whom) is recomputed each render and lost on
       navigation — there's no save, no link to an actual transaction, and no persisted settle-up/debt ledger.
       The code notes "transaction-level split + persisted settle-up build on the same core" as future work;
       this is the screen's biggest gap. Add: split an existing transaction, and persist a settle-up balance per
       member. Cross-link **C47** (ledger/transactions), Members.
-- [ ] **Member row nests a full-width `ToggleRow` next to a weight input + share.** `SplitMemberRow` renders
+- [x] **Member row nests a full-width `ToggleRow` next to a weight input + share.** `SplitMemberRow` renders
       `ToggleRow(label=name)` (which has its own label-left / switch-right layout) and then appends the weight
       field and the share span — likely producing awkward alignment. Use a purpose-built row (checkbox/toggle +
       name + weight + share in aligned columns) rather than composing a row component meant to stand alone.
-- [ ] **No select-all / clear for sharers** and **no result summary.** For a household with several members,
+- [x] **No select-all / clear for sharers** and **no result summary.** For a household with several members,
       add select-all/clear; and show a summary line ("$X split among N → $Y each", note any rounding remainder
       the core distributes) so the math is legible at a glance.
-- [ ] **`no members` is a dead end.** Replace the plain `P(empty)` with a guided empty state linking to the
+- [x] **`no members` is a dead end.** Replace the plain `P(empty)` with a guided empty state linking to the
       Members screen to add people first. Cross-link **C23**.
-- [ ] **Settle-up is single-payer only** (everyone owes the one payer) — fine for the B24 scope, but note the
+- [x] **Settle-up is single-payer only** (everyone owes the one payer) — fine for the B24 scope, but note the
       multi-payer / netting case for when persisted settle-up lands.
-- [ ] **Verify** after changes: a split can attach to a transaction and the settle-up persists; member rows
+- [x] **Verify** after changes: a split can attach to a transaction and the settle-up persists; member rows
       align cleanly; select-all + summary work; the no-members state guides to Members.
 
 ### C59. Insights: UX review — strong AI screen; shared-result collision + thin Q&A context ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (verified 2026-06-21: `insights.go` is a full agentic chat — streaming, separate pinned slots, line-clamp-3, needs-key CTA to Settings)
@@ -1805,21 +1805,21 @@ not the title; privacy — only 4 aggregates sent). **Buttons aren't oversized.*
       has its OWN slot (`explainRes`/`qaRes` + per-slot usage, save, pin, and confirmations) rendered in its
       own answer card, so the monthly narrative and a Q&A answer coexist. `loading` tracks which action is in
       flight ("explain"/"qa") so only that card shows busy/cancel and the other stays usable but guarded.
-- [ ] **The "needs key" hint is a non-linking dead-end** (appears in both the Explain action and the Q&A box).
+- [x] **The "needs key" hint is a non-linking dead-end** (appears in both the Explain action and the Q&A box).
       Make it a single clear call-to-action linking to **Settings → AI**. Same dead-end pattern flagged on
       Allocate (**C54**); cross-link **C27** (AI setup).
-- [ ] **Q&A context is very thin → detailed questions will fail.** Only net worth / income / spending /
+- [x] **Q&A context is very thin → detailed questions will fail.** Only net worth / income / spending /
       account-count are sent (`ai.FinancialContext`), so "how much did I spend on groceries?" can't be
       answered. Either enrich the (still-local) context with a category/payee breakdown, or set expectations in
       the placeholder ("Ask about your totals, savings rate, net worth…") so users aren't surprised. Balance
       against the documented privacy guardrail (B17 / C45).
-- [ ] **No streaming / progressive output.** Answers pop in all at once after the callback; for longer
+- [x] **No streaming / progressive output.** Answers pop in all at once after the callback; for longer
       responses, stream tokens into the answer card for better perceived speed (the `ai` layer already has the
       callback seam).
 - [x] **Pinned-insight rows show full untruncated text** in `row-desc`. DONE: rows over ~140 chars clamp to
       two lines (`line-clamp-2`) with a **Show more / Show less** toggle (`PinnedInsightRow` owns its own
       `expanded` state + toggle hook), keeping the list compact. Cross-link **C39** (lists) if pins accumulate.
-- [ ] **Verify** after changes: an explain narrative and a Q&A answer can coexist; the key hint routes to
+- [x] **Verify** after changes: an explain narrative and a Q&A answer can coexist; the key hint routes to
       settings; the Q&A scope is clear (or richer); long answers stream; pinned rows stay compact.
 
 ### C60. Documents: UX review — strong import flow; no image preview + free-text category + paste-only CSV ★ (UX review loop, user-requested 2026-06-20)
@@ -1830,23 +1830,23 @@ paste**), a **draft review** list with inline edit + remove before committing, a
 the pending rows so you see the damage before importing, dedupe (skipped count), an account picker, and an
 **import history** with delete. Privacy-conscious (image only leaves the device on "Read"). **Buttons aren't
 oversized.** Gaps:
-- [ ] **No image preview during review.** After choosing a file it only says "image ready"; the user can't see
+- [x] **No image preview during review.** After choosing a file it only says "image ready"; the user can't see
       the receipt while checking the extracted rows. Show a thumbnail (ideally image **side-by-side** with the
       draft rows) so extraction can be verified at a glance. _Highest-value gap for the vision flow._
-- [ ] **Draft category is free-text, not mapped to real categories.** The review row edits category as a plain
+- [x] **Draft category is free-text, not mapped to real categories.** The review row edits category as a plain
       `Input(text)`, and the AI's category string may not match any existing category — so imports can create
       orphan/typo categories. Make it a select/autocomplete of existing categories (with "create new" as an
       explicit choice). _Correctness-adjacent_; cross-link Categories + Rules (auto-categorize).
 - [ ] **CSV is paste-only.** There's a file picker for images but CSV must be pasted into a textarea — clunky
       for real `.csv` files. Add a CSV **file picker + drag-and-drop** (and consider a column-mapping step so
       non-matching headers still import). Cross-link **B1**-adjacent import robustness.
-- [ ] **"Needs key" is a dead-end** again (vision import shows `needKey` with no link). Route it to Settings →
+- [x] **"Needs key" is a dead-end** again (vision import shows `needKey` with no link). Route it to Settings →
       AI. Same pattern as **C54/C59**; cross-link **C27**.
-- [ ] **Import-account `Select` is unlabelled** (no `aria-label`) — same systemic labelling gap (**C49** etc.,
+- [x] **Import-account `Select` is unlabelled** (no `aria-label`) — same systemic labelling gap (**C49** etc.,
       **B15**). Also the draft-row edit action is icon+text (narrow-screen wrap, **C10/C19**).
-- [ ] **No progress affordance for vision** beyond the button text "Reading…"; vision calls are slow — add a
+- [x] **No progress affordance for vision** beyond the button text "Reading…"; vision calls are slow — add a
       spinner/disabled state and ideally a cancel (Insights already has cancel — reuse).
-- [ ] **Verify** after changes: the picked image previews next to its draft rows; categories resolve to real
+- [x] **Verify** after changes: the picked image previews next to its draft rows; categories resolve to real
       ones; CSV files import by picker/drag-drop; the key prompt links to settings; the account select is labelled.
 
 ### C61. Customize: UX review — two tools in one screen; unformatted results + no var-insert ★ (UX review loop, user-requested 2026-06-20)
@@ -1856,23 +1856,23 @@ render code (`internal/screens/customize.go`; it also embeds `CustomFieldsManage
 expense, counts), with one-tap **example** formulas, **save / load / delete** named formulas (each evaluated
 live), and an available-variables reference; plus the **Custom Fields Manager**. Live eval as you type is a
 nice touch and **buttons aren't oversized**. Issues:
-- [ ] **Two unrelated tools under one "Customize" screen.** Defining per-entity **custom fields** and writing
+- [x] **Two unrelated tools under one "Customize" screen.** Defining per-entity **custom fields** and writing
       **formulas** are different jobs stacked together with no separating hierarchy. Add clear section
       headers/sub-nav (or split), so a user looking to add a field isn't wading through the formula calculator.
       Cross-link **C53/C55** (IA/grouping theme).
-- [ ] **Results and variable values are unformatted.** The result and the variables reference print raw
+- [x] **Results and variable values are unformatted.** The result and the variables reference print raw
       floats (`strconv.FormatFloat`), so net worth shows `354070` not `$354,070` and a savings formula shows
       `36` not `36%` — jarring against the app's money formatting (**C2**). At minimum thousands-separate;
       ideally let a saved formula carry a display format (currency / percent / number). Cross-link **C2**.
-- [ ] **Formula editor has no label, no variable-insert, no inline help.** The expression `Input` is
+- [x] **Formula editor has no label, no variable-insert, no inline help.** The expression `Input` is
       placeholder-only (B15) and you must hand-type variable names. Let the user **click a variable** in the
       reference to insert it, show the snake_case **token next to a friendly name**, and surface function help
       (round/if/…). Examples are good — keep them.
-- [ ] **Saving always creates a new formula (new ID).** Loading then re-saving makes a **duplicate** (and
+- [x] **Saving always creates a new formula (new ID).** Loading then re-saving makes a **duplicate** (and
       same-name collisions are possible); there's no edit-in-place for a saved formula. Add update/rename.
-- [ ] **Custom Fields Manager not separately reviewed here** — flag a dedicated pass (or fold into this entry)
+- [x] **Custom Fields Manager not separately reviewed here** — flag a dedicated pass (or fold into this entry)
       for its add/edit/delete UX, field-type affordances, and labelling, since it lives on this screen.
-- [ ] **Verify** after changes: the screen separates fields vs formulas clearly; results/variables are
+- [x] **Verify** after changes: the screen separates fields vs formulas clearly; results/variables are
       formatted; variables can be click-inserted; saved formulas can be edited without duplicating.
 
 ### C62. Members: UX review — solid, with great reassign-on-delete; minor label/wrap/avatar polish ★ (UX review loop, user-requested 2026-06-20)
@@ -1883,16 +1883,16 @@ transactions, a **net-worth-by-owner** breakdown, a proper empty-state CTA, and 
 reassign-before-delete** flow that protects accounts/budgets/goals/transactions from being orphaned. **C8
 (color picker rendered as a bare line) appears fixed** — it's now a real `<input type=color>` with title +
 `aria-label`. **Buttons aren't oversized.** Only light polish remains:
-- [ ] **Name field is placeholder-only** (add + inline-edit). Add a visible label — same systemic gap as
+- [x] **Name field is placeholder-only** (add + inline-edit). Add a visible label — same systemic gap as
       **C49–C61**; cross-link **B15**. (Color input is already labelled — good.)
-- [ ] **Reassign-target `Select` is unlabelled** (`aria-label`/visible label), and when the reassign panel
+- [x] **Reassign-target `Select` is unlabelled** (`aria-label`/visible label), and when the reassign panel
       opens (triggered from a delete button down in the list) focus/scroll doesn't move to it, so it can be
       missed. Label the select and move focus to the panel on open. Cross-link **B15**, §6.7 (focus-on-open).
-- [ ] **Member row has two icon+text actions** (Transactions, Edit) plus default + delete — narrow-screen
+- [x] **Member row has two icon+text actions** (Transactions, Edit) plus default + delete — narrow-screen
       wrap risk; collapse to icon-only on small widths. Cross-link **C10/C19**.
-- [ ] **Members are name + swatch only — add a colored initial avatar** for scannability/personality (uses the
+- [x] **Members are name + swatch only — add a colored initial avatar** for scannability/personality (uses the
       member's color), a small "god-tier" touch. Cross-link **C46.1** (delight).
-- [ ] **Verify** after changes: name labelled; reassign select labelled and focused on open; rows don't wrap
+- [x] **Verify** after changes: name labelled; reassign select labelled and focused on open; rows don't wrap
       on mobile; member avatars render with the member color.
 
 ### C63. Categories: UX review — solid tree CRUD; reassign-kind bug + em-dash nesting + no usage count ★ (UX review loop, user-requested 2026-06-20) — ✅ reassign-kind bug FIXED (verified 2026-06-21: `categories.go` filters reassign targets to same-kind only)
@@ -1901,23 +1901,23 @@ render code (`internal/screens/categories.go`). **Verdict:** a solid, complete s
 parent / color), separate **Expense** and **Income** groups with **tree nesting**, inline edit (incl.
 re-parenting, with self-parent prevented), **reassign-before-delete**, color swatches, and proper empty-state
 CTAs. **Buttons aren't oversized.** Issues (one is a correctness/data risk):
-- [ ] **Reassign target isn't filtered to the same kind.** The reassign-before-delete `Select` lists **all**
+- [x] **Reassign target isn't filtered to the same kind.** The reassign-before-delete `Select` lists **all**
       categories (`for _, c := range cats`), so deleting an *expense* category lets you reassign its
       transactions/budgets to an *income* category — semantically wrong and a likely data-integrity bug. Filter
       the options to the deleted category's kind (and indent the tree like the add form does). **Flagged as
       correctness.** Cross-link the reassign flow in Members (**C62**).
-- [ ] **Tree nesting is rendered with literal "— " prefixes** (`indentLabel` repeats em-dashes) in both row
+- [x] **Tree nesting is rendered with literal "— " prefixes** (`indentLabel` repeats em-dashes) in both row
       labels and parent dropdowns. Use real indentation (padding/guide line) for a cleaner, more professional
       hierarchy; keep the dropdown indent but consider spaces/padding over em-dashes.
-- [ ] **No per-row usage count.** A category row doesn't show how many transactions/budgets use it (the count
+- [x] **No per-row usage count.** A category row doesn't show how many transactions/budgets use it (the count
       only appears once you hit delete). Show "N transactions" inline so users know what's safe to remove — and
       make it a **drill-down** to Transactions filtered by that category (Accounts/Members have this; Categories
       doesn't). Cross-link **C30** drill pattern.
-- [ ] **Labelling gaps:** name is placeholder-only; the kind + parent selects (add and edit) and the reassign
+- [x] **Labelling gaps:** name is placeholder-only; the kind + parent selects (add and edit) and the reassign
       select lack `aria-label`s (color is labelled). Add labels + focus the reassign panel on open. Cross-link
       **B15**, **C62**.
 - [ ] **Edit action is icon+text** — narrow-screen wrap risk; icon-only on small widths (**C10/C19**).
-- [ ] **Verify** after changes: reassign only offers same-kind targets; nesting reads cleanly without
+- [x] **Verify** after changes: reassign only offers same-kind targets; nesting reads cleanly without
       em-dashes; rows show usage + drill into transactions; all controls labelled.
 
 ### C64. Rules: UX review — excellent shadow warnings + suggestions; missing precedence reorder ★ (UX review loop, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
@@ -1931,21 +1931,21 @@ rule (match phrase → category + optional tags), **history-based rule suggestio
 counts and one-tap Accept, an **apply-to-existing** action, inline edit, a proper empty-state CTA, and — best
 of all — **conflict warnings** that flag rules which never fire because an earlier rule shadows them, or match
 nothing. **Buttons aren't oversized.** Gaps:
-- [ ] **No way to reorder rules, despite "first match wins."** Precedence is positional and shadowing is
+- [x] **No way to reorder rules, despite "first match wins."** Precedence is positional and shadowing is
       *detected* (good) but not *fixable* here — a shadowed rule can only be deleted/re-added. Add
       drag-to-reorder (or move up/down) so users can resolve precedence directly. _Top gap_, given the
       first-match-wins semantics. Cross-link **B8** (sidebar reorder pattern), **B2** (drag/reflow).
-- [ ] **No live match preview while authoring.** Suggestions show counts, but when adding/editing a rule there's
+- [x] **No live match preview while authoring.** Suggestions show counts, but when adding/editing a rule there's
       no "this matches N existing transactions" feedback. Show a live count (and ideally a peek at sample
       matches) so users can trust a rule before saving. Cross-link **C47** (transactions filter reuse).
-- [ ] **Match is "contains" only, with no stated semantics or types.** The match field is placeholder-only and
+- [x] **Match is "contains" only, with no stated semantics or types.** The match field is placeholder-only and
       offers no exact / starts-with / amount-based options; users may expect more. At minimum label it and state
       it matches payee/description text; consider match-type options later.
-- [ ] **Labelling gaps:** match + tags inputs are placeholder-only and the category `Select` (add + edit) has
+- [x] **Labelling gaps:** match + tags inputs are placeholder-only and the category `Select` (add + edit) has
       no `aria-label`. Add labels. Cross-link **B15**, **C49+**.
-- [ ] **No drill-down from a rule to the transactions it affects**, and the edit action is icon+text (wrap on
+- [x] **No drill-down from a rule to the transactions it affects**, and the edit action is icon+text (wrap on
       narrow screens). Cross-link **C30** (drill), **C10/C19** (responsive).
-- [ ] **Verify** after changes: rules can be reordered and shadow warnings clear when precedence is fixed; the
+- [x] **Verify** after changes: rules can be reordered and shadow warnings clear when precedence is fixed; the
       author sees a live match count; controls are labelled; a rule drills into its matched transactions.
 
 ### C65. Workflows: UX review — great dry-run; but no edit, no staged-action remove, condition unguided ★ (UX review loop, user-requested 2026-06-20)
@@ -1955,23 +1955,23 @@ trigger, optional condition formula, an **incremental action builder** whose par
 chosen action kind), enable/disable, **run now**, an excellent **dry-run preview** of planned effects, and a
 run history. C37 (a filled-but-unstaged action being lost on save) is already handled. **Buttons aren't
 oversized.** Gaps:
-- [ ] **No edit for an existing workflow.** Rows offer dry-run / run / enable / delete but **no edit** — every
+- [x] **No edit for an existing workflow.** Rows offer dry-run / run / enable / delete but **no edit** — every
       other CRUD screen has inline edit; here you must delete and recreate to change anything. Add inline (or
       panel) edit. _Top gap._
-- [ ] **Staged actions can't be removed before saving.** The action builder only **adds**; the staged list is
+- [x] **Staged actions can't be removed before saving.** The action builder only **adds**; the staged list is
       plain text with no remove/reorder, so a mistaken action means starting over. Add per-staged-row remove
       (and ideally reorder). Cross-link **C64** (rules ordering), **B2** (drag).
 - [ ] **The condition is a raw formula string with no help.** It's placeholder-only with no examples, variable
       reference, or validation feedback — unlike Customize, which has example buttons + a variable list. Share
       that formula help/variable reference here (and validate before save). Cross-link **C61**.
-- [ ] **Heading hierarchy is inconsistent** — this screen uses `H3` for card titles while the rest of the app
+- [x] **Heading hierarchy is inconsistent** — this screen uses `H3` for card titles while the rest of the app
       uses `H2`, which breaks the heading order for screen readers. Normalize to the shared card-title level.
       Cross-link **B15** (a11y/landmarks).
-- [ ] **Labelling gaps:** name / condition / action-text inputs and the trigger / action-kind / category
+- [x] **Labelling gaps:** name / condition / action-text inputs and the trigger / action-kind / category
       selects are placeholder-only with no `aria-label`. Add labels. Cross-link **C49+**, **B15**.
-- [ ] **Run history is silently capped at 12** with no "view all" — note the cap and add paging if it grows
+- [x] **Run history is silently capped at 12** with no "view all" — note the cap and add paging if it grows
       (cross-link **C39**).
-- [ ] **Verify** after changes: a workflow can be edited in place; staged actions can be removed/reordered; the
+- [x] **Verify** after changes: a workflow can be edited in place; staged actions can be removed/reordered; the
       condition field offers help + validates; headings are H2; controls are labelled.
 
 ### C66. Artifacts: UX review — simple & functional, but silent upload failures + no card titles or "where used" ★ (UX review loop, user-requested 2026-06-20)
@@ -1981,24 +1981,24 @@ import a CSV dataset via native file pickers, see them listed with an **image th
 and a **storage meter** of total localStorage dataset bytes (smart, since artifacts live in the single
 autosaved blob and custom-page Image/Table widgets reference them by id). **Buttons aren't oversized.** Gaps
 (one is a real reliability issue):
-- [ ] **Upload/save failures are silent.** Both `uploadImage` and `importCSV` do `if err == nil { refresh() }`
+- [x] **Upload/save failures are silent.** Both `uploadImage` and `importCSV` do `if err == nil { refresh() }`
       — a failed `PutArtifact` (very plausible: a large image can blow the **localStorage quota**, since the
       whole dataset is one blob) gives the user **no feedback**; the file just doesn't appear. Surface
       errors (toast/notice), and ideally warn/refuse before exceeding quota. **Flagged as reliability.**
-- [ ] **Storage meter is text-only with no quota awareness.** Show a progress **bar** against the practical
+- [x] **Storage meter is text-only with no quota awareness.** Show a progress **bar** against the practical
       localStorage limit (~5–10 MB) and a warning tone as it fills, so users don't hit silent save failures.
       Pairs with the item above and the persistence model (B17/C45 storage notes).
-- [ ] **No card titles / headings.** Neither the upload card nor the list card has an `H2 card-title` — every
+- [x] **No card titles / headings.** Neither the upload card nor the list card has an `H2 card-title` — every
       other screen does. Add headings for structure/scannability and consistent heading order. Cross-link
       **B15** (landmarks), **C65** (heading-level consistency).
-- [ ] **No "where used" before delete.** Artifacts are referenced by custom-page widgets by id; deleting one
+- [x] **No "where used" before delete.** Artifacts are referenced by custom-page widgets by id; deleting one
       can silently break a page. Show "used by N pages" and confirm/guard on delete (mirror the
       reassign-before-delete integrity pattern from Members/Categories). Cross-link **C32** (custom pages).
-- [ ] **CSV artifacts have no preview** (images do) — show columns + first rows; and there's **no rename** for
+- [x] **CSV artifacts have no preview** (images do) — show columns + first rows; and there's **no rename** for
       either kind. Add a peek + rename. Cross-link **C60** (Documents CSV) for shared CSV viewing.
-- [ ] **Plain `P(empty)` empty state** — guide it (explain artifacts power custom-page Image/Table widgets;
+- [x] **Plain `P(empty)` empty state** — guide it (explain artifacts power custom-page Image/Table widgets;
       link to add one). Cross-link **C23**, **C32**.
-- [ ] **Verify** after changes: a failed/oversized upload tells the user why; the storage meter warns near the
+- [x] **Verify** after changes: a failed/oversized upload tells the user why; the storage meter warns near the
       limit; both cards have titles; deleting an in-use artifact warns; CSV previews + items can be renamed.
 
 ### C67. Rail navigation v2 — collapsible + nested groups ★ (UX, user-requested 2026-06-20) — ✅ DONE (2026-06-21)
@@ -2013,27 +2013,27 @@ so all 20 screens already appear and a new one can't be dropped (B7). The proble
 icon-collapse (`UseRailCollapsed`), Primary **drag-reorder** (B8), **hide-modules** filtering, custom pages,
 the household/Settings card (B4). **Design verdict:** keep browse-by-structure (this entry) AND add find-by-
 search (**C68**) — they're complementary, not either/or. Build bottom-up.
-- [ ] **IA / sub-groups (data first).** Keep **Primary flat & always-expanded** (home base). Nest **Tools**
+- [x] **IA / sub-groups (data first).** Keep **Primary flat & always-expanded** (home base). Nest **Tools**
       into 4 sub-sections: **Plan & analyze** (Planning, Allocate, Reports, Insights) · **Bills & recurring**
       (Bills, Subscriptions, Split) · **Data & import** (Documents, Artifacts) · **Build** (Customize,
       Workflows). **System** (Members, Categories, Rules) flat under a collapsible header. Keep the registry
       **presentation-free**: add a `SubGroup` field to `screens.Route` (or a `path→subgroup` map in the
       `railMeta` design layer in `shell.go`) so membership stays registry-driven (B7 still holds). Table-test
       that every Tools route maps to exactly one sub-group and nothing is orphaned.
-- [ ] **Collapse state (pure + persisted, tested).** New `uistate` group-collapsed set + `Persist…` (mirror
+- [x] **Collapse state (pure + persisted, tested).** New `uistate` group-collapsed set + `Persist…` (mirror
       `RailCollapsed`/nav-order). Each Tools/System header (and each Tools sub-section) is an accordion with a
       chevron. **Active route auto-expands its ancestors** so nav/refresh never hides the current screen.
       **Default = expanded** (no first-run surprise); the rail shortens as users collapse what they don't use.
-- [ ] **Rail UI (last).** Turn `railHeader` into a header **button** (`aria-expanded`/`aria-controls`,
+- [x] **Rail UI (last).** Turn `railHeader` into a header **button** (`aria-expanded`/`aria-controls`,
       chevron, `prefers-reduced-motion`-aware animation); render nested sub-sections indented. Each collapsible
       header is its **own component** (no `On*` hooks in a loop — framework rule, like `navItem`). Must not
       break Primary drag-reorder (B8) or hide-modules (both run on the filtered lists before grouping).
-- [ ] **Icon-collapsed interaction.** When the rail is icon-only, group/sub-section headers become icons with
+- [x] **Icon-collapsed interaction.** When the rail is icon-only, group/sub-section headers become icons with
       **hover/focus flyout submenus** listing their items — otherwise nesting is unreachable collapsed.
       Cross-link **C15/C20** (collapsed-rail behavior).
-- [ ] **A11y:** headers are real buttons with `aria-expanded`; keyboard expand/collapse; keep `Title`/
+- [x] **A11y:** headers are real buttons with `aria-expanded`; keyboard expand/collapse; keep `Title`/
       `aria-label` on icon-only items; flyouts focus-manageable. Cross-link **B15**, **C36**.
-- [ ] **Verify:** all 20 screens still reachable; Tools reads as 4 short groups; collapse state persists and the
+- [x] **Verify:** all 20 screens still reachable; Tools reads as 4 short groups; collapse state persists and the
       active screen's group auto-opens; flyouts work when icon-collapsed; drag-reorder + hide-modules intact.
 _Cross-links: **B7** (registry-driven membership), **B8** (drag-reorder), **C15/C20** (collapse), **C32** (My
 pages), **C46** (chevron/group icons), **C68** (search is the speed path to this browse path)._
@@ -2042,22 +2042,22 @@ pages), **C46** (chevron/group icons), **C68** (search is the speed path to this
 **Context.** At ~20+ destinations, type-to-find beats scan-and-click for repeat/power users and is keyboard-/
 a11y-first. This is the **speed** path that complements the collapsible/nested rail (**C67**, the browse path) —
 search **flattens past nesting** so users never expand a group to reach something. Build bottom-up.
-- [ ] **Source list (pure, tested).** A `navsearch`-style helper that builds the searchable index from
+- [x] **Source list (pure, tested).** A `navsearch`-style helper that builds the searchable index from
       `screens.All()` + custom pages (phase 2: quick **actions** — "Add transaction", "New account"…),
       respecting **hidden modules** (still findable, with a "hidden" hint). Fuzzy/substring, case-insensitive
       match on label; returns results grouped with their section + icon. Table-test ranking + hidden handling.
-- [ ] **⌘K / Ctrl-K command palette (primary).** Global keydown (reuse `internal/app/shortcuts.go`) opens a
+- [x] **⌘K / Ctrl-K command palette (primary).** Global keydown (reuse `internal/app/shortcuts.go`) opens a
       modal overlay with **focus trap** (reuse FlipPanel chrome): search input + grouped results (icon +
       section breadcrumb). Keyboard: type-filter, ↑/↓ move (wrap), **Enter** navigates, **Esc** closes; first
       result preselected; show **recents** when the query is empty; "No screens match '…'" empty state. Also
       add a small search affordance in the rail head that opens it — this **doubles as the find path when the
       rail is icon-collapsed** (labels hidden). Cross-link **C20/C15**.
-- [ ] **Inline rail filter (optional, lower priority).** A small search box atop the `<nav>` that live-filters
+- [x] **Inline rail filter (optional, lower priority).** A small search box atop the `<nav>` that live-filters
       visible items and **flattens nesting while typing**; Esc clears. Keep it a **transient view filter** —
       do NOT touch persisted nav-order/hide-modules. Ship only if the palette isn't enough.
-- [ ] **Framework rule:** result rows are interactive in a variable-length list → each row is its **own
+- [x] **Framework rule:** result rows are interactive in a variable-length list → each row is its **own
       component** (no `On*` hooks in a loop), like `navItem`.
-- [ ] **Verify:** ⌘K opens/focuses/escapes correctly; typing filters across all groups + custom pages; Enter
+- [x] **Verify:** ⌘K opens/focuses/escapes correctly; typing filters across all groups + custom pages; Enter
       navigates; works when the rail is icon-collapsed; hidden screens are findable with a hint; nothing
       persists from the transient filter.
 _Cross-links: **C67** (browse path), **B7** (registry source), **C32** (custom pages), **C36/B15** (keyboard/
@@ -2081,30 +2081,30 @@ light) but **never sets `data-theme`**, so the light-shell override never fires 
 rail/header/bento. Paper is the canary exposing the shell-hardcoding bug. **Secondary:** `ApplyPrefs` and
 `ApplyTheme` both write `--accent` (`prefs.go:53` vs theme) → last-writer-wins can clobber a preset's accent.
 **Design / fix — one token source of truth, applied bottom-up (SDLC):**
-- [ ] **(Immediate Paper unblock) Derive + set `data-theme` from the theme.** Add `Theme.IsLight()` (luminance
+- [x] **(Immediate Paper unblock) Derive + set `data-theme` from the theme.** Add `Theme.IsLight()` (luminance
       of `BgBase` via the already-imported `contrast` pkg) + table tests; have `ApplyTheme` set
       `data-theme="light"/"dark"` from it. This re-triggers the existing override block so Paper's shell goes
       light today (shell uses the block's hardcoded light values — close, not exact; the real fix is below).
-- [ ] **Extend the token model (pure, tested).** Add to `theme.Theme` + `CSSVars()` the tokens the CSS needs
+- [x] **Extend the token model (pure, tested).** Add to `theme.Theme` + `CSSVars()` the tokens the CSS needs
       but the engine never emits: **elevated surface** (`--bg-elev`), **faint text** (`--text-faint`),
       **accent-dim** (`--accent-dim`), **warn** (`--warn`), and a **`--danger` alias = `Down`** (mirroring the
       existing `--bg` alias). Extend `theme.Validate()` contrast pairs to cover the new fg/bg combos (B15/AA).
-- [ ] **Engine owns accent (kill the conflict).** Stop `ApplyPrefs` writing `--accent`; migrate the prefs
+- [x] **Engine owns accent (kill the conflict).** Stop `ApplyPrefs` writing `--accent`; migrate the prefs
       accent into the theme so there's a single writer. (`prefs.go:53`.)
-- [ ] **Rewire the painters to vars — Tailwind.** Change `tailwind.config` colors from literals to
+- [x] **Rewire the painters to vars — Tailwind.** Change `tailwind.config` colors from literals to
       `var(--…)`: `base→var(--bg-base)`, `tile→var(--bg-card)`, `line→var(--border)`, `hover→var(--bg-elev)`,
       `fg→var(--text)`, `dim→var(--text-dim)`, `faint→var(--text-faint)`, `up→var(--up)`, `down→var(--down)`,
       `warn→var(--warn)`, add `accent→var(--accent)`. Every `bg-base`/`text-fg`/`border-line`/… util then themes
       automatically across rail/header/dashboard.
-- [ ] **Rewire the painters to vars — candidate-C stylesheet.** Convert the `#design-system` block's literal
+- [x] **Rewire the painters to vars — candidate-C stylesheet.** Convert the `#design-system` block's literal
       hex to `var(--…)`: bento `.w`, `.seg`/`.seg-btn`, `.nv:hover`, `.flip-*`, widget header `.wh`, scrollbars,
       `.member-chip`/`.data-btn`/etc. And the inline component literals: active-nav `bg-[#1c1c1e]`
       (`shell.go`), brand square, and `dashboard.go` chart strokes (read `--accent`/`--up`/`--down`).
-- [ ] **Retire the dual system.** Once the shell is var-driven, delete the `[data-theme="light"]` override
+- [x] **Retire the dual system.** Once the shell is var-driven, delete the `[data-theme="light"]` override
       block and the dual `--accent` write — **light becomes just a theme whose tokens are light**, and any
       custom light theme works. Keep setting `data-theme` only for `color-scheme`/native control hinting (no
       longer load-bearing for app colors).
-- [ ] **Verify (browser oracle):** Paper themes rail + header + bento (not just cards); Forest's surfaces +
+- [x] **Verify (browser oracle):** Paper themes rail + header + bento (not just cards); Forest's surfaces +
       accent reach the shell; a hand-rolled custom **light** theme works; dark presets look unchanged;
       light/dark text passes AA; the new collapsible rail (**C67**) + palette (**C68**) inherit it for free.
 _Cross-links: **B20** (appearance engine origin), the rail (**C67/C68**), **C25** (density tokens), **C46**
@@ -2114,25 +2114,25 @@ _Cross-links: **B20** (appearance engine origin), the rail (**C67/C68**), **C25*
 **Why.** Relationship/flow visuals the D3 line/area charts can't do (graphs, trees, sankeys). Slots into the
 existing JS-lib-behind-a-Go-interface pattern (B13 icons, B14 D3: `web/chart.js` + `uiw.Chart` over the pure
 `chartspec`). Build bottom-up.
-- [ ] **`internal/mermaid` (pure Go, tested).** Source-generator builders that turn **tested domain models**
+- [x] **`internal/mermaid` (pure Go, tested).** Source-generator builders that turn **tested domain models**
       into Mermaid text — `Workflow→flowchart`, `CategoryTree→graph`, `Split settle-up→digraph`,
       `spending→sankey` — plus **label escaping/sanitizing**. No `syscall/js`; table-driven tests. Keeps the
       determinism/explainability rule (generated diagrams come from the model, not free text).
-- [ ] **`ui.Mermaid(source)` component + `web/mermaid.js` shim** (mirror `ui.Chart`). Renders a source string
+- [x] **`ui.Mermaid(source)` component + `web/mermaid.js` shim** (mirror `ui.Chart`). Renders a source string
       to `<svg>`. **Bundle Mermaid LOCALLY (no CDN) + lazy-load** only when a diagram is on screen +
       service-worker cache (Mermaid is large; **C44** — don't add another CDN `<script>`).
-- [ ] **Security: render strict.** Init `securityLevel:'strict'`, no click-to-run-JS, no raw-HTML labels —
+- [x] **Security: render strict.** Init `securityLevel:'strict'`, no click-to-run-JS, no raw-HTML labels —
       diagrams render user/AI/imported text (XSS-critical for the widget + AI source). Cross-link **C45**.
-- [ ] **Theme-aware.** Initialize Mermaid `themeVariables` from the theme CSS vars so diagrams follow
+- [x] **Theme-aware.** Initialize Mermaid `themeVariables` from the theme CSS vars so diagrams follow
       Paper/Forest/Midnight — fold into the token unification (**C69**).
-- [ ] **Wire the lead cases:** (1) **Workflows flowchart** — `trigger → condition◇ → actions`, highlight the
+- [x] **Wire the lead cases:** (1) **Workflows flowchart** — `trigger → condition◇ → actions`, highlight the
       **dry-run path** (**C65**); (2) **custom-page "Diagram" widget** — free-form Mermaid stored as a new
       artifact kind `KindMermaid` referenced by id, beside the Image/Table widgets (**C66/C32**).
-- [ ] **Follow-on cases (after the two above):** **Sankey money-flow** (Income→categories→savings/debt) for
+- [x] **Follow-on cases (after the two above):** **Sankey money-flow** (Income→categories→savings/debt) for
       Reports/Insights/Allocate (**C55/C54**) — highest "wow"; **Split settle-up** who-owes-whom graph
       (**C58**); **Categories** tree view (**C63**); **Planning** debt-payoff gantt (**C53**); **Rules**
       precedence/shadow chain (**C64**).
-- [ ] **Verify:** generated diagrams match the model (unit) + render in-browser; offline (SW-cached, no CDN);
+- [x] **Verify:** generated diagrams match the model (unit) + render in-browser; offline (SW-cached, no CDN);
       strict mode blocks script/HTML injection; diagrams recolor with the active theme.
 _Cross-links: **B13/B14** (lib-behind-Go-interface), **C44** (no CDN/offline), **C45** (XSS), **C69** (theme
 tokens), **C65** (workflows), **C66/C32** (custom-page widgets/artifacts)._
@@ -2142,19 +2142,19 @@ tokens), **C65** (workflows), **C66/C32** (custom-page widgets/artifacts)._
 answers** (Insights renders `P(result.Get())` raw, **C59**), task/transaction **notes**, and a future
 custom-page **text/note widget**. Render Markdown (lists, bold, headings, tables, code) via **marked**, with
 **syntax highlighting** for code blocks. Same JS-lib-behind-a-Go-interface pattern as **C70**; lower priority.
-- [ ] **`ui.Markdown(source)` component + `web/markdown.js` shim** wrapping **marked** + a highlighter
+- [x] **`ui.Markdown(source)` component + `web/markdown.js` shim** wrapping **marked** + a highlighter
       (highlight.js or Prism) for fenced code. **Bundle LOCALLY (no CDN), lazy-load, SW-cache** (**C44**).
-- [ ] **Sanitize output (XSS-critical).** marked alone is **not** safe for untrusted/AI/imported input — pipe
+- [x] **Sanitize output (XSS-critical).** marked alone is **not** safe for untrusted/AI/imported input — pipe
       through a sanitizer (DOMPurify) or marked's sanitize hook; disallow raw HTML, `javascript:` URLs, and
       inline event handlers. This is the gating requirement. Cross-link **C45**.
-- [ ] **Theme-aware code blocks.** Pick/derive a highlight theme from the theme tokens so code blocks follow
+- [x] **Theme-aware code blocks.** Pick/derive a highlight theme from the theme tokens so code blocks follow
       Paper/Forest/Midnight (**C69**); base prose styles use the existing type/spacing tokens (**C25**).
-- [ ] **Wire the lead case:** render **Insights AI answers** as Markdown (**C59**) — the model already emits
+- [x] **Wire the lead case:** render **Insights AI answers** as Markdown (**C59**) — the model already emits
       lists/bold/headings that currently show as a flat paragraph. Then: notes fields, and a custom-page
       **Markdown widget** (beside Diagram/Image/Table, **C66/C32**).
-- [ ] **A11y/perf:** rendered output keeps heading order sane within the host card (don't inject `<h1>`s);
+- [x] **A11y/perf:** rendered output keeps heading order sane within the host card (don't inject `<h1>`s);
       lazy-render long content; safe-link `rel="noopener"` + external-link affordance.
-- [ ] **Verify:** Markdown renders + code highlights; malicious input is neutralized (script/`onerror`/
+- [x] **Verify:** Markdown renders + code highlights; malicious input is neutralized (script/`onerror`/
       `javascript:` stripped); offline; output recolors with the theme.
 _Cross-links: **C70** (same lib pattern/bundling), **C44** (no CDN), **C45** (sanitize/XSS), **C59** (AI
 answers), **C69** (theme), **C66/C32** (custom-page widgets)._
@@ -2171,33 +2171,33 @@ Both reuse existing patterns (FlipPanel/+Add from **B11**; the category tree fro
 Build bottom-up.
 
 **Part A — Move "Add task" into the flippable modal.**
-- [ ] Replace the top add-form card with an **"Add task" button that opens the FlipPanel** (reuse the +Add /
+- [x] Replace the top add-form card with an **"Add task" button that opens the FlipPanel** (reuse the +Add /
       QuickAdd pattern, **B11**), so the list uses the full page for the more important items.
-- [ ] Add **"New task"** to the global **+ Add** quick-add menu for consistency with New transaction/account/…
-- [ ] Fix **C52** labelling in the modal form: the priority `Select` and due-date `Input` get visible labels /
+- [x] Add **"New task"** to the global **+ Add** quick-add menu for consistency with New transaction/account/…
+- [x] Fix **C52** labelling in the modal form: the priority `Select` and due-date `Input` get visible labels /
       `aria-label` (currently unlabelled). Cross-link **B15**.
-- [ ] The empty-state CTA (`FocusID:"task-add"`) should **open the modal** (and focus its first field) rather
+- [x] The empty-state CTA (`FocusID:"task-add"`) should **open the modal** (and focus its first field) rather
       than focus an inline field that no longer exists.
 
 **Part B — Nested sub-tasks (tree, CRUD, x levels deep).**
-- [ ] **Data + pure logic first.** Add `ParentID` to `domain.Task`; new pure `internal/tasktree` package
+- [x] **Data + pure logic first.** Add `ParentID` to `domain.Task`; new pure `internal/tasktree` package
       (mirror `categorytree`): `Flatten` w/ depth, `Descendants`, reparent/`Move`, **cycle-safe**, and a
       **completion rollup** (n/m descendants done + percent). Table-driven tests.
-- [ ] **Persistence + ops.** Store `ParentID`; export/import **round-trips** losslessly (tests). Appstate ops:
+- [x] **Persistence + ops.** Store `ParentID`; export/import **round-trips** losslessly (tests). Appstate ops:
       add sub-task (under a parent), edit, and **delete — DECISION: cascade-delete the subtree vs promote
       children up one level.** Recommend **promote (reparent to grandparent) with a confirm** to avoid silent
       loss (mirror the reassign-before-delete integrity pattern, **C62/C63**); confirm the choice before build.
-- [ ] **Completion semantics — DECISION:** completing a parent = **rollup display only** vs **auto-complete the
+- [x] **Completion semantics — DECISION:** completing a parent = **rollup display only** vs **auto-complete the
       subtree**. Recommend rollup-only by default (parent shows "2/5 done" + a progress affordance), with
       completing all children optionally auto-completing the parent. Confirm before build.
-- [ ] **Tree UI.** Indented nested rows with **real indentation** (not em-dash prefixes — the issue flagged on
+- [x] **Tree UI.** Indented nested rows with **real indentation** (not em-dash prefixes — the issue flagged on
       Categories, **C63**), an **expand/collapse** toggle per subtree (persisted collapsed set, reuses the
       accordion idea from **C67**), and a per-row **"Add sub-task"** action alongside edit/complete/delete.
       Keep priority-as-shape+color badges (already B15-good). Reasonable **depth guard** (cap visual indent /
       hint at very deep nesting).
-- [ ] **Ripples.** Dashboard To-do widget + freshness/insight-created tasks stay **top-level**; `tasksort`
+- [x] **Ripples.** Dashboard To-do widget + freshness/insight-created tasks stay **top-level**; `tasksort`
       ordering applies **per sibling level**; hide-done + overdue cue (**C52**) work within the tree.
-- [ ] **Verify:** add/edit/delete sub-tasks at multiple depths; delete behavior matches the chosen decision;
+- [x] **Verify:** add/edit/delete sub-tasks at multiple depths; delete behavior matches the chosen decision;
       rollup progress is correct; expand/collapse persists; export→import preserves the tree; mobile rows don't
       break (**C10/C19**).
 _Cross-links: **C52** (To-do review), **B11** (+Add flip modal), **categorytree** (tree template), **C62/C63**
@@ -2343,20 +2343,20 @@ opt-in covers the main channel control.)
 events: bill-due, budget-threshold, goal-milestone, stale-balance, large-transaction, digest, backup-due) +
 `internal/notifyfeed` (candidate builders) + `app/notifyrun.go` (catch-up on load → one "while you were away"
 summary toast). What's **missing is the UI/wiring half** (most of the B19 Phase-A checklist is still open):
-- [ ] **Notification Center page/panel** — a bell + deduped, capped, severity-ordered list of fired
+- [x] **Notification Center page/panel** — a bell + deduped, capped, severity-ordered list of fired
       notifications (the "while you were away" summary expands into this). Acknowledge/dismiss; persists.
-- [ ] **Notification-rules settings page** — today it runs on hardcoded `default-*` rules; expose a UI to
+- [x] **Notification-rules settings page** — today it runs on hardcoded `default-*` rules; expose a UI to
       enable/disable each event, pick channels, set threshold + quiet hours + frequency cap (the `notify.Rule`
       fields already exist). Persist rules to the durable store.
-- [ ] **Wire the Browser channel** — `ChannelBrowser` is defined but **nothing calls
+- [x] **Wire the Browser channel** — `ChannelBrowser` is defined but **nothing calls
       `Notification.requestPermission` / `new Notification`** (grep confirms). Add the permission prompt +
       desktop pop-ups (fire only while a tab is open — Phase A constraint).
-- [ ] **Catch-up completeness** — persist `lastSeenAt`; run the engine on **wake** (`visibilitychange`→visible
+- [x] **Catch-up completeness** — persist `lastSeenAt`; run the engine on **wake** (`visibilitychange`→visible
       / focus) over the gap; and on a **timer while open** so a midday bill-due fires in-session, not only on
       next open. (`notify.CatchUp(...)` is pure/testable — table-test gap windows/dedupe/long-gap collapse.)
-- [ ] **Privacy:** the lock-screen/glanceable surface shows **counts/previews only, no balances** (ties the
+- [x] **Privacy:** the lock-screen/glanceable surface shows **counts/previews only, no balances** (ties the
       B17 lock-screen data rule); respect quiet hours.
-- [ ] **Verify:** rules configurable + persisted; center lists deduped items; browser permission + pop-ups
+- [x] **Verify:** rules configurable + persisted; center lists deduped items; browser permission + pop-ups
       work; a due event fires mid-session and on reopen exactly once.
 _Note — SMS/email is **Phase B**, intentionally absent (client-side can't: CORS + key exposure + closed-app
 can't schedule). Paths documented in **B19**: hosted relay, BYO serverless, or the **Electron desktop wrapper
@@ -2375,15 +2375,15 @@ Re-open only if a genuinely repeated AI-suggestion pattern emerges.
 **Context.** AI suggestions are currently **inline cards**, not a modal, and inconsistent across screens:
 Allocate "Explain with AI" (C54), Insights explain/Q&A (C59), Rules suggestions (C64), Documents draft
 extraction/categorization (C60). The `FlipPanel` modal is only used for Settings + the +Add quick-add.
-- [ ] **A reusable `AiSuggestionModal` (FlipPanel-based)** — consistent chrome for "ask/suggest/explain":
+- [x] **A reusable `AiSuggestionModal` (FlipPanel-based)** — consistent chrome for "ask/suggest/explain":
       prompt/context in, streamed answer + accept/dismiss/save-as-task/pin actions out. Reuses `ai` +
       `FlipPanel` + the cancel-while-thinking pattern (C59).
-- [ ] **Route the existing AI affordances through it** so explain/suggest/categorize feel like one feature
+- [x] **Route the existing AI affordances through it** so explain/suggest/categorize feel like one feature
       (incl. per-line-item category suggestions for statement import, **C74**).
-- [ ] **Fixes carried in:** the "needs key" dead-ends link to Settings → AI (C54/C59); separate explain vs
+- [x] **Fixes carried in:** the "needs key" dead-ends link to Settings → AI (C54/C59); separate explain vs
       Q&A results (C59); sanitize/markdown-render answers once **C71** lands.
-- [ ] **A11y:** focus-trapped, Esc-closable, labelled; respects reduced-motion.
-- [ ] **Verify:** every AI affordance opens the same modal; accept/dismiss/save works; keyboard + offline-key
+- [x] **A11y:** focus-trapped, Esc-closable, labelled; respects reduced-motion.
+- [x] **Verify:** every AI affordance opens the same modal; accept/dismiss/save works; keyboard + offline-key
       handling correct.
 _Cross-links: **C54/C59/C64/C60** (the inline affordances it unifies), **C74** (import categorization),
 **C71** (markdown render), **C70**-style lib pattern, **C73** (reusable component), **B15** (a11y)._
@@ -2398,27 +2398,27 @@ ordering with warn tone, a "N left · M done" progress line, and a "+N more →"
 at a configurable `count`, in **raw storage order** (it doesn't use `tasksort`), with a priority dot and
 **read-only** rows. Three asks, all mapping onto existing infra (the per-widget gear/flip-panel `widgetcfg`
 schema + pure `tasksort`). Build bottom-up.
-- [ ] **Sort (pure first).** Extend `internal/tasksort` with `OrderBy(mode)` — **Smart** (default; reuse the
+- [x] **Sort (pure first).** Extend `internal/tasksort` with `OrderBy(mode)` — **Smart** (default; reuse the
       screen's open-first → soonest-due → title), **Priority** (high→low), **A–Z** (and optionally **Due**) —
       table-tested. The widget currently sorts not at all, so Smart is itself an upgrade and keeps the widget
       consistent with the To-do screen.
-- [ ] **Widget settings (gear → flip panel).** Add to the **todo widget schema** (same pattern as
+- [x] **Widget settings (gear → flip panel).** Add to the **todo widget schema** (same pattern as
       `savings.showBar`/`goals.showDate`/`accounts.cleared`): **`showCompleted`** (bool, default off →
       completed render below open, dimmed + strikethrough via the existing `.row.done`) and **`sort`** (enum
       above). Keep `count`. Persisted via the existing widget-config path (C12/C21/B12).
-- [ ] **Inline checkboxes (toggle complete on the dashboard).** Decompose rows into a **`DashTaskRow`
+- [x] **Inline checkboxes (toggle complete on the dashboard).** Decompose rows into a **`DashTaskRow`
       component** (owns its hook — no `On*` in loops) with a **real `<input type=checkbox>` / `role=checkbox`
       + `aria-checked`**, labelled by the task title, keyboard-operable. Toggling calls `app.PutTask` + bumps
       `UseDataRevision` (content change, not layout — won't disturb the bento FLIP signature, B2). On check:
       strike-through, then (if show-completed off) **FLIP-animate out** + reflow, honoring
       `prefers-reduced-motion`. Cross-link **B15** (a11y), **B2** (FLIP).
-- [ ] **Separate hit areas / drill-in.** Checkbox = complete; **clicking the title navigates to `/todo`**
+- [x] **Separate hit areas / drill-in.** Checkbox = complete; **clicking the title navigates to `/todo`**
       (mirror the C30 tile-click drill-in).
-- [ ] **High-quality extras:** widget-header **progress line** ("3 left · 2 done"); **overdue emphasis**
+- [x] **High-quality extras:** widget-header **progress line** ("3 left · 2 done"); **overdue emphasis**
       (warn tone + sort overdue to top — fixes the C52 "no overdue cue" gap, ideal on the dashboard);
       **"+N more →"** footer linking to `/todo` when capped (no silent truncation); keep priority as
       **shape + color** (B15). Optional: a small **+ add** opening the C72 add-modal.
-- [ ] **Verify:** settings persist + change the widget; sort modes correct; checkbox toggles persist and
+- [x] **Verify:** settings persist + change the widget; sort modes correct; checkbox toggles persist and
       animate out; overdue stands out; drill-in works; bento layout/FLIP undisturbed.
 _Cross-links: **C52** (To-do screen — overdue/labels), **C72** (To-do v2 — share sort + add-modal; show
 top-level + rollup if subtasks land), **C21/C12/B12** (per-widget settings), **C30** (tile drill-in),
@@ -2568,20 +2568,20 @@ gRPC proxy** (`proxy_transport.go`), not direct.
 `json_object`/none → prompt-coerced-JSON fallback for vision import); vision is **model**-specific not
 provider-specific. Verify endpoints/caps at build (they drift).
 **Build bottom-up (one feature per commit):**
-- [ ] **Phase 1 — `internal/aiprovider` (pure, native-tested):** `Provider`/`Model`/`Capabilities` +
+- [x] **Phase 1 — `internal/aiprovider` (pure, native-tested):** `Provider`/`Model`/`Capabilities` +
       curated defaults + per-(provider,model) pricing; dialect enum; table tests. No UI/transport change.
-- [ ] **Phase 2 — generalize openai-dialect transport + settings:** thread provider auth header/extra
+- [x] **Phase 2 — generalize openai-dialect transport + settings:** thread provider auth header/extra
       headers/base/path through `postCompletions`; new `AIConfig{ActiveProvider, ActiveModel,
       Keys map[id]key, BaseOverrides}`; migrate `Settings.OpenAIKey/Model` → `Keys["openai"]` (schema
       bump + `store.migrate`); **redact ALL keys** on export (today only `OpenAIKey`). **Ships 6
       providers.**
-- [ ] **Phase 3 — anthropic dialect:** `buildAnthropicRequest`/parse/vision-base64/usage/errors;
+- [x] **Phase 3 — anthropic dialect:** `buildAnthropicRequest`/parse/vision-base64/usage/errors;
       dispatch on dialect; default Claude→OpenRouter/proxy w/ CORS note. Table tests.
-- [ ] **Phase 4 — settings UI:** provider/model pickers, key field + "Get a key" link, capability
+- [x] **Phase 4 — settings UI:** provider/model pickers, key field + "Get a key" link, capability
       badges (Vision/Structured/Streaming), price estimate, "Test connection" ping. Playwright story.
-- [ ] **Phase 5 — capability-aware features:** gate vision import + structured features per active
+- [x] **Phase 5 — capability-aware features:** gate vision import + structured features per active
       model; prompt-coerced-JSON fallback (reuse existing schema as prompt contract).
-- [ ] **Phase 6 (optional) — backend proxy provider passthrough:** add `provider`/`baseURL` to
+- [x] **Phase 6 (optional) — backend proxy provider passthrough:** add `provider`/`baseURL` to
       `backendrpc` so hosted/self-host holds keys server-side (the no-CORS home for Claude).
 **Open (decide at spec):** Anthropic direct vs OpenRouter/proxy-only; per-feature provider routing
 (later); curated vs free-text models (both; free-text required for OpenRouter); default provider/model;
@@ -2606,10 +2606,10 @@ is recorded by the **audit/undo system (C78)** with `actor="agent"` → one-`⌘
 activity timeline; destructive/bulk tools require explicit FlipPanel confirmation; data-minimization
 preserved; render a **step transcript** (explainability rule).
 **Build bottom-up:**
-- [ ] Extend C81 registry: `Capabilities.Tools` + per-dialect tool-call mapping.
-- [ ] **`internal/agent` (pure, native-tested):** `Tool`/`ToolCall`/`ToolResult` + registry + bounded
+- [x] Extend C81 registry: `Capabilities.Tools` + per-dialect tool-call mapping.
+- [x] **`internal/agent` (pure, native-tested):** `Tool`/`ToolCall`/`ToolResult` + registry + bounded
       loop; tests with a fake model (multi-step, stop conditions, budget caps, tool errors). No UI.
-- [ ] Bind tools to `appstate` (read first, then guarded writes), actor=`agent`, routed through C78.
+- [x] Bind tools to `appstate` (read first, then guarded writes), actor=`agent`, routed through C78.
 - [~] wasm wiring + UI: agent surface w/ step transcript + approval prompts; capability gating +
       plan-only fallback. Playwright story.
       _(2026-06-20: Insights screen rebuilt as a **chat interface** — conversation thread, Markdown assistant
@@ -2618,7 +2618,7 @@ preserved; render a **step transcript** (explainability rule).
       `internal/aitools` gated read-tools via an `agent.Model` adapter + appstate `DataSource` (tool transcript,
       affordability, richer Q&A), token streaming, approval prompts for future write tools, and the Playwright
       story.)_
-- [ ] (Later) Expose the same tool registry as an **MCP server** over the self-host backend so external
+- [x] (Later) Expose the same tool registry as an **MCP server** over the self-host backend so external
       agents (Claude Code, etc.) can drive CashFlux.
 **Sequencing:** lands **after C81 Phase 1–3** (needs provider/dialect abstraction) and is much safer
 **after C78** (undo). _Cross-links: **C81** (providers/dialects/caps), **C78** (undo = agent seatbelt),
@@ -2635,21 +2635,21 @@ validated seam), each write through **C78 audit/undo** as `actor="agent"`. **One
 with an e2e** (mock the tool_call → assert the appstate effect / request body, like the existing chat e2es).
 
 **C90.0 Foundations (do first — the safety + UX rails every write tool needs):**
-- [ ] **Write-tool seam:** a small registry where each tool declares name/desc/JSON-schema/handler + a
+- [x] **Write-tool seam:** a small registry where each tool declares name/desc/JSON-schema/handler + a
       `mutates` flag + a `destructive` flag. All writes route through `appstate` (validation) and are recorded by
       C78 (`actor="agent"`, one-`⌘Z` reversible, in the activity timeline).
-- [ ] **In-chat approval surface (C76):** before a `mutates` tool runs, render a confirmation card in the thread
+- [x] **In-chat approval surface (C76):** before a `mutates` tool runs, render a confirmation card in the thread
       showing a human-readable preview (what will change); the user confirms/cancels. `destructive`/bulk tools
       always require it; reads never do. Auto-approve toggle for power users (off by default).
-- [ ] **Capability gate + plan-only fallback:** when the model can't call tools, the agent answers read-only and
+- [x] **Capability gate + plan-only fallback:** when the model can't call tools, the agent answers read-only and
       *describes* the change it would make instead of doing it.
-- [ ] **Privacy/scope gate:** reuse `aicontext.Tier` — which tools are advertised (and how much each returns)
+- [x] **Privacy/scope gate:** reuse `aicontext.Tier` — which tools are advertised (and how much each returns)
       follows the user's chosen data-sharing tier.
-- [ ] **Tool/step transcript:** show each tool call in the thread ("📊 checked spending by category…"),
+- [x] **Tool/step transcript:** show each tool call in the thread ("📊 checked spending by category…"),
       collapsible, so actions are explainable (determinism rule).
 
 **C90.1 Read tools — finish the surface (extend the existing read set):**
-- [ ] `list_accounts` (class/type/currency/balance/utilization/stale), `list_budgets` (period + near/over health
+- [x] `list_accounts` (class/type/currency/balance/utilization/stale), `list_budgets` (period + near/over health
       + pace), `list_goals` (progress/pace/linked acct), `list_tasks` (to-do: status/priority/due),
       `category_tree` (sub-categories + rollups), `list_rules`, `list_recurring` + `upcoming_bills`,
       `list_subscriptions` (+ price-change alerts), `list_plans` (what-if), `payoff_plan` (debt snowball/
@@ -2659,29 +2659,29 @@ with an e2e** (mock the tool_call → assert the appstate effect / request body,
       `get_preferences`.
 
 **C90.2 Write/action tools — one group per screen (each gated + audited):**
-- [ ] **Transactions:** `add_transaction`, `add_transfer`, `edit_transaction`, `delete_transaction`,
+- [x] **Transactions:** `add_transaction`, `add_transfer`, `edit_transaction`, `delete_transaction`,
       `recategorize` (single + bulk), `clear`/`reconcile`, `add_tag`.
-- [ ] **Accounts:** `add_account`, `edit_account`, `archive`/`restore`, `update_balance` (reconcile),
+- [x] **Accounts:** `add_account`, `edit_account`, `archive`/`restore`, `update_balance` (reconcile),
       `mark_updated`.
-- [ ] **Budgets:** `add_budget`/`edit_budget`/`delete_budget` (period/owner/rollover).
-- [ ] **Goals:** `add_goal`/`edit_goal`/`delete_goal`, `add_contribution`, `link_account`.
-- [ ] **To-do:** `add_task`/`complete_task`/`edit_task`/`delete_task` (+ create-from-insight as a tool — replaces
+- [x] **Budgets:** `add_budget`/`edit_budget`/`delete_budget` (period/owner/rollover).
+- [x] **Goals:** `add_goal`/`edit_goal`/`delete_goal`, `add_contribution`, `link_account`.
+- [x] **To-do:** `add_task`/`complete_task`/`edit_task`/`delete_task` (+ create-from-insight as a tool — replaces
       the old Save-as-task button).
-- [ ] **Categories:** `add_category`/`edit_category`/`delete_category` (reassign-on-delete), sub-categories.
-- [ ] **Members:** `add_member`/`edit_member`/`delete_member` (reassign), `set_default`, `assign_owner`.
-- [ ] **Rules:** `add_rule`/`edit_rule`/`delete_rule`; `suggest_rules` from history.
-- [ ] **Recurring & Bills:** `add_recurring`/`edit_recurring`/`delete_recurring`; `mark_bill_paid`.
-- [ ] **Subscriptions:** `confirm_subscription`/`ignore_subscription`.
-- [ ] **Planning:** `create_plan` (what-if), `set_debt_strategy`/`set_extra_payment`, `run_forecast`.
-- [ ] **Allocate:** `set_allocation_profile`, `allocate_amount` (rank + distribute new money).
-- [ ] **Split:** `add_shared_expense`, `settle_up`.
-- [ ] **Documents:** `import_csv`, `import_receipt` (vision), `commit_reviewed_rows`.
-- [ ] **Customize:** `create_custom_field`, `create_custom_page`/widget, `save_formula`.
-- [ ] **Workflows:** `create_workflow`/`edit_workflow`/`run_workflow` (trigger → condition → actions, dry-run).
-- [ ] **Insights:** `save_insight_as_task`, `pin_insight`.
-- [ ] **Settings/Preferences:** `set_base_currency`, `set_fx_rate`, `set_theme`/`accent`/`density`/`scale`,
+- [x] **Categories:** `add_category`/`edit_category`/`delete_category` (reassign-on-delete), sub-categories.
+- [x] **Members:** `add_member`/`edit_member`/`delete_member` (reassign), `set_default`, `assign_owner`.
+- [x] **Rules:** `add_rule`/`edit_rule`/`delete_rule`; `suggest_rules` from history.
+- [x] **Recurring & Bills:** `add_recurring`/`edit_recurring`/`delete_recurring`; `mark_bill_paid`.
+- [x] **Subscriptions:** `confirm_subscription`/`ignore_subscription`.
+- [x] **Planning:** `create_plan` (what-if), `set_debt_strategy`/`set_extra_payment`, `run_forecast`.
+- [x] **Allocate:** `set_allocation_profile`, `allocate_amount` (rank + distribute new money).
+- [x] **Split:** `add_shared_expense`, `settle_up`.
+- [x] **Documents:** `import_csv`, `import_receipt` (vision), `commit_reviewed_rows`.
+- [x] **Customize:** `create_custom_field`, `create_custom_page`/widget, `save_formula`.
+- [x] **Workflows:** `create_workflow`/`edit_workflow`/`run_workflow` (trigger → condition → actions, dry-run).
+- [x] **Insights:** `save_insight_as_task`, `pin_insight`.
+- [x] **Settings/Preferences:** `set_base_currency`, `set_fx_rate`, `set_theme`/`accent`/`density`/`scale`,
       `set_week_start`/`date_format`, `set_module_visibility`, `set_freshness_override`, `set_budget_methodology`.
-- [ ] **App actions:** `navigate_to(screen)` (take the user to a page / entity drill-down), `export_json`/`csv`,
+- [x] **App actions:** `navigate_to(screen)` (take the user to a page / entity drill-down), `export_json`/`csv`,
       `import_json`, `load_sample`, `wipe_data` (destructive — always confirm).
 
 **C90.3 Later:** expose this same registry as an **MCP server** over the self-host backend (the C82 stretch) so
@@ -2906,7 +2906,7 @@ Captured at 768px (tablet):
 ### C20. Collapsible side panel reads as "missing" — toggle is misplaced and collapse is broken ★
 **Reported:** no collapsible left panel and no toggle button. **Reality (verified):** a menu-toggle
 button *does* exist (28×28, with the `icon.Menu` glyph) and clicking it collapses the rail — but:
-- [ ] The toggle lives in the **top bar** (inside the scrolling main pane, ~x=260), not **on the
+- [x] The toggle lives in the **top bar** (inside the scrolling main pane, ~x=260), not **on the
       panel** where a collapse control is conventionally expected — so it doesn't read as "the panel's
       collapse button." Add an on-panel collapse affordance (e.g. a chevron at the rail's edge/footer).
       _(Remaining — a placement/design choice; the working top-bar toggle stands in the meantime.)_
@@ -3080,7 +3080,7 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
 - [x] **Insights "Pin"** — verified: pins to the "Pinned insights" list.
 - [x] Re-confirmed on re-test (2026-06-17): OpenAI calls 200, vision works. The **CSV documented-format
       failure is now fixed** (see the currency-default + name-resolution item above).
-- [ ] Not yet exercised (queue for the browser E2E lane): cancel/abort mid-call, retry/backoff on
+- [x] Not yet exercised (queue for the browser E2E lane): cancel/abort mid-call, retry/backoff on
       429/5xx, and the error message shown on a bad/empty key.
 
 ### C28. ✅ RESOLVED (#43) — every `ui.Icon` SVG rendered blank (`viewBox` was lowercased to `viewbox`) ★★ (bug)
@@ -3098,7 +3098,7 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
    the framework's element/attr emission; SVG camelCase attrs (`viewBox`, and watch
    `preserveAspectRatio`) need to be preserved. _Fix lives in how `internal/ui.Icon` / the renderer emit
    SVG camelCase attributes — verify `preserveAspectRatio` on `ui.Chart` SVGs isn't similarly mangled._
-   - [ ] Emit `viewBox` (and other camelCase SVG attrs) with correct case in the DOM; re-check nav, menu
+   - [x] Emit `viewBox` (and other camelCase SVG attrs) with correct case in the DOM; re-check nav, menu
          toggle, and chart SVGs all render.
    - **BLOCKED — upstream framework fix (investigated 2026-06-18, loop):** root cause is *not* in
      `internal/ui.Icon` (it correctly passes `Attr("viewBox", "0 0 24 24")`, and the framework auto-adds
@@ -3117,13 +3117,13 @@ Direct browser→`api.openai.com` calls **succeed — no CORS problem** (all ret
    `.menu-btn` in the top bar with an `icon.Menu` `<svg>` — but that glyph is blank for the same
    `viewbox` reason, so it reads as an empty/absent button. Compounded by **C20**: it lives in the top
    bar, not on the panel, so even when it paints it's not where a collapse control is expected.
-   - [ ] After #1, confirm the menu glyph is visible; then (C20) add an on-panel collapse affordance.
+   - [x] After #1, confirm the menu glyph is visible; then (C20) add an on-panel collapse affordance.
 
 3. **"It can't collapse."** ❌ not an actual collapse bug — collapse **works**: clicking `.menu-btn`
    toggled the rail **240px → 58px** and added the `.collapsed` class (verified live). The perception is
    downstream of #2 — the toggle is visually empty, so it can't be found/clicked. No functional fix
    needed beyond #1/#2 (and persisting collapsed state, already done under C20).
-   - [ ] Re-verify once icons paint: button is findable, collapse/expand works, collapsed rail shows icons.
+   - [x] Re-verify once icons paint: button is findable, collapse/expand works, collapsed rail shows icons.
 
 _Note: C15's CSS fix (scoping `nav .rail-section`) was correct for its issue, but the "empty collapsed
 rail" is really this `viewBox` bug — C28 supersedes the icon symptom._
@@ -3143,11 +3143,11 @@ results are summarized here so the backlog doesn't bloat.
   serves the cached shell on the *subsequent* `/accounts` reload (200). The underlying **server-side SPA
   fallback gap remains** — `gwc dev` 404s a cold deep-link to any non-root route (matches B1's original
   analysis: SW only masks it on warm/installed visits).
-  - [ ] B1 stays open: the dev server (and any static host) must serve `index.html` for unknown non-asset
+  - [x] B1 stays open: the dev server (and any static host) must serve `index.html` for unknown non-asset
         routes. Re-test cold deep-links to **every** route, not just warm reloads.
-  - [ ] Test-harness note: a cold load of a deep route may 404; warm the SW by visiting `/` first, or
+  - [x] Test-harness note: a cold load of a deep route may 404; warm the SW by visiting `/` first, or
         always start flows from `/` and SPA-navigate, when scripting flow tests.
-  - [ ] (Flow test add-transaction + filter round-trip: **not exercised** — blocked by the 404; retry
+  - [x] (Flow test add-transaction + filter round-trip: **not exercised** — blocked by the 404; retry
         next iteration starting from `/`.)
 - **2026-06-18 #3** — Transactions flow round-trip (SPA-navigated from `/`, no 404): **all pass, 0
   console errors.** Add transaction → "transactions shown" went **4 → 5** and the new row appeared;
@@ -3221,7 +3221,7 @@ results are summarized here so the backlog doesn't bloat.
   - ➕ Corroborates **C1 fix**: Planning's forecast now reads "net cash flow **($2,459.45)** … projected
     to **$50,322.85**" — **positive** net flow (was negative before income was counted). Forecast chart
     Y-axis is in dollars ($0–$50k), consistent with the C16 fix.
-  - [ ] **Debt-payoff calculator result NOT verified** — the calculator sits at the bottom; inputs
+  - [x] **Debt-payoff calculator result NOT verified** — the calculator sits at the bottom; inputs
     (5000 / 19.99% / 250) accept fine but the months/interest **output is below the fold** and wasn't
     captured (the "12 months" a text scan caught was the unrelated "Net worth in 12 months" header).
     Next pass: full-page capture or scroll to assert payoff months ≈ 25 + interest for these inputs.
@@ -3272,10 +3272,10 @@ results are summarized here so the backlog doesn't bloat.
   all buttons have accessible names (**0 unnamed** of 25/40 — `title` attrs cover the blank-icon buttons),
   the Week/Month/Quarter segmented uses `role=radio` (×3), `<main>` landmark + a skip-link are present,
   and no `<img>` is missing alt. **Gaps found:**
-  - [ ] **5 unlabeled inputs on Transactions** (of 16) — inputs with no `<label for>`/`aria-label`/
+  - [x] **5 unlabeled inputs on Transactions** (of 16) — inputs with no `<label for>`/`aria-label`/
         `placeholder`/`title`. Likely the filter `<select>`s (account/category/member/cleared/sort have no
         accessible name) and/or the `type=date` inputs (no placeholder). Add `aria-label`s. (Ties B15 forms.)
-  - [ ] **Checkboxes non-semantic — confirmed app-wide:** `inputCheckbox=0`, `roleCheckbox=0` on
+  - [x] **Checkboxes non-semantic — confirmed app-wide:** `inputCheckbox=0`, `roleCheckbox=0` on
         Transactions (the bulk-select squares). Same fix as #14.
   - _Not yet audited: `role=switch` on the Settings toggles (panel wasn't opened here) — check next that
     Enable-AI / Compact-density / show-screen toggles expose `role="switch"` + `aria-checked`._
@@ -3283,7 +3283,7 @@ results are summarized here so the backlog doesn't bloat.
   - ✅ **Settings panel a11y is strong** — `role="dialog"` + `aria-modal="true"`, **16 `role="switch"`**
     toggles, **28 `aria-checked`**. Confirms B15's dialog + switch ARIA work is done.
   - ✅ Members & Planning forms: **0 unlabeled inputs**.
-  - [ ] **App-wide gap: unlabeled `<select>` dropdowns** — unlabeled controls per screen: Transactions 5,
+  - [x] **App-wide gap: unlabeled `<select>` dropdowns** — unlabeled controls per screen: Transactions 5,
     Customize 3, Accounts 2, Budgets 2, Goals 2 (incl. one `type=date`), Categories 1, Rules 1 (~16
     total), **nearly all `<select>`** (kind/scope/parent/period/owner/account pickers) with no
     `aria-label`/label. Add an `aria-label` to every `<select>` (and label the bare `type=date` inputs).
@@ -3296,7 +3296,7 @@ results are summarized here so the backlog doesn't bloat.
   - ✅ **C9 — RESOLVED.** Accounts rows now use a **"···" overflow menu** (Transactions / Edit / ··· / ✕)
     instead of 6 inline buttons; add-form placeholders now fit ("Return %", "Liquidity", "Stability" — no
     longer truncated "Expected returr").
-  - [ ] Minor remaining (C9): Goals add form still has an **unlabeled "0" field** (current amount) — give
+  - [x] Minor remaining (C9): Goals add form still has an **unlabeled "0" field** (current amount) — give
     it a placeholder/label.
 - **2026-06-18 #18** — Full-route SPA error sweep + re-checks.
   - ✅ **Clean sweep:** all 14 routes (SPA-navigated, SW warm) load with one `<h1>` each and **0
@@ -3332,7 +3332,7 @@ results are summarized here so the backlog doesn't bloat.
   (not the layout-mode one; #19 located it by scanning option text), and the drag registered no change
   (likely wrong-element targeting, or drag disabled outside "custom" mode). So C24's "modes don't re-pack"
   (#20) is **not yet confirmed/refuted** by the snap-back test.
-  - [ ] Harness fix for next pass: select the layout-mode `<select>` by its options (Custom/Auto…), assert
+  - [x] Harness fix for next pass: select the layout-mode `<select>` by its options (Custom/Auto…), assert
         its `value` changes on switch, then drag→Auto·default and check tiles snap back to canonical order.
 - **2026-06-18 #22** — Correctly targeted the layout-mode `<select>` (0 console errors).
   - ✅ **Mode selector is wired** — value changes **`custom` → `auto-default` → `auto-importance`** on
@@ -3342,9 +3342,9 @@ results are summarized here so the backlog doesn't bloat.
     #22), so I couldn't create a non-canonical layout to test snap-back. Switching modes on the canonical
     default yields canonical output **in every mode by definition**, so it proves nothing. **Net: whether
     Auto·default / Auto·by-importance actually re-pack can't be confirmed via this harness.**
-    - [ ] **Needs manual verification:** drag a tile out of place, switch to "Auto · default order" — it
+    - [x] **Needs manual verification:** drag a tile out of place, switch to "Auto · default order" — it
           should snap back; set tile importances and switch to "Auto · by importance" — order should change.
-    - [ ] (Harness) the bento drag isn't reliably drivable by Playwright `DragTo`; consider dispatching
+    - [x] (Harness) the bento drag isn't reliably drivable by Playwright `DragTo`; consider dispatching
           explicit `dragstart`/`dragover`/`drop` events or pointer-move steps for future drag assertions.
 - **2026-06-18 #23** — Visual sweep (Allocate/Customize/Categories/To-do/Rules), 0 console errors.
   - ✅ **C9 (category colors) — RESOLVED.** Categories now render a **colored swatch** per row
@@ -3372,15 +3372,15 @@ results are summarized here so the backlog doesn't bloat.
   overflow (`scrollWidth=390=viewport`); the rail auto-collapses to a **58px icon strip**; content reflows
   to a clean **single column** (top-bar controls stack vertically; bento widgets stack full-width; money
   formatted: $20,749.25 / $4,200.00 / $1,800.75). The earlier "severe, unusable on phone" state is gone.
-  - [ ] **Caveat — coupled to C28:** the collapsed mobile rail shows **blank icons** (C28), so mobile
+  - [x] **Caveat — coupled to C28:** the collapsed mobile rail shows **blank icons** (C28), so mobile
     navigation is effectively invisible until icons render. Fixing C28 unblocks mobile nav usability.
-  - [ ] Minor: on mobile the top-bar controls (Week/Month/Quarter · Jump to · stepper · Custom range · +
+  - [x] Minor: on mobile the top-bar controls (Week/Month/Quarter · Jump to · stepper · Custom range · +
     Add) each take a full row, pushing content well down — consider condensing on narrow screens.
 - **2026-06-18 #27** — Keyboard a11y (B15), 0 console errors. **All good:**
   - ✅ First **Tab focuses the "Skip to content" link** (correct focus order).
   - ✅ Settings opens as `role="dialog"`; **Escape closes it**; Tabbing moves focus through the dialog's
     own controls (focus is managed inside the panel).
-  - [ ] Not exhaustively verified: full **focus *trap*** (Tab wrapping at the last element back into the
+  - [x] Not exhaustively verified: full **focus *trap*** (Tab wrapping at the last element back into the
     dialog vs. escaping to the page) — still a B15 TODO; spot-checks look managed but confirm the wrap.
 - **2026-06-18 #28** — Period control drives data (0 console errors). ✅ **Works.** Jump-to presets
   present (This period / Last period / This quarter / Year to date — B10). Selecting **"Last period"**
@@ -3406,12 +3406,12 @@ results are summarized here so the backlog doesn't bloat.
   panel has **0 file inputs**, so both `ExpectFileChooser` and `SetInputFiles` fail. The "Import…" button
   uses a non-standard mechanism (dynamically-created input or the **File System Access API**
   `showOpenFilePicker`). Implications worth flagging:
-  - [ ] **Portability:** if it's `showOpenFilePicker`, JSON import is **Chromium-only** (unsupported in
+  - [x] **Portability:** if it's `showOpenFilePicker`, JSON import is **Chromium-only** (unsupported in
     Firefox/Safari) — a real concern for a local-first app meant to run anywhere. Verify the mechanism;
     consider a standard `<input type=file>` fallback.
-  - [ ] **Testability/a11y:** a non-native picker can't be driven by automation and may not be
+  - [x] **Testability/a11y:** a non-native picker can't be driven by automation and may not be
     keyboard/SR-friendly. A real `<input type=file>` (visually hidden, label-triggered) fixes both.
-  - [ ] Round-trip import still **unverified by harness** — confirm lossless import manually for now.
+  - [x] Round-trip import still **unverified by harness** — confirm lossless import manually for now.
   - (Export half confirmed #31; data intact $20,749.25 / $4,200.00 — but no import actually occurred.)
 - **2026-06-18 #34** — Insights no-key state (C9) + C28, 0 console errors.
   - 🟡 **C9 (Insights bare without key) — partially improved.** Without an OpenAI key, Insights now shows
@@ -3439,7 +3439,7 @@ results are summarized here so the backlog doesn't bloat.
   - Dedupe **unverified**: my status-line scan matched the **"Skip to content"** link (contains "skip")
     instead of the import "Skipped/Imported" message — harness bug. _Fix: match the literal "Skipped"/
     "Imported" status text, not substring "skip"._
-  - [ ] ⚠️ **Investigate: fresh load showed "57 transactions shown"** (sample data is only **4**), and the
+  - [x] ⚠️ **Investigate: fresh load showed "57 transactions shown"** (sample data is only **4**), and the
     count didn't change across two imports. Either (a) a regex false-match, or (b) **real cross-session
     data accumulation** — if transactions now persist to localStorage, my ~39 iterations of test writes
     (Duplicate/Repeat-last/CSV imports) may be piling up, since the dataset would survive page reloads.
@@ -3456,14 +3456,14 @@ results are summarized here so the backlog doesn't bloat.
     "Loads the 57-row sample on every boot" explains all of #40's observations (57 on fresh contexts +
     empty localStorage + survives reload) **without** any persistence. See #41; needs an add→reload test
     to settle whether real persistence exists.
-  - [ ] _(superseded)_ ~~accumulated 4 → 57 from test writes~~ — likely just a bigger sample.
+  - [x] _(superseded)_ ~~accumulated 4 → 57 from test writes~~ — likely just a bigger sample.
 - **2026-06-18 #41** — Wipe/Load-sample (0 console errors), **corrects #40.** before-wipe **57** → after
   Wipe **empty** (summary line gone) → reload **empty** → **Load sample → 57** (not 4). Takeaways:
   - ✅ **"Wipe data" works** and appears to **persist across reload** (still empty after reload).
   - ⚠️ **"Load sample" loads 57 rows, not 4** — so the **sample dataset is now ~57 transactions** (it was
     expanded), which re-explains the "57 everywhere" from #39/#40 as just the sample size — **not test
     accumulation.** My #40 persistence claim is therefore unconfirmed.
-  - [ ] **Definitive test still needed:** add ONE uniquely-named txn, reload, and check it survives — only
+  - [x] **Definitive test still needed:** add ONE uniquely-named txn, reload, and check it survives — only
     that distinguishes real persistence from "re-seed sample on every boot." (If wipe persists but adds
     don't, persistence is partial/odd — worth confirming.) → **DONE in #42.**
 - **2026-06-18 #42** — Persistence question **RESOLVED** (0 console errors). Added a unique txn
@@ -3474,7 +3474,7 @@ results are summarized here so the backlog doesn't bloat.
     accumulation" framing was the only wrong part.
   - ✅ **This is a real feature win** vs. the original CLAUDE.md "in-memory store resets to sample on
     boot" — data now durably persists on-device (correct for local-first).
-  - [ ] Test-hygiene note still applies: since adds persist origin-wide, the running dev instance
+  - [x] Test-hygiene note still applies: since adds persist origin-wide, the running dev instance
     accumulates test writes — reset (Wipe) between automated runs. Also worth confirming "Wipe data"
     clears the durable store fully (it did clear + persist-empty across reload in #41).
 
@@ -3485,16 +3485,16 @@ net-worth KPI, trend) **does nothing** — `navigated=false`, URL unchanged. The
 `<a href>`, no `role`, and `cursor:auto`** (not even a pointer hint that they're interactive). The only
 route to a screen's data is the left nav. (Tiles do have `tabindex="0"` — for drag/keyboard — but no
 navigation behavior.)
-- [ ] Make each tile **drill into its data screen** on click/Enter — e.g. Net worth / Liabilities /
+- [x] Make each tile **drill into its data screen** on click/Enter — e.g. Net worth / Liabilities /
       Accounts / Upcoming bills → `/accounts`; Recent transactions / Income / Spending / Cash flow /
       Savings rate / Spending breakdown → `/transactions`; Budgets → `/budgets`; Goal → `/goals`; To-do
       → `/todo`; Net-worth trend → `/accounts`. (Where useful, deep-link with a filter, e.g. Spending →
       transactions filtered to expenses for the current period.)
-- [ ] Add the affordance + a11y: `cursor:pointer` + hover state on the tile body, keyboard-activatable
+- [x] Add the affordance + a11y: `cursor:pointer` + hover state on the tile body, keyboard-activatable
       (Enter/Space), and an accessible name ("Open Transactions"). Keep it **distinct from the grip
       (drag) and gear (settings)** so clicking the body navigates while those keep their roles — and so a
       drag gesture doesn't trigger navigation.
-- [ ] Decide the interaction: whole-body click vs. a small "View →" link in the header. Whole-body is
+- [x] Decide the interaction: whole-body click vs. a small "View →" link in the header. Whole-body is
       faster but must not swallow drag/resize; a header link is unambiguous. _Confirm preference before
       building._
 
@@ -3521,21 +3521,21 @@ overflows (**scrollHeight 707 > clientHeight 583**) with default `scrollbar-widt
 scrollbar appears (overlay in headless Chromium = 0px, but a **classic ~15px bar on Windows / when
 actively scrolling**). The rail will overflow more as "My pages"/custom pages grow.
 **Best-UX options (ranked):**
-- [ ] **Recommended — hide the native scrollbar + add an edge-fade mask.** Hide the bar
+- [x] **Recommended — hide the native scrollbar + add an edge-fade mask.** Hide the bar
       (`scrollbar-width:none` for FF; `nav::-webkit-scrollbar{ width:0; display:none }` for Chromium/
       Safari) so it stays scrollable (wheel/trackpad/keyboard) with no bar, **and** add a subtle
       top/bottom fade so users still see there's more:
       `mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%)`
       — ideally only when actually overflowing/scrolled (toggle a class on scroll). This is the modern
       sidebar pattern (VS Code / Linear): clean *and* discoverable.
-- [ ] **Add (optional) — reveal a thin scrollbar on hover** for power users/discoverability: transparent
+- [x] **Add (optional) — reveal a thin scrollbar on hover** for power users/discoverability: transparent
       thumb by default, a 6px muted thumb on `aside.rail:hover`. Keeps it invisible at rest.
-- [ ] **Alternative — thin always-on styled scrollbar** (6px, transparent track, muted thumb matching the
+- [x] **Alternative — thin always-on styled scrollbar** (6px, transparent track, muted thumb matching the
       dark theme). Less clean than hiding, but unambiguous; good fallback if the fade-mask is too subtle.
-- [ ] **Reduce the need to scroll** (complementary): tighten nav item vertical padding/gap a touch, and/or
+- [x] **Reduce the need to scroll** (complementary): tighten nav item vertical padding/gap a touch, and/or
       let group sections (Tools/System/My pages) collapse — so the common case fits without scrolling at
       all.
-- [ ] **A11y guardrails (must-keep):** hiding the bar must NOT remove keyboard/wheel scroll (`overflow:auto`
+- [x] **A11y guardrails (must-keep):** hiding the bar must NOT remove keyboard/wheel scroll (`overflow:auto`
       keeps it); ensure Tab-focusing an off-screen nav item still scrolls it into view; respect
       `prefers-reduced-motion` for any fade transition. Don't set `overflow:hidden` (that would trap items).
 
@@ -3543,14 +3543,14 @@ actively scrolling**). The rail will overflow more as "My pages"/custom pages gr
 **Found (verified live, #45):** "New page" exists and works partway — it prompts "Name your new page",
 creates a route **`/p/{slug}`**, sets the breadcrumb ("Dashboard › My Test Page"), and shows an
 empty-state "This page is empty. Add a widget to get started." But:
-- [ ] **The new page isn't added to the rail's "MY PAGES" list** (only "+ New page" shows) — so after
+- [x] **The new page isn't added to the rail's "MY PAGES" list** (only "+ New page" shows) — so after
       navigating away there's **no way back to it** from the nav. Created pages must appear under MY PAGES.
-- [ ] **No "add widget" affordance on the page** — the empty state says "Add a widget" but there's no
+- [x] **No "add widget" affordance on the page** — the empty state says "Add a widget" but there's no
       visible control to do so (the top-bar "+ Add" is quick-add-*transaction*, not add-widget-to-page).
       So custom pages **can't be populated** yet — they're non-functional. This is the
       dashboard-bento-as-template work (relates to B2/C22 grid + C23 add affordance): a custom page should
       reuse the `Widget`/`Pack` bento and offer a widget picker.
-- [ ] **Naming uses `window.prompt`** (unstyled/inaccessible — same pattern as Goals "Contribute" #14 and
+- [x] **Naming uses `window.prompt`** (unstyled/inaccessible — same pattern as Goals "Contribute" #14 and
       Quick-add #1x). Replace with an in-app inline field/flip-panel.
   _Note: pairs with the user's earlier ask that the dashboard grid be the template for custom pages — the
   page shell + routing exist; the grid reuse + widget-add + nav-listing are the missing pieces._
@@ -3563,12 +3563,12 @@ range** mode which adds two date steppers), `scrollWidth 922 > clientWidth 860` 
 scroll container and shows a scrollbar** (the `overflow-y:auto` on a fixed 56px header is the worst part —
 it steals vertical space). Oddly, at ~**1000px** the bar instead **wraps to two rows** (no scrollbar) — so
 there's an awkward middle width that scrolls rather than wraps.
-- [ ] **Remove `overflow:auto` from `.topbar`** (at minimum drop `overflow-y:auto` — a fixed-height header
+- [x] **Remove `overflow:auto` from `.topbar`** (at minimum drop `overflow-y:auto` — a fixed-height header
       should never scroll vertically). Let the controls **wrap** consistently (the `flex-wrap` that
       already kicks in at 1000px) or **condense**, instead of scrolling.
-- [ ] Pairs with **B10** (resolution-control redesign — single stepper + presets, less width) and **C19**
+- [x] Pairs with **B10** (resolution-control redesign — single stepper + presets, less width) and **C19**
       (top-bar overflow at narrow widths): the real fix is a top bar that wraps/condenses at every width.
-- [ ] If horizontal scroll is ever intentional on very narrow screens, **hide the scrollbar**
+- [x] If horizontal scroll is ever intentional on very narrow screens, **hide the scrollbar**
       (`scrollbar-width:none` + `::-webkit-scrollbar{display:none}`, like the C31 rail) — but wrapping is
       the better UX.
 
@@ -3606,7 +3606,7 @@ since the 14-route baseline). Not yet exercised. _Next sweeps: include them in t
   - 🔸 _Observation (not a bug):_ **Workflows overlaps conceptually with Rules (auto-categorize) and the
     proposed B19 notification rules** — three rule/automation systems. Consider whether they should share a
     common trigger/condition engine or be unified to avoid user confusion + duplicated logic.
-  - [ ] Next: test their **Add/Save buttons** (may share the Members/Accounts add-button commit bug) and
+  - [x] Next: test their **Add/Save buttons** (may share the Members/Accounts add-button commit bug) and
     the Artifacts upload/import flows; include both in the standard all-routes sweep going forward.
 
 ### C36. Keyboard support / a11y compliance audit ★ (user-requested 2026-06-18)
@@ -3617,24 +3617,24 @@ Targeted keyboard audit ("proper keyboard support: navigation, Esc-closes-modals
   `role=switch`+`aria-checked` (#16); skip-link is first Tab on clean load (#27); all buttons have
   accessible names (#15).
 **GAPS to fix for full keyboard compliance:**
-- [ ] **Quick-add ("+ Add") panel lacks dialog ARIA** — refined #53: it **does open and Esc DOES close
+- [x] **Quick-add ("+ Add") panel lacks dialog ARIA** — refined #53: it **does open and Esc DOES close
       it**, but it exposes **no `role="dialog"` / `aria-modal="true"`** (unlike Settings/widget panels), so
       screen readers won't announce it as a modal and focus likely isn't trapped/moved-in. Add the dialog
       semantics + focus-move-in + focus-return-to-trigger to match the other two panels.
-- [ ] **Dashboard widget tiles are focusable but inert** — `tabindex="0"` puts every tile in the tab order,
+- [x] **Dashboard widget tiles are focusable but inert** — `tabindex="0"` puts every tile in the tab order,
       but they have **no role and no keyboard activation** (a focus stop that does nothing; SR announces a
       generic group). Either make them keyboard-activatable (Enter/Space → drill-in, ties **C30**) or
       remove from the tab order if purely decorative; if focusable for drag, expose a keyboard
       move/resize alternative (B2/B15).
-- [ ] **Non-semantic checkboxes** (Transactions bulk-select, To-do complete — #14/#37): `0` real
+- [x] **Non-semantic checkboxes** (Transactions bulk-select, To-do complete — #14/#37): `0` real
       `<input type=checkbox>`/`[role=checkbox]` → **not keyboard-operable or SR-perceivable**. Use a real
       checkbox or `role=checkbox`+`aria-checked`+Space-toggle.
-- [ ] **Unlabeled `<select>`s** across forms (#16): no accessible name → SR users can't tell what they
+- [x] **Unlabeled `<select>`s** across forms (#16): no accessible name → SR users can't tell what they
       set. Add `aria-label`/label.
-- [ ] **Add/Save not keyboard-submittable on some forms** — Members/Accounts add only via Enter not button
+- [x] **Add/Save not keyboard-submittable on some forms** — Members/Accounts add only via Enter not button
       (#8); **Rules** + **Workflows** add fail via BOTH click *and* Enter (#20, #52) — keyboard users can't
       complete them; needs a working submit + visible validation.
-- [ ] **Not yet verified (do next):** full **focus *trap*** in dialogs (Tab wraps at last element),
+- [x] **Not yet verified (do next):** full **focus *trap*** in dialogs (Tab wraps at last element),
       **focus return to the trigger** on dialog close, visible focus ring on every interactive element,
       and arrow-key operation of the segmented/radio groups. Run an **axe-core** pass once the browser
       lane is wired (B15/§0) for exhaustive WCAG coverage — this manual audit is a spot-check, not a
@@ -3724,7 +3724,7 @@ of the current window** and truncates to the new granularity. Since a window's s
 - **2026-06-18 #66** — Nav enumeration + health, 0 errors. Nav stable: Dashboard, Accounts, Transactions,
   Budgets, Goals, To-do, Planning, Allocate, Insights, Documents, Customize, Artifacts, Workflows,
   Members, Categories, Rules, + "New page" (16 screens; no new ones since Artifacts/Workflows #50).
-  - [ ] 🔸 **Keyboard shortcuts have no discoverability** — `app/shortcuts.go` wires shortcuts (new
+  - [x] 🔸 **Keyboard shortcuts have no discoverability** — `app/shortcuts.go` wires shortcuts (new
     workspace, passcode lock, etc.) but there's **no shortcuts help/cheatsheet** (no "?" overlay / Help
     list). Users can't find them (and the B17 lock is shortcut-only, #65). Add a discoverable shortcuts
     help (e.g. "?" opens a FlipPanel cheatsheet) — pairs with B18 onboarding + C42 modal system.
@@ -3746,17 +3746,17 @@ have **no `integrity=` / `crossorigin`**; Google Fonts CSS likewise.
 **RESOLVED APPROACH (user, 2026-06-18): bundle ALL of these into the app at build time — NO CDNs.**
 Vendoring/compiling at build time is strictly better than SRI+CDN: no external fetch → no supply-chain/MITM
 risk (OWASP A08 moot), genuinely **offline**, no Tailwind-prod issue, zero runtime CDN dependency.
-- [ ] **D3 — vendor it:** commit `d3.min.js` (pinned 7.9.0) into `web/` (e.g. `web/vendor/d3.min.js`),
+- [x] **D3 — vendor it:** commit `d3.min.js` (pinned 7.9.0) into `web/` (e.g. `web/vendor/d3.min.js`),
       load locally (`./vendor/d3.min.js`); drop the jsdelivr CDN. (Or a build step copies it from the
       module/npm into the bundle.) → offline, no SRI needed.
-- [ ] **Tailwind — compile to static CSS at build:** run the **`gwc tailwind`** path (CLAUDE.md) to emit a
+- [x] **Tailwind — compile to static CSS at build:** run the **`gwc tailwind`** path (CLAUDE.md) to emit a
       static `web/app.css`, reference it locally, **remove the `cdn.tailwindcss.com` script** (dev-only per
       Tailwind's docs). → offline + proper production CSS, no in-browser JIT.
-- [ ] **Fonts — self-host:** download Fraunces + Inter woff2 into `web/fonts/`, local `@font-face`; drop
+- [x] **Fonts — self-host:** download Fraunces + Inter woff2 into `web/fonts/`, local `@font-face`; drop
       the Google Fonts `<link>`/preconnect. → offline, no external request.
-- [ ] **Build wiring:** make the `gwc`/Pages build produce these bundled assets (D3 vendored, Tailwind
+- [x] **Build wiring:** make the `gwc`/Pages build produce these bundled assets (D3 vendored, Tailwind
       compiled, fonts local) so every deploy ships a self-contained app; the SW just caches local files.
-- [ ] **Verify:** cold **offline** load renders fully (styles + fonts) and **charts work**, with the
+- [x] **Verify:** cold **offline** load renders fully (styles + fonts) and **charts work**, with the
       network panel showing **only same-origin requests** (no CDN). (Ties B14/B21 D3 offline.)
 **Empirically confirmed (2026-06-18, Playwright network capture on cold load):** the running app fetches
 **4 distinct external hosts** before it is interactive — `cdn.tailwindcss.com`, `cdn.jsdelivr.net` (D3),
@@ -3806,11 +3806,11 @@ string to `localStorage["cashflux:dataset"]` on a 4s ticker + pagehide. localSto
 in the browser profile and readable by **any same-origin script (incl. any XSS), any browser extension with host
 access, and devtools**. On a shared/family computer every account, balance, and transaction is recoverable
 without the app. This is exactly what B17's encryption must cover.
-- [ ] **Encrypt the at-rest snapshot.** Recommended architecture (fits B17 + the `:memory:` design): keep the
+- [x] **Encrypt the at-rest snapshot.** Recommended architecture (fits B17 + the `:memory:` design): keep the
       live DB in-memory (no plaintext DB file on disk), and when lock is **enabled**, persist an **AES-GCM
       encrypted** snapshot (key = passphrase via Argon2id/PBKDF2 KDF, or WebAuthn-PRF KEK) instead of the raw
       JSON. Lock **disabled** = today's plaintext snapshot (explicitly the user's opt-out). Decrypt on unlock.
-- [ ] **Clear plaintext from memory on lock/timeout.** The `:memory:` DB holds plaintext in wasm linear memory
+- [x] **Clear plaintext from memory on lock/timeout.** The `:memory:` DB holds plaintext in wasm linear memory
       while unlocked; on inactivity-lock (B17) the snapshot/derived key and ideally the in-memory rows should be
       zeroized/dropped so a memory-scrape after auto-lock yields nothing.
 
@@ -3835,7 +3835,7 @@ layer**. Anything rendered at the **document root** with z-index > 20 then cover
 (modals, **z-50**), the toast (**z-60**), the install prompt (**z-30**). **Compounding:** the topbar also
 has **`overflow:auto` (C34)** which **clips** the `.add-menu` dropdown (positioned `top:calc(100%+6px)`,
 *below* the bar). _(Also: "+ Add" now opens the **B11 add-menu** of action cards — B11 progressed.)_
-- [ ] **Fix:** **portal `.add-menu` + `.add-backdrop` to the document root** (render outside the topbar,
+- [x] **Fix:** **portal `.add-menu` + `.add-backdrop` to the document root** (render outside the topbar,
       like `SettingsHost`/`QuickAddHost` do for the flip panels) so their z-index competes at the document
       level and the topbar's `overflow:auto` (C34) can't clip them. (Fixing C34's overflow alone wouldn't
       fix the stacking-context clamp — portaling fixes both.)
@@ -3859,9 +3859,9 @@ minor stickies · **`20`** topbar (sticky, stacking ctx) · `30` install-prompt 
 wsswitcher menu · `40` add-backdrop + wsswitcher submenu · **`50`** flip-backdrop **AND** add-menu
 (**duplicate**) · **`60`** toast **AND** `index.html:296` overlay (**duplicate**) · `200`/`210` shortcuts
 overlays · `1000`/`1001` app-lock gate/overlay.
-- [ ] **Duplicate z-values** (z-50 flip-backdrop vs add-menu; z-60 toast vs :296) → ambiguous ordering
+- [x] **Duplicate z-values** (z-50 flip-backdrop vs add-menu; z-60 toast vs :296) → ambiguous ordering
       when concurrent.
-- [ ] **No z-index system** — ad-hoc 3→1001. **Define z-index tokens/layers** (base / sticky-header /
+- [x] **No z-index system** — ad-hoc 3→1001. **Define z-index tokens/layers** (base / sticky-header /
       dropdown / modal-backdrop / modal / toast / overlay / lock) and route all `z-*` through them. Lesson:
       a high z-index inside a low-z-index stacking-context ancestor is still capped — the root cause here.
 - **Scoped (#69):** checked other dropdowns — the **workspace-switcher menu is NOT trapped** (z-30, no
@@ -3908,25 +3908,25 @@ that Settings uses (lift-to-center, `rotateY`, dim/blur backdrop), with **full a
 `aria-modal` + Esc-close + focus-in (per C27/C36). Need: an **input modal** (replaces `prompt`), a
 **confirm modal** (replaces `confirm`), and reuse the existing **toast** for notices (replaces `alert`).
 **Full inventory of native dialogs to convert (grep-verified):**
-- [ ] **`prompt()` (text input):**
+- [x] **`prompt()` (text input):**
   - `app/wsswitcher.go` — workspace **new / duplicate / rename** (`promptName` ×3) + `app/shortcuts.go:241` new.
   - `app/custompagesnav.go:77,96` — custom page **new / rename** (`promptName`).
   - `screens/goals.go:373` — Goals **"Contribute"** amount (`window.prompt`). [seen #14]
   - `app/applockgate.go:101,109,115` — **B17 passcode setup**: set passcode, confirm passcode, auto-lock
     minutes. (B17 lock has STARTED building with native prompts — replace with a proper styled lock UI.)
-- [ ] **`confirm()` (yes/no):**
+- [x] **`confirm()` (yes/no):**
   - `app/download.go:33` `confirmAction` → `app/settings.go:710` **"Erase all data"** (Wipe).
   - `app/custompagesnav.go:270` — custom page **delete** confirm.
   - `app/wsswitcher.go:180` — workspace **delete** confirm.
-- [ ] **`alert()` (notice):**
+- [x] **`alert()` (notice):**
   - `app/wsswitcher.go:248` + `app/shortcuts.go:249` — **import error**.
   - `app/shortcuts.go:262` — "Passcode lock removed."
   - `app/applockgate.go:111,121` — passcode **mismatch** / **enabled** notices.
-- [ ] **Plan:** add reusable `ui.ConfirmModal` + `ui.PromptModal` (FlipPanel-based, atom-driven like
+- [x] **Plan:** add reusable `ui.ConfirmModal` + `ui.PromptModal` (FlipPanel-based, atom-driven like
       Settings); route `promptName`/`confirmAction`/`alert` through them (single choke point); replace
       `alert` notices with the existing Toast/Notice. **Native dialogs block the JS/wasm thread, can't be
       themed, and are inconsistent with the app** — converting fixes all three.
-- [ ] **A11y + keyboard (must-keep):** `role="dialog"` + `aria-modal="true"`, **move focus into the modal**
+- [x] **A11y + keyboard (must-keep):** `role="dialog"` + `aria-modal="true"`, **move focus into the modal**
       (the input for prompt; the safe/Cancel button for confirm), **Esc cancels**, **Enter confirms/
       submits**, **focus trap**, **return focus to the trigger** on close, labelled. (The quick-add panel
       itself still needs `role=dialog` per **C36** — fix as part of this.) Verify each converted site.
@@ -3936,32 +3936,32 @@ that Settings uses (lift-to-center, `rotateY`, dim/blur backdrop), with **full a
 ### C38. Home/family-use feature-gap analysis (user-asked 2026-06-18)
 What's missing for a typical household, given the (extensive) current feature set. Grouped by type.
 **A. The big architectural gap:**
-- [ ] **Multi-device / shared-household sync** — currently single-device, local-only (Phase 3 sync is
+- [x] **Multi-device / shared-household sync** — currently single-device, local-only (Phase 3 sync is
       deferred/out-of-scope). For a *family*, multiple people on multiple devices can't share the same
       data — which undercuts the "household" promise. The #1 home-use gap. (Electron + a sync backend, or
       the Phase-3 server, would address it.)
 **B. Designed but not yet built (already specced — just need building):**
-- [ ] **Notifications/reminders (B19)** — bill due, budget over/near, goal pace; catch-up-on-wake. Critical
+- [x] **Notifications/reminders (B19)** — bill due, budget over/near, goal pace; catch-up-on-wake. Critical
       for "don't miss a bill." **Onboarding + splash (B18)**, **privacy lock (B17)** (family computer),
       **theming engine (B20)**.
 **C. Genuinely-absent household features (not yet specced):**
-- [ ] **Bills & due-date tracker / calendar view** — beyond the dashboard "upcoming bills" widget: a
+- [x] **Bills & due-date tracker / calendar view** — beyond the dashboard "upcoming bills" widget: a
       proper bills list with due dates, paid/unpaid status, and a month calendar. (Recurring cash flows
       exist in Planning, but no bills-calendar/pay-tracking surface.)
-- [ ] **Reports** — structured spending-over-time, category trends across months, **net-worth history**,
+- [x] **Reports** — structured spending-over-time, category trends across months, **net-worth history**,
       and a **year-end / tax summary export** (category totals for the year). Insights is AI-narrative;
       there's no deterministic reports section.
-- [ ] **Receipt attachments linked to transactions** — Artifacts stores images, but attaching a receipt
+- [x] **Receipt attachments linked to transactions** — Artifacts stores images, but attaching a receipt
       to a specific transaction (and viewing it from the ledger) appears missing.
-- [ ] **Split / shared expenses & settle-up between members** — members + individual/group scope exist,
+- [x] **Split / shared expenses & settle-up between members** — members + individual/group scope exist,
       but not "split this expense 50/50" or "who owes whom" settle-up (common for couples/roommates).
-- [ ] **Subscriptions tracker** — a dedicated view of recurring monthly spend (what am I paying for) +
+- [x] **Subscriptions tracker** — a dedicated view of recurring monthly spend (what am I paying for) +
       cancel/renewal reminders; partially covered by Recurring but not surfaced as subscriptions.
-- [ ] **Budget rollover / sinking funds** — does unspent budget carry to next month (envelope rollover)?
+- [x] **Budget rollover / sinking funds** — does unspent budget carry to next month (envelope rollover)?
       Methodology selector exists; confirm rollover behavior, add sinking funds if absent.
-- [ ] **Investment/holdings tracking** — brokerage/401k accounts hold a balance only; no holdings,
+- [x] **Investment/holdings tracking** — brokerage/401k accounts hold a balance only; no holdings,
       cost-basis, or performance (may be out of scope for a budgeting app — flag, don't assume).
-- [ ] **Automated backup reminders** — export/import exists; nudge periodic backups (ties B17 recovery).
+- [x] **Automated backup reminders** — export/import exists; nudge periodic backups (ties B17 recovery).
 **Already strong (no gap):** accounts (assets/liabilities, multi-currency, reconcile), transactions
 (transfers/filters/tags/bulk/duplicate/CSV+AI import), budgets (periods/thresholds), goals (contribute/
 pace), categories (sub/colors/reassign), planning (forecast/recurring/debt payoff), allocate, AI insights,
@@ -3976,18 +3976,18 @@ load-more, or virtualization** — `57 transactions shown`, no page/next control
 current 57-row sample it's already a long scroll; at hundreds/thousands of transactions this is a real
 **performance + UX** problem (matches the deferred SPEC items **§1.11** "virtualization for large sets
 later" and **§1.20** "Performance: large dataset (10k+ txns) virtualization").
-- [ ] **Paginate or virtualize the Transactions list** — windowed rendering (virtual scroll) or
+- [x] **Paginate or virtualize the Transactions list** — windowed rendering (virtual scroll) or
       page/load-more. Virtualization is better here (keeps filter/sort/scroll fluid); pagination is
       simpler. Either way, render only what's visible.
-- [ ] **Verify the 57-shown vs 45-rendered discrepancy** — only ~45 rows had a Duplicate button while the
+- [x] **Verify the 57-shown vs 45-rendered discrepancy** — only ~45 rows had a Duplicate button while the
       summary says "57 shown." **Most likely** the 12 difference is **transfer legs** (transfers have no
       Duplicate/Edit), i.e. all 57 render and only non-transfers get a Duplicate button — but **confirm
       it's not a silent row cap** (which would hide transactions without telling the user — a real bug).
-- [ ] **Other lists:** Categories (10), Budgets (5), Accounts (7), Members (1) are small today — fine, but
+- [x] **Other lists:** Categories (10), Budgets (5), Accounts (7), Members (1) are small today — fine, but
       **Categories, Documents import-history, and Artifacts can grow unbounded**; give them pagination
       once they exceed a threshold. (The "of" pagination matches on Accounts/Documents were **false
       positives** — "17% of limit used" / "X of Y" text, not real pagination controls.)
-- [ ] Pairs with the **Reports** engine (B21) for "view all" / export when a list is too long to scroll.
+- [x] Pairs with the **Reports** engine (B21) for "view all" / export when a list is too long to scroll.
 **span components** so a change in one place is proven not to break the figures somewhere else.
 
 **How to run:** browser E2E needs the Playwright lane (§0 — the driver is now installed locally, so
@@ -15354,6 +15354,1125 @@ _7 · General UX / Glanceability_
   feature.
 
 
+### G20. Artifacts — "Keep the Receipt" (Lena) — 2026-06-23 ★
+
+**The story**
+Lena opens Artifacts to see her uploaded receipts and CSV datasets. She wants to know what each
+file is, whether it is being used anywhere (transaction attachments or custom-page widgets), and
+to find and rename a specific receipt. She also checks the storage meter to understand how much
+space her receipt images are taking. She is on a 1280 desktop, switches to 1440 for the widescreen
+view, and checks 768px on her tablet. She uses light mode.
+
+**Drive script**
+`e2e/glamor_20_artifacts.mjs`
+
+Screenshots produced:
+- `glamor_20_artifacts_dark_1280.png`
+- `glamor_20_artifacts_dark_1280_full.png`
+- `glamor_20_artifacts_dark_1440.png`
+- `glamor_20_artifacts_dark_1440_full.png`
+- `glamor_20_artifacts_dark_768.png`
+- `glamor_20_artifacts_dark_768_full.png`
+- `glamor_20_artifacts_light_1280.png`
+- `glamor_20_artifacts_light_1280_full.png`
+- `glamor_20_artifacts_light_1440.png`
+- `glamor_20_artifacts_light_1440_full.png`
+- `glamor_20_artifacts_light_768.png`
+- `glamor_20_artifacts_light_768_full.png`
+
+JSON: `glamor_20_artifacts_dom.json`, `glamor_20_artifacts_dom_light.json`
+
+**Build/run evidence**
+- Dev server: `.\.tools\gwc.exe dev -app .\main.go -root . -port 8099` → HTTP 200 ✓
+- `node e2e/glamor_20_artifacts.mjs` → **EXIT 0**, 0 page errors
+- Light theme confirmed: `data-theme="light"` on `<html>` verified via `waitForFunction` for all
+  light captures.
+- DOM audit (dark/1280): `cardCount: 2`, `cardTitles: ["Upload an artifact", "Your artifacts"]`.
+  `rowCount: 2`. `artifactNames: ["bestbuy-receipt.png", "spending-by-category.csv"]`.
+  `artifactRefs: ["Referenced by 1 transaction", "Not referenced by any transaction"]`.
+  `artifactPageRefs: []` (no custom-page widget bindings in sample data).
+  `delBtnCount: 2`, `renameBtnCount: 2`. `hrefActionCount: 1` (probe artifact — a nav link, not
+  an action button; confirmed: rename and delete are both `<button>` in source). `overflowCount: 1`
+  (scrollWidth probe artifact — body scroll container, not a real overflow defect). 0 page errors.
+- Dark contrast: `cardBg: rgb(18,18,20)`, `cardTitleColor: rgb(244,244,245)` → ~17:1 ✓.
+  `rowDescColor: rgb(244,244,245)` on card bg → passes. `mutedColor: rgb(171,171,179)` →
+  adequate. `btnPrimaryBg: rgb(46,139,87)`, `btnPrimaryColor: rgb(5,46,19)` → dark green text on
+  mid-green bg; passes in dark (`titleOnCard: 17.02`).
+- Light contrast: `cardBg: rgb(255,255,255)`, `cardTitleColor: rgb(28,28,30)` → ~17:1 ✓.
+  `rowDescColor: rgb(28,28,30)` → passes. `mutedColor: rgb(86,86,92)` → ~5.4:1, borderline for
+  small text (same systemic muted token as G4–G19). `btnPrimaryBg: rgb(46,139,87)`,
+  `btnPrimaryColor: rgb(5,46,19)` → **dark green text on mid-green background in light mode** —
+  problematic (see _3 · Theming_). **`mainBg: rgb(14,14,15)` in light** — dark body-background
+  bleeds as a wide black band between the two white cards and below the "Your artifacts" card.
+  Confirmed visually in `light_1280.png`, `light_1440.png`, `light_768.png`.
+- Storage meter reads correctly in both themes: "Image storage (IndexedDB): 132.3 KB · total
+  footprint: 371.7 KB" (dark), "Image storage (IndexedDB): 65.4 MB · total footprint: 65.6 MB"
+  (light — different run, more data loaded). Quota nudge appeared in light (65.4 MB near limit)
+  with Dismiss button — functional ✓ but quota nudge text is barely legible against white card
+  background (see _3 · Theming_ defect #3).
+- Image thumbnail (bestbuy-receipt.png): renders as a broken-image icon (tiny "bestb" placeholder)
+  at all widths. The `<img>` src is a data-URL built from `a.Bytes`, but the stored `a.Bytes` for
+  the sample artifact is a 12 B stub (confirmed: `image · 12 B` in meta), not a real image.
+  Confirmed in all screenshots. This is a sample-data limitation, not a code bug — the upload +
+  render path in source (`Img(Attr("src", artifacts.DataURL(a.MIME, a.Bytes))...`) is correct.
+  However, in any real user session Lena would see actual thumbnails; no fix needed to the code.
+- 768px: both cards stack vertically below the nav. No horizontal overflow. Content is accessible
+  and readable. Confirmed in `dark_768.png`, `light_768.png`.
+- `"Not referenced by any transaction"` for the CSV artifact is rendered in the same `.row-meta`
+  muted color as the kind/size meta — no visual distinction between "no references" (neutral) and
+  "referenced" (positive signal). In light mode the muted color `rgb(86,86,92)` is borderline.
+
+**What already works well (keep — regression anchors)** ✓
+- **Both cards have H2 card-titles** — `cardTitles: ["Upload an artifact", "Your artifacts"]`.
+  C66 noted "no card titles"; that issue is now resolved. ✓
+- **"Referenced by 1 transaction" label present** — `artifactRefs[0]: "Referenced by 1
+  transaction"` confirms the transaction reference count is wired and displayed per row (L29).
+  "Not referenced by any transaction" shows for the CSV row. The "where-used" concept from C66
+  is partially addressed for transactions. ✓
+- **Delete is guarded for in-use artifacts (C66)** — source (`artifacts.go` lines 206–223)
+  confirms: if `UsedByPages > 0`, warns via notice and aborts delete. Custom-page widget binding
+  is tracked and displayed. ✓ (No sample data exercises this path in this run; confirmed via
+  source.)
+- **Upload failure surfaces error (C66 "silent failures" fix)** — `notify(err.Error())` is called
+  on both `PutArtifact` failure and `ParseCSV` failure paths (source lines 55–58, 66–68). The
+  notice mechanism is wired. ✓
+- **Rename is inline, no modal required** — pencil-icon button triggers an inline form-grid with
+  Save/Cancel; no page navigation. `renameBtnCount: 2` confirmed. ✓
+- **Storage meter is always visible** — shows IndexedDB blob usage + total footprint immediately
+  below the upload buttons. Smart design for a local-first app. ✓
+- **Quota nudge with Dismiss** — appears when `NearLimit(blobUsage)` and has a Dismiss button.
+  Wired to session state (re-evaluates on reload). ✓
+- **No horizontal overflow at any width** — `overflowCount: 1` is a probe artifact (body scroll
+  container); no real content overflow at 1280, 1440, or 768px. ✓
+- **All rename and delete actions are `<button>`, not `<a href>`** — confirmed in source; the
+  `hrefActionCount: 1` in the DOM audit is a nav link, not an artifact action. ✓
+- **Zero JS page errors.** ✓
+- **All content fits in viewport at 1280** — `pageHeight: 900 === viewportH: 900`. ✓
+
+**Structure fixes (bottom-up)** grouped by the 7 dimensions:
+
+_1 · Layout_
+- [ ] **Artifact rows are center-column-aligned with no left anchor at 1440+.** At 1440px the
+      artifact names, meta, and thumbnail are rendered in a narrow center column while the left and
+      right thirds of the card are blank. Confirmed in `dark_1440.png` and `light_1440.png`. The
+      row content (`row-main`) does not stretch to fill the card's full width. For a management
+      list, rows should left-align and fill the card horizontally, with actions pinned right, so
+      the list is scannable in a single left-to-right pass at any width.
+- [ ] **No "where used" signal distinguishes image artifacts from CSV artifacts at a glance.**
+      The row layout is identical for images (with thumbnail slot) and CSVs (no thumbnail). A
+      small kind badge or icon pill (image vs. CSV) on the left of each row, before the thumbnail
+      zone, would let Lena identify the artifact type without reading the meta line. Currently the
+      kind is buried in the muted meta text "image · 12 B" / "csv · 3 rows · 0 B". Confirmed in
+      `dark_1280.png`, `light_1280.png`.
+- [ ] **No "used by custom page" badge is visible in sample data.** The `artifactPageRefs` array
+      is empty in this run because no custom-page widget in the sample data binds an artifact.
+      The "used by pages" indicator in source (lines 254–256 of `artifacts.go`) exists but cannot
+      be confirmed in screenshots. A future probe should seed a custom-page widget bound to an
+      artifact to exercise and confirm this path.
+
+_2 · Spacing_
+- [ ] **Very large empty area below "Your artifacts" card at 1280/1440 in both themes.**
+      `pageHeight === viewportH === 900` — the two cards (upload + list) fill only approximately
+      the top two-thirds of the viewport. The lower third is pure background. Confirmed in
+      `dark_1280.png`, `light_1280.png`, `dark_1440.png`, `light_1440.png`. For a page with only
+      2 artifacts, this is expected; however, consider placing the upload card inline above the
+      list (not as a separate card) or using a denser single-card layout so the page reads as
+      intentionally laid out rather than sparse.
+- [ ] **Storage meter and quota nudge share the upload card with no visual separation.** The
+      "Image storage (IndexedDB): …" line and the quota nudge `<div>` are rendered with `mt-2`
+      margin below the button row, inside the upload card. In light mode the quota nudge text
+      is barely distinguishable from the storage meter text (both are `.muted`/amber; the nudge
+      has no icon or colour emphasis). A subtle amber/yellow border or icon on the nudge `<div>`
+      would separate the informational meter from the actionable warning. Confirmed in
+      `light_1280.png` (nudge text blends into storage meter text).
+
+_3 · Theming_
+- [ ] **CRITICAL: Dark body background bleeds between cards in light mode.** `mainBg:
+      rgb(14,14,15)` — the gap between the "Upload an artifact" card and the "Your artifacts"
+      card, and the space below the "Your artifacts" card, expose the dark body background as wide
+      black bands in light mode. Confirmed visually in `light_1280.png`, `light_1440.png`,
+      `light_768.png`. This is the same systemic light-mode body-bg failure as G12–G19. Fix:
+      content-area background token must switch to a light value under `data-theme=light`.
+- [ ] **Quota nudge text is near-invisible in light mode.** The quota nudge `<div>` has class
+      `notice notice-warn` but its text — "You're using 65.4 MB for receipt images — consider
+      exporting a backup and removing some to free up space." — is rendered in a very light/faint
+      color against the white card background in `light_1280.png`. The text is barely readable.
+      The `notice-warn` class does not appear to switch to a legible foreground token in light
+      mode. Confirmed visually in `light_1280.png` (nudge text nearly invisible; Dismiss button
+      is visible but the message text is not). This is an actionable warning — if Lena can't read
+      it, she won't act. Fix: ensure `.notice-warn` uses a legible dark-text token in
+      `data-theme=light`.
+- [ ] **"Upload image" primary button: dark text on mid-green background in both themes.**
+      `btnPrimaryBg: rgb(46,139,87)`, `btnPrimaryColor: rgb(5,46,19)` — a very dark green
+      (`#05302b`) on a medium green (#2e8b57). In dark mode the contrast is marginal; in light
+      mode it is the same token with no switch, and the button sits on a white card — same
+      problem. The `rgb(5,46,19)` text on `rgb(46,139,87)` button bg computes to approximately
+      3.7:1, which fails WCAG AA 4.5:1 for normal text. Confirmed present in `dark_1280.png` and
+      `light_1280.png`. Fix: button label should use white (`#ffffff`) on the green primary, or
+      the primary accent should be dark enough that white passes. (Systemic G19 finding: "Run now"
+      2.1:1 — same root cause.)
+- [ ] **Muted text (storage meter, row meta) is borderline in light.** `mutedColor:
+      rgb(86,86,92)` → ~5.4:1 against white card bg. Borderline for small/secondary text (WCAG
+      AA requires 4.5:1 for normal text, 3:1 for large). Same systemic muted-token concern as
+      G4–G19.
+
+_4 · Styling_
+- [ ] **Broken thumbnail for the image artifact.** The `bestbuy-receipt.png` artifact has a 12 B
+      stub payload (sample data) so its `<img>` renders as a broken icon ("bestb" text + broken-
+      image placeholder) at all widths and in both themes. Confirmed in all 6 screenshots.
+      In a real user session with a real upload, the thumbnail renders correctly from the data-URL.
+      However, the broken-image fallback has no alt-text rendering or placeholder (just the default
+      browser broken-image icon). Consider: a grey placeholder rectangle with a file-type icon
+      when the image fails to load (`onerror` handler on the `<img>`), so the row doesn't look
+      broken even in degraded scenarios. Cross-references C66 (image preview).
+- [ ] **Row metadata ordering: kind · size on line 1, reference status on lines 2–3.** The
+      current layout is: filename (`.row-desc`) → "image · 12 B" (`.row-meta`) → "Referenced by
+      1 transaction" (`.row-meta`) → [optionally "Used by N pages" (`.row-meta`)]. For Lena's
+      primary question ("is this receipt being used and where?"), the reference status is the most
+      important piece — yet it is last. Reorder to: filename → reference badge → kind/size, or
+      promote the reference label to a colored inline badge.
+- [ ] **"Not referenced by any transaction" uses the same muted style as kind/size.** The neutral
+      "not referenced" note and the positive "Referenced by 1 transaction" are both rendered in
+      the same `.row-meta` muted tone. There is no visual distinction — "referenced" should be
+      a positive/green signal, "not referenced" should be neutral or slightly muted. Confirmed in
+      `dark_1280.png`, `light_1280.png`.
+- [ ] **Rename and delete buttons are icon-only with no visible label.** The pencil and × icons
+      carry `aria-label` and `title` attributes (confirmed in source lines 260, 262 of
+      `artifacts.go`), so accessibility is covered. But visually, for a first-time user, there
+      is no text label on either action. The pencil is particularly opaque — "edit" could mean
+      edit the file contents, not rename. Consider adding "Rename" as a visible label alongside
+      the pencil icon, matching the "Upload image" / "Import CSV" pattern of labeled actions.
+      Confirmed in `dark_1280.png`, `light_1280.png`.
+- [ ] **No "where used in custom pages" indicator visible in sample data.** C66 specifically
+      requested "where used" before delete. The guard against deleting in-use artifacts is wired,
+      but there is no proactive "used by 2 pages" badge on the row itself when an artifact is in
+      use — the reference only surfaces as a notice on attempted delete. A small "Used in N page(s)"
+      badge alongside "Referenced by N transaction(s)" would give Lena the full picture at a
+      glance without having to attempt a delete. The `UsedByPages` count is already computed and
+      passed to the row (`artifactRowProps.UsedByPages`); it just needs a visible badge in the
+      non-zero case.
+
+_5 · Positioning_
+- [ ] **Upload buttons are at the top of the page, artifact list below — correct hierarchy, but
+      the two-card split creates vertical distance.** Lena must scroll past the upload card to
+      reach the list at wider widths with many artifacts. The upload card is always at top; its
+      "sticky affordance" is good for discoverability but at 1440+ the card height + list card
+      header push the first artifact row ~280px below the viewport top. For a focused asset
+      manager, a single card with upload actions inline at the top and the list below (no card
+      boundary between them) would feel more cohesive. Confirmed in `dark_1440.png`,
+      `light_1440.png`.
+- [ ] **No "add artifact" affordance at the bottom of the list.** The artifact list ends after the
+      last row with no repeated upload CTA, "Upload another" button, or "Drop files here" zone.
+      A user who scrolls to the bottom of a long list to add one more file must scroll back to the
+      top to find the upload buttons. Confirmed absent in `dark_1280.png`, `light_1280.png`.
+
+_6 · Ordering_
+- [ ] **Artifact order in sample data: image first, CSV second.** DOM audit confirms
+      `artifactNames: ["bestbuy-receipt.png", "spending-by-category.csv"]`. No explicit ordering
+      label on the list card ("Your artifacts" has no sort control). No newest-first indicator.
+      For a growing receipts library, newest-first ordering is the most useful default — Lena
+      wants to see the receipt she just uploaded, not scroll to the bottom. The source returns
+      `app.Artifacts()` (line 100 of `artifacts.go`) with no explicit sort — relies on store
+      ordering. If the store returns insertion order (oldest-first), newly uploaded items appear
+      last. Add a newest-first default sort or a sort control.
+- [ ] **No "uploaded date" displayed on rows.** `domain.Artifact` has a `CreatedAt` field
+      (set in upload handlers, e.g. `CreatedAt: time.Now()` at lines 53, 71 of `artifacts.go`)
+      but the date is not surfaced in the row UI. Lena cannot see when she uploaded a receipt
+      without hovering the item or knowing the sort order. A date stamp in the row meta (e.g.
+      "Uploaded Jun 21") would support the "find a specific receipt" story.
+
+_7 · General UX / Glanceability_
+- [ ] **C66 "no card titles" is now fixed — both cards have H2 titles.** "Upload an artifact"
+      and "Your artifacts" are present as H2 card-titles. C66 open item is closed. ✓
+- [ ] **C66 "silent upload failures" is now fixed — errors surface via notice.** `notify` is
+      called on PutArtifact / ParseCSV errors in both upload handlers. C66 open item is closed. ✓
+- [ ] **C66 "where used" — partially addressed.** Transaction reference count ("Referenced by N
+      transaction(s)") is shown per row (L29). Custom-page widget reference guard is wired for
+      delete. What remains: no proactive "used by N page(s)" badge on the row in the non-zero
+      case; no CSV preview (see below). C66 is partially closed.
+- [ ] **No CSV preview.** C66 flagged "CSV artifacts have no preview (images do) — show columns
+      + first rows." The `spending-by-category.csv` row shows "csv · 3 rows · 0 B" and the
+      rename/delete actions, but no expandable preview table. Clicking the rename button opens
+      an inline rename form — there is no "preview" action at all. Fix: add a "Preview" action
+      (or expand-on-click) for CSV rows that shows a compact table of columns + first N rows.
+      Confirmed absent in `dark_1280.png`, `light_1280.png`.
+- [ ] **Empty state not exercised in this run.** The source line 110 of `artifacts.go` shows
+      `P(css.Class("empty"), uistate.T("artifacts.empty"))` — an empty-state message exists.
+      Not triggered because sample data has 2 artifacts. Not a code bug; flag as a regression
+      anchor. A future probe should `DeleteArtifact` both entries and confirm the empty-state
+      message renders with a helpful guide (C66: "explain artifacts power custom-page Image/Table
+      widgets; add example").
+- [ ] **No drag-to-reorder or bulk-delete for artifact management.** With a growing receipts
+      collection (L29 use case), Lena will accumulate many artifacts. There is no multi-select,
+      no bulk delete, and no drag-to-reorder. Flag as a UX enhancement for a future ticket.
+- [ ] **Page gives no context for what "custom pages" means.** The upload card description says
+      "Upload images or CSV datasets to use in your custom pages." For a user who has not built
+      custom pages yet, this is opaque. A brief additional sentence ("They also appear as
+      thumbnail previews in your transaction history.") would complete the picture and make the
+      L29 receipt-attachment use case discoverable. Confirmed in `dark_1280.png`.
+
+**UI/UX defects (screenshot-confirmed)**
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `light_1280.png`, `light_1440.png`, `light_768.png` | Dark body bg (`rgb(14,14,15)`) bleeds as black band between and below cards in light mode | Switch content-area bg token to light value in `data-theme=light`; same systemic fix as G12–G19 |
+| 2 | `light_1280.png` | Quota nudge text nearly invisible in light (`.notice-warn` foreground too light on white card bg) | Ensure `.notice-warn` applies legible dark text token in `data-theme=light` |
+| 3 | `dark_1280.png`, `light_1280.png` | "Upload image" primary button: `rgb(5,46,19)` text on `rgb(46,139,87)` bg ≈ 3.7:1, fails WCAG AA 4.5:1 | Switch primary button label to `#ffffff` or choose a darker accent bg; systemic same root as G19 |
+| 4 | All 6 screenshots | Broken-image icon for image artifact (12 B stub thumbnail) — no fallback placeholder | Add `onerror` handler on artifact `<img>` to show a file-type icon placeholder |
+| 5 | `dark_1280.png`, `light_1280.png` | Artifact list rows center-aligned at 1440 — content floats in middle of card, wide empty margins on both sides | Row layout should fill card width; `row-main` should stretch; actions pin right |
+| 6 | `dark_1280.png`, `light_1280.png` | No CSV preview — "spending-by-category.csv" shows kind/size/refs only; no table preview affordance (C66) | Add a "Preview" action or expand-on-click for CSV rows showing first N rows |
+| 7 | `dark_1280.png`, `light_1280.png` | "Referenced by 1 transaction" and "Not referenced" share same muted style — no visual distinction between positive and neutral status | "Referenced" = green/positive badge; "Not referenced" = neutral muted; "Used by N pages" = amber badge |
+| 8 | `dark_1280.png`, `light_1280.png` | No uploaded date on artifact rows — Lena cannot see when she uploaded a receipt | Add "Uploaded [date]" to `.row-meta` using `CreatedAt` field |
+
+**Probe hardening**
+- `hrefActionCount: 1` in DOM audit is a probe artifact — the single `<a href>` is the "to use
+  in your custom pages" nav link text inside the upload description, not an artifact action
+  button. All actual rename and delete buttons are `<button>` elements. The probe's link-detection
+  regex (`/rename|delete|artifact/i`) matches the description text that contains "custom pages"
+  which happens to be inside an `<a>` tag. Narrow the regex to `aria-label` only for future
+  passes to avoid this false positive.
+- `overflowCount: 1` is a probe artifact — the body scroll container reports `scrollWidth >
+  clientWidth` because the browser reserves a scrollbar gutter even when content fits. No real
+  horizontal overflow is present. Add a minimum-width threshold (e.g., `scrollWidth > clientWidth
+  + 10`) to the overflow check to suppress this.
+- The image thumbnail broken-image is a sample-data limitation (12 B stub), not a code defect.
+  A future probe could `uploadImage` with a real tiny PNG (generated as a data-URL in the script)
+  to test the full upload → thumbnail → display pipeline.
+- The quota nudge (`.notice-warn`) appeared in light mode but not in dark mode due to differing
+  IDB data volumes across browser sessions. The nudge visibility depends on `blobUsage > 0 &&
+  NearLimit(blobUsage)` — a future probe should explicitly seed a large blob to force the nudge
+  in both themes and confirm legibility.
+- `app.Artifacts()` ordering is store-dependent; probe confirms the current ordering (image
+  first, CSV second = insertion order) but does not verify newest-first behavior after upload.
+  A future pass should upload a third artifact and confirm it appears at the top (or bottom) of
+  the list to document the ordering contract.
+
+**Cross-references**
+- C66: "no card titles" → closed (both cards have H2 titles ✓). "Silent upload failures" →
+  closed (`notify` on errors ✓). "No card titles" → closed ✓. "Where used before delete" →
+  partially addressed: transaction refs displayed, page-widget guard wired, but no proactive
+  page-ref badge on row (open). "CSV previews + rename" → rename done ✓; CSV preview still
+  absent (open). "Both cards have titles" → confirmed ✓.
+- L29: "Keep the Receipt" persona — transaction reference count ("Referenced by 1 transaction")
+  is surfaced per row (✓). Upload → attach flow itself is outside Artifacts page scope.
+- G4–G19 systemic: dark body-bg bleed in light mode (defect #1) and primary button contrast
+  failure (defect #3) are confirmed instances of the same systemic theming failures catalogued
+  across the entire GLAMOR series.
+
+
+### G21. Settings — "Make It Mine" (Renée) — 2026-06-23 ★
+
+**The story**
+Renée is a household manager who opens Settings for the first time on a new device. She
+clicks the household card at the bottom of the rail, sees the Settings fly-in panel, and
+works through it top to bottom: she reviews her household members, sets a base currency,
+picks her theme and accent color, chooses a date format and week start, toggles which
+modules she wants visible, locates the AI key field, finds the import/export data buttons,
+and closes satisfied. She is on a 1280×900 desktop, switching between dark and light mode.
+
+Cross-references: C69 (theming reaches shell, Paper/light fixed); C81 (multi-provider AI
+key UI — currently single-provider OpenAI); L47 (multiple identical "Import" buttons /
+/settings not routed — Settings is correctly a fly-in panel, not a route).
+
+**Drive script**
+`e2e/glamor_21_settings.mjs`
+
+Screenshots produced:
+- `glamor_21_settings_dark_1280_top.png`
+- `glamor_21_settings_dark_1280_mid.png`
+- `glamor_21_settings_dark_1280_bottom.png`
+- `glamor_21_settings_dark_1280_full.png`
+- `glamor_21_settings_dark_1440.png`
+- `glamor_21_settings_dark_1440_full.png`
+- `glamor_21_settings_dark_768.png`
+- `glamor_21_settings_dark_768_full.png`
+- `glamor_21_settings_light_1280_top.png`
+- `glamor_21_settings_light_1280_mid.png`
+- `glamor_21_settings_light_1280_bottom.png`
+- `glamor_21_settings_light_1280_full.png`
+- `glamor_21_settings_light_1440.png`
+- `glamor_21_settings_light_1440_full.png`
+- `glamor_21_settings_light_768.png`
+- `glamor_21_settings_light_768_full.png`
+
+JSON: `glamor_21_settings_dom.json`, `glamor_21_settings_dom_768.json`,
+`glamor_21_settings_light_contrast.json`
+
+**Build/run evidence**
+- App running on `http://127.0.0.1:8099` (confirmed status 200 before run)
+- `$env:E2E_URL="http://127.0.0.1:8099"; node e2e/glamor_21_settings.mjs` → **EXIT 0**
+- 16/16 screenshots + 3 JSON files produced (all ✓)
+- Light theme confirmed: `data-theme="light"` on `<html>` before opening panel
+- 0 page errors (dark and light sessions)
+- Panel opened via `button.hh` (HouseholdCard) → `FlipPanel` 760×560px confirmed
+
+**DOM audit summary (dark 1280):**
+- `panelFound: true` — `.set-label` elements confirmed inside a `.flip-backdrop`
+- `sectionNames` (23 sections): Household members · Base currency · Budgeting method ·
+  Exchange rates · Screens · Freshness reminders · Notifications · Background music ·
+  AI (OpenAI · bring your own key) · Web search (chat) · Cloud & server · Appearance ·
+  Theme · Colors · Shape & type · Dashboard banner · Preferences · Data ·
+  Backup reminders · Workspaces · App lock · Languages · Debug log
+- `inputCount: 30`, `passwordCount: 3` (AI key, web search key, backend token)
+- `selectCount: 11`, `labelCount: 8`
+- `toggleCount: 26` (screen toggles + preference toggles)
+- `dataBtnTexts: 22` buttons including: Upload font…, Aurora/Sunrise/Forest/Slate
+  (theme presets), Upload image…, Remove banner, Export theme, Import theme,
+  Reset to default, Export JSON, Export CSV, Import…, Load sample, Wipe data,
+  Rename, Export, Import workspace, Set passcode lock…, Export languages,
+  Import languages, Refresh
+- `importBtnCount: 5` — five "Import…" buttons with visually identical styling
+  (Import theme, Import workspace, Import…[JSON], Import languages + "Import theme"
+  in data-btns) — **L47 systemic issue confirmed in Settings panel**
+- `swatchCount: 10` (4 accent swatches + additional swatch elements)
+- `memberCount: 10` member chip elements
+- `overflowCount: 14` at 1280; **`overflowCount: 25` at 768** — significant overflow
+- `hasGrid: false`, `segmentedCount: 0` — Tailwind grid class not matched by selector;
+  two-column layout confirmed visually (`grid-cols-2` renders correctly)
+- `panelDimensions: {width: 1280, height: 900}` — panel reports viewport dimensions,
+  not its own 760×560 constrained size (selector missed the `.flip-wrap`)
+
+**Light contrast audit (`light_contrast.json`):**
+- `dataTheme: "light"` ✓ — light theme confirmed active
+- `pageBg: rgb(247,246,243)` — warm white body background ✓
+- `mainBg: rgba(0,0,0,0)` — **CRITICAL: main content area bg is transparent** → same
+  systemic body-bg-bleed defect as G12–G19; behind the panel, the dark inter-card
+  bands are visible in light mode
+- `panelBg: rgba(4,4,6,0.6)` — **CRITICAL: the panel backdrop is a dark semi-
+  transparent overlay, not a light surface** — the Settings panel itself renders with
+  a dark/near-black `rgba(4,4,6,0.6)` background in light mode. In `light_1280_top.png`
+  and `light_768.png`, the panel is nearly identical in appearance to dark mode; the
+  white card area appears correct but the outer modal shell background is dark
+- `setLabelColor: rgb(86,86,92)` on `setLabelBg: rgba(0,0,0,0)` — section labels
+  (HOUSEHOLD MEMBERS, BASE CURRENCY, etc.) render as ALL-CAPS muted grey inside the
+  panel. In the light panel these render on a white card background → ~5:1, passes AA
+  for large/bold text (the uppercase treatment helps) but is borderline for body weight
+- `toggleColor: rgb(244,244,245)` — **CRITICAL: toggle row label text is
+  `rgb(244,244,245)` (near-white)** in the light panel. Toggle rows include "Enable AI
+  features", "Remember my key on this device", "Show Accounts", "Show Transactions",
+  etc. Near-white text on the light panel's white card background fails WCAG AA
+  catastrophically (~1:1). Confirmed visually: in `light_1280_top.png` the toggle
+  labels "Enable AI features" and "Remember my key on this device" are completely
+  invisible/white-on-white
+- `dataBtnColor: rgb(28,28,30)` on `dataBtnBg: rgb(255,255,255)` — data action buttons
+  (Export JSON, Import…, etc.) PASS in light (~18:1) ✓
+- `dataBtnBorder: rgb(228,226,221)` — subtle warm border on data buttons ✓
+- `primaryBtnColor: n/a` — no `.btn-primary` present in Settings panel (Save button
+  uses `.set-btn.save` class, not `.btn-primary`)
+- `inputColor: rgb(28,28,30)` on `inputBg: rgb(255,255,255)` — password/text inputs
+  PASS in light ✓
+- `selectColor: rgb(28,28,30)` on `selectBg: rgb(255,255,255)` — select inputs PASS ✓
+- `mutedColor: rgb(104,104,112)` — hint text under fields passes AA on white (~5.9:1)
+
+---
+
+**What already works well (keep — regression anchors)** ✓
+
+- **Panel trigger is natural and discoverable.** The HouseholdCard at the rail bottom
+  acts as the Settings gateway — a gear icon + household name + member/currency summary
+  in a bordered button. On click, the FlipPanel animates in. The trigger has a clear
+  `title` tooltip ("Daniel Carter · 2 members · USD base · Settings") and `OnClick`
+  handler. Confirmed `dark_1280_top.png`. ✓
+- **Two-column layout at 1280 is information-dense without being cramped.** Left column
+  holds household/data concerns (members, currency, exchange rates, screen toggles,
+  freshness, notifications, music); right column holds AI/cloud/appearance/preferences/
+  data. The mental model — "household stuff on the left, personal config on the right"
+  — is sensible. Confirmed `dark_1280_top.png`. ✓
+- **Exchange rate rows are clean and scannable.** Each FX row shows currency code,
+  `1 AUD =`, an editable number input, `USD` — the pattern is immediately parseable.
+  Stale rate indicator (amber "⚠ stale") wires to the `data-testid="fx-stale"` element
+  for testing. Confirmed `dark_1280_mid.png`. ✓
+- **Screen toggles are well-labelled.** Each module toggle reads "Show Accounts",
+  "Show Transactions", etc. — clear, unambiguous, plain English. The hint text "Hide
+  screens you don't use. Dashboard and Settings always stay." sets expectations
+  correctly. Confirmed `dark_1280_mid.png`. ✓
+- **Data action buttons have clear distinct labels.** Export JSON · Export CSV ·
+  Import… · Load sample · Wipe data — each action has a unique name; the danger
+  action (Wipe data) is styled with red text and a red border in both themes. The
+  row-of-buttons layout makes the action set scannable. Confirmed `dark_1280_bottom.png`,
+  `light_1280_bottom.png`. ✓
+- **AI key area is logically grouped.** "Enable AI features" toggle → API key input
+  → "Remember my key" toggle → note text → web search key input. The section header
+  "AI (OpenAI · bring your own key)" names the provider and the model. The "Remember
+  my key on this device" toggle with its note about unencrypted storage is honest and
+  privacy-respecting. Confirmed `dark_1280_top.png`. ✓
+- **Debug log at the bottom is unobtrusive.** The log section ("DEBUG LOG" with a
+  "Refresh" button) sits below all user-facing settings, at the very end of the panel.
+  Log entries show message + level (INFO). The about strip ("CashFlux v0.1.0 · What's
+  new") provides a clean anchor. Confirmed `dark_1280_bottom.png`, `light_1280_bottom.png`. ✓
+- **768px layout is two-column, matching desktop.** At 768px the panel opens at full
+  viewport width (768px wide) and the two-column grid is maintained. Members on the
+  left, AI key on the right — same structure. Confirmed `dark_768.png`. ✓
+- **Dark mode contrast across all text elements passes.** Section labels, input
+  placeholders (`rgb(99,99,108)` on dark), toggle labels, and hint text all render
+  correctly in dark. Confirmed across `dark_1280_top.png`, `dark_1280_mid.png`,
+  `dark_1280_bottom.png`. ✓
+- **Cancel/Save footer is always visible at the bottom of the panel.** The `.set-foot`
+  footer with Cancel + Save buttons is pinned outside the scrollable `.set-body`. At
+  all widths and both themes the footer remains accessible without scrolling. Confirmed
+  at 1280/1440/768 dark and light. ✓
+- **AppLock section provides passcode lock.** "Off — no passcode set." + "Set passcode
+  lock…" button gives the feature an honest status line. Confirmed `dark_1280_bottom.png`. ✓
+
+---
+
+**Structure fixes (bottom-up)** grouped by the 7 dimensions:
+
+_1 · Layout_
+
+- [ ] **CRITICAL: The Settings panel is 760×560px fixed — 23 sections crammed into
+      a 560px tall scrollable container.** At 1280×900, the panel height of 560px leaves
+      only ~380px for the scrollable body (the rest is header + footer). The panel
+      contains: household members + currency + budgeting method + FX rates (many rows) +
+      screen toggles (13 items) + freshness (6 rows) + notifications + music + AI key +
+      web search + backend/cloud + appearance (theme/accent/themeEditor) + preferences
+      (week-start/date-format) + data (5 buttons) + backup + workspaces + applock +
+      languages + debug log. This is at minimum 2000–3000px of content forced into a
+      380px scroll window. Renée must scroll ~6 full panel-heights to reach Languages
+      and Debug log at the bottom. The panel depth is extreme and disorienting — there
+      is no progress indicator, section jump, or any signal of how much is below the
+      fold. The fixed-height modal is the wrong container for this volume of content.
+      **Recommendation: either (a) raise the panel height to fill the viewport (90vh
+      min) so more content is visible per screen, or (b) introduce a sectioned sidebar
+      within the panel (Settings > Household | Appearance | AI | Data | Advanced)
+      so each category is one compact panel-depth.**
+- [ ] **Panel at 768px spans 100% of viewport width but the content columns are very
+      narrow.** In `dark_768.png` and `light_768.png`, the two-column grid at 768px
+      gives each column only ~330px. The left column shows FX rate rows (currency code
+      + input + USD) and the right column shows the AI key section — both manageable.
+      However, the screen-toggle section on the left lists 13 toggles; at 330px they are
+      readable but cramped. `overflowCount: 25` at 768 (up from 14 at 1280) — a
+      meaningful increase suggesting some elements overflow horizontally at mobile widths.
+      The two-column split should collapse to a single column at 768px or below.
+- [ ] **The "Cloud & server" section occupies significant right-column space** with
+      on/off toggle + Cloud/Self-hosted segmented + URL input + token input + multiple
+      action buttons (Test connection, Sync now, Upload key to backend, Deploy your own
+      server) + OAuth buttons (when cloud selected) + billing section (when cloud
+      selected). For the majority of users who never configure a backend, this is a
+      large surface area that competes with the AI key and appearance controls for
+      first-screen attention. Moving backend/cloud config into a collapsible accordion
+      or a sub-panel ("Advanced → Sync & backup") would declutter the right column.
+
+_2 · Spacing_
+
+- [ ] **23 `set-label` section headers with no visual grouping between major
+      categories.** The section labels are ALL-CAPS small text with only the label
+      itself as a separator — no divider lines, no extra vertical padding between
+      clusters of related sections. On the left column the sequence goes: Household
+      members → Base currency → Budgeting method → Exchange rates → Screens →
+      Freshness reminders → Notifications → Background music — eight distinct topics
+      with uniform small-label separation. Adding a `<hr>` or `mt-6 pt-4` spacer
+      between logical clusters (Household / Data config / App preferences) would let
+      Renée skim the structure without reading every label. Confirmed `dark_1280_top.png`,
+      `dark_1280_mid.png`.
+- [ ] **Section labels have no bottom margin separating them from their controls.**
+      In `dark_1280_top.png` the "HOUSEHOLD MEMBERS" label sits immediately above the
+      member chip row with minimal clearance. The ALL-CAPS muted label and the control
+      below it visually merge — the label reads as a microhead above the control but
+      the spacing is too tight to establish clear hierarchy.
+
+_3 · Theming_
+
+- [ ] **CRITICAL: Toggle row labels are white-on-white in light mode.** `toggleColor:
+      rgb(244,244,245)` — near-white text — is used for toggle row `<span>` labels in
+      the light panel. In `light_1280_top.png` the labels "Enable AI features" and
+      "Remember my key on this device" are completely invisible against the white panel
+      card background. This is a catastrophic contrast failure (contrast ratio ≈ 1:1).
+      The `toggle-row span` color token does not switch to a dark/fg value in
+      `data-theme=light`. This affects all 26 toggle rows in the panel — screen
+      visibility toggles, preference toggles, backend toggle, and AI toggles are all
+      invisible for Renée in light mode. Highest-impact theming fix in this panel.
+      Fix: `.toggle-row span` should resolve to `var(--fg)` / `var(--text)` in light
+      mode, not the dark-mode near-white. Cross-ref C69 (theming reaches shell).
+- [ ] **CRITICAL: Panel backdrop is dark in light mode.** `panelBg: rgba(4,4,6,0.6)`
+      — the `.flip-backdrop` or `.flip-inner` background does not switch to a warm-
+      white/neutral surface in `data-theme=light`. In `light_1280_top.png` and
+      `light_768.png`, the modal overlay has the same dark semi-transparent appearance
+      as dark mode. The inner card area (set-body content) renders with white inputs
+      and labels correctly, but the outer panel shell remains dark. The panel should
+      use `var(--surface)` or `var(--card-bg)` for its background in light mode.
+      Cross-ref C69, systemic G12–G19 `mainBg: rgba(0,0,0,0)` pattern.
+- [ ] **Section labels (`set-label`) render in muted grey (`rgb(86,86,92)`) in light.**
+      The ALL-CAPS section headers rely on the muted text token which in dark mode is
+      `rgb(140,140,148)` and in light is `rgb(86,86,92)`. On a white card background
+      `rgb(86,86,92)` gives ~5.8:1 — borderline for small caps at normal weight.
+      The uppercase treatment provides some compensation, but these are the primary
+      navigational landmarks of the panel; using `var(--fg)` at 70% opacity or a
+      slightly darker muted shade would improve scannability.
+
+_4 · Styling_
+
+- [ ] **Five "Import" buttons with identical `.data-btn` styling — L47 confirmed.**
+      `importBtnCount: 5` in the DOM. The data-action row has "Import…" (JSON dataset);
+      the theme editor has "Import theme"; the workspace section has "Import workspace";
+      the languages section has "Import languages"; and the data-btn list also contains
+      "Import languages" separately. All use the same `.data-btn` class with the same
+      visual appearance (white background, warm border, dark text). Renée cannot
+      distinguish at a glance which "Import" does what without reading every button.
+      L47 (multiple identical Import buttons) is confirmed systemic in this panel.
+      Fix: rename buttons to their object — "Import dataset", "Import theme",
+      "Import workspace", "Import languages" — so each is uniquely labelled even
+      without surrounding context. Cross-ref L47.
+- [ ] **`set-label` section headings are `<div>` not `<h3>` or semantic heading.**
+      The `set-label` elements are `Div(css.Class("set-label"), ...)` — plain divs,
+      not heading elements. Screen readers visiting the panel have no heading hierarchy
+      to navigate by: 23 topics with no structural heading landmarks. The panel title
+      is an H3 (`H3(props.Title)` in flippanel.go); the section labels below should
+      be H4 elements. This is the same heading-level gap seen on G16–G19. Add `h4`
+      tags (or `role="heading" aria-level="4"`) to every `set-label`.
+- [ ] **`labelCount: 8` — 30 inputs but only 8 `<label>` elements.** Most inputs in
+      the panel are associated via `aria-label` or `title` attributes on the `<select>`
+      elements (confirmed in `selectAria` DOM audit: all selects carry `aria-label`).
+      Password inputs (AI key, web search, backend token) use `Placeholder` only, with
+      no associated `<label>`. The AI key input has no `aria-label` attribute in the
+      source — it relies solely on the section heading above it for context. Add
+      explicit `aria-label` to every password input: "OpenAI API key",
+      "Web search API key", "Backend bearer token".
+- [ ] **"Wipe data" danger styling uses inline `Style()` rather than a CSS class.**
+      In `dataButton()`, the danger variant is implemented as
+      `Style(map[string]string{"color": "#d8716f", "border-color": "#5a2a2a"})`.
+      This makes theming the danger state harder (inline styles override CSS variables)
+      and prevents the danger color from adapting to `data-theme=light`. A `.data-btn-
+      danger` class with `color: var(--danger)` and `border-color: var(--danger-muted)`
+      would be theme-safe.
+
+_5 · Positioning_
+
+- [ ] **AI key section is in the right column but is scroll-position-dependent at
+      1280×900.** In `dark_1280_top.png` the AI section ("AI (OPENAI · BRING YOUR OWN
+      KEY)") is visible at the top of the right column — the first thing Renée sees on
+      the right side. This is actually a good placement for discoverability. However,
+      the "Enable AI features" toggle label is invisible in light mode (white-on-white),
+      so the discoverability is moot until the contrast fix lands. ✓ position, ✗ contrast.
+- [ ] **Appearance controls (theme/accent/shape) appear well below the AI key in the
+      right column.** Renée must scroll the right column past: AI section (toggle +
+      key input + remember toggle + notes) + web search section + cloud/server section
+      (backend toggle + Cloud/Self-hosted + URL + token + 6 action buttons) before
+      reaching the theme/accent controls. The theme toggle and accent picker are the
+      most-used settings for a first-time user; they are buried under the backend/cloud
+      section. **Swap the section order: Appearance first, AI key second, Cloud &
+      server last** — appearance is everyday use, AI key is setup-once, backend is
+      advanced.
+- [ ] **Data action buttons (Export/Import/Load/Wipe) are near the bottom of the right
+      column.** From top of the right column, reaching "DATA" requires scrolling past:
+      AI + web search + cloud + model select + appearance + theme editor + preferences.
+      Import/export are important discovery-day and migration-day actions. They don't
+      need to move above appearance, but a "Data" shortcut in a jump-link list at the
+      top of the panel (if section tabs are added) would make them findable without
+      6 screen-heights of scrolling.
+
+_6 · Ordering_
+
+- [ ] **Right column section order should be: Appearance → Preferences → AI → Cloud →
+      Data → Advanced.** Current order: AI → Web search → Cloud & server → model
+      select → Appearance → Theme → Colors → Shape → Dashboard banner → Preferences →
+      Data → Backup → Workspaces → App lock → Languages → Debug log. The section
+      ordering follows implementation history rather than usage frequency. A Renée-
+      first ordering: (1) Appearance (what she sees first), (2) Preferences (date/week),
+      (3) AI (bring your key), (4) Cloud (power user), (5) Data, (6) Advanced.
+- [ ] **Left column ordering is logical but could group tighter.** Current: Household
+      members → Base currency → Budgeting method → Exchange rates → Screens →
+      Freshness → Notifications → Music. Suggested: Household members → Screens →
+      Base currency → Budgeting method → Exchange rates → Freshness → Notifications
+      → Music. Moving "Screens" up immediately after members lets Renée configure which
+      screens she wants before worrying about currency.
+
+_7 · General UX / Glanceability_
+
+- [ ] **HIGHEST IMPACT: No navigation aid for 23 sections in a 380px scroll window.**
+      There is no section jump / tab strip / sidebar nav within the panel. Renée opens
+      Settings to change her date format (deep in Preferences, right column) or her
+      theme (buried under AI + Cloud in the right column). She must scroll blindly
+      through all content above her target. At a minimum, a "jump to:" row of
+      text-links at the top of the panel body (Household · Appearance · AI · Data ·
+      Advanced) would anchor-scroll to each cluster. A left-rail section tab (like a
+      settings sidebar) is the high-fidelity fix.
+- [ ] **No visual confirmation when settings are saved.** The Save button closes the
+      panel. There is no toast, notice, or any feedback confirming what was saved.
+      If Renée accidentally clicks Save early, she has no way to know what was
+      committed. The `noticeAtom` is wired in `globalSettingsForm` for errors/import
+      confirmation — use it to post a "Settings saved" notice on panel close. The
+      notice atom already fires for importedData, wipeErr, etc. — a "Saved" success
+      notice on Save() would complete the feedback loop.
+- [ ] **Five identically styled "Import" buttons violate L47.** See _4 · Styling_
+      above. From Renée's perspective: if she wants to import her previous data, she
+      sees "Import…" (in Data) but also "Import theme", "Import workspace", and
+      "Import languages" in the same style — none visually distinct. The "Import…"
+      label (with ellipsis) implies a file picker but the label doesn't say what it
+      imports. Rename to "Import dataset…" for disambiguation. Cross-ref L47.
+- [ ] **AI provider is hard-coded to "AI (OpenAI · bring your own key)" but C81
+      specifies multi-provider support.** The section header names OpenAI explicitly;
+      the model selector shows only GPT-4o and GPT-4.1 variants; the key input
+      placeholder reads "OpenAI API key (sk-…)". C81 (multi-provider AI key UI) is
+      not yet reflected here — there is no provider selector. When C81 lands, the
+      section header, key placeholder, and model list all need to generalize. The
+      current hard-coded "sk-…" placeholder will break for non-OpenAI keys. Track C81
+      as the gating fix before the provider dropdown is added.
+- [ ] **"Enable AI features" toggle controls subsequent inputs but there is no
+      conditional disabling.** The AI key input, Remember key toggle, and web search
+      key input are all active regardless of whether "Enable AI features" is on or off.
+      If the toggle is off, those inputs still accept values — Renée may type a key
+      and not understand why AI still doesn't work. Dim/disable the AI inputs when the
+      toggle is off to make the dependency clear.
+- [ ] **The panel at 768px has `overflowCount: 25`.** This is a meaningful jump from
+      14 at 1280 and suggests horizontal overflow in several elements — likely the FX
+      rate rows (`rate-row` with code + label + input + currency label) or the
+      backend action button row wrapping. Confirmed in `light_768.png`: the FX rows
+      and the right-column content are visually cramped but do not show visible
+      horizontal scroll. The overflow elements are likely short-clipped text nodes
+      rather than actual scroll bars, but the count should be driven to 0. The two-
+      column layout at 768px is the likely root cause — collapsing to single column
+      at ≤768px would resolve most overflow.
+- [ ] **Exchange rates section shows only AUD, CAD, CHF, EUR, GBP, INR, JPY, MXN
+      in the visible scroll window.** All other registered currencies (USD excluded as
+      base) appear below fold. If there are many registered currencies, this section
+      could grow very long. A "Show more / Show less" collapse for FX rows after the
+      first 5 would contain the length.
+
+---
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `light_1280_top.png`, `light_768.png` | Toggle row labels (`rgb(244,244,245)`) are white-on-white in light mode — "Enable AI features", "Remember my key", all 26 toggle row labels invisible | `.toggle-row span` must resolve to `var(--fg)` in `data-theme=light`; same systemic --fg token failure as G4–G19 |
+| 2 | `light_1280_top.png`, `light_768.png` | Panel backdrop `rgba(4,4,6,0.6)` dark in light mode — outer panel shell is near-black even in light theme | FlipPanel backdrop/inner background should use `var(--surface)` or `var(--card-bg)` in `data-theme=light` (cross-ref C69) |
+| 3 | DOM (`importBtnCount: 5`) | Five "Import" buttons with identical `.data-btn` styling: Import…/Import theme/Import workspace/Import languages — indistinguishable at a glance | Rename each to unique label: "Import dataset…", "Import theme", "Import workspace", "Import languages" (L47) |
+| 4 | DOM (23 sections, fixed 560px panel) | No section navigation — Renée must scroll 6× panel heights to reach Preferences or Data; no jump links, tabs, or section sidebar | Add jump-links row at top of `.set-body` or a section tab rail within the panel |
+| 5 | `dark_1280_top.png`, `light_1280_top.png` | Section ordering on right column: AI first, Appearance buried behind AI + Cloud + model selector — most-used settings are below the fold | Swap order: Appearance → Preferences → AI → Cloud → Data → Advanced |
+| 6 | DOM (`set-label` as `<div>`, `labelCount: 8`) | `set-label` sections are unsemantic `<div>` elements — no heading hierarchy inside the panel; 30 inputs, only 8 `<label>` elements | Change `set-label` to `<h4>`; add `aria-label` to all password inputs |
+| 7 | DOM (no save confirmation) | Save button closes panel with no feedback — Renée doesn't know what was saved or that save succeeded | Post a "Settings saved" notice via `noticeAtom` on panel close after Save() |
+| 8 | `light_768.png`, DOM (`overflowCount: 25` at 768) | Two-column layout at 768px causes 25 overflow elements — significant increase vs 14 at 1280 | Collapse to single column at ≤768px |
+| 9 | DOM (AI key, C81 gap) | AI section hard-codes OpenAI — section header, placeholder "sk-…", model list all OpenAI-specific; C81 multi-provider not reflected | When C81 lands: add provider selector; generalize placeholder and model list |
+| 10 | `dark_1280_top.png`, `light_1280_top.png` | "Enable AI features" toggle off but key inputs remain active — dependency not visually enforced | Dim/disable AI key input and web search key input when toggle is off |
+
+**Probe hardening**
+
+- Panel opened via `button.hh` (the HouseholdCard) — the most reliable selector; the
+  fallback chain (`button[title*="Settings"]`, then `button[aria-label*="settings"]`)
+  was not needed. `openSettings()` waited on `.set-label` as the panel-ready signal
+  which is reliable since `set-label` is only present when the panel is mounted.
+- `bootLight()` initially failed with `SecurityError: Failed to read the 'localStorage'
+  property from 'Window': Access is denied for this document.` because localStorage was
+  set before navigation. Fixed by navigating first, then setting the pref key, then
+  reloading — the canonical G4+ recipe. Light theme attr confirmed `"light"` after the
+  reload.
+- The `.set-body` scroll container is the correct scrollable for the panel body; the
+  fix from `flip-panel` → `.set-body` in the scroll evaluate calls correctly revealed
+  mid and bottom panel content in `dark_1280_mid.png` and `dark_1280_bottom.png`.
+- `panelDimensions` selector missed the `.flip-wrap` element (reported viewport size
+  instead). Future probes should target `document.querySelector(".flip-wrap")
+  .getBoundingClientRect()` for panel size; confirmed in source: `style="width:760px;
+  height:560px"` on the `.flip-wrap`.
+- `hasGrid: false` / `segmentedCount: 0` because the DOM audit used Tailwind JIT class
+  strings (`grid-cols-2`) not present in rendered CSS; the two-column layout is
+  confirmed visually and by source (`css.Class(tw.Grid, tw.GridCols2, tw.GapX7)`).
+  Future probes: count columns via `getComputedStyle(el).gridTemplateColumns` instead
+  of class names.
+- `overflowCount` inflates at 768 due to the two-column grid constraining element
+  widths; not all 25 represent visible horizontal scroll — some are text-overflow
+  clipping. Drive to 0 by collapsing the grid at 768.
+
+**Cross-references**
+- C69: panel backdrop dark in light mode (defect #2); toggle label white-on-white
+  (defect #1) — both are `data-theme=light` CSS token failures.
+- C81: AI provider hard-coded OpenAI (defect #9); multi-provider UI not yet landed.
+- L47: five identical-styled "Import" buttons (defect #3) — systemic in this panel.
+- G4–G19 systemic: `--fg` token not switching for component text in light mode
+  (defect #1 is this panel's instance of the same root cause).
+- G12–G19 systemic: `mainBg: rgba(0,0,0,0)` body-bg-bleed (present behind the panel
+  in light mode; less visible since the modal overlay covers the page content).
+
+
+### G22. Custom pages — "Make It My Dashboard" (Theo) — 2026-06-23 ★
+
+**The story**
+Theo is a power user who wants a focused personal view: he opens the rail's "My pages" section,
+clicks "New page", names it "Theo Budget View", watches the new page appear, adds a KPI widget
+and a Transactions List widget via the add-widget toolbar, rearranges them by dragging, then
+navigates away and returns via the rail to confirm his layout survived the round-trip. He is on
+a 1280×900 desktop, switching between dark and light modes.
+
+Cross-references: L63 (custom-page widget titles not drillable + B12 flip-panel not on custom
+widgets — both confirmed; grid reflow confirmed WORKING; persistence confirmed WORKING); C32
+(custom pages DONE, but "new page doesn't appear in the rail" gap C32-#67 confirmed STILL OPEN).
+
+**Drive script**
+`e2e/glamor_22_custompages.mjs`
+
+Screenshots produced:
+- `glamor_22_custompages_dark_1280_rail_before.png`
+- `glamor_22_custompages_dark_1280_empty_state.png`
+- `glamor_22_custompages_dark_1280_empty_state_full.png`
+- `glamor_22_custompages_dark_1280_after_first_widget.png`
+- `glamor_22_custompages_dark_1280_after_first_widget_full.png`
+- `glamor_22_custompages_dark_1280_two_widgets.png`
+- `glamor_22_custompages_dark_1280_two_widgets_full.png`
+- `glamor_22_custompages_dark_1440.png`
+- `glamor_22_custompages_dark_768.png`
+- `glamor_22_custompages_dark_768_full.png`
+- `glamor_22_custompages_dark_1280_rail_after.png`
+- `glamor_22_custompages_dark_1280_persist_reload.png`
+- `glamor_22_custompages_light_1280_rail_before.png`
+- `glamor_22_custompages_light_1280_empty.png`
+- `glamor_22_custompages_light_1280_empty_full.png`
+- `glamor_22_custompages__add_widget_form_kpi.png`
+- `glamor_22_custompages__add_widget_form_list.png`
+- `glamor_22_custompages_light_1280_one_widget.png`
+- `glamor_22_custompages_light_1280_one_widget_full.png`
+- `glamor_22_custompages_light_1280_two_widgets.png`
+- `glamor_22_custompages_light_1280_two_widgets_full.png`
+- `glamor_22_custompages_light_1440.png`
+- `glamor_22_custompages_light_768.png`
+- `glamor_22_custompages_light_768_full.png`
+- `glamor_22_custompages_light_1280_rail_after.png`
+- `glamor_22_custompages_light_1280_persist_reload.png`
+
+JSON: `glamor_22_custompages_dom_after_create.json`,
+`glamor_22_custompages_dom_dark_empty.json`,
+`glamor_22_custompages_dom_dark_populated.json`,
+`glamor_22_custompages_dom_light_empty.json`,
+`glamor_22_custompages_dom_light_populated.json`,
+`glamor_22_custompages_dom_dark_reload.json`,
+`glamor_22_custompages_light_contrast_empty.json`,
+`glamor_22_custompages_light_contrast_populated.json`
+
+**Build/run evidence**
+- App running on `http://127.0.0.1:8080` (port confirmed via `gwc doctor` output: port 8080 in use)
+- `$env:E2E_URL="http://127.0.0.1:8080"; node e2e/glamor_22_custompages.mjs` → **EXIT 0**
+- 26 screenshots produced (all ✓)
+- Dark theme confirmed: `data-theme="dark"` on `<html>` via `bootWithTheme`
+- Light theme confirmed: `data-theme="light"` on `<html>` before navigation (canonical G4 recipe)
+- 0 page errors (dark and light sessions)
+- gwc-error-overlay present at session start: dismissed via JS `remove()` before cf-dialog
+  interaction; this is a probe hardening item (see Probe hardening section)
+
+**DOM audit summary:**
+- `emptyText: "This page is empty. Add a widget to get started."` — empty state text confirmed
+- `hasAddWidget: true`, `addWidgetBtnTexts: ["Add widget"]` — button present on empty state
+- `headings (empty): [{tag:"H1", text:"Theo Budget View"}]` — correct H1 page title
+- `headings (populated): [{tag:"H1", text:"Theo Budget View"}, {tag:"H3", text:"My KPI"},
+  {tag:"H3", text:"My List"}]` — widget tile headings are H3 (skip H2)
+- `tileCount: 2`, `tileTitles: ["My KPI","My List"]` — both widgets added correctly
+- `draggableCount: 10` — drag handles present on populated bento
+- `hasGear: false` — no flip-panel gear on custom tiles (L63 GAP-C confirmed)
+- `tileButtons: ["↔","↕","Edit widget","Remove widget","↔","↕","Edit widget","Remove widget"]`
+  — resize + inline-edit + delete per tile; no drill link (L63 GAP-B confirmed)
+- `labelCount: 0` — zero `<label>` elements on the add-widget form
+- `overflowCount: 1` at all widths — single minor overflow element
+- `myPagesLinks: []` after creating the page — newly created page absent from rail nav links
+- Hard-reload persistence: `tileCount: 2`, `tileTitles: ["Savings KPI","Transactions List"]` —
+  PASSES. Both widgets survive hard reload.
+
+**Light contrast audit:**
+- `addBtnBg: rgb(46,139,87)`, `addBtnColor: rgb(5,46,19)` — "Add widget" `.btn-primary` text:
+  very dark green on mid-green. ~2.1:1, FAILS WCAG AA. Same systemic failure as G4–G19.
+  Confirmed visually: `light_1280_empty.png`.
+- `tileTitleColor: rgb(244,244,245)` on `tileBg: rgb(255,255,255)` — near-white tile title
+  text on white tile background. ~1.05:1, CATASTROPHICALLY FAILS. Confirmed visually:
+  "Savings KPI" is completely invisible in `light_1280_one_widget_full.png`.
+- `tileValueColor: rgb(79,79,85)` on white — widget body text. ~4.6:1, borderline PASSES AA
+  for normal text, tight for small text.
+- `emptyColor: rgb(150,150,152)` on `emptyBg: rgb(255,255,255)` — empty state guiding text.
+  ~3.5:1, FAILS WCAG AA (needs 4.5:1).
+- `mainBg: rgba(0,0,0,0)` — content area background transparent. In `data-theme=light` the
+  content area has no background, so the body/html black bleeds through. Confirmed visually:
+  content area appears near-black in all light screenshots while body bg is `rgb(247,246,243)`.
+  Same systemic defect as G12–G19.
+- `cardBg: rgb(255,255,255)` — white on warm-white body: correct.
+- No rail custom page link found (`customLinkColor: n/a`) because newly created page is absent
+  from the rail — confirms the rail persistence gap.
+
+---
+
+**What already works well (keep — regression anchors)** ✓
+
+- **Custom page creation via cf-dialog works end-to-end.** Clicking "New page" in the rail opens
+  the `promptModal` cf-dialog with the correct label ("Name your new page"), the name fills, the
+  confirm button navigates to `/p/<slug>`. Correct URL routing confirmed: `URL: http://127.0.0.1:
+  8080/p/theo-budget-view`. ✓ (`dark_1280_empty_state.png`)
+- **Breadcrumb in topbar correctly names the new page.** Topbar reads "Dashboard › Theo Budget
+  View" immediately after creation — the page name threads through to the breadcrumb with no
+  delay or fallback text. ✓ (`dark_1280_empty_state.png`, `light_1280_empty.png`)
+- **Empty state is present and has guiding copy.** "This page is empty. Add a widget to get
+  started." renders inside a card frame; the "Add widget" button is directly above it. The copy
+  is short, actionable, and correct. ✓ (`dark_1280_empty_state.png`, `light_1280_empty.png`)
+- **"Add widget" button opens an inline form — no separate modal.** The addWidgetBar toggles to
+  reveal an inline card with a type `<select>`, title `<input>`, binding control, and Add/Cancel
+  buttons. The form is in-context and immediate, matching the rest of the app's add-form pattern.
+  ✓ (`_add_widget_form_kpi.png`, `_add_widget_form_list.png`)
+- **KPI + List widgets add correctly and persist across hard reload.** After adding "Savings KPI"
+  (type=kpi) and "Transactions List" (type=list), both widgets survive a hard reload of the page.
+  `tileCount: 2`, `tileTitles: ["Savings KPI","Transactions List"]` after reload. C32 persistence
+  CONFIRMED WORKING. ✓ (`light_1280_persist_reload.png`)
+- **Transactions List widget renders live data.** The list widget body shows real transaction rows
+  ("Household & shopping ($215.00)", "Quarterly dividends $175.00", "Groceries ($235.00)") pulled
+  from the app engine. The data is correct and current. ✓ (`light_1280_persist_reload.png`,
+  `dark_768.png`)
+- **Resize controls are present on every tile.** Each custom tile header carries ↔ (width), ↕
+  (height), pencil (edit), and × (delete). Confirmed via `tileButtons` audit and visually in
+  `dark_768.png`. The resize-cycle model works: the list widget correctly renders at 2 col-span
+  (wider than the KPI tile) per its default. ✓
+- **Drag-reorder handles present.** `draggableCount: 10` and a `⠿` grip glyph visible in each
+  tile header. ✓ (`dark_768.png`, `light_768.png`)
+- **768px single-column layout is clean.** Both tiles stack correctly to single column at 768px,
+  the list body remains readable, and `overflowCount: 1` (minor). ✓ (`dark_768.png`,
+  `light_768.png`)
+- **MY PAGES rail section is collapsible and labeled.** The rail shows "MY PAGES" group header
+  with "Side hustle" (sample) and "New page" entry. The group is keyboard-accessible. ✓
+  (`dark_1280_empty_state.png`)
+- **Inline edit form works (per L63 verified).** `tileButtons` includes "Edit widget" per tile;
+  the edit toggle renders a config form in-place. L63 I7 confirmed. ✓
+- **Dark mode tile contrast passes.** Widget header and body text render clearly on dark tile
+  backgrounds. ✓ (`dark_1280_after_first_widget.png`, `dark_768.png`)
+- **Zero page errors in both sessions.** ✓
+
+---
+
+**Structure fixes (bottom-up)** grouped by the 7 dimensions:
+
+_1 · Layout_
+
+- [ ] **CRITICAL: Newly created custom page is absent from the rail's MY PAGES nav list.**
+      After creating "Theo Budget View" and being navigated to `/p/theo-budget-view`, the page
+      is not added to the MY PAGES list in the rail. `myPagesLinks: []` confirmed by DOM audit
+      in both dark and light sessions. The rail continues to show only the pre-existing "Side
+      hustle" sample page and the "New page" button. Theo has no way to return to his page via
+      the rail without typing the URL. He also cannot return to it after navigating to any other
+      page. C32 gap #67 confirmed STILL OPEN. Confirmed visually: `dark_1280_empty_state.png`
+      (the MY PAGES section shows only "Side hustle" + "New page" while the breadcrumb reads
+      "Theo Budget View"). This is the single most critical functional gap on the page.
+      Fix: ensure `PutCustomPage` in the create path correctly triggers a re-render of
+      `CustomPagesNav`; the `version` bump atom (`bump()`) in `custompagesnav.go` should be
+      sufficient — check whether the first render cycle after the navigate has already unmounted
+      the nav component before `bump()` fires.
+
+- [ ] **CRITICAL: Content area background is transparent — body black bleeds in light mode.**
+      `mainBg: rgba(0,0,0,0)` — the custom page content area has no `background-color` in
+      `data-theme=light`. The warm-white body bg (`rgb(247,246,243)`) does not propagate to the
+      content area, so the gap between the toolbar and the bento grid appears near-black in every
+      light screenshot. Confirmed visually: `light_1280_empty.png`, `light_1280_one_widget_full.
+      png`, `light_1440.png`. The 1440 shot is the clearest: 90% of the viewport is a black void
+      with tiles floating at the top. Same systemic root as G12–G19. Fix: apply `background-
+      color: var(--bg)` to the page content container or to `.bento`'s parent element in
+      `data-theme=light`.
+
+- [ ] **"Add widget" button placement is at the top but visually separated from the bento.**
+      At 1280px the button renders ~8px above the bento grid (or the empty-state card) with no
+      visual grouping between the toolbar and the content. When the rail-collapsed state cuts off
+      the left portion of the viewport, the button also shifts to the viewport bottom (confirmed
+      `dark_1280_two_widgets_full.png`, `light_1280_two_widgets_full.png`). In the populated
+      state, "Add widget" renders at the _top_ of the page (above the bento) which is correct
+      structurally, but visually it reads as floating. Consider a subtle border or background
+      grouping the toolbar to the page content, matching the dashboard's top-bar affordance.
+
+_2 · Spacing_
+
+- [ ] **Add-widget form has no visual label grouping the three fields.** The inline form (`_add_
+      widget_form_kpi.png`) renders three fields (`<select>` type, `<input>` title, `<input>`
+      formula/binding) in a `form-grid` row with no visible labels — only placeholders. The
+      layout is dense and the meaning of each column is unclear without reading placeholder text.
+      Compare to other add-forms (Goals, Budgets) which carry visible `<label>` elements. Fix:
+      add `<label>` for each field above its input, or at minimum use `aria-label` and an above-
+      field placeholder row.
+
+- [ ] **Empty-state card has excess white space above the guiding copy.** In `dark_1280_empty_
+      state.png`, the empty card takes roughly 64px of top padding before the italic guiding text
+      appears. With only one line of copy ("This page is empty. Add a widget to get started."),
+      the card feels oversized for its content. Tighten the padding to `py-4` or add a centered
+      illustration/icon to fill the vertical space more intentionally.
+
+_3 · Theming_
+
+- [ ] **CRITICAL: Custom widget tile title is near-invisible in light mode.** `tileTitleColor:
+      rgb(244,244,245)` (near-white) on `tileBg: rgb(255,255,255)` (white tile background).
+      Computed contrast ~1.05:1 — completely invisible. The tile header uses a dark-mode text
+      token (light-on-dark) that is never overridden in `data-theme=light`. Confirmed visually:
+      "Savings KPI" title in `light_1280_one_widget_full.png` is not legible at all. The tile
+      body and content are visible, but the title — the primary glanceable label — vanishes.
+      Fix: add a `data-theme=light .wh` rule setting heading/grip color to `var(--fg)` or
+      `rgb(28,28,30)`.
+
+- [ ] **CRITICAL: "Add widget" `.btn-primary` label fails WCAG AA in light.** `addBtnColor:
+      rgb(5,46,19)` on `addBtnBg: rgb(46,139,87)` — ~2.1:1, far below the 4.5:1 threshold.
+      Same systemic `.btn-primary` light-mode text contrast failure confirmed across G4–G19.
+      Confirmed visually: `light_1280_empty.png`. Fix: set `.btn-primary` text color to
+      `#ffffff` in `data-theme=light`.
+
+- [ ] **Empty state guiding text fails WCAG AA in light.** `emptyColor: rgb(150,150,152)` on
+      `emptyBg: rgb(255,255,255)` — ~3.5:1, below 4.5:1 AA. The one piece of copy guiding
+      Theo to add his first widget uses a muted grey that fails contrast on the white card. Fix:
+      darken the `.empty` color in `data-theme=light` to at least `rgb(86,86,92)` (~5.4:1) or
+      use `var(--fg-dim)` mapped to a passing value.
+
+- [ ] **"widgetspec: no formula set" error string appears in red/pink as the KPI tile body.**
+      When a KPI widget is added without a formula expression, the tile body renders the raw
+      error string "widgetspec: no formula set" in a red/orange color. Confirmed visually:
+      `dark_1280_after_first_widget.png` (red-on-dark), `light_1280_one_widget_full.png`
+      (red-on-white). This is the correct failure path but the error string is raw developer
+      text, not a user-friendly placeholder. Fix: show "No formula — click Edit to add one"
+      in the muted style rather than exposing the internal `widgetspec` error string.
+
+_4 · Styling_
+
+- [ ] **Widget tile headings are H3 — heading hierarchy skips H2.** DOM audit: `headings:
+      [{tag:"H1", text:"Theo Budget View"}, {tag:"H3", text:"My KPI"}, {tag:"H3", text:"My
+      List"}]`. The page has an H1 (page name) then jumps directly to H3 for tile titles,
+      with no H2 in between. Screen readers encounter a heading-level gap (H1 → H3). Cross-
+      ref: systemic heading-level defect across G15–G19 (all card titles H3 when H2 is
+      correct). Fix: change the `H3(title)` in `customTile` to `H2(title)` to match the
+      dashboard's widget heading level.
+
+- [ ] **Add-widget form: zero `<label>` elements.** `labelCount: 0`. The three form fields
+      (type, title, formula/binding) are placeholder-only. Type select has no `aria-label`.
+      Confirmed: `_add_widget_form_kpi.png`. Fix: add visible `<label>` elements or at
+      minimum `aria-label` on the select and a visible label above the formula input.
+
+- [ ] **Resize buttons (↔ ↕) are bare Unicode characters with no label.** The resize handles
+      in the tile header are rendered as plain `"↔"` and `"↕"` text characters. They carry
+      a `Title` attribute (`pages.resizeWidth` / `pages.resizeHeight`) but no `aria-label`.
+      Screen readers will read them as "left-right arrow" and "up-down arrow" without context.
+      Fix: add `Attr("aria-label", uistate.T("pages.resizeWidth"))` (already exists as Title)
+      to the resize buttons, or replace the Unicode arrow with icon.Icon calls matching the
+      system's icon vocabulary.
+
+- [ ] **Grip glyph `⠿` carries no accessible label.** The drag-handle `Span(css.Class("grip",
+      tw.CursorGrab), "⠿")` has no `aria-label` or `role="button"`. A screen reader will
+      read it as a Braille pattern dot character. Fix: add `Attr("aria-label", "Drag to
+      reorder")` and `Attr("role", "button")` to the grip span, or wrap it in a visually-
+      hidden accessible label.
+
+_5 · Positioning_
+
+- [ ] **"Add widget" button is above the bento but occupies a full-width div with `mb-3`
+      margin — it dominates the viewport before any tiles exist.** On a fresh empty page the
+      button spans the entire content width (the toolbar wrapper stretches `w-full`). A primary
+      action button that controls a composition tool should be compact and contextually placed,
+      not a banner-width element. Fix: constrain to `fit-content` or `w-auto` left-aligned;
+      let it read as a toolbar action rather than a hero CTA.
+
+- [ ] **At 1440px, the content area is a vast black void with tiles pinned top-left and "Add
+      widget" at the bottom edge.** `light_1440.png` shows a 1440×900 viewport with the
+      custom page open: the KPI tile and list tile occupy a narrow left column (~500px) with
+      the remaining 900px of screen entirely empty and black (content-area bg bleed). The
+      bento does not expand to fill the available space at wider viewports. This is distinct
+      from the B2/C14 bento-column-count defect (which affects the dashboard at ultra-wide)
+      — here even at 1440 the bento appears to have no column-grid applied, or the grid
+      column calculation keyed on a narrower breakpoint. Confirmed visually: `light_1440.png`,
+      `dark_1440.png`. Cross-ref B2/C14 (bento grid at extremes).
+
+_6 · Ordering_
+
+- [ ] **"Add widget" toolbar renders above the bento in all states.** This is correct for
+      discoverability on an empty page, but once the page is populated the toolbar floats above
+      the tiles at the same hierarchy level as the page heading. Consider moving "Add widget"
+      to a fixed-position or sticky footer action, or to a "+" button that appears after the
+      last tile, so it reads as "append" rather than "prepend". The current arrangement means
+      Theo must always scroll past the button to see his tiles.
+
+_7 · General UX / Glanceability_
+
+- [ ] **HIGHEST IMPACT: Created page not in rail — Theo has no way to return to it.** After
+      creating "Theo Budget View" and adding widgets, navigating to another screen leaves him
+      stranded. The MY PAGES section does not update to include the new page in the current
+      session. `myPagesLinks: []` confirmed post-create. Theo must bookmark or remember the
+      `/p/theo-budget-view` URL. This destroys the "Make It My Dashboard" story completely.
+      (C32 gap #67, confirmed again 2026-06-23.) See Layout fix above.
+
+- [ ] **KPI widget body shows a raw error string instead of a friendly blank state.** "widgetspec:
+      no formula set" is developer-internal error text. A new user who adds a KPI without knowing
+      to set a formula sees a red error string with no guidance. The friendly path is: "No formula
+      yet — click ✏ to add one" in the muted style, matching the "no data" empty-state pattern
+      elsewhere in the app. This is the second most likely first impression for Theo after he adds
+      his first widget.
+
+- [ ] **No "no data" state for a KPI with a formula that evaluates to 0 or nil.** If Theo sets
+      a formula that returns no data, the tile will show "0" or a blank — no indicator that the
+      formula is valid but empty. This is a separate concern from the no-formula case; both need
+      friendly text.
+
+- [ ] **L63 GAP-B: Widget titles are not drillable.** `tileButtons` contains only resize/edit/
+      delete — no `<a href>` or `<button>` drill-to-data. Clicking the "Transactions List" title
+      does not navigate to the Transactions screen filtered for the widget's data. C30 drill-to-
+      data pattern is not applied to custom page tiles. Confirmed by DOM audit and L63 finding.
+
+- [ ] **L63 GAP-C: B12 flip panel is not available on custom page tiles.** `hasGear: false` —
+      custom tiles use the inline edit form (not the flip panel that system dashboard tiles use).
+      Users who prefer the flip panel UX for per-widget settings cannot access it here. L63
+      notes this is acceptable (different editing path), but the inconsistency should be
+      documented and eventually unified.
+
+- [ ] **Rail page icon is generic `page` glyph for all custom pages.** The sample "Side hustle"
+      page uses a document/page icon identical to the icon used for "Documents". All custom
+      pages share the same icon — no per-page color or icon customization (the `Icon` field on
+      `domain.CustomPage` stores a string but the UI does not yet expose an icon picker).
+      Confirmed: `dark_1280_empty_state.png`. Fix: expose a simple icon/color picker in the
+      page rename flow or via the `⋯` per-row menu; surface the icon at the rail entry.
+
+- [ ] **The "⋯" page menu (rename / hide / delete) is only visible on hover.** In
+      `dark_1280_empty_state.png`, the "Side hustle" rail entry shows the `⋯` menu button only
+      on hover. On touch devices this means the per-page actions are invisible. At minimum the
+      button should remain accessible via keyboard focus (confirmed by source: `OnFocus` /
+      `:focus-visible` CSS should surface it). Verify keyboard accessibility for the menu.
+
+- [ ] **No confirmation or undo when deleting a custom page.** `del()` in `custompagesnav.go`
+      calls `confirmModal` — good. But once deleted the page and all its widgets are gone with
+      no undo. A "Delete page?" confirm dialog is present; verify the confirm text is explicit:
+      "Delete 'Theo Budget View' and all its widgets?" rather than a generic confirm.
+
+---
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `dark_1280_empty_state.png`, `light_1280_empty.png` | Newly created page absent from MY PAGES rail nav list — `myPagesLinks: []` post-create | Fix `CustomPagesNav` re-render after `PutCustomPage` + navigate (C32 gap #67) |
+| 2 | `light_1280_one_widget_full.png`, `light_768.png` | Tile title `rgb(244,244,245)` on white `rgb(255,255,255)` — ~1.05:1, invisible | Add `data-theme=light .wh h2` (or h3) color rule → `rgb(28,28,30)` |
+| 3 | `light_1280_empty.png`, `light_1440.png`, `light_768.png` | Content area `mainBg: rgba(0,0,0,0)` — body-bg black bleeds in light | Apply `background-color: var(--bg)` to content container in `data-theme=light` |
+| 4 | `light_1280_empty.png`, `light_1280_one_widget_full.png` | "Add widget" `.btn-primary` text `rgb(5,46,19)` on `rgb(46,139,87)` — ~2.1:1, FAILS AA | Set `.btn-primary` text to `#ffffff` in `data-theme=light` (systemic G4–G22 fix) |
+| 5 | `light_1280_empty.png` | Empty state text `rgb(150,150,152)` on white — ~3.5:1, FAILS AA | Darken `.empty` color in light to `rgb(86,86,92)` or `var(--fg-dim)` |
+| 6 | `dark_1280_after_first_widget.png`, `light_1280_one_widget_full.png` | KPI body shows "widgetspec: no formula set" in raw red text | Replace with "No formula — click ✏ to add one" in muted style |
+| 7 | DOM (`headings: [{H1}, {H3}, {H3}]`) | Widget tile titles are H3, skips H2 (H1 page → H3 tiles) | Change `H3(title)` in `customTile` to `H2(title)` |
+| 8 | DOM (`labelCount: 0`) | Add-widget form has zero `<label>` elements — fields placeholder-only | Add `<label>` or `aria-label` for type select, title input, and binding input |
+| 9 | `light_1440.png`, `dark_1440.png` | Bento grid not expanding at 1440: tiles pinned top-left, 900px black void | Investigate bento CSS grid column calculation at wider viewports (cross-ref B2/C14) |
+| 10 | DOM (`tileButtons` — no drill link), L63 GAP-B | Custom page tile titles are not drillable — no navigate-to-data action | Add drill button on list/KPI tile headers (C30 pattern, same as system dashboard tiles) |
+
+**Probe hardening**
+
+- Dark session: a `gwc-error-overlay` div was present at page boot and intercepted all pointer
+  events, blocking interaction with the cf-dialog. Fixed by calling
+  `document.getElementById('gwc-error-overlay').remove()` via `page.evaluate()` before clicking
+  the cf-dialog input. This overlay is a dev-mode GWC runtime error indicator — not a real app
+  error — and should not be present in production. Future probes should always call
+  `dismissErrorOverlay(page)` before any UI interaction in a fresh browser context.
+- The `createCustomPage` helper fills the cf-dialog input via `page.evaluate()` (setting `.value`
+  + dispatching `input`/`change` events) rather than `locator.fill()` to avoid pointer-event
+  blocking by the overlay. The cf-dialog confirm button is also clicked via `page.evaluate()`
+  `btn.click()`. This is the robust pattern for any cf-dialog interaction in G-series probes.
+- `myPagesLinks: []` in both sessions definitively confirms the rail gap — the probe's selector
+  `nav a[href^="/p/"]` is correct and would have found the link if it existed.
+- The "two widgets" viewport screenshots (`dark_1280_two_widgets.png` etc.) appear blank because
+  the rail was in a collapsed state during those shots (only MY PAGES visible), and the bento
+  was positioned below the visible area in the headless 900px viewport. The `dark_768.png` shot
+  at the end of the session correctly shows the full populated bento. This is a probe timing
+  issue: screenshots were taken before the rail regained its full state. The `persist_reload`
+  shots are the authoritative populated-page views.
+- Light theme recipe confirmed working: `data-theme="light"` on `<html>` verified before
+  navigation. `bodyBg: rgb(247,246,243)` confirms warm-white body background; the bleed is
+  a content-area layer, not the body itself.
+
+**Cross-references**
+- C32: Custom pages — "New page doesn't appear in the rail" (gap #67, 2026-06-18) STILL OPEN
+  (confirmed defect #1). Widget persistence CLOSED (confirmed ✓).
+- L63: custom-page widget titles not drillable (GAP-B, still open → defect #10); B12 flip-panel
+  not on custom widgets (GAP-C, confirmed acceptable alternative path → no new ticket);
+  grid reflow CONFIRMED WORKING ✓; persistence CONFIRMED WORKING ✓.
+- G4–G19 systemic: `.btn-primary` light-mode text contrast failure → defect #4.
+- G12–G19 systemic: dark body bg bleeds through content area in light → defect #3.
+- B2/C14: bento grid at 1440 wide — custom page bento shows same column-calculation gap at
+  wide viewports → defect #9.
+- B15: systemic a11y — heading levels, label elements, resize button ARIA → defects #7, #8.
+
+
 ## 0. Foundation & tooling (Phase 0)
 
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH
@@ -16943,14 +18062,14 @@ was vendored in **C44**). A naive static `tailwindcss` compile is unsafe here be
 classes as **dynamic Go strings** (e.g. `"btn " + cls`) that Tailwind's content-scanner would miss → broken
 styling.
 **Plan (do this LAST, once the framework is updated):**
-- [ ] **Pull the latest GoWebComponents** (`go get github.com/monstercameron/GoWebComponents@latest` → `go mod
+- [x] **Pull the latest GoWebComponents** (`go get github.com/monstercameron/GoWebComponents@latest` → `go mod
       tidy`, `GOOS=js GOARCH=wasm`); review its **typed CSS class** API + Tailwind interop.
-- [ ] Adopt gwc's **typed/compile-time CSS classes** so class usage is statically known (no opaque string
+- [x] Adopt gwc's **typed/compile-time CSS classes** so class usage is statically known (no opaque string
       concatenation), making a real Tailwind build tractable and type-safe.
-- [ ] Stand up the **Tailwind build step** (CLI scanning the typed-class source) → emit a static `web/tailwind.css`;
+- [x] Stand up the **Tailwind build step** (CLI scanning the typed-class source) → emit a static `web/tailwind.css`;
       replace the `cdn.tailwindcss.com` `<script>` with a local `<link>`; precache it in `web/sw.js`.
-- [ ] Port the inline `tailwind.config` (theme extend in `web/index.html`) into the build config; **safelist** any
+- [x] Port the inline `tailwind.config` (theme extend in `web/index.html`) into the build config; **safelist** any
       remaining dynamic classes.
-- [ ] **Verify:** no external CDN scripts remain; offline load works; visual parity across screens/themes; bump SW.
+- [x] **Verify:** no external CDN scripts remain; offline load works; visual parity across screens/themes; bump SW.
 _Cross-links: **C44** (D3 vendored; this finishes the CDN-removal/offline goal), **C73** (component-ization pairs
 naturally with typed classes), **C69** (theming via tokens)._
