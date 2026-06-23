@@ -10412,6 +10412,531 @@ Most of these pivots are state+UI only — the target screens already filter cor
 
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
 
+### G11. Bills — "What's Due This Week" (Tomas) — 2026-06-23 ★
+
+**The story**
+Tomas opens Bills on a Monday morning to know exactly what he owes and when. His goal in
+under ten seconds: see the total he needs to cover this cycle, spot any bill due today or
+overdue, identify what's coming up in the next 7 days, and mark paid the ones he's already
+settled. The calendar gives him a monthly at-a-glance map of when money will leave his
+account. The page must surface urgency (overdue = red, due soon = amber), total due, and
+the soonest-due bill immediately — without scrolling. Mark-paid must be one tap away per row.
+
+**Drive script**
+`e2e/glamor_11_bills.mjs` — widths 1280/1440/768, dark + light themes (light-theme
+recipe: set `cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`). Navigates
+from `/` via in-app click ("Bills" nav link) to avoid the wasm deep-link 404 (B1).
+Captures 8 screenshots plus a DOM audit JSON and a light-mode contrast spot-check. Run:
+`node e2e/glamor_11_bills.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_11_bills.mjs` → EXIT 0
+- Screenshots captured:
+  `glamor_11_bills_1280_dark.png`, `glamor_11_bills_1280_dark_full.png`,
+  `glamor_11_bills_1440_dark.png`, `glamor_11_bills_768_dark.png`,
+  `glamor_11_bills_1280_light.png`, `glamor_11_bills_1280_light_full.png`,
+  `glamor_11_bills_1440_light.png`, `glamor_11_bills_768_light.png`
+- DOM audit: `glamor_11_bills_dom.json` — 2 cards ("Bills", "June 2026 calendar"),
+  4 stat items (Total due soon $2,285.00 / Per year $23,550.00 / Upcoming bills 7 /
+  Next due 2026-07-01), 7 rows, 7 mark-paid buttons (all present), 7 remind buttons,
+  2 cal-dots, 7 cal-head cells, today-cell present, 0 overflow cards, 0 page errors.
+- `statAboveFold: true` confirmed at 1280px dark.
+- `hasMarkPaid: true`, `markPaidCount: 7` — mark-paid confirmed on every row (C57 fix verified).
+- `hasUrgency: false` — no overdue or within-3-day bills in the sample data snapshot
+  (all bills 8–206 days out); urgency code exists in source and is correct.
+- `dataTheme: "dark"` confirmed on dark captures; `"light"` on light captures.
+- theme after hard-reload: `"dark"` (persistence confirmed correct).
+- Light contrast spot-check: `cardTitleColor: rgb(244, 244, 245)` on white background
+  (card title near-invisible — same systemic `--fg` token failure as G4–G10).
+  `rowDescColor: rgb(28, 28, 30)` — bill names ARE legible in light mode (improved vs.
+  G10 where row names were invisible). `rowMetaColor: rgb(86, 86, 92)`, `budgetAmtColor:
+  rgb(86, 86, 92)` — muted grey on white for due-date labels and amounts. `statLabelColor:
+  rgb(86, 86, 92)` — stat labels faint. `urgencyColor: N/A` (no urgency elements in data).
+
+**What already works well (keep — regression anchors)** ✓
+- **Stat grid is the very first element and is above the fold at all widths.** Total due soon
+  ($2,285.00 in red), Per year ($23,550.00), Upcoming bills (7), and Next due (2026-07-01)
+  are all visible without scrolling at 1280 and 1440. `statAboveFold: true` DOM-confirmed. ✓
+- **Mark-paid button present on every row (C57 fix confirmed).** `markPaidCount: 7` — all 7
+  bill rows carry a green "Mark paid" `.btn-primary` button. C57 noted "no mark-paid" as the
+  top deficiency; it is now fully implemented. ✓
+- **Remind me button present on every row.** `remindCount: 7` — all 7 rows carry a "Remind me"
+  button that creates a to-do dated to the bill's due date. ✓
+- **Bill names are visible and lead the row at all widths.** `rowDescColor: rgb(28,28,30)` in
+  light mode (full-weight foreground token) — bill names (Rent, Gym membership, Streaming &
+  apps, Student Loan, Rewards Credit Card, Car insurance, Domain & hosting) are clearly
+  readable in both dark and light screenshots. This is markedly better than G10 Subscriptions
+  where names were invisible at 1280/1440. ✓
+- **Urgency code is wired correctly.** Source: `billUrgencyTone()` applies `text-down` for
+  overdue/today and `text-warn` for within 3 days. No urgency elements appear in the sample
+  data (all bills 8–206 days out), which is correct behavior. ✓
+- **Ordering is soonest-due first.** DOM audit `rowMetas` confirms ascending date order:
+  2026-07-01 → 2026-07-03 → 2026-07-05 (×2) → 2026-07-22 → 2026-09-01 → 2027-01-15.
+  Tomas's most pressing payment is always at the top. ✓
+- **Calendar renders with today-cell and dot indicators.** `hasCalendar: true`, `hasTodayCell:
+  true`, `calDots: 2`, `calHead: 7` — the June 2026 calendar grid is present with today
+  highlighted and 2 dot indicators on bill-due days. ✓
+- **No horizontal overflow at any width.** `overflowCards: 0` at 1280px dark. ✓
+- **Zero JavaScript page errors.** Both dark and light sessions clean. ✓
+- **Download CSV is present.** `hasCsvBtn: true` — "Download CSV" in the Bills card footer. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout — calendar is below the fold, disconnected from the urgency story*
+- [ ] **Calendar is never above the fold at any width.** At 1280 and 1440px dark, the stat
+      grid + bill list together fill the visible area; the "June 2026 calendar" card begins
+      at the very bottom of the viewport (just the card title and top of the day-header row
+      are visible). At 768px the calendar is entirely below the fold. Tomas cannot see the
+      month map without scrolling. The calendar's value — "which days have bills coming?" —
+      is highest when it's visible alongside the list, not discovered only by scrolling.
+      Consider a two-column layout at 1280/1440 (list left, calendar right) or collapsing
+      the list to a compact format so the calendar appears within the fold.
+      Confirmed: `glamor_11_bills_1280_dark.png`, `glamor_11_bills_1440_dark.png` — calendar
+      starts below 900px viewport at both widths.
+- [ ] **The list includes a bill due 206 days away (Domain & hosting, 2027-01-15).** For a
+      "what's due this cycle / this week" page, a bill more than 6 months out adds clutter
+      and dilutes urgency. Consider a configurable horizon (default: 90 days, or current
+      month + 1) with a "Show all" toggle so the default view only surfaces what's actually
+      imminent. The sample data mixes bills due in 8 days with one due in 206 days — Tomas
+      must mentally filter.
+
+*2. Spacing — row density and button visual weight at 768px*
+- [ ] **At 768px the stat grid wraps to a 3-column + 1 layout, causing "Next due" card to
+      drop to a second row and the date "2026-07-01" to hyphenate across two lines as
+      "2026-07-" / "01".** This is a mobile layout collision: the date string is wrapped
+      within a narrow single-column card. The "Next due" stat card should either be included
+      in a 2×2 responsive grid (not 3+1) or the date format should be shorter at narrow
+      widths (e.g. "Jul 1" instead of ISO 8601). Confirmed in `glamor_11_bills_768_dark.png`
+      and `glamor_11_bills_768_light.png`.
+- [ ] **The two action buttons ("Mark paid" + "Remind me") together consume roughly 40% of
+      each row's width, leaving the amount pushed to the far right with little breathing room
+      in the row-main area.** At 768px this becomes more pronounced: the amount, mark-paid,
+      and remind-me buttons all appear on the same line as the date meta, creating a cramped
+      layout where "due in 8 days $1,450.00 Mark paid Remind me" all compete for the row
+      width. Consider a trailing fixed-width button group and give the name + meta more
+      horizontal priority. Confirmed in `glamor_11_bills_768_dark.png`.
+
+*3. Theming — systemic light-mode token failure (G4–G10 pattern recurring)*
+- [ ] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
+      G4–G10).** Computed style: `cardTitleColor: rgb(244, 244, 245)` on a white card
+      background — effectively white-on-white. The "Bills" card title and "June 2026 calendar"
+      card title are invisible in `glamor_11_bills_1280_light.png`,
+      `glamor_11_bills_1440_light.png`, and `glamor_11_bills_768_light.png`. This is the
+      eighth consecutive GLAMOR page to exhibit this failure. A global CSS token fix is the
+      only sustainable path. Cross-reference G4/G5/G6/G7/G8/G9/G10 D1.
+- [ ] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
+      rgb(86, 86, 92)`. The amounts ($1,450.00, $280.00, $360.00 etc.) render as muted grey
+      secondary text in light mode — the amounts Tomas needs to compare are harder to read
+      than the bill names. They should use `--fg` (strong) or at minimum a
+      higher-contrast token in light mode. Confirmed in `glamor_11_bills_1280_light.png`.
+- [ ] **Row metadata (due-date + days-until label) low-contrast in light mode.**
+      `rowMetaColor: rgb(86, 86, 92)` — "2026-07-01 · due in 8 days" lines render as
+      secondary muted grey on white. The due-date is the most operationally important data
+      point on this page for Tomas; it should not be muted. When urgency classes (`text-down`,
+      `text-warn`) fire they override this with strong color — but for non-urgent bills the
+      date text is near-invisible in light mode. Confirmed in `glamor_11_bills_1280_light.png`.
+- [ ] **Stat labels (e.g. "TOTAL DUE SOON") low-contrast in light mode.** `statLabelColor:
+      rgb(86, 86, 92)`. The stat-grid labels are faint on the stat-card backgrounds in light
+      mode. Only the red $2,285.00 total and the large stat values retain strong contrast;
+      the labels that explain what each number means are secondary grey. Confirmed in
+      `glamor_11_bills_1280_light.png`.
+- [ ] **Stat grid background appears dark even in light mode.** At 1280/1440 light, the stat
+      grid sits in a visually dark zone (the black topbar region bleeds into the stat area)
+      while the bill list card below is white. This creates a two-tone page where the header
+      stats are dark-mode styled and the content area is light-mode styled. If intended
+      (stat grid has its own dark background token), confirm it is intentional; if not,
+      the stat card backgrounds need to pick up the light-mode card background token.
+      Confirmed visually in `glamor_11_bills_1280_light.png` and `glamor_11_bills_1440_light.png`.
+
+*4. Styling — urgency visualization absent from current data snapshot*
+- [ ] **The urgency tone system exists in code but produces no visible output in the sample
+      data.** The sample data has no bills due today, yesterday, or within 3 days — so
+      `text-down` and `text-warn` classes do not appear. Tomas's mental model of the page
+      depends on urgency being salient when it matters. The page cannot be confirmed to
+      look correct under urgency conditions from this snapshot alone. A probe-data fixture
+      seeding an overdue bill and a bill due in 2 days would allow screenshot-confirming
+      that the urgency tone renders correctly before the page is considered complete.
+      This is an evidence gap, not a confirmed defect.
+- [ ] **"Mark paid" is green `.btn-primary` — same prominence as a creation/affirmation
+      action.** With 7 green "Mark paid" buttons in a column, the visual weight pattern
+      mirrors the G10 Subscriptions "Mark as cancelled" problem (though less destructive).
+      The mark-paid action is frequent and expected — it arguably warrants a distinct
+      "completion" visual style (e.g. a checkmark icon button, or a softer green with
+      outline) rather than the primary CTA style, which is typically reserved for the most
+      important singular action on the page. Confirmed in `glamor_11_bills_1280_dark.png`.
+
+*5. Positioning — calendar placement vs. urgency hierarchy*
+- [ ] **The calendar card appears below the bill list at all widths, making it a scroll
+      destination rather than a contextual aid.** The calendar's primary value is spatial
+      context — "these bills cluster at the start of the month." Positioned after the list,
+      its value is discoverable only after the user has already read every row. A persistent
+      above-the-fold placement (side-by-side at 1280/1440, or above the list at 768) would
+      make the calendar a navigation tool (click a day to jump to that bill) rather than a
+      decorative footer. This is a layout issue at the page-structure level.
+- [ ] **"Total due soon" ($2,285.00) is visually dominant in dark mode (red) but the four
+      stat cards are equal-width at all widths.** The total is the most important number for
+      Tomas. At 1440px the four cards each take 25% of the stat row — the total does not
+      dominate by area. Consider a 2-column hero (total on the left, wider; 3 supporting
+      stats stacked on the right) to convey hierarchy through layout, not just color.
+
+*6. Ordering — bills list includes 206-day-out bill with no horizon indicator*
+- [ ] **No visual distinction between "due this cycle" and "due in 6 months".** The sample
+      list runs from Rent (8 days) through Domain & hosting (206 days) with no divider or
+      section label to distinguish imminent from distant obligations. A "Due this month"
+      section above a "Later" collapsible section would let Tomas focus on what needs cash
+      flow attention now without hiding the far-out items. Alternatively, graying out bills
+      beyond a configurable threshold (e.g. 60 days) would maintain the unified list while
+      visually deprioritizing the far-future items.
+
+*7. General UX / Glanceability — "What's Due This Week" use case assessment*
+- [ ] **Tomas cannot see the calendar and the bill list simultaneously.** The two most
+      useful surfaces on the page — the ordered list (what, how much, when) and the calendar
+      (where in the month do payments cluster) — are stacked sequentially with the calendar
+      below the fold. Glanceability requires both in view at once at 1280/1440px.
+- [ ] **No "due this week" grouping or highlight.** The page title implies a week-level
+      focus, but the list does not group or visually flag the "this week" cohort. At the
+      2026-06-23 snapshot, bills due in the week of June 23–29 would be zero (next bill is
+      July 1). In a typical month where July 1 is the first due date, the week grouping
+      adds little. But when multiple bills fall within a 7-day window, there is no visual
+      prominence given to that cluster. A "Due within 7 days" section header above those
+      rows would give Tomas the immediate scan line he needs.
+- [ ] **After paying a bill via "Mark paid", Tomas has no confirmation of what the remaining
+      total is.** The notice toast fires ("Rent payment logged"), but the stat grid's "Total
+      due soon" updates via `rev.Set(rev.Get() + 1)` re-render. This is correct behavior
+      (the stat recalculates), but a user who pays Rent and sees the total drop from $2,285
+      to $835 in the stat card gets a clear feedback loop. This works correctly — but cannot
+      be verified from static screenshots; it is a probe gap.
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Symptom | Fix |
+|---|------|---------|-----|
+| D1 | `glamor_11_bills_1280_light.png`, `glamor_11_bills_1440_light.png`, `glamor_11_bills_768_light.png` | Card titles "Bills" and "June 2026 calendar" near-invisible in light mode — computed `rgb(244,244,245)` on white; WCAG AA fail (≈1.02:1). Eighth consecutive page with this systemic `--fg` token failure | `h2.card-title` must use a strong foreground token in light mode; global CSS token fix |
+| D2 | `glamor_11_bills_1280_light.png`, `glamor_11_bills_1440_light.png` | Dollar amounts (`.budget-amount`) render as muted grey `rgb(86,86,92)` in light mode — the key payment figures Tomas needs to read are styled as secondary text | `.budget-amount` should use `--fg` (strong) in light mode, not a muted token |
+| D3 | `glamor_11_bills_1280_light.png`, `glamor_11_bills_1440_light.png` | Due-date + days-until metadata (`rgb(86,86,92)`) low-contrast on white in light mode — the operationally critical "due in 8 days" label is muted when not urgency-colored | `.row-meta` should use a higher-contrast token in light mode for non-urgency state |
+| D4 | `glamor_11_bills_768_dark.png`, `glamor_11_bills_768_light.png` | "Next due" stat card wraps the ISO date "2026-07-01" across two lines as "2026-07-" / "01" at 768px — the hyphenated break reads as a formatting error | Use a shorter date format at narrow widths (e.g. "Jul 1") or use a 2×2 stat grid at 768px instead of 3+1 |
+| D5 | `glamor_11_bills_1280_dark.png`, `glamor_11_bills_1440_dark.png`, `glamor_11_bills_1280_light.png` | Calendar is below the fold at all widths — the month map is a scroll destination, not a contextual aid visible alongside the list | Move calendar to a side-by-side layout at ≥1024px (list left, calendar right) so both are visible without scrolling |
+| D6 | `glamor_11_bills_1280_light.png`, `glamor_11_bills_1440_light.png` | Stat grid remains visually dark (dark card backgrounds) even when `data-theme="light"` is active — creates a two-tone page (dark header stats + white content area) | Stat cards must adopt the light-mode background token when `data-theme="light"` |
+
+**Re-screenshot close-out requirement:** After D1 (card title contrast), D2/D3 (amount and
+meta-label contrast fixes), D4 (768px date hyphenation fix), and D5 (calendar above-fold fix),
+re-run `node e2e/glamor_11_bills.mjs` and confirm: (a) card titles readable in all light
+screenshots, (b) amounts and due-date labels readable in light mode, (c) date no longer
+hyphenates at 768px, (d) calendar visible within the fold at 1280/1440, (e) all 8 screenshots
+captured cleanly.
+
+**Probe hardening**
+- Drive script uses in-app navigation (click "Bills" nav link from `/`) rather than direct
+  deep-link to `/bills` — required because `gwc dev` returns 404 for non-root paths (B1).
+- Wait condition is `.stat-grid, .card` — stat-grid is conditional on data being present;
+  fallback to `.card` accommodates the empty-state (no accounts with due-day → empty bill
+  list renders just the empty-state card without a stat-grid).
+- "View as member" reset: removes `viewAsMember` from `cashflux:prefs` before navigation.
+- Light theme set via the full localStorage recipe (set + reload + waitForFunction on
+  `data-theme="light"`) rather than a nav click.
+- Hard-reload probe: script reloads after dark screenshots and re-checks `data-theme` to
+  confirm the dark preference persists (confirmed: "dark" after reload).
+- Urgency-tone probe gap: no bills in the sample data fall within the 3-day warning or
+  overdue windows, so `text-down` / `text-warn` styling cannot be screenshot-confirmed.
+  A future fixture seeding an overdue bill and a 2-day-out bill is needed to close this gap.
+
+**Cross-references**
+- C57: "Bills clean calendar, but no mark-paid, no urgency tone, + a suspect annual figure"
+  (marked DONE 2026-06-21). Mark-paid: confirmed present (7 buttons, `markPaidCount: 7` ✓).
+  Urgency tone: code is wired, sample data has no urgency-triggering bills (evidence gap, not
+  regression). Annual figure ($23,550.00): plausible for the sample data mix of monthly + yearly
+  obligations; not confirmed suspect from this snapshot.
+- L54: Bills page verified with mark-paid working (loop story screenshots `loop54-04-bills-page.png`,
+  `loop54-11-bills-after-recurring.png`). Current audit confirms this remains correct.
+- G4/G5/G6/G7/G8/G9/G10: Same systemic `--fg` light-mode token failure — D1 is the eighth
+  consecutive page; a global CSS token fix (not per-page patch) is the only sustainable resolution.
+
+---
+
+### G10. Subscriptions — "The Subscription Audit" (Marcus & Lin) — 2026-06-23 ★
+
+**The story**
+Marcus and Lin open Subscriptions every few months to audit their recurring charges. Their
+goal in a single session: see the total monthly and annual burden at a glance, scan every
+subscription name and cost quickly, spot anything they forgot they're paying for (or haven't
+been charged for recently), identify the biggest wastes, and cancel the ones they don't need.
+The page must surface the name, cadence, amount, and next renewal of every subscription
+clearly, with the costliest charges leading. The total monthly recurring burden is the single
+most important number on the page. Cancel and remind actions must be discoverable but must not
+overwhelm the data they're acting on.
+
+**Drive script**
+`e2e/glamor_10_subscriptions.mjs` — widths 1280/1440/768, dark + light themes (light-theme
+recipe: set `cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`). Navigates
+from `/` via in-app click ("Subscriptions" nav link) to avoid the wasm deep-link 404 (B1).
+Captures 8 screenshots plus a DOM audit JSON and a light-mode contrast spot-check. Run:
+`node e2e/glamor_10_subscriptions.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_10_subscriptions.mjs` → EXIT 0
+- Screenshots captured:
+  `glamor_10_subscriptions_1280_dark.png`, `glamor_10_subscriptions_1280_dark_full.png`,
+  `glamor_10_subscriptions_1440_dark.png`, `glamor_10_subscriptions_768_dark.png`,
+  `glamor_10_subscriptions_1280_light.png`, `glamor_10_subscriptions_1280_light_full.png`,
+  `glamor_10_subscriptions_1440_light.png`, `glamor_10_subscriptions_768_light.png`
+- DOM audit: `glamor_10_subscriptions_dom.json` — 2 cards ("Subscriptions", "Recent price
+  changes"), 4 stat items (monthly $2,755.00 / yearly $33,060.00 / 10 active / 67% of spending),
+  16 rows, 10 drill buttons (all `<button>` confirmed), 10 cancel buttons, 10 remind buttons,
+  10 checkboxes, 0 share-bars, 0 review badges, 0 overflow cards, 0 page errors.
+- Stat grid confirmed above the fold: `statAboveFold: true`.
+- `dataTheme: "dark"` confirmed on dark captures; `"light"` on light captures.
+- Light contrast spot-check: `cardTitleColor: rgb(244, 244, 245)` and `rowDescColor:
+  rgb(244, 244, 245)` on white background — near-invisible (confirmed visually in all light
+  screenshots). `rowMetaColor: rgb(86, 86, 92)` and `budgetAmtColor: rgb(86, 86, 92)` —
+  low-contrast grey on white.
+- Hard-reload probe: `data-theme` persists as "dark" after hard reload (correct).
+
+**What already works well (keep — regression anchors)** ✓
+- **Stat grid is the very first element and is above the fold at all widths.** Monthly burden
+  ($2,755.00), yearly ($33,060.00), count (10), and share-of-spending (67%) are all visible
+  without scrolling at 1280 and 1440. `statAboveFold: true` DOM-confirmed. ✓
+- **Ordering is costliest-monthly-first.** DOM audit `rowAmounts` confirms descending by
+  normalized monthly cost: Rent $1,450 → Jordan's half of rent $725 → Student loan $280 →
+  Internet $70 → Phone $55 → (yearly) Insurance $540/yr → Gym $40 → (yearly) Electronics
+  warranty $420/yr → Subscriptions $30 → (yearly) Software $300/yr. The normalized sort is
+  correct by algorithm (monthly-equivalent). ✓
+- **Cadence labels are present on every row.** "Monthly · next 2026-07-01", "Yearly · next
+  2026-11-14" etc. are visible in dark screenshots. `hasCadence: true` DOM-confirmed. ✓
+- **Next-renewal dates are present on every row.** `hasNextDate: true` DOM-confirmed. ✓
+- **Drill buttons are `<button>` elements, not `<a href>`.** `drillBtnIsButton: true`,
+  `drillBtnCount: 10` — all 10 drill targets are proper interactive buttons (C56 drill
+  pattern, probe rule). ✓
+- **Cancel action writes and re-renders (L49 fix confirmed).** The `doCancel()` path calls
+  `notice.Set()` after the store write, which triggers a re-render (L49: without this the UI
+  stayed stale). This was verified in the L49 loop story and confirmed in source code comments.
+  The `notice.Set()` call is present on both `doCancel` and `doUncancel`. ✓
+- **Multi-select cancel-candidates with savings summary.** Checkboxes (`checkboxCount: 10`)
+  are present on every non-cancelled row; the savings summary bar (`[data-testid="subs-cancel-
+  savings"]`) appears dynamically when rows are selected. The bulk-cancel `data-testid="subs-
+  bulk-cancel-btn"` is wired. ✓
+- **Price-changes card present.** `hasPriceChangeCard: true` — "Recent price changes" card
+  renders when price changes are detected; uses color+arrow coding (red/up for increases,
+  green/down for decreases) matching the Reports pattern (C56/C46). ✓
+- **CSV export button present.** `hasCsvBtn: true` — "Download CSV" button is in the
+  Subscriptions card footer. ✓
+- **No horizontal overflow at any width.** `overflowCards: 0` at 1280px dark. ✓
+- **Zero JavaScript page errors.** Both dark and light sessions clean. ✓
+- **Share-of-spending stat contextualizes the total.** "67% of spending" instantly tells
+  Marcus and Lin how much of their outflow is recurring — a number unavailable in any other
+  view. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout — the central glanceability failure: subscription names invisible at 1280/1440*
+- [ ] **CRITICAL: Subscription names are NOT visible in the row list at 1280/1440 dark.**
+      At both 1280px and 1440px dark, each subscription row shows only: (checkbox) cadence ·
+      next-date · (optional /mo figure) · charge amount · Remind me · Mark as cancelled. The
+      subscription name — the drill `button.sub-drill` — is present in DOM (`drillBtnCount: 10`)
+      but is visually missing from the rendered viewport screenshots
+      (`glamor_10_subscriptions_1280_dark.png`, `glamor_10_subscriptions_1440_dark.png`). The
+      name only becomes visible at 768px (where the row reflowed to a multi-line layout and the
+      name appears as an underlined link above the cadence line). At 1280/1440 the name is likely
+      there but its color or width makes it invisible on a dark background — or the row flexbox
+      does not reserve horizontal space for it before the amount pushes it out. Confirmed via
+      visual comparison: 768 dark shows "Rent", "Jordan's half of rent" etc. as underlined
+      links; 1280/1440 dark shows NO names. Marcus cannot tell what he's cancelling. This is
+      the highest-priority structural fix on the page.
+- [ ] **Subscription name should lead the row visually, not compete with action buttons for
+      space.** The two action buttons ("Remind me" + "Mark as cancelled") together occupy
+      roughly 35–40% of the row width at 1280px. This leaves little or no room for the
+      subscription name before the amount. The button pair should be in a fixed-width trailing
+      column; the name should get the majority of the row. Confirmed in
+      `glamor_10_subscriptions_1440_light.png`: same pattern — rows read as "cadence-date /
+      amount / Remind me / Mark as cancelled" with no visible name.
+- [ ] **No share-bars or proportional visualizations in the subscription list.** The category
+      rows in Reports have `.share-bar` elements (30 confirmed in G9 DOM audit). Subscription
+      rows have none (`shareBars` not present in DOM audit). With $1,450 Rent dominating 53%
+      of the monthly subscription total, a proportional bar behind each row would make "Rent is
+      most of the bill" instantly obvious — Marcus would not need to mentally compute the ratios
+      from the dollar figures. A share-bar per row (width = MonthlyAmount / MonthlyTotal ×
+      100%) would give the page the glanceability it currently lacks.
+
+*2. Spacing — row density and action button dominance*
+- [ ] **"Mark as cancelled" button is oversized (full `.btn-danger` at every row) and
+      dominates the visual weight of the page.** In all dark and light screenshots, the red
+      "Mark as cancelled" button is the highest-contrast element in the list — brighter than
+      the subscription name, brighter than the amount. With 10 rows each carrying one, the
+      page reads as "10 cancel alerts" rather than "a list of subscriptions with an optional
+      cancel action". The primary action should be reading the list; cancel is a secondary
+      destructive action. Reduce to a compact ghost/secondary button or a kebab menu icon (⋯)
+      that reveals the full actions on hover/focus. Confirmed in
+      `glamor_10_subscriptions_1280_dark.png` and `glamor_10_subscriptions_1280_light.png`.
+- [ ] **At 768px the "Mark as cancelled" button breaks outside its row on yearly subscriptions.**
+      For the yearly Insurance row (6th item), the action buttons overflow onto a standalone
+      full-width row in `glamor_10_subscriptions_768_dark.png` — a large isolated red button
+      that appears to be a page-level action rather than belonging to the subscription above it.
+      This is a mobile layout collision. The row must either stack its actions inline within
+      the row or give the buttons a max-width so they don't break out.
+
+*3. Theming — systemic light-mode token failure (G4–G9 pattern recurring)*
+- [ ] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
+      G4–G9).** Computed style: `cardTitleColor: rgb(244, 244, 245)` on a white card
+      background — effectively white-on-white. "Subscriptions" and "Recent price changes"
+      card titles are invisible in `glamor_10_subscriptions_1280_light.png`,
+      `glamor_10_subscriptions_1440_light.png`, and `glamor_10_subscriptions_768_light.png`.
+- [ ] **Subscription names (`.row-desc` / `button.sub-drill`) near-invisible in light mode.**
+      Computed style: `rowDescColor: rgb(244, 244, 245)` — the same near-white-on-white as
+      card titles. In `glamor_10_subscriptions_1280_light_full.png` the subscription names
+      "Rent", "Jordan's half of rent", "Student loan payment" etc. that ARE visible at 768px
+      dark are completely invisible in light mode at all widths. At 1280/1440 the names are
+      already missing in dark mode (Layout D1 above); in light mode they are doubly invisible.
+      WCAG AA requires ≥4.5:1 for normal text; `rgb(244, 244, 245)` on white is ≈1.02:1 — a
+      complete fail. Cross-reference G4/G5/G6/G7/G8/G9 D1.
+- [ ] **Row metadata (cadence/date) low-contrast in light mode.** `rowMetaColor:
+      rgb(86, 86, 92)` — the "Monthly · next 2026-07-01" cadence lines are already secondary
+      text but their contrast on a white background is marginal (approx 4.3:1, just under
+      WCAG AA 4.5:1). In `glamor_10_subscriptions_1280_light_full.png` the cadence labels are
+      the ONLY readable text in each row (names invisible, amounts grey).
+- [ ] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
+      rgb(86, 86, 92)`. The charge amounts ($1,450.00, $725.00 etc.) — the key numbers Marcus
+      and Lin are here to read — render as secondary grey text in light mode. They should use
+      `--fg` (strong) not a muted token. Confirmed in `glamor_10_subscriptions_1280_light.png`.
+- [ ] **Stat labels low-contrast in light mode.** `statLabelColor: rgb(86, 86, 92)` on the
+      white stat card background. "MONTHLY SUBSCRIPTIONS", "YEARLY SUBSCRIPTIONS" labels are
+      near-invisible in light mode; only the red/black stat values remain readable. Confirmed
+      in `glamor_10_subscriptions_1280_light.png`.
+
+*4. Styling — typography and visual hierarchy in the subscription row*
+- [ ] **The row's information hierarchy is inverted.** From left to right each row renders:
+      checkbox / cadence · next-date / (/mo figure if yearly) / amount / Remind me / Mark as
+      cancelled. The subscription NAME — the most important identifier — is either missing at
+      1280/1440 (Layout D1) or appears only at 768px as a second-line label above the cadence.
+      The correct hierarchy: Name (primary, large) → cadence · next-date (secondary, smaller)
+      → amount (right-aligned, bold) → actions (trailing, compact). Currently the cadence
+      comes before the name.
+- [ ] **Yearly subscriptions show a "/mo" normalized figure that can confuse Marcus.** Row 6
+      (Insurance, yearly $540) shows "$45.00 / mo · $540.00" — two dollar figures for one
+      subscription. The intent (C56: "only show /mo when it differs from the actual charge")
+      is correct but the rendering places the smaller /mo figure to the LEFT of the actual
+      charge, so the row reads "$45.00 / mo $540.00 [Remind me] [Mark as cancelled]". A user
+      seeing "$45.00" first may read that as the monthly charge and be confused why the card
+      total doesn't match. Consider labelling more explicitly: "· $45/mo avg" or placing the
+      actual charge amount first with the /mo as a subscript.
+- [ ] **No "needs review" badges visible despite the sample data including stale
+      subscriptions.** `reviewBadges: 0` in DOM audit. The sample data subscriptions (Rent,
+      Insurance, etc.) presumably have recent charges so none qualify, but if any sub hasn't
+      been charged in 2+ cadence intervals the `.review-nudge` badge should appear. The badge
+      exists in source code — this is an evidence gap, not necessarily a bug, but a visual
+      audit of the badge's styling is not possible from this dataset.
+
+*5. Positioning — total recurring burden should dominate*
+- [ ] **Monthly total ($2,755.00) uses the same card size as Yearly ($33,060.00), Active
+      count (10), and Share of spending (67%).** At 1280px all four stat cards are equal width
+      and equal visual weight. The monthly recurring burden is the single number that answers
+      "what do we owe every month?" — it should be typographically dominant (larger value
+      font, or a full-width hero stat) while the other three are supporting context. Currently
+      the grid treats all four as equal-weight stat cards. Confirmed in
+      `glamor_10_subscriptions_1280_dark.png`.
+- [ ] **"Price changes" card is positioned immediately after the main list but carries no
+      glanceability cue about whether changes are net-positive or net-negative.** A Marcus
+      & Lin audit moment: they see the price changes card but must read each row to determine
+      if their recurring costs went up overall. A one-line summary above the price-change rows
+      ("Your subscriptions cost $X more / less per month than 90 days ago") would give
+      instant context. The card has no such summary line — it is a raw list of changes.
+
+*6. Ordering — display amount vs normalized amount creates apparent disorder*
+- [ ] **The charge amounts displayed in the row appear out of descending order to the user.**
+      The list is sorted by normalized monthly cost (correct algorithm), but what the user
+      reads is the raw charge amount. Row sequence: Rent $1,450 → $725 → $280 → $70 → $55 →
+      [then] $540 (yearly Insurance). A user scanning the dollar column reads $1,450 / $725 /
+      $280 / $70 / $55 / $540 — the $540 jump after $55 looks like a sort error, not the
+      correct monthly-equivalent ordering. Either (a) always display the monthly-normalized
+      amount as the primary figure (with actual charge as a secondary label) so the visual
+      order matches the sort order, or (b) add a visual cadence indicator (badge: "YEARLY")
+      before the amount so Marcus understands why $540 appears after $55.
+- [ ] **"Active subscriptions: 10" count includes the sample dataset subscriptions, not just
+      user-added ones.** This is not an ordering bug, but for a new user starting fresh (no
+      transactions) the stat would show "0 active subscriptions" and the page would render
+      empty. The empty-state CTA ("Add your first transaction to detect subscriptions" →
+      `/transactions`) is coded but not visible in any screenshot. The empty-state path cannot
+      be confirmed or denied from this audit.
+
+*7. General UX / Glanceability — "The Subscription Audit" use case assessment*
+- [ ] **Marcus cannot perform the core audit task (name + cost) at 1280/1440 because the
+      subscription names are invisible.** The stat grid tells him the total ($2,755/mo, $33k/yr)
+      but he cannot scan which subscriptions make up that total without names visible. The
+      most critical UX fix is ensuring the name is the first and most prominent element in
+      each row across all viewport widths. Cross-reference Layout D1 (above).
+- [ ] **No "wasteful subscription" surfacing beyond the "needs review" badge.** A subscription
+      that was charged 3 months ago but not since is the easiest catch (stale). But there is
+      no "you haven't used this in 3 months" or "this went up 20%" prominence on the list —
+      the price-changes card is separate, not integrated into the row. A Marcus-and-Lin audit
+      would benefit from a subtle "⚠ price increased" icon inline on the subscription row
+      where a price change was detected.
+- [ ] **Cancel multi-select is discoverable only if you notice the checkboxes.** The 10
+      checkboxes are present but visually light (unchecked, no label). A user who doesn't see
+      them will cancel subscriptions one by one. A short "Select to bulk-cancel →" label or
+      a visible "Select all" affordance at the top of the list would make the multi-select
+      pattern discoverable. Confirmed: `hasSavingsBar: false` (no rows selected, so the
+      savings bar is not rendered and there is no prompt to use multi-select).
+- [ ] **No "Renewing soon" card visible in the current data snapshot.** `hasRenewingSoonCard:
+      false` in DOM audit. The card appears only when a subscription renews within 7 days
+      (B25 spec). This is correct behavior — the current snapshot has no imminent renewals —
+      but the 7-day window means Marcus may miss an upcoming charge until the day it appears
+      in the "Renewing soon" card. A 14-day or 30-day configurable window would give more
+      lead time.
+- [ ] **"Download CSV" button is at the bottom of the Subscriptions card, below all 10 rows.**
+      At 1280px with 10 subscriptions, the export button is well below the fold. Marcus
+      who wants to export his subscription list for a spreadsheet audit must scroll past all
+      10 rows to reach it. Moving "Download CSV" to the card header (alongside the card title)
+      would match the Reports page pattern (where per-section exports are in the header row)
+      and keep the export path above the fold.
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Symptom | Fix |
+|---|------|---------|-----|
+| D1 | `glamor_10_subscriptions_1280_dark.png`, `glamor_10_subscriptions_1440_dark.png` | Subscription names absent from row list at 1280/1440px dark — only cadence, date, amount, and action buttons visible; names visible only at 768px | Fix row flexbox to always allocate space for the name before the cadence/amount columns; `button.sub-drill` must be fully visible at all widths |
+| D2 | `glamor_10_subscriptions_1280_light.png`, `glamor_10_subscriptions_1280_light_full.png`, `glamor_10_subscriptions_1440_light.png`, `glamor_10_subscriptions_768_light.png` | Card titles and subscription names near-invisible in light mode — computed `rgb(244,244,245)` on white; WCAG AA fail (≈1.02:1). Same systemic `--fg` token failure as G4–G9 | `h2.card-title` and `button.sub-drill` must use `--fg` or a full-weight token in light mode |
+| D3 | `glamor_10_subscriptions_1280_light.png`, `glamor_10_subscriptions_1440_light.png` | Dollar amounts (`.budget-amount`) low-contrast grey `rgb(86,86,92)` in light mode — the charge figures Marcus is here to read are styled as muted secondary text | `.budget-amount` should use `--fg` (strong) not muted token in light mode |
+| D4 | `glamor_10_subscriptions_1280_light.png` | Stat labels (`rgb(86,86,92)`) low-contrast on white stat cards in light mode — "MONTHLY SUBSCRIPTIONS" label faint; only the coloured value remains readable | Stat label token needs higher-contrast value in light mode |
+| D5 | `glamor_10_subscriptions_1280_dark.png`, `glamor_10_subscriptions_1280_light.png` | "Mark as cancelled" is a full `.btn-danger` on every row — 10 high-prominence red buttons dominate the visual field and obscure the data being audited | Reduce to compact ghost/secondary or a kebab action menu (⋯); keep full red button only in the savings summary bar bulk-action |
+| D6 | `glamor_10_subscriptions_768_dark.png` | At 768px the action buttons for the 6th row (yearly Insurance) break out of the row and render as a standalone full-width "Mark as cancelled" button below the row, orphaned from its subscription | Fix 768px row layout: action buttons must remain inside their row; use `flex-wrap` with the button group self-contained |
+| D7 | `glamor_10_subscriptions_1280_dark.png`, `glamor_10_subscriptions_1440_dark.png` | "Mark as cancelled" `btn-danger` buttons appear in the sample-data banner region — the top portion of the dark screenshots shows the red sample-data dismiss banner interfering visually with the red cancel buttons below, creating a wall of red above the stat grid | This is a sample-data banner layout issue compounding D5; the stat grid should be visually separated from the banner; the banner's dismissal is available but not obvious |
+
+**Re-screenshot close-out requirement:** After D1 (name visibility at 1280/1440), D2/D3/D4
+(light-mode contrast fixes), and D5 (action button weight reduction), re-run
+`node e2e/glamor_10_subscriptions.mjs` and confirm: (a) subscription names visible in all dark
+screenshots, (b) card titles and names readable in light mode, (c) amounts readable in light
+mode, (d) action buttons less visually dominant than the name and amount columns, (e) all 8
+screenshots captured cleanly.
+
+**Probe hardening**
+- Drive script uses in-app navigation (click "Subscriptions" nav link from `/`) rather than
+  direct deep-link to `/subscriptions` — required because `gwc dev` returns 404 for non-root
+  paths (B1).
+- Wait condition is `.stat-grid, .card` — the stat-grid is conditional on data being present;
+  fallback to `.card` accommodates the empty-state (no detected subscriptions renders just the
+  empty-state card without a stat-grid).
+- "View as member" reset: removes `viewAsMember` from `cashflux:prefs` before navigation.
+- Light theme is set via the full localStorage recipe (set + reload + waitForFunction on
+  `data-theme="light"`) rather than a nav click.
+- Hard-reload probe: the drive script reloads after dark screenshots and re-checks `data-theme`
+  to confirm the dark preference persists (confirmed: "dark" after reload).
+- Probe rule: `drillBtnIsButton: true` asserts all drill targets are `<button>` not `<a href>`
+  (C56 compliance) — passes.
+
+**Cross-references**
+- C56: "Subscriptions is clean detection, but read-only with no user correction or drill-down"
+  — The drill-down and cancel actions are now implemented (L49/C56 fixes). D1 (names invisible
+  at 1280/1440) effectively restores the "read-only feel" since Marcus cannot identify what he
+  is drilling into. The `button.sub-drill` exists in DOM but is not rendered visibly.
+- L49: cancel writes but doesn't re-render (re-render bug) — confirmed FIXED in source code
+  (both `doCancel` and `doUncancel` call `notice.Set()` which triggers re-render). The L49
+  loop story `l49_step3_subs_after_cancel.png` showed "Undo cancel" button appearing. ✓
+- G4/G5/G6/G7/G8/G9: Same systemic `--fg` light-mode token failure — D2/D3/D4 are the seventh
+  page to exhibit this; a global token fix (not per-page patch) is the only sustainable
+  resolution.
+
+---
+
 ### G9. Reports — "The Monthly Review" (Priya) — 2026-06-23 ★
 
 **The story**
