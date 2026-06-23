@@ -1544,7 +1544,7 @@ and a couple of input affordances:
       Expected return / Liquidity / Stability / Lock-until inline — all advanced/optional. Tuck them behind an
       **"Advanced" disclosure** so the common path (name · type · owner · currency · opening balance) stays a
       short, calm form. Same for the inline-edit grid.
-- [ ] **Row primary actions render icon + text and may wrap on narrow screens** (Transactions, Edit). On small
+- [x] **Row primary actions render icon + text and may wrap on narrow screens** (Transactions, Edit). On small
       widths collapse to icon-only with tooltip/`aria-label` to avoid wrapping. Cross-link **C10/C19**
       (responsive).
 - [x] **Verify** after changes: every field has a discoverable label; currency can only be a valid code;
@@ -1571,7 +1571,7 @@ oversized.** Polish opportunities:
 - [x] **No drill-down from a budget to its transactions.** A budget row should be clickable to open
       Transactions filtered to that category (mirror the Accounts→Transactions and dashboard tile-click
       pattern, **C30**) — a natural "why am I over?" affordance that's currently missing.
-- [ ] **Edit action is icon+text inline in the row head** — same narrow-screen wrap risk as other rows;
+- [x] **Edit action is icon+text inline in the row head** — same narrow-screen wrap risk as other rows;
       collapse to icon-only on small widths. Cross-link **C10/C19** (responsive).
 - [x] **Verify** after changes: rows stay scannable when pace+rollover+envelope all apply; form fields are
       labelled; risk summary uses tone+shape; clicking a budget lands on its filtered transactions.
@@ -1618,7 +1618,7 @@ B15-compliant), and proper empty / all-done states. **Buttons aren't oversized.*
       meta + optional sort-to-top) so the list is actionable at a glance.
 - [x] **Only filter is hide-done.** Consider a lightweight priority/status filter (or grouping by High /
       Medium / Low) for longer lists — pairs with the general long-list concern in **C39** if task counts grow.
-- [ ] **Edit action is icon+text inline** — same narrow-screen wrap risk as other rows; icon-only on small
+- [x] **Edit action is icon+text inline** — same narrow-screen wrap risk as other rows; icon-only on small
       widths. Cross-link **C10/C19**.
 - [x] **Long notes shown inline as `row-meta`** could overflow the row; truncate with a tooltip/expand for
       long notes.
@@ -1719,7 +1719,7 @@ auto-detects recurring charges from history (`subscriptions.Detect`), shows mont
 **share-of-spending** gauge, normalized "/mo" for non-monthly subs (smart: hidden when it equals the charge),
 a **price-changes** card, a **renewing-soon** card, a **remind-me-to-cancel** action that files a dated task,
 and CSV export. **Buttons aren't oversized.** The gaps are about user control and trust in the detection:
-- [ ] **Detection is read-only with no correction path.** A heuristic that flags subscriptions from 2+
+- [x] **Detection is read-only with no correction path.** A heuristic that flags subscriptions from 2+
       matches will have false positives/negatives, but the user can't **confirm**, **ignore/dismiss** ("not a
       subscription"), or **manually add** a known subscription. Add per-row confirm/ignore (persisted) and a
       manual-add affordance so the list can be trusted and curated. _Highest-value gap._
@@ -1837,7 +1837,7 @@ oversized.** Gaps:
       `Input(text)`, and the AI's category string may not match any existing category — so imports can create
       orphan/typo categories. Make it a select/autocomplete of existing categories (with "create new" as an
       explicit choice). _Correctness-adjacent_; cross-link Categories + Rules (auto-categorize).
-- [ ] **CSV is paste-only.** There's a file picker for images but CSV must be pasted into a textarea — clunky
+- [x] **CSV is paste-only.** There's a file picker for images but CSV must be pasted into a textarea — clunky
       for real `.csv` files. Add a CSV **file picker + drag-and-drop** (and consider a column-mapping step so
       non-matching headers still import). Cross-link **B1**-adjacent import robustness.
 - [x] **"Needs key" is a dead-end** again (vision import shows `needKey` with no link). Route it to Settings →
@@ -1916,7 +1916,7 @@ CTAs. **Buttons aren't oversized.** Issues (one is a correctness/data risk):
 - [x] **Labelling gaps:** name is placeholder-only; the kind + parent selects (add and edit) and the reassign
       select lack `aria-label`s (color is labelled). Add labels + focus the reassign panel on open. Cross-link
       **B15**, **C62**.
-- [ ] **Edit action is icon+text** — narrow-screen wrap risk; icon-only on small widths (**C10/C19**).
+- [x] **Edit action is icon+text** — narrow-screen wrap risk; icon-only on small widths (**C10/C19**).
 - [x] **Verify** after changes: reassign only offers same-kind targets; nesting reads cleanly without
       em-dashes; rows show usage + drill into transactions; all controls labelled.
 
@@ -1961,7 +1961,7 @@ oversized.** Gaps:
 - [x] **Staged actions can't be removed before saving.** The action builder only **adds**; the staged list is
       plain text with no remove/reorder, so a mistaken action means starting over. Add per-staged-row remove
       (and ideally reorder). Cross-link **C64** (rules ordering), **B2** (drag).
-- [ ] **The condition is a raw formula string with no help.** It's placeholder-only with no examples, variable
+- [x] **The condition is a raw formula string with no help.** It's placeholder-only with no examples, variable
       reference, or validation feedback — unlike Customize, which has example buttons + a variable list. Share
       that formula help/variable reference here (and validate before save). Cross-link **C61**.
 - [x] **Heading hierarchy is inconsistent** — this screen uses `H3` for card titles while the rest of the app
@@ -2234,11 +2234,11 @@ an adoption + decomposition refactor (behavior-preserving), done **bottom-up, on
   - [ ] **`FormField`** — label + control + inline error (fixes placeholder-only labelling across C49–C65/B15).
   - [ ] **`Select`/`OptionsFrom(items, selected, keyFn, labelFn)`** — kills the 103× option loops; pairs with FormField.
   - [ ] **`EntityRow`** — swatch/icon · title · meta · primary actions · `⋯` overflow (unifies the row display halves).
-  - [ ] **`InlineEditForm`** — the `row-edit` + `form-grid` wrapper repeated on every CRUD screen.
+  - [x] **`InlineEditForm`** — the `row-edit` + `form-grid` wrapper repeated on every CRUD screen.
   - [ ] **`IconButton`/`IconTextButton`** (16×) + **`DeleteButton`** (18×) + **`ExportButton`** (14×, wraps `downloadBytes`).
-  - [ ] **`OverflowMenu`** (the `add-wrap`/`add-menu` pattern) + **`ReassignDialog`** (Members C62 + Categories C63).
+  - [x] **`OverflowMenu`** (the `add-wrap`/`add-menu` pattern) + **`ReassignDialog`** (Members C62 + Categories C63).
   - [ ] **`StatGrid`/`Stat`** (promote the `stat()` helper) (9×).
-  - [ ] **`TreeRows`** — indented rows + expand/collapse (Categories C63, Tasks C72).
+  - [x] **`TreeRows`** — indented rows + expand/collapse (Categories C63, Tasks C72).
   - [ ] **Replace ad-hoc inline `Style{}` (39×)** with utility classes / component props (no scattered inline styles).
 
 **Decompose super-components (single responsibility; ≲100 lines; hooks stable; no `On*` in loops).**
@@ -18054,6 +18054,64 @@ The probe script (`gm_04_palette_gear.mjs`) correctly:
 
 Cross-references: **C68** (command palette done, a11y gaps remain), **B12** (per-widget gear settings wired and functional; save feedback gap), **C11** (CloseOnly empty-panel — structurally present; visual quality unreviewed).
 
+---
+
+### GI0. BUILD BLOCKER — wasm tree does not compile (resolve before GI1–GI3) ★★
+
+The repo currently fails `GOOS=js GOARCH=wasm go build` due to **uncommitted C78 audit-log WIP**:
+`internal/screens/activity.go` imports `internal/app` (for `UndoEntries`/`UndoNow`/`CanUndoNow`), but
+`internal/app` composes `internal/screens` → **import cycle not allowed**. New WIP files involved:
+`internal/auditlog/`, `internal/screens/activity.go`, `internal/app/auditview.go`,
+`internal/appstate/subscription_ops.go`.
+- [x] Fixed: `internal/screens/documents.go` `recordDocument` closure called before declaration (moved up).
+- [ ] **Resolve the cycle**: relocate the undo/audit accessors (`UndoEntries`/`UndoNow`/`CanUndoNow`) from
+      `internal/app` into a shared lower package (`internal/appstate` or `internal/auditlog`) that both
+      `app` and `screens` may import — OR pass the audit feed into the Activity screen via props instead of
+      importing `app`. (Architecture decision on the half-built C78 feature.)
+- [ ] Until then, screen-structure changes (GI1–GI3) cannot be rebuilt/verified with screenshots.
+- [x] DONE (already landed): global light-mode token fixes in `web/index.html` (G23 Tier-1) — `.fig`
+      foreground pinning, light app/body background `#f7f6f3` (kills black inter-card bands), `.btn-primary`
+      white label in light, `--text-dim` bumped to `#4b4b52` for AA. Served statically; live now.
+
+### GI1. IMPLEMENT — Rules page glamor (from G18) ★
+
+- [ ] **Reorder cards** so the user's own data leads: `[Your rules, Rule order, Suggested rules]` — today
+      the tall "Suggested rules" card pushes "Your rules" entirely below the fold at 1280/1440/768.
+- [ ] **Collapse "Suggested rules" to ~5** with a "Show all" toggle (currently 15 rows fill the viewport).
+- [ ] **Add an on-page add-rule row** (match + category + tags + Add) at the top of "Your rules" — today the
+      only entry point is the global "+" menu.
+- [ ] **Demote the 15 suggestion "Add" buttons** from `.btn-primary` (loud green band) to secondary/outline.
+- [ ] **Inline-edit Save** → `width: fit-content` (currently full card width ≈480px).
+- [ ] **Drag-to-reorder discoverability**: add subtitle hint "Drag ⠿ to reorder — first match wins" (C64 grips
+      exist but read as non-interactive).
+- [ ] Verify in BOTH themes after the GI0 build is green; re-screenshot.
+
+### GI2. IMPLEMENT — Categories page glamor (from G17) ★
+
+- [ ] **Add an in-card "+ Add category" button** in each kind card header (today the only entry is the command
+      palette — invisible to most users; every other CRUD screen has one).
+- [ ] **Move "Category map"** above/beside the lists (today it's card 3, below 22+ rows — never seen on arrival).
+- [ ] **Afford the usage count as clickable** (button/link style) — "26 transactions" reads identically to the
+      kind label; the drill works but isn't discoverable.
+- [ ] **Sub-category nesting cue**: add a subtle background fill on child rows (current ~2-3px left border is
+      missed, esp. at 768px).
+- [ ] **Dim zero-usage categories** ("· No transactions") so safe-to-delete ones are spottable at a glance.
+- [ ] **Add a "sort by usage" toggle** for cleanup audits (currently alphabetical only).
+- [ ] Verify in BOTH themes after GI0; re-screenshot.
+
+### GI3. IMPLEMENT — Workflows page glamor (from G19) ★
+
+- [ ] **Collapse the per-row Mermaid flowchart by default** (4 workflows render ~2000px of diagrams; run
+      history is unreachable without extreme scrolling) — add an expand toggle.
+- [ ] **Add inline Edit** for existing workflows (C65 top gap — delete+recreate is the only mutation path today).
+- [ ] **Move the condition input to its own full-width row** (truncates to ~10 chars in the 3-col form grid).
+- [ ] **Invert button hierarchy**: make "Dry run" the primary action and "Run now" secondary (simulation-first
+      page); ensure "Run now" label is white-on-green in light (covered by GI0 global fix — verify).
+- [ ] **Heading hierarchy**: card titles `H3 → H2`; add `<label>`s to the builder inputs (a11y).
+- [ ] **Condition variable reference** (C65 still open): surface valid identifiers near the condition field.
+- [ ] Verify in BOTH themes after GI0; re-screenshot.
+
+---
 
 ## 0. Foundation & tooling (Phase 0)
 
