@@ -96,6 +96,7 @@ and every commit updates this file under `Unreleased`.
   a shared e2e `ready()` helper + forms-a11y gate (L12/L7). Confirmed many items already shipped.
 
 ### Changed
+- **GLAMOR series, GX17 loading states (2026-06-23).** **Loading & skeleton states (GX17):** thinking-bubble now visible in light mode (`.insights-thinking` CSS class + `[data-theme="light"]` rule), boot-ring-arc stroke pinned to mid-grey in light mode (GX17-F6), and all three Allocate AI i18n keys (`allocate.explainAINarrative`, `allocate.explainAI`, `allocate.thinking`) verified present. GX17-F2/F3/F5 deferred (GO-STRUCTURAL, build-gated).
 - **Systemic light-mode tokens (GX14):** CSS `!important` surface/text pins verified live across all surfaces; theme-engine root fix deferred (build-gated).
 - **GLAMOR series, GX16 charts in light mode (2026-06-23).** **Charts in light mode (GX16):** D3 axis text, Reports hero secondary stats, Mermaid/Sankey node text, and `.reports-hero` card now readable in light mode.
 - **GLAMOR series, GX13 budgets re-check (2026-06-23).** **Budgets re-check (GX13):** light-mode stat tiles, bar tracks, category-name .budget-drill contrast, row separators.

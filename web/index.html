@@ -165,6 +165,17 @@
       [data-theme="light"] .boot-c, [data-theme="light"] .boot-word { color: #1c1c1e; }
       [data-theme="light"] .boot-sub { color: #56565c; }
       [data-theme="light"] .boot-ring-track { stroke: #e4e2dd; }
+      /* GX17-F6: boot-ring-arc stroke is var(--accent) which can disappear against a
+         light background; pin to a visible mid-grey so the spinning arc is always legible
+         in light mode regardless of the chosen accent colour. */
+      [data-theme="light"] .boot-ring-arc { stroke: #56565c; }
+
+      /* GX17-F1: insights "thinking" bubble — bg-black/4 is invisible on white; pin to
+         the border surface colour so the bubble reads as a distinct card in light mode. */
+      [data-theme="light"] .insights-thinking {
+        background: var(--border, #e4e2dd);
+        color: var(--text, #1c1c1e);
+      }
 
       /* Display scale: zoom the whole app by the user's preference (default 1). */
       #app { zoom: var(--ui-scale, 1); }

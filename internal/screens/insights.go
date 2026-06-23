@@ -767,7 +767,7 @@ func Insights() ui.Node {
 			},
 		),
 		If(loading.Get(), Div(css.Class(tw.Flex, tw.JustifyStart),
-			Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py2, tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
+			Div(css.Class("insights-thinking", tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py2, tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
 		)),
 	)
 
