@@ -4,6 +4,7 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/domain"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -23,9 +24,9 @@ func ImportHistoryList(props importHistoryListProps) ui.Node {
 	docs := props.Docs
 	accounts := props.Accounts
 
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("documents.historyTitle")),
-		IfElse(len(docs) == 0,
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("documents.historyTitle"),
+		Body: IfElse(len(docs) == 0,
 			P(css.Class("empty"), uistate.T("documents.historyEmpty")),
 			Div(css.Class("rows"), MapKeyed(docs,
 				func(d domain.Document) any { return d.ID },
@@ -42,5 +43,5 @@ func ImportHistoryList(props importHistoryListProps) ui.Node {
 				},
 			)),
 		),
-	)
+	})
 }

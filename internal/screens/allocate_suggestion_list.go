@@ -4,6 +4,7 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/allocate"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -47,14 +48,16 @@ func SuggestionList(p suggestionListProps) ui.Node {
 	}
 
 	return Fragment(
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("allocate.suggestionsTitle")),
-			listBody,
-		),
-		If(len(p.ExcludedRows) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("allocate.excludedTitle")),
-			P(css.Class("muted"), uistate.T("allocate.excludedDesc")),
-			Div(css.Class("rows"), p.ExcludedRows),
-		)),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("allocate.suggestionsTitle"),
+			Body:  listBody,
+		}),
+		If(len(p.ExcludedRows) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("allocate.excludedTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("allocate.excludedDesc")),
+				Div(css.Class("rows"), p.ExcludedRows),
+			),
+		})),
 	)
 }

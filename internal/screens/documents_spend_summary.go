@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/spendsummary"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -58,9 +59,11 @@ func SpendSummaryCard(props spendSummaryCardProps) ui.Node {
 		))
 	}
 
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("documents.summaryTitle")),
-		P(css.Class("muted"), uistate.T("documents.summaryDesc")),
-		Div(css.Class("rows"), sumRows),
-	)
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("documents.summaryTitle"),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("documents.summaryDesc")),
+			Div(css.Class("rows"), sumRows),
+		),
+	})
 }

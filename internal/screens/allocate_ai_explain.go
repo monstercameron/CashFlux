@@ -3,6 +3,7 @@
 package screens
 
 import (
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -26,20 +27,22 @@ func AiExplainCard(p aiExplainCardProps) ui.Node {
 	if !p.HasRanked {
 		return Fragment()
 	}
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("allocate.whyTitle")),
-		Button(css.Class("btn"), Type("button"), OnClick(p.OnExplain), IfElse(p.AiLoading, Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAI")))),
-		If(p.AiErr != "", Div(css.Class("err"), Attr("role", "alert"),
-			Text(p.AiErr),
-			If(p.AiErr == p.NeedKeyMsg,
-				Button(css.Class("btn"), Type("button"),
-					Attr("aria-label", "Open Settings to add your AI key"),
-					Style(map[string]string{"margin-left": "0.5rem"}),
-					OnClick(p.OnGoToSettings),
-					"Open Settings",
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("allocate.whyTitle"),
+		Body: Fragment(
+			Button(css.Class("btn"), Type("button"), OnClick(p.OnExplain), IfElse(p.AiLoading, Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAI")))),
+			If(p.AiErr != "", Div(css.Class("err"), Attr("role", "alert"),
+				Text(p.AiErr),
+				If(p.AiErr == p.NeedKeyMsg,
+					Button(css.Class("btn"), Type("button"),
+						Attr("aria-label", "Open Settings to add your AI key"),
+						Style(map[string]string{"margin-left": "0.5rem"}),
+						OnClick(p.OnGoToSettings),
+						"Open Settings",
+					),
 				),
-			),
-		)),
-		If(p.AiResult != "", P(css.Class("muted"), p.AiResult)),
-	)
+			)),
+			If(p.AiResult != "", P(css.Class("muted"), p.AiResult)),
+		),
+	})
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -140,11 +141,13 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 		)
 	}
 
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("documents.reviewTitle", plural(len(rows), "transaction"))),
-		P(css.Class("muted"), uistate.T("documents.reviewDesc")),
-		props.Toggle,
-		Div(css.Class("rows"), items),
-		footer,
-	)
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("documents.reviewTitle", plural(len(rows), "transaction")),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("documents.reviewDesc")),
+			props.Toggle,
+			Div(css.Class("rows"), items),
+			footer,
+		),
+	})
 }
