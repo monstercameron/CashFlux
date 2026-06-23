@@ -69,15 +69,23 @@ build, run, test, and browser-driving while developing** rather than ad-hoc `go`
 
 ## Build / run / test
 
+The app's static assets (vendored JS — d3/mermaid/chart/marked/purify/flip/muzak —
+`wasm_exec.js`, `manifest.webmanifest`, `sw.js`) and the built wasm (`bin/main.wasm`) all
+live under **`web/`**, and `web/index.html` references them root-relative (`<base href="/">`).
+So **the server's static root must be `web/`**, not the project root.
+
 ```powershell
-# Inner loop (live reload):
-.\.tools\gwc.exe dev -app .\main.go -root .
+# Inner loop (live reload — rebuilds wasm on change, serves the app on :8080).
+# CRITICAL: -root MUST be .\web (where the vendored JS + manifest + wasm live), NOT . —
+# with -root . the static assets (d3/mermaid/chart/...) 404. Point -wasm at web\bin so the
+# built wasm lands where index.html expects it (./bin/main.wasm).
+.\.tools\gwc.exe dev -app .\main.go -root .\web -html .\web\index.html -wasm .\web\bin\main.wasm
 
 # Health check the toolchain:
 .\.tools\gwc.exe doctor
 
-# Build wasm directly:
-$env:GOOS="js"; $env:GOARCH="wasm"; go build -o .\static\bin\main.wasm .
+# Build wasm directly (into the served dir):
+$env:GOOS="js"; $env:GOARCH="wasm"; go build -o .\web\bin\main.wasm .
 
 # Tests — native logic packages (no wasm needed) MUST pass here:
 go test ./...
@@ -86,7 +94,11 @@ go test ./...
 .\.tools\gwc.exe test -lane unit -lane wasm
 ```
 
-Build artifacts (`bin/`, `static/bin/`, `static/wasm_exec.js`) and `.tools/` are git-ignored.
+Note: `gwc dev` serves the shell at `/` and SPA routes work via in-app navigation, but it has
+no history fallback, so a **hard-refresh directly on a sub-route** (e.g. `/workflows`) 404s the
+route itself (B1) — load `/` and navigate, or use the deep-link-aware server in `e2e/serve.go`.
+
+Build artifacts (`web/bin/`, `web/wasm_exec.js`) and `.tools/` are git-ignored.
 
 ## Code-quality rules (non-negotiable)
 
