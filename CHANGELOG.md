@@ -36,7 +36,10 @@ and every commit updates this file under `Unreleased`.
   pills stay outlined in light mode, and the starter chips get a softer dedicated pill style.
   **Documents (G14):** parsed-statement review rows now render *below* the statement card (not above
   it), and the neutral draft-import amounts are readable in light mode (scoped so the green/red
-  semantic amount colors are preserved). This completes the GLAMOR per-page review series (G1–G14).
+  semantic amount colors are preserved). **Customize (G15):** the formula calculator now leads the
+  page (above the custom-fields manager, behind a section divider) instead of being buried below the
+  fold, and the variable-reference amounts are readable in light mode. This completes the GLAMOR
+  per-page review series (G1–G15).
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**

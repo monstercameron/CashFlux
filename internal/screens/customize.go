@@ -140,7 +140,9 @@ func Customize() ui.Node {
 	}
 
 	return Div(
-		CustomFieldsManager(),
+		// Lead with the formula calculator (G15 §1): it's the featured power-user tool,
+		// so it goes above the fold — the custom-fields manager (an advanced secondary
+		// feature) moves below a section divider rather than burying the calculator.
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("customize.calcTitle")),
 			P(css.Class("muted"), uistate.T("customize.calcDesc")),
@@ -169,6 +171,10 @@ func Customize() ui.Node {
 			H2(css.Class("card-title"), uistate.T("customize.varsTitle")),
 			Div(css.Class("rows"), varRows),
 		),
+		// Custom fields are a separate, advanced tool — divider makes the two-tool
+		// structure of the page legible instead of one flat 7-card stream (G15 §1).
+		H3(css.Class("section-divider"), uistate.T("customize.customFieldsSection")),
+		CustomFieldsManager(),
 	)
 }
 

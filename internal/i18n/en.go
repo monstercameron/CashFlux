@@ -1160,6 +1160,7 @@ var english = Catalog{
 	// Customize screen
 	"customize.formulaHint":     "Type a formula above — e.g. round((income - expense) / income * 100)",
 	"customize.calcTitle":       "Formula calculator",
+	"customize.customFieldsSection": "Custom fields",
 	"customize.calcDesc":        "Build your own calculation from your live figures. Functions: sum, avg, min, max, count, abs, round, if.",
 	"customize.exprPlaceholder": "e.g. round((income - expense) / income * 100)",
 	"customize.try":             "Try:",

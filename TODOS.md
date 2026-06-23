@@ -13884,6 +13884,15 @@ _7 · General UX / Glanceability_
 
 ### G15. Customize — "The Formula Tinkerer" (Tomás) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** Both CRITICALs fixed:
+- **CRITICAL §1: formula calculator below the fold** — reordered `customize.go` so the formula
+  calculator + result + saved formulas + variables lead the page; the custom-fields manager moves
+  below a "Custom fields" `.section-divider`, making the two-tool structure legible.
+- **CRITICAL §3: variable-row amounts invisible in light** — already fixed by the G14
+  `[data-theme="light"] .amount:not(.amount-income):not(.amount-expense)` pin (the vars use `.amount fig`).
+- **Intentionally deferred**: merging the Result card into the calculator as an inline output pane,
+  and the shell-level inter-card background bleed (systemic, deferred series-wide).
+
 **The story**
 Tomás is an analytical household manager who wants to build a custom calculated metric — a
 savings-rate percentage — and save it alongside his live figures. He opens Customize, scans the
