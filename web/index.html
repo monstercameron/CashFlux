@@ -205,6 +205,10 @@
 
       /* Page */
       .page { width: 100%; max-width: 1040px; margin: 0 auto; padding: 1.75rem 1.25rem 4rem; }
+      /* GX7-F1: on ultra-wide displays content sprawled to ~2320px (no cap on main),
+         giving grotesque table column spacing + unreadable line lengths. Cap + center
+         the content area. Gated at min-width:1441px so all common widths are untouched. */
+      @media (min-width: 1441px) { main { max-width: 1440px; margin-inline: auto; } }
       .page-head { margin-bottom: 1.5rem; }
       .page-title { margin: 0; font-size: 1.6rem; letter-spacing: -0.02em; }
       .page-sub { margin: 0.25rem 0 0; color: var(--text-dim); }
@@ -305,8 +309,10 @@
       [data-theme="light"] .add-menu, [data-theme="light"] .notify-menu, [data-theme="light"] .muzak-menu {
         background: #ffffff !important; border-color: #e4e2dd !important; color: #1c1c1e; }
       [data-theme="light"] .add-item:hover, [data-theme="light"] .notify-item:hover { background: #efede8 !important; color: #1c1c1e; }
-      /* G22: darken .empty text in light for WCAG AA compliance (~3.5:1 → ~5.4:1). */
-      [data-theme="light"] .empty { color: #56565c; }
+      /* G22 + GX2-F5: darken .empty text in light for WCAG AA. The plain rule was
+         outranked on some surfaces (dashboard widgets, cards) by runtime --text-faint
+         (~3.2:1), so pin a darker value with !important across .empty + widget empties. */
+      [data-theme="light"] .empty, [data-theme="light"] .w .empty, [data-theme="light"] .card .empty { color: #4b4b52 !important; }
       /* Widget shell, segmented + stepper pills, nav hover */
       [data-theme="light"] .w { background: #ffffff; border-color: #e4e2dd; }
       [data-theme="light"] .nav:hover { background: #efede8; color: #1c1c1e; }
@@ -498,6 +504,12 @@
          so the eye doesn't lose its place across the columns. */
       .txn-table tbody tr.row:nth-child(even) { background: rgba(255,255,255,0.03); }
       [data-theme="light"] .txn-table tbody tr.row:nth-child(even) { background: rgba(0,0,0,0.025); }
+      /* GX3-D2: the DataTable stayed dark-on-dark in light (runtime vars resolved to the
+         dark palette in the table context, outranking var(--bg)/(--text)). Pin light
+         surfaces + text with !important, matching the GX1 shell pattern. */
+      [data-theme="light"] .txn-table thead th { background: #f7f6f3 !important; color: #3c3c43 !important; }
+      [data-theme="light"] .txn-table tbody td, [data-theme="light"] .txn-table tbody tr.row { color: #1c1c1e !important; }
+      [data-theme="light"] .txn-table tbody tr.row:hover { background: #efede8 !important; }
       .txn-table tbody tr.row:hover { background: var(--bg-elev); }
       .txn-table .td-date { white-space: nowrap; color: var(--text-dim); }
       .txn-table .td-cat, .txn-table .td-acct, .txn-table .td-tags { color: var(--text-dim); }
@@ -643,6 +655,15 @@
       }
       .toast-err { border-color: var(--danger); }
       .toast-err .toast-msg { color: var(--danger); }
+      /* GX5-F2: toast used --bg-elev which on the warm-white light page is ~2.1:1 and
+         nearly vanishes. Pin a white surface + clear border + lighter shadow in light. */
+      [data-theme="light"] .toast { background: #ffffff; border-color: #d1cfc9; box-shadow: 0 6px 20px rgba(0,0,0,0.16); }
+      /* GX5-F1: success and error toasts looked identical — add a severity glyph. */
+      .toast::before { content: "\2713"; color: var(--accent); font-weight: 700; font-size: 1rem; line-height: 1; }
+      .toast-err::before { content: "\26A0"; color: var(--danger); }
+      /* GX5-F3: /notifications card had transparent background (rgba(0,0,0,0)) in light
+         mode — the global .card rule loses to an override somewhere. Pin surface elevation. */
+      [data-theme="light"] section.card { background: #ffffff !important; border: 1px solid #e4e2dd !important; }
       .toast-msg { flex: 1; }
       .toast-x {
         flex: none; border: 0; background: transparent; color: inherit; cursor: pointer;
@@ -728,7 +749,8 @@
       /* Goal pace badge (G5): a compact colored chip per row answering "am I on
          pace?". Tones mirror the bar states; readable in both themes. */
       .pace-badge { display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em;
-        padding: 0.1rem 0.45rem; border-radius: 999px; white-space: nowrap; line-height: 1.5; }
+        padding: 0.1rem 0.45rem; border-radius: 999px; white-space: nowrap; line-height: 1.5;
+        border: 1px solid var(--border); /* GX3-D7: was borderless; every other pill has a 1px ring */ }
       .pace-final { background: var(--accent-dim); color: var(--accent); }
       .pace-overdue { background: rgba(216,113,111,0.18); color: var(--danger); }
       .pace-soon { background: rgba(245,158,11,0.18); color: #d98c00; }
@@ -1075,7 +1097,9 @@
       .wh .wh-title { background:none; border:0; padding:0; margin:0; color:inherit; cursor:pointer; line-height:inherit; }
       .wh .wh-title:hover, .wh .wh-title:focus-visible { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
       .wh .grip { width:1.1rem; margin-right:.15rem; }
-      .grip { cursor:grab; color:#4f4f55; }
+      /* GX6-D2: the Unicode ⠿ grip glyph sat off the text baseline (droop). Center it
+         until F1 swaps it for the registry SVG. */
+      .grip { cursor:grab; color:#4f4f55; display:inline-flex; align-items:center; line-height:1; }
 
       /* Sample-data banner (G1): these classes were unstyled, so "Start fresh" and
          "Dismiss" rendered as adjacent inline text reading "Start freshDismiss".

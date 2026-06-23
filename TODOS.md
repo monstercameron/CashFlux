@@ -19081,6 +19081,8 @@ The `bar-fill` transition (`width 0.45s cubic-bezier`) and the `.row:hover` back
 
 ### GX5. Toasts & notices — "Did It Save?" — 2026-06-23 ★
 
+✅ RESOLVED (2026-06-23). Shipped: **F1** — per-type toast icons via `::before` pseudo-elements (`✓` for success, `⚠` for error); **F2** — light-mode toast pinned to white surface (`#ffffff`) with clear border and softer shadow under `[data-theme="light"]`; **F3** — `/notifications` card surface elevation enforced via `[data-theme="light"] section.card` override (white bg + `#e4e2dd` border). All CSS-only changes in `web/index.html`. Deferred: **F4** — "Logged a payment" not triggering Undo is a heuristic gap in `toastNoticeIsUndoable`; the code comment already flags the correct fix (add `Notice.Undoable bool` field); deferring because the quick `"logged"` string-patch would still miss other undoable patterns and the proper fix is a structural change to `uistate.Notice` + all call sites.
+
 **The story**
 
 Priya marks a bill paid, saves a budget, and bulk-clears three transactions in quick succession.
@@ -19427,6 +19429,354 @@ The KPI trend `▲` prefix is in-line numeric decoration, not an icon, and is ac
 ---
 
 *Cross-ref: B13 (icon Go interface), C46 (iconography pass — registry + registry-first migration DONE), C28 (viewBox bug — fixed), GX3 (primitives — datatable listed as an area for further polish), GX4 (a11y — `aria-hidden` on decorative glyphs already correct).*
+
+
+# GX7. Ultra-wide & portrait responsive — "Every Screen Size" — 2026-06-23 ★
+
+---
+
+## The story
+
+Every prior G / GX review tested at 1280 × 800 or 1440 × 900, with occasional 768 checks.
+GX7 probes the *extreme* ends: **ultra-wide** (2560 × 1440 and 1920 × 1080) and **portrait/narrow**
+(600 × 900 small-tablet and 400 × 800 phone). These reveal a very different failure mode from the
+ones fixed in G3/C10/C19/GX1: at ultra-wide the content area sprawls to fill the entire viewport
+with no max-width guard, producing extreme line lengths and an ocean of dead horizontal space; at
+narrow widths the topbar wraps into a 260–296 px tall chrome tower that consumes a third or more
+of the phone screen before the user sees a single pixel of page content. Both are real-world
+regressions for users on large monitors and phones. All findings below are CSS-addressable without
+touching any Go source.
+
+---
+
+## Drive script
+
+```
+node e2e/gx_07_responsive.mjs   # exit 0
+```
+
+Screenshots written to `e2e/screenshots/gx07_*.png` (22 files).
+Measurements written to `e2e/screenshots/gx07_measurements.json`.
+
+Probe visits: `/dashboard`, `/transactions`, `/budgets`, `/goals`, `/reports`, add-modal trigger —
+at **2560 × 1440**, **1920 × 1080**, **600 × 900**, **400 × 800** (dark); light spot-check at 400.
+
+### Run evidence
+
+```
+=== VIEWPORT 2560x1440 ===
+  dashboard   content=2320px  overflow=0px  topbar=69px  rail=240px  bento=4cols  ss=gx07_2560_dash_dark.png
+  transactions content=2320px overflow=0px  topbar=69px  rail=240px               ss=gx07_2560_txn_dark.png
+  budgets     content=2320px  overflow=0px  topbar=69px  rail=240px               ss=gx07_2560_budg_dark.png
+  goals       content=2320px  overflow=0px  topbar=69px  rail=240px               ss=gx07_2560_goal_dark.png
+  reports     content=2320px  overflow=0px  topbar=69px  rail=240px               ss=gx07_2560_rpt_dark.png
+
+=== VIEWPORT 1920x1080 ===
+  dashboard   content=1680px  overflow=0px  topbar=69px  rail=240px  bento=4cols  ss=gx07_1920_dash_dark.png
+  transactions content=1680px overflow=0px  topbar=69px  rail=240px               ss=gx07_1920_txn_dark.png
+  budgets     content=1680px  overflow=0px  topbar=69px  rail=240px               ss=gx07_1920_budg_dark.png
+  goals       content=1680px  overflow=0px  topbar=69px  rail=240px               ss=gx07_1920_rpt_dark.png
+  reports     content=1680px  overflow=0px  topbar=69px  rail=240px               ss=gx07_1920_rpt_dark.png
+
+=== VIEWPORT 600x900 ===
+  dashboard   content=544px   overflow=0px  topbar=260px  rail=56px  bento=1col   ss=gx07_0600_dash_dark.png
+  transactions content=544px  overflow=0px  topbar=260px  rail=56px               ss=gx07_0600_txn_dark.png
+  budgets     content=544px   overflow=0px  topbar=260px  rail=56px               ss=gx07_0600_budg_dark.png
+  goals       content=544px   overflow=0px  topbar=98px   rail=56px               ss=gx07_0600_goal_dark.png
+  reports     content=544px   overflow=0px  topbar=260px  rail=56px               ss=gx07_0600_rpt_dark.png
+
+=== VIEWPORT 400x800 ===
+  dashboard   content=344px   overflow=0px  topbar=296px  rail=56px  bento=1col   ss=gx07_0400_dash_dark.png
+  transactions content=344px  overflow=0px  topbar=296px  rail=56px               ss=gx07_0400_txn_dark.png
+  budgets     content=344px   overflow=0px  topbar=296px  rail=56px               ss=gx07_0400_budg_dark.png
+  goals       content=344px   overflow=0px  topbar=138px  rail=56px               ss=gx07_0400_rpt_dark.png
+  reports     content=344px   overflow=0px  topbar=296px  rail=56px               ss=gx07_0400_rpt_dark.png
+  [light] dashboard  content=342px  overflow=0px                                  ss=gx07_0400_dash_light.png
+  [light] transactions content=342px overflow=0px                                 ss=gx07_0400_txn_light.png
+
+Exit code: 0
+```
+
+---
+
+## What already works well (keep) ✓
+
+- **No horizontal overflow at any viewport.** `scrollWidth − clientWidth = 0` across all 22
+  captures. The `overflow-x: hidden` + `max-width: 100vw` on `html/body/#app` at ≤ 767px (C10)
+  is doing its job. No horizontal scrollbar plague.
+- **Rail correctly collapses to 56 px icon-only strip at ≤ 767 px** (C10 fix confirmed).
+- **Bento correctly collapses to 1 column at ≤ 767 px** and to 2 columns at 768–1024 px (C19 fix
+  confirmed). The 4-column desktop bento is intact at 1920 and 2560.
+- **Transaction table card-stacks at narrow** (≤ 760 px). At 400 px each transaction renders as a
+  legible card block; no horizontal scroll, no squish. Screenshot: `gx07_0400_txn_dark.png`.
+- **Budgets and goals pages reflow cleanly at 600 and 400 px.** Single-column stat tiles, budget
+  rows, progress bars all readable. Screenshots: `gx07_0600_budg_dark.png`, `gx07_0400_budg_dark.png`.
+- **Light theme at 400 px is structurally correct** — theme tokens apply, no overflow, layout
+  matches dark. Screenshots: `gx07_0400_dash_light.png`, `gx07_0400_txn_light.png`.
+- **Bottom mobile nav bar renders correctly** at 400 and 600 px — Dashboard / Transactions /
+  Accounts / Budgets / Add, visible and tappable. Target heights look ≥ 44 px (cross-ref GX4).
+- **Reports at 1920 px** uses the full rail + a left-docked nav approach that leaves readable column
+  widths for charts. Screenshot: `gx07_1920_rpt_dark.png`.
+
+---
+
+## Structure fixes — grouped by viewport class
+
+### F1. [CSS-ONLY] CRITICAL — No max-width cap on main content: ultra-wide sprawl
+
+**Viewport:** 2560 × 1440 and 1920 × 1080  
+**Measured:** content area = 2320 px at 2560-wide; 1680 px at 1920-wide. Rail is 240 px so
+`main` fills the remaining 2320 px / 1680 px edge-to-edge with no guard.  
+**Screenshot:** `gx07_2560_dash_dark.png`, `gx07_1920_dash_dark.png`
+
+`.page` already has `max-width: 1040px; margin: 0 auto` (line 207 of index.html), but `main`
+itself has no max-width. The bento grid and all list pages render inside `.page` so they respect
+the 1040 px cap — BUT the topbar and rail chrome are full-width with no column bound, and the
+*page wrapper* itself stretches to fill `main`. The net result is that at 2560 px the topbar
+breadcrumb text and page-level chrome are distributed across 2560 px with the content island
+sitting in the middle — visually correct but wasteful.
+
+More importantly, the **transactions table** at 2560 px is 2320 px wide. The `.page` cap applies
+only to the page-level `.page` div, which in the wasm app may be the full `main` width on most
+pages. The bento stays within 1040 px but the topbar controls and rail do not.
+
+**Fix:** Enforce a `max-width` on `main` (or on the app-shell content column) so the content
+region never exceeds ~1400–1600 px. Recommended: `1440px` to allow the bento to eventually grow
+to a 5-column configuration without hard-coding it now.
+
+```css
+/* GX7-F1: content column max-width cap for ultra-wide viewports */
+@media (min-width: 1440px) {
+  main {
+    max-width: 1440px;   /* or 1600px if a wider bento is planned */
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+```
+
+Cross-ref: B31 (full responsive strategy spec — max-width container requirement documented but not
+yet implemented at the shell level).
+
+---
+
+### F2. [CSS-ONLY] HIGH — Topbar wraps to 260–296 px tall at narrow portrait widths
+
+**Viewport:** 600 × 900 → topbar 260 px tall; 400 × 800 → topbar 296 px tall  
+**Normal desktop topbar:** 69 px  
+**Impact:** At 400 × 800 the topbar eats 296 / 800 = **37% of the screen height** before the user
+sees any page content. Every page except Goals (98 px/138 px — fewer controls) shows this.  
+**Screenshot:** `gx07_0400_dash_dark.png`, `gx07_0600_dash_dark.png`
+
+The `@media (max-width: 1024px)` rule (index.html line 1030) already wraps the topbar to two
+rows and adds `flex-wrap: wrap` to `.topbar-controls`. But at 400–600 px the controls cluster
+(period segmented control: Week / Month / Quarter / Year, then Jump to… select, then date stepper,
+then Custom range, then action icons + Add) still wraps onto 3–4 rows because there are too many
+items at too-small a font size.
+
+The Goals page topbar is shorter (98 px at 600 / 138 px at 400) because it has fewer controls,
+confirming the issue is the control count, not a structural defect.
+
+**Fix options (choose one; both [CSS-ONLY]):**
+
+**Option A — hide low-priority controls under a "More" overflow at ≤ 480 px:**
+At ≤ 480 px hide "Custom range" link and the Jump-to select (which is already in the topbar
+filter); leave only the segmented period + date stepper + icon buttons. This alone removes one
+full topbar row.
+
+```css
+@media (max-width: 480px) {
+  .topbar .reso-control > *:not(.seg-control):not(.date-step) { display: none; }
+  /* or target specific controls: */
+  .topbar [data-ctrl="custom-range"],
+  .topbar [data-ctrl="jump-to"] { display: none; }
+}
+```
+
+**Option B — switch to a single-row topbar with horizontal scroll at ≤ 480 px:**
+Allow `.topbar-controls` to scroll horizontally rather than wrap. Less loss of functionality.
+
+```css
+@media (max-width: 480px) {
+  .topbar { flex-wrap: nowrap; overflow-x: auto; min-height: 3.5rem; height: auto !important; }
+  .topbar-controls { flex: 0 0 auto; flex-wrap: nowrap; overflow-x: auto; }
+}
+```
+
+Cross-ref: GX1-F5/F6 (768 px topbar/rail findings); C19 (topbar overflow fix at 1024 px); G3
+(accounts 768 broken topbar).
+
+---
+
+### F3. [CSS-ONLY] HIGH — Ultra-wide bento stays at 4 columns: dead horizontal whitespace
+
+**Viewport:** 2560 × 1440 (bento = 4 cols, content = 2320 px after rail)  
+**Measured:** 4 columns confirmed by grid introspection. Each tile is ~580 px wide at 2560.  
+**Screenshot:** `gx07_2560_dash_dark.png`
+
+At 2560 px the 4-column bento tiles are very wide. The content does stay within `.page`'s
+`max-width: 1040px` rule IF the fix in F1 is applied — but if `main` expands to fill 2320 px,
+`.page`'s auto margin centering means tiles sit in the left-center region with a dead right
+gutter.
+
+If F1 (content max-width) is applied first, this becomes manageable. As a secondary enhancement
+at ≥ 1440 px (or after the main max-width cap), permit the bento to grow to 5 or 6 columns:
+
+```css
+@media (min-width: 1440px) {
+  .bento {
+    grid-template-columns: repeat(5, 1fr) !important;
+    /* or use auto-fill for organic column growth: */
+    /* grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important; */
+  }
+}
+```
+
+Note: the column-span assignments on tiles (e.g. header tile spans full width) would need audit
+before enabling this. Mark as LOW priority until F1 is confirmed to work.
+
+---
+
+### F4. [CSS-ONLY] MEDIUM — Budgets stat tiles stack single-column too early (400 px)
+
+**Viewport:** 400 × 800  
+**Screenshot:** `gx07_0400_budg_dark.png`
+
+At 400 px the budget KPI stats (SPENT / BUDGETED / LEFT) each render in their own full-width
+tile as a large figure card, stacking vertically. The stat-grid rule `repeat(auto-fit, minmax(160px, 1fr))`
+(line 427) correctly packs them into a row at 600 px (3 × ~182 px = 544 px) but at 400 px
+`minmax(160px, 1fr)` would still produce 2 columns (2 × 160 px = 320 px ≤ 344 px content width),
+yet the tiles render single-column — suggesting something is forcing 1-column before the CSS
+breakpoint.
+
+The bento `grid-template-columns: 1fr !important` (≤ 767 px) overrides all child grids via
+inheritance in some browsers if the `.stat-grid` is inside the bento flow, OR the wasm runtime
+is applying explicit `grid-column: 1 / -1 !important` to every bento child including the stat grid.
+
+**Fix:** Ensure `.stat-grid` inside a page (not a bento tile) is not clobbered by the bento
+override. Scope the bento 1-column rule to direct `.bento > *` children:
+
+```css
+@media (max-width: 767px) {
+  /* Already: .bento > * { grid-column: 1 / -1 !important; } */
+  /* Add: let .stat-grid inside a page (not a direct bento child) use its own auto-fit */
+  .page .stat-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important; }
+}
+```
+
+Lowering `minmax` from 160 px to 120 px also ensures 3 stats fit in 344 px content width:
+3 × 120 px = 360 px — tight but functional at 400 px with gap.
+
+---
+
+### F5. [CSS-ONLY] LOW — Reports page ultra-wide: chart + text spans full 2320 px
+
+**Viewport:** 2560 × 1440  
+**Screenshot:** `gx07_2560_rpt_dark.png`
+
+The reports bar chart stretches to fill the full 2320 px wide content area. Category labels on
+the x-axis are separated by hundreds of pixels. The donut + legend layout underneath is two very
+wide columns. This resolves automatically once F1 (main max-width cap) is in place, since the
+reports content lives inside `.page`. No additional fix required beyond F1.
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+### D1. Topbar chrome consumes 37% of phone screen before any content
+
+- **Viewport:** 400 × 800
+- **Measured topbar height:** 296 px (= 37% of 800 px viewport)
+- **Screenshot:** `gx07_0400_dash_dark.png`, `gx07_0400_rpt_dark.png`
+- At 600 × 900 topbar is 260 px (= 29% of viewport)
+- Goals page is the exception: 138 px at 400 (= 17%), because it has fewer topbar controls
+- **Root cause:** The multi-row wrap behavior (C19 fix) works well at 768–1024 px but wraps too
+  aggressively at 400–600 px, with 4+ rows of controls
+- **Fix:** See F2 above
+
+### D2. Ultra-wide transactions table: 2320 px wide row with 7 columns
+
+- **Viewport:** 2560 × 1440
+- **Measured content width:** 2320 px
+- **Screenshot:** `gx07_2560_txn_dark.png`
+- Row columns (Date / Amount / Description / Category / Account / Tags / Actions) each stretch
+  to fill proportional widths of 2320 px. Description column alone is ~600 px wide. Amount
+  column is right-aligned with hundreds of px of dead space to its left.
+- The `.txn-table td.row-desc { max-width: 280px }` cap (line 514) is honored, but the rest of
+  the columns expand freely.
+- **Fix:** Resolved by F1 (main content max-width cap). Optionally add `max-width` to the table
+  itself: `.txn-table { max-width: 100%; }` — it already has `width: 100%` so the fix is the
+  container, not the table.
+
+### D3. Attention-item chips clip text at 400 px
+
+- **Viewport:** 400 × 800
+- **Screenshot:** `gx07_0400_dash_dark.png`
+- "Pay credit card before the 22nd · 1d overdue" truncates with `...` at the right edge of the
+  card at 344 px content width. The `.attention-text { overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap }` (line 1158) is correct behavior but the truncation is quite aggressive —
+  the text clips before 20 characters.
+- At 600 px the chips render on one row with correct wrapping. This is acceptable behavior
+  (ellipsis is the right pattern) but worth noting.
+- **Status:** Acceptable — no fix required.
+
+### D4. Modal probe returned no modal (automation gap, not a visual defect)
+
+- The `+Add` button in the topbar is a `.menu-btn` that opens `.add-menu`. The probe clicked it
+  successfully but then waited for `.flip-wrap` which is the settings flip-panel, not the add
+  modal. The add actions open entity-specific add forms that live in the wasm router, not a
+  `.flip-wrap`. The probe selector was wrong.
+- **No screenshot of modal at narrow viewports was captured.**
+- **Cross-ref:** GM2 (Add/Edit modals marked RESOLVED). The `.flip-wrap` rule at line 367
+  (`max-width: min(760px, calc(100vw - 24px))`) would correctly cap the settings modal at
+  400 px to 376 px — adequate. Fix the probe for next iteration (see Probe hardening below).
+
+---
+
+## Probe hardening
+
+1. **Modal selector:** replace `.flip-wrap, dialog, [role="dialog"], .modal` with the actual add
+   form selectors used in the wasm app — find by clicking one of the `.add-item` children of
+   `.add-menu` (e.g. "Add transaction"), then wait for the form card to appear.
+
+2. **Topbar height at goals:** Goals measured 98 px at 600 / 138 px at 400, far lower than other
+   pages. Confirm this is because Goals has fewer topbar controls (no period-resolution segment +
+   no custom-range?), not a separate layout. If so, the fix target in F2 is the control-count
+   problem, confirmed.
+
+3. **Content width measurement:** the probe measures `.page` element, which correctly returns the
+   padded content width. At ultra-wide this is `main width − 0` (no max-width on main), so the
+   measurement surface is correct. After F1 is applied, the expected content width at 2560 px
+   should drop to `1440 − 240 (rail) = 1200 px` from `2320 px`.
+
+4. **Longest text line char count:** the `maxLineLen` field in the JSON gives raw text node
+   lengths, not visual line widths. Replace with a visual line-length measurement:
+   `el.getBoundingClientRect().width / (fontSize * 0.5)` per paragraph to estimate chars-per-line.
+
+---
+
+## Priority order
+
+| # | Finding | Tag | Impact |
+|---|---------|-----|--------|
+| 1 | F1 — No main content max-width: 2320 px sprawl at 2560 | [CSS-ONLY] | CRITICAL |
+| 2 | F2 + D1 — Topbar 296 px tall at 400 px (37% of screen) | [CSS-ONLY] | HIGH |
+| 3 | D2 — Transaction table 2320 px wide rows | [CSS-ONLY, resolved by F1] | HIGH |
+| 4 | F3 — Ultra-wide bento stays 4 cols | [CSS-ONLY] | MEDIUM |
+| 5 | F4 — Budget stats force single-column at 400 px | [CSS-ONLY] | MEDIUM |
+| 6 | F5 — Reports chart spans full 2320 px | [CSS-ONLY, resolved by F1] | LOW |
+| 7 | D3 — Attention chips clip text at 400 px | acceptable | INFO |
+| 8 | D4 — Modal probe gap | probe fix | INFO |
+
+**F1 is the single highest-leverage land-now fix.** A single `max-width: 1440px; margin: auto` on
+`main` (under a `@media (min-width: 1440px)`) resolves F1, D2, and F5 simultaneously — three
+findings for ~4 lines of CSS.
+
+**F2 is the most user-visible portrait fix.** Shrinking the topbar from 296 px to ≤ 100 px at
+400 px is the difference between "usable phone layout" and "buried under chrome."
+
+Cross-references: B31 (container max-width strategy), C10/C19 (narrow overflow/topbar fixes),
+G3 (768 px accounts broken), G6 (768 chip wrap).
 
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★

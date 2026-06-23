@@ -26,7 +26,12 @@ type CardProps struct {
 	TestID string
 	// Attrs holds any extra attributes/nodes to place on the section root (e.g. an
 	// aria-label or a second data-* attribute) — appended right after the class.
+	// NOTE: do NOT pass a css.Class() here for extra classes — a second class prop
+	// overrides the first. Use ClassParts instead, which merges into one css.Class.
 	Attrs []any
+	// ClassParts are extra class names/rules merged into the SINGLE root css.Class
+	// next to "card" (e.g. "card-alert", tw.Mb3) so they compose instead of override.
+	ClassParts []any
 	// Header, when non-nil, is rendered as the card's header verbatim INSTEAD of the
 	// auto-generated H2/.card-head. Use it to port a bespoke header unchanged — an
 	// H3 title, a flex header div, a .budget-head/.card-head with custom controls —
@@ -40,7 +45,8 @@ type CardProps struct {
 // It matches the Section(ClassStr("card"), H2(ClassStr("card-title"), …), …) pattern
 // repeated across screens so callers need only supply title and body.
 func Card(props CardProps) uic.Node {
-	args := []any{css.Class("card")}
+	classParts := append([]any{"card"}, props.ClassParts...)
+	args := []any{css.Class(classParts...)}
 	if props.TestID != "" {
 		args = append(args, Attr("data-testid", props.TestID))
 	}
@@ -288,6 +294,8 @@ type EntityListSectionProps struct {
 	// Header, when non-nil, replaces the auto title header verbatim (H3 titles, flex
 	// headers, .budget-head/.card-head with custom controls) for a byte-identical port.
 	Header uic.Node
+	// ClassParts are extra class names/rules merged into the single root css.Class.
+	ClassParts []any
 	// TestID, when non-empty, lands as data-testid on the section root (preserves a
 	// hand-rolled card's test id during a port).
 	TestID string
@@ -330,6 +338,7 @@ func EntityListSection(props EntityListSectionProps) uic.Node {
 		Header:       props.Header,
 		TestID:       props.TestID,
 		Attrs:        props.Attrs,
+		ClassParts:   props.ClassParts,
 		Body:         content,
 	})
 }
