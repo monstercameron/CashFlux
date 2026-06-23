@@ -26,6 +26,9 @@ func main() {
 		if strings.HasSuffix(clean, ".wasm") {
 			w.Header().Set("Content-Type", "application/wasm")
 		}
+		if strings.HasSuffix(clean, ".webmanifest") {
+			w.Header().Set("Content-Type", "application/manifest+json")
+		}
 		if info, err := os.Stat(full); err == nil && !info.IsDir() {
 			http.ServeFile(w, r, full)
 			return
