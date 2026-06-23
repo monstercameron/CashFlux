@@ -275,15 +275,17 @@ func TaskRow(props taskRowProps) ui.Node {
 	editLinkID := ui.UseState(t.RelatedID)
 	editRecur := ui.UseState(string(t.Recurrence))
 	onTitle := ui.UseEvent(func(v string) { titleS.Set(v) })
-	onPrio := ui.UseEvent(func(e ui.Event) { prioS.Set(e.GetValue()) })
+	// onPrio/onEditLinkType/onEditLinkID/onEditRecur hook slots kept for stable hook
+	// ordering; SelectInput owns the change event internally.
+	ui.UseEvent(func(e ui.Event) { prioS.Set(e.GetValue()) })
 	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
 	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
-	onEditLinkType := ui.UseEvent(func(e ui.Event) {
+	ui.UseEvent(func(e ui.Event) {
 		editLinkType.Set(e.GetValue())
-		editLinkID.Set("") // reset entity when type changes
+		editLinkID.Set("")
 	})
-	onEditLinkID := ui.UseEvent(func(e ui.Event) { editLinkID.Set(e.GetValue()) })
-	onEditRecur := ui.UseEvent(func(e ui.Event) { editRecur.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { editLinkID.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { editRecur.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		titleS.Set(t.Title)
 		prioS.Set(string(t.Priority))
@@ -322,28 +324,48 @@ func TaskRow(props taskRowProps) ui.Node {
 		curEditType := domain.RelatedType(editLinkType.Get())
 		var editEntitySelect ui.Node
 		if curEditType != domain.RelatedNone && curEditType != "" {
-			editEntitySelect = labeledField(uistate.T("todo.linkEntity"),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkEntity")), OnChange(onEditLinkID),
-					buildEntityOptions(curEditType, editLinkID.Get(), props.Accounts, props.Budgets, props.Goals, props.Transactions)))
+			entityOpts := buildEntitySelectOptions(curEditType, editLinkID.Get(), props.Accounts, props.Budgets, props.Goals, props.Transactions)
+			editEntitySelect = uiw.FormField(uistate.T("todo.linkEntity"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   entityOpts,
+					Selected:  editLinkID.Get(),
+					OnChange:  func(v string) { editLinkID.Set(v) },
+					AriaLabel: uistate.T("todo.linkEntity"),
+				}))
+		}
+		editPrioOpts := []uiw.SelectOption{
+			{Value: string(domain.PriorityHigh), Label: uistate.T("priority.high")},
+			{Value: string(domain.PriorityMedium), Label: uistate.T("priority.medium")},
+			{Value: string(domain.PriorityLow), Label: uistate.T("priority.low")},
 		}
 		return Div(css.Class("row"),
 			Form(css.Class("form-grid"), OnSubmit(saveEdit),
 				Input(css.Class("field field-wide"), Attr("id", "task-edit-"+t.ID), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
-				labeledField("Priority",
-					Select(css.Class("field"), Attr("aria-label", "Priority"), OnChange(onPrio),
-						Option(Value(string(domain.PriorityHigh)), SelectedIf(prioS.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
-						Option(Value(string(domain.PriorityMedium)), SelectedIf(prioS.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
-						Option(Value(string(domain.PriorityLow)), SelectedIf(prioS.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
-					)),
-				labeledField("Due date",
+				uiw.FormField("Priority",
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   editPrioOpts,
+						Selected:  prioS.Get(),
+						OnChange:  func(v string) { prioS.Set(v) },
+						AriaLabel: "Priority",
+					})),
+				uiw.FormField("Due date",
 					Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueS.Get()), OnInput(onDue))),
 				Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
-				labeledField(uistate.T("todo.repeat"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("todo.repeat")), Attr("data-testid", "task-edit-repeat-"+t.ID), OnChange(onEditRecur),
-						cadenceOptions(editRecur.Get()))),
-				labeledField(uistate.T("todo.linkTo"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("todo.linkTo")), OnChange(onEditLinkType),
-						linkTypeOptions(editLinkType.Get()))),
+				uiw.FormField(uistate.T("todo.repeat"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   cadenceSelectOptions(editRecur.Get()),
+						Selected:  editRecur.Get(),
+						OnChange:  func(v string) { editRecur.Set(v) },
+						AriaLabel: uistate.T("todo.repeat"),
+						TestID:    "task-edit-repeat-" + t.ID,
+					})),
+				uiw.FormField(uistate.T("todo.linkTo"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   linkTypeSelectOptions(editLinkType.Get()),
+						Selected:  editLinkType.Get(),
+						OnChange:  func(v string) { editLinkType.Set(v); editLinkID.Set("") },
+						AriaLabel: uistate.T("todo.linkTo"),
+					})),
 				editEntitySelect,
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),

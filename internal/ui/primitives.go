@@ -154,6 +154,143 @@ func EntityRow(props EntityRowProps) uic.Node {
 }
 
 // ---------------------------------------------------------------------------
+// DeleteButton
+// ---------------------------------------------------------------------------
+
+// DeleteButtonProps configures a DeleteButton.
+type DeleteButtonProps struct {
+	// AriaLabel is the accessible name of the button (required — WCAG 4.1.2).
+	// Example: "Delete transaction".
+	AriaLabel string
+	// Title is the tooltip text shown on hover. Defaults to AriaLabel when empty.
+	Title string
+	// OnClick is the click handler. May be nil (button renders but does nothing).
+	OnClick func()
+	// TestID is an optional data-testid attribute for e2e selectors.
+	TestID string
+}
+
+// DeleteButton renders a destructive icon-only button (.btn-del + Close/Trash icon).
+// It consolidates the 18× hand-rolled `.btn-del` + `icon.Close` + `aria-label` pattern
+// scattered across screens into a single owned component so callers can safely use it
+// inside variable-length loops (each DeleteButton owns its click hook).
+func DeleteButton(props DeleteButtonProps) uic.Node {
+	return uic.CreateElement(deleteButton, props)
+}
+
+func deleteButton(props DeleteButtonProps) uic.Node {
+	title := props.Title
+	if title == "" {
+		title = props.AriaLabel
+	}
+	onClick := props.OnClick
+	args := []any{
+		css.Class("btn-del"),
+		Type("button"),
+		Attr("aria-label", props.AriaLabel),
+		Attr("title", title),
+		OnClick(func() {
+			if onClick != nil {
+				onClick()
+			}
+		}),
+	}
+	if props.TestID != "" {
+		args = append(args, Attr("data-testid", props.TestID))
+	}
+	args = append(args, Icon(icon.Close, css.Class(tw.W4, tw.H4)))
+	return Button(args...)
+}
+
+// ---------------------------------------------------------------------------
+// ExportButton
+// ---------------------------------------------------------------------------
+
+// ExportButtonProps configures an ExportButton.
+type ExportButtonProps struct {
+	// Label is the visible button text.
+	Label string
+	// Title is the tooltip / aria-label. Defaults to Label when empty.
+	Title string
+	// OnClick is called when the button is clicked. The caller is responsible for
+	// triggering the download (e.g. via downloadBytes in the screens package).
+	// This keeps the primitive free of syscall/js and the screen-private downloadBytes.
+	OnClick func()
+	// TestID is an optional data-testid attribute for e2e selectors.
+	TestID string
+}
+
+// ExportButton renders a labeled export/download button. It consolidates the 14×
+// hand-rolled inline-flex export button pattern. OnClick is caller-supplied so the
+// primitive stays free of the screen-private downloadBytes helper and syscall/js.
+// Each ExportButton is its own component and owns its click hook — safe in loops.
+func ExportButton(props ExportButtonProps) uic.Node {
+	return uic.CreateElement(exportButton, props)
+}
+
+func exportButton(props ExportButtonProps) uic.Node {
+	title := props.Title
+	if title == "" {
+		title = props.Label
+	}
+	onClick := props.OnClick
+	args := []any{
+		css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+		Type("button"),
+		Attr("title", title),
+		OnClick(func() {
+			if onClick != nil {
+				onClick()
+			}
+		}),
+	}
+	if props.TestID != "" {
+		args = append(args, Attr("data-testid", props.TestID))
+	}
+	args = append(args, Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)))
+	if props.Label != "" {
+		args = append(args, Span(props.Label))
+	}
+	return Button(args...)
+}
+
+// ---------------------------------------------------------------------------
+// EntityListSection
+// ---------------------------------------------------------------------------
+
+// EntityListSectionProps configures an EntityListSection.
+type EntityListSectionProps struct {
+	// Title is the section heading (.card-title). Required.
+	Title string
+	// HeaderAction is an optional node placed to the right of the title (e.g. add button).
+	HeaderAction uic.Node
+	// Empty is rendered when Body is nil and EmptyState is non-nil. If both Body
+	// and EmptyState are nil, nothing is rendered inside the card body area.
+	EmptyState uic.Node
+	// Body is the list content (typically a Div(.rows) with mapped rows).
+	// When non-nil it is rendered; EmptyState is ignored.
+	Body uic.Node
+}
+
+// EntityListSection renders the canonical Card + title + (empty-state OR rows body)
+// scaffold that appears on every CRUD screen. It absorbs the
+// Section(.card) > H2(.card-title) + optional Div(.card-head) + (empty | Div(.rows))
+// pattern so screens only supply title, header action, and list body.
+func EntityListSection(props EntityListSectionProps) uic.Node {
+	var content uic.Node
+	if props.Body != nil {
+		content = props.Body
+	} else if props.EmptyState != nil {
+		content = props.EmptyState
+	}
+	return Card(CardProps{
+		Title:        props.Title,
+		HeaderAction: props.HeaderAction,
+		Body:         content,
+	})
+}
+
+// ---------------------------------------------------------------------------
 // StatGrid
 // ---------------------------------------------------------------------------
 

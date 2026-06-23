@@ -18,7 +18,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/importmap"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/spendsummary"
 	"github.com/monstercameron/CashFlux/internal/statement"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -488,184 +487,48 @@ func Documents() ui.Node {
 			break
 		}
 	}
-	draftBody := ui.Node(nil)
-	if len(rows) > 0 {
-		items := make([]ui.Node, 0, len(rows))
-		draftCats := app.Categories()
-		for i, r := range rows {
-			items = append(items, ui.CreateElement(DraftRow, draftRowProps{Index: i, Row: r, Currency: reviewCur, Categories: draftCats, OnRemove: removeDraft, OnUpdate: updateDraft}))
-		}
-		acctOptions := make([]ui.Node, 0, len(accounts))
-		for _, a := range accounts {
-			acctOptions = append(acctOptions, Option(Value(a.ID), SelectedIf(importAcct.Get() == a.ID), a.Name))
-		}
 
-		// Receipt mode imports the lines as ONE transaction split across categories
-		// (so a grocery receipt counts once against the card charge). The receipt
-		// math runs in the base currency, matching appstate.ImportReceipt.
-		recCur := app.Settings().BaseCurrency
-		if recCur == "" {
-			recCur = "USD"
-		}
-		recDec := currency.Decimals(recCur)
-		toggle := uiw.ToggleRow(uiw.ToggleRowProps{
-			Label: "Import as one receipt (split across categories)",
-			On:    receiptMode.Get(),
-			OnChange: func(on bool) {
-				if on && strings.TrimSpace(receiptTotal.Get()) == "" {
-					var sum int64
-					for _, r := range rows {
-						if m, err := money.ParseMinor(absAmount(r.Amount), recDec); err == nil {
-							sum += m
-						}
+	// Receipt mode toggle: built here so OnChange has direct access to state setters.
+	recBaseCur := app.Settings().BaseCurrency
+	if recBaseCur == "" {
+		recBaseCur = "USD"
+	}
+	recDec := currency.Decimals(recBaseCur)
+	receiptToggle := uiw.ToggleRow(uiw.ToggleRowProps{
+		Label: "Import as one receipt (split across categories)",
+		On:    receiptMode.Get(),
+		OnChange: func(on bool) {
+			if on && strings.TrimSpace(receiptTotal.Get()) == "" {
+				var sum int64
+				for _, r := range rows {
+					if m, err := money.ParseMinor(absAmount(r.Amount), recDec); err == nil {
+						sum += m
 					}
-					receiptTotal.Set(money.FormatMinor(sum, recDec))
 				}
-				receiptMode.Set(on)
-			},
-		})
-
-		var footer ui.Node
-		if receiptMode.Get() {
-			recLines := make([]extract.ReceiptLine, 0, len(rows))
-			for _, r := range rows {
-				recLines = append(recLines, extract.ReceiptLine{Description: r.Description, Category: r.Category, Amount: absAmount(r.Amount)})
+				receiptTotal.Set(money.FormatMinor(sum, recDec))
 			}
-			resid, residErr := (extract.Receipt{Total: absAmount(receiptTotal.Get()), Lines: recLines}).Residual(recDec)
-			reconciled := residErr == nil && resid == 0
-			var remainderLine ui.Node
-			switch {
-			case reconciled:
-				remainderLine = P(css.Class("muted"), "Lines add up to the total — ready to import as one transaction.")
-			case residErr != nil:
-				remainderLine = P(css.Class("err"), Attr("role", "alert"), "Check the amounts — one couldn't be read as a number.")
-			default:
-				off := resid
-				if off < 0 {
-					off = -off
-				}
-				remainderLine = P(css.Class("err"), Attr("role", "alert"), "Lines are off from the total by "+fmtMoney(money.New(off, recCur))+" — adjust the lines or the total to import.")
-			}
-			importBtn := []any{css.Class("btn btn-primary"), Type("submit")}
-			if !reconciled {
-				importBtn = append(importBtn, Attr("disabled", "disabled"))
-			}
-			importBtn = append(importBtn, "Import receipt")
-			footer = Div(
-				Div(css.Class("form-grid"),
-					Input(css.Class("field"), Type("text"), Attr("aria-label", "Store name (optional)"), Placeholder("Store name (optional)"), Value(receiptMerchant.Get()), OnInput(onReceiptMerchant)),
-					Input(css.Class("field"), Type("text"), Attr("aria-label", "Receipt total"), Placeholder("Receipt total"), Value(receiptTotal.Get()), OnInput(onReceiptTotal)),
-				),
-				remainderLine,
-				Form(css.Class("form-grid"), OnSubmit(importReceipt),
-					Select(css.Class("field"), Attr("aria-label", "Import into account"), OnChange(onAcct), acctOptions),
-					Button(importBtn...),
-				),
-			)
-		} else {
-			footer = Form(css.Class("form-grid"), OnSubmit(importDraft),
-				Select(css.Class("field"), Attr("aria-label", "Import into account"), OnChange(onAcct), acctOptions),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
-			)
-		}
+			receiptMode.Set(on)
+		},
+	})
 
-		draftBody = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("documents.reviewTitle", plural(len(rows), "transaction"))),
-			P(css.Class("muted"), uistate.T("documents.reviewDesc")),
-			toggle,
-			Div(css.Class("rows"), items),
-			footer,
-		)
-	}
-
-	// Monthly-spend summary of the rows awaiting import: out vs in vs net per
-	// month, so the user sees what a statement says they spent before committing
-	// any rows. Amounts read at the chosen account's currency precision.
-	summaryBody := ui.Node(nil)
-	if len(rows) > 0 {
-		cur := app.Settings().BaseCurrency
-		if cur == "" {
-			cur = "USD"
-		}
-		if acc, ok := domain.AccountByID(accounts, importAcct.Get()); ok && acc.Currency != "" {
-			cur = acc.Currency
-		}
-		months := spendsummary.Summarize(rows, currency.Decimals(cur))
-		sumRows := make([]ui.Node, 0, len(months))
-		for _, m := range months {
-			label := m.Month
-			if label == "" {
-				label = uistate.T("documents.summaryUndated")
-			}
-			sumRows = append(sumRows, Div(css.Class("row"),
-				Span(css.Class("row-desc"), label),
-				Span(css.Class("muted"), plural(m.Count, "row")),
-				Span(css.Class("amount fig"), uistate.T("documents.summaryOutIn",
-					fmtMoney(money.New(m.Out, cur)), fmtMoney(money.New(m.In, cur)), fmtMoney(money.New(m.Net(), cur)))),
-			))
-		}
-		summaryBody = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("documents.summaryTitle")),
-			P(css.Class("muted"), uistate.T("documents.summaryDesc")),
-			Div(css.Class("rows"), sumRows),
-		)
-	}
-
-	// Import history: every recorded document, newest first.
+	// Import history: sort newest first before rendering.
 	deleteDoc := func(docID string) {
 		_ = app.DeleteDocument(docID)
 		rev.Set(rev.Get() + 1)
 	}
 	docs := app.Documents()
 	sort.Slice(docs, func(i, j int) bool { return docs[i].UploadedAt.After(docs[j].UploadedAt) })
-	historyCard := Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("documents.historyTitle")),
-		IfElse(len(docs) == 0,
-			P(css.Class("empty"), uistate.T("documents.historyEmpty")),
-			Div(css.Class("rows"), MapKeyed(docs,
-				func(d domain.Document) any { return d.ID },
-				func(d domain.Document) ui.Node {
-					name := ""
-					if a, ok := domain.AccountByID(accounts, d.AccountID); ok {
-						name = a.Name
-					}
-					return ui.CreateElement(DocHistoryRow, docHistoryRowProps{Doc: d, AccountName: name, OnDelete: deleteDoc})
-				},
-			)),
-		),
-	)
 
 	return Div(
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("documents.imageTitle")),
-			P(css.Class("muted"), uistate.T("documents.imageDesc")),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-				Button(css.Class("btn"), Type("button"), OnClick(chooseImage), uistate.T("documents.chooseImage")),
-				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(readAI), Disabled(aiLoading.Get()), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
-			),
-			// Image preview: show the chosen image alongside the draft rows so the user
-			// can check the scan results against the original receipt (C60). The data
-			// URL is already in memory (it was read by pickImageDataURL), so no extra
-			// round-trip is needed. Max-height keeps the preview compact.
-			If(imageURL.Get() != "",
-				Div(css.Class(tw.Mt2, tw.Flex, tw.Gap3, tw.ItemsStart),
-					Img(Attr("src", imageURL.Get()), Attr("alt", uistate.T("documents.imagePreviewAlt")),
-						Attr("data-testid", "doc-image-preview"),
-						css.Class(tw.MaxWFull, tw.ObjectContain, tw.Rounded, tw.BorderLine70),
-						Style(map[string]string{"border-width": "1px", "border-style": "solid", "max-width": "200px", "max-height": "160px"})),
-				),
-			),
-			If(needsKey.Get(),
-				Div(css.Class("notice notice-warn", tw.Mt1, tw.Flex, tw.ItemsCenter, tw.Gap2),
-					Span(uistate.T("documents.needKey")),
-					Button(css.Class("btn btn-sm"), Type("button"),
-						OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }),
-						uistate.T("documents.goToSettings"),
-					),
-				),
-			),
-			If(aiErr.Get() != "", P(css.Class("err"), Attr("role", "alert"), aiErr.Get())),
-		),
+		ImageImportCard(imageImportCardProps{
+			ImageURL:  imageURL.Get(),
+			AILoading: aiLoading.Get(),
+			AIErr:     aiErr.Get(),
+			NeedsKey:  needsKey.Get(),
+			OnChoose:  chooseImage,
+			OnReadAI:  readAI,
+			Nav:       nav,
+		}),
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("documents.stmtTitle")),
 			P(css.Class("muted"), uistate.T("documents.stmtDesc")),
@@ -745,35 +608,45 @@ func Documents() ui.Node {
 		// Review results sit below the import inputs that produce them (G14 §1): a
 		// parsed statement / scanned receipt's draft rows no longer pop in *above* the
 		// card the user just acted in.
-		draftBody,
-		summaryBody,
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("documents.csvTitle")),
-			P(css.Class("muted"), uistate.T("documents.csvDesc")),
-			// File picker: the primary path for real .csv files — no copy-paste needed
-			// (C60). Reads the file and imports it immediately through the same
-			// ImportTransactionsCSV / review pipeline as the paste path below.
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt1),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "csv-file-picker"),
-					OnClick(chooseCsvFile), uistate.T("documents.chooseCsvFile")),
-				Span(css.Class("muted"), uistate.T("documents.csvFileOrPaste")),
-			),
-			Form(OnSubmit(importCSV),
-				// Account selector + Import button appear above the textarea so
-				// they are always visible without scrolling on short viewports
-				// (L44: button was below the fold on a 900 px viewport).
-				Div(css.Class("form-grid"), Style(map[string]string{"margin-bottom": "0.5rem", "margin-top": "0.5rem"}),
-					csvAcctSelect(accounts, importAcct.Get(), onAcct),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
-				),
-				Textarea(css.Class("field field-wide"), Attr("rows", "6"),
-					Placeholder("date,payee,amount,account\n2026-06-01,Salary,4200.00,Checking\n2026-06-02,Groceries,-86.40,Checking"),
-					OnInput(onCsv),
-				),
-			),
-			If(msg.Get() != "", P(css.Class("muted"), msg.Get())),
-		),
-		historyCard,
+		DraftReviewList(draftReviewListProps{
+			Rows:              rows,
+			Accounts:          accounts,
+			Categories:        app.Categories(),
+			ReviewCur:         reviewCur,
+			ImportAcctID:      importAcct.Get(),
+			ReceiptMode:       receiptMode.Get(),
+			ReceiptTotal:      receiptTotal.Get(),
+			ReceiptMerchant:   receiptMerchant.Get(),
+			RecBaseCur:        recBaseCur,
+			Toggle:            receiptToggle,
+			OnAcctChange:      onAcct,
+			OnReceiptTotal:    onReceiptTotal,
+			OnReceiptMerchant: onReceiptMerchant,
+			OnImportDraft:     importDraft,
+			OnImportReceipt:   importReceipt,
+			OnRemoveDraft:     removeDraft,
+			OnUpdateDraft:     updateDraft,
+		}),
+		SpendSummaryCard(spendSummaryCardProps{
+			Rows:         rows,
+			Accounts:     accounts,
+			ImportAcctID: importAcct.Get(),
+			BaseCurrency: app.Settings().BaseCurrency,
+		}),
+		CsvImportCard(csvImportCardProps{
+			Accounts:     accounts,
+			ImportAcctID: importAcct.Get(),
+			Msg:          msg.Get(),
+			OnChooseFile: chooseCsvFile,
+			OnAcctChange: onAcct,
+			OnCsvInput:   onCsv,
+			OnImportCSV:  importCSV,
+		}),
+		ImportHistoryList(importHistoryListProps{
+			Docs:     docs,
+			Accounts: accounts,
+			OnDelete: deleteDoc,
+		}),
 	)
 }
 

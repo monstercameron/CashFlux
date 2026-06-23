@@ -46,11 +46,13 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onColor := ui.UseEvent(func(v string) { color.Set(v) })
-	onKind := ui.UseEvent(func(e ui.Event) {
+	// onKind and onParent hook slots kept for stable hook ordering; SelectInput owns
+	// the change event internally.
+	ui.UseEvent(func(e ui.Event) {
 		kind.Set(e.GetValue())
-		parentID.Set("") // a parent must share the new kind; clear the stale choice
+		parentID.Set("")
 	})
-	onParent := ui.UseEvent(func(e ui.Event) { parentID.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { parentID.Set(e.GetValue()) })
 	onDeductible := ui.UseEvent(func(e ui.Event) { deductible.Set(e.IsChecked()) })
 
 	add := ui.UseEvent(Prevent(func() {
@@ -77,9 +79,9 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 		}
 	}))
 
-	kindOptions := []ui.Node{
-		Option(Value(string(domain.KindExpense)), SelectedIf(kind.Get() == string(domain.KindExpense)), uistate.T("category.expense")),
-		Option(Value(string(domain.KindIncome)), SelectedIf(kind.Get() == string(domain.KindIncome)), uistate.T("category.income")),
+	kindOpts := []uiw.SelectOption{
+		{Value: string(domain.KindExpense), Label: uistate.T("category.expense")},
+		{Value: string(domain.KindIncome), Label: uistate.T("category.income")},
 	}
 
 	// Parent options: existing categories of the chosen kind, indented by depth.
@@ -89,15 +91,27 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 			kindCats = append(kindCats, c)
 		}
 	}
-	parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentID.Get() == ""), uistate.T("categories.noParentTop"))}
+	parentOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("categories.noParentTop")}}
 	for _, f := range categorytree.Flatten(kindCats) {
-		parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentID.Get() == f.Category.ID), uiw.IndentLabel(f.Depth)+f.Category.Name))
+		parentOpts = append(parentOpts, uiw.SelectOption{Value: f.Category.ID, Label: uiw.IndentLabel(f.Depth) + f.Category.Name})
 	}
 
 	return Form(css.Class("form-grid"), Attr("data-testid", "category-add-form"), OnSubmit(add),
 		Input(append([]any{css.Class("field"), Attr("id", "cat-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
-		Select(css.Class("field"), Attr("aria-label", "Category type"), OnChange(onKind), kindOptions),
-		Select(css.Class("field"), Attr("aria-label", "Parent category (optional)"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
+		uiw.FormField("Category type",
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   kindOpts,
+				Selected:  kind.Get(),
+				OnChange:  func(v string) { kind.Set(v); parentID.Set("") },
+				AriaLabel: "Category type",
+			})),
+		uiw.FormField(uistate.T("categories.parentOptional"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   parentOpts,
+				Selected:  parentID.Get(),
+				OnChange:  func(v string) { parentID.Set(v) },
+				AriaLabel: "Parent category (optional)",
+			})),
 		Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(color.Get()), OnInput(onColor)),
 		Label(css.Class("checkbox-label"), Attr("title", uistate.T("categories.deductibleTitle")),
 			Input(Type("checkbox"), Attr("id", "cat-add-deductible"), Attr("aria-label", uistate.T("categories.deductible")), CheckedIf(deductible.Get()), OnChange(onDeductible)),

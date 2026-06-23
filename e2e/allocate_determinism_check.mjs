@@ -36,7 +36,7 @@ async function checkInvariant(page, amount, reserve) {
   await amountInput.dispatchEvent("input");
 
   // Fill reserve input (may be 0).
-  const reserveInput = page.locator('input[placeholder*="Keep back"]').first();
+  const reserveInput = page.locator('input[placeholder*="Emergency buffer"]').first();
   await reserveInput.fill(String(reserve));
   await reserveInput.dispatchEvent("input");
 

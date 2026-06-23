@@ -643,30 +643,16 @@ func globalSettingsForm() uic.Node {
 		}))
 	}
 
-	left := Div(
-		H4(css.Class("set-label"), uistate.T("settings.householdMembers")),
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), memberChips),
-		H4(css.Class("set-label"), uistate.T("settings.baseCurrency")),
-		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.baseCurrency")), Title(uistate.T("settings.baseCurrency")), OnChange(onBase), baseCurrencyOptions(base)),
-		H4(css.Class("set-label"), uistate.T("settings.budgetMethod")),
-		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
-			Option(Value(string(budgeting.MethodSimple)), SelectedIf(curMethod == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
-			Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(curMethod == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
-			Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(curMethod == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
-		),
-		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.budgetMethodNote")),
-		H4(css.Class("set-label"), uistate.T("settings.exchangeRates")),
-		If(len(fxRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
-		Div(fxRows),
-		H4(css.Class("set-label"), uistate.T("settings.screens")),
-		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.screensHint")),
-		Div(screenToggles),
-		H4(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
-		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
-		Div(freshnessRows),
-		uic.CreateElement(notifySettings),
-		uic.CreateElement(musicSettings),
-	)
+	left := settingsLeftColumn(settingsLeftProps{
+		MemberChips:   memberChips,
+		OnBase:        onBase,
+		Base:          base,
+		OnMethod:      onMethod,
+		CurMethod:     curMethod,
+		FXRows:        fxRows,
+		ScreenToggles: screenToggles,
+		FreshnessRows: freshnessRows,
+	})
 
 	activeLang := uistate.ActiveLanguage()
 	langOptions := make([]uic.Node, 0)
@@ -676,61 +662,18 @@ func globalSettingsForm() uic.Node {
 
 	// Right column: Appearance → Preferences → AI → Cloud & server → Data → Advanced.
 	// Ordered by usage frequency: Appearance is everyday, AI is setup-once, Cloud is power-user.
-	right := Div(
-		// 1 · Appearance — most-used first so Renée can set her theme without scrolling.
-		H4(css.Class("set-label"), uistate.T("settings.appearance")),
-		ui.Segmented(ui.SegmentedProps{
-			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")}, {Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")}, {Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")}},
-			Selected: string(pr.Theme),
-			OnSelect: func(v string) {
-				p := prefsAtom.Get()
-				p.Theme = prefs.Theme(v)
-				savePrefs(p)
-			},
-		}),
-		Div(css.Class("toggle-row"),
-			Span(uistate.T("settings.accent")),
-			ui.SwatchPicker(ui.SwatchPickerProps{
-				Colors:   []string{"#2e8b57", "#cfa14e", "#7c83ff", "#d8716f"},
-				Selected: pr.Accent,
-				OnSelect: func(c string) {
-					p := prefsAtom.Get()
-					p.Accent = c
-					savePrefs(p)
-				},
-			}),
-		),
-		accentContrastNote(pr.Accent, pr.Theme),
-		// Density and display scale are in the theme editor (B20 unify).
-		uic.CreateElement(themeEditor),
+	right := settingsRightColumn(settingsRightProps{
+		Pr:          pr,
+		OnTheme:     func(v string) { p := prefsAtom.Get(); p.Theme = prefs.Theme(v); savePrefs(p) },
+		OnAccent:    func(c string) { p := prefsAtom.Get(); p.Accent = c; savePrefs(p) },
+		OnDateStyle: onDateStyle,
+		OnWeekStart: func(v string) { p := prefsAtom.Get(); p.WeekStart = prefs.WeekStart(v); savePrefs(p) },
 
-		// 2 · Preferences — date/week-start sit naturally after appearance.
-		H4(css.Class("set-label"), uistate.T("settings.preferences")),
-		Div(css.Class("toggle-row"),
-			Span(uistate.T("settings.weekStart")),
-			ui.Segmented(ui.SegmentedProps{
-				Options:  []ui.SegOption{{Value: string(prefs.WeekSunday), Label: uistate.T("settings.sunday")}, {Value: string(prefs.WeekMonday), Label: uistate.T("settings.monday")}},
-				Selected: string(pr.WeekStart),
-				OnSelect: func(v string) {
-					p := prefsAtom.Get()
-					p.WeekStart = prefs.WeekStart(v)
-					savePrefs(p)
-				},
-			}),
-		),
-		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.dateFormat")), Title(uistate.T("settings.dateFormat")), OnChange(onDateStyle),
-			Option(Value(string(prefs.DateISO)), SelectedIf(pr.DateStyle == prefs.DateISO), "2026-06-05  (ISO)"),
-			Option(Value(string(prefs.DateUS)), SelectedIf(pr.DateStyle == prefs.DateUS), "06/05/2026  (US)"),
-			Option(Value(string(prefs.DateEU)), SelectedIf(pr.DateStyle == prefs.DateEU), "05/06/2026  (European)"),
-			Option(Value(string(prefs.DateLong)), SelectedIf(pr.DateStyle == prefs.DateLong), "Jun 5, 2026  (Long)"),
-		),
-
-		// 3 · AI — setup-once; key + model select in one logical cluster.
-		H4(css.Class("set-label"), uistate.T("settings.aiTitle")),
-		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
-		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.aiKeyPlaceholder")), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(aiKey.Get()), OnInput(onKey)),
-		If(strings.TrimSpace(aiKey.Get()) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
-		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: pr.RememberAIKey, OnChange: func(v bool) {
+		AiOn:       aiOn.Get(),
+		OnAiToggle: func(v bool) { aiOn.Set(v) },
+		AiKey:      aiKey.Get(),
+		OnKey:      onKey,
+		OnRememberKey: func(v bool) {
 			p := prefsAtom.Get()
 			p.RememberAIKey = v
 			savePrefs(p)
@@ -739,105 +682,50 @@ func globalSettingsForm() uic.Node {
 			} else {
 				uistate.ClearAIKey()
 			}
-		}}),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
-		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
-			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
-			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),
-			Option(Value("gpt-4.1-mini"), SelectedIf(curModel == "gpt-4.1-mini"), "GPT-4.1 mini"),
-			Option(Value("gpt-4o"), SelectedIf(curModel == "gpt-4o"), "GPT-4o"),
-			Option(Value("gpt-4.1"), SelectedIf(curModel == "gpt-4.1"), "GPT-4.1"),
-			Option(Value("o4-mini"), SelectedIf(curModel == "o4-mini"), "o4-mini (reasoning)"),
-		),
-		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
-		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchKeyPlaceholder")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(wsKey.Get()), OnInput(onWsKey)),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
+		},
+		OnModel:  onModel,
+		CurModel: curModel,
+		WsKey:    wsKey.Get(),
+		OnWsKey:  onWsKey,
 
-		// 4 · Cloud & server — power-user sync config after AI.
-		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
-		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
-		// keeps the app fully local even with a server saved, so an unreachable
-		// backend never throws websocket errors the user can't dismiss.
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Connect to a backend (sync + AI proxy)", On: backendOn.Get(), OnChange: onBackendToggle}),
-		If(!backendOn.Get(), P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), "Backend off — the app stays fully local; no sync or proxy connections are made.")),
-		If(backendOn.Get(), Fragment(
-			ui.Segmented(ui.SegmentedProps{
-				Label: uistate.T("settings.serverMode"),
-				Options: []ui.SegOption{
-					{Value: string(prefs.ServerCloud), Label: uistate.T("settings.serverModeCloud")},
-					{Value: string(prefs.ServerSelfHosted), Label: uistate.T("settings.serverModeSelf")},
-				},
-				Selected: serverMode.Get(),
-				OnSelect: onServerMode,
-			}),
-			Input(css.Class("set-input", tw.Mt045), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onServerURL)),
-			If(showTokenAuth, Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onServerToken))),
-		)),
-		If(cloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.backendNote"))),
-		If(!cloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.selfHostedNote"))),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.authMode", authDiscovery.AuthMode)),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.syncStatus", syncStatusLabel())),
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
-			If(showGoogleOAuth, Button(css.Class("btn"), Type("button"), OnClick(signInGoogle), uistate.T("settings.signInGoogle"))),
-			If(showGitHubOAuth, Button(css.Class("btn"), Type("button"), OnClick(signInGitHub), uistate.T("settings.signInGitHub"))),
-			If(strings.TrimSpace(serverToken.Get()) != "", Button(css.Class("btn"), Type("button"), OnClick(signOut), uistate.T("settings.signOut"))),
-			Button(css.Class("btn"), Type("button"), OnClick(testBackend), uistate.T("settings.testBackend")),
-			Button(css.Class("btn"), Type("button"), OnClick(syncNow), uistate.T("settings.syncNow")),
-			Button(css.Class("btn"), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey")),
-			A(css.Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
-		),
-		If(cloudSelected, Fragment(
-			H4(css.Class("set-label"), uistate.T("settings.cloudPlanTitle")),
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPlanNote")),
-			Div(css.Class(tw.Text18, tw.FontSemibold, tw.Mt045), cloudPrice),
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrialNote")),
-			ui.Segmented(ui.SegmentedProps{
-				Label: uistate.T("settings.cloudPlanBilling"),
-				Options: []ui.SegOption{
-					{Value: "annual", Label: uistate.T("settings.cloudPlanAnnual")},
-					{Value: "monthly", Label: uistate.T("settings.cloudPlanMonthly")},
-				},
-				Selected: billingInterval.Get(),
-				OnSelect: func(v string) { billingInterval.Set(v) },
-			}),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
-				Button(css.Class("btn btn-primary"), Type("button"), OnClick(startCheckout), uistate.T("settings.cloudSubscribe")),
-				Button(css.Class("btn"), Type("button"), OnClick(openPortal), uistate.T("settings.manageSub")),
-			),
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrustLine")),
-		)),
+		BackendOn:         backendOn.Get(),
+		OnBackendToggle:   onBackendToggle,
+		ServerMode:        serverMode.Get(),
+		OnServerMode:      onServerMode,
+		ServerURL:         serverURL.Get(),
+		OnServerURL:       onServerURL,
+		ServerToken:       serverToken.Get(),
+		OnServerToken:     onServerToken,
+		CloudSelected:     cloudSelected,
+		AuthDiscovery:     authDiscovery,
+		ShowTokenAuth:     showTokenAuth,
+		ShowGoogleOAuth:   showGoogleOAuth,
+		ShowGitHubOAuth:   showGitHubOAuth,
+		OnSignInGoogle:    signInGoogle,
+		OnSignInGitHub:    signInGitHub,
+		OnSignOut:         signOut,
+		OnTestBackend:     testBackend,
+		OnSyncNow:         syncNow,
+		OnUploadKey:       uploadKey,
+		BillingInterval:   billingInterval.Get(),
+		OnBillingInterval: func(v string) { billingInterval.Set(v) },
+		CloudPrice:        cloudPrice,
+		OnStartCheckout:   startCheckout,
+		OnOpenPortal:      openPortal,
 
-		// 5 · Data — export/import/wipe actions.
-		H4(css.Class("set-label"), uistate.T("settings.data")),
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-			dataBtn(uistate.T("settings.exportJSON"), false, func() { exportJSON(notify) }),
-			dataBtn(uistate.T("settings.exportCSV"), false, func() { exportCSV(notify) }),
-			dataBtn(uistate.T("settings.importDataset"), false, func() { importJSON(bump, notify) }),
-			dataBtn(uistate.T("settings.loadSample"), false, func() { loadSample(bump, notify) }),
-			dataBtn(uistate.T("settings.wipe"), true, func() { wipeData(bump, notify) }),
-		),
-		H4(css.Class("set-label"), uistate.T("settings.backupCadence")),
-		P(css.Class("muted", tw.TextXs), uistate.T("settings.backupCadenceHint")),
-		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.backupCadence")), Title(uistate.T("settings.backupCadence")), OnChange(onBackupCadence),
-			Option(Value("monthly"), SelectedIf(loadBackupCadence() == backup.Monthly), uistate.T("settings.cadenceMonthly")),
-			Option(Value("weekly"), SelectedIf(loadBackupCadence() == backup.Weekly), uistate.T("settings.cadenceWeekly")),
-			Option(Value("off"), SelectedIf(loadBackupCadence() == backup.Off), uistate.T("settings.cadenceOff")),
-		),
+		OnExportJSON:    func() { exportJSON(notify) },
+		OnExportCSV:     func() { exportCSV(notify) },
+		OnImportJSON:    func() { importJSON(bump, notify) },
+		OnLoadSample:    func() { loadSample(bump, notify) },
+		OnWipe:          func() { wipeData(bump, notify) },
+		OnBackupCadence: onBackupCadence,
 
-		// 6 · Advanced — workspaces, app lock, languages; rarely needed at the bottom.
-		H4(css.Class("set-label"), uistate.T("ws.section")),
-		P(css.Class("muted", tw.TextXs), uistate.T("ws.sectionHint")),
-		workspacesSection(bump),
-		H4(css.Class("set-label"), uistate.T("applock.section")),
-		P(css.Class("muted", tw.TextXs), uistate.T("applock.sectionHint")),
-		appLockSection(bump),
-		H4(css.Class("set-label"), uistate.T("settings.languages")),
-		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.language")), Title(uistate.T("settings.language")), OnChange(onLang), langOptions),
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-			dataBtn(uistate.T("settings.exportLangs"), false, func() { exportLanguages(notify) }),
-			dataBtn(uistate.T("settings.importLangs"), false, func() { importLanguages(notify) }),
-		),
-	)
+		LangOptions:   langOptions,
+		OnLang:        onLang,
+		OnExportLangs: func() { exportLanguages(notify) },
+		OnImportLangs: func() { importLanguages(notify) },
+		Bump:          bump,
+	})
 
 	// Debug log viewer (moved here from the old /settings screen): the last entries
 	// of the in-app log ring, newest first, with a refresh.

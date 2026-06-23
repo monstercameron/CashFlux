@@ -6,6 +6,22 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **C73 super-screen decomposition + primitive completion (2026-06-23).** Behavior-preserving refactor wave:
+  - **3 new primitives** — `DeleteButton` (the 18× `.btn-del` pattern, loop-safe), `ExportButton` (wraps the
+    14× `downloadBytes` flow), and `EntityListSection` (card + title + empty-state/body scaffold).
+  - **All five super-screens decomposed** into single-purpose, hook-free sub-components that receive state as
+    props (hooks stay in the parent shell): **Planning** → `planning_{forecast,afford,runway,recurring,plans,debt}.go`;
+    **Documents** → `documents_{image_import,draft_review,spend_summary,csv_import,import_history}.go`;
+    **Allocate** → `allocate_{profile_config,weight_editor,suggestion_list,ai_explain}.go`;
+    **Customize** → `FormulaCalculator()` + `CustomFieldsManager()` (customize_formula.go);
+    **Settings** → `settingsLeftColumn`/`settingsRightColumn` (settings_section.go).
+  - **TransactionRow** extracted to `transactions_row.go` (Display+Edit); **Categories/Rules/To-do** add + inline-edit
+    forms migrated to `SelectInput`/`FormField` (orphaned `UseEvent` hooks converted to anonymous calls to keep
+    hook ordering stable). Planning forms migrated to `FormField`/`OptionsFrom`/`StatGrid`.
+  - Stale e2e gates refreshed for the +Add modal / TreeRows markup (category_parent_delete, categories_labels,
+    allocate_determinism). `go test ./...` green, wasm builds clean, touched-screen gates pass.
+
 ### Added
 - **C73/C74/C78 epic build-out (2026-06-23).**
   - **C73:** migrated Accounts/Budgets/Goals selects to the `SelectInput` primitive + consolidated the
@@ -50,6 +66,7 @@ and every commit updates this file under `Unreleased`.
   a shared e2e `ready()` helper + forms-a11y gate (L12/L7). Confirmed many items already shipped.
 
 ### Changed
+- **GLAMOR series, G9.1 Reports redesign (2026-06-23).** **Reports redesign (G9.1):** hero zone (Net at 2.5rem/800, Income+Spend flanking at 1.75rem/700, period caption promoted, secondary row for savings rate/runway/no-spend days), card-title weight (font-weight: 600 app-wide), heads-up alert strip (.card-alert with danger left-border + tint), tabular amounts (font-variant-numeric + strong color on .budget-amount), Sankey moved up (category → Sankey → top payees → biggest expenses), advanced collapse (custom field spend + deductible totals behind "Advanced ▾/▲" disclosure, collapsed by default).
 - **GLAMOR series, second wave (G7+).** **Planning (G7):** the forecast card now leads with a
   display-weight headline stat (projected 12-month net worth + avg monthly net), and the forecast
   chart's X-axis shows real calendar months ("Jul 2026") instead of opaque indices. Series-wide:

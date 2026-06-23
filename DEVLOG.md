@@ -3,6 +3,40 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — refactor: C73 super-screen decomposition + primitive completion (6-agent wave)
+
+Closed the bulk of the C73 component-ization epic. Ran six sonnet agents on a **single main tree** (no
+worktrees, per the standing rule) with disjoint file sets: Lane A built the 3 missing primitives
+(`DeleteButton`, `ExportButton`, `EntityListSection`) and migrated the Categories/Rules/To-do forms; Lanes
+B–F each decomposed one super-screen (Customize, Documents, Planning, Allocate, Settings) plus the
+Transactions row. **Decomposition rule that kept it safe:** every agent left all `UseState`/`UseEvent` hooks
+in the parent shell and made the extracted sub-components *hook-free*, receiving state as props — so hook
+ordering can't drift and the framework's "no `On*` in a loop" rule is never at risk. Where forms were
+migrated, orphaned `onX := ui.UseEvent(...)` assignments became anonymous `ui.UseEvent(func(e){...})` calls
+to preserve the hook slot.
+
+**Integration:** the LSP threw a blizzard of transient DuplicateDecl/type-mismatch diagnostics mid-flight,
+but the authoritative `GOOS=js GOARCH=wasm go build` came back exit 0 and `go test ./...` + `go vet` are
+clean — the agents' *final* states compose. Removed a stray orphan worktree (`agent-af0bce…`) that was
+polluting diagnostics with its own copy of the tree.
+
+**Gate triage:** ran the touched-screen e2e gates. Three failed, all traced to **stale tests, not
+regressions**: `category_parent_delete` + `categories_labels` still assumed the pre-modal inline add form
+(fixed to open the +Add FlipPanel; parent-delete also needed a reload since modal-add doesn't refresh the
+list in place, and the `.rows .row` wrapper is gone post-TreeRows); `allocate_determinism` looked for a
+"Keep back" placeholder that's been "Emergency buffer (%s)" for a while. `bulk_ops` (L25) fails — but it
+fails identically when I stash this wave's changes and build at HEAD, so it's a pre-existing transactions
+issue, out of C73 scope; logged for a separate look. All other touched gates green.
+
+**Still open in C73 (next wave):** the inline-`Style{}`→utility-class sweep (39×), splitting
+AccountRow/BudgetRow/GoalRow into Display+Edit (TransactionRow done), full Phase-1 form coverage on the
+remaining screens, Phase 2 (lists→DataTable/EntityListSection), and Phase 5 (cleanup + a lint banning raw
+`Div(.rows)`/`Section(.card)` in screens).
+
+## 2026-06-23 — feat: GLAMOR G9.1 Reports redesign — hero zone, type hierarchy, heads-up alert, Sankey-up, advanced collapse
+
+Six G9.1 items shipped in one pass. **Hero zone (Item 1):** promoted Net / Income / Spend out of the flat stat-grid into a dedicated `.reports-hero` strip above all cards — Net at 2.5rem/800, Income+Spend flankers at 1.75rem/700, savings rate / runway / no-spend days in a secondary row below a hairline divider. The old `stat-grid` with six equal-weight tiles is gone; the headline number now lands first. **Card-title weight (Item 2):** added `font-weight: 600` to `.card-title` — one CSS change, lifts every card app-wide. **Alert urgency (Item 3):** new `.card-alert` class (`border-left: 4px solid var(--danger)` + 6% danger tint via `color-mix`) applied to the "Heads up" anomaly card so it reads as an urgent callout, not a passive list. **Tabular amounts (Item 4):** `.budget-amount` already had `font-variant-numeric: tabular-nums`; switched color to `var(--fg, var(--text))` so amounts are full-contrast rather than dim. **Sankey up (Item 5):** reordered the return block — Sankey moved from the Income section to directly after the Spending-by-category card, giving the group: category → Sankey → top payees → biggest expenses. Income section (biggest deposits + income by source) follows. **Advanced collapse (Item 6):** wrapped "Custom field spend" and "Deductible totals" cards in a `ui.UseState`-powered disclosure toggle ("Advanced ▾/▲"), collapsed by default. The deductible card compiled cleanly so both cards are included. Build: `GOOS=js GOARCH=wasm go build` — exit 0, no errors.
+
 ## 2026-06-23 — feat: GLAMOR GM4 palette/gear — a11y, keyboard hints, entity cap, backdrop close
 
 GM4 audit (20 screenshots, 4 DOM sessions) surfaced 20 findings across the command palette and widget gear panel. Six structural Go fixes shipped today; all CSS fixes were already landed from prior waves.

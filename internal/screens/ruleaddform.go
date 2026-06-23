@@ -6,14 +6,26 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/textutil"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
+
+// categorySelectOptions builds a []uiw.SelectOption for a category picker
+// (a leading "choose" placeholder, then every category by name).
+func categorySelectOptions(cats []domain.Category, selected string) []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("rules.chooseCategory")}}
+	for _, c := range cats {
+		opts = append(opts, uiw.SelectOption{Value: c.ID, Label: c.Name})
+	}
+	return opts
+}
 
 // RuleAddFormProps configures the RuleAddForm component.
 type RuleAddFormProps struct {
@@ -42,7 +54,8 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	errMsg := ui.UseState("")
 
 	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
-	onCategory := ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })
+	// onCategory hook slot kept for stable hook ordering; SelectInput owns the event.
+	ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })
 	onTags := ui.UseEvent(func(v string) { tags.Set(v) })
 
 	cats := app.Categories()
@@ -86,9 +99,17 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		}
 	}))
 
+	catOpts := categorySelectOptions(cats, categoryID.Get())
+
 	return Form(css.Class("form-grid"), Attr("data-testid", "rule-add-form"), OnSubmit(add),
 		Input(append([]any{css.Class("field"), Attr("id", "rule-add"), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
-		Select(css.Class("field"), Attr("aria-label", uistate.T("rules.categoryFieldLabel")), OnChange(onCategory), categoryOptions(cats, categoryID.Get())),
+		uiw.FormField(uistate.T("rules.categoryFieldLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   catOpts,
+				Selected:  categoryID.Get(),
+				OnChange:  func(v string) { categoryID.Set(v) },
+				AriaLabel: uistate.T("rules.categoryFieldLabel"),
+			})),
 		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
 		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		If(liveMatch != "" && len(texts) > 0, P(css.Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))),

@@ -381,22 +381,54 @@ func Reports() ui.Node {
 		moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: "Income", To: "Savings", Value: sav})
 	}
 
+	// G9.1: Advanced disclosure toggle state (wraps custom field + deductible cards).
+	showAdvanced := ui.UseState(false)
+	onToggleAdvanced := ui.UseEvent(func() { showAdvanced.Set(!showAdvanced.Get()) })
+	advancedLabel := "Advanced ▾"
+	if showAdvanced.Get() {
+		advancedLabel = "Advanced ▲"
+	}
+
 	return Div(
-		// Make the covered window (and the comparison period) explicit on the page —
-		// the report silently uses the top-bar window, so without this the numbers
-		// have no stated date range (L-quickhit #32).
-		P(css.Class("t-caption", tw.TextDim), uistate.T("reports.covering", pr.FormatDate(cs), pr.FormatDate(ce), pr.FormatDate(ps), pr.FormatDate(pe))),
-		Div(css.Class("stat-grid"),
-			stat(uistate.T("dashboard.income"), fmtMoney(money.New(flow.Income, base)), "pos"),
-			stat(uistate.T("dashboard.spending"), fmtMoney(money.New(flow.Expense, base)), "neg"),
-			stat(uistate.T("reports.net"), fmtMoney(net), accentFor(net)),
-			stat(uistate.T("dashboard.savingsRate"), fmt.Sprintf("%d%%", flow.SavingsRate()), ""),
-			If(burn > 0, stat(uistate.T("reports.runway"), uistate.T("reports.runwayMonths", runway.Months), accentForRunway(runway.Months))),
-			If(noSpendDays > 0, stat(uistate.T("reports.noSpendDays"), fmt.Sprintf("%d", noSpendDays), "pos")),
+		// G9.1 Item 1 — Hero zone: Net / Income / Spend as a prominent headline strip
+		// above the card flow. Savings rate, runway, no-spend days go in a secondary row.
+		Div(css.Class("reports-hero"),
+			P(css.Class("hero-period"), uistate.T("reports.covering", pr.FormatDate(cs), pr.FormatDate(ce), pr.FormatDate(ps), pr.FormatDate(pe))),
+			Div(css.Class("hero-main"),
+				Div(
+					P(css.Class("hero-flanker-label"), uistate.T("reports.net")),
+					P(ClassStr("hero-net "+accentFor(net)), fmtMoney(net)),
+				),
+				Div(css.Class("hero-flankers"),
+					Div(css.Class("hero-flanker"),
+						Span(css.Class("hero-flanker-label"), uistate.T("dashboard.income")),
+						Span(css.Class("hero-flanker-value", "pos"), fmtMoney(money.New(flow.Income, base))),
+					),
+					Div(css.Class("hero-flanker"),
+						Span(css.Class("hero-flanker-label"), uistate.T("dashboard.spending")),
+						Span(css.Class("hero-flanker-value", "neg"), fmtMoney(money.New(flow.Expense, base))),
+					),
+				),
+			),
+			Div(css.Class("hero-secondary"),
+				Div(css.Class("hero-stat"),
+					Span(css.Class("hero-stat-label"), uistate.T("dashboard.savingsRate")),
+					Span(css.Class("hero-stat-value"), fmt.Sprintf("%d%%", flow.SavingsRate())),
+				),
+				If(burn > 0, Div(css.Class("hero-stat"),
+					Span(css.Class("hero-stat-label"), uistate.T("reports.runway")),
+					Span(ClassStr("hero-stat-value "+accentForRunway(runway.Months)), uistate.T("reports.runwayMonths", runway.Months)),
+				)),
+				If(noSpendDays > 0, Div(css.Class("hero-stat"),
+					Span(css.Class("hero-stat-label"), uistate.T("reports.noSpendDays")),
+					Span(css.Class("hero-stat-value", "pos"), fmt.Sprintf("%d", noSpendDays)),
+				)),
+			),
 		),
 		If(spendTrend != "", P(css.Class("muted"), spendTrend)),
 		If(spendStats.Count > 0, P(css.Class("muted"), uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))),
-		If(len(anomalyNodes) > 0, Section(css.Class("card"),
+		// G9.1 Item 3 — Heads-up anomaly card gets .card-alert urgency border.
+		If(len(anomalyNodes) > 0, Section(css.Class("card", "card-alert"),
 			H2(css.Class("card-title"), uistate.T("reports.headsUp")),
 			Div(anomalyNodes),
 		)),
@@ -435,24 +467,10 @@ func Reports() ui.Node {
 				}), uistate.T("reports.taxSummary")),
 			)),
 		),
-		H3(css.Class("section-divider"), uistate.T("reports.sectionIncome")),
+		// G9.1 Item 5 — Sankey moved up: directly after category → Sankey → payees → biggest expenses.
 		If(len(moneyFlows) > 1, Section(css.Class("card"),
 			H2(css.Class("card-title"), "Money flow"),
 			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow"}),
-		)),
-		If(len(bigIncomeNodes) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.biggestDeposits")),
-			Div(css.Class("rows"), bigIncomeNodes),
-		)),
-		If(len(incomeNodes) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.incomeBySource")),
-			Div(css.Class("rows"), incomeNodes),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
-				}), uistate.T("reports.downloadCsv")),
-			),
 		)),
 		If(len(payeeNodes) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.topPayees")),
@@ -480,6 +498,21 @@ func Reports() ui.Node {
 						downloadBytes(reports.ExportFilename("largest-expenses", w.Res, w.From), "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
 					}),
 					uistate.T("reports.downloadCsv")),
+			),
+		)),
+		H3(css.Class("section-divider"), uistate.T("reports.sectionIncome")),
+		If(len(bigIncomeNodes) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("reports.biggestDeposits")),
+			Div(css.Class("rows"), bigIncomeNodes),
+		)),
+		If(len(incomeNodes) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("reports.incomeBySource")),
+			Div(css.Class("rows"), incomeNodes),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
+				}), uistate.T("reports.downloadCsv")),
 			),
 		)),
 		// L21: show the member-spend section whenever the household has ≥2 members
@@ -526,8 +559,23 @@ func Reports() ui.Node {
 			P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
 			uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
 		)),
-		If(len(cfDefs) > 0, customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w)),
-		deductibleSection(txns, cats, cs, ce, rates, base, fmtMinor, w),
+		// G9.1 Item 6 — Advanced collapse: wraps custom field spend and deductible totals.
+		// Both are behind a disclosure toggle ("Advanced ▾/▲"), collapsed by default.
+		If(len(cfDefs) > 0,
+			Div(
+				Button(css.Class("disclosure-toggle"), Type("button"),
+					Attr("aria-expanded", boolStr(showAdvanced.Get())),
+					OnClick(onToggleAdvanced),
+					advancedLabel,
+				),
+				If(showAdvanced.Get(),
+					Div(
+						customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w),
+						deductibleSection(txns, cats, cs, ce, rates, base, fmtMinor, w),
+					),
+				),
+			),
+		),
 	)
 }
 

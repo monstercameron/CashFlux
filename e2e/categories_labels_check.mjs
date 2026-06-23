@@ -23,6 +23,10 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/categories", { waitUntil: "domcontentloaded" });
+  // The add-category form lives in the +Add FlipPanel modal (C73/C79) — open it.
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /category/i }).first().click();
   await page.waitForSelector("#cat-add", { timeout: 60000 });
 
   // Every select in the add form must have an accessible name.

@@ -27,7 +27,17 @@ async function waitCats(page, pred, timeoutMs = 10000) {
   return c;
 }
 
+// The add-category form lives in the +Add FlipPanel modal (C73/C79) — open it
+// first; it closes again on submit, so re-open before every add.
+async function openCatForm(page) {
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /category/i }).first().click();
+  await page.waitForSelector("#cat-add", { timeout: 60000 });
+}
+
 async function addCategory(page, name, parentValue) {
+  await openCatForm(page);
   await page.fill("#cat-add", name);
   if (parentValue) {
     await page.locator('select[aria-label="Parent category (optional)"]').selectOption(parentValue);
@@ -42,7 +52,7 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/categories", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#cat-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
   // Create the parent, then the child under it.
   await addCategory(page, PAR);
@@ -57,8 +67,13 @@ try {
   if (!child) { fail("child category was not created"); process.exit(1); }
   if (child.parentId !== parent.id) { fail(`child parentId=${child.parentId}, want ${parent.id}`); process.exit(1); }
 
+  // The +Add modal persists to the dataset but doesn't refresh the list in place;
+  // reload so the new parent/child rows render before we click their controls.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".row .row-desc", { timeout: 60000 });
+
   // Delete the parent: click the btn-del on the parent's row.
-  const parentRow = page.locator(".rows .row", { has: page.locator(".row-desc", { hasText: PAR }) }).first();
+  const parentRow = page.locator(".row", { has: page.locator(".row-desc", { hasText: PAR }) }).first();
   await parentRow.locator("button.btn-del").click();
   await page.waitForTimeout(500);
 

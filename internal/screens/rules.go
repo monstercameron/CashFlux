@@ -296,7 +296,8 @@ func RuleRow(props ruleRowProps) ui.Node {
 	catS := ui.UseState(r.SetCategoryID)
 	tagsS := ui.UseState(strings.Join(r.SetTags, ", "))
 	onMatch := ui.UseEvent(func(v string) { matchS.Set(v) })
-	onCat := ui.UseEvent(func(e ui.Event) { catS.Set(e.GetValue()) })
+	// onCat hook slot kept for stable hook ordering; SelectInput owns the event.
+	ui.UseEvent(func(e ui.Event) { catS.Set(e.GetValue()) })
 	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		matchS.Set(r.Match)
@@ -326,7 +327,12 @@ func RuleRow(props ruleRowProps) ui.Node {
 		return Div(css.Class("row"),
 			Form(css.Class("form-grid"), OnSubmit(saveEdit),
 				Input(css.Class("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch)),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("rules.categoryFieldLabel")), OnChange(onCat), categoryOptions(props.Categories, catS.Get())),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   categorySelectOptions(props.Categories, catS.Get()),
+					Selected:  catS.Get(),
+					OnChange:  func(v string) { catS.Set(v) },
+					AriaLabel: uistate.T("rules.categoryFieldLabel"),
+				}),
 				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags)),
 				Button(css.Class("btn btn-primary fit"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn fit"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),

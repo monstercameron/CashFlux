@@ -24,6 +24,12 @@ const (
 	TypeText PortType = "text"
 	// TypeBool is a boolean scalar.
 	TypeBool PortType = "bool"
+	// TypeColor is a CSS color string (e.g. "#3b82f6").
+	TypeColor PortType = "color"
+	// TypeCollection is a table of rows with named columns (a dataset/query result).
+	TypeCollection PortType = "collection"
+	// TypeSeries is an ordered list of (label → number) points (for charts).
+	TypeSeries PortType = "series"
 	// TypeViz is a renderable block (the output of a visualization node).
 	TypeViz PortType = "viz"
 )
@@ -44,16 +50,46 @@ func CanFeed(out, in PortType) bool {
 	return false
 }
 
-// Value is a node's computed output: a tagged union over the scalar types plus a
-// renderable Viz block. A tagged struct (rather than interface{}) keeps evaluation
-// and tests explicit. The Type field says which member is meaningful.
+// Value is a node's computed output: a tagged union over the scalar types, a data
+// Collection, a Series, and a renderable Viz block. A tagged struct (rather than
+// interface{}) keeps evaluation and tests explicit. The Type field says which member
+// is meaningful. Color reuses Str.
 type Value struct {
-	Type PortType
-	Num  float64
-	Str  string
-	Bool bool
-	Viz  *VizBlock
+	Type   PortType
+	Num    float64
+	Str    string
+	Bool   bool
+	Coll   *Collection
+	Series []SeriesPoint
+	Viz    *VizBlock
 }
+
+// Row is one record in a Collection: column name → cell value (scalar).
+type Row map[string]Value
+
+// Collection is a table: an ordered column list plus the rows. Columns carry their
+// type so transforms/displays know which are numeric.
+type Collection struct {
+	Cols []Column
+	Rows []Row
+}
+
+// Column describes a Collection column.
+type Column struct {
+	Name string
+	Type PortType // TypeNumber | TypeText | TypeBool
+}
+
+// SeriesPoint is one (label, value) datum in a Series.
+type SeriesPoint struct {
+	Label string
+	Value float64
+}
+
+// Coll builds a collection value; Series and Color are the sibling constructors.
+func Coll(c Collection) Value     { return Value{Type: TypeCollection, Coll: &c} }
+func Ser(s []SeriesPoint) Value   { return Value{Type: TypeSeries, Series: s} }
+func Color(hex string) Value      { return Value{Type: TypeColor, Str: hex} }
 
 // VizBlock is a renderable result the wasm layer turns into a dashboard tile body.
 // Kind selects the renderer; the other fields are interpreted per Kind:

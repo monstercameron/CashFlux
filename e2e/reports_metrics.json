@@ -1,0 +1,726 @@
+{
+  "dark": {
+    "768": {
+      "counts": {
+        "cardCount": 13,
+        "rowCount": 37,
+        "sectionDividers": 3,
+        "shareBars": 30,
+        "svgs": 70,
+        "areaCharts": 0,
+        "exportBtns": 6
+      },
+      "scroll": {
+        "scrollHeight": 900,
+        "viewHeight": 900,
+        "viewports": "1.0"
+      },
+      "typeScale": {
+        "cardTitle": {
+          "size": "16.8px",
+          "weight": "400",
+          "color": "rgb(244, 244, 245)"
+        },
+        "rowDesc": {
+          "size": "14.5px",
+          "weight": "400",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statValue": {
+          "size": "24px",
+          "weight": "700",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statLabel": {
+          "size": "12.8px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "muted": {
+          "size": "14.5px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "caption": {
+          "size": "12px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "allCardTitles": [
+          "16.8px",
+          "16.8px",
+          "16.8px"
+        ]
+      },
+      "sectionDivider": {
+        "size": "11.84px",
+        "color": "rgb(108, 108, 113)",
+        "marginTop": "25.6px"
+      },
+      "card": {
+        "padding": "19.2px",
+        "marginBottom": "16px",
+        "bg": "rgb(18, 18, 20)",
+        "border": "rgb(42, 42, 44)",
+        "radius": "0px"
+      },
+      "statGrid": {
+        "gap": "12px",
+        "cols": "161.328px 161.328px 161.328px"
+      },
+      "shareBar": {
+        "height": "4px",
+        "maxWidth": "260px",
+        "bg": "var(--border)",
+        "fillColor": "var(--accent)"
+      },
+      "mermaid": {
+        "w": 468,
+        "h": 314
+      },
+      "svgSizes": [
+        {
+          "w": 0,
+          "h": 0
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        }
+      ],
+      "row": {
+        "padTop": "9.6px",
+        "padBot": "9.6px",
+        "borderTop": "0px"
+      },
+      "btn": {
+        "padding": "6.4px 12.8px",
+        "size": "14.5px",
+        "color": "rgb(244, 244, 245)",
+        "border": "rgb(42, 42, 44)"
+      },
+      "bg": {
+        "html": "rgba(0, 0, 0, 0)",
+        "main": "rgba(0, 0, 0, 0)",
+        "body": "rgb(14, 14, 15)"
+      },
+      "amounts": {
+        "income": null,
+        "expense": null,
+        "budget": "rgb(171, 171, 179)"
+      },
+      "rollupToggle": {
+        "size": "14.5px",
+        "color": "rgb(244, 244, 245)"
+      },
+      "cardBgActual": "rgb(18, 18, 20)"
+    },
+    "1280": {
+      "counts": {
+        "cardCount": 13,
+        "rowCount": 37,
+        "sectionDividers": 3,
+        "shareBars": 30,
+        "svgs": 70,
+        "areaCharts": 0,
+        "exportBtns": 6
+      },
+      "scroll": {
+        "scrollHeight": 900,
+        "viewHeight": 900,
+        "viewports": "1.0"
+      },
+      "typeScale": {
+        "cardTitle": {
+          "size": "16.8px",
+          "weight": "400",
+          "color": "rgb(244, 244, 245)"
+        },
+        "rowDesc": {
+          "size": "14.5px",
+          "weight": "400",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statValue": {
+          "size": "24px",
+          "weight": "700",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statLabel": {
+          "size": "12.8px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "muted": {
+          "size": "14.5px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "caption": {
+          "size": "12px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "allCardTitles": [
+          "16.8px",
+          "16.8px",
+          "16.8px"
+        ]
+      },
+      "sectionDivider": {
+        "size": "11.84px",
+        "color": "rgb(108, 108, 113)",
+        "marginTop": "25.6px"
+      },
+      "card": {
+        "padding": "20px",
+        "marginBottom": "16px",
+        "bg": "rgb(18, 18, 20)",
+        "border": "rgb(42, 42, 44)",
+        "radius": "0px"
+      },
+      "statGrid": {
+        "gap": "12px",
+        "cols": "160px 160px 160px 160px 160px 160px"
+      },
+      "shareBar": {
+        "height": "4px",
+        "maxWidth": "260px",
+        "bg": "var(--border)",
+        "fillColor": "var(--accent)"
+      },
+      "mermaid": {
+        "w": 978,
+        "h": 403
+      },
+      "svgSizes": [
+        {
+          "w": 0,
+          "h": 0
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        }
+      ],
+      "row": {
+        "padTop": "9.6px",
+        "padBot": "9.6px",
+        "borderTop": "0px"
+      },
+      "btn": {
+        "padding": "6.4px 12.8px",
+        "size": "14.5px",
+        "color": "rgb(244, 244, 245)",
+        "border": "rgb(42, 42, 44)"
+      },
+      "bg": {
+        "html": "rgba(0, 0, 0, 0)",
+        "main": "rgba(0, 0, 0, 0)",
+        "body": "rgb(14, 14, 15)"
+      },
+      "amounts": {
+        "income": null,
+        "expense": null,
+        "budget": "rgb(171, 171, 179)"
+      },
+      "rollupToggle": {
+        "size": "14.5px",
+        "color": "rgb(244, 244, 245)"
+      },
+      "cardBgActual": "rgb(18, 18, 20)"
+    },
+    "1440": {
+      "counts": {
+        "cardCount": 13,
+        "rowCount": 37,
+        "sectionDividers": 3,
+        "shareBars": 30,
+        "svgs": 70,
+        "areaCharts": 0,
+        "exportBtns": 6
+      },
+      "scroll": {
+        "scrollHeight": 900,
+        "viewHeight": 900,
+        "viewports": "1.0"
+      },
+      "typeScale": {
+        "cardTitle": {
+          "size": "16.8px",
+          "weight": "400",
+          "color": "rgb(244, 244, 245)"
+        },
+        "rowDesc": {
+          "size": "14.5px",
+          "weight": "400",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statValue": {
+          "size": "24px",
+          "weight": "700",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statLabel": {
+          "size": "12.8px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "muted": {
+          "size": "14.5px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "caption": {
+          "size": "12px",
+          "color": "rgb(171, 171, 179)"
+        },
+        "allCardTitles": [
+          "16.8px",
+          "16.8px",
+          "16.8px"
+        ]
+      },
+      "sectionDivider": {
+        "size": "11.84px",
+        "color": "rgb(108, 108, 113)",
+        "marginTop": "25.6px"
+      },
+      "card": {
+        "padding": "20px",
+        "marginBottom": "16px",
+        "bg": "rgb(18, 18, 20)",
+        "border": "rgb(42, 42, 44)",
+        "radius": "0px"
+      },
+      "statGrid": {
+        "gap": "12px",
+        "cols": "186.656px 186.672px 186.672px 186.656px 186.672px 186.672px"
+      },
+      "shareBar": {
+        "height": "4px",
+        "maxWidth": "260px",
+        "bg": "var(--border)",
+        "fillColor": "var(--accent)"
+      },
+      "mermaid": {
+        "w": 1138,
+        "h": 403
+      },
+      "svgSizes": [
+        {
+          "w": 0,
+          "h": 0
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        }
+      ],
+      "row": {
+        "padTop": "9.6px",
+        "padBot": "9.6px",
+        "borderTop": "0px"
+      },
+      "btn": {
+        "padding": "6.4px 12.8px",
+        "size": "14.5px",
+        "color": "rgb(244, 244, 245)",
+        "border": "rgb(42, 42, 44)"
+      },
+      "bg": {
+        "html": "rgba(0, 0, 0, 0)",
+        "main": "rgba(0, 0, 0, 0)",
+        "body": "rgb(14, 14, 15)"
+      },
+      "amounts": {
+        "income": null,
+        "expense": null,
+        "budget": "rgb(171, 171, 179)"
+      },
+      "rollupToggle": {
+        "size": "14.5px",
+        "color": "rgb(244, 244, 245)"
+      },
+      "cardBgActual": "rgb(18, 18, 20)"
+    }
+  },
+  "light": {
+    "768": {
+      "counts": {
+        "cardCount": 13,
+        "rowCount": 37,
+        "sectionDividers": 3,
+        "shareBars": 30,
+        "svgs": 70,
+        "areaCharts": 0,
+        "exportBtns": 6
+      },
+      "scroll": {
+        "scrollHeight": 900,
+        "viewHeight": 900,
+        "viewports": "1.0"
+      },
+      "typeScale": {
+        "cardTitle": {
+          "size": "16.8px",
+          "weight": "400",
+          "color": "rgb(28, 28, 30)"
+        },
+        "rowDesc": {
+          "size": "14.5px",
+          "weight": "400",
+          "color": "rgb(28, 28, 30)"
+        },
+        "statValue": {
+          "size": "24px",
+          "weight": "700",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statLabel": {
+          "size": "12.8px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "muted": {
+          "size": "14.5px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "caption": {
+          "size": "12px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "allCardTitles": [
+          "16.8px",
+          "16.8px",
+          "16.8px"
+        ]
+      },
+      "sectionDivider": {
+        "size": "11.84px",
+        "color": "rgb(104, 104, 112)",
+        "marginTop": "25.6px"
+      },
+      "card": {
+        "padding": "19.2px",
+        "marginBottom": "16px",
+        "bg": "rgb(255, 255, 255)",
+        "border": "rgb(228, 226, 221)",
+        "radius": "0px"
+      },
+      "statGrid": {
+        "gap": "12px",
+        "cols": "161.328px 161.328px 161.328px"
+      },
+      "shareBar": {
+        "height": "4px",
+        "maxWidth": "260px",
+        "bg": "var(--border)",
+        "fillColor": "var(--accent)"
+      },
+      "mermaid": {
+        "w": 468,
+        "h": 314
+      },
+      "svgSizes": [
+        {
+          "w": 0,
+          "h": 0
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        }
+      ],
+      "row": {
+        "padTop": "9.6px",
+        "padBot": "9.6px",
+        "borderTop": "0px"
+      },
+      "btn": {
+        "padding": "6.4px 12.8px",
+        "size": "14.5px",
+        "color": "rgb(28, 28, 30)",
+        "border": "rgb(228, 226, 221)"
+      },
+      "bg": {
+        "html": "rgba(0, 0, 0, 0)",
+        "main": "rgb(247, 246, 243)",
+        "body": "rgb(247, 246, 243)"
+      },
+      "amounts": {
+        "income": null,
+        "expense": null,
+        "budget": "rgb(28, 28, 30)"
+      },
+      "rollupToggle": {
+        "size": "14.5px",
+        "color": "rgb(28, 28, 30)"
+      },
+      "cardBgActual": "rgb(255, 255, 255)"
+    },
+    "1280": {
+      "counts": {
+        "cardCount": 13,
+        "rowCount": 37,
+        "sectionDividers": 3,
+        "shareBars": 30,
+        "svgs": 70,
+        "areaCharts": 0,
+        "exportBtns": 6
+      },
+      "scroll": {
+        "scrollHeight": 900,
+        "viewHeight": 900,
+        "viewports": "1.0"
+      },
+      "typeScale": {
+        "cardTitle": {
+          "size": "16.8px",
+          "weight": "400",
+          "color": "rgb(28, 28, 30)"
+        },
+        "rowDesc": {
+          "size": "14.5px",
+          "weight": "400",
+          "color": "rgb(28, 28, 30)"
+        },
+        "statValue": {
+          "size": "24px",
+          "weight": "700",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statLabel": {
+          "size": "12.8px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "muted": {
+          "size": "14.5px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "caption": {
+          "size": "12px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "allCardTitles": [
+          "16.8px",
+          "16.8px",
+          "16.8px"
+        ]
+      },
+      "sectionDivider": {
+        "size": "11.84px",
+        "color": "rgb(104, 104, 112)",
+        "marginTop": "25.6px"
+      },
+      "card": {
+        "padding": "20px",
+        "marginBottom": "16px",
+        "bg": "rgb(255, 255, 255)",
+        "border": "rgb(228, 226, 221)",
+        "radius": "0px"
+      },
+      "statGrid": {
+        "gap": "12px",
+        "cols": "160px 160px 160px 160px 160px 160px"
+      },
+      "shareBar": {
+        "height": "4px",
+        "maxWidth": "260px",
+        "bg": "var(--border)",
+        "fillColor": "var(--accent)"
+      },
+      "mermaid": {
+        "w": 978,
+        "h": 403
+      },
+      "svgSizes": [
+        {
+          "w": 0,
+          "h": 0
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        }
+      ],
+      "row": {
+        "padTop": "9.6px",
+        "padBot": "9.6px",
+        "borderTop": "0px"
+      },
+      "btn": {
+        "padding": "6.4px 12.8px",
+        "size": "14.5px",
+        "color": "rgb(28, 28, 30)",
+        "border": "rgb(228, 226, 221)"
+      },
+      "bg": {
+        "html": "rgba(0, 0, 0, 0)",
+        "main": "rgb(247, 246, 243)",
+        "body": "rgb(247, 246, 243)"
+      },
+      "amounts": {
+        "income": null,
+        "expense": null,
+        "budget": "rgb(28, 28, 30)"
+      },
+      "rollupToggle": {
+        "size": "14.5px",
+        "color": "rgb(28, 28, 30)"
+      },
+      "cardBgActual": "rgb(255, 255, 255)"
+    },
+    "1440": {
+      "counts": {
+        "cardCount": 13,
+        "rowCount": 37,
+        "sectionDividers": 3,
+        "shareBars": 30,
+        "svgs": 70,
+        "areaCharts": 0,
+        "exportBtns": 6
+      },
+      "scroll": {
+        "scrollHeight": 900,
+        "viewHeight": 900,
+        "viewports": "1.0"
+      },
+      "typeScale": {
+        "cardTitle": {
+          "size": "16.8px",
+          "weight": "400",
+          "color": "rgb(28, 28, 30)"
+        },
+        "rowDesc": {
+          "size": "14.5px",
+          "weight": "400",
+          "color": "rgb(28, 28, 30)"
+        },
+        "statValue": {
+          "size": "24px",
+          "weight": "700",
+          "color": "rgb(46, 139, 87)"
+        },
+        "statLabel": {
+          "size": "12.8px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "muted": {
+          "size": "14.5px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "caption": {
+          "size": "12px",
+          "color": "rgb(60, 60, 67)"
+        },
+        "allCardTitles": [
+          "16.8px",
+          "16.8px",
+          "16.8px"
+        ]
+      },
+      "sectionDivider": {
+        "size": "11.84px",
+        "color": "rgb(104, 104, 112)",
+        "marginTop": "25.6px"
+      },
+      "card": {
+        "padding": "20px",
+        "marginBottom": "16px",
+        "bg": "rgb(255, 255, 255)",
+        "border": "rgb(228, 226, 221)",
+        "radius": "0px"
+      },
+      "statGrid": {
+        "gap": "12px",
+        "cols": "186.656px 186.672px 186.672px 186.656px 186.672px 186.672px"
+      },
+      "shareBar": {
+        "height": "4px",
+        "maxWidth": "260px",
+        "bg": "var(--border)",
+        "fillColor": "var(--accent)"
+      },
+      "mermaid": {
+        "w": 1138,
+        "h": 403
+      },
+      "svgSizes": [
+        {
+          "w": 0,
+          "h": 0
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        },
+        {
+          "w": 16,
+          "h": 16
+        }
+      ],
+      "row": {
+        "padTop": "9.6px",
+        "padBot": "9.6px",
+        "borderTop": "0px"
+      },
+      "btn": {
+        "padding": "6.4px 12.8px",
+        "size": "14.5px",
+        "color": "rgb(28, 28, 30)",
+        "border": "rgb(228, 226, 221)"
+      },
+      "bg": {
+        "html": "rgba(0, 0, 0, 0)",
+        "main": "rgb(247, 246, 243)",
+        "body": "rgb(247, 246, 243)"
+      },
+      "amounts": {
+        "income": null,
+        "expense": null,
+        "budget": "rgb(28, 28, 30)"
+      },
+      "rollupToggle": {
+        "size": "14.5px",
+        "color": "rgb(28, 28, 30)"
+      },
+      "cardBgActual": "rgb(255, 255, 255)"
+    }
+  }
+}
