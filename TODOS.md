@@ -2339,8 +2339,10 @@ an adoption + decomposition refactor (behavior-preserving), done **bottom-up, on
       first (Reports, Subscriptions, Bills, Categories, Accounts). Resolves C55–C57, C63, C39.
 - [ ] **Phase 3 — Rows:** decompose `*Row` → Display+Edit; fold Display onto `EntityRow`.
 - [x] **Phase 4 — Super-screens:** decompose Planning, Documents, Allocate, Customize, settings _(all five decomposed 2026-06-23; hooks kept in the parent shell, sub-components hook-free, gates green)_.
-- [ ] **Phase 5 — Cleanup:** delete dead bespoke markup; component inventory doc; a check/lint banning raw
-      `Div(.rows)` + `Section(.card)` scaffolds in screens.
+- [x] **Phase 5 — Cleanup:** component inventory doc (`docs/COMPONENTS.md`) + a native ratchet test
+      (`internal/screenlint/scaffold_baseline_test.go`) that fails if raw `Section(.card)`/`Div(.rows)` scaffolds
+      in `internal/screens` exceed the 2026-06-23 baseline (165) — a one-way ratchet so new bespoke markup is
+      blocked and existing offenders migrate down. _(Dead-markup deletion is the ongoing migration the ratchet drives.)_
 - **Per-screen checklist:** `[ ] forms→FormField · [ ] list→DataTable · [ ] row→EntityRow split · [ ] empty→EmptyStateCTA · [ ] inline-Style removed · [ ] tests green · [ ] one commit`.
 
 **Guardrails / risk.**

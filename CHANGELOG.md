@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **C73 Phase 5 — component inventory + scaffold ratchet (2026-06-23).** `docs/COMPONENTS.md` documents every
+  `internal/ui` primitive with a one-line usage + a porting guide mapping each legacy idiom to its primitive.
+  `internal/screenlint/scaffold_baseline_test.go` is a native (host-runnable) ratchet that counts raw
+  `Section(.card)`/`Div(.rows)` scaffolds in `internal/screens` and fails if they exceed the 2026-06-23 baseline
+  of 165 — a one-way ratchet that blocks new bespoke markup and only ever ratchets down as screens are ported.
+
 ### Changed
 - **C73 super-screen decomposition + primitive completion (2026-06-23).** Behavior-preserving refactor wave:
   - **3 new primitives** — `DeleteButton` (the 18× `.btn-del` pattern, loop-safe), `ExportButton` (wraps the
