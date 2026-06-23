@@ -825,8 +825,21 @@
       /* Title doubles as a drill-in link to the tile's data screen (C30). */
       .wh .wh-title { background:none; border:0; padding:0; margin:0; color:inherit; cursor:pointer; line-height:inherit; }
       .wh .wh-title:hover, .wh .wh-title:focus-visible { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
-      .wh .grip { width:1.1rem; }
+      .wh .grip { width:1.1rem; margin-right:.15rem; }
       .grip { cursor:grab; color:#4f4f55; }
+
+      /* Sample-data banner (G1): these classes were unstyled, so "Start fresh" and
+         "Dismiss" rendered as adjacent inline text reading "Start freshDismiss".
+         Give the banner a compact styled strip with a clear gap between actions. */
+      .sample-banner { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.6rem;
+        padding:.5rem .85rem; margin-bottom:1rem; background:var(--accent-dim); border:1px solid var(--border);
+        border-radius:var(--radius); font-size:.86rem; }
+      .sample-banner-text { color:var(--text-dim); }
+      .sample-banner-actions { display:flex; align-items:center; gap:.6rem; }
+      .sample-banner-btn { background:transparent; border:0; padding:.15rem .2rem; font:inherit; color:var(--accent);
+        cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+      .sample-banner-btn:hover { color:var(--text); }
+      .sample-banner-dismiss { color:var(--text-dim); }
       .wbody { padding:0 .7rem .7rem; flex:1; min-height:0; }
       .kpi { padding:.95rem 1rem; }
 

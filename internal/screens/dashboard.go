@@ -93,6 +93,14 @@ func Dashboard() ui.Node {
 	widgetCfgs := uistate.UseWidgetConfigs().Get()
 	start, end := w.Range()
 	income, expense, _ := ledger.PeriodTotals(kpiTxns, start, end, rates)
+	// Cash flow = income − spending for the period (G1 §7): the surplus/deficit Elena
+	// wants in one line. Shown as a signed sub-line on the Income tile so "what
+	// changed?" is answerable above the fold without mental arithmetic.
+	cashFlow := money.New(income.Amount-expense.Amount, income.Currency)
+	cashFlowSub := "cash flow −" + fmtMoney(money.New(-cashFlow.Amount, income.Currency))
+	if cashFlow.Amount >= 0 {
+		cashFlowSub = "cash flow +" + fmtMoney(cashFlow)
+	}
 	periodLabel := w.FromLabel()
 	if w.ToLabel() != w.FromLabel() {
 		periodLabel += " – " + w.ToLabel()
@@ -140,10 +148,19 @@ func Dashboard() ui.Node {
 	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
 	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
 		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
-			if d < 0 {
-				nwTone, nwSub = "text-down", fmt.Sprintf("▼ %d%% this month", -d)
-			} else {
-				nwTone, nwSub = "text-up", fmt.Sprintf("▲ %d%% this month", d)
+			// A flat 0% reads as "nothing moved" rather than "income == spending";
+			// say so plainly with the absolute delta instead of a misleading "▲ 0%"
+			// (G1 §7).
+			delta := money.New(net.Amount-prev[0].Amount, net.Currency)
+			switch {
+			case d < 0:
+				nwTone, nwSub = "text-down", fmt.Sprintf("▼ %d%% (%s) this month", -d, fmtMoney(delta))
+			case d > 0:
+				nwTone, nwSub = "text-up", fmt.Sprintf("▲ %d%% (+%s) this month", d, fmtMoney(delta))
+			case delta.Amount != 0:
+				nwTone, nwSub = "text-dim", fmt.Sprintf("%s this month", fmtMoney(delta))
+			default:
+				nwTone, nwSub = "text-dim", "No change this month"
 			}
 		}
 	}
@@ -174,7 +191,7 @@ func Dashboard() ui.Node {
 			return uiw.Widget(uiw.WidgetProps{
 				ID: "kpi-income", Title: uistate.T("dashboard.income"), Draggable: true, Resizable: true,
 				GridColumn: "2", GridRow: "2", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
-				Body: kpiBody(fmtMoney(income), "text-up", periodLabel+" · "+plural(incCount, "deposit"), "text-dim"),
+				Body: kpiBody(fmtMoney(income), "text-up", periodLabel+" · "+plural(incCount, "deposit")+" · "+cashFlowSub, "text-dim"),
 			})
 		},
 		"kpi-spending": func() ui.Node {

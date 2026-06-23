@@ -11820,6 +11820,23 @@ toggle pass. All findings below are dark-mode confirmed.
 
 ### G1. Dashboard — "The 7am Glance" (Elena) — 2026-06-22 ★
 
+**✅ RESOLVED (2026-06-23).** Screenshot-confirmed defects addressed:
+- D1 "Start freshDismiss" — the `.sample-banner*` classes were entirely unstyled; added a styled
+  banner strip with a real gap between the two actions.
+- D2 alert triage — already implemented: `attentionTone` gives each item a severity class
+  (`is-critical`/`is-warning`/`is-info`) with a colored left-border + ▲/●/○ glyph. Kept as anchor.
+- D4 speaker icon — already labelled: the muzak button carries `title`+`aria-label` (Turn music
+  on/off) and `aria-pressed`. Kept as anchor.
+- D6 cash-flow delta — added a signed **"cash flow +$X / −$X"** sub-line to the Income KPI tile.
+- "0% this month" misleading — the net-worth tile sub-line now shows the absolute delta and reads
+  "No change this month" at a true zero instead of a misleading "▲ 0%".
+- Net-worth dominance — the tile already uses `kpiBodyHero` (enlarged figure). The full
+  2-column-span / widget-reorder / liabilities-demote items are **intentionally not applied**: the
+  default bento is tightly packed (a packing algorithm + position-asserting e2e), it is
+  user-reconfigurable by drag, and the hero figure already delivers the visual dominance — reflowing
+  the packed default risks overlap for marginal glance benefit. Noted rather than silently skipped.
+- D5 light theme — covered by the series-wide explicit `--text` contrast pins.
+
 **The story**
 Elena, a busy ops manager, opens CashFlux for 15 seconds over coffee. She needs to answer three
 questions at a glance: Am I OK today? Anything on fire? What changed?
@@ -11962,6 +11979,187 @@ noted.
       panel (`.hh` button), toggle theme to Light, wait 400ms, navigate back to `/`, then screenshot.
       Do not rely on pre-boot localStorage injection.
 - [ ] Hard-reload before any persistence asserts (`page.reload({ waitUntil: "domcontentloaded" })`).
+
+---
+
+### G8. Allocate — "Every Dollar a Job" (Marcus) — 2026-06-23 ★
+
+**The story**
+Marcus is a zero-based budgeter: every dollar has a job. He has $2,000 of surplus this month
+and opens Allocate to figure out where it should go. He wants to pick a priority profile ("pay
+down debt"), glance at the ranked destinations with score bars to understand the reasoning, exclude
+one account he is keeping liquid (HYSA), enter the lump sum, and see the suggested split. He
+expects the config to stay out of his way: pick profile, see list, done — not a wall of weight
+sliders before he can even read his candidates. He also expects that card titles and labels are
+readable in light mode (his preference), and that breakdown text at 768px does not overflow.
+
+**Drive script**
+`e2e/glamor_08_allocate.mjs` — widths 1280/1440/768, dark + light themes (light-theme recipe:
+set `cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`). Navigates from `/`
+via in-app click ("Allocate" nav link) to avoid the wasm deep-link 404 (B1). Captures 7
+screenshots and a DOM audit JSON. Run: `node e2e/glamor_08_allocate.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_08_allocate_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_08_allocate.mjs` → EXIT 0
+- Screenshots captured:
+  `glamor_08_allocate_1280_dark.png`, `glamor_08_allocate_1280_dark_full.png`,
+  `glamor_08_allocate_1440_dark.png`, `glamor_08_allocate_768_dark.png`,
+  `glamor_08_allocate_1280_light.png`, `glamor_08_allocate_1440_light.png`,
+  `glamor_08_allocate_768_light.png`
+- DOM audit: `glamor_08_allocate_dom.json` — 3 cards confirmed ("Allocation profile",
+  "Where to put your money next", "Why this order?"), 5 weight labels present (C6 ✓),
+  8 candidate rows (debt leads at 60%), 2 unlabelled selects (mode + profile), 0 page errors.
+- Light theme confirmed: `data-theme="light"` on `<html>` for all three light captures.
+
+**What already works well (keep — regression anchors)** ✓
+- **Five criterion weight inputs all carry visible `<span>` labels** — "Returns weight",
+  "Stability weight", "Liquidity weight", "Debt-reduction weight", "Goal-progress weight"
+  — C6 fix holding, DOM-confirmed. ✓
+- **Candidate list is above the fold at 1280px dark.** The "Where to put your money next"
+  card is fully visible in the first viewport with top-ranking candidates readable without
+  scrolling. ✓
+- **Score bars have `role="progressbar"` + `aria-valuenow` + `aria-label` ("Score 60%", etc.).**
+  Accessibility-correct. DOM-confirmed. ✓
+- **Breakdown sub-line reads in plain English:** "returns 100 · stability 100 · liquidity 0 ·
+  pays debt" — determinism surfaced at row level. L60 confirmed this working. ✓
+- **Per-row "Exclude" buttons are `<button type="button">` not `<a>` tags** — actions are
+  semantically correct. DOM-confirmed. ✓
+- **Breadcrumb "Dashboard › Allocate" is present.** DOM-confirmed. ✓
+- **Zero JavaScript page errors** — dark and light sessions both clean. ✓
+- **No horizontal overflow at 768px.** DOM audit `overflowCards: 0` confirmed. ✓
+- **Score only appears once per row** (in the head as "60%"); sub-line carries only the component
+  breakdown — C54 "score shown twice" issue resolved. Confirmed visually in all dark screenshots. ✓
+- **Debt candidates rank first under balanced profile** — "Pay down Rewards Credit Card" 60%,
+  "Pay down Student Loan" 47% correctly lead the list. Score ordering correct. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout*
+- [ ] **Config card stacks three `form-grid`s before the user sees a single candidate (C54
+      critical — still present).** DOM confirms `configFormGrids: 3`, `configInputCount: 11`.
+      Card 1 is: mode select + profile select + 3 amount inputs (row 1) → 5 weight inputs
+      (row 2) → profile name save form (row 3). Marcus's common path is: pick profile → see
+      suggestions. He must scroll past 11 inputs before reaching candidates. The weight and
+      save-profile forms should be collapsed into an "Advanced — tune weights" disclosure
+      (`<details>`) so the typical user sees: mode, profile, amount fields, then the list.
+      Cross-reference C54 (config-heavy top).
+- [ ] **"Amount to allocate" is visually equal to "Keep back" and "Max per destination" —
+      all three are plain placeholder-only inputs in the same row at equal weight.** The
+      amount field is Marcus's primary action but looks identical to the secondary constraint
+      fields. It needs visual primacy — a persistent label above it, or separation from the
+      constraint inputs. Cross-reference C54 (amount-split entry point buried).
+- [ ] **Three cards with no page-level orientation affordance.** Cards are: (1) config,
+      (2) suggestions, (3) "Why this order?". The apply card only appears after an amount is
+      entered. No page-level section header or hint orients a new user about the three-step
+      structure (Setup → Results → Action).
+
+*2. Spacing*
+- [ ] **Inter-card gap between config and suggestions cards is approximately 8px.**
+      At 1280px dark, the two cards are nearly flush. A 16–20px gap would give each section
+      breathing room and reinforce the step structure. Consistent with G7 Planning inter-card
+      finding.
+- [ ] **"CRITERION WEIGHTS" sub-section has only ~8px separation from the amount inputs above.**
+      The `set-label` text appears immediately below the amount row with minimal breathing room.
+      A 16px top margin would clarify it as a distinct sub-step.
+- [ ] **Score bar and breakdown sub-line are tightly packed (~4px each) under the candidate
+      head row.** Increasing to 6–8px each would improve scannability of the candidate list.
+
+*3. Theming*
+- [ ] **Card titles near-invisible in light mode (CRITICAL — same systemic `--fg` token
+      failure as G4/G5/G6/G7).** In `glamor_08_allocate_1280_light.png`,
+      `glamor_08_allocate_1440_light.png`, and `glamor_08_allocate_768_light.png`: "Allocation
+      profile" and "Where to put your money next" render in extremely faint grey on white —
+      effectively invisible. `card-title` does not apply `--fg` in light mode.
+- [ ] **Weight input labels near-invisible in light mode.** "Returns weight", "Stability
+      weight", etc. render in faint green-grey against white in `glamor_08_allocate_1280_light.png`.
+      The `<span class="muted">` label inside label wrappers needs `--fg` in light mode.
+- [ ] **"CRITERION WEIGHTS" sub-section label near-invisible in light mode.** The `set-label`
+      element renders in faint grey caps on white in all light screenshots.
+- [ ] **Breakdown sub-line text faint in light mode.** "returns 100 · stability 100 · liquidity
+      0 · pays debt" is too low-contrast against the white card background. Screenshots:
+      `glamor_08_allocate_1280_light.png`, `glamor_08_allocate_1440_light.png`.
+
+*4. Styling*
+- [ ] **Mode and profile selects have no persistent visible label — placeholder-only (C54
+      open).** DOM confirms `unlabelledSelects: 2`. A user who loaded a saved profile won't
+      know what the second select represents. Add "Mode" and "Profile" as persistent labels
+      (Span-above-select pattern, consistent with weight inputs). Cross-reference C54.
+- [ ] **Score percent ("60%") in the candidate head-right is unlabeled at first sight.**
+      A new user doesn't know if this is a return rate, a completion percent, or a priority
+      score. A subtle "score" column header above the list or a "Priority" label on the first
+      row would clarify the data dimension.
+- [ ] **"Save profile" button spans full remaining row width (~50% at 1280px, ~full width at
+      768px).** It is the tertiary action in the config card but visually dominates the card
+      bottom as a large green button. Reduce to `width: fit-content` or compact secondary style.
+
+*5. Positioning*
+- [ ] **"Amount to allocate" is slot 3 of 5 in a five-column row — primary input is buried.**
+      At 1280px: [Weighted] [Balanced] [Amount to allocate (US…)] [Keep back (emergenc…)]
+      [Max per destination (L…)]. The placeholder clips to "Amount to allocate (US…)" because
+      the field is one-fifth of row width. Elevate to its own row or 2x width.
+- [ ] **Apply/commit card is hidden with no affordance below the suggestions card.** No hint
+      tells Marcus that entering an amount unlocks a split and apply flow. A ghost card or
+      inline hint below the suggestions card would guide him through the full loop.
+
+*6. Ordering*
+- [ ] **Weight tuning (advanced) appears before amount entry (primary) within the config card.**
+      Natural Marcus flow: (a) pick profile, (b) enter amount, (c) see split, (d) apply. Weight
+      editing is a power-user override of step (a). Current order forces weight inputs between
+      steps (a) and (b), interrupting the primary flow. Re-order: mode/profile → amount/reserve/
+      max-per → collapsed "Advanced: tune weights" disclosure.
+
+*7. General UX / Glanceability*
+- [ ] **No rank number on each candidate row.** Candidates are ordered by score but carry no
+      #1 / #2 / #3 ordinal — only relative bar lengths and percentages. A compact ordinal in
+      the row head would let Marcus answer "what is my first priority?" at glance-speed.
+- [ ] **"Why this order?" card requires an API key to surface any content.** The heading
+      implies there is always an explanation — the breakdown sub-line already supplies the
+      mechanical "why". The AI card should show an inline algorithmic summary even without AI
+      (e.g. "Debt ranked first: highest effective return under current weights"), or label the
+      button accurately as "Get AI narrative (requires API key)". Cross-reference C54 (AI
+      dead-end / settings link missing).
+- [ ] **Full-page flow (config → suggestions → apply) requires scrolling twice.** Config fills
+      the first viewport; after entering an amount the apply card appears below the long
+      suggestions list, requiring another scroll to commit. A sticky "Apply $X split" bar at
+      the viewport bottom (visible whenever `totalMinor > 0`) would let Marcus commit without
+      scrolling to the card.
+- [ ] **At 768px, amount input placeholders clip.** "Keep back (emergency buff…)" and "Max per
+      destination (USD)" clip in the column layout. Confirmed visually in
+      `glamor_08_allocate_768_dark.png`. Shorten to "Emergency buffer (USD)" and
+      "Cap per destination (USD)".
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Symptom | Fix |
+|---|------|---------|-----|
+| D1 | `glamor_08_allocate_1280_light.png`, `glamor_08_allocate_1440_light.png`, `glamor_08_allocate_768_light.png` | Card titles near-invisible in light mode — blanket `--fg` token failure (G4/G5/G6/G7 systemic) | `h2.card-title` must use `--fg` or full-weight token in light mode |
+| D2 | `glamor_08_allocate_1280_light.png`, `glamor_08_allocate_768_light.png` | Weight input labels near-invisible in light mode — muted token too low-contrast on white | Label span must use `--fg` in light mode |
+| D3 | `glamor_08_allocate_1280_dark.png`, `glamor_08_allocate_1440_dark.png` | Mode and profile selects have no persistent label — 2 `unlabelledSelects` in DOM audit (C54 open) | Add persistent visible label above each select ("Mode", "Profile") |
+| D4 | `glamor_08_allocate_1280_dark.png`, `glamor_08_allocate_1440_dark.png` | "Amount to allocate" truncated to "Amount to allocate (US…)" — primary input too narrow in 5-column row | Promote to standalone row or 2x width with persistent label |
+| D5 | `glamor_08_allocate_1280_dark.png` (full page) | Three `form-grid`s stacked in config card — C54 density confirmed | Collapse weights + save-profile into `<details>` "Advanced: tune weights" disclosure |
+| D6 | `glamor_08_allocate_768_dark.png` | Amount / reserve / max-per placeholders clip at 768px | Shorten to ≤25 char: "Emergency buffer (USD)", "Cap per destination (USD)" |
+| D7 | All light screenshots | "CRITERION WEIGHTS" set-label near-invisible in light mode | `set-label` must apply `--fg` in light mode |
+
+**Re-screenshot close-out requirement:** After D1 (light-mode contrast fix) and D5 (config
+density/disclosure fix), re-run `node e2e/glamor_08_allocate.mjs` and confirm: (a) card titles
+readable in light mode, (b) config card shows only mode/profile/amount row above the fold
+with weights tucked into a disclosure, (c) all placeholder text readable at 768px.
+
+**Probe hardening**
+- The drive script uses in-app navigation (click "Allocate" nav link from `/`) rather than
+  a direct deep-link to `/allocate` — required because `gwc dev` returns 404 for non-root
+  paths (B1).
+- "View as member" reset: removes `viewAsMember` from `cashflux:prefs` before navigation.
+- Wait condition is `.card` with 800ms settle — sufficient; no async chart render delay on
+  this page (unlike G7's D3 chart).
+
+**Cross-references**
+- C6: "Allocate criterion weights are five unlabeled inputs" — FIXED, DOM-confirmed. ✓
+- C54: "Config-heavy top card / label inconsistency / amount buried / AI dead-end" — D3/D4/D5
+  all still open; this G8 review confirms and re-evidences each sub-issue.
+- L60: "Every Dollar a Job" story — apply flow, ZERO_REMAINDER, goal funding all confirmed
+  working. G8 covers the pre-apply visual layer L60 did not audit.
 
 ---
 

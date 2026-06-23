@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard screen glamor pass (G1).** The sample-data banner is now properly styled (its classes
+  were unstyled, so "Start fresh" and "Dismiss" ran together as "Start freshDismiss"); the Income
+  KPI tile shows a signed **cash-flow** sub-line (income − spending), so Elena's "what changed?" is
+  answerable above the fold; and the net-worth tile's trend sub-line shows the **absolute delta**
+  and reads "No change this month" at a true zero instead of a misleading "▲ 0%".
 - **Transactions screen glamor pass (G2).** The ledger is far denser and faster to scan: the
   **Actions column collapses to an icon strip** (was ~44% of table width), **Amount moves to
   column 3** (Date → Amount → Description), rows get **zebra striping + a themed hover band**,

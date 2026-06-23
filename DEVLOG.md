@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series — G1 Dashboard "The 7am Glance"
+
+Auditing G1, several "defects" were already fixed in the code since the screenshots were taken: the
+attention chips already carry severity classes + a colored left-border + ▲/●/○ glyph (the triage
+gradient the audit asked for), and the muzak speaker button already has title/aria-label/aria-pressed.
+Banked those as regression anchors rather than re-doing them.
+
+Real gaps fixed: the `.sample-banner*` classes were *completely unstyled*, which is exactly why
+"Start fresh" and "Dismiss" rendered as "Start freshDismiss" — added a styled banner. Added a signed
+cash-flow sub-line to the Income tile (income − spending), and made the net-worth trend sub-line
+honest: it shows the absolute dollar delta and says "No change this month" at a true 0% instead of a
+misleading "▲ 0%".
+
+Deliberately did NOT reflow the bento default for the "net worth spans 2 columns / reorder widgets /
+demote liabilities" items. The default layout is tightly packed (there's a packing algorithm and
+position-asserting e2e), the grid is user-reconfigurable by drag, and net worth already uses an
+enlarged hero figure — reflowing the packed default risks overlaps and test breakage for marginal
+glance benefit. Logged the reasoning in TODOS rather than silently skipping.
+
 ## 2026-06-23 - feat: GLAMOR series — G2 Transactions "The Reconciler"
 
 The dense one. The audit's DOM measurements were damning: the Actions column was 560px (44% of a
