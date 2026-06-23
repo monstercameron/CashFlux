@@ -14694,6 +14694,15 @@ against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
 
 ### G18. Rules — "Set It and Forget It" (Bianca) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** (Light contrast already passes here.)
+- **CRITICAL §1: "Your rules" below the fold** — reordered so the user's own rules lead the page,
+  then "Rule order" (precedence chain), then the 15-row Suggestions card (a discovery aid) last. Now
+  Bianca sees her rules + precedence without scrolling past suggestions.
+- **§1: no on-page add** — added a **"+ Add rule"** button in the "Your rules" header (beside "Apply
+  to existing"), so a new rule doesn't require discovering the global header quick-add.
+- **Intentionally deferred**: the single-row horizontal inline-edit form layout and the borderline
+  muted-meta contrast are polish; the reorder + add button address the page-defining gaps.
+
 **The story**
 Bianca is a household manager who wants to automate her monthly categorization chores. She
 opens Rules to create auto-categorization rules ("merchant contains X → category Y"), set

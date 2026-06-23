@@ -339,6 +339,7 @@ var english = Catalog{
 
 	// Rules screen (auto-categorization)
 	"rules.add":                "Add rule",
+	"rules.addRule":            "+ Add rule",
 	"rules.hint":               "When a transaction's payee or description contains the phrase, it's assigned this category (and any tags). The first matching rule wins.",
 	"rules.matchPlaceholder":   "If text contains… (e.g. uber)",
 	"rules.tagsPlaceholder":    "Tags, comma-separated (optional)",

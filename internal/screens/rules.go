@@ -34,6 +34,9 @@ func Rules() ui.Node {
 	rev := state.UseAtom("rev:rules", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 
+	// In-context add (G18 §1): an "+ Add rule" button in the "Your rules" header.
+	addRule := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("rule") }))
+
 	errMsg := ui.UseState("")
 	dragSrc := ui.UseState("") // id of the rule being dragged (precedence reorder, C64)
 	notice := uistate.UseNotice()
@@ -172,12 +175,20 @@ func Rules() ui.Node {
 		)
 	}
 
+	// Lead with the user's own rules (G18 §1): the 15-row suggestions card used to
+	// push "Your rules" — Bianca's primary concern — entirely below the fold. Order
+	// is now Your rules → Rule order → Suggestions (discovery aid, secondary).
 	return Div(
-		suggestCard,
 		Section(css.Class("card"),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
 				H2(css.Class("card-title"), uistate.T("rules.listTitle")),
-				If(len(rs) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
+				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+					If(len(rs) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
+					Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+						Attr("data-testid", "rules-add"), Title(uistate.T("rules.add")), OnClick(addRule),
+						uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+						Span(uistate.T("rules.addRule"))),
+				),
 			),
 			If(len(rs) > 0 && hasTxns, P(css.Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
 			list,
@@ -191,6 +202,7 @@ func Rules() ui.Node {
 				Label:  "Rule precedence chain",
 			}),
 		)),
+		suggestCard,
 	)
 }
 

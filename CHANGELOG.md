@@ -41,7 +41,9 @@ and every commit updates this file under `Unreleased`.
   fold, and the variable-reference amounts are readable in light mode. **Members (G16):** the
   net-worth-by-member amounts are now readable in light mode (they were inheriting the dark `--text`).
   **Categories (G17):** added an in-card "+ Add category" button to both the Expense and Income kind
-  cards (add was previously only reachable from the command palette).
+  cards (add was previously only reachable from the command palette). **Rules (G18):** "Your rules"
+  now leads the page (precedence chain next, the 15-row suggestions card last) instead of being
+  pushed below the fold, plus an in-card "+ Add rule" button.
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**
