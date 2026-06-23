@@ -4,6 +4,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +68,8 @@ func Budgets() ui.Node {
 	}
 
 	errMsg := ui.UseState("")
+	// Open the add-budget modal from the card header (G4: discoverable add).
+	addBudget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("budget") }))
 	// The viewed period comes from the shared top-bar resolution control (C7) —
 	// the Budgets card no longer has its own competing month stepper.
 	periodWin := uistate.UsePeriod()
@@ -172,6 +175,31 @@ func Budgets() ui.Node {
 		}
 	}
 
+	// Health-first ordering (G4): problems rise to the top so Renu scans the
+	// budgets that need action before the healthy ones — Over → Near/At-risk →
+	// On track, then by percent used descending within each tier. "At risk" (the
+	// pace projection flags an overspend though the budget isn't Near yet) shares
+	// the middle tier so a trending-over budget isn't buried among on-track ones.
+	healthRank := func(s budgeting.Status) int {
+		switch s.State {
+		case budgeting.StateOver:
+			return 0
+		case budgeting.StateNear:
+			return 1
+		}
+		if paceOver[s.Budget.ID] != "" {
+			return 1
+		}
+		return 2
+	}
+	sort.SliceStable(statuses, func(i, j int) bool {
+		ri, rj := healthRank(statuses[i]), healthRank(statuses[j])
+		if ri != rj {
+			return ri < rj
+		}
+		return statuses[i].Percent > statuses[j].Percent
+	})
+
 	overCount, nearCount := 0, 0
 	var totalSpent, totalLimit int64
 	for _, s := range statuses {
@@ -248,8 +276,12 @@ func Budgets() ui.Node {
 			stat(uistate.T("budgets.left"), fmtMoney(money.New(totalLimit-totalSpent, base)), accentFor(money.New(totalLimit-totalSpent, base))),
 		)),
 		Section(css.Class("card"),
-			Div(css.Class("budget-head"),
+			Div(css.Class("card-head"),
 				H2(css.Class("card-title"), uistate.T("nav.budgets")),
+				If(len(statuses) > 0, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
+					uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("budgets.addBudget")))),
 			),
 			assignBanner,
 			If(overCount > 0 || nearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
@@ -533,7 +565,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-		Span(css.Class("budget-sub"), uistate.T("budgets.rowSub", s.Budget.Period.Label(), label, width, fmtMoney(s.Remaining))),
+		// Sub-line split (G4 §8): the primary line carries the at-a-glance signal —
+		// health status + money left; the period and percent drop to a dimmer
+		// secondary line so they read as low-signal context, not equal weight.
+		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, fmtMoney(s.Remaining))),
+		Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.rowSecondary", s.Budget.Period.Label(), width)),
 		paceLine,
 		rolloverLine,
 		envLine,

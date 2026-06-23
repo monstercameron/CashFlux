@@ -431,7 +431,9 @@
       .budget-sub { display: block; color: var(--text-dim); font-size: 0.82rem; margin-top: 0.15rem; }
       .cover-form { margin-top: 0.6rem; padding: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev, rgba(255,255,255,0.02)); }
       .cover-form .form-grid { margin-top: 0.4rem; }
-      .bar { height: 8px; background: var(--bg-elev); border-radius: 999px; overflow: hidden; margin: 0.45rem 0 0.35rem; }
+      /* Bar track (G4 §6): a touch more contrast than --bg-elev so a 0%/empty bar
+         still reads as a track rather than vanishing into the card. */
+      .bar { height: 8px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin: 0.45rem 0 0.35rem; }
       .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
       /* Progress/budget bars grow into place on load and update instead of snapping (§6.16). */
       @media (prefers-reduced-motion: no-preference) {
@@ -446,6 +448,14 @@
       .bar-fill.final { background: linear-gradient(90deg, var(--accent), var(--up, #54b884)); }
       .bar-fill.overdue { background: var(--danger); }
       .bar-fill.soon { background: #f59e0b; }
+
+      /* Budget health pills (G4 §4): the over/near summary chips were unstyled
+         ".pill" spans rendering as bare colored text; give them a soft filled chip
+         so "2 over budget" / "2 near limit" read as distinct status badges. The
+         color comes from the tw text-tone class already on the span. */
+      .pill { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.74rem; font-weight: 700;
+        letter-spacing: 0.02em; padding: 0.12rem 0.5rem; border-radius: 999px;
+        background: var(--bg-elev); border: 1px solid var(--border); white-space: nowrap; }
 
       /* Card header row (G5): a card title with a right-aligned action (e.g.
          "+ Add goal") so adding is discoverable without hunting for the FAB. */

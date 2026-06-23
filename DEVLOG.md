@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series — G4 Budgets "The Mid-Month Pulse"
+
+Second glamor screen. Headline gap was ordering: budget rows came out in insertion order, so Renu
+scanned past healthy budgets to reach the over-budget ones. Added a health-first stable sort (Over →
+Near/At-risk → On-track, then %-used desc) where "At risk" (the pace projection flags a trending
+overspend though the budget isn't Near yet) shares the middle tier so it isn't buried.
+
+Found a real latent bug while auditing finding #4: the over/near summary "pills" used a `.pill` class
+that **had no CSS at all** — they rendered as bare colored text, which is exactly what the audit
+screenshot showed. Added the chip style. Several other G4 items were already satisfied by the global
+contrast/separator fixes from G5 (stat `--text` pin, `.budget` border-top), so this pass was mostly
+the sort, the pill style, a bar-track border, the "+ Add budget" header button, and splitting the
+run-on row sub-line into primary + dimmed-secondary.
+
+Next: G3 Accounts (net-worth dominance, type icons, 768 reflow).
+
 ## 2026-06-23 - feat: GLAMOR series — G5 Goals "Are We There Yet?"
 
 Started the GLAMOR per-page UX/visual structure review from the backlog (section G). Working

@@ -376,6 +376,9 @@ var english = Catalog{
 	// Budgets screen
 	"budgets.progressLabel":    "Budget usage",
 	"budgets.add":              "Add budget",
+	"budgets.addBudget":        "+ Add budget",
+	"budgets.rowPrimary":       "%s · %s left",
+	"budgets.rowSecondary":     "%s · %d%% used",
 	"budgets.needCategory":     "Add an expense category first, then create budgets.",
 	"budgets.limitRequired":    "Enter a positive limit.",
 	"budgets.limitPlaceholder": "Limit (%s)",

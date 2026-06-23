@@ -10937,6 +10937,17 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
 
 ### G4. Budgets — "The Mid-Month Pulse" (Renu) — 2026-06-22 ★
 
+**✅ RESOLVED (2026-06-23).** All 8 consolidated fixes shipped:
+1 (insertion order) — `statuses` now sorted Over → Near/At-risk → On track, then % used desc.
+2 (BUDGETED stat faint in light) — covered by the global `.stat-value { color: var(--text) }` pin.
+3 (category names faint in light) — covered by `.budget .row-desc { color: var(--text) }` (drill button inherits).
+4 (near pill absent / pills look like text) — `.pill` was unstyled; added a filled chip; near pill renders when nearCount>0.
+5 (no row separators) — `.budget` rows already carry `border-top: 1px solid var(--border)`.
+6 (empty bar track invisible) — added `border: 1px solid var(--border)` to `.bar`.
+7 (no add) — "+ Add budget" button in the `.card-head`.
+8 (single-weight sub-line) — split into primary (status · left) + dimmed secondary (period · % used).
+View in `budgets.go`; CSS + i18n keys `budgets.rowPrimary/rowSecondary/addBudget`.
+
 **The story**
 Renu, a 38-year-old household budget manager, opens the Budgets page around the 15th of the
 month. She has one question cluster she needs answered in under 10 seconds: Which categories am

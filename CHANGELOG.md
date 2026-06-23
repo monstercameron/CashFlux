@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Budgets screen glamor pass (G4).** Budget rows now sort **health-first** — Over → Near/At-risk →
+  On track, then percent-used descending — so the budgets that need action rise to the top. The
+  over/near **summary pills** (previously unstyled bare text) get a proper filled-chip treatment;
+  the empty progress-bar **track** gains a hairline border so a 0% bar still reads; added a
+  discoverable **"+ Add budget"** header button; and the row sub-line is split into a primary
+  status·remaining line over a dimmed period·%-used line.
 - **Goals screen glamor pass (G5).** Active goals now sort by the most actionable first —
   nearest target date, then highest percent complete, then name (`goals.LessForList`, pure +
   table-tested) — so a near-complete or time-pressed goal surfaces at the top. Each row gains a
