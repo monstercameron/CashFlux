@@ -311,7 +311,25 @@
          white tile background — ~1.05:1 ratio, completely invisible. Pin .wh headings to
          the darkest foreground token so the title is always readable. */
       [data-theme="light"] .wh h2, [data-theme="light"] .wh h3 { color: #1c1c1e; }
+      /* GX11-F3: the clickable-title variant (.wh-title button) was NOT covered by the
+         h2/h3 override above and inherited near-white text → invisible on the white .w
+         tile in light. Pin it dark too. */
+      [data-theme="light"] .wh .wh-title { color: #1c1c1e; }
       [data-theme="light"] .wh .grip { color: #6a6a72; }
+      /* GX11-F2: widget containers (.w) are already overridden below, but belt-and-suspenders
+         explicit --bg-card surface ensures tiles read as elevated cards in light. */
+      [data-theme="light"] .w { background: var(--bg-card, #ffffff) !important; border-color: #e4e2dd; }
+      /* GX11-F4: bento items have padding managed inside .wh/.wbody; ensure no extra
+         outer padding gap makes them inconsistent — reset outer container padding. */
+      [data-theme="light"] .bento > .w { padding: 0; }
+      /* GX11-F1: alert chips (.attention-item) had transparent bg — first chip especially
+         lacked fill + correct text color in light (white-on-white). Give every chip a solid
+         card surface and pin text dark in light. */
+      [data-theme="light"] .attention-item { background: var(--bg-card, #ffffff); color: #1c1c1e; border-color: #e4e2dd; }
+      /* GX11-F5: is-critical/is-warning chips in light mode showed a colored border on a
+         transparent bg (empty error-box look). Pair the border with a faint danger/warn tint. */
+      [data-theme="light"] .attention-item.is-critical { background: color-mix(in srgb, var(--down, #dc2626) 6%, #ffffff); border-color: color-mix(in srgb, var(--down, #dc2626) 30%, #e4e2dd); }
+      [data-theme="light"] .attention-item.is-warning { background: color-mix(in srgb, var(--warn, #d97706) 6%, #ffffff); border-color: color-mix(in srgb, var(--warn, #d97706) 30%, #e4e2dd); }
       /* G22 CRITICAL: custom page content area had no background-color in light mode — the
          body dark bg bled through the transparent content div as a near-black void. Apply
          the warm-white body bg so bento and empty-state cards sit on the correct surface. */
@@ -345,7 +363,7 @@
          (~3.2:1), so pin a darker value with !important across .empty + widget empties. */
       [data-theme="light"] .empty, [data-theme="light"] .w .empty, [data-theme="light"] .card .empty { color: #4b4b52 !important; }
       /* Widget shell, segmented + stepper pills, nav hover */
-      [data-theme="light"] .w { background: #ffffff; border-color: #e4e2dd; }
+      /* GX11-F2 note: .w light-mode bg+border are now set above (with !important) near the GX11 block */
       [data-theme="light"] .nav:hover { background: #efede8; color: #1c1c1e; }
       [data-theme="light"] .seg, [data-theme="light"] .rpill { background: #efede8; border-color: #e4e2dd; }
       [data-theme="light"] .seg-btn, [data-theme="light"] .rstep { color: #56565c; }

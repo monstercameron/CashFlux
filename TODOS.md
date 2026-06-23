@@ -1,4 +1,4 @@
-# CashFlux — Master Feature Backlog
+﻿# CashFlux — Master Feature Backlog
 
 Single source of truth, **ordered top-to-bottom by implementation priority**. Work in order;
 within a section earlier items unblock later ones. Build **bottom-up** per the SDLC rule
@@ -23454,3 +23454,19 @@ naturally with typed classes), **C69** (theming via tokens)._
 - **GX4-F2:** `role="dialog"` and `aria-modal="true"` are already present on the FlipPanel wrapper in `internal/ui/flippanel.go` (line 218).
 - **GX4-F5:** `aria-label` on `<main>` deferred — low impact, addressed separately if needed.
 - **GX4-F7:** `aria-live` region roles deferred — `polite` on `<div>` is functional; `role="status"` addition is a low-risk follow-up.
+
+
+# GX11. Dashboard re-check (post-fixes) — "The 7am Glance, Revisited" — 2026-06-23
+
+✅ RESOLVED (2026-06-23).
+
+**Fixes shipped:**
+- **GX11-F1 (HIGH):** Alert chips had transparent background — first chip lacked fill and correct text color in light mode (white-on-white). Added light-mode .attention-item rule: bg=--bg-card, color=#1c1c1e, border=#e4e2dd.
+- **GX11-F2 (HIGH):** Widget container (.w) explicit card surface added via !important light-mode override — tiles read as elevated cards in light mode.
+- **GX11-F3 (MEDIUM):** Clickable widget title button (.wh .wh-title) was not covered by the .wh h2/h3 rule — inherited near-white text invisible on white tile. Pinned to #1c1c1e.
+- **GX11-F4 (MEDIUM):** Bento item outer padding consistency ensured — reset to 0 on .bento > .w; padding is managed inside .wh/.wbody.
+- **GX11-F5 (LOW):** is-critical/is-warning alert chips in light mode had colored border on transparent body (empty error-box look). Added faint danger/warn tint backgrounds using color-mix.
+
+**Deferred:**
+- None. All F1-F5 fixes shipped as CSS-only changes in web/index.html.
+
