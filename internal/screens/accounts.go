@@ -31,7 +31,7 @@ import (
 func Accounts() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
 	// Revision atom: bumping it after a mutation re-renders this screen.
@@ -267,11 +267,13 @@ func Accounts() ui.Node {
 	keyOf := func(ac domain.Account) any { return ac.ID }
 
 	return Div(
-		If(len(accounts) == 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("accounts.welcomeTitle")),
-			P(css.Class("muted"), uistate.T("accounts.welcomeDesc")),
-			Button(css.Class("btn btn-primary"), Type("button"), OnClick(loadSample), uistate.T("accounts.loadSample")),
-		)),
+		If(len(accounts) == 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("accounts.welcomeTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("accounts.welcomeDesc")),
+				Button(css.Class("btn btn-primary"), Type("button"), OnClick(loadSample), uistate.T("accounts.loadSample")),
+			),
+		})),
 		// Net-worth-dominant summary (G3 §2/§3): net worth is the household's
 		// north-star figure, so it gets a larger hero tile spanning the full height
 		// with a month-to-date trend subtitle; assets and liabilities sit beside it
@@ -291,18 +293,18 @@ func Accounts() ui.Node {
 			Button(css.Class("btn btn-stale"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
 				Text(uistate.T("accounts.markAll", plural(staleCount, "account")))),
 		)),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("accounts.assets")),
-			IfElse(len(assetList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts}), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
-		),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("dashboard.liabilities")),
-			IfElse(len(liabList) == 0, P(css.Class("empty"), uistate.T("accounts.noLiabilities")), Div(css.Class("rows"), MapKeyed(liabList, keyOf, renderRow))),
-		),
-		If(len(archivedList) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("accounts.archived")),
-			Div(css.Class("rows"), MapKeyed(archivedList, keyOf, renderRow)),
-		)),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("accounts.assets"),
+			Body:  IfElse(len(assetList) == 0, P(css.Class("empty"), uistate.T("accounts.noAssets")), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
+		}),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("dashboard.liabilities"),
+			Body:  IfElse(len(liabList) == 0, P(css.Class("empty"), uistate.T("accounts.noLiabilities")), Div(css.Class("rows"), MapKeyed(liabList, keyOf, renderRow))),
+		}),
+		If(len(archivedList) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("accounts.archived"),
+			Rows:  MapKeyed(archivedList, keyOf, renderRow),
+		})),
 	)
 }
 
