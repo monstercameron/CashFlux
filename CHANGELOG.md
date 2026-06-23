@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **To-do screen glamor pass (G6).** Added a page-level **"+ Add task"** button in the card header,
+  a compact **"N open · N overdue · N done"** summary strip above the list (matching the stat strip
+  every other list screen opens with), and pinned the primary row label to a full-contrast token so
+  task titles stay readable in light mode. Long entity chips no longer collide with the action
+  buttons at narrow widths (shared row reflow).
 - **Dashboard screen glamor pass (G1).** The sample-data banner is now properly styled (its classes
   were unstyled, so "Start fresh" and "Dismiss" ran together as "Start freshDismiss"); the Income
   KPI tile shows a signed **cash-flow** sub-line (income − spending), so Elena's "what changed?" is

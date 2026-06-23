@@ -328,7 +328,12 @@
       .row-edit:first-child { border-top: 0; }
       [data-density="compact"] .row-edit { padding-top: 0.3rem; padding-bottom: 0.3rem; }
       .row-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
-      .row-desc { font-weight: 500; }
+      /* Primary row label stays full-contrast in both themes (G4/G5/G6): it
+         inherits body text, but pin it explicitly so a muted wrapper or a stale
+         utility class can never wash a task/account/goal name out in light mode. */
+      .row-desc { font-weight: 500; color: var(--text); }
+      /* To-do portfolio summary line (G6). */
+      .todo-summary { margin: 0 0 0.6rem; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
       .row-meta { color: var(--text-dim); font-size: 0.82rem; }
       /* Transactions table (C47): a dense, sortable, column-aligned ledger. */
       .txn-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
@@ -978,6 +983,171 @@
       .row.subtask { border-left:2px solid var(--line,#e5e7eb); }
       .rule-grip { display:inline-flex; align-items:center; color:var(--faint,#9ca3af); cursor:grab; flex:none; margin-right:.25rem; }
       .row[draggable="true"]:active { cursor:grabbing; }
+
+      /* ============================================================
+         RESPONSIVE / MOBILE — L11, L32, L33, L36 (2026-06-23)
+         ============================================================ */
+
+      /* --- 1. Tap targets (L11/L36) ---
+         On narrow phones every interactive control should clear the
+         WCAG 2.5.5 / 44px touch-target recommendation. We grow hit
+         areas with padding/min-height only; visual chrome is unchanged
+         on desktop. */
+      @media (max-width: 640px) {
+        /* Primary action buttons */
+        .btn {
+          min-height: 44px;
+          padding-top: clamp(0.5rem, 1.5vw, 0.75rem);
+          padding-bottom: clamp(0.5rem, 1.5vw, 0.75rem);
+          padding-left: clamp(0.6rem, 2vw, 1rem);
+          padding-right: clamp(0.6rem, 2vw, 1rem);
+        }
+        /* Form fields */
+        .field { min-height: 44px; }
+        /* Nav items in the top bar */
+        .nav-link { min-height: 44px; padding-left: 0.75rem; padding-right: 0.75rem; display: inline-flex; align-items: center; }
+        /* Icon-only action buttons in rows (edit/delete/overflow ⋯) */
+        .btn-icon, .btn-del, .td-actions .btn {
+          min-width: 44px;
+          min-height: 44px;
+        }
+        /* Cleared-toggle and row checkbox */
+        .txn-table .clr-toggle,
+        .txn-table .td-select .check {
+          min-width: 44px;
+          min-height: 44px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        /* Pagination controls */
+        .data-pager .btn { min-height: 44px; min-width: 44px; }
+        /* Segmented-control buttons (resolution picker) */
+        .seg-btn { min-height: 44px; padding-left: 0.85rem; padding-right: 0.85rem; }
+        /* Stepper prev/next */
+        .rstep { min-width: 44px; min-height: 44px; }
+        /* Gear / settings inline buttons */
+        .gear-inline, .gear-abs { min-width: 44px; min-height: 44px; }
+      }
+
+      /* --- 2. Period/date controls (L11/L32) ---
+         On phones the resolution+jump+stepper bar should condense
+         without dominating the viewport. */
+      @media (max-width: 640px) {
+        /* Shrink button text in resolution segmented control */
+        .seg-btn { font-size: 0.8rem; }
+        /* Range label: allow shrink/ellipsis instead of forcing wide pill */
+        .rlabel {
+          min-width: 0;
+          max-width: 8rem;
+          text-overflow: ellipsis;
+          overflow: hidden;
+          white-space: nowrap;
+          font-size: 0.75rem;
+        }
+        /* topbar control cluster wraps tidily */
+        .topbar { row-gap: 0.5rem; }
+        .topbar-controls { row-gap: 0.5rem; }
+        /* reso-control: wrap onto its own line, allow children to shrink */
+        .reso-control {
+          flex-wrap: wrap;
+          gap: 0.4rem;
+          width: 100%;
+        }
+        /* rcap "WEEK / MTH / QTR" uppercase labels hidden to save space */
+        .rcap { display: none; }
+      }
+
+      /* --- 3. Bottom nav / mobile tab bar (L11) ---
+         .mobile-tabbar is the CSS hook for a fixed bottom strip on phones.
+         The Go agent wires the markup; these styles make it work.
+         Completely removed from layout on desktop/tablet. */
+      .mobile-tabbar {
+        display: none; /* hidden on desktop */
+      }
+      @media (max-width: 640px) {
+        .mobile-tabbar {
+          display: flex;
+          position: fixed;
+          bottom: 0; left: 0; right: 0;
+          z-index: 20;
+          background: var(--bg-elev, #1a1a1d);
+          border-top: 1px solid var(--border, #2a2a2c);
+          /* dvh-aware padding clears iOS home indicator */
+          padding-bottom: env(safe-area-inset-bottom, 0px);
+          height: calc(56px + env(safe-area-inset-bottom, 0px));
+          align-items: stretch;
+          justify-content: space-around;
+        }
+        .mobile-tabbar .tab-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 0.18rem;
+          flex: 1;
+          min-width: 44px;
+          min-height: 44px;
+          background: transparent;
+          border: 0;
+          color: var(--text-dim, #ababb3);
+          font: inherit;
+          font-size: 0.65rem;
+          letter-spacing: 0.02em;
+          cursor: pointer;
+          transition: color 0.12s ease;
+          padding: 0;
+        }
+        .mobile-tabbar .tab-item.active { color: var(--accent, #2e8b57); }
+        .mobile-tabbar .tab-item:hover  { color: var(--text, #f4f4f5); }
+        .mobile-tabbar .tab-icon {
+          font-size: 1.15rem;
+          line-height: 1;
+        }
+        /* Push page content above the tab bar */
+        .app { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+      }
+
+      /* --- 4. Touch chrome — hide drag/resize handles (L11/L33) ---
+         Bento drag handles and resize handles are desktop interactions.
+         Hide them on touch-primary devices and below the phone breakpoint. */
+      @media (hover: none), (max-width: 640px) {
+        /* Bento resize handles */
+        .rz { display: none !important; }
+        /* Drag-grip icon inside widget headers */
+        .ghandle, .grip { display: none !important; }
+        /* "Reset layout" bento config button */
+        .bento-reset-btn { display: none !important; }
+      }
+
+      /* --- 5. Splash overlay (L2/L6/L11/L12) ---
+         The JS already adds .hidden → opacity 0 + pointer-events:none,
+         then sets display:none after transitionend. Belt-and-suspenders:
+         guarantee pointer-events off during the fade window so the splash
+         can never trap taps on the app beneath it. */
+      #boot.hidden {
+        pointer-events: none !important;
+        z-index: -1;
+      }
+      /* Covers the window between .hidden added and transitionend firing */
+      #boot[style*="display: none"],
+      #boot[style*="display:none"] {
+        display: none !important;
+        pointer-events: none !important;
+      }
+
+      /* --- 6. Fluid type / gaps (L11) ---
+         clamp() scaling between 390 px phone and 1040 px desktop;
+         dvh/svh where the context is the viewport height. */
+      .page {
+        padding-left: clamp(0.75rem, 3vw, 1.25rem);
+        padding-right: clamp(0.75rem, 3vw, 1.25rem);
+        padding-top: clamp(1rem, 3dvh, 1.75rem);
+        padding-bottom: clamp(2rem, 5dvh, 4rem);
+      }
+      .page-title { font-size: clamp(1.25rem, 4vw, 1.6rem); }
+      .card { padding: clamp(0.75rem, 2.5vw, 1.25rem); }
+      .topbar { min-height: clamp(3rem, 6svh, 3.5rem); }
     </style>
   </head>
   <body>

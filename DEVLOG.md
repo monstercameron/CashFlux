@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series — G6 To-do "The Money To-Do List" (series complete)
+
+Final screen. Small, contained pass: a header "+ Add task" button (the global "+" was ~700px from
+the list), a "N open · N overdue · N done" summary strip so the To-do page opens with portfolio
+context like every other list screen, and a global `.row-desc` contrast pin for light mode. The 768
+chip-collision was already solved by the shared `.row` flex-wrap added in G3.
+
+Note: couldn't run a full wasm build to verify at commit time — there were concurrent in-progress
+edits to shell.go/allocate.go/entities.go (a separate "tax-deductible" feature) sitting uncommitted
+and non-compiling in the tree. Left those untouched; the G6 changes mirror the exact patterns from
+the G5/G4 commits that built cleanly, so they're committed independently. The series (G1–G6) is done.
+
 ## 2026-06-23 - feat: GLAMOR series — G1 Dashboard "The 7am Glance"
 
 Auditing G1, several "defects" were already fixed in the code since the screenshots were taken: the

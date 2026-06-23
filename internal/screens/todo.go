@@ -47,6 +47,9 @@ func Todo() ui.Node {
 
 	toggleHideDone := ui.UseEvent(func() { hideDone.Set(!hideDone.Get()) })
 	onFilterPrio := ui.UseEvent(func(e ui.Event) { filterPrio.Set(e.GetValue()) })
+	// Open the add-task modal from the card header (G6: page-level add affordance,
+	// instead of reaching for the global "+" far from the list).
+	addTask := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("task") }))
 
 	tasks := app.Tasks()
 	accounts := app.Accounts()
@@ -188,8 +191,24 @@ func Todo() ui.Node {
 		hideLabel = uistate.T("todo.showAll")
 	}
 
+	// Portfolio summary (G6): a compact open/overdue/done count above the list so
+	// Nina gets the at-a-glance context every other list screen opens with. Counts
+	// are over all tasks, independent of the current view filters.
+	openCount, overdueCount, doneCount := 0, 0, 0
+	today := dateutil.FormatDate(time.Now())
+	for _, t := range tasks {
+		if t.Status == domain.StatusDone {
+			doneCount++
+			continue
+		}
+		openCount++
+		if !t.Due.IsZero() && dateutil.FormatDate(t.Due) < today {
+			overdueCount++
+		}
+	}
+
 	return Section(css.Class("card"),
-		Div(css.Class("budget-head"),
+		Div(css.Class("card-head"),
 			H2(css.Class("card-title"), uistate.T("todo.listTitle")),
 			Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap, tw.ItemsCenter),
 				// Priority filter — lightweight selector; "" means show all (C52).
@@ -201,8 +220,14 @@ func Todo() ui.Node {
 					Option(Value(string(domain.PriorityLow)), SelectedIf(filterPrio.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 				),
 				Button(css.Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
+					uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("todo.addTask"))),
 			),
 		),
+		If(len(tasks) > 0, P(css.Class("todo-summary", tw.TextDim),
+			Text(uistate.T("todo.summary", openCount, overdueCount, doneCount)))),
 		If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 		listBody,
 	)

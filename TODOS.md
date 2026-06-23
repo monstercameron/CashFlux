@@ -10412,6 +10412,281 @@ Most of these pivots are state+UI only — the target screens already filter cor
 
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
 
+### G9. Reports — "The Monthly Review" (Priya) — 2026-06-23 ★
+
+**The story**
+Priya opens Reports on the last day of the month. She wants three things in a single session:
+understand where the money went this period (biggest categories at a glance), see if anything
+looks unusual (big spikes vs the prior month), and export the breakdown for her records. She is
+not reconciling individual transactions — she is doing the 30,000-foot view. The page must let
+her grasp the spending shape in seconds, not make her read every row in a wall of text. C55
+named this exact problem: Reports is "comprehensive & correct, but a long ungrouped scroll of
+text lists." This G9 audit assesses how much of that has been resolved and what remains.
+
+**Drive script**
+`e2e/glamor_09_reports.mjs` — widths 1280/1440/768, dark + light themes (light-theme recipe:
+set `cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`). Navigates from `/`
+via in-app click ("Reports" nav link) to avoid the wasm deep-link 404 (B1). Captures 8
+screenshots plus a DOM audit JSON and a light-mode contrast spot-check. Run:
+`node e2e/glamor_09_reports.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_09_reports_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_09_reports.mjs` → EXIT 0
+- Screenshots captured:
+  `glamor_09_reports_1280_dark.png`, `glamor_09_reports_1280_dark_full.png`,
+  `glamor_09_reports_1440_dark.png`, `glamor_09_reports_768_dark.png`,
+  `glamor_09_reports_1280_light.png`, `glamor_09_reports_1280_light_full.png`,
+  `glamor_09_reports_1440_light.png`, `glamor_09_reports_768_light.png`
+- DOM audit: `glamor_09_reports_dom.json` — 13 cards confirmed, 37 text-list rows across 9
+  list sections, 4 SVG area charts, 1 Mermaid Sankey, 30 share-bars, 6 export buttons,
+  rollup toggle present, tax-summary button present, heads-up card present, 0 page errors.
+- Light theme confirmed: `data-theme="light"` on `<html>` for all light captures.
+- Light contrast spot-check: `cardTitleColor: rgb(244, 244, 245)` on white background —
+  near-invisible (confirmed visually in all light screenshots).
+
+**What already works well (keep — regression anchors)** ✓
+- **Stat-grid headline figures are above the fold at all widths.** Income / Spending / Net /
+  Savings Rate / Cash Runway / No-spend Days all render in the first viewport at 1280/1440 and
+  wrap to two rows at 768px — both readable without scrolling. `statAboveFold: true`
+  DOM-confirmed. ✓
+- **Period caption is explicit and above the stat-grid.** "Covering 2026-06-01 – 2026-07-01 ·
+  compared with 2026-05-01 – 2026-06-01" leaves no ambiguity about which window the numbers
+  cover (L45/L58 fix holding). ✓
+- **Spending-by-category is ordered biggest-first.** DOM audit `rowAmounts` confirms descending
+  order: Housing $2,175 → Groceries $520 → Education & Loans $280 → … ✓
+- **Share-bars give proportional visual context to every list row (C55 partial fix — bars
+  present).** `shareBars: 30` in DOM audit; bars visible in dark screenshots. ✓
+- **Delta arrows and % change are present per category row** — Groceries ↓24%, Shopping ↑13%,
+  Dining ↓33% — comparisons visible without reading prose. ✓
+- **Plain-English narrative is present** above the category list: "You spent $4,068.00 across
+  14 categories. Your biggest expense was Housing at $2,175.00. Groceries fell 24% to $520.00
+  versus the prior period." The key takeaway is stated immediately above the list. ✓
+- **Heads-up anomaly card appears above Spending by category** — C55 "unusual" surfacing works:
+  "Transit is 200% above its usual." and "Health & Fitness is 61% above its usual." are above
+  the fold in the first card. ✓
+- **Area charts are present for Cash flow, Net-worth trend, and Savings-rate trend.** DOM audit:
+  `svgCount: 63` (SVG area chart elements present in all chart cards). ✓
+- **Money-flow Sankey is rendered** ("Money flow" card, `mermaidCount: 1`) — high-level income
+  → category fan-out is visualized. ✓
+- **Export buttons are per-section (not buried at bottom).** "Download CSV" and "Tax summary
+  (year)" are inside the relevant card, not in a separate export section. ✓
+- **Rollup toggle is accessible.** `[data-testid="reports-rollup-toggle"]` with `aria-pressed`
+  present. DOM-confirmed. ✓
+- **No horizontal overflow at any width.** `overflowCards: 0` at 1280px dark. ✓
+- **Zero JavaScript page errors.** Dark and light sessions both clean. ✓
+- **Category amounts render correctly — dollar values present and non-zero.** `firstRowAmt:
+  $2,175.00` DOM-confirmed; budget-amount spans present on all 37 rows. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout — C55 core issue: 13 cards, no section grouping, ungrouped scroll*
+- [ ] **13 cards with no visual section grouping — the C55 "long ungrouped scroll" problem is
+      still the dominant issue.** The page has: stat-grid (bare, no card wrapper) → Heads up →
+      Spending by category → Money flow → Biggest deposits → Income by source → Top payees →
+      Biggest expenses → Spending by member → Cash flow → Net worth → Net worth trend →
+      Savings-rate trend → Spending by Project. These 13 cards have no section headers
+      separating "This period's spending" from "Income breakdown" from "Trend charts". Priya
+      must scroll through ~9 list-of-text cards before reaching any trend chart. A two-column
+      layout (spending breakdown left, charts right) at ≥1024px, or at minimum a "— Spending —"
+      / "— Income —" / "— Trends —" section divider, would let her navigate the page instead
+      of scrolling it linearly.
+- [ ] **No charts in the spending breakdown section — share-bars are present but no bar or
+      pie chart visualizing the category split.** At first scroll below the Sankey, the page
+      reverts to text lists (Biggest deposits, Income by source, Top payees, Biggest expenses,
+      Spending by member — all pure text rows with no proportional bar chart or donut). A
+      horizontal bar chart or donut chart for the top spending categories would give Priya
+      instant shape at the top; the detailed text list can follow beneath it. The Sankey
+      (Money flow) is several cards below where it would be most useful.
+- [ ] **"Money flow" Sankey is card 3 (position after Spending by category) but visually it
+      belongs above or alongside the category list as the summary view.** Currently: stat-grid
+      → Heads up → Spending by category (text list) → Money flow (Sankey). The Sankey is the
+      highest-glanceability element on the page but is hidden one scroll below the text list it
+      summarizes. Swap: Sankey immediately after stat-grid / Heads up, then the detailed text
+      list below it.
+- [ ] **Period control (Week/Month/Quarter/Year + nav arrows) is in the shared top bar, not
+      co-located with the report content.** This is consistent with other pages but means
+      Priya must look up to the top bar to understand the window, while the period caption
+      (the "Covering…" line) appears inside the content area. The period control placement is
+      acceptable but the "Covering…" line could be made more visually prominent (larger,
+      slightly bolder) so it reads as the report's title, not a footnote. Currently it is
+      `t-caption` style — same weight as muted text.
+
+*2. Spacing — wall of cards, no breathing room between logical groups*
+- [ ] **No visual separation between the "spending this period" cluster and the "trends" cluster.**
+      Cards 9–12 (Cash flow, Net worth, Net worth trend, Savings-rate trend) are trend charts
+      that belong to a separate mental model from the period-specific spending breakdown above
+      them, but they are separated only by the same ~12px card gap used between every other
+      card. A 32–40px section break or a section header ("Trends over the last 6 periods")
+      before the Cash flow card would visually reset Priya's scan.
+- [ ] **"Heads up" card is nearly flush with the stat-grid above (~8px gap).** The anomaly
+      card is the most actionable content on the page but its proximity to the stat-grid makes
+      it read as a footnote to the stats rather than an alert. A 20–24px gap or a subtle
+      accent-left border would elevate it.
+- [ ] **Category rows have ~6px between each row item.** With 14 rows in the Spending by
+      category card, the list is dense. The share-bar `margin-top: 0.3rem` adds minimal
+      relief. Row padding of 8–10px (vs ~6px) would improve scannability without excessive
+      length. Visible in `glamor_09_reports_1280_dark.png`.
+
+*3. Theming — systemic light-mode token failure (G4/G5/G6/G7/G8 pattern recurring)*
+- [ ] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
+      G4–G8).** Computed style: `cardTitleColor: rgb(244, 244, 245)` on a white card
+      background — effectively white-on-white. Confirmed visually in
+      `glamor_09_reports_1280_light.png`, `glamor_09_reports_1440_light.png`,
+      `glamor_09_reports_768_light.png`: "Heads up" and "Spending by category" titles are
+      invisible; their card content is legible but orphaned from its header. All 13 card
+      titles affected.
+- [ ] **Category names (`.row-desc`) near-invisible in light mode.** Computed style:
+      `rowDescColor: rgb(244, 244, 245)` — same near-white token as card titles. In
+      `glamor_09_reports_1280_light_full.png` the category names "Housing", "Groceries",
+      "Education & Loans" etc. are invisible; only the share-bar and dollar amount remain.
+      The dollar amounts are `rgb(86, 86, 92)` (low-contrast grey) and the amounts at
+      `$2,175.00` are the only readable element in each row. WCAG AA requires ≥4.5:1 for
+      normal text; `rgb(244, 244, 245)` on white is approximately 1.02:1 — a complete fail.
+- [ ] **Stat-grid labels near-invisible in light mode.** Computed style:
+      `statLabelColor: rgb(86, 86, 92)` — "INCOME", "SPENDING", "NET" labels are low-contrast
+      grey on white. Only the colored stat values (green income, red spending) remain readable;
+      the label row that identifies each figure is faint. Confirmed in
+      `glamor_09_reports_1280_light.png`.
+- [ ] **Muted text and narrative near-invisible in light mode.** `mutedColor: rgb(86, 86, 92)`.
+      The plain-English narrative ("Spending is down 1% versus the previous period. 19
+      purchases…") and the Heads-up anomaly body text render in low-contrast grey in light
+      mode. These are among the most useful sentences on the page for Priya.
+- [ ] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
+      rgb(86, 86, 92)`. Category amounts like "$2,175.00" that Priya is here to read are
+      styled as secondary/muted text, making them harder to scan than they should be. In dark
+      mode these read fine (light text on dark card); in light mode the same token produces
+      low contrast. Amount figures should use `--fg` (strong) not `--fg-muted` in both
+      themes.
+
+*4. Styling — typography hierarchy and chart labeling*
+- [ ] **"Roll up sub-categories" button is visually equal to "Download CSV" and "Tax summary
+      (year)" — tertiary toggle reads as a primary action.** At 1280px the roll-up toggle is a
+      large right-aligned `.btn` in the card header row, competing with the "Spending by
+      category" title. It should be a compact secondary/ghost button or a toggle chip, not a
+      full `.btn` that dominates the card header. Confirmed in `glamor_09_reports_1280_dark.png`.
+- [ ] **Area chart labels (Cash flow, Net worth trend, Savings-rate trend) are not visible on
+      the charts themselves.** The card title above each chart labels it, but the chart SVG
+      has no axis labels, no Y-axis scale, and no period labels on the X-axis. A user cannot
+      tell from the chart alone whether the net-worth trend Y-axis spans $0–$10k or $0–$1M,
+      or what time interval each point represents. Minimal axis labels (first and last period
+      on X, min/max value on Y) would make these charts independently readable.
+- [ ] **"Biggest deposits" section has no share-bars (unlike Spending by category and Top
+      payees).** `sectionInfo[3].hasShareBars: false`. The Biggest deposits list is 2 rows of
+      plain text with amount right-aligned — no proportional visual. Applying the same
+      share-bar pattern would make this list consistent and scannable.
+- [ ] **"Spending by member" section has no share-bars.** `sectionInfo[7].hasShareBars: false`.
+      2 member rows with amounts only; no proportional bars. A share-bar per member would
+      give instant "who spent most" at a glance.
+
+*5. Positioning — what matters should lead*
+- [ ] **The most important single piece of information (biggest spending category) is buried
+      below three prose lines before the list begins.** Priya's question is "where did the
+      money go?" The answer is "Housing: $2,175.00 (53% of total spending)". This answer
+      appears as row 1 of the category list, but it is preceded by: (a) the covering-period
+      caption, (b) the 6-stat stat-grid, (c) a "Spending is down 1%" prose line, (d) "19
+      purchases · average…" prose line, (e) the Heads-up card, (f) the Spending by category
+      card title and a 2-sentence narrative. The big number does not lead. A single prominent
+      "this period's biggest category" callout (e.g. "Housing · $2,175 · 53% of spend") as a
+      seventh stat in the stat-grid, or as a large highlighted row before the list, would
+      serve Priya's core question first.
+- [ ] **Export buttons (6 of them, one per section) have no visual hierarchy.** All six
+      "Download CSV" buttons are identical `.btn` elements; "Tax summary (year)" is also a
+      `.btn`. There is no master "Export all" or period-level export affordance. A user who
+      wants to export everything must scroll and click six times. A top-level "Export…"
+      dropdown or button above the stat-grid would be more discoverable.
+
+*6. Ordering — section sequence does not match Priya's mental model*
+- [ ] **Section order: Heads up → Spending by category → Money flow → Biggest deposits →
+      Income by source → Top payees → Biggest expenses → Spending by member → trend charts.
+      The Sankey (Money flow) and the trend charts are interleaved with spending detail rather
+      than grouped.** A more coherent section order for Priya's "monthly review" mental model
+      would be: (A) This period at a glance (stat-grid + Heads up) → (B) Where the money went
+      (Sankey summary + Spending by category + Biggest expenses + Top payees) → (C) Where it
+      came from (Income by source + Biggest deposits) → (D) Household breakdown (Spending by
+      member + custom-field grouping) → (E) Trends (Cash flow + Net worth + Savings-rate).
+      Currently (C) Income precedes (B) Biggest expenses, and trend charts are scattered
+      among detail lists rather than grouped at the end.
+- [ ] **"Income by source" and "Biggest deposits" appear before "Top payees" and "Biggest
+      expenses" in the current order.** For Priya's spending-review use case, income is
+      secondary context; she cares more about where money went (payees, biggest expenses)
+      before she wants income detail. The current order is roughly chronological by
+      when the sections were added, not ordered by Priya's priority.
+
+*7. General UX / Glanceability — C55 re-assessment*
+- [ ] **C55 verdict — "comprehensive & correct, but a long ungrouped scroll of text lists" —
+      is still ~70% accurate.** The page has improved since C55 (share-bars added, narrative
+      present, Sankey added, anomaly surfaced, Charts present for trends), but the dominant
+      experience remains: scroll 13 cards, all visually identical in weight, with no landmark
+      section headers to orient Priya. The three trend charts (Cash flow, Net worth trend,
+      Savings-rate) are the highest-visual-density content on the page but require 3–4
+      viewports of scrolling to reach. Cross-reference C55.
+- [ ] **No "jump to" anchors or table of contents for the 13-card page.** A sticky sidebar
+      mini-nav ("Spending · Income · Trends") or an in-page anchor jump list at the top would
+      let Priya skip directly to the section she wants — especially relevant on mobile (768px)
+      where the page is very long.
+- [ ] **Drill-to-transactions from a category row is absent.** Priya sees "Housing $2,175.00"
+      and wants to know which individual transactions make that up. There is no drill button
+      or link on category rows. The Transactions page has filters (L58), but there is no
+      bridge from a Reports category row to a pre-filtered transaction list. Cross-reference
+      L58 (drill confirmed on Transactions, but the Reports→Transactions path is missing).
+- [ ] **The "covering period" line (`t-caption`) is visually identical to muted prose lines.**
+      It is the most important label on the page (it tells Priya what the numbers mean) but
+      renders in the same small grey caption style as "Spending is down 1%…" A slightly
+      larger or bolder treatment would distinguish it as the report header, not a detail line.
+- [ ] **At 768px, stat-grid wraps to two rows (3 stats each) with a gap between the rows.**
+      The second row (Savings Rate / Cash Runway / No-spend Days) is visible without
+      scrolling in `glamor_09_reports_768_dark.png` — no clipping or overflow. This is
+      acceptable but the second row feels orphaned from the first. A single 2×3 grid (all 6
+      in two rows, no row break gap) would look more intentional. Confirmed visually.
+- [ ] **"No-spend days: 9" is the rightmost stat but carries no context.** A user who hasn't
+      read the docs won't know if 9 no-spend days is good, great, or average for a month.
+      A small subtitle ("out of 22 elapsed days") or a colored accent (green for above-
+      average) would add instant meaning. Same issue for "Cash runway: 6 months" — the
+      `accentForRunway` function does apply a green accent for ≥6, but 6 months is the
+      threshold, so a first-time user might not know if this is safe or concerning.
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Symptom | Fix |
+|---|------|---------|-----|
+| D1 | `glamor_09_reports_1280_light.png`, `glamor_09_reports_1440_light.png`, `glamor_09_reports_768_light.png` | Card titles ("Heads up", "Spending by category", etc.) near-invisible — computed `rgb(244,244,245)` on white. Systemic `--fg` token failure (G4–G8 pattern) | `h2.card-title` must use `--fg` or a full-weight token in light mode |
+| D2 | `glamor_09_reports_1280_light_full.png`, `glamor_09_reports_768_light.png` | Category names (`.row-desc`) near-invisible in light mode — same `rgb(244,244,245)` near-white on white; WCAG AA fail (≈1.02:1) | `.row-desc` must use `--fg` in light mode |
+| D3 | `glamor_09_reports_1280_light.png`, `glamor_09_reports_1440_light.png` | Dollar amounts (`.budget-amount`) low-contrast grey `rgb(86,86,92)` in light mode — amounts are Priya's primary data | `.budget-amount` should use `--fg` (strong) not muted token in light mode |
+| D4 | `glamor_09_reports_1280_light.png` | Muted narrative text and stat labels (`rgb(86,86,92)`) below WCAG AA on white background | `--fg-muted` token needs a higher-contrast value in light mode, or `.muted` must use a distinct light-mode override |
+| D5 | `glamor_09_reports_1280_dark.png`, `glamor_09_reports_1440_dark.png` | "Roll up sub-categories" is a full `.btn` in the card header — visually dominates over the card title | Reduce to compact ghost/secondary button or toggle chip |
+| D6 | `glamor_09_reports_1280_dark_full.png` | 13 cards with no section dividers — page is a single undifferentiated scroll (C55 core issue) | Add section headers ("Spending", "Income", "Trends") before logical card groups |
+| D7 | `glamor_09_reports_1280_dark_full.png` | Sankey ("Money flow") is card 3 but is the highest-glanceability summary element — should be card 1 after stat-grid | Promote Sankey to immediately after stat-grid / Heads up |
+| D8 | `glamor_09_reports_1280_dark.png` | "Covering…" period caption uses `t-caption` style — same weight as muted prose; as the report's date-range label it needs more visual weight | Increase to at least `font-weight: 500` or use a dedicated `.report-period` style |
+
+**Re-screenshot close-out requirement:** After D1/D2/D3/D4 (light-mode contrast fixes) and D6
+(section dividers), re-run `node e2e/glamor_09_reports.mjs` and confirm: (a) card titles
+readable in light mode on white background, (b) category names and amounts readable in light
+mode, (c) section grouping headers visible between logical clusters, (d) all 8 screenshots
+captured cleanly.
+
+**Probe hardening**
+- Drive script uses in-app navigation (click "Reports" nav link from `/`) rather than direct
+  deep-link to `/reports` — required because `gwc dev` returns 404 for non-root paths (B1).
+- Wait condition is `.stat-grid` with 1000ms settle — chosen over `.card` because the stat-grid
+  is always present (cards are conditional on data); the extra settle time accommodates the
+  Mermaid Sankey render which uses a JS library with an async paint cycle.
+- "View as member" reset: removes `viewAsMember` from `cashflux:prefs` before navigation.
+- Light theme is set via the full localStorage recipe (set + reload + waitForFunction on
+  `data-theme="light"`) — not a nav click — to avoid the member-filter reset clobbering the
+  theme preference.
+
+**Cross-references**
+- C55: "Reports is comprehensive & correct, but a long ungrouped scroll of text lists" — D6/D7
+  directly address this; the section-grouping and Sankey-positioning fixes are the primary
+  structural response.
+- L45/L58: Period persistence + drill-from-transactions confirmed working. G9 surfaces the
+  missing Reports→Transactions drill path (dimension 7, third bullet).
+- G4/G5/G6/G7/G8: Same systemic `--fg` light-mode token failure — D1/D2/D3/D4 are the sixth
+  page to exhibit this; a global token fix (not per-page patch) is warranted.
+
+---
+
 ### G7. Planning — "The What-If Sunday" (Dev) — 2026-06-23 ★
 
 **The story**
@@ -10637,6 +10912,13 @@ confirm: (a) card titles readable in light mode, (b) X-axis shows "Jul 2026"/"Au
 - L27: "Plan comparison overlay" — compare-with-plan select confirmed present in DOM ✓.
 
 ### G6. To-do — "The Money To-Do List" (Nina) — 2026-06-22 ★
+
+**✅ RESOLVED (2026-06-23).** Consolidated defects shipped:
+- D1 (task titles faint in light) — global `.row-desc { color: var(--text) }` pin (covers tasks, accounts, goals).
+- D2 (no Add affordance) — "+ Add task" button in the card header (`.card-head`) opening the add-task modal.
+- D3 (768 chip wrap/collide) — covered by the series-wide `@media (max-width:760px) .row { flex-wrap }` reflow.
+- Summary strip — a compact **"N open · N overdue · N done"** line above the list, matching the stat-strip every other list screen opens with.
+View in `todo.go`; CSS in `web/index.html`; i18n `todo.addTask/summary`.
 
 **The story**
 Nina, 31, uses the To-do page as her financial action queue. She keeps tasks like "call about the
