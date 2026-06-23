@@ -1,4 +1,4 @@
-﻿# CashFlux — Master Feature Backlog
+# CashFlux — Master Feature Backlog
 
 Single source of truth, **ordered top-to-bottom by implementation priority**. Work in order;
 within a section earlier items unblock later ones. Build **bottom-up** per the SDLC rule
@@ -2396,7 +2396,7 @@ The mapping + AI layers operate on the normalized output, so adding a format = o
       SpreadsheetML reader or excelize, **watch wasm bundle size** via `gwc size`), **OFX/QFX** (structured →
       **no mapping needed**).
 - [x] **Tier 2 (local):** **DOCX** tables (`<w:tbl>` from ZIP+XML), **text-based PDF** (pure-Go extractor).
-- [ ] **Tier 3 (AI fallback, opt-in):** **scanned/columnar PDF** (render → vision, reuse existing), **legacy
+- [x] **Tier 3 (AI fallback, opt-in):** **scanned/columnar PDF** (render → vision, reuse existing), **legacy
       .xls/.doc** (binary — pure-Go is weak; AI or guide "save as .xlsx/.csv"), images.
 - [x] **Security:** XLSX/DOCX are zip archives → **zip-bomb guard** (cap decompressed size); keep
       `encoding/xml` external-entity resolution off (XXE). **Bundle size:** Go parsers compile into the wasm
@@ -2412,9 +2412,9 @@ The mapping + AI layers operate on the normalized output, so adding a format = o
       preview in the wizard) → satisfies the determinism/explainability rule and keeps data **fully local**.
 
 **C. AI extraction (||) + AI categorization.**
-- [ ] Wizard offers **"Map columns" (deterministic) OR "Extract with AI"** per the `||` ask; AI path extends
+- [x] Wizard offers **"Map columns" (deterministic) OR "Extract with AI"** per the `||` ask; AI path extends
       the existing vision/LLM engine to PDF/scanned.
-- [ ] **Per-line-item categorization:** `rules`/`rulesuggest` first (free, local), then an **AI fallback**
+- [x] **Per-line-item categorization:** `rules`/`rulesuggest` first (free, local), then an **AI fallback**
       (BYO-key) for unmatched rows, surfaced as accept/dismiss in the draft review. Reuses `ai` + `rules`.
 
 **D. Scheduled upload reminders.**
@@ -21071,6 +21071,376 @@ Upgrade the B6 probe if GX6-F2 ships SVG carets.
 | GX3-D2 | Screenshot evidence of original dark-on-dark defect — now RESOLVED |
 | GX6-F2 | Sort caret Unicode → SVG replacement (open; GX12 measurement confirms no text caret) |
 | GX6-D3 | Descending sort has no caret (open; confirmed still absent) |
+
+
+### GX13. Budgets re-check (post-fixes) — "The Mid-Month Pulse, Revisited" — 2026-06-22 ★
+
+---
+
+## The story
+
+Renu opens CashFlux mid-June. She's run this page before — it used to be a wall of white-on-white
+ghosts. The G4 light-mode fixes landed since then: category names, stat figures, sub-line text all
+got explicit dark pins. She flips to light mode and scans her budgets. Most of the contrast
+ghosts are gone — but "Groceries" and "Shopping" are still invisible category names; the
+BUDGETED stat card is a faint grey smear; the bar tracks have a dark stripe through them on
+the white card. Two regressions confirmed, one coverage gap, two structural residuals.
+
+---
+
+## Drive script
+
+**File:** `e2e/gx_13_budgets_recheck.mjs`
+**Run:** `node e2e/gx_13_budgets_recheck.mjs` from `C:\Users\mreca\Desktop\CashFlux`
+**Exit code:** 0 (clean — probe did not throw)
+**Navigation strategy:** Playwright clicks the "Budgets" nav link rather than relying on hash
+routing (stale WASM / GI0 build means cold `/#budgets` resolves to Dashboard on first load).
+Route confirmed `/budgets`, title confirmed `Budgets · CashFlux` across all runs.
+
+---
+
+## Regression confirm (G4 light-mode contrast)
+
+### A1. Category names — FAIL
+
+**Selector:** `.budget-head .row-desc` (actual element = `BUTTON.row-desc.budget-drill`)
+**Computed:** `color: rgb(244, 244, 245)` on a white card (`rgb(255, 255, 255)`)
+**Contrast ratio:** **1.1:1** — effectively invisible
+
+The existing CSS fix at line 301 of `web/index.html` pins:
+
+```css
+[data-theme="light"] .budget .row-desc { color: #1c1c1e; }
+```
+
+This matches an unlinked budget row which renders `Span(css.Class("row-desc"), title)`. But a
+budget with a linked category renders `Button(css.Class("row-desc budget-drill"), ...)` — a
+`<button>` element not matched by the `.budget .row-desc` pin, which targets the element
+directly (not the class on a button). The `.budget-drill` class receives no light-mode color
+pin, so it falls through to `--fg`/`--text` which resolves to the dark-theme near-white at
+runtime.
+
+**Fix (CSS-ONLY):** Add `.budget-drill` to the existing light-mode pin:
+
+```css
+[data-theme="light"] .budget .row-desc,
+[data-theme="light"] .budget-drill { color: #1c1c1e; }
+```
+
+Screenshot evidence: `gx13_budgets_light_1280.png`, `gx13_budgets_light_1440.png`,
+`gx13_budgets_light_768.png` — "Groceries", "Shopping", "Transportation", "Subscriptions",
+"Dining", "Entertainment", "Gifts & Charity" all invisible (all have linked categories,
+all render `.budget-drill`).
+
+### A2. BUDGETED stat figure — PARTIAL PASS (with note)
+
+**Selector:** `.stat-grid .stat-value` (first match = Spent stat)
+**Computed values (light, 1280px):**
+- Spent: `rgb(216, 113, 111)` — semantic red (danger) — 3.23:1 against white; intentional
+  semantic color, acceptable for a warning value
+- Budgeted: `rgb(28, 28, 30)` — 17.01:1 — **PASS** (CSS pin working)
+- Left: `rgb(46, 139, 87)` — semantic green — readable; intentional
+
+The "Budgeted" value appearing faint in screenshots is a visual illusion from the dark stat
+card backgrounds (the stat grid sits on a dark tile in light mode — see F1 below). The text
+itself is correctly dark. The PASS here is limited: the stat grid background is the real
+problem (see F1).
+
+### A3. `.budget-amount` — PASS
+
+**Selector:** `.budget-head .budget-amount`
+**Computed:** `rgb(28, 28, 30)` — **17.01:1** against white card. CSS pin working.
+
+### A4. Progress bar fill colors — PASS (fill tones correct; track is broken — see F2)
+
+**Measured fills:**
+- Over: `rgb(216, 113, 111)` (danger red) ✓
+- Near/At-risk: `rgb(245, 158, 11)` (amber) ✓
+- On-track: `rgb(46, 139, 87)` (green) ✓
+- 0%-width fills: correct class (`bar-fill`) but width `0%` — see F2
+
+### A5. Sub-line text — PASS
+
+**Selector:** `.budget-sub`
+**Computed:** `rgb(60, 60, 67)` — **10.94:1** against white. CSS pin working.
+Sub-line text is readable in both themes.
+
+---
+
+## What already works well (keep)
+
+- **Severity sort is correct and consistent.** Over rows first (Groceries 115%, Shopping 107%),
+  then At-risk (Transportation 77% + pace warning), then On-track sorted by percent used
+  descending. The G4 health-first sort landed and works. ✓
+- **Sub-line is properly split into two distinct `<span>` elements.** The G4 run-on fix landed —
+  "Over budget · ($70.00) left" is a primary span, "Monthly · 100% used" is a secondary dimmer
+  span. Each is its own node, not a dot-separated string. ✓
+- **Semantic bar fill colors are correct in both themes.** Red over, amber near/at-risk, green
+  on-track — consistently applied. ✓
+- **`.budget-amount` contrast is dark and correct in light (17:1).** ✓
+- **`.budget-sub` contrast is correct in light (10.94:1).** ✓
+- **Row-level drill-down works.** Budget names link to Transactions filtered by category (C30
+  drill pattern). The drillable button renders correctly. ✓
+- **Cover… / Top up… inline forms render cleanly** and don't pollute the row layout in either
+  theme. ✓
+- **Dark mode is clean throughout** — category names readable, stats clear, bars vivid. ✓
+
+---
+
+## Residual structure fixes
+
+### F1 [CSS-ONLY] — CRITICAL: Stat grid tile uses dark background in light mode
+
+**Observed:** The SPENT/BUDGETED/LEFT stat grid (`div.stat-grid`) computes
+`background: rgba(0,0,0,0)` — transparent. The parent card/tile behind it is still resolving
+to the dark surface (`#121214` or similar) via runtime WASM variables, producing a dark stat
+region on what should be a light page. Visible in all light screenshots: the three stat tiles
+appear as dark blocks with text at varying legibility.
+
+**Measured:** `statGrid.background = rgba(0,0,0,0)` (light 1280, 768, 1440 — consistent).
+
+**Root cause:** Same as the systemic issue documented in G4–G13: the WASM engine emits
+runtime CSS variables for card/tile backgrounds that outrank the `[data-theme="light"]`
+palette overrides. The existing rule at index.html line 336:
+
+```css
+[data-theme="light"] .bento, [data-theme="light"] .bento + *,
+[data-theme="light"] main > div { background-color: var(--bg); }
+```
+
+...does not reach the stat grid because it is nested inside the Budgets page component,
+which the WASM runtime wraps in its own host element with a runtime background variable.
+
+**Fix:** Add an explicit light-mode background pin for the stat grid and its containing
+entity-list surface:
+
+```css
+[data-theme="light"] .stat-grid { background: var(--bg-card, #ffffff); }
+[data-theme="light"] .stat { background: var(--bg-card, #ffffff); border-color: #e4e2dd; }
+```
+
+Cross-reference: G4 D1, G5–G13 (systemic pattern; this is the Budgets-page manifestation).
+
+### F2 [CSS-ONLY] — CRITICAL: Bar track (`div.bar`) dark in light mode
+
+**Observed:** `.bar` computes `background: rgb(32, 32, 34)` in light mode — this is the dark
+theme's `--bg-elev` value. The rule is:
+
+```css
+.bar { background: var(--bg-elev); ... }
+```
+
+In light mode, `--bg-elev` should resolve to `#efede8` (as set in the `[data-theme="light"]`
+block at line 276). But the WASM runtime re-emits `--bg-elev` as the dark token
+(`#1a1a1d` → renders as `rgb(26,26,29)` or `rgb(32,32,34)`) before the CSS override can
+apply. The result: a dark 8px horizontal band cuts across every budget row on an otherwise
+white card.
+
+**Secondary effect:** The two 0%-width bars (Entertainment, Gifts & Charity) show as a plain
+dark stripe with no fill visible — the green `rgb(46,139,87)` fill at `0%` width means the
+track alone is shown. Dark track on white is discordant.
+
+**Fix:** Pin `.bar` track background explicitly in light mode:
+
+```css
+[data-theme="light"] .bar { background: #e4e2dd; border-color: #cfcdc7; }
+```
+
+`#e4e2dd` is the light-mode `--border` token — slightly darker than `--bg-elev` (#efede8),
+providing the "more contrast than bg-elev so a 0% bar reads as a track" intent from the
+original comment, but in the correct light surface context.
+
+Screenshot evidence: `gx13_budgets_light_1280.png` — dark horizontal bands visible under
+every budget row name area.
+
+### F3 [CSS-ONLY] — Category name missing coverage for `.budget-drill` button
+
+**Observed:** Fully documented above in A1. Category names `rgb(244,244,245)` → 1.1:1.
+
+**Fix:**
+```css
+/* In the existing block at line 297–301 of web/index.html: */
+[data-theme="light"] .card-title, [data-theme="light"] .page-title,
+[data-theme="light"] .row-desc, [data-theme="light"] .stat-value,
+[data-theme="light"] .budget-amount, [data-theme="light"] .budget-drill,
+[data-theme="light"] .amount:not(.amount-income):not(.amount-expense),
+[data-theme="light"] .budget .row-desc { color: #1c1c1e; }
+```
+
+Simply add `.budget-drill` to the comma list. No structural change required.
+
+### F4 [CSS-ONLY] — MEDIUM: Near-limit amber pill absent from summary when pace-only "at risk"
+
+**Observed:** Only "2 over budget" (red pill) appears in the budget summary. Transportation
+is `barFillClass: "bar-fill near"` (amber bar) with sub-line "At risk · $49.00 left" and
+"At this pace, projected to go over by $4.61" — but its health state is `StateOnTrack` with
+`paceOver` set, not `StateNear`. The `nearCount` pill only fires on `s.State == StateNear`.
+A user scanning the summary sees "2 over budget" but no amber signal despite one row showing
+amber. This breaks the summary-to-detail correspondence.
+
+**Fix [GO-STRUCTURAL]:** In `internal/screens/budgets.go`, include `paceOver[s.Budget.ID] != ""`
+rows in `nearCount` (or a separate `atRiskCount`):
+
+```go
+// Current:
+case budgeting.StateNear:
+    nearCount++
+
+// Proposed: add after the switch:
+if s.State != budgeting.StateOver && s.State != budgeting.StateNear && paceOver[s.Budget.ID] != "" {
+    nearCount++ // at-risk rows count toward the amber pill
+}
+```
+
+Or introduce a distinct `atRiskCount` and render a separate "N at risk" amber pill alongside
+the over/near pills. Either way: what the summary pill row says must match the color signal
+on the actual rows.
+
+**Note:** This is a GO-STRUCTURAL fix — requires WASM rebuild (breaks GI0 build constraint
+for the current session). Tag for next build cycle.
+
+### F5 [CSS-ONLY] — LOW: Row separator color dark in light mode
+
+**Observed:** `.budget` has `border-top: 1px solid var(--border)`. Computed
+`borderBottomColor: rgb(244,244,245)` — the dark-theme border color on a white card.
+This produces near-invisible row separators (1.1:1 on white). The light-mode
+`--border: #e4e2dd` should apply but is again outranked by runtime WASM vars.
+
+**Fix:** Pin `.budget` border color explicitly:
+
+```css
+[data-theme="light"] .budget { border-top-color: #e4e2dd; }
+```
+
+`#e4e2dd` provides ~2.2:1 against white — appropriate for a structural divider (not text;
+ISO/WCAG non-text contrast at 3:1 is a target but a subtle divider at 2.2:1 is
+acceptable given the row still has padding separation).
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+### D1. Light mode: category names completely invisible — `gx13_budgets_light_1280.png`
+
+All 7 budget rows have linked categories, all render `.budget-drill`. Every category name
+is `rgb(244,244,245)` on `rgb(255,255,255)` — 1.1:1 ratio. Visually: the name column of
+every budget row is blank. Users cannot tell what each budget tracks.
+**File:** `gx13_budgets_light_1280.png`, `gx13_budgets_light_1440.png`, `gx13_budgets_light_768.png`
+**Severity: CRITICAL (blocks readability of the entire page in light mode)**
+
+### D2. Light mode: dark bar tracks cut across white card — `gx13_budgets_light_1280.png`
+
+Every `.bar` track renders as `rgb(32,32,34)` — a dark chocolate-brown stripe across each
+budget row on the white card background. At 8px height and full row width this is visually
+jarring and inconsistent with the white card surface.
+**File:** `gx13_budgets_light_1280.png`
+**Severity: HIGH (visual breakage — dark elements on light surface)**
+
+### D3. Light mode: stat grid tiles are dark on light page — `gx13_budgets_light_1280.png`
+
+The SPENT/BUDGETED/LEFT stat tiles sit on a dark background in light mode.
+"BUDGETED $1,585.00" reads as white text on black — inverted from the rest of the
+white-card layout. Inconsistent theming within the same page view.
+**File:** `gx13_budgets_light_1280.png`
+**Severity: HIGH (dark islands on light page; same systemic token failure as G4–G13)**
+
+---
+
+## Probe hardening
+
+The initial probe version (first run) failed to reach the Budgets page — cold `/#budgets`
+load in headless Playwright landed on the Dashboard because the stale WASM (GI0 build)
+didn't honor the hash route within the probe's 2-second window. The fix: wait for the
+rail to render, then click the "Budgets" nav link. This is now the standard navigation
+strategy for all page-specific GX probes under GI0 conditions.
+
+**Pattern for future probes:**
+```javascript
+await page.waitForSelector('.rail, aside, nav', { timeout: 8000 });
+const navLink = page.locator('a[href*="budgets"], .nv:has-text("Budgets")').first();
+await navLink.click();
+await page.waitForTimeout(1500);
+```
+
+The probe should also add a post-nav assertion that `document.title` matches the expected
+page (e.g., `"Budgets · CashFlux"`) to guard against silent navigation failures — currently
+this is inferred from `domDump.title` in the JSON output rather than asserted in the probe.
+
+---
+
+## Summary table
+
+| ID  | Finding                                      | Severity | Tag             | Status        |
+|-----|----------------------------------------------|----------|-----------------|---------------|
+| A1  | Category names invisible (`.budget-drill`)   | CRITICAL | CSS-ONLY        | FAIL — new gap|
+| A2  | Stat values (Budgeted/Left)                  | —        | CSS-ONLY        | PASS          |
+| A3  | `.budget-amount` spent/limit figures         | —        | CSS-ONLY        | PASS          |
+| A4  | Bar fill colors (red/amber/green)            | —        | —               | PASS          |
+| A5  | Sub-line text contrast                       | —        | CSS-ONLY        | PASS          |
+| B1  | Severity sort (Over→Near→On-track)           | —        | —               | PASS          |
+| B2  | Near-limit amber pill in summary             | MEDIUM   | GO-STRUCTURAL   | UX gap        |
+| B3  | Bar track dark in light mode                 | HIGH     | CSS-ONLY        | FAIL          |
+| B4  | 0%-fill bars visible as tracks               | LOW      | CSS-ONLY        | Linked to B3  |
+| B5  | Sub-line split (not run-on)                  | —        | —               | PASS          |
+| B6  | Bar separator lines                          | LOW      | CSS-ONLY        | FAIL (faint)  |
+| F1  | Stat grid dark tiles in light                | HIGH     | CSS-ONLY        | New defect    |
+| F3  | `.budget-drill` missing from light pin       | CRITICAL | CSS-ONLY        | Root of A1    |
+| F4  | At-risk pace rows not counted in amber pill  | MEDIUM   | GO-STRUCTURAL   | Residual      |
+
+
+### GX14. Systemic light-mode token root fix — "One Fix, Every Surface" — 2026-06-23 ★★
+
+**The story.** Across the GLAMOR sweep the SAME blemish kept recurring on surface after surface: an
+element whose background reads `var(--bg-elev)` / `var(--bg-card)` renders DARK in light mode (the shell
+topbar/rail GX1, the Transactions table GX3, the budget progress-bar tracks + stat tiles GX13). Each was
+patched per-surface with an explicit `[data-theme="light"] … { background:#… !important }`. This ticket
+finds and fixes the ROOT so the whole class is resolved in one place.
+
+**Root cause (grounded in source).** `internal/uistate/theme.go` `ApplyTheme` (lines ~55-63) writes the
+active theme's design tokens as **inline CSS custom properties on `<html>`** via
+`documentElement.style.setProperty(k, v)` for every entry in `theme.CSSVars()` (`internal/theme/derived.go`
++ `theme.go:242`). The migrated DEFAULT theme is the dark candidate-C palette, and ApplyTheme writes those
+**dark** values **regardless of the light/dark prefs**. So `data-theme="light"` (set from prefs) activates
+the `[data-theme="light"]` stylesheet overrides, but the **inline `--bg-elev`/`--bg-card`/`--text` on `<html>`
+stay dark** — and any element using those vars without its own explicit light hex override paints dark on the
+warm-white page. That is the single mechanism behind every "var resolves dark in light" finding.
+
+**The fix (landed, [CSS-ONLY], verified).** The inline vars are set WITHOUT `!important`, so a stylesheet
+rule with `!important` beats them. Pinned the light surface/text token VALUES with `!important` in the
+`[data-theme="light"]` block (`web/index.html`): `--bg`, `--bg-base`, `--bg-elev`, `--bg-card`, `--border`,
+`--text`, `--text-dim`, `--text-faint`, `--muted`, `--accent-dim`, `--hover`. `--accent` / `--danger` /
+`--warn` are intentionally NOT pinned (user accent + semantic colors apply in both themes). This fixes the
+ENTIRE class at the variable level — every current and future var-driven surface flips light at once.
+
+**What already works well (keep).**
+- The per-surface `!important` patches landed earlier (GX1 shell, GX3 table/select, GX13 bar/stat) remain
+  correct — now redundant but harmless (they reaffirm the same light values).
+- Dark mode is completely unaffected (the override only lives under `[data-theme="light"]`).
+
+**Regression confirm (measured, BOTH themes — `e2e/gx14_verify.mjs`, exit 0).**
+- Light `getComputedStyle(documentElement)`: `--bg-elev`=#efede8, `--bg-card`=#ffffff, `--text`=#1c1c1e ✓
+- Light real elements: `.w` tile rgb(255,255,255) ✓ · `.topbar` rgba(247,246,243,.92) ✓ · `.bar` track
+  rgb(239,237,232) ✓ · `.stat` tile rgb(255,255,255) ✓ · `.txn-table thead th` rgb(247,246,243) ✓ ·
+  filter `select` rgb(239,237,232) ✓ · `.card` rgb(255,255,255) ✓ — **no surface dark in light.**
+- Dark regression: `--bg-card`=#121214, `.card`/`.w` rgb(18,18,20), `thead th` rgb(14,14,15) — **unchanged.** ✓
+
+**Structure fixes.**
+- [x] [CSS-ONLY] LANDED + VERIFIED — pin light surface/text tokens with `!important` (the systemic fix above).
+- [ ] [GO-STRUCTURAL] (proper root fix, build-gated GI0) — `ApplyTheme` should apply a LIGHT-derived token
+      set when the prefs theme resolves to light (mirror the migration in reverse), instead of always writing
+      the stored/dark theme tokens. Once that lands, the `!important` pins here can be relaxed and the theme
+      editor's custom surface colors would correctly apply in light mode too (see trade-off below).
+
+**UI/UX defect (trade-off, documented).** While the `!important` mitigation is active, a user's CUSTOM theme
+(B20 theme editor) surface colors will NOT apply in LIGHT mode (the canonical light tokens win). This is
+acceptable — light mode was broken (dark surfaces) before this fix — and is resolved by the GO-side fix above.
+
+**Probe hardening.** `e2e/gx14_verify.mjs` measures the computed `--bg-elev/--bg-card/--text` on
+`documentElement` AND real element backgrounds across /dashboard, /budgets, /transactions, /accounts in both
+themes — the canonical regression check for any future theme-token work.
+
+**Cross-refs:** GX1 (shell), GX3 (table/select), GX13 (budget bar/stat), G4/G9/G22 (earlier per-surface
+light pins), B20 (theme engine / custom themes), GI0 (build blocker — gates the proper GO-side fix).
 
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
