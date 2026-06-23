@@ -4,6 +4,7 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -19,7 +20,7 @@ import (
 //     rather than one flat 7-card stream (G15 §1).
 func Customize() ui.Node {
 	if appstate.Default == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	return Div(
 		// Lead with the formula calculator (G15 §1): it's the featured power-user tool.

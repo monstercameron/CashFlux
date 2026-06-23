@@ -31,7 +31,7 @@ import (
 func Budgets() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
 	rev := state.UseAtom("rev:budgets", 0)

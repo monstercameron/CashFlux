@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/textutil"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -135,7 +136,7 @@ func allocProfiles() map[string]allocate.Weights {
 func Allocate() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
 	// nav is used to route the user to Settings when AI credentials are missing (C54).

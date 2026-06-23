@@ -43,7 +43,7 @@ type pageCtx struct {
 func CustomPage(slug string) ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	page, ok := pages.BySlug(app.CustomPages(), slug)
 	if !ok {
