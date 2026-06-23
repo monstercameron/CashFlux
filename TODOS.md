@@ -17974,6 +17974,23 @@ The following script adjustments are needed before re-running:
 - G23 T1-B — shell/nav light-mode backgrounds (rule exists, is outranked at runtime — GX1-F1)
 
 
+### GX2. Empty & loading states — "The First Run / The Empty Month" — 2026-06-23 ★
+
+✅ RESOLVED (2026-06-23). GX2-F1 and GX2-F2 shipped.
+
+**Shipped:**
+- **GX2-F1** — Transactions: `EmptyStateCTA` now passes `AddTarget: "transaction"` and `Icon: icon.Transactions`; the first-run state shows the transactions glyph + "Add your first transaction" button that opens the add modal. Accounts / noAssets: replaced bare `P.empty` with `EmptyStateCTA{AddTarget: "account", Icon: icon.Accounts}` + new i18n key `accounts.addFirst`.
+- **GX2-F2** — Insights: added a guiding `EmptyStateCTA` card (rendered above the chat section) when there are no accounts and no transactions. Uses `Icon: icon.Insights`, new keys `insights.noData` / `insights.addAccount`, and `AddTarget: "account"`.
+
+**Deferred (out of scope for this pass):**
+- GX2-F3 — Artifacts + Workflows bare `.empty` text (no structural CTA); acceptable until those screens get a full UX pass.
+- GX2-F4 — Dashboard empty state color/font inconsistency (CSS-only; part of the global token fix).
+- GX2-F5 — Light-mode `.empty` contrast (CSS-only; root cause is the `--fg` token gap fixed globally elsewhere).
+- GX2-F6 — Boot splash transparent card background (CSS-only, cosmetic).
+- GX2-F7 — Planning CTA button says "Add" — too terse (one-line wording change; deferred to next GX pass).
+- GX2-F8 — Reports/Documents/Customize/Allocate bare `.empty` (structural; deferred to screen-level UX passes).
+
+
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
 
 ### GM1. Settings modal — UX deep-dive (from G21) — 2026-06-23 ★

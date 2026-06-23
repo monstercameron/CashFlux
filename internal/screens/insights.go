@@ -852,7 +852,20 @@ func Insights() ui.Node {
 		approvalPreview = pa.preview
 	}
 
+	noData := len(accounts) == 0 && len(txns) == 0
+
 	return Div(
+		// When there is no financial data yet, show a guided empty state so a first-time
+		// user knows to add an account before asking questions. The chat section is still
+		// rendered below it so all hooks stay stable.
+		If(noData, Section(css.Class("card"),
+			ui.CreateElement(EmptyStateCTA, emptyCTAProps{
+				Message:   uistate.T("insights.noData"),
+				CTALabel:  uistate.T("insights.addAccount"),
+				AddTarget: "account",
+				Icon:      icon.Insights,
+			}),
+		)),
 		highlights,
 		// Pinned insights sit ABOVE the chat as quick references, so the conversation
 		// thread below has room to grow.

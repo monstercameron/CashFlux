@@ -293,7 +293,7 @@ func Accounts() ui.Node {
 		)),
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("accounts.assets")),
-			IfElse(len(assetList) == 0, P(css.Class("empty"), uistate.T("accounts.noAssets")), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
+			IfElse(len(assetList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts}), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
 		),
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("dashboard.liabilities")),

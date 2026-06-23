@@ -422,7 +422,7 @@ func Transactions() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(txns) == 0:
-		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst")})
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), AddTarget: "transaction", Icon: icon.Transactions})
 	case len(shown) == 0:
 		listBody = P(css.Class("empty"), uistate.T("transactions.noMatch"))
 	default:
