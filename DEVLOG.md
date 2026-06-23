@@ -3,6 +3,10 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — feat: WONDER W-3..W-8 — interaction-feedback flourishes (token-driven, reduced-motion safe)
+
+W-3 and W-4 were the remaining items in Batch 1. W-3 adds bento `.w` tile hover lift: transition + `translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on)))` + shadow, gated via `.w:not(.drag)` so the ghost tile during drag doesn't fight the drag transform. W-4 adds a 2px `translateX` nudge on list `.row` hover, scoped to `:not(.txn-table .row)` so table rows stay column-aligned. Both transitions use `--wonder-dur`/`--wonder-dur-fast` and `--wonder-ease`; at `--wonder-on:0` (off/reduced-motion) both transforms collapse to zero. W-5..W-8 were already shipped in the prior session; this commit closes out Batch 1 (W-3..W-8) fully.
+
 ## 2026-06-23 — C74 final 3 sub-bullets complete
 
 **C74 Tier 3 (scanned PDF):** In `parseStatement`, unwrapped the wrapped `pdftext.ErrNoText`/`ErrEncrypted`

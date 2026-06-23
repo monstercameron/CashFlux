@@ -21839,16 +21839,17 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 
 **EXTENSIVE catalog — the flourishes to build (grouped; tasteful + fast). [CSS-ONLY] unless noted:**
 *Interaction feedback*
-- [ ] W-3 Tile/widget hover lift on the bento `.w` tiles (scope carefully vs drag; lift only non-dragging).
-- [ ] W-4 Row hover nudge — list rows shift ~2px toward the reader on hover (EXCLUDE table rows — column align).
+- [x] W-3 Tile/widget hover lift on the bento `.w` tiles (scope carefully vs drag; lift only non-dragging). **LANDED 2026-06-23**
+- [x] W-4 Row hover nudge — list rows shift ~2px toward the reader on hover (EXCLUDE table rows — column align). **LANDED 2026-06-23**
 - [x] W-5 Nav-item hover — `.nv` + `.nav-link` get `translateY(calc(-1px * var(--wonder-on)))` lift + icon micro-scale; collapsed-rail flyout unaffected. **LANDED 2026-06-23**
 - [x] W-6 Icon-button delight — `.gear-inline`/`.gear-abs` rotate 38deg, `.add-btn` scale 1.12, `.notify-btn` tilt 18deg, `.muzak-btn` scale 1.08; all `calc(… * var(--wonder-on))`, `var(--wonder-dur-fast) var(--wonder-ease)`. **LANDED 2026-06-23**
-- [ ] W-7 Ripple/halo on click for primary buttons (radial origin at pointer) — [needs a tiny JS hook or
-      a pure-CSS `:active` radial-gradient overlay; prefer CSS].
+- [x] W-7 Ripple/halo on click for primary buttons (radial origin at pointer) — **LANDED 2026-06-23** CSS-only: `::after` radial-gradient overlay, `scale(calc(2.2 * var(--wonder-on)))` on `:active`, 0ms expand + `--wonder-dur` fade-out; `overflow:hidden` on `.btn/.btn-primary/.set-btn.save/.data-btn/.add-item`; off/reduced-motion → scale stays 0.
 - [x] W-8 Toggle/switch spring — `.switch::after` uses `cubic-bezier(.34,1.56,.64,1)` overshoot; `[data-wonder="off"]` zeroes `--wonder-dur` → snaps; reduced-motion universal rule covers `::after`. **LANDED 2026-06-23**
+
+> Batch 1 (W-3..W-8) fully landed 2026-06-23 — all CSS, token-driven, reduced-motion safe.
+
 *Entrance / reveal*
-- [ ] W-9 Page-enter transition — on route change the page content fades + rises quickly. [GO-STRUCTURAL:
-      the router must toggle a `.page-enter` class on the swapped content; CSS keyframe ready.]
+- [x] W-9 Page-enter transition — on route change the page content fades + rises quickly. **LANDED 2026-06-23** — Approach A: `triggerPageEnter()` (pageenter.go, js+wasm build tag) does a double-rAF class toggle on `#cf-page-view`; `@keyframes wonder-page-enter` in index.html uses `--wonder-dur-slow`/`--wonder-ease-out`/`--wonder-on`; gated off under `[data-wonder="off"]` and `prefers-reduced-motion`; cold-boot excluded via existing firstRender guard in shell.go UseEffect.
 - [ ] W-10 Route cross-fade — outgoing/incoming pages cross-fade (advanced; GO-STRUCTURAL + view-transition API).
 - [ ] W-11 List stagger — list/table rows fade-rise in a fast cascade on first paint (CSS `animation-delay`
       by nth-child, capped; or GO if rows are virtualized).
@@ -21859,7 +21860,7 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 - [ ] W-15 Number count-up — KPI/stat values tween from old→new on change (net worth, totals). [GO-STRUCTURAL:
       needs a JS tween or a Go-driven interpolation; high delight on the dashboard.]
 - [ ] W-16 Progress-bar fill ease — already eased (GX8 `.bar-fill` cubic-bezier); extend to goals/allocate.
-- [ ] W-17 Success pulse — a brief green ring/checkmark pulse on save/add (ties to the toast + GX5).
+- [x] W-17 Success pulse — **LANDED 2026-06-23** `@keyframes wonder-success-pulse` (scale .6→1.15→1) on `.toast:not(.toast-err)::before`; duration `calc(--wonder-dur-slow * --wonder-on)` → instant/static when off; `animation:none` under `[data-wonder="off"]` and `prefers-reduced-motion`.
 - [ ] W-18 Chart draw-in — area/line charts animate their path on first render; donut sweeps; bars grow.
       [GO-STRUCTURAL: the D3/chartspec renderer must animate; pairs with G9.1a.]
 *Polish*

@@ -13,6 +13,7 @@ and every commit updates this file under `Unreleased`.
 - C74 e2e: `e2e/c74_ai_extract_check.mjs` asserts Extract-with-AI + Suggest-categories buttons render and are operable
 
 ### Changed
+- **WONDER (W-3..W-8):** tile/row/nav/icon hover flourishes, primary-button click ripple, switch spring — all token-driven + reduced-motion safe. W-3 adds bento `.w` tile hover lift (excluded during drag); W-4 adds list `.row` 2px translateX nudge on hover (table rows excluded for column alignment). W-5..W-8 previously landed.
 - **C73 Phase 2 COMPLETE — every screen card ported to primitives (2026-06-23).** Drove the raw-scaffold count
   **165 → 38**, eliminating **all** bespoke `Section(css.Class("card"))` markup from `internal/screens` (now zero):
   every card on every screen renders through `Card`/`EntityListSection`, byte-identically. The primitives gained

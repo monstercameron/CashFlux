@@ -246,6 +246,16 @@
          older :active translateY with a cleaner scale; combine both for buttons. */
       .btn, .data-btn, .seg-btn, .add-item, .menu-btn, .icon-btn { transition: transform var(--wonder-dur-fast) var(--wonder-ease), background-color var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease; }
       .btn:active, .data-btn:active, .seg-btn:active, .add-item:active, .menu-btn:active, .icon-btn:active, [role="button"]:active { transform: scale(var(--wonder-press)); }
+      /* W-3 · Tile/widget hover lift — bento .w tiles rise + shadow on hover, mirroring
+         .card (W-1). Excluded while dragging (.w.drag) so the ghost tile doesn't fight the
+         drag transform. The transition extends the existing border-color transition on .w. */
+      .w:not(.drag) { transition: transform var(--wonder-dur) var(--wonder-ease), box-shadow var(--wonder-dur) var(--wonder-ease), border-color .12s ease; }
+      .w:not(.drag):hover { transform: translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on))); box-shadow: var(--wonder-shadow); }
+      /* W-4 · Row hover nudge — list rows shift 2px toward the reader on hover.
+         Table rows (.txn-table .row) are excluded to preserve column alignment.
+         translateX scaled by --wonder-on so off/subtle/reduced-motion all control it. */
+      .row:not(.txn-table .row):hover { transform: translateX(calc(2px * var(--wonder-on))); }
+      .row:not(.txn-table .row) { transition: background 0.12s ease, transform var(--wonder-dur-fast) var(--wonder-ease); }
       /* W-5 · Nav-item hover — subtle lift + icon micro-scale on .nv / .nav-link.
          Transform scaled by --wonder-on so the intensity dial + reduced-motion both zero it.
          Collapsed-rail flyout span is position:absolute so it is unaffected by translateY. */
@@ -272,6 +282,61 @@
         transition: outline-offset 100ms var(--wonder-ease), box-shadow 100ms var(--wonder-ease);
         outline-offset: 2px; /* unchanged — just now eased */
       }
+      /* W-9 · Page-enter transition — new screen fades in + rises slightly on every
+         route change. Duration is --wonder-dur-slow (300ms at full, 0ms at off).
+         translateY uses --wonder-on multiplier so subtle/off scale it to zero.
+         The .page-enter class is toggled by Go (pageenter.go) on each navigation
+         via double-rAF so the browser restarts the keyframe cleanly from frame 0.
+         Cold-boot is excluded: the UseEffect guard skips the first render. */
+      @keyframes wonder-page-enter {
+        from { opacity: 0; transform: translateY(calc(8px * var(--wonder-on))); }
+        to   { opacity: 1; transform: none; }
+      }
+      #cf-page-view.page-enter {
+        animation: wonder-page-enter var(--wonder-dur-slow) var(--wonder-ease-out) both;
+      }
+      [data-wonder="off"] #cf-page-view.page-enter { animation: none; }
+      @media (prefers-reduced-motion: reduce) { #cf-page-view.page-enter { animation: none; } }
+
+      /* W-7 · Click ripple — a radial-gradient overlay scales from 0→2.2× on
+         :active and fades back out on release; driven purely by CSS :active.
+         scale(calc(2.2 * var(--wonder-on))) → 0 when off/reduced-motion.
+         overflow:hidden clips the ripple; text stays inside the content box
+         so no label clipping occurs. .add-item has no overflow-extending icons
+         so hidden is safe there too. */
+      .btn, .btn-primary, .set-btn.save, .data-btn, .add-item {
+        position: relative; overflow: hidden;
+      }
+      .btn::after, .btn-primary::after, .set-btn.save::after, .data-btn::after, .add-item::after {
+        content: ''; position: absolute; inset: 0;
+        background: radial-gradient(circle, rgba(255,255,255,0.35) 0%, transparent 70%);
+        transform: scale(0); opacity: 0;
+        transition: transform var(--wonder-dur) var(--wonder-ease-out),
+                    opacity var(--wonder-dur) var(--wonder-ease-out);
+        pointer-events: none; border-radius: inherit;
+      }
+      .btn:active::after, .btn-primary:active::after, .set-btn.save:active::after,
+      .data-btn:active::after, .add-item:active::after {
+        transform: scale(calc(2.2 * var(--wonder-on)));
+        opacity: calc(1 * var(--wonder-on));
+        transition-duration: 0ms;
+      }
+
+      /* W-17 · Success pulse — the ✓ glyph on success toasts pops in with a
+         spring-scale (0.6→1.15→1) so the confirmation moment has delight.
+         Error toasts (::before shows ⚠) are excluded; they get no animation.
+         Duration = --wonder-dur-slow * --wonder-on → 0ms when off (instant/static). */
+      @keyframes wonder-success-pulse {
+        0%   { transform: scale(.6); opacity: .4; }
+        60%  { transform: scale(1.15); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .toast:not(.toast-err)::before {
+        animation: wonder-success-pulse calc(var(--wonder-dur-slow) * var(--wonder-on, 1)) var(--wonder-ease-out) both;
+      }
+      [data-wonder="off"] .toast:not(.toast-err)::before { animation: none; }
+      @media (prefers-reduced-motion: reduce) { .toast:not(.toast-err)::before { animation: none; } }
+
       /* ========================== /WONDER ============================ */
 
       #boot-error {
