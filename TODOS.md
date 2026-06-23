@@ -18058,6 +18058,11 @@ Cross-references: **C68** (command palette done, a11y gaps remain), **B12** (per
 
 ### GI0. BUILD BLOCKER — wasm tree does not compile (resolve before GI1–GI3) ★★
 
+**✅ RESOLVED (2026-06-23).** The wasm tree now compiles clean (`GOOS=js GOARCH=wasm go build` → rc=0):
+the C78 audit-log import cycle is gone — `internal/auditlog/` exists as the shared lower package and
+`internal/screens/activity.go` + `internal/app/auditview.go` build without a cycle. GI1–GI3 can now be
+rebuilt/verified. (Verified by a clean build at resolution time.)
+
 The repo currently fails `GOOS=js GOARCH=wasm go build` due to **uncommitted C78 audit-log WIP**:
 `internal/screens/activity.go` imports `internal/app` (for `UndoEntries`/`UndoNow`/`CanUndoNow`), but
 `internal/app` composes `internal/screens` → **import cycle not allowed**. New WIP files involved:
