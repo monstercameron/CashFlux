@@ -810,20 +810,22 @@ func Planning() ui.Node {
 		recurringCard,
 		plansCard,
 		debtCard,
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("planning.payoffTitle")),
-			P(css.Class("muted"), uistate.T("planning.payoffDesc")),
-			Form(css.Class("form-grid"),
-				labeledField(uistate.T("planning.balancePlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(balStr.Get()), Step("0.01"), OnInput(onBal))),
-				labeledField(uistate.T("planning.aprPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(aprStr.Get()), Step("0.01"), OnInput(onApr))),
-				labeledField(uistate.T("planning.paymentPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(payStr.Get()), Step("0.01"), OnInput(onPay))),
-				labeledField(uistate.T("planning.extraPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(extraStr.Get()), Step("0.01"), OnInput(onExtra))),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("planning.payoffTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("planning.payoffDesc")),
+				Form(css.Class("form-grid"),
+					labeledField(uistate.T("planning.balancePlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(balStr.Get()), Step("0.01"), OnInput(onBal))),
+					labeledField(uistate.T("planning.aprPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(aprStr.Get()), Step("0.01"), OnInput(onApr))),
+					labeledField(uistate.T("planning.paymentPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(payStr.Get()), Step("0.01"), OnInput(onPay))),
+					labeledField(uistate.T("planning.extraPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(extraStr.Get()), Step("0.01"), OnInput(onExtra))),
+				),
 			),
-		),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("planning.projectionTitle")),
-			resultBody,
-		),
+		}),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("planning.projectionTitle"),
+			Body:  resultBody,
+		}),
 	)
 }
 
