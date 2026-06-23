@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: C74 Tier 2/3 — OFX parser, import mapping, categorizer, ParseAny
+
+Three new pure-logic packages land the Tier 2/3 import engine infrastructure.
+
+**`internal/ofx`** — The key design decision was dual-path parsing: OFX 1.x is SGML (not XML), so `encoding/xml` would choke on it. The SGML path is a simple line scanner that tracks `<STMTTRN>` / `</STMTTRN>` aggregate boundaries and harvests leaf values. OFX 2.x goes through `encoding/xml` with a struct tree covering both `BANKMSGSRSV1` and `CREDITCARDMSGSRSV1` message sets. Date parsing strips the `[tz:NAME]` annotation before trying `20060102150405` then `20060102` as UTC. Amount is `ParseFloat → Round(f * 10^decimals)`.
+
+**`internal/importmap`** — `Profile` captures the full column mapping for a given bank's CSV export format, plus `SkipRows`, `DateLayout`, and `Decimals`. `Apply` is deliberately lenient: bad-date or bad-amount rows are silently skipped so a partially-bad file still imports cleanly. `DefaultProfile` does case-insensitive header-name matching — handles the common "Date", "Transaction Date", "Posted Date" variants. The debit/credit split path subtracts debit and adds credit, treating both as positive raw values.
+
+**`internal/statement` extensions** — `Category string` added to `Row` with zero cost to existing consumers (zero value = uncategorized). `DefaultCategorizer` is a keyword-table scan (O(n × k), fine for statement sizes). `ParseAny` peeks at the byte prefix after stripping BOM; the four OFX-prefix strings cover all realistic real-world variants, everything else falls through to the existing CSV `Parse`.
+
+No external packages used. All 20 tests pass; `go vet` clean.
+
 ## 2026-06-23 - feat: GLAMOR series wave 4 — G15 Customize … G19 Workflows
 
 Cam kept adding glamor tickets (G15–G19) as I worked. Pattern across this wave: the deepest light-mode

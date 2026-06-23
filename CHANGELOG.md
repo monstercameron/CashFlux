@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **C74 Tier 2/3 — OFX parser, import-mapping profiles, categorizer, ParseAny (2026-06-23).** `internal/ofx`: pure-Go OFX 1.x SGML + OFX 2.x XML parser → signed minor-unit rows; handles `[tz]` annotations, date format variants, and both bank/credit-card message sets. `internal/importmap`: `Profile` struct for saveable column-mapping + `Apply` (CSV rows → `statement.Row`) + `DefaultProfile` (auto-detect from header names). `internal/statement`: `Category string` field added to `Row`; `Categorizer` interface + `Categorize` helper + `DefaultCategorizer` keyword-table; `ParseAny` format-sniffing dispatcher (OFX vs CSV/TSV, BOM-safe). All three packages: `go vet` clean, 20 tests passing.
+
 - **C-series 6-lane sweep (2026-06-23).** Audited the C backlog (mostly already-shipped via the L-series
   work) and closed the remaining gaps: on-panel rail collapse toggle (C20); dashboard band-span + figure
   type tokens (C48); Accounts inline-edit advanced disclosure (C49); Allocate amount-field labels + AI

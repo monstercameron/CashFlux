@@ -26,6 +26,7 @@ type Row struct {
 	Amount      int64 // signed minor units: credit positive, debit negative
 	Balance     int64
 	HasBalance  bool
+	Category    string
 }
 
 // Columns maps each role to a 0-based column index, or -1 when the statement has no
