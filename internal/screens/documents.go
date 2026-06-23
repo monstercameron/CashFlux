@@ -529,26 +529,28 @@ func Documents() ui.Node {
 			OnReadAI:  readAI,
 			Nav:       nav,
 		}),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("documents.stmtTitle")),
-			P(css.Class("muted"), uistate.T("documents.stmtDesc")),
-			Form(OnSubmit(parseStatement),
-				Textarea(css.Class("field field-wide"), Attr("rows", "8"),
-					Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
-					OnInput(onStmt),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("documents.stmtTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("documents.stmtDesc")),
+				Form(OnSubmit(parseStatement),
+					Textarea(css.Class("field field-wide"), Attr("rows", "8"),
+						Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
+						OnInput(onStmt),
+					),
+					Div(Style(map[string]string{"margin-top": "0.6rem"}),
+						Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
+					),
 				),
-				Div(Style(map[string]string{"margin-top": "0.6rem"}),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
+				// C74 — per-bank import cadence reminder: creates a monthly to-do so the
+				// user is nudged to import next cycle. Off by default; single click.
+				Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+					P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
+						OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
 				),
 			),
-			// C74 — per-bank import cadence reminder: creates a monthly to-do so the
-			// user is nudged to import next cycle. Off by default; single click.
-			Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-				P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
-					OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
-			),
-		),
+		}),
 		// C74 — Map columns wizard: shown when auto-detect fails or user requests it.
 		// Exactly 5 fixed selects (Date / Desc / Amount / Debit / Credit) — never in
 		// a variable-length loop, so UseEvent hooks stay at stable render positions.

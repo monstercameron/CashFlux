@@ -111,23 +111,25 @@ func CustomFieldsManager() ui.Node {
 
 	isChoice := ftype.Get() == string(customfields.TypeSelect)
 
-	form := Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("cf.addTitle")),
-		P(css.Class("muted"), uistate.T("cf.addDesc")),
-		Form(css.Class("form-grid"), OnSubmit(add),
-			Select(css.Class("field"), OnChange(onEntity), entityOptions),
-			Input(append([]any{css.Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
-			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
-			Select(css.Class("field"), OnChange(onType), typeOptions),
-			If(isChoice, Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
-			Select(css.Class("field"), OnChange(onRequired),
-				Option(Value("no"), SelectedIf(required.Get() == "no"), uistate.T("cf.optional")),
-				Option(Value("yes"), SelectedIf(required.Get() == "yes"), uistate.T("cf.required")),
+	form := uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("cf.addTitle"),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("cf.addDesc")),
+			Form(css.Class("form-grid"), OnSubmit(add),
+				Select(css.Class("field"), OnChange(onEntity), entityOptions),
+				Input(append([]any{css.Class("field"), Type("text"), Placeholder(uistate.T("cf.keyPlaceholder")), Title(uistate.T("cf.keyTitle")), Attr("pattern", "[A-Za-z0-9_]+"), Value(key.Get()), OnInput(onKey)}, errAttrs("cf-err", errMsg.Get())...)...),
+				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("cf.labelPlaceholder")), Value(label.Get()), OnInput(onLabel)),
+				Select(css.Class("field"), OnChange(onType), typeOptions),
+				If(isChoice, Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("cf.optionsPlaceholder")), Value(options.Get()), OnInput(onOptions))),
+				Select(css.Class("field"), OnChange(onRequired),
+					Option(Value("no"), SelectedIf(required.Get() == "no"), uistate.T("cf.optional")),
+					Option(Value("yes"), SelectedIf(required.Get() == "yes"), uistate.T("cf.required")),
+				),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
 			),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("cf.addField")),
+			errText("cf-err", errMsg.Get()),
 		),
-		errText("cf-err", errMsg.Get()),
-	)
+	})
 
 	// Group existing defs by entity type for a tidy list.
 	defs := app.CustomFieldDefs()
@@ -146,10 +148,10 @@ func CustomFieldsManager() ui.Node {
 			return ui.CreateElement(CustomFieldRow, customFieldRowProps{Def: d, OnDelete: deleteDef})
 		}
 		keyOf := func(d customfields.Def) any { return d.ID }
-		sections = append(sections, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T(e.Key)),
-			Div(css.Class("rows"), MapKeyed(rows, keyOf, renderRow)),
-		))
+		sections = append(sections, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T(e.Key),
+			Rows:  MapKeyed(rows, keyOf, renderRow),
+		}))
 	}
 
 	list := ui.Node(nil)
