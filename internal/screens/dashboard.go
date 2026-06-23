@@ -227,6 +227,27 @@ func Dashboard() ui.Node {
 		// so it needs no state here. Decorative, hence aria-hidden.
 		Div(css.Class("app-banner"), Attr("aria-hidden", "true")),
 		Div(tiles...),
+		// L43: Quick Transfer shortcut — a persistent affordance on the dashboard so
+		// users can initiate a transfer without hunting for the Transactions screen.
+		// Accounts is the natural home for transfer creation (the full form lives
+		// there); we navigate to /transactions which also hosts the add-transfer flow.
+		ui.CreateElement(dashTransferFAB),
+	)
+}
+
+// dashTransferFAB is the "Transfer" floating shortcut on the dashboard (L43).
+// It routes to /transactions (where the transfer form lives) so the main transfer
+// logic stays in one place — this is a navigation affordance, not a duplicate form.
+// Its own component keeps the navigate hook at a stable position (the On* rule).
+func dashTransferFAB() ui.Node {
+	nav := router.UseNavigate()
+	open := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/transactions")) })
+	return Button(css.Class("dash-transfer-fab"), Type("button"),
+		Attr("title", uistate.T("dashboard.transferTitle")),
+		Attr("aria-label", uistate.T("dashboard.transferTitle")),
+		Attr("data-testid", "dash-transfer-btn"),
+		OnClick(open),
+		uistate.T("dashboard.transfer"),
 	)
 }
 

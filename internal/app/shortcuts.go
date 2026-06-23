@@ -234,11 +234,13 @@ const (
 )
 
 // paletteCmd is one searchable command: a label, optional search keywords (verbs /
-// synonyms / aliases that match the query alongside the label but aren't shown), and
+// synonyms / aliases that match the query alongside the label but aren't shown), a
+// group header (shown above the first command in the group when un-filtered), and
 // the action to run.
 type paletteCmd struct {
 	label    string
 	keywords []string
+	group    string // palette section header; "" = inherit the previous group
 	run      func()
 }
 
@@ -257,20 +259,26 @@ func paletteNotify(msg string, isErr bool) {
 }
 
 // buildPaletteCommands enumerates the searchable commands: jump to any screen
-// (primary, tools, system groups) plus a couple of direct actions.
+// (primary, tools, system groups) plus a couple of direct actions. Each command
+// carries a group tag so renderPalette can emit section headers (Navigate /
+// Actions / Workspaces) in the unfiltered view.
 func buildPaletteCommands() []paletteCmd {
 	var cmds []paletteCmd
-	add := func(items []railItem) {
-		for _, it := range items {
+	addNav := func(items []railItem, groupLabel string) {
+		for i, it := range items {
 			path := it.Path
-			cmds = append(cmds, paletteCmd{label: uistate.T(it.Key), run: func() { router.Navigate(uistate.RoutePath(path)) }})
+			g := ""
+			if i == 0 {
+				g = groupLabel
+			}
+			cmds = append(cmds, paletteCmd{label: uistate.T(it.Key), group: g, run: func() { router.Navigate(uistate.RoutePath(path)) }})
 		}
 	}
-	add(primaryNav())
-	add(toolsNav())
-	add(systemNav())
+	addNav(primaryNav(), uistate.T("palette.groupNavigate"))
+	addNav(toolsNav(), "")
+	addNav(systemNav(), "")
 	cmds = append(cmds,
-		paletteCmd{label: uistate.T("addmenu.transaction"), keywords: []string{"add", "new", "create", "transaction", "expense", "income", "spend"}, run: func() { uistate.SetQuickAdd(true) }},
+		paletteCmd{label: uistate.T("addmenu.transaction"), group: uistate.T("palette.groupActions"), keywords: []string{"add", "new", "create", "transaction", "expense", "income", "spend"}, run: func() { uistate.SetQuickAdd(true) }},
 		paletteCmd{label: uistate.T("cmd.toggleTheme"), keywords: []string{"theme", "dark", "light", "appearance"}, run: toggleTheme},
 		paletteCmd{label: uistate.T("cmd.toggleSidebar"), keywords: []string{"sidebar", "rail", "collapse", "expand"}, run: toggleSidebar},
 		paletteCmd{label: uistate.T("shortcuts.title"), keywords: []string{"help", "keyboard", "shortcuts", "keys"}, run: toggleHelpOverlay},
@@ -299,7 +307,7 @@ func buildPaletteCommands() []paletteCmd {
 		cmds = append(cmds, paletteCmd{label: uistate.T("cmd.switchTo") + name, run: func() { switchWorkspace(id) }})
 	}
 	cmds = append(cmds,
-		paletteCmd{label: uistate.T("cmd.newWorkspace"), run: func() {
+		paletteCmd{label: uistate.T("cmd.newWorkspace"), group: uistate.T("palette.groupWorkspaces"), run: func() {
 			promptModal(uistate.T("ws.newPrompt"), uistate.T("ws.newDefault"), func(n string) {
 				if n != "" {
 					createWorkspace(n)
@@ -520,6 +528,10 @@ func buildCommandPalette(doc js.Value) {
 }
 
 // renderPalette filters the commands by query and rebuilds the result rows.
+// When the query is empty it emits a group header above the first command in
+// each section (Navigate / Actions / Workspaces) so the palette is scannable
+// at a glance. While filtering, groups are omitted — ranked results span
+// sections and the header would be misleading.
 func renderPalette(doc js.Value, query string) {
 	list := doc.Call("getElementById", cmdListID)
 	if list.IsNull() || list.IsUndefined() {
@@ -539,18 +551,43 @@ func renderPalette(doc js.Value, query string) {
 	}
 	cmdPaletteSel = 0
 
+	// groupHeader renders a small section label (Navigate / Actions / Workspaces).
+	groupHeader := func(label string) string {
+		return `<div role="presentation" style="padding:0.55rem 0.7rem 0.2rem;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;opacity:0.5;user-select:none;">` +
+			htmlEscaper.Replace(label) + `</div>`
+	}
+
 	var b strings.Builder
+	navGroup := uistate.T("palette.groupNavigate")
+	currentGroup := ""
 	for pos, ci := range cmdPaletteShown {
+		// Track which section each item belongs to by inheriting the last non-empty
+		// group tag (only the first item in each section carries the tag).
+		if g := cmdPaletteCmds[ci].group; g != "" {
+			currentGroup = g
+		}
+		// Emit group header above the first item in each section (unfiltered only).
+		if query == "" {
+			if g := cmdPaletteCmds[ci].group; g != "" {
+				b.WriteString(groupHeader(g))
+			}
+		}
 		bg := "transparent"
 		if pos == cmdPaletteSel {
 			bg = "var(--hover,#1c1c1e)"
 		}
 		b.WriteString(`<div data-cmd-row="`)
 		b.WriteString(strconv.Itoa(ci))
-		b.WriteString(`" role="option" style="padding:0.5rem 0.7rem;border-radius:6px;cursor:pointer;background:`)
+		b.WriteString(`" role="option" style="padding:0.5rem 0.7rem;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:`)
 		b.WriteString(bg)
 		b.WriteString(`;">`)
+		b.WriteString(`<span>`)
 		b.WriteString(htmlEscaper.Replace(cmdPaletteCmds[ci].label))
+		b.WriteString(`</span>`)
+		// Navigate items get a small "↵ jump" breadcrumb hint regardless of filtering.
+		if currentGroup == navGroup {
+			b.WriteString(`<span style="font-size:0.75rem;opacity:0.45;">jump ↵</span>`)
+		}
 		b.WriteString(`</div>`)
 	}
 	if len(cmdPaletteShown) == 0 {
