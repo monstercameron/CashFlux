@@ -112,7 +112,11 @@ func Subscriptions() ui.Node {
 		}
 		if err := app.MarkSubscriptionCancelled(name, time.Now()); err != nil {
 			notice.Set(notice.Get().With(err.Error(), true))
+			return
 		}
+		// Success notice triggers a re-render so the row immediately shows its
+		// cancelled state (L49: without this the UI stayed stale after cancel).
+		notice.Set(notice.Get().With(uistate.T("subs.cancelledConfirm", name), false))
 	}
 	doUncancel := func(name string) {
 		app := appstate.Default
@@ -121,7 +125,11 @@ func Subscriptions() ui.Node {
 		}
 		if err := app.UnmarkSubscriptionCancelled(name); err != nil {
 			notice.Set(notice.Get().With(err.Error(), true))
+			return
 		}
+		// Success notice triggers a re-render so the row immediately shows its
+		// active state again (L49).
+		notice.Set(notice.Get().With(uistate.T("subs.uncancelledConfirm", name), false))
 	}
 
 	// --- Cancel-candidates multi-select (L12) ---
@@ -326,16 +334,32 @@ func Subscriptions() ui.Node {
 		)),
 		If(len(soon) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("subs.renewingSoon")),
+			// Renewing-soon rows reuse the full SubscriptionRow so each imminent
+			// renewal is actionable in place (remind / cancel) — not a stripped
+			// read-only card (C56). The cancelledOn lookup, selection state, and
+			// all callbacks are wired identically to the main list.
 			Div(css.Class("rows"), MapKeyed(soon,
-				func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
+				func(s subscriptions.Subscription) any { return "soon|" + s.Name + "|" + fmt.Sprint(s.Amount) },
 				func(s subscriptions.Subscription) ui.Node {
-					return Div(css.Class("row"),
-						Div(css.Class("row-main"),
-							Span(css.Class("row-desc"), s.Name),
-							Span(css.Class("row-meta"), pr.FormatDate(s.NextRenewal)),
-						),
-						Span(css.Class("budget-amount"), fmtMoney(money.New(s.Amount, base))),
-					)
+					cancelledOn, isCancelled := cancelMap[strings.ToLower(strings.TrimSpace(s.Name))]
+					cancelledDate := ""
+					if isCancelled {
+						cancelledDate = pr.FormatDate(cancelledOn)
+					}
+					return ui.CreateElement(SubscriptionRow, subscriptionRowProps{
+						Sub:            s,
+						Base:           base,
+						NextDate:       pr.FormatDate(s.NextRenewal),
+						Cancelled:      isCancelled,
+						CancelledOn:    cancelledDate,
+						Selected:       sel[s.Name],
+						NeedsReview:    false, // renewing soon ≠ stale
+						OnRemind:       remind,
+						OnDrill:        viewCharges,
+						OnCancel:       doCancel,
+						OnUncancel:     doUncancel,
+						OnToggleSelect: toggle,
+					})
 				},
 			)),
 		)),

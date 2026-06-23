@@ -429,10 +429,30 @@ func Reports() ui.Node {
 		If(len(payeeNodes) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.topPayees")),
 			Div(css.Class("rows"), payeeNodes),
+			Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
+				Button(css.Class("btn"), Type("button"),
+					Attr("data-testid", "reports-payees-csv"),
+					Title(uistate.T("reports.downloadCsvTitle")),
+					OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						downloadBytes("top-payees.csv", "text/csv", reports.PayeeCSV(payees, csvAmount))
+					}),
+					uistate.T("reports.downloadCsv")),
+			),
 		)),
 		If(len(largestNodes) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.biggestExpenses")),
 			Div(css.Class("rows"), largestNodes),
+			Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
+				Button(css.Class("btn"), Type("button"),
+					Attr("data-testid", "reports-largest-csv"),
+					Title(uistate.T("reports.downloadCsvTitle")),
+					OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						downloadBytes("largest-expenses.csv", "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
+					}),
+					uistate.T("reports.downloadCsv")),
+			),
 		)),
 		// L21: show the member-spend section whenever the household has ≥2 members
 		// and at least one has attributed spending — not just when both have spend.

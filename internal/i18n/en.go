@@ -147,6 +147,8 @@ var english = Catalog{
 	"subs.renewingSoon":                  "Renewing soon",
 	"subs.empty":                         "No recurring charges detected yet. Subscriptions show up once a charge repeats on a regular schedule.",
 	"subs.addFirst":                      "Add transactions",
+	"subs.cancelledConfirm":              "Marked %s as cancelled.",
+	"subs.uncancelledConfirm":            "Removed the cancellation for %s.",
 	"subs.perMonth":                      "%s / mo",
 	"subs.next":                          "next %s",
 	"subs.weekly":                        "Weekly",

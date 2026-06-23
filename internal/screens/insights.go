@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -72,8 +73,9 @@ func Insights() ui.Node {
 	// The only financial data sent to the model: aggregates, no PII (see ai.FinancialContext).
 	aiCtx := ai.FinancialContext{NetWorth: fmtMoney(net), Income: fmtMoney(income), Spending: fmtMoney(expense), Accounts: active}
 
-	// Starter questions for the Ask box (L8): tailored to this month's top spend
-	// category so a blank box never stalls the user.
+	// Starter questions for the Ask box (L8): tailored to the user's live data so
+	// a blank box never stalls them — top spend category, a near-limit budget, and
+	// a near-target goal (C59: fuller context means more useful starter questions).
 	topCatSpend := map[string]int64{}
 	for _, t := range txns {
 		if t.IsExpense() && dateutil.InRange(t.Date, mStart, mEnd) {
@@ -89,7 +91,37 @@ func Insights() ui.Node {
 			topAmt, topCat = topCatSpend[c.ID], c.Name
 		}
 	}
-	starters := insights.SuggestedQuestions(insights.QuestionContext{TopCategory: topCat})
+
+	// Near-limit budget: the budget closest to (or over) its limit this month.
+	nearLimitBudget := ""
+	if statuses, err := budgeting.EvaluateAll(app.Budgets(), txns, mStart, mEnd, rates, budgeting.DefaultNearThreshold); err == nil {
+		for _, s := range statuses {
+			if s.State == budgeting.StateNear || s.State == budgeting.StateOver {
+				nearLimitBudget = s.Budget.Name
+				break // first near/over budget (EvaluateAll order matches Budgets order)
+			}
+		}
+	}
+
+	// Upcoming goal: the active goal with the nearest non-zero target date.
+	upcomingGoal := ""
+	now := time.Now()
+	var soonest time.Time
+	for _, g := range app.Goals() {
+		if g.Archived || g.TargetDate.IsZero() || !g.TargetDate.After(now) {
+			continue
+		}
+		if soonest.IsZero() || g.TargetDate.Before(soonest) {
+			soonest = g.TargetDate
+			upcomingGoal = g.Name
+		}
+	}
+
+	starters := insights.SuggestedQuestions(insights.QuestionContext{
+		TopCategory:     topCat,
+		NearLimitBudget: nearLimitBudget,
+		UpcomingGoal:    upcomingGoal,
+	})
 
 	nav := router.UseNavigate()
 	// The no-key hint is a clear call to action that hops to Settings (where the AI

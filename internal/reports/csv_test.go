@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCategoryCSV(t *testing.T) {
@@ -64,5 +65,52 @@ func TestMemberCSV(t *testing.T) {
 	}
 	if strings.TrimRight(lines[2], "\r") != "(unassigned),50" {
 		t.Errorf("unassigned row = %q", lines[2])
+	}
+}
+
+func TestPayeeCSV(t *testing.T) {
+	rows := []PayeeTotal{
+		{Name: "Whole Foods", Amount: 25000},
+		{Name: "", Amount: 5000}, // blank description
+	}
+	amount := func(v int64) string { return strconv.FormatInt(v/100, 10) }
+	out := string(PayeeCSV(rows, amount))
+	lines := strings.Split(strings.TrimRight(out, "\r\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("got %d lines, want 3 (header + 2): %q", len(lines), out)
+	}
+	if strings.TrimRight(lines[0], "\r") != "Payee,Amount" {
+		t.Errorf("header = %q", lines[0])
+	}
+	if strings.TrimRight(lines[1], "\r") != "Whole Foods,250" {
+		t.Errorf("row 1 = %q", lines[1])
+	}
+	if strings.TrimRight(lines[2], "\r") != "(no description),50" {
+		t.Errorf("blank-name row = %q", lines[2])
+	}
+}
+
+func TestLargestExpensesCSV(t *testing.T) {
+	rows := []ExpenseItem{
+		{Desc: "Flight to NYC", CategoryID: "travel", Amount: 45000, Date: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)},
+		{Desc: "", CategoryID: "", Amount: 3000, Date: time.Date(2026, 6, 5, 0, 0, 0, 0, time.UTC)},
+	}
+	name := func(id string) string {
+		return map[string]string{"travel": "Travel"}[id]
+	}
+	amount := func(v int64) string { return strconv.FormatInt(v/100, 10) }
+	out := string(LargestExpensesCSV(rows, name, amount))
+	lines := strings.Split(strings.TrimRight(out, "\r\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("got %d lines, want 3 (header + 2): %q", len(lines), out)
+	}
+	if strings.TrimRight(lines[0], "\r") != "Description,Category,Date,Amount" {
+		t.Errorf("header = %q", lines[0])
+	}
+	if strings.TrimRight(lines[1], "\r") != "Flight to NYC,Travel,2026-06-10,450" {
+		t.Errorf("row 1 = %q", lines[1])
+	}
+	if strings.TrimRight(lines[2], "\r") != "(no description),,2026-06-05,30" {
+		t.Errorf("blank-desc row = %q", lines[2])
 	}
 }
