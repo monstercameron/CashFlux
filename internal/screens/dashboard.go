@@ -228,7 +228,9 @@ func Dashboard() ui.Node {
 
 	hidden := uistate.UseHiddenWidgets().Get()
 	tiles := make([]any, 0, len(layoutItems)+1)
-	tiles = append(tiles, css.Class("bento"))
+	// no-touch-chrome: lets the CSS agent hide drag/resize affordances (.grip, .rz
+	// buttons) under @media (hover:none) so they don't show on touch screens (L33).
+	tiles = append(tiles, css.Class("bento no-touch-chrome"))
 	for _, it := range layoutItems {
 		if hidden.IsHidden(it.ID) {
 			continue

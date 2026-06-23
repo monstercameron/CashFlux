@@ -43,6 +43,100 @@ type sidebarProps struct {
 	ActivePath string
 }
 
+// mobileTabItemProps configures one item in the mobile bottom tab bar.
+type mobileTabItemProps struct {
+	Label  string
+	Path   string
+	Icon   icon.Name
+	Active bool
+}
+
+// mobileTabItem is a single tappable entry in the mobile bottom tab bar.
+// Its own component so its click-handler hook stays at a stable position
+// regardless of how many items are in the bar (the On*-hooks-in-loops rule).
+func mobileTabItem(props mobileTabItemProps) uic.Node {
+	nav := router.UseNavigate()
+	path := props.Path
+	cls := "mobile-tab-item"
+	if props.Active {
+		cls += " active"
+	}
+	args := []any{
+		ClassStr(cls),
+		Title(props.Label),
+		Attr("aria-label", props.Label),
+		OnClick(Prevent(func() {
+			if path != "" {
+				nav.Navigate(uistate.RoutePath(path))
+			}
+		})),
+	}
+	if path != "" {
+		args = append(args, Attr("href", uistate.RoutePath(path)))
+	}
+	if props.Active {
+		args = append(args, Attr("aria-current", "page"))
+	}
+	args = append(args,
+		ui.Icon(props.Icon, css.Class(tw.W5, tw.H5)),
+		Span(css.Class("mobile-tab-label"), props.Label),
+	)
+	return A(args...)
+}
+
+// mobileTabBarProps carries the active route for the bar.
+type mobileTabBarProps struct {
+	ActivePath string
+}
+
+// MobileTabBar renders a fixed bottom tab bar for phones. The CSS agent
+// controls visibility: it is shown only under a phone-width breakpoint and
+// hidden on desktop. It surfaces the four primary destinations plus a quick
+// +Add shortcut as tappable anchors with icon + label. The desktop left rail
+// is left entirely intact — this is purely additive (L11).
+func MobileTabBar(props mobileTabBarProps) uic.Node {
+	cur := props.ActivePath
+	// Five fixed primary slots — enough for one-thumb reach on a 390px viewport.
+	// The +Add slot opens the Quick-Add overlay rather than navigating.
+	quickAdd := uistate.UseQuickAdd()
+	openAdd := uic.UseEvent(func() { quickAdd.Set(true) })
+	return Nav(css.Class("mobile-tabbar"), Attr("aria-label", uistate.T("nav.mobileTabLabel")),
+		uic.CreateElement(mobileTabItem, mobileTabItemProps{
+			Label:  uistate.T("nav.dashboard"),
+			Path:   "/",
+			Icon:   icon.Dashboard,
+			Active: cur == "/",
+		}),
+		uic.CreateElement(mobileTabItem, mobileTabItemProps{
+			Label:  uistate.T("nav.transactions"),
+			Path:   "/transactions",
+			Icon:   icon.Transactions,
+			Active: cur == "/transactions",
+		}),
+		uic.CreateElement(mobileTabItem, mobileTabItemProps{
+			Label:  uistate.T("nav.accounts"),
+			Path:   "/accounts",
+			Icon:   icon.Accounts,
+			Active: cur == "/accounts",
+		}),
+		uic.CreateElement(mobileTabItem, mobileTabItemProps{
+			Label:  uistate.T("nav.budgets"),
+			Path:   "/budgets",
+			Icon:   icon.Budgets,
+			Active: cur == "/budgets",
+		}),
+		// +Add slot: opens the Quick-Add overlay (same as the top-bar Add button).
+		// It is a button — not an anchor — because it has no route destination.
+		Button(css.Class("mobile-tab-item mobile-tab-add"), Type("button"),
+			Attr("aria-label", uistate.T("action.quickAdd")),
+			Title(uistate.T("action.quickAdd")),
+			OnClick(openAdd),
+			ui.Icon(icon.PlusCircle, css.Class(tw.W5, tw.H5)),
+			Span(css.Class("mobile-tab-label"), uistate.T("action.add")),
+		),
+	)
+}
+
 // Shell renders the candidate-C application chrome: a fixed left rail and an
 // independently scrolling main pane with a sticky top bar, wrapping the active
 // screen's content. (Ported from design/candidate-c.html.)
@@ -82,6 +176,9 @@ func Shell(props ShellProps) uic.Node {
 			uic.CreateElement(SampleDataBanner),
 			Div(css.Class(tw.P10px), uic.CreateElement(props.View)),
 		),
+		// Mobile bottom tab bar (L11): shown only at phone widths (CSS agent controls
+		// the breakpoint). The desktop left rail is unchanged — this is additive.
+		uic.CreateElement(MobileTabBar, mobileTabBarProps{ActivePath: props.ActivePath}),
 		uic.CreateElement(SettingsHost),
 		uic.CreateElement(QuickAddHost),
 		uic.CreateElement(AddHost),
