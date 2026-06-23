@@ -1520,6 +1520,16 @@ var english = Catalog{
 	"accounts.transferSubmit":          "Transfer",
 	"accounts.transferDone":            "Transfer recorded.",
 	"accounts.transferInvalidAmount":   "Enter a valid amount greater than zero.",
+
+	// L-series 6-lane sweep, round 2 (2026-06-23)
+	"nav.mobileTabLabel":          "Mobile navigation",
+	"action.quickAdd":             "Quick add transaction",
+	"allocate.incomeNudgeLabel":   "Allocate this month's income",
+	"allocate.incomeNudgeDesc":    "You earned %v this month. Put it to work — allocate it to your budgets and goals.",
+	"allocate.incomeNudgeApply":   "Allocate %v",
+	"allocate.incomeNudgeDismiss": "Not now",
+	"artifacts.storageIDB":        "Image storage (IndexedDB): %s · total footprint: %s",
+	"artifacts.quotaWarn":         "You're using %s for receipt images — consider exporting a backup and removing some to free up space.",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

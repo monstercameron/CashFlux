@@ -11134,3 +11134,15 @@ not opened, goal add now in the +Add modal, money field serialized as .Amount no
 .set-btn.save vs type=submit, localStorage cold-reads needing a flush, and a fleet-wide port 8080→8099
 default across 55 e2e files). All 9 new gates + regression sweep (a11y, modals, drills, lifecycle) green;
 combined wasm builds clean; only the pre-existing internal/icon test fails.
+
+## 2026-06-23 — L-series 6-agent sweep round 2
+Second 6-agent parallel pass on the single main tree (disjoint files, no en.go edits except Lane D
+which deviated harmlessly). Lanes: L29 IndexedDB receipts (revived the deferred attempt + fixed its
+render-path deadlock by keeping rehydrate off the render goroutine and caching usage); responsive CSS
+(index.html) paired with responsive Go (mobile tab-bar markup + dashboard no-touch-chrome hook);
+tax-deductible reporting (Category.Deductible + reports.DeductibleTotals + Reports section); income→
+Allocate nudge + custom-fields in Insights context; and tooling — FIXED the internal/icon test (added
+Paperclip to the curated set) so `go test ./...` is finally all-green, plus docs/TESTING.md. Combined
+wasm built after one fix (added a CheckedIf checkbox helper the deductible lane assumed). Integration:
+merged ~8 i18n keys, fixed the agents' allocate_income gate (seed via addInitScript not the removed
+inline form) and the goals_drill stale #txn-add marker. All 6 new gates + regression sweep green.

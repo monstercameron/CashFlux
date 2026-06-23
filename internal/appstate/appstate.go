@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/allocate"
+	"github.com/monstercameron/CashFlux/internal/artifactstore"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -41,6 +42,17 @@ type App struct {
 	store *store.SQLiteStore
 	log   *slog.Logger
 	ring  *logging.Ring
+	// blobs is the optional IndexedDB-backed binary artifact store. When non-nil,
+	// artifact image bytes are kept here instead of in the main dataset JSON blob,
+	// which prevents large uploads from blowing the localStorage quota. Wired in by
+	// the wasm entry point after OpenIDB succeeds; nil on native Go (tests) or if
+	// IndexedDB is unavailable.
+	blobs artifactstore.Store
+	// blobUsageCache is the last successfully queried blob-store usage in bytes.
+	// It is updated by RefreshBlobUsage (called outside the render path) so that
+	// BlobStoreUsage can be called safely from render functions without blocking
+	// on the single-threaded wasm runtime.
+	blobUsageCache int64
 	// triggersSuspended pauses automatic workflow firing from PutTransaction while
 	// a bulk operation (import) or a workflow's own effects are running, so a single
 	// user-facing "add a transaction" fires triggers but a 500-row import doesn't

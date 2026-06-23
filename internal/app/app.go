@@ -34,6 +34,10 @@ func Run() {
 	// pinned, swap its context into the canonical keys so the first paint is the
 	// workspace the user chose to open with (no reload needed pre-mount).
 	applyStartupWorkspace()
+	// Open the IndexedDB artifact store so binary bytes are kept out of the main
+	// localStorage JSON blob. This must run before hydrateDataset so the blob store
+	// is ready when artifact bytes are migrated on load.
+	initBlobStore()
 	hydrateDataset()
 	initUndo() // capture the baseline undo snapshot after hydration (C78)
 	// Seed this device's music resume point from the dataset (e.g. a just-imported

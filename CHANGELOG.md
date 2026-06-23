@@ -6,6 +6,21 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **L-series 6-lane parallel sweep, round 2 (2026-06-23).**
+  - **Receipts → IndexedDB (L29):** artifact image bytes now live in IndexedDB (`internal/artifactstore`)
+    with lightweight refs in the dataset, a render-safe cached usage meter, a quota nudge, and
+    self-contained export/import; graceful localStorage fallback. The prior render-path deadlock is fixed.
+  - **Responsive/mobile (L11/L32/L33/L36):** a mobile bottom tab-bar (`MobileTabBar`), 44px tap targets,
+    condensed period controls, touch-chrome hiding on the bento, and reliable splash dismissal — gated by
+    a 390×844 Playwright viewport check.
+  - **Tax-deductible reporting (L16/L58):** a `Category.Deductible` flag (with a category-form checkbox)
+    and a Reports "Deductible totals" section + CSV, backed by pure `reports.DeductibleTotals`.
+  - **Income → Allocate (L10):** an "Allocate this month's income" nudge that pre-fills the amount from the
+    period's net income; custom-field values now feed the Insights Q&A context (L18).
+- **Fixed the long-failing `internal/icon` curated-set test** (`Paperclip` was missing from the curated
+  list); added `docs/TESTING.md`. **`go test ./...` is now fully green.**
+
 ### Changed
 - **To-do screen glamor pass (G6).** Added a page-level **"+ Add task"** button in the card header,
   a compact **"N open · N overdue · N done"** summary strip above the list (matching the stat strip

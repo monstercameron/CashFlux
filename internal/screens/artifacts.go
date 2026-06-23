@@ -10,6 +10,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
+	"github.com/monstercameron/CashFlux/internal/artifactstore"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -111,8 +112,35 @@ func Artifacts() ui.Node {
 		listBody = Div(css.Class("rows"), rows)
 	}
 
-	// Storage meter: total serialized dataset size (what hits localStorage).
-	total := app.DatasetBytes()
+	// Storage meter: combined localStorage dataset size + IndexedDB blob bytes.
+	// Use DatasetBytesWithBlobs so both storage locations are counted, but do NOT
+	// call any IDB Get in the render path — that would block the single-threaded
+	// wasm runtime waiting for a JS callback that can never fire.
+	total := app.DatasetBytesWithBlobs()
+	blobUsage := app.BlobStoreUsage()
+
+	// Quota nudge: shown once when IndexedDB usage is near the recommended cap.
+	// Dismissed by the user via component state for the session; a page refresh
+	// re-evaluates usage and may not show again if usage has dropped.
+	quotaDismissed := ui.UseState(false)
+	var quotaNudge ui.Node = Fragment()
+	if blobUsage > 0 && artifactstore.NearLimit(blobUsage) && !quotaDismissed.Get() {
+		quotaNudge = Div(css.Class("notice notice-warn", tw.Mt2, tw.Flex, tw.ItemsCenter, tw.Gap2),
+			Span(uistate.T("artifacts.quotaWarn", artifacts.HumanSize(int(blobUsage)))),
+			Button(css.Class("btn btn-sm"), Type("button"),
+				OnClick(func() { quotaDismissed.Set(true) }),
+				uistate.T("action.dismiss"),
+			),
+		)
+	}
+
+	storageLabel := uistate.T("artifacts.storage", artifacts.HumanSize(total))
+	if blobUsage > 0 {
+		storageLabel = uistate.T("artifacts.storageIDB",
+			artifacts.HumanSize(int(blobUsage)),
+			artifacts.HumanSize(total),
+		)
+	}
 
 	return Div(
 		Section(css.Class("card"),
@@ -122,7 +150,8 @@ func Artifacts() ui.Node {
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
 				Button(css.Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
 			),
-			P(css.Class("muted", tw.Mt2), uistate.T("artifacts.storage", artifacts.HumanSize(total))),
+			P(css.Class("muted", tw.Mt2), storageLabel),
+			quotaNudge,
 		),
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("artifacts.listTitle")),
