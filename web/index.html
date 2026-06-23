@@ -199,7 +199,44 @@
            under reduce. Universally neutralize TRANSITIONS (keyframe animations are
            already guarded individually above + via no-preference blocks). */
         *, *::before, *::after { transition-duration: 0.001ms !important; }
+        /* WONDER: also zero the flourish transforms (not just timing) so reduced-motion
+           users get no movement at all. */
+        :root { --wonder-on: 0 !important; --wonder-lift: 0px !important; --wonder-press: 1 !important; --wonder-shadow: none !important; }
       }
+
+      /* ============================ WONDER ============================
+         Configurable animated flourishes, theme-engine driven. Tokens default
+         here; the theme engine sets [data-wonder="off|subtle|full"] on <html>
+         (exactly like data-theme / data-density) and — once GI0 is fixed — can
+         emit --wonder-* via theme.CSSVars() for an editor intensity slider. Every
+         flourish reads these tokens, so ONE dial scales the whole app. The
+         --wonder-on multiplier (0..1) lets intensity scale transforms smoothly;
+         reduced-motion forces everything off (above). See WONDER series in TODOS. */
+      :root {
+        --wonder-on: 1;                       /* master intensity multiplier 0..1 */
+        --wonder-dur-fast: 110ms;
+        --wonder-dur: 170ms;
+        --wonder-dur-slow: 300ms;
+        --wonder-ease: cubic-bezier(.2,.75,.2,1);
+        --wonder-ease-out: cubic-bezier(.16,1,.3,1);
+        --wonder-lift: 2px;                    /* hover rise distance */
+        --wonder-press: .975;                  /* active/click scale */
+        --wonder-shadow: 0 6px 22px rgba(0,0,0,.16);
+      }
+      [data-wonder="off"]    { --wonder-on: 0; --wonder-dur-fast: 0ms; --wonder-dur: 0ms; --wonder-dur-slow: 0ms; --wonder-lift: 0px; --wonder-press: 1; --wonder-shadow: none; }
+      [data-wonder="subtle"] { --wonder-on: .55; --wonder-dur: 140ms; --wonder-lift: 1px; --wonder-press: .99; --wonder-shadow: 0 4px 14px rgba(0,0,0,.12); }
+      /* default (no attribute) == [data-wonder="full"] uses the :root values. */
+
+      /* W-1 · Card hover lift — clickable content cards rise + cast a soft shadow.
+         translateY is scaled by --wonder-on so the intensity dial controls it. */
+      .card { transition: transform var(--wonder-dur) var(--wonder-ease), box-shadow var(--wonder-dur) var(--wonder-ease), border-color var(--wonder-dur-fast) var(--wonder-ease); }
+      .card:hover { transform: translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on))); box-shadow: var(--wonder-shadow); }
+      /* W-2 · Press feedback — interactive controls compress on click. Supersedes the
+         older :active translateY with a cleaner scale; combine both for buttons. */
+      .btn, .data-btn, .seg-btn, .add-item, .menu-btn, .icon-btn { transition: transform var(--wonder-dur-fast) var(--wonder-ease), background-color var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease; }
+      .btn:active, .data-btn:active, .seg-btn:active, .add-item:active, .menu-btn:active, .icon-btn:active, [role="button"]:active { transform: scale(var(--wonder-press)); }
+      /* ========================== /WONDER ============================ */
+
       #boot-error {
         display: none; position: fixed; inset: auto 1rem 1rem 1rem; z-index: 20;
         background: #3b0d0d; color: #fecaca; border: 1px solid #7f1d1d;
@@ -315,6 +352,12 @@
          --bg-elev/--bg-card that resolved DARK in light on this screen. Pin light surfaces. */
       [data-theme="light"] .bar { background: #efede8 !important; border-color: #e4e2dd !important; }
       [data-theme="light"] .stat { background: #ffffff !important; border-color: #e4e2dd; }
+      /* GX16-F2/F3/F4: chart surfaces that bypass the token system in light. Reports hero
+         secondary stat values + hero card bg were near-white/dark; mermaid/Sankey node
+         <text> has no fill attr and inherited near-white → invisible on white. */
+      [data-theme="light"] .hero-stat-value { color: #1c1c1e !important; }
+      [data-theme="light"] .reports-hero { background: #ffffff !important; border-color: #e4e2dd; }
+      [data-theme="light"] svg[id^="cf-mmd"] text, [data-theme="light"] .mermaid text { fill: #1c1c1e !important; }
       /* GX13-F5: budget row separators (.budget border-top) used var(--border) which resolved dark in light. */
       [data-theme="light"] .budget { border-color: #e4e2dd; }
       [data-theme="light"] .muted, [data-theme="light"] .row-meta,
@@ -756,6 +799,11 @@
       .budget-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
       .budget-amount { font-variant-numeric: tabular-nums; color: var(--fg, var(--text)); white-space: nowrap; }
       .budget-sub { display: block; color: var(--text-dim); font-size: 0.82rem; margin-top: 0.15rem; }
+      /* G5 Goals: breathing room between bar and sub-line; dimmer secondary % text; stable row height; hide × at rest. */
+      .goal-sub { margin-top: 0.5rem; }
+      .goal-sub-dim { color: var(--text-dim); font-size: 0.8rem; }
+      .budget { min-height: 100px; }
+      .budget:not(:hover):not(:focus-within) .btn-del-hover { opacity: 0; pointer-events: none; }
       .cover-form { margin-top: 0.6rem; padding: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev, rgba(255,255,255,0.02)); }
       .cover-form .form-grid { margin-top: 0.4rem; }
       /* Bar track (G4 §6): a touch more contrast than --bg-elev so a 0%/empty bar

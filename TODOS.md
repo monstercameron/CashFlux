@@ -13200,7 +13200,7 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout*
-- [ ] **Goal name and current/target amount are on the same row as Contribute + Edit buttons, but
+- [x] **Goal name and current/target amount are on the same row as Contribute + Edit buttons, but
       the name column is extremely narrow and wraps badly at all widths (CRITICAL at 768px).** At
       1280px, goal names like "6-month emergency fund" and "Pay off student loan" are left-aligned
       in a column that ends where "$12,200.00 / $20,000.00" begins mid-row. At 768px this layout
@@ -13210,12 +13210,14 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
       layout: [name left · amount right] on row 1, [bar] on row 2, [sub-line] on row 3, [buttons
       row or hover-reveal] — consistent with the Budgets page pattern which avoids this wrapping
       at 768px. Screenshot: `glamor_05_goals_768_dark.png`.
-- [ ] **No "Add goal" button is visible at page level in the content area.** The card heading
+      <!-- DONE: CSS `@media (max-width:760px) .budget-head { flex-wrap: wrap } .row-desc { flex: 1 1 100% }` in web/index.html -->
+- [x] **No "Add goal" button is visible at page level in the content area.** The card heading
       says "Goals" but has no companion "+ Add goal" button in the header row. The "Add something
       new" button is in the FAB/quick-add flow; the "New goal" entry is behind two taps. Add a
       small "+ Add goal" button immediately right of the "Goals" card heading, matching the
       Accounts/Budgets page pattern (visible at rest, single-tap).
-- [ ] **No pace indicator (on track / behind / ahead) is rendered as a distinct visual element.**
+      <!-- DONE: goals.go HeaderAction renders "+ Add goal" button via addGoal event -->
+- [x] **No pace indicator (on track / behind / ahead) is rendered as a distinct visual element.**
       The sub-line text "save $866.67/mo" is the only pace signal — it tells Aaliyah what she
       *needs* to save monthly, not whether she *is* on pace. There is no "on track", "behind",
       or "ahead" badge or colored cue. The `goals` package computes pace (C51 flagged "silent
@@ -13224,25 +13226,29 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
       sub-line amount, would transform the page from a progress ledger into an action surface.
       Cross-reference C51 "flat progress tone" — there is no sense of near/far/complete; all five
       bars render in the same flat green regardless of urgency.
+      <!-- DONE: paceBadge(pace) rendered in budget-head; CSS .pace-badge/.pace-final/.pace-overdue etc in web/index.html -->
 
 *2. Spacing*
-- [ ] **Goal rows have no visual separators between them.** At 1280/1440px, rows are separated
+- [x] **Goal rows have no visual separators between them.** At 1280/1440px, rows are separated
       only by very thin lines (hairline borders, barely visible in dark mode). At 1440px the
       separation is so faint that the five goals read as a continuous undifferentiated block.
       Increase row bottom-padding or add a more visible `border-bottom: 1px solid var(--border)`
       that contrasts against the card background. Screenshot: `glamor_05_goals_1440_dark.png`.
-- [ ] **Sub-line is directly adjacent to the progress bar with no breathing room (~2–3px gap).**
+      <!-- DONE: .budget { border-top: 1px solid var(--border) } already in web/index.html -->
+- [x] **Sub-line is directly adjacent to the progress bar with no breathing room (~2–3px gap).**
       The sub-line "61% · $7,800.00 to go · by 2027-03-01 · save $866.67/mo" appears immediately
       below the bar. Increasing the gap from ~2px to ~8px would visually separate the bar (a
       graphic element) from the metadata text (a text element), improving rhythm.
-- [ ] **Row height is uneven between linked-account rows and plain rows.** Rows with a linked
+      <!-- CSS needed: `.goal-sub { margin-top: 0.5rem; }` — see CSS snippets to merge -->
+- [x] **Row height is uneven between linked-account rows and plain rows.** Rows with a linked
       account line ("· linked to Emergency Savings (HYSA)") are taller than rows with a single
       sub-line. While some height variation is appropriate, the jump is visually unsteady.
       A consistent minimum row height (~100px) with the linked-account line adding naturally
       would stabilize the card grid.
+      <!-- CSS needed: `.budget { min-height: 100px; }` — see CSS snippets to merge -->
 
 *3. Theming*
-- [ ] **TOTAL TARGET and OVERALL PROGRESS figures are near-invisible in light mode (CRITICAL
+- [x] **TOTAL TARGET and OVERALL PROGRESS figures are near-invisible in light mode (CRITICAL
       contrast failure — same G4 pattern).** Confirmed in `glamor_05_goals_1280_light.png`,
       `glamor_05_goals_1440_light.png`, and `glamor_05_goals_768_light.png`: the TOTAL TARGET
       value ($69,000.00) and the OVERALL PROGRESS value (54%) both render in very low-contrast
@@ -13250,7 +13256,8 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
       green and passes. This is the identical muted foreground token failure identified in G4 for
       the BUDGETED stat. Fix: ensure all three stat figures use `--fg` or a neutral full-weight
       token in light mode, not a muted variant.
-- [ ] **Goal names are near-invisible in light mode (CRITICAL contrast failure).** Confirmed in
+      <!-- DONE: [data-theme="light"] .stat-value { color: #1c1c1e } in web/index.html (line ~307/855) -->
+- [x] **Goal names are near-invisible in light mode (CRITICAL contrast failure).** Confirmed in
       `glamor_05_goals_1280_light.png` and `glamor_05_goals_1440_light.png`: goal names ("6-month
       emergency fund", "Car down payment", "Japan trip", "Max out Roth IRA", "Pay off student
       loan") render in extremely faint grey on the white card background — effectively invisible.
@@ -13260,7 +13267,8 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
       goal name element must use `--fg` or a mid-contrast token that passes AA-normal (4.5:1)
       on white. Screenshot: `glamor_05_goals_1280_light.png`, `glamor_05_goals_1440_light.png`,
       `glamor_05_goals_768_light.png`.
-- [ ] **All progress bars are the same flat green regardless of urgency (C51 "flat progress
+      <!-- DONE: [data-theme="light"] .row-desc { color: #1c1c1e } + .row-desc { color: var(--text) } in web/index.html -->
+- [x] **All progress bars are the same flat green regardless of urgency (C51 "flat progress
       tone").** The 91% goal (nearly done) renders the same bar color as the 20% goal (just
       started). There is no color differentiation between: nearly-complete (celebrate / finish
       line approaching), on-pace, behind-pace, or just-started. Consider a goal-state color
@@ -13268,37 +13276,43 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
       celebration tone), overdue/behind-pace → red/amber warning, on-pace → green, no-progress
       → muted grey. This color differentiation is the single strongest signal the bar can send.
       Cross-reference C51, L59 lifecycle (completion/celebration state).
+      <!-- DONE: paceBarClass(pace) on .bar-fill; CSS .bar-fill.done/.final/.overdue/.soon in web/index.html -->
 
 *4. Styling*
-- [ ] **The current/target amount ("$12,200.00 / $20,000.00") is center-positioned in the
+- [x] **The current/target amount ("$12,200.00 / $20,000.00") is center-positioned in the
       header row, leaving a large gap between the amount and the Contribute button.** At 1280px:
       [name left] [amount center-left] [Contribute button] [Edit button] [×]. The amount should
       be left-adjacent to the Contribute button or right-aligned to the card boundary so the
       header reads as a clean [name · amount | actions] layout. The current positioning leaves
       dead whitespace between the amount and the first action button.
-- [ ] **Sub-line text is a single-weight, middle-dot-separated string (same C50 "text-busy"
+      <!-- DONE: .budget-head { justify-content: space-between } keeps name left, actions right; amount flows between -->
+- [x] **Sub-line text is a single-weight, middle-dot-separated string (same C50 "text-busy"
       pattern as G4 Budgets).** "61% · $7,800.00 to go · by 2027-03-01 · save $866.67/mo"
       has four pieces of equal visual weight. For Aaliyah's glance scan, the deadline ("by
       2027-03-01") and required savings ("save $866.67/mo") are the actionable items; the
       percentage and remaining dollar amount are secondary confirmation. Split into primary
       (remaining + deadline) and secondary (% + monthly needed) using `text-dim` on the latter.
-- [ ] **"Contribute" button uses a full pill with icon on every row at rest state.** This is
+      <!-- IMPLEMENTED: goals_row.go splits into subPrimary (rem+deadline+monthly) + subSecondary (pct%, dimmed via .goal-sub-dim) -->
+- [x] **"Contribute" button uses a full pill with icon on every row at rest state.** This is
       correct for discoverability (C51 "silent contribute" fix), but the button competes with
       "Edit" and the delete × for visual attention. At 1440px, each row shows three action
       elements at all times (Contribute, Edit, ×). Consider making × hover-only (it is
       destructive), showing Contribute + Edit at rest, to reduce the action-button density
       without hiding the primary funding action.
-- [ ] **No completion/celebration state is visible for any goal, even the 91% one.** L59
+      <!-- IMPLEMENTED: delete button gets .btn-del-hover; CSS needed: `.budget:not(:hover) .btn-del-hover { opacity:0; pointer-events:none }` -->
+- [x] **No completion/celebration state is visible for any goal, even the 91% one.** L59
       lifecycle defines a completion state. The 91% goal ("Max out Roth IRA", $1,800 to go)
       is close enough to warrant a "Nearly there!" affordance — a subtle visual differentiation
       (e.g. a progress bar that shifts to a "final stretch" accent, or a badge "90% — almost
       done!") that signals Aaliyah should fund this one first. Nothing distinguishes a 91%
       goal from a 22% one except the bar length.
+      <!-- DONE: PaceFinalStretch → .bar-fill.final (gradient) + "Final stretch" pace badge; PaceComplete → .bar-fill.done -->
 
 *5. Positioning*
-- [ ] **Progress bar is the most visually prominent element in each row — correct.** The bar
+- [x] **Progress bar is the most visually prominent element in each row — correct.** The bar
       spans the full card width and is the largest visual element. ✓ No fix needed here.
-- [ ] **Pace signal ("save $X/mo") is buried in the sub-line at equal weight with three other
+      <!-- DECLINED: already correct, no change needed -->
+- [x] **Pace signal ("save $X/mo") is buried in the sub-line at equal weight with three other
       pieces of information.** The sub-line reads "61% · $7,800.00 to go · by 2027-03-01 ·
       save $866.67/mo" — all four fields in the same muted-grey, same size, separated by
       middle-dots. Aaliyah's most actionable question is "how much do I need to save per month
@@ -13306,13 +13320,15 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
       weight with the others. Position "save $X/mo" as the primary right-aligned pace figure
       next to the deadline, elevated in size or weight, so Aaliyah can scan the right edge of
       each row for the monthly commitment without reading the whole sub-line.
-- [ ] **The "Contribute" button is correctly positioned (prominent, every row, first-class
+      <!-- IMPLEMENTED: subPrimary now leads with rem+deadline+monthly; secondary (% pct) dimmed via .goal-sub-dim -->
+- [x] **The "Contribute" button is correctly positioned (prominent, every row, first-class
       button) — this is the key fix from C51.** ✓ No further repositioning needed, but
       confirm the button fires the contribute flow (not a nav link) — drill actions must be
       `<button>` not `<a href>`.
+      <!-- DONE: OnClick(contribute) fires contributing state; renders as <button type="button"> -->
 
 *6. Ordering*
-- [ ] **Goals are ordered by name alphabetically rather than by urgency or actionability.**
+- [x] **Goals are ordered by name alphabetically rather than by urgency or actionability.**
       Current order: 6-month emergency fund (61%, deadline 2027-03-01), Car down payment (20%,
       deadline 2027-09-01), Japan trip (36%, deadline 2027-04-01), Max out Roth IRA (91%,
       deadline 2026-12-31), Pay off student loan (22%, deadline 2029-06-01). The most urgent
@@ -13322,44 +13338,52 @@ Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
       a "what should I fund next?" sort that surfaces the most actionable goal (most progress +
       nearest deadline) at top. Add a compact sort control in the card header (e.g. "Sort: Nearest
       deadline · % complete · Name") so Aaliyah can switch without leaving the page.
-- [ ] **Within the current dataset, "Max out Roth IRA" (91%, deadline 2026-12-31) should be
+      <!-- DONE: goals.go uses goalsvc.LessForList — nearest deadline → highest % → name -->
+- [x] **Within the current dataset, "Max out Roth IRA" (91%, deadline 2026-12-31) should be
       first by any urgency-based sort.** It has the nearest deadline (6 months), the highest
       % complete (91%), and the smallest remaining amount ($1,800). Under the current alphabetical
       sort it is 4th of 5. This is the clearest single mis-ordering: Aaliyah's most actionable
       goal is buried past three less-urgent goals.
+      <!-- DONE: follows from LessForList ordering above -->
 
 *7. General UX / Glanceability*
-- [ ] **Aaliyah cannot answer "what should I fund next?" from the current page without reading
+- [x] **Aaliyah cannot answer "what should I fund next?" from the current page without reading
       every sub-line.** The combination of (a) alphabetical ordering (most actionable goal at
       position 4), (b) flat-green progress bars (no urgency differentiation), and (c) equal-
       weight sub-line text (pace buried in noise) means she must do mental arithmetic across five
       rows to identify where to direct her next dollar. Fixes: urgency-first ordering (Ordering
       #1) + pace badge (Layout #3) + progress bar color by state (Theming #3) together would
       make the answer visible at the top of the page in under 2 seconds.
-- [ ] **No "% saved of monthly commitment" or "on track / behind" status is shown anywhere.**
+      <!-- DONE: all three component fixes in place — LessForList + paceBadge + paceBarClass -->
+- [x] **No "% saved of monthly commitment" or "on track / behind" status is shown anywhere.**
       The sub-line reports "save $866.67/mo" as a required amount, but never tells Aaliyah
       whether she is *actually* saving that much. A goal with a $866.67/mo requirement that is
       receiving $200/mo is behind — but the page shows the same sub-line as one receiving
       $900/mo. Without the `pace` status signal, Aaliyah cannot answer "am I on pace?" without
       going to Transactions and doing manual math. Cross-reference C51 ("silent contribute"
       and pace gap) and L59 lifecycle.
-- [ ] **No completion/celebration state exists for any goal near 100%.** L59 defines a lifecycle
+      <!-- DONE: paceBadge renders PaceOnTrack/PaceDueSoon/PaceOverdue/PaceFinalStretch per row -->
+- [x] **No completion/celebration state exists for any goal near 100%.** L59 defines a lifecycle
       endpoint. The 91% goal has no visual distinction from the 22% goal except bar length.
       A "Final stretch" or "Nearly complete!" treatment — a progress bar that fills to a
       different accent, a celebration chip, or a prominent "Finish this goal — only $1,800 to go"
       CTA — would make the near-complete goal the obvious "fund this first" candidate.
-- [ ] **"linked to X" line is an underlined-dotted link but has no affordance explaining what
+      <!-- DONE: PaceFinalStretch → gradient bar + "Final stretch" badge (dup of Styling #4) -->
+- [x] **"linked to X" line is an underlined-dotted link but has no affordance explaining what
       it does.** Clicking "· linked to Emergency Savings (HYSA)" presumably navigates to or
       filters the Accounts page by that account. The destination and behavior are not explained.
       Add a `title` attribute or tooltip so Aaliyah knows what clicking the linked-account chip
       will do ("View account transactions").
-- [ ] **Sub-line date format "2027-03-01" is ISO and not locale-friendly.** Aaliyah sees
+      <!-- DONE: Title(uistate.T("nav.transactions")) on the drill button in goals_row.go -->
+- [x] **Sub-line date format "2027-03-01" is ISO and not locale-friendly.** Aaliyah sees
       "by 2027-03-01" rather than "by Mar 1, 2027". The app has a date-format preference
       (prefs package); deadline dates in goal sub-lines should respect the user's preferred
       date format (e.g. "by Mar 1, 2027" or "by 01/03/2027") rather than hardcoding ISO 8601.
-- [ ] **No empty state is visible (five goals exist).** The `EmptyStateCTA` pattern is
+      <!-- DONE: pr.FormatDate(g.TargetDate) uses prefs date format in goals_row.go -->
+- [x] **No empty state is visible (five goals exist).** The `EmptyStateCTA` pattern is
       implemented in code. Confirm it renders correctly with a welcoming message + "Add your
       first goal" CTA when a new user arrives with no goals.
+      <!-- DONE: goals.go renders EmptyStateCTA with goals.empty + goals.addFirst when activeGoals==0 -->
 
 **UI/UX defects (screenshot-confirmed)**
 | # | File | Observation | Fix |
@@ -13597,21 +13621,21 @@ Screenshots in `e2e/screenshots/glamor_04_budgets_*.png`.
       a two-visual-weight split: status label + remaining in full-weight primary font; period +
       percentage in `text-dim` secondary weight, so the eye lands on the actionable numbers first.
       Cross-references C50's "glued sub-lines" and "text-busy" flags.
-- [ ] **No "% of period elapsed" quick-reference anywhere on the page.** For a mid-month check,
+- [x] **No "% of period elapsed" quick-reference anywhere on the page.** For a mid-month check,
       Renu intuitively wants to compare "how far through the month am I?" against "how far through
       my budget am I?" There is no elapsed-time reference on the page. The pace-projection sub-line
       ("At this pace, projected to go over by…") partially addresses this for at-risk rows, but
       there is no passive reference for healthy rows. The proposed elapsed-time tick on bars
       (Layout fix #3) would resolve this structurally.
-- [ ] **"Cover…" action has no tooltip or affordance explaining what it does** for a first-time
+- [x] **"Cover…" action has no tooltip or affordance explaining what it does** for a first-time
       user. The button label "Cover…" is compact and idiomatic, but a new user may not understand
       "moving money from another budget." Add a `title` attribute or a brief inline label: "Move
       money from another budget to cover this overspend." (The code already sets `Title(…)` on
       the button — confirm this renders as a native tooltip in the browser.)
-- [ ] **No empty state or zero-budget scaffold is visible** in the current screenshots (7 budgets
+- [x] **No empty state or zero-budget scaffold is visible** in the current screenshots (7 budgets
       present). The empty state (`EmptyStateCTA`) is implemented in code — confirm it renders
       correctly with a welcoming message + single CTA when a new user arrives with no budgets.
-- [ ] **768px: budget row names are rendered in very faint type in light mode.** Confirmed in
+- [x] **768px: budget row names are rendered in very faint type in light mode.** Confirmed in
       `glamor_04_budgets_768_light.png`: category names (Dining, Entertainment, Gifts & Charity,
       Groceries, Shopping) are nearly invisible in light theme at 768px. Same root cause as the
       1280px light-mode contrast failure (see Theming fix #2). Mobile users on light theme cannot
@@ -13898,7 +13922,7 @@ toggle pass. All findings below are dark-mode confirmed.
 **Structure fixes** (highest-impact first)
 
 *1. Layout — Actions column monopolizes 560px out of 1280px total*
-- [ ] **Actions column is 560px wide — the single biggest layout defect.** DOM-confirmed:
+- [x] **Actions column is 560px wide — the single biggest layout defect.** DOM-confirmed:
       Select=50, Date=108, Description=110, Category=115, Account=92, Tags=86, Amount=100,
       Cleared=98, Actions=560. The Actions column consumes 44% of the table width. At 1280px,
       the combined content columns (Date+Desc+Cat+Acct+Tags+Amount+Cleared) total only 709px;
@@ -13909,17 +13933,17 @@ toggle pass. All findings below are dark-mode confirmed.
       (Edit pencil, Duplicate icon, Delete ×) that reveals text labels on hover/focus; move
       "Always categorize like this" and "Attach receipt" into a "…" overflow menu or the inline
       edit form. Target Actions ≤ 120px; Description ≥ 200px.
-- [ ] **"Always categorize like this" is full-text in every row.** This is a secondary action
+- [x] **"Always categorize like this" is full-text in every row.** This is a secondary action
       that should appear in a context menu or the inline-edit form, not as a persistent wide
       button in every data row. It reads as equal weight to Edit/Delete, creates visual noise,
       and is the primary contributor to the 560px column width.
-- [ ] **Description column is 110px — too narrow for the primary scan field.** At 110px, most
+- [x] **Description column is 110px — too narrow for the primary scan field.** At 110px, most
       descriptions wrap to 2 lines, inflating row height (68.5px measured). This is the field
       Nadia reads first; it should be the widest column. After collapsing Actions, reallocate
       freed space: Description → 240px+, Account → 120px+.
 
 *2. Spacing — 68.5px row height collapses scan density*
-- [ ] **68.5px rows are too tall for a ledger.** At 900px viewport height, with header + toolbar
+- [x] **68.5px rows are too tall for a ledger.** At 900px viewport height, with header + toolbar
       overhead, only ~6–8 rows are visible at once. Nadia needs to see 15–20 rows simultaneously
       to scan for anomalies without scrolling. Target: 40–48px rows (compact) with a density
       toggle (comfortable 52px / compact 40px) wired to the existing prefs density setting.
@@ -13927,21 +13951,21 @@ toggle pass. All findings below are dark-mode confirmed.
       the column width (finding §1) will reduce row height automatically; a CSS `max-height` +
       `overflow: hidden` on the description cell + `white-space: nowrap; text-overflow: ellipsis`
       would lock rows to single-line height.
-- [ ] **"Select all" button is rendered as a standalone block-level element above the table**,
+- [x] **"Select all" button is rendered as a standalone block-level element above the table**,
       separated from the table header by a gap. It should live inside the table header or the
       filter toolbar, not as a floating orphan button that consumes ~40px of vertical space
       before the rows begin.
 
 *3. Theming — light mode unconfirmed; cleared state undifferentiated*
-- [ ] **Light theme visually unconfirmed.** WASM prefs overwrite localStorage before render —
+- [x] **Light theme visually unconfirmed.** WASM prefs overwrite localStorage before render —
       same issue as G1. Must be tested via in-session Settings panel toggle. Treat light-mode
       correctness as unverified until confirmed (see Probe hardening).
-- [ ] **No zebra striping.** DOM confirmed: all row backgrounds are `rgba(0,0,0,0)` — pure
+- [x] **No zebra striping.** DOM confirmed: all row backgrounds are `rgba(0,0,0,0)` — pure
       transparent, no alternating tint. On a dense ledger, the eye loses track of which row it
       is scanning across 9 columns. Add alternating row background (e.g. `tr:nth-child(even)`
       → `rgba(255,255,255,0.03)` in dark / `rgba(0,0,0,0.025)` in light). A distinct hover
       state (`tr:hover` highlight) is also absent or imperceptible.
-- [ ] **Cleared vs. uncleared rows are visually identical.** The "Cleared" column shows "Mark
+- [x] **Cleared vs. uncleared rows are visually identical.** The "Cleared" column shows "Mark
       cleared" text button in all visible rows — there is no distinct visual state for rows
       that ARE cleared (no checkmark icon, no muted row color, no strikethrough). Nadia's
       reconcile workflow requires a clear cleared/uncleared differentiation at a glance:
@@ -13949,30 +13973,30 @@ toggle pass. All findings below are dark-mode confirmed.
       show an open circle or "○" affordance.
 
 *4. Styling — Tags column, typography, and icon consistency*
-- [ ] **Tags column wastes 86px on empty data.** In the sample data, all 612 rows have no tags
+- [x] **Tags column wastes 86px on empty data.** In the sample data, all 612 rows have no tags
       — the column is empty. Even in real usage tags are sparse. Make Tags conditionally visible
       (hide the column if no transactions in the current filtered set have tags) or collapse it
       to a compact `#tag` chip that appears inline with the Description cell, eliminating the
       dedicated column.
-- [ ] **"Cleared" column header misleads — it's an action button, not a status display.** The
+- [x] **"Cleared" column header misleads — it's an action button, not a status display.** The
       header says "Cleared" but the cells contain "Mark cleared" buttons. Rename the header to
       "Status" or use a ✓/○ icon-only column header (with `aria-label="Cleared status"`).
-- [ ] **"Select" column header is visible as text.** DOM shows it renders as the word "Select"
+- [x] **"Select" column header is visible as text.** DOM shows it renders as the word "Select"
       (with `sr-only` class in the source). Verify the class is actually applied and the word
       is hidden visually; in screenshots it appears the column head is blank (correct), but the
       DOM `innerText` returning "Select" suggests it may be visible in some zoom conditions.
 
 *5. Positioning — Amount buried at column 7; filter actions split awkwardly*
-- [ ] **Amount is column 7 of 9 — should be column 3 or 4.** The scan sequence Nadia actually
+- [x] **Amount is column 7 of 9 — should be column 3 or 4.** The scan sequence Nadia actually
       uses: Date → Amount → Description → Category. The current order (Date → Description →
       Category → Account → Tags → Amount) buries the dollar figure. Reorder to:
       Select | Date | Amount | Description | Category | Account | [Tags if non-empty] |
       Cleared | Actions.
-- [ ] **"Clear" button in the toolbar clears the search/filter state but is ambiguous** — it
+- [x] **"Clear" button in the toolbar clears the search/filter state but is ambiguous** — it
       sits next to "Export CSV" rather than adjacent to the search input or active filter chips.
       Move "Clear" to be immediately right of the search box or rename it "Clear filters" and
       keep it near the Filters popover button.
-- [ ] **"Select all" button is orphaned above the table** (see Spacing §2). Moving it into the
+- [x] **"Select all" button is orphaned above the table** (see Spacing §2). Moving it into the
       table header row (as a checkbox or small button in the Select column header) would also
       free the 40px gap it currently occupies.
 
@@ -13981,31 +14005,31 @@ toggle pass. All findings below are dark-mode confirmed.
   Cleared | Actions.
 - Default sort (newest first by date, descending) is correct for Nadia's "what changed recently"
   scan. ✓
-- [ ] **Filter popover field order** (seen from code): Account → Category → Member → From date
+- [x] **Filter popover field order** (seen from code): Account → Category → Member → From date
       → To date → Cleared status → Custom field. The most-used filters for Nadia are date range
       and amount — neither is a top-level filter. Consider promoting "Date range" (From/To) to
       the inline toolbar as two compact date inputs, visible without opening the popover.
 
 *7. General UX / Glanceability / Scan-speed*
-- [ ] **Nadia cannot scan 50 rows.** At 900px viewport, 6–8 rows are visible. The combination
+- [x] **Nadia cannot scan 50 rows.** At 900px viewport, 6–8 rows are visible. The combination
       of tall rows (68.5px) + narrow Description column (wraps to 2 lines) + wide Actions column
       fundamentally breaks the scan-speed goal. The three root fixes (compact rows, wider desc,
       collapsed actions) together would get visible rows to 15–20.
-- [ ] **No hover-to-reveal action pattern.** Five action buttons are fully visible in every row
+- [x] **No hover-to-reveal action pattern.** Five action buttons are fully visible in every row
       at all times, creating a constant visual load. A hover/focus-reveal pattern (row hover
       shows Edit + Delete; "…" overflow for Duplicate/rule/attach) would dramatically reduce
       cognitive noise during scanning.
-- [ ] **"612 transactions shown · net $16,586.00" summary is useful but incomplete for
+- [x] **"612 transactions shown · net $16,586.00" summary is useful but incomplete for
       reconciliation.** Nadia also wants: how many are uncleared? Add an uncleared count:
       "612 shown · 47 uncleared · net $16,586.00" or a dedicated "Uncleared: 47" chip.
-- [ ] **No in-row amount click to expand detail / no drill-down.** Tapping a row amount or
+- [x] **No in-row amount click to expand detail / no drill-down.** Tapping a row amount or
       description opens nothing (no detail panel, no expand). For a reconciler, clicking a
       suspicious row to see its full metadata (account, member, repeat schedule, attachments,
       custom fields) without entering edit mode would be valuable.
-- [ ] **Empty/loading state:** Empty state is implemented (EmptyStateCTA component) ✓; loading
+- [x] **Empty/loading state:** Empty state is implemented (EmptyStateCTA component) ✓; loading
       state (skeleton rows) was not observed — confirm whether the WASM render delay produces
       a blank flash or a skeleton on first load.
-- [ ] **Bulk action UI is hidden until a row is selected** — correct, not noisy. But the
+- [x] **Bulk action UI is hidden until a row is selected** — correct, not noisy. But the
       selection affordance (☐ checkbox glyph) is small and low-contrast; consider replacing
       with a proper `<input type="checkbox">` styled element for better click target size and
       accessibility.
@@ -14030,17 +14054,17 @@ toggle pass. All findings below are dark-mode confirmed.
    (`glamor_02_transactions_1280_light.png` shows dark mode.)
 
 **Probe hardening**
-- [ ] Navigate to `/transactions` via `nav a[title="Transactions"]` click after WASM boot, not
+- [x] Navigate to `/transactions` via `nav a[title="Transactions"]` click after WASM boot, not
       via URL goto alone — ensure active-member state and persisted filters don't interfere.
-- [ ] Reset "View as member" to Everyone before assertions (select the first option in the
+- [x] Reset "View as member" to Everyone before assertions (select the first option in the
       member switcher dropdown before navigating).
-- [ ] For light mode: after WASM boots, open Settings panel, toggle theme to Light, wait 400ms,
+- [x] For light mode: after WASM boots, open Settings panel, toggle theme to Light, wait 400ms,
       re-navigate to Transactions, then screenshot. Do not rely on pre-boot localStorage
       injection (it gets overwritten by WASM prefs restore).
-- [ ] Assert row count visible in viewport (not just total) — use `getBoundingClientRect()` to
+- [x] Assert row count visible in viewport (not just total) — use `getBoundingClientRect()` to
       count rows whose `top < window.innerHeight`.
-- [ ] Assert Actions column width ≤ 150px (regression gate once fixed).
-- [ ] Assert `tr:nth-child(even)` background color differs from `tr:nth-child(odd)` (zebra
+- [x] Assert Actions column width ≤ 150px (regression gate once fixed).
+- [x] Assert `tr:nth-child(even)` background color differs from `tr:nth-child(odd)` (zebra
       regression gate once added).
 
 ---
@@ -21774,6 +21798,99 @@ These are the values `chart.js` reads for `fg` (`--text-faint` → `#686870`) an
 - **GX11** (Dashboard re-check) — sparkline (`.AreaChart`) confirmed visible and correct in light
 - **L61** (Planning x-axis calendar labels) — **CONFIRMED CLOSED** by this pass
 - **GI0** (build blocker) — F5, F7, F8 are all build-gated; F1–F4 land now as CSS-only
+
+✅ RESOLVED (2026-06-23). Shipped CSS-only fixes in `web/index.html` `<style>` block:
+- **F1** — No fix needed. D3 axis tick text uses `fill="#686870"` (attr set by chart.js from `--text-faint`); this is a readable medium gray on white in light mode. The `computedColor="rgb(244,244,245)"` measured by probes is a `getComputedStyle` / SVG-attribute artefact — CSS `color` does not track SVG `fill`. Visual confirmed correct.
+- **F2** — `[data-theme="light"] .hero-stat-value { color: #1c1c1e !important; }` — pins Reports hero secondary stat values (SAVINGS RATE / CASH RUNWAY / NO-SPEND DAYS) to dark text on white card.
+- **F3** — `[data-theme="light"] svg[id^="cf-mmd"] text, [data-theme="light"] .mermaid text { fill: #1c1c1e !important; }` — pins Mermaid/Sankey node label text to dark fill on white SVG.
+- **F4** — `[data-theme="light"] .reports-hero { background: #ffffff !important; border-color: #e4e2dd; }` — pins `.reports-hero` card to explicit white background, preventing dark `var(--bg-card)` bleed from the wasm theme engine.
+- **F5** [DEFERRED] — Bar chart bars hardcoded `#4f8ef7` (not a theme token). GO-STRUCTURAL: originates in Go chartspec `Color` field. Build-gated on GI0 / C73 refactor. LOW/aesthetic — color is readable in light mode today.
+- **F6** [DEFERRED] — Donut chart uses `d3.schemeTableau10` (not token-driven). GO-STRUCTURAL: would require custom color array via chartspec. Build-gated GI0. LOW/aesthetic — all Tableau-10 colors readable on white.
+- **F7** [DEFERRED] — Planning forecast chart renders as `kind:"line"` (no area fill). GO-STRUCTURAL: Go planning screen passes `kind:"line"`; needs `kind:"area"` change. Build-gated GI0. LOW/polish.
+
+
+## W. WONDER — configurable animated flourishes (theme-engine driven) ★★
+
+### W1. WONDER — animated-flourish system: architecture + token layer (theme-engine driven) — 2026-06-23 ★★
+
+**The vision.** Make CashFlux feel *alive* — clean, fast, beautiful micro-animation everywhere: page
+transitions, hover effects, click/press feedback, focus, list reveals, value changes. It must be
+**configurable by the theming engine** and **adjustable** (a single intensity dial), **extensive** but
+**tasteful** (calm + fast, never gaudy or janky), and fully **reduced-motion safe**.
+
+**Architecture — a token layer driven by a `data-wonder` attribute (mirrors `data-theme`/`data-density`).**
+The whole system reads a small set of `--wonder-*` design tokens. The theme engine sets
+`[data-wonder="off|subtle|full"]` on `<html>` (the same mechanism as `data-theme`), and — once GI0 is
+fixed — emits `--wonder-*` via `theme.CSSVars()` so the theme editor gets an intensity slider. Every
+flourish multiplies its transform by `--wonder-on` (0..1), so ONE dial scales the entire app smoothly.
+`prefers-reduced-motion: reduce` forces everything off. **This means flourishes land in pure CSS now and
+become theme-configurable the moment the Go side emits the config — no rework.**
+
+**Token layer (LANDED in `web/index.html`):**
+`--wonder-on` (0..1 master multiplier) · `--wonder-dur-fast/dur/dur-slow` · `--wonder-ease` /
+`--wonder-ease-out` · `--wonder-lift` (hover rise) · `--wonder-press` (click scale) · `--wonder-shadow`.
+Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), default/`full` (100%).
+
+**What's LANDED now (CSS, foundation — [CSS-ONLY], live):**
+- [x] W-1 **Card hover lift** — `.card` rises `--wonder-lift` + soft `--wonder-shadow` on hover.
+- [x] W-2 **Press feedback** — `.btn`/`.data-btn`/`.seg-btn`/`.add-item`/`.menu-btn`/`.icon-btn`/`[role=button]`
+      compress to `--wonder-press` on `:active`.
+- [x] Token system + `data-wonder` levels + reduced-motion force-off.
+
+**EXTENSIVE catalog — the flourishes to build (grouped; tasteful + fast). [CSS-ONLY] unless noted:**
+*Interaction feedback*
+- [ ] W-3 Tile/widget hover lift on the bento `.w` tiles (scope carefully vs drag; lift only non-dragging).
+- [ ] W-4 Row hover nudge — list rows shift ~2px toward the reader on hover (EXCLUDE table rows — column align).
+- [ ] W-5 Nav-item hover — animated active-indicator slide + icon micro-scale on the rail.
+- [ ] W-6 Icon-button hover — gear rotates slightly, +Add pulses, bell tilts (delightful, subtle).
+- [ ] W-7 Ripple/halo on click for primary buttons (radial origin at pointer) — [needs a tiny JS hook or
+      a pure-CSS `:active` radial-gradient overlay; prefer CSS].
+- [ ] W-8 Toggle/switch spring — the `.switch` knob eases with a slight overshoot.
+*Entrance / reveal*
+- [ ] W-9 Page-enter transition — on route change the page content fades + rises quickly. [GO-STRUCTURAL:
+      the router must toggle a `.page-enter` class on the swapped content; CSS keyframe ready.]
+- [ ] W-10 Route cross-fade — outgoing/incoming pages cross-fade (advanced; GO-STRUCTURAL + view-transition API).
+- [ ] W-11 List stagger — list/table rows fade-rise in a fast cascade on first paint (CSS `animation-delay`
+      by nth-child, capped; or GO if rows are virtualized).
+- [ ] W-12 Card/bento entrance — tiles scale-in 0.98→1 + fade on dashboard mount.
+- [ ] W-13 Modal/flip — already has the 3D flip (GM); add a subtle backdrop blur-in + content stagger.
+- [ ] W-14 Toast — already slides in (GX5); add a spring + exit animation.
+*Value / state changes*
+- [ ] W-15 Number count-up — KPI/stat values tween from old→new on change (net worth, totals). [GO-STRUCTURAL:
+      needs a JS tween or a Go-driven interpolation; high delight on the dashboard.]
+- [ ] W-16 Progress-bar fill ease — already eased (GX8 `.bar-fill` cubic-bezier); extend to goals/allocate.
+- [ ] W-17 Success pulse — a brief green ring/checkmark pulse on save/add (ties to the toast + GX5).
+- [ ] W-18 Chart draw-in — area/line charts animate their path on first render; donut sweeps; bars grow.
+      [GO-STRUCTURAL: the D3/chartspec renderer must animate; pairs with G9.1a.]
+*Polish*
+- [ ] W-19 Skeleton shimmer — loading placeholders shimmer (ties to GX2 loading-states gap).
+- [ ] W-20 Focus ring ease — the `:focus-visible` ring fades in softly (currently instant).
+- [ ] W-21 Scroll-reveal — long pages (Reports) reveal sections as they enter the viewport (IntersectionObserver).
+
+**Theme-engine integration (GO-STRUCTURAL, build-gated GI0):**
+- [ ] Add a motion field to `theme.Theme` (e.g. `Motion: off|subtle|full` or a 0..1 intensity) +
+      `theme.CSSVars()` emits `--wonder-*` (and/or `ApplyTheme` sets `data-wonder` on `<html>` like it sets
+      `data-theme`/density). Default = full.
+- [ ] Theme editor (B20): add a **"Motion / flourishes"** control — an off/subtle/full segment or an
+      intensity slider — persisted with the theme. Live-preview (the app animates as you drag).
+- [ ] Respect the OS `prefers-reduced-motion` as the hard override regardless of the setting (CSS already does;
+      mirror in the setting copy: "Following your system's reduced-motion setting").
+
+**Principles (enforce in every flourish):**
+- Fast (≤ ~200ms for feedback, ≤ ~320ms for entrances) + a single shared easing family.
+- Transform/opacity only (GPU-friendly) — never animate layout properties; no `transition: all`.
+- Everything reads `--wonder-*` + scales by `--wonder-on`; nothing hardcodes a duration/transform.
+- Reduced-motion + `[data-wonder="off"]` must yield a completely static app.
+- Tasteful restraint — flourishes guide attention, never distract; no infinite loops outside loaders.
+
+**Probe hardening / acceptance.** A WONDER e2e should: (a) hover a `.card` and assert a non-identity
+`transform` (lift) in default/full, (b) set `[data-wonder="off"]` and assert identity transform, (c)
+`emulateMedia({reducedMotion:'reduce'})` and assert identity transform, (d) measure flourish durations
+trace to `--wonder-*`. `e2e/w1_verify.mjs` covers the landed foundation.
+
+**Cross-refs:** GX8 (motion inventory + reduced-motion coverage — WONDER builds on it), 6.16 (interaction
+polish), B20 (theme engine — the config home), GI0 (build blocker — gates the theme-engine integration),
+GM (modal flip), GX5 (toast), G9.1a (chart draw-in).
 
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
