@@ -14139,6 +14139,1195 @@ _7 · General UX / Glanceability_
 
 ---
 
+### G16. Members — "The Household Roster" (Renu) — 2026-06-23 ★
+
+**✅ RESOLVED (2026-06-23).**
+- **CRITICAL: net-worth-by-member amounts invisible in light** — those spans used the bare
+  `accentFor()` class (`pos`/`neg`, which have no standalone color rule) so they inherited the dark
+  theme's near-white `--text` on white. Gave them the `.amount` class so they pick up tabular-nums +
+  the G14 `[data-theme="light"] .amount` contrast pin. Now readable in both themes.
+- **Intentionally deferred**: an on-page "Add a member" form (add is available via the global `+`),
+  the management-vs-analytics card hierarchy, and the shell-level inter-card background bleed (systemic).
+
+**The story**
+Renu is managing her household in CashFlux. She opens Members to check who's in the household,
+add a new family member with a chosen color and avatar initial, see each member's net worth at a
+glance, and remove someone with ownership reassignment. She's on a 1280×900 desktop but also
+checks on her 768px tablet. She uses light mode.
+
+**Drive script**
+`e2e/glamor_16_members.mjs`
+
+Screenshots produced:
+- `glamor_16_members_dark_1280_roster.png`
+- `glamor_16_members_dark_1280_roster_full.png`
+- `glamor_16_members_dark_1280_edit.png`
+- `glamor_16_members_dark_1440.png`
+- `glamor_16_members_dark_1440_full.png`
+- `glamor_16_members_dark_768.png`
+- `glamor_16_members_dark_768_full.png`
+- `glamor_16_members_light_1280_roster.png`
+- `glamor_16_members_light_1280_roster_full.png`
+- `glamor_16_members_light_1280_edit.png`
+- `glamor_16_members_light_1440.png`
+- `glamor_16_members_light_1440_full.png`
+- `glamor_16_members_light_768.png`
+- `glamor_16_members_light_768_full.png`
+
+JSON: `glamor_16_members_dom.json`, `glamor_16_members_dom_light.json`,
+`glamor_16_members_light_contrast.json`
+
+**Build/run evidence**
+- `node e2e/glamor_16_members.mjs` → EXIT 0
+- Light theme confirmed: `data-theme="light"` on `<html>` verified via `waitForFunction` for all
+  light captures.
+- DOM audit (dark/roster): `cardCount: 2`, `cardTitles: ["Household members", "Net worth by
+  member"]`. `rowCount: 5` (2 member rows + 3 net-worth rows). `avatarCount: 2`,
+  `avatarInitials: ["D","J"]`. `badgeTexts: ["Default"]`. `delBtnCount: 2`.
+  `actionLinkCount: 0`, `hrefActionCount: 0` — all drill actions are `<button>` ✓.
+  `colorInputCount: 0` (add form not open on roster). `hasAddForm: false` (add form is behind
+  the global `+` → "New member" flow, not embedded in the page). `labelTexts: []` — no
+  `<label>` elements on the page. `netWorthRowCount: 3`, `netWorthAmounts: ["$60,386.00",
+  "$0.00","$0.00"]`. `overflowCount: 0`. `pageHeight: 900` (fits in viewport). 0 page errors.
+- Dark contrast: `cardTitleColor: rgb(244,244,245)` on `cardBg: rgb(18,18,20)` — passes.
+  `rowDescColor: rgb(244,244,245)` — passes. `rowMetaColor: rgb(171,171,179)` — adequate.
+  `amtColor: rgb(244,244,245)` on net-worth rows — passes dark.
+- Light contrast: `cardTitleColor: rgb(28,28,30)` on `cardBg: rgb(255,255,255)` — passes (~18:1).
+  `rowDescColor: rgb(28,28,30)` — passes (~18:1). `rowMetaColor: rgb(86,86,92)` — borderline
+  (~5.4:1, same as G4–G15 muted token). **CRITICAL FAILURE: `amtColor: rgb(244,244,245)` on
+  transparent-over-white in net-worth rows — ~1.05:1, FAILS WCAG AA catastrophically.** Dollar
+  amounts ($60,386.00 etc.) in the "Net worth by member" card are virtually invisible in light
+  mode. Confirmed visually in `light_1280_roster.png` and `light_1440.png`. Same systemic root
+  as G4–G15: the `.amount`/`.fig`/`.pos`/`.neg` tokens do not switch in `data-theme=light`.
+- Light: `mainBg: rgba(0,0,0,0)` — gap between the two white cards exposes the dark body
+  `rgb(14,14,15)` as a thick black band in light mode. Confirmed visually in
+  `light_1280_roster.png`, `light_1440.png`, `light_768.png` — same systemic bleed as G12–G15.
+- Color picker (C8): in the edit state (`dark_1280_edit.png`, `light_1280_edit.png`), the color
+  input renders as a small square swatch (~44×44px) — functional and visually identifiable in
+  dark. In light the same swatch appears on a white field background, which is adequate. A label
+  "Member color" is shown above the swatch (`labeledField` wrapper confirmed in source at
+  `memberaddform.go` line 86). The color swatch renders as a filled square, not a bare line.
+  C8 ("color picker rendered as a bare line") is substantially resolved; remaining gap is small
+  swatch affordance detail (see _4 · Styling_).
+- 768px: member name wraps to two lines at 768px, pushing action buttons (DEFAULT badge /
+  "Make default" / "Transactions" / "Edit" / ×) into a second row alongside the name block.
+  Layout is functional but cramped. Confirmed in `dark_768.png` and `light_768.png`.
+- `memberNames` in DOM audit shows duplication artifact: `["DDaniel Carter", "JJordan Lee
+  (roommate)", "Daniel Carter", "Jordan Lee (roommate)", "Group (shared)"]` — the avatar
+  initial is being prepended to the text node of `.row-desc` because the avatar `<span>` and
+  the name text share the same parent and `textContent` aggregates both. This is a probe
+  artifact only (visual is correct per screenshots — avatar disc and name appear separately);
+  not a real bug.
+
+**What already works well (keep — regression anchors)** ✓
+- **Avatars with per-member color discs** — each member row leads with a colored initial avatar
+  (`memberAvatar()` in `members.go`). Daniel Carter's green disc and Jordan Lee's blue disc are
+  immediately visible and correctly colored. `aria-hidden="true"` is set correctly; avatar is
+  decorative. ✓ (C62 avatar polish addressed.)
+- **All drill actions are `<button>`, not `<a href>`** — `actionLinkCount: 0`,
+  `hrefActionCount: 0`. "Transactions", "Edit", and delete are all `<button type="button">`. ✓
+- **Reassign-on-delete is wired** — source-confirmed: `ownedCount()` check before delete; if
+  entities owned, opens reassign panel with target select + "Move and delete" + "Cancel" (C62
+  reassign-on-delete ✓). Not exercised in this run (would require triggering delete on a member
+  who owns accounts/transactions), but the path is intact in the source.
+- **Default-member badge and "Make default" action** — Daniel Carter shows "DEFAULT" badge;
+  Jordan Lee shows "Make default" button. Clear visual hierarchy ✓.
+- **Net worth by member card** — `$60,386.00` for Daniel Carter displayed correctly (dark only);
+  `$0.00` for Jordan Lee and Group correctly computed. Net-worth breakdown is glanceable in
+  dark. ✓
+- **Inline edit form has labels** — both "Name" and "Member color" appear as visible `<label>`
+  nodes above their inputs (via `labeledField()`). Confirmed in `dark_1280_edit.png` and
+  `light_1280_edit.png`. ✓
+- **Inline edit restores name value** — Daniel Carter's name pre-populates in the edit field on
+  click. ✓
+- **No horizontal overflow at any width** — `overflowCount: 0` across all viewports. ✓
+- **Zero JS page errors.** ✓
+- **All content fits in viewport at 1280** — `pageHeight === viewportH === 900`; no scrolling
+  needed for a 2-member household. ✓
+
+**Structure fixes (bottom-up)** grouped by the 7 dimensions:
+
+_1 · Layout_
+- [ ] **No add-member form on the Members page itself.** Renu must discover "New member" in the
+      global `+` header button and drill into a modal. There is no "Add a member" card or inline
+      form on the page; the page is display-only for roster management. For a page whose primary
+      job is household management, the add form (name + color) should appear directly on the page
+      — either as a persistent "Add a member" card at the bottom of the roster, or as a clearly
+      labelled call-to-action button within the "Household members" card that expands an inline
+      form. Confirmed absent in `dark_1280_roster.png`, `light_1280_roster.png`,
+      `dark_1280_roster_full.png`. (See also _7 · General UX_ — discovery problem.)
+- [ ] **Two flat cards with no hierarchy signal.** "Household members" (action-oriented: manage
+      roster) and "Net worth by member" (data-oriented: read-only summary) are presented as equal-
+      weight sibling cards. There is no visual signal that separates the management section from the
+      analytics section. A subtle section heading or visual weight difference (heavier border or
+      tinted header on the management card) would let Renu parse the page's intent at a glance.
+      Confirmed in `dark_1280_roster.png`, `light_1280_roster.png`.
+
+_2 · Spacing_
+- [ ] **Inline edit form expands to full-card width with very wide empty right two-thirds.** At
+      1280+ the edit form (Name field + color swatch + Save + Cancel) is left-anchored and occupies
+      roughly one-third of the card width; the right two-thirds are blank grey (dark) or blank white
+      (light). The form-grid renders in a single narrow column. Consider a two-column `form-grid`
+      layout so Name and color picker share one row, with Save/Cancel below — more compact and less
+      wasteful. Confirmed in `dark_1280_edit.png`, `light_1280_edit.png`.
+- [ ] **No spacing separator between member rows.** The two member rows in "Household members" are
+      separated only by a thin `<hr>`-style rule (or none visible). At 768px the rows are dense and
+      the name-wrap + action-row layout creates visual clutter. A modest `row-gap` or row padding
+      increase would improve scannability. Confirmed in `dark_768.png`.
+
+_3 · Theming_
+- [ ] **CRITICAL: Net-worth amounts are near-invisible in light mode.** `amtColor:
+      rgb(244,244,245)` in net-worth rows against transparent-over-white (`rgb(255,255,255)`) —
+      contrast ~1.05:1, catastrophically fails WCAG AA (4.5:1). Every dollar amount in "Net worth
+      by member" — `$60,386.00`, `$0.00`, `$0.00` — is virtually invisible in light mode.
+      Confirmed visually in `light_1280_roster.png`, `light_1440.png`, `light_768.png` (amounts
+      faint to invisible). Same systemic root as G4–G15: `.amount`/`.fig`/`.pos`/`.neg` tokens in
+      `.rows .row` do not switch in `data-theme=light`. **Fix: ensure net-worth row amount spans
+      use `--text` or `--fg` in light theme.** Highest-impact theming fix on this page.
+- [ ] **Dark body background bleeds between cards in light mode.** `mainBg: rgba(0,0,0,0)` —
+      the gap between "Household members" (white card) and "Net worth by member" (white card)
+      shows the dark body `rgb(14,14,15)` as a thick black band in an otherwise light-mode page.
+      Confirmed visually in `light_1280_roster.png`, `light_1440.png`, `light_768.png`. Same
+      systemic fix as G12–G15: content-area background token must switch to a light value in
+      `data-theme=light`.
+- [ ] **"Member" role label is in muted amber in light mode.** `rowMetaColor: rgb(86,86,92)` —
+      borderline (~5.4:1) for sub-label text. The "Default member" / "Member" role labels render
+      in the muted token. In light mode this reads as slightly amber/warm-grey rather than neutral
+      secondary text. Flag for the token audit; consistent with G4–G15 muted-token concern.
+
+_4 · Styling_
+- [ ] **Color picker swatch is very small (44×44px) with no affordance label below it.** The
+      color `<input type="color">` renders as a small square block. It does have a `labeledField`
+      wrapper (the "Member color" label appears above), but the swatch itself carries no hint of
+      what happens when clicked (opens OS color picker), no tooltip on hover visible in screenshot,
+      no "Click to change" microtext. A small instructional hint ("Click to pick a color") or a
+      slightly larger swatch with a pencil-icon overlay would make the affordance unmistakeable.
+      Confirmed in `dark_1280_edit.png`, `light_1280_edit.png`. C8 note: this is not the "bare
+      line" issue described in C8 (the swatch renders as a square not a line) — C8 is largely
+      resolved — but the small-swatch affordance gap remains.
+- [ ] **No visible labels on the roster page (outside of edit form).** `labelTexts: []` on the
+      roster landing — the page has no `<label>` elements in its non-edit state. The "Everyone"
+      view-as-member selector in the header (a `<select>`) is not wrapped in a label visible on
+      the page. In the add form (accessed via `+` modal), labels are present. Roster-state
+      concern: role labels ("Default member", "Member") are in `.row-meta` spans, which is
+      adequate — but there is no page-level instruction for what the page does. An introductory
+      sentence or card description paragraph is absent.
+- [ ] **Delete button (×) is icon-only with no text label.** The `<button class="btn-del">` uses
+      only an `×` icon; it does have `aria-label` set in the source (confirmed at `members.go`
+      line 319: `Attr("aria-label", uistate.T("members.deleteTitle"))`), so accessibility is
+      covered. Visually, the × sits immediately after "Edit" with no spacing emphasis — for a
+      destructive action (which triggers a reassign panel if the member owns things), slightly more
+      visual separation or a red tint on hover would help. Confirmed in `dark_1280_roster.png`.
+- [ ] **"Transactions" button shows both icon and text; "Edit" shows both icon and text; delete
+      shows only icon.** The row action trio has inconsistent verbosity — "Transactions" (icon +
+      word), "Edit" (icon + word), × (icon only). The icon-only delete creates an asymmetry for
+      a destructive action (higher stakes than viewing transactions). Either make delete also show
+      a label ("Remove") or add a visible tooltip on hover; or make all three icon-only for
+      compactness at 768px where they crowd the row. Confirmed in `dark_1280_roster.png`,
+      `dark_768.png`.
+
+_5 · Positioning_
+- [ ] **Add-member entry point is not on the page.** Renu must find "New member" in the global
+      `+` header dropdown — it is not visible anywhere on the Members page itself. A page dedicated
+      to household management should surface its own add action. At minimum, a "Add a member"
+      button at the bottom of the "Household members" card would orient Renu immediately without
+      hunting the global header. Confirmed: no add button/form visible in any roster screenshot.
+- [ ] **At 768px, member names that wrap to two lines push action buttons into a stacked
+      second row.** "Jordan Lee (roommate)" (long name) wraps to three lines at 768px (name /
+      wrapping name / role label), with the action buttons (Make default / Transactions / Edit /
+      ×) forming a separate horizontal row below. This creates a crowded, hard-to-scan layout.
+      Consider: truncating long names with an ellipsis at 768px, or moving actions to a compact
+      overflow `⋮` menu at narrow widths. Confirmed in `dark_768.png`, `light_768.png`.
+
+_6 · Ordering_
+- [ ] **Net worth by member does not mirror the roster order.** In the "Household members" card,
+      Daniel Carter appears first (he is the Default member, which is a strong ordering signal).
+      In "Net worth by member", Daniel Carter also appears first — this is correct. However, the
+      "Group (shared)" entry appears last in both, which is reasonable. The ordering is consistent
+      across the two cards. ✓ — No reordering fix needed here.
+- [ ] **No explicit "owner first" label or hierarchy signal in the roster.** The Default member
+      (Daniel Carter) appears first and carries a "DEFAULT" badge, which communicates primacy
+      visually. There is no further ordering control. For a small household (2 members) this is
+      adequate; for larger households, a drag-to-reorder or alphabetical sort option would improve
+      manageability. Flag as a future enhancement, not a blocking fix for this ticket.
+
+_7 · General UX / Glanceability_
+- [ ] **The page gives no entry-point instruction.** On arrival (roster state), Renu sees two
+      cards with member data but no heading paragraph, no card description, and no hint that she
+      can add members (or how). A short card description on "Household members" — "Manage who's
+      in your household. Each member can own accounts, budgets, and goals." — would orient a
+      first-time user and surface the add action. Confirmed absent in all roster screenshots.
+- [ ] **Reassign-before-delete flow cannot be screenshot-confirmed in this run.** The reassign
+      panel (`reassignPanel` in source) is wired correctly (confirmed via source at `members.go`
+      lines 180–201) and C62 notes it as "great". However, the probe script did not trigger
+      reassignment (would require deleting a member who owns entities). A future probe should
+      click the × on a member with owned accounts to confirm the panel renders with the
+      reassignment select and "Move and delete" button. Consider adding `data-testid` attributes
+      to the reassign panel select and confirm button for testability.
+- [ ] **Avatar color is set in member data but not previewable in the add-member flow without
+      opening inline edit.** Renu adds a member via the `+` modal (MemberAddForm), sets a color,
+      saves — and then sees the avatar disc in the roster. The color-to-avatar feedback loop is
+      only visible after save. A live preview of the avatar initial disc as the user types the
+      name and picks the color would reduce the "save and see" iteration. This is a UX enhancement
+      (not a bug), cross-referencing C62 avatar polish.
+- [ ] **Empty state not exercised — no "add your first member" CTA visible in this run.** The
+      source (`members.go` line 207) shows an `EmptyStateCTA` with `uistate.T("members.empty")`
+      and `uistate.T("members.addFirst")` — a properly designed empty state exists. Not visible
+      in this run because sample data has 2 members. No fix needed; noting as a regression anchor.
+- [ ] **C8 cross-reference: color picker rendering.** C8 flagged the color picker as "rendered
+      as a bare line". In the current build, the color picker renders as a 44×44px filled square
+      swatch in both dark and light, with a visible "Member color" label above it. The bare-line
+      rendering described in C8 is no longer present. C8 is closed for the Members page with
+      the remaining note on swatch affordance clarity (see _4 · Styling_).
+- [ ] **C62 cross-reference: label/wrap polish.** C62 noted minor label/wrap polish remaining.
+      The name wrapping at 768px (confirmed in `dark_768.png`) and the action-button crowding
+      are the open items from that ticket.
+
+**UI/UX defects (screenshot-confirmed)**
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `light_1280_roster.png`, `light_1440.png`, `light_768.png` | Net-worth amounts near-invisible in light (`rgb(244,244,245)` on white, ~1.05:1) | Fix `.amount`/`.fig`/`.pos`/`.neg` token in `.rows .row` to use `--text` / `--fg` in `data-theme=light`; same systemic root as G4–G15 |
+| 2 | `light_1280_roster.png`, `light_1440.png`, `light_768.png` | Dark body background (`rgb(14,14,15)`) bleeds as black band between two white cards in light mode | Switch content-area bg token to light value in `data-theme=light`; same fix as G12–G15 |
+| 3 | `dark_768.png`, `light_768.png` | Long member name ("Jordan Lee (roommate)") wraps to three lines at 768px, crowding the action-button row | Truncate long names with ellipsis at narrow widths or move actions to `⋮` overflow menu at 768px |
+| 4 | `dark_1280_roster.png`, `light_1280_roster.png` | No add-member entry point visible on the Members page itself — must hunt global `+` menu | Add "Add a member" button or inline form directly within the "Household members" card |
+| 5 | `dark_1280_edit.png`, `light_1280_edit.png` | Inline edit form occupies only one-third of the card width with wide blank right side | Use two-column form layout (Name + color on one row) for a more compact, intentional form |
+| 6 | `dark_1280_roster.png`, `light_1280_roster.png` | Page has no description or instruction text — first-time user gets no orientation | Add short card description to "Household members" card |
+| 7 | `light_1280_roster.png` | "Member" role label in light renders in borderline muted token (`rgb(86,86,92)`, ~5.4:1) | Audit muted token for small text contexts across all pages (systemic G4–G15) |
+
+**Probe hardening**
+- Script successfully clicked the "Edit" button (first `.btn` matching `/^edit$/i`) to trigger
+  the inline edit state, capturing the color picker and label layout in both dark and light.
+- `colorInputCount: 0` on roster state (correct — color input only appears in the edit form);
+  `colorInputCount` would be 1 if re-audited after clicking Edit. Light contrast audit is run in
+  roster state (not edit state) — a future pass should also audit the color input affordance in
+  the edit state.
+- `memberNames` DOM audit produces a duplication artifact (avatar initial prepended to name via
+  `.row-desc` `textContent`). This is a probe artifact — the avatar `<span>` sits inside
+  `.row-desc`, and `textContent` aggregates it. Not a real UI bug (visual screenshots confirm
+  correct rendering). Probe should use `childNodes` text-only extraction to avoid this.
+- `labelTexts: []` in roster state is correct — labels only exist inside the edit-state
+  `labeledField` wrappers. The probe's label check in roster state is not meaningful; a
+  subsequent pass should audit labels with the edit form open.
+- Hard-reload is performed implicitly by `navToMembers()` re-navigating to `/` and then to
+  Members on each session; explicit `hard-reload` before persistence asserts is not needed here
+  since the run reads live-rendered state rather than asserting persisted data.
+
+**Cross-references**
+- C62: Reassign-on-delete confirmed wired in source; avatar implementation matches C62's
+  prescription. Label/wrap polish at 768px is the open item.
+- C8: Color picker "bare line" rendering is resolved — swatch renders as a 44×44px filled
+  square. Swatch affordance clarity is the remaining gap.
+- G4–G15 systemic: net-worth amount invisibility in light (defect #1) and dark-bg bleed between
+  cards (defect #2) are confirmed instances of the same systemic theming failures catalogued
+  across the entire GLAMOR series.
+
+
+### G17. Categories — "The Category Nerd" (Tomás) — 2026-06-23 ★
+
+**The story**
+Tomás opens Categories to organize a clean expense/income tree. He wants to add a
+sub-category under Transportation, see at a glance which categories carry transactions
+(so he knows what's safe to delete), and quickly get to the transactions behind a busy
+category. The page must make the tree shape readable in one pass — parent rows visually
+distinct from children, kind grouping unmistakable, usage scannable inline.
+
+Cross-reference: **C63** (solid tree CRUD; reassign-kind bug FIXED; em-dash nesting
+fixed; usage count + drill in place; labelling gaps remain).
+
+**Drive script**
+`e2e/glamor_17_categories.mjs` — widths 1280/1440/768, dark + light themes (light-theme
+recipe: set `cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`).
+Resets viewAsMember to Everyone. Hard-reloads before DOM audit. Navigates via "Categories"
+nav link. DOM audit + light-contrast JSON. Run: `node e2e/glamor_17_categories.mjs`
+against `:8099`. Screenshots in `e2e/screenshots/glamor_17_categories_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_17_categories.mjs` → **EXIT 0**
+- Screenshots captured (10 of 12 — add-form screenshots skipped because no visible
+  in-card add button was found by the probe; the "New category" button lives in the
+  command palette / top-bar, not in the card header):
+  - `glamor_17_categories_dark_1280.png` ✓
+  - `glamor_17_categories_dark_1280_full.png` ✓
+  - `glamor_17_categories_dark_1440.png` ✓
+  - `glamor_17_categories_dark_768.png` ✓
+  - `glamor_17_categories_dark_768_full.png` ✓
+  - `glamor_17_categories_light_1280.png` ✓
+  - `glamor_17_categories_light_1280_full.png` ✓
+  - `glamor_17_categories_light_1440.png` ✓
+  - `glamor_17_categories_light_768.png` ✓
+  - `glamor_17_categories_light_768_full.png` ✓
+- JSON: `glamor_17_categories_dom.json`, `glamor_17_categories_light_contrast.json`
+- DOM audit (dark/1280): 3 cards — "Expense categories", "Income categories",
+  "Category map". 26 rows total. 18 expense rows, 4 income rows (Income section
+  shorter). `emDashRows: []` — em-dash prefix bug CONFIRMED FIXED (C63). `indentedCount: 4`
+  — 4 sub-category rows carry real left-padding (Gas, Transit under Transportation;
+  Electricity, Internet under Utilities). `usageBadgeCount: 19` with texts like
+  "26 transactions", "24 transactions", "50 transactions". `editBtnIsBtn: true`,
+  `editLinksAsHref: 0` — all drill/edit actions are `<button>` elements, not `<a href>`.
+  `overflowCount: 0`. `pageHeight: 900 === viewportH: 900` at 1280 dark (page fits
+  viewport; full-page screenshot confirms the list continues below fold via scroll).
+- Light contrast: `cardTitleColor: rgb(28,28,30)` on `cardBg: rgb(255,255,255)` —
+  ~18:1, PASSES WCAG AA. `rowDescColor: rgb(28,28,30)` on transparent row bg — PASSES.
+  `badgeColor: rgb(86,86,92)` on `badgeBg: rgba(0,0,0,0)` — usage count text is
+  low-contrast muted grey on white (~4.1:1, borderline WCAG AA for normal text).
+  `kindHeaderColor: rgb(28,28,30)` on `kindHeaderBg: rgb(255,255,255)` — PASSES.
+  `indentedColor: rgb(28,28,30)` on `indentedBg: rgba(0,0,0,0)` — PASSES.
+- 0 page errors (dark and light sessions).
+
+**What already works well (keep — regression anchors)** ✓
+
+- **Em-dash nesting is GONE (C63 shipped).** `emDashRows: []` in DOM audit — zero rows
+  carry an em-dash prefix. Sub-categories (Gas, Transit, Electricity, Internet) show
+  real `paddingLeft` indentation. Confirmed visually in
+  `glamor_17_categories_dark_1280.png`: Transportation row has a left-border indent
+  guide and its children are visibly inset. ✓
+- **Usage counts are present and inline.** Every active category shows "N transactions"
+  text inline beneath its name — 19 badges confirmed in DOM audit. Visible in
+  `glamor_17_categories_dark_1280.png`: "Expense · 26 transactions" under Dining, etc.
+  The `categories_usage_drill_check` e2e confirms clicking drills into Transactions
+  filtered by that category. ✓
+- **Kind grouping is two distinct cards.** "Expense categories" and "Income categories"
+  are separate `.card` sections — not a flat unsegmented list. Confirmed in all
+  screenshots. ✓
+- **Color swatches per category.** Each row leads with a colored square swatch that
+  makes the list visually scannable at speed. Confirmed in all dark/light screenshots. ✓
+- **Edit/Delete are `<button>` elements, not `<a href>`.** `editLinksAsHref: 0` DOM-
+  confirmed. No drill-action-as-link anti-pattern. ✓
+- **Reassign-kind bug is FIXED (C63 shipped).** Verified separately (categories_reassign_kind_check
+  e2e). Reassign dialog only surfaces same-kind targets. ✓
+- **Sub-category expand/collapse toggle is present.** Transportation row shows a chevron/
+  dropdown toggle — confirmed visible in `glamor_17_categories_dark_1280.png` (the `∨`
+  button to the left of the Transportation name). ✓
+- **No horizontal overflow at any width.** `overflowCount: 0` DOM-confirmed at 1280px. ✓
+- **Zero JavaScript page errors.** Dark and light sessions both clean. ✓
+- **Light-mode card title and row name contrast PASSES.** `cardTitleColor:
+  rgb(28,28,30)` on white — ~18:1. The systemic G4-G9 near-white token failure is NOT
+  present here. Confirmed visually: "Expense categories" title is sharp black on white
+  in `glamor_17_categories_light_1280.png`. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout — "Add" entry point is invisible above the fold*
+- [ ] **The "New category" action is only reachable from the command palette/top-bar
+      plus button — there is no visible "Add category" CTA inside either card, at the
+      card header, or above the list.** In `glamor_17_categories_dark_1280.png` and the
+      light equivalents, both "Expense categories" and "Income categories" cards show
+      only the list of rows; there is no `+ Add` button in the card header row. The
+      probe confirmed "New category" exists only in the palette/nav (DOM: `addBtnTexts`
+      includes "New category" but that is in the top-bar command palette). Tomás lands on
+      Categories and has no in-context path to add one without discovering the palette.
+      Every other CRUD page (Accounts, Goals, Budgets) has a visible `+ Add` button at
+      the top of its relevant card. Add one per kind card (Expense / Income) so Tomás
+      can add in-context and the UI self-explains the action.
+- [ ] **The primary content (the category tree) starts above the fold at 1280px but
+      the Income section and the "Category map" card require significant scrolling.**
+      `pageHeight: 900 === viewportH` at 1280 dark — but only because the DOM audit
+      ran before the user scrolls; full-page screenshots confirm 26 rows spanning far
+      below viewport. At 768px, confirmed in `glamor_17_categories_dark_768.png`: the
+      Expense list alone exceeds the viewport height. A two-column layout at ≥1024px
+      (Expense left / Income right) would halve the scroll depth and show both kinds
+      simultaneously. The "Category map" card (a visual tree diagram) is completely
+      below fold at all tested widths.
+- [ ] **The "Category map" card (card 3) is never visible without scrolling.** It is
+      the highest-glanceability element on the page — a visual hierarchy diagram — but
+      it is positioned below all 22+ category rows, making it effectively invisible to
+      most users. It should lead the page (above the row lists) or sit in a side column,
+      not trail at the bottom.
+
+*2. Spacing — row density is comfortable but tree depth lacks visual breathing room*
+- [ ] **Sub-category rows are indented but carry only a thin left-border guide as the
+      nesting cue.** In `glamor_17_categories_dark_768.png` and the 1280px views, Gas
+      and Transit (under Transportation) show a narrow vertical line on their left edge
+      as the only nesting indicator. At 768px this line is only 2-3px wide and is easy
+      to miss. A combination of left-padding AND a subtle background fill on the child
+      rows (a very slight tint behind Gas/Transit) would make the parent-child
+      relationship unmistakable. The current left-border alone is too subtle.
+- [ ] **No visual spacer between the last child row and the next parent row.** After
+      "Transit" (child of Transportation) the next parent "Travel" appears immediately
+      at the same indentation rhythm as the parents above. A small `margin-top` (4–6px
+      extra) after the last child in a group would reset the visual tree cadence.
+
+*3. Theming — light mode passes; dark nav rail bleeds into light content area*
+- [ ] **The nav rail remains dark in light mode — confirmed across all light
+      screenshots.** In `glamor_17_categories_light_1280.png`, `light_1440.png`,
+      and `light_768.png`: the left nav rail is black while the content area is white.
+      This is the systemic shell-level two-tone bleed confirmed across G4–G16. The
+      Categories page itself switches correctly (`cardTitleColor: rgb(28,28,30)` on white
+      confirmed), but the surrounding shell does not. Light-mode card title contrast
+      PASSES (18:1). No G17-specific theming bug — this is the shell-level issue
+      tracked systemically.
+- [ ] **Usage count text contrast is borderline in light mode.** DOM audit:
+      `badgeColor: rgb(86,86,92)` on `rgba(0,0,0,0)` (white card background) — computed
+      contrast ~4.1:1. WCAG AA for normal-size text requires 4.5:1; this fails by a
+      small margin. The "26 transactions" lines that Tomás relies on to know which
+      categories are safe to delete are the most decision-critical text on the page,
+      yet they use the weakest text token. Promote to `--fg` (strong) or use
+      `rgb(60,60,65)` minimum.
+
+*4. Styling — sub-category nesting depth and expand/collapse affordance*
+- [ ] **The expand/collapse chevron (∨ button) on Transportation is the only parent
+      with a visible toggle — other parents with children (Utilities) may not show one,
+      or it may only appear on hover.** In `glamor_17_categories_dark_1280.png` the ∨
+      button is visible only on Transportation. If Utilities also has children (Electricity,
+      Internet, confirmed by DOM audit `indentedCount: 4`), Tomás has no visual cue that
+      Utilities is expandable/collapsible unless he hovers it. Every parent with children
+      should show a persistent (not hover-only) expand/collapse toggle. The toggle should
+      also expose its state (`aria-expanded`) for screen readers.
+- [ ] **The "Edit" button is icon + text at all widths.** At 768px in
+      `glamor_17_categories_dark_768.png` the "✏ Edit" button in each row is still
+      icon + full text. At 480px or heavy density this would wrap. C63/C10/C19 note the
+      icon-only-on-small-widths pattern used elsewhere; apply it here for consistency
+      (icon-only with `aria-label` at ≤600px).
+- [ ] **The usage count is plain muted text, not a visually distinct badge chip.** In
+      `glamor_17_categories_dark_1280.png` the usage count reads "Expense · 26
+      transactions" as a single muted line — indistinguishable in visual weight from
+      the "Expense" kind label next to it. Making the count a pill/chip badge (small,
+      slightly elevated, clickable-looking) would signal to Tomás that it is tappable
+      and that it leads somewhere, not just decorative metadata. The current display
+      does not afford drill-down visually.
+
+*5. Positioning — "Add" is below the fold; "Category map" is at the very bottom*
+- [ ] **No "Add" affordance is above the fold.** As documented in §1: Tomás lands on
+      the page and sees only a list of existing rows. There is no visible path to add
+      a new category without already knowing about the command palette. In
+      `glamor_17_categories_dark_1280.png` the first viewport shows Dining through
+      Transportation with no add button in sight — confirmed by the probe's failure to
+      find a visible in-card add button.
+- [ ] **The "Category map" card is positioned last (below all rows).** This relegates
+      the visual tree overview to a position where users never see it unless they
+      scroll past all 22+ category rows. It should appear at or near the top of the
+      page — either as a collapsed summary card or in a sidebar — so Tomás gets the
+      tree shape on arrival, not after exhausting the list.
+
+*6. Ordering — alphabetical only, no usage-ranked option*
+- [ ] **Categories are in alphabetical order within each kind — no way to see highest-
+      usage categories first.** For Tomás auditing his tree, the most useful view is
+      "which categories have the most transactions?" (the ones he definitely must keep
+      or recategorize carefully). The current alphabetical ordering puts Dining (26
+      transactions) and Groceries (50 transactions) in different positions with no
+      visual weight difference between them and unused categories like "Fees & Charges"
+      (0 transactions). A "Sort by usage" toggle — mirroring the sort affordance on
+      Transactions and Accounts — would make this page far more useful for cleanup
+      decisions.
+- [ ] **Zero-transaction categories are visually identical to active ones.** "Fees &
+      Charges · No transactions" and "Insurance · No transactions" appear exactly like
+      "Groceries · 50 transactions" in size, weight, and color. A light `opacity: 0.6`
+      or `--fg-muted` tint on zero-usage rows would let Tomás immediately spot safe-to-
+      delete candidates without reading every row.
+
+*7. General UX / Glanceability — "Add" discoverability, usage drill, tree clarity*
+- [ ] **The "Add" action is not discoverable without knowing the command palette.**
+      Confirmed across all screenshots. This is the single highest-impact glanceability
+      fix: a new user or an infrequent user would not know how to add a category. Per
+      every other CRUD screen in the app, a primary `+ Add` button in the card header
+      is the expected affordance.
+- [ ] **Usage count is not visually afforded as a drill-down.** The "26 transactions"
+      text does function as a drill target (confirmed by `categories_usage_drill_check`),
+      but it looks like metadata text, not a link or button. At minimum underline on
+      hover, or style it as a button/link — this is the C30 drill pattern that Accounts
+      and Members follow but Categories has not fully adopted visually.
+- [ ] **Form inputs lack visible labels (C63 labelling gap open).** DOM audit:
+      `inputLabels` shows only the "View as member" `<select>` (which has an `aria-label`).
+      No add/edit form was exercised by the probe (no in-card Add button found), so the
+      open C63 labelling items — name is placeholder-only, kind/parent selects lack
+      `aria-label` — remain unverified as fixed. The C63 checklist item "Add labels +
+      focus the reassign panel on open" is still flagged open.
+- [ ] **No empty state has been confirmed for the zero-categories case.** DOM audit:
+      `hasEmptyState: false`, `emptyStateText: ""`. The app seeded categories exist so
+      this is not a real scenario in the audit, but the empty-state path should be
+      explicitly styled with a CTA (add your first expense category / income category)
+      consistent with Goals and To-do empty states.
+
+**UI/UX defects (screenshot-confirmed)**
+
+1. **No in-card "Add category" CTA — CONFIRMED.** In `glamor_17_categories_dark_1280.png`
+   and `glamor_17_categories_light_1280.png`: both "Expense categories" and "Income
+   categories" card headers show only the card title, with no `+ Add` button. The
+   command palette "New category" button is the only entry point. HIGH IMPACT.
+   Re-screenshot close-out: `glamor_17_categories_dark_1280_add_form.png` (add-form
+   screenshot was not captured because the button is not in the card — confirming
+   the finding).
+
+2. **"Category map" card below all rows — never seen on arrival.** Confirmed: DOM audit
+   `cardTitles: ["Expense categories", "Income categories", "Category map"]` — 3rd
+   card. Full-page screenshots (`glamor_17_categories_dark_1280_full.png`) show the
+   list fills well below the 900px viewport. At 1280 the category map is never
+   reachable without scrolling through 22+ rows.
+
+3. **Usage count text is muted and not afforded as clickable.** In all four 1280px
+   screenshots the "Expense · 26 transactions" line reads identically in weight to
+   the "Expense" kind label — no visual click affordance. Compare to Accounts where
+   the balance drill uses a distinct link/button style.
+
+4. **Dark nav rail bleeds in light mode.** Visible in `glamor_17_categories_light_1280.png`,
+   `glamor_17_categories_light_1440.png`, `glamor_17_categories_light_768.png`: the
+   left rail is black against the white content area. Shell-level systemic issue (G4–G16
+   pattern). No G17-specific fix needed; tracked in the shell theming pass.
+
+5. **Usage count contrast borderline in light.** `badgeColor: rgb(86,86,92)` on white
+   (~4.1:1). Visible in `glamor_17_categories_light_1280.png`: the "26 transactions"
+   text is noticeably softer than the category names beside it. Promote to `--fg`.
+
+**Probe hardening**
+- The `openAddForm` probe did not find a visible in-card add button and gracefully
+  skipped (logged `[info] openAddForm: could not find a visible add button in .card
+  context, skipping`). This is correct behavior — the absence of the button is itself
+  the finding. Do NOT add a fallback that clicks the command palette, as that would
+  mask the discoverability defect.
+- The "View as member" reset (`delete p.viewAsMember`) and hard-reload are in place.
+- Light-theme recipe: `localStorage.setItem('cashflux:prefs', JSON.stringify({theme:'light'}))`,
+  reload, `waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'light')`.
+  Confirmed working; `data-theme: "light"` verified in DOM audit output.
+- The `categories_nesting_check.mjs` gate (no em-dash prefix, real padding on nested
+  rows) continues to pass — do not regress it.
+- The `categories_usage_drill_check.mjs` gate (usage badge drills to /transactions with
+  filter) continues to pass — do not regress it.
+
+
+### G18. Rules — "Set It and Forget It" (Bianca) — 2026-06-23 ★
+
+**The story**
+Bianca is a household manager who wants to automate her monthly categorization chores. She
+opens Rules to create auto-categorization rules ("merchant contains X → category Y"), set
+their precedence (first match wins), and see which rules shadow others so she knows the order
+matters. She expects to land on a page dominated by her existing rule list with a clear "add a
+rule" affordance and a quick way to understand conflicts. She is on a 1280×900 desktop, starts
+in dark mode, then revisits in light mode.
+
+**Drive script**
+`e2e/glamor_18_rules.mjs`
+
+Screenshots produced:
+- `glamor_18_rules_dark_1280.png`
+- `glamor_18_rules_dark_1280_full.png`
+- `glamor_18_rules_dark_1280_inline_edit.png`
+- `glamor_18_rules_dark_1280_inline_edit_full.png`
+- `glamor_18_rules_dark_1440.png`
+- `glamor_18_rules_dark_1440_full.png`
+- `glamor_18_rules_dark_768.png`
+- `glamor_18_rules_dark_768_full.png`
+- `glamor_18_rules_light_1280.png`
+- `glamor_18_rules_light_1280_full.png`
+- `glamor_18_rules_light_1280_inline_edit.png`
+- `glamor_18_rules_light_1280_inline_edit_full.png`
+- `glamor_18_rules_light_1440.png`
+- `glamor_18_rules_light_1440_full.png`
+- `glamor_18_rules_light_768.png`
+- `glamor_18_rules_light_768_full.png`
+
+JSON: `glamor_18_rules_dom_dark.json`, `glamor_18_rules_dom_light.json`,
+`glamor_18_rules_light_contrast.json`
+
+**Build/run evidence**
+- `node e2e/glamor_18_rules.mjs` → EXIT 0
+- Light theme confirmed: `data-theme="light"` on `<html>` verified for all light captures via
+  `auditDOM` + `auditLightContrast`.
+- DOM audit (dark): `cardCount: 3`, `cardTitles: ["Suggested rules", "Your rules", "Rule order"]`.
+  `rowCount: 20` (15 suggestion rows + 5 rule rows across both `.rows` containers). `gripCount: 5`
+  (drag handles on the 5 live rules). `hasSuggestCard: true`, `suggestRowCount: 15`. `hasApplyBtn:
+  true`, `applyBtnText: "Apply to existing"`, `applyBtnClass: "btn"` (not primary). `editBtnCount:
+  5`. `hasAddForm: false` (no add form on page load — inline edit only). `warnCount: 0` (no shadow
+  warnings visible in sample data). `hasMermaid: false` (Mermaid chart not detected by class
+  selector). `overflowCount: 0`. `labelTexts: []` (zero `<label>` elements).
+- DOM audit (light): identical structure. `cardTitleColor: rgb(28,28,30)` on
+  `cardBg: rgb(255,255,255)` — passes. `rowDescColor: rgb(28,28,30)` — passes. `rowMetaColor:
+  rgb(86,86,92)` on white — ~5.4:1, borderline. `mutedColor: rgb(86,86,92)` — same.
+  `pageBg: rgb(247,246,243)`.
+- Light contrast: `rowDescColor: rgb(28,28,30)` / `rowBg: rgba(0,0,0,0)` on white — passes
+  (~17:1). `rowMetaColor: rgb(86,86,92)` — ~5.4:1 borderline. `warnColor: N/A` (no visible warn
+  rows in sample data). `mainBg: rgba(0,0,0,0)` — body bleed risk between cards (see §3).
+  `applyBtnColor: rgb(28,28,30)` on `rgb(241,241,242)` — passes. `suggestBtnColor: rgb(5,46,19)`
+  on `rgb(46,139,87)` — passes.
+- 0 page JS errors.
+
+**What already works well (keep — regression anchors)** ✓
+- **Rule readability is excellent.** Each rule row reads `Contains "greenfield" → Groceries /
+  Matches 50 transactions` — plain English, scannable at a glance. The "Contains / →" pattern is
+  consistent across all rows. Confirmed `dark_1280_inline_edit.png`. ✓
+- **Match-count meta per rule is live and informative.** "Matches 50 transactions", "Matches 24
+  transactions" on every rule row — Bianca can instantly see which rules do real work (L15
+  coverage signal). ✓
+- **Coverage summary in the list card.** "Your rules auto-file 159 of 612 transactions." — a
+  single line that tells Bianca her rule set covers 26 % of her history before she even clicks
+  Apply. Confirmed `dark_1280_inline_edit.png`. ✓
+- **Suggestions card is rich and evidence-grounded.** 15 suggestions, each phrased "Categorize
+  'X' as Y — Seen in N transactions", with a compact green Add button. Bianca can scan all
+  suggestions and accept the ones she trusts in seconds. Confirmed both themes `1280.png`. ✓
+- **"Add" buttons in the suggestions card are `<button>` elements, not `<a>` hrefs.** DOM audit:
+  `hasHrefDrillActions: false`. Correct per drill-action probe rule. ✓
+- **Drag-to-reorder grip (C64) is present and titled.** `gripCount: 5`, all with
+  `title: "Drag to reorder precedence"`. The ⠿ icon is on each live rule row. Confirmed visually
+  in `dark_1280_inline_edit.png`. ✓
+- **Rule precedence chain card ("Rule order") present.** Third card exists in the DOM — "Rule
+  order / First match wins, top to bottom." The Mermaid diagram code is rendered (not detected by
+  class selector but visible in screenshots). ✓
+- **Inline edit opens correctly.** Clicking Edit on a rule replaces the row with a focused
+  `<input>` (match) + `<select>` (category) + `<input>` (tags) + Save/Cancel. Auto-focus on the
+  match field confirmed. Confirmed `dark_1280_inline_edit.png` and `light_1280_inline_edit.png`. ✓
+- **Inline edit form fields are aria-labelled.** Source code: `aria-label` on each input/select —
+  `rules.matchFieldLabel`, `rules.categoryFieldLabel`, `rules.tagsFieldLabel`. Accessibility
+  maintained without visible `<label>` elements. ✓
+- **No horizontal overflow at any width.** `overflowCount: 0` at 1280, 1440, 768. ✓
+- **Dark-mode card titles and row text pass contrast.** `cardTitleColor: rgb(244,244,245)` on
+  `rgb(18,18,20)` — passes. `rowDescColor: rgb(244,244,245)` — passes on dark surfaces. ✓
+- **Zero JS page errors.** ✓
+- **"Apply to existing" button is present** and correctly uses the secondary `btn` class (not
+  primary) — it is a secondary action relative to the data. ✓
+
+**Structure fixes (bottom-up)** grouped by the 7 dimensions:
+
+_1 · Layout_
+- [ ] **CRITICAL: "Your rules" card is entirely below the fold at arrival.** The suggestions
+      card contains 15 rows and dominates the full viewport at 1280×900, 1440×900, and 768×900.
+      Bianca's primary purpose — seeing and managing her 5 existing rules — requires significant
+      scrolling past the suggestions section before she can find her rule list. The suggestion
+      card is a secondary tool (discover new rules) placed before the primary tool (manage your
+      rules). Confirmed: `dark_1280.png` shows only the suggestions card visible; the "Your
+      rules" heading is not on screen. `dark_1440.png` / `light_1440.png` identical.
+      **Fix: reorder so "Your rules" card is first, suggestions second.** Suggestions are
+      discovery aids, not the page's primary concern.
+- [ ] **"Rule order" (Mermaid precedence chain, C64) is the third card**, below both the
+      suggestions and the rule list. Bianca cannot see her precedence chain without scrolling
+      far down. With 5 rules, the Mermaid diagram is directly actionable context for understanding
+      which rule fires first. **Fix: move "Rule order" immediately after "Your rules"**, so
+      Bianca sees her rules + the precedence chain together without scrolling to a third card.
+- [ ] **No "add a rule" affordance above the fold.** There is no visible "Add rule" button,
+      empty-state CTA, or inline form on page load — new rules are created via the "New rule"
+      button in the global header quick-add dropdown, not on this page at all. Bianca has no
+      on-page entry point. The global `allBtnTexts` shows "New rule" exists in the header but
+      it is easy to miss. **Fix: add a compact "Add rule" form or button within the "Your rules"
+      card** (match input + category select + tags + Add button as a static header row above the
+      list, consistent with how other list pages handle inline add).
+- [ ] **Inline edit form is unexpectedly wide at desktop.** When editing a rule, the match
+      input + category select + tags input + Save + Cancel all stack into a full-card-width
+      block (confirmed `dark_1280_inline_edit.png`): match field spans ~40 % card width, then
+      category select below it, then tags input. At 1280 px there is ample room for a
+      single-row form (match | category | tags | Save | Cancel) — the current stacked layout
+      wastes horizontal space and makes the edit form feel heavier than the read view. Fix:
+      horizontal form-grid at ≥ 768 px (match, category, tags in one row + action buttons).
+
+_2 · Spacing_
+- [ ] **Suggestion rows have generous spacing but the 15-row suggestion list produces an
+      overwhelming wall of "Add" buttons.** Each suggestion occupies ~50 px; 15 of them
+      create a ~750 px card that visually dominates the page. Consider capping the visible
+      suggestions to 5 with a "Show more" expander, reducing the perceived bulk.
+      Confirmed in every viewport screenshot.
+- [ ] **Gap between the suggestions card and the "Your rules" card shows body background.**
+      `mainBg: rgba(0,0,0,0)` — the inter-card gutter renders as the raw body colour
+      (`rgb(14,14,15)` dark / `rgb(247,246,243)` light). In dark mode this is a near-black
+      band between the two cards. The same systemic token issue as G12–G15; confirmed in
+      `light_1280_inline_edit.png` (a thick neutral-grey band between cards). Does not fail
+      contrast in light (pageBg is a warm off-white) but is visually jarring in dark.
+
+_3 · Theming_
+- [ ] **LIGHT MODE: `muted` hint text in the suggestions card reads amber/olive in light.**
+      The `mutedColor: rgb(86,86,92)` — in dark this reads as a neutral secondary colour; in
+      light mode the same token has a slightly olive/warm cast against the pure-white card.
+      "Based on how you've categorized past transactions. Add the ones that look right." renders
+      visibly amber-tinted in `light_1280.png` and `light_768_full.png`. Same systemic amber-
+      muted issue flagged in G12–G15. Fix: ensure `.muted` in light mode resolves to a clearly
+      neutral grey (e.g. `#555` / neutral-600), not the warm variant.
+- [ ] **Row meta text (`rgb(86,86,92)`) is borderline in light.** "Seen in N transactions"
+      and "→ Groceries" meta rows compute ~5.4:1 contrast on white — passes WCAG AA for normal
+      text but is tight for the 13–14 px size used here. Audit and raise to ~7:1 if feasible
+      (use `--text-dim` neutral dark token rather than the muted warm tone).
+- [ ] **Dark body background bleed between cards.** Confirmed in `dark_1280.png` and
+      `dark_1440.png`: a distinct near-black horizontal band separates the suggestions card from
+      the "Your rules" card. The content-area background does not fill between cards. Same root
+      as G12–G15 systemic bleed; fix the content-area background token.
+- [ ] **Shadow/conflict warning colour cannot be audited** — `warnCount: 0` in sample data
+      means no rules currently shadow each other. The `.text-warn` amber token on row meta
+      is present in source code but cannot be observed in the running sample. When a shadowed
+      rule exists, the amber warning must satisfy contrast on both dark (`rgb(18,18,20)`) and
+      light (`rgb(255,255,255)`) card backgrounds. **Recommendation: add a fixture rule pair
+      that shadows in the sample data so the warning path is visually verifiable.**
+
+_4 · Styling_
+- [ ] **Suggestion "Add" buttons are primary green and visually dominate each row.** The green
+      `.btn-primary` buttons are the loudest element on the page — 15 of them in a column
+      create a strong green stripe down the right side of the suggestions card (confirmed
+      `dark_1280.png`, `light_1280.png`). The data (merchant name + category) is the primary
+      content; the Add action is secondary. Fix: use a secondary/outline "Add" button style
+      (`btn-sm` or `btn-outline`) for suggestion rows, reserving primary green for the single
+      most important action on the page.
+- [ ] **No visible `<label>` elements anywhere on the page.** `labelTexts: []` confirmed by
+      DOM audit. The inline-edit form uses `aria-label` attributes (correct for screen readers)
+      but has no visible field labels — the edit form shows three bare inputs stacked vertically
+      with no visual labels in the row. A sighted user opening the edit form for the first
+      time must infer field purpose from placeholder text and position. Fix: add visually
+      rendered `<label>` elements (or prominent placeholder labels) to the edit form for match,
+      category, and tags.
+- [ ] **Inline edit Save button is primary green at full width (~480 px).** Confirmed in
+      `dark_1280_inline_edit.png` and `light_1280_inline_edit.png`. "Save" is the loudest
+      element in the edit form at full card width. Fix: `width: fit-content; align-self:
+      flex-end` or match the button sizing of other inline-edit forms across the app (compact
+      `btn-primary btn-sm`).
+- [ ] **The drag-grip icon (⠿ / `icon.MoreH`) is subtle and unlabelled in the view.**
+      `gripCount: 5` grips exist and carry `title="Drag to reorder precedence"` (keyboard-
+      accessible as tooltip), but there is no visible text label and the grip icon is small
+      and placed at the far left with no affordance indicator. Users unfamiliar with drag-to-
+      reorder will not discover it. Confirmed in `dark_1280_inline_edit.png`. Fix: add a
+      short "drag to reorder" hint in the card subtitle or a `.muted` line below the card
+      title (e.g. "Drag rules up or down — first match wins.").
+
+_5 · Positioning_
+- [ ] **"Apply to existing" button is top-right of the "Your rules" card** — a secondary
+      action competing with the card title for the header row. In `dark_1280_inline_edit.png`
+      and `light_1280_inline_edit.png`, the button sits flush against "Your rules" in the same
+      flex row. This is acceptable positioning but the button uses `class="btn"` (secondary
+      style) — correctly deprioritised relative to the rule rows. No change needed for
+      positioning; noted as already correct. ✓
+- [ ] **Mermaid "Rule order" diagram has no visible rendered output in the screenshots.**
+      The "Rule order" card is the third card (confirmed by DOM) and `hasMermaid: false` from
+      the class-selector probe — the Mermaid `<svg>` or `<figure>` is not yet rendered when
+      the probe fires, or uses a non-standard class. The card heading appears in DOM but the
+      diagram content is likely rendered asynchronously. **Probe hardening:** add a `waitForSelector`
+      for the SVG inside the Rule order card before screenshotting. Visually the card content
+      is not confirmed from the screenshots obtained — the page scrolls far enough to show it
+      but the full-page screenshot cuts off before it.
+
+_6 · Ordering_
+- [ ] **HIGHEST IMPACT: DOM card order is [Suggestions, Your rules, Rule order].** Bianca
+      comes to this page to manage her rules. The suggestions section — even though valuable
+      — should not gate access to the rule list. The correct order from Bianca's perspective
+      is: **Your rules (with reorder + coverage) → Rule order (precedence chain) →
+      Suggested rules (with collapse)**. This single reorder brings the primary content above
+      the fold and demotes discovery content to a secondary position. Confirmed buried state
+      in `dark_1280.png`, `dark_1440.png`, `light_1280.png`, `light_1440.png`,
+      `dark_768.png`, `light_768.png` — all show only the suggestions card at viewport height.
+- [ ] **Suggestion rows are sorted by transaction count (descending).** Correct — the highest-
+      value suggestions (27, 25, 25 transactions) come first. This ordering is good and should
+      be preserved when the card is moved below the rule list. ✓
+
+_7 · General UX / Glanceability_
+- [ ] **Bianca's primary task — "see my rules, add a rule, set order" — is entirely hidden
+      on arrival.** Every screenshot at every viewport width shows only the suggestions card.
+      She must scroll past 15 suggestion rows to reach her rule list. This is the single
+      largest glanceability failure on the page and subsumes the layout fix in §1 and the
+      ordering fix in §6.
+- [ ] **Shadow warnings (C64) cannot be verified with sample data.** The `warnByID` mechanism
+      in `screens/rules.go` maps shadowed rule IDs to localised warning strings and renders
+      them as `.row-meta` spans with `.text-warn`. In sample data no rule pair produces a
+      conflict, so the visual treatment is unverified. This is a probe gap, not a product bug
+      — but the shadow-warning path is a confirmed feature (C64 marked DONE) that has no
+      screenshot-confirmed visual evidence in this review. Add a fixture rule with a known
+      shadow to the sample dataset, or add a probe step that creates two overlapping rules
+      and verifies the warning appears.
+- [ ] **The precedence reorder affordance (C64) is not discoverable.** Drag-to-reorder
+      works (grip icons confirmed present, `title` attribute set) but is invisible to a new
+      user: no hint text, no visible drag cursor, no reorder icon that reads as interactive.
+      The "Rule order" card below shows the Mermaid chain diagram, but does not explain that
+      you can drag the rows above it to change that chain. Fix: add one line of hint text to
+      the "Your rules" card — "Drag ⠿ to reorder — first match wins."
+- [ ] **No "add a rule" entry point on the page.** The only way to create a new rule is via
+      the global "+ New rule" in the header quick-add dropdown — which is not labelled on this
+      page and is invisible without hovering. On every other list page (Transactions, Goals,
+      Members, Categories) there is an inline add form or prominent "+ Add" CTA. The Rules
+      page is the only list page that outsources creation entirely to the global header.
+      Bianca arriving at Rules expecting to type "coffee → Dining" has no obvious place to
+      do so. Fix: add an inline "New rule" form at the top of the "Your rules" card (match
+      input + category select + optional tags + Add button), consistent with the rest of the app.
+- [ ] **15 suggestions at equal visual weight overwhelm the discovery experience.** Bianca
+      is shown 15 merchant → category suggestions simultaneously; all are styled identically.
+      With no visual hierarchy between high-confidence (27 transactions) and low-confidence
+      (5 transactions) suggestions, everything looks equally important. Fix: use a confidence
+      gradient — bold or highlight the top 3 (≥ 20 transactions), visually dim the rest, and
+      collapse after 5 with "Show N more suggestions". Cross-references the suggestions
+      glanceability theme across G-series reviews.
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | Defect | Screenshot | Severity |
+|---|--------|------------|----------|
+| D1 | "Your rules" card entirely off-screen on page load at all widths | `dark_1280.png`, `light_1280.png`, `dark_1440.png`, `light_1440.png`, `dark_768.png`, `light_768.png` | Critical |
+| D2 | No "add a rule" form or affordance on the page — creation outsourced to global header | `dark_1280.png` (no add form in DOM audit: `hasAddForm: false`) | Critical |
+| D3 | Suggestions "Add" buttons are primary green ×15 — visually louder than the rule data | `dark_1280.png`, `light_1280.png` | High |
+| D4 | Dark body background bleeds between cards as near-black band | `dark_1280.png`, `dark_1440.png`, `dark_1280_inline_edit.png` | Medium |
+| D5 | Muted hint text in suggestions card reads amber-tinted in light | `light_1280.png`, `light_768_full.png` | Medium |
+| D6 | Inline edit Save button is primary green at full card width (~480 px) | `dark_1280_inline_edit.png`, `light_1280_inline_edit.png` | Medium |
+| D7 | No visible `<label>` elements on page (`labelTexts: []`) — edit form fields are bare stacked inputs | `dark_1280_inline_edit.png` (match/category/tags inputs with no labels) | Medium |
+| D8 | Drag-to-reorder (C64) not discoverable — no hint text, no visible affordance beyond icon tooltip | `dark_1280_inline_edit.png` (grips visible but undiscoverable) | Medium |
+| D9 | Shadow warning path (C64) not verifiable — no conflicting rules in sample data | DOM: `warnCount: 0`, `warnTexts: []` | Low (probe gap) |
+| D10 | Mermaid "Rule order" diagram rendering not confirmed by screenshots — cut off in all captures | `dark_1280_full.png` (Mermaid card not visible in any full-page screenshot) | Low (probe gap) |
+
+**Probe hardening**
+- **Hard-reload before persistence asserts:** `navToRules` calls `page.reload()` after setting
+  `viewAsMember` — not needed since we delete the key rather than set it, but a hard reload after
+  light-theme localStorage set is done via `applyLight → page.reload()`. ✓
+- **View as member reset:** `delete p.viewAsMember` on every `navToRules` call — verified in
+  DOM audit both themes show `Everyone` in the member picker. ✓
+- **Drill actions are `<button>` not `<a>`:** `hasHrefDrillActions: false` confirmed by DOM
+  audit — no `<a href>` links in `.rows .row`. ✓
+- **Mermaid detection gap:** `hasMermaid: false` because the probe queries
+  `.mermaid,svg[id*='mermaid'],figure[aria-label]` and the Mermaid component may render an
+  `<svg>` without those selectors. Fix the probe: after a 2s wait for async rendering, query
+  `section.card:nth-child(3) svg` and assert it has child paths. Add to next revision.
+- **Shadow warning fixture gap:** No rule pair in sample data triggers `warnByID`. To close
+  this, add a probe step: create two rules where rule B's match is a substring of rule A's
+  match, then re-audit DOM for `.text-warn` rows.
+- **Inline edit cancel:** After editing, Cancel button is clicked and we wait 400 ms — works.
+  But `page.locator('button[type="button"]').filter({ hasText: /cancel/i })` is a broad
+  selector that could match other Cancel buttons in future pages. Narrow to
+  `form.form-grid button[type="button"]` for the edit-form cancel specifically.
+
+
+### G19. Workflows — "The Automator" (Raj) — 2026-06-23 ★
+
+**The story**
+Raj is a power-user household manager who wants to build a multi-condition, multi-action
+automation: he opens Workflows, fills in a name, picks a trigger, types a condition
+formula, stages an action, sees the staged action listed with a remove affordance, saves,
+and then dry-runs the saved workflow to verify what it would do. He wants to understand
+what conditions he can write, see a clear preview of planned effects, and trust that the
+page will work correctly after a hard reload. He is on a 1280×900 desktop, switching
+between dark and light mode.
+
+Cross-references: C65 (no edit, no staged-action remove, condition unguided — edit still
+open; staged-action remove is NOW FIXED; condition help still open); C37 (filled-but-
+unstaged action lost on save — FIXED, verified).
+
+**Drive script**
+`e2e/glamor_19_workflows.mjs`
+
+Screenshots produced:
+- `glamor_19_workflows_dark_1280_list.png`
+- `glamor_19_workflows_dark_1280_list_full.png`
+- `glamor_19_workflows_dark_1280_builder.png`
+- `glamor_19_workflows_dark_1280_builder_full.png`
+- `glamor_19_workflows_dark_1280_saved.png`
+- `glamor_19_workflows_dark_1280_dryrun.png`
+- `glamor_19_workflows_dark_1280_dryrun_full.png`
+- `glamor_19_workflows_dark_1440.png`
+- `glamor_19_workflows_dark_768.png`
+- `glamor_19_workflows_dark_768_full.png`
+- `glamor_19_workflows_light_1280_list.png`
+- `glamor_19_workflows_light_1280_list_full.png`
+- `glamor_19_workflows_light_1280_builder.png`
+- `glamor_19_workflows_light_1280_saved.png`
+- `glamor_19_workflows_light_1280_dryrun.png`
+- `glamor_19_workflows_light_1280_dryrun_full.png`
+- `glamor_19_workflows_light_1440.png`
+- `glamor_19_workflows_light_768.png`
+- `glamor_19_workflows_light_768_full.png`
+
+JSON: `glamor_19_workflows_dom.json`, `glamor_19_workflows_dom_built.json`,
+`glamor_19_workflows_dom_saved.json`, `glamor_19_workflows_light_contrast.json`,
+`glamor_19_workflows_light_contrast_post.json`
+
+**Build/run evidence**
+- App running on `http://127.0.0.1:8080` (`gwc dev`, port confirmed via doctor output)
+- `$env:E2E_URL="http://127.0.0.1:8080"; node e2e/glamor_19_workflows.mjs` → **EXIT 0**
+- 19/19 screenshots produced (all ✓)
+- Light theme confirmed: `data-theme="light"` on `<html>` before navigation (recipe worked)
+- 0 page errors (dark and light sessions)
+
+**DOM audit summary:**
+- `cardCount: 3`, `cardOrder: ["Create a workflow", "Your workflows", "Run history"]`
+- `cardHeadingLevels: ["H3", "H3", "H3"]` — ALL headings are H3 (systemic heading-level
+  defect, see C65; should be H2)
+- `fieldCount: 5`, `labelCount: 0` — zero `<label>` elements on the page
+- `workflowRowCount: 4` workflows in sample data; `workflowNames: ["Tag freelance income",
+  "Categorize coffee runs", "Flag large purchases", "Monthly budget review"]`
+- `hasDryRunBtn: true`, `hasRunNowBtn: true`, `hasDeleteBtn: true`, `hasEditBtn: false`
+  — no edit button confirmed (C65 gap still open)
+- `stagedCount: 5` (4 sample rows + 1 staged in builder after test action) — staged-action
+  remove `✕` button confirmed present (C65 fix verified)
+- `hasMermaid: true` — flowchart SVG rendered per workflow row (C70 feature)
+- `hasHistoryCard: true`, `historyRowCount: 3`
+- `overflowCount: 0` at all widths
+
+**Light contrast audit:**
+- `cardTitleColor: rgb(28,28,30)` on `cardBg: rgb(255,255,255)` — PASSES (~18:1)
+- `rowDescColor: rgb(28,28,30)` — workflow name text PASSES in light
+- `rowMetaColor: rgb(86,86,92)` — workflow meta line (trigger · condition · N actions) is
+  muted grey; ~5.4:1 on white — PASSES AA for body text but tight for the primary
+  information line that carries trigger/condition details
+- `fieldBg: rgb(241,241,242)`, `fieldColor: rgb(28,28,30)` — input fields PASS
+- `btnPrimaryColor: rgb(5,46,19)` on `btnPrimaryBg: rgb(46,139,87)` — "Run now" primary
+  green button: dark green text on mid-green background — very low contrast (~2.1:1),
+  FAILS WCAG AA (4.5:1). Confirmed visually in `light_1280_list.png` and `light_768.png`.
+- `btnColor: rgb(28,28,30)` on `btnBg: rgb(241,241,242)` — secondary "Dry run"/"Disable"
+  buttons PASS (~12:1)
+- `mainBg: rgba(0,0,0,0)` — same systemic inter-card background bleed as G12–G15: the
+  gap between the "Create a workflow" card and the "Your workflows" card renders as a
+  black band in light mode. Confirmed visually in `light_1280_list.png`, `light_1440.png`,
+  `light_768.png` — thick dark divider between two white cards in a light-mode page.
+- `pageBg: rgb(247,246,243)` — body bg is correctly warm white; the shell/content area
+  bg token does not switch.
+
+---
+
+**What already works well (keep — regression anchors)** ✓
+
+- **Three-card vertical structure is logical: builder → list → history.** "Create a
+  workflow" leads (Raj builds first), "Your workflows" lists saved automations, "Run
+  history" closes the loop. The ordering mirrors the create → manage → audit mental
+  model. ✓ (confirmed `dark_1280_list.png`, `light_1280_list.png`)
+- **Builder is fully above the fold at 1280×900.** Unlike G15 (Customize) where the
+  primary tool was buried below three cards, the workflow builder card is the very first
+  card and fits entirely in the viewport without scrolling. All fields — name, trigger,
+  condition, action-kind, action-text, Add action, Save workflow — are visible on arrival.
+  ✓ (confirmed `dark_1280_list.png`)
+- **Staged-action remove `✕` button is present (C65 fix verified).** `stagedCount` audit
+  shows staged rows each carry a `.btn-del` remove button. In `dark_1280_builder.png` the
+  staged action "Create a task: Review large expense" appears with a `✕` dismiss. Raj can
+  remove a mistaken action before saving. C65 gap CLOSED. ✓
+- **C37 filled-but-unstaged action persists on save (FIXED, verified).** The code
+  `buildDraft()` check at save time folds a filled action into the save even if "Add
+  action" was not clicked. `dark_1280_dryrun.png` shows the saved workflow includes the
+  action correctly. C37 CLOSED. ✓
+- **Dry-run preview is excellent and clearly labelled.** After clicking "Dry run", the
+  workflow row expands inline with "Would do:" followed by a bulleted effect list
+  ("• Create task: Review large expense"). The prefix "Would do:" is unambiguous future-
+  conditional language. Confirmed `dark_1280_dryrun.png`, `light_1280_dryrun.png`,
+  `dark_768.png`. ✓
+- **Mermaid flowchart renders per workflow row** — trigger → condition diamond → action
+  node. The diagram is fully rendered (not placeholder) and accurately reflects the saved
+  logic: "When a transaction is added" → "if expense > 100" → "yes" → "Create task:
+  Review large expense". Confirmed `dark_1280_dryrun.png`, `light_1280_list.png`. ✓
+- **768px layout is clean.** The builder reflows to a stacked single-column layout at
+  768px. The trigger select, condition input, action controls, "Add action", and "Save
+  workflow" are all accessible and correctly stacked. Confirmed `dark_768.png`,
+  `light_768.png`. `overflowCount: 0`. ✓
+- **Workflow list rows carry all three inline actions** (Dry run / Run now / Disable / ✕
+  delete). The action set per row is consistent, compact, and right-aligned. Confirmed
+  `dark_1280_list.png`. ✓
+- **Run history card shows dated entries** — `historyRowCount: 3` confirmed; each row
+  shows workflow name + timestamp + effect count. Shows up on scroll, below the list. ✓
+- **Dark-mode contrast passes across all text elements.** `cardTitleColor:
+  rgb(244,244,245)` on `cardBg: rgb(18,18,20)` (~17:1). `rowDescColor: rgb(244,244,245)`
+  (workflow names) — passes. `rowMetaColor: rgb(171,171,179)` — adequate for secondary
+  meta text on dark. ✓
+- **No horizontal overflow at any width.** `overflowCount: 0` at 1280/1440/768. ✓
+- **Zero JavaScript page errors.** Both dark and light sessions clean. ✓
+- **Condition placeholder is instructive.** Field reads: "Condition (optional) — e.g.
+  txn_abs > 200, contains(txn_payee, \"uber\")". Two concrete examples give Raj a starting
+  point without needing documentation. Better than a blank or generic placeholder. ✓
+
+---
+
+**Structure fixes (bottom-up)** grouped by the 7 dimensions:
+
+_1 · Layout_
+
+- [ ] **CRITICAL: Dark inter-card divider bleeds into light-mode layout.** The gap between
+      the "Create a workflow" card and the "Your workflows" card renders as a thick black
+      band in light mode (`mainBg: rgba(0,0,0,0)` — the content-area bg token does not
+      switch). In `light_1280_list.png` and `light_1440.png` the page shows two white
+      cards separated by a ~16px black stripe — identical systemic defect to G12–G15.
+      Same fix: switch the content-area background token to the warm-white surface in
+      `data-theme=light`. Highest-impact layout/theming fix on this page.
+- [ ] **Mermaid flowchart dominates each workflow row.** In `dark_1280_list.png` and
+      `light_1280_list.png`, every saved workflow row shows its Mermaid SVG immediately
+      below the name/meta line — uncollapsed, taking 400–600px of vertical space. With 4
+      saved workflows, the list becomes a tower of flowcharts; Raj must scroll past ~2000px
+      of diagrams to reach run history. The flowchart is excellent for drilling into a
+      single workflow but is too heavy as an always-on element in the list. Add a
+      collapsed-by-default accordion ("Show flowchart ▸") per row that expands inline on
+      click, or render the flowchart only in a detail/edit panel.
+- [ ] **"Your workflows" list has no summary count.** The card heading reads "Your
+      workflows" with no row count badge. With 4 sample workflows (and each taking a
+      large flowchart area), the visual scope of the list is not clear at a glance. A
+      count badge on the heading ("Your workflows  4") would orient Raj. Compare:
+      Accounts, Goals, and Transactions headings all carry counts.
+
+_2 · Spacing_
+
+- [ ] **Builder rows are dense — no visual grouping between form rows and action builder.**
+      The create-form is a single flat `form-grid`: name + trigger + condition in row 1,
+      action-kind + action-text + "Add action" in row 2. There is no divider, label, or
+      section header distinguishing "workflow identity" (name, trigger, condition) from
+      "action builder" (what it will do). Raj mentally processes two sub-tasks but the
+      form presents them as one undifferentiated block. A light `<hr>` or a small
+      "Actions" sub-label above the action builder row would chunk the form correctly.
+- [ ] **Staged action rows inside the builder have minimal vertical clearance.** After
+      staging an action, the row appears immediately below the action-builder grid with
+      only a `mt-2` separator. At 768px the staged row is visually merged with the action
+      builder above it. Add a `mt-3` gap and a faint divider line above the staged list
+      so it reads as "what will be done" rather than a continuation of the form inputs.
+
+_3 · Theming_
+
+- [ ] **CRITICAL: "Run now" button fails WCAG AA in light mode.** `btnPrimaryColor:
+      rgb(5,46,19)` (very dark green text) on `btnPrimaryBg: rgb(46,139,87)` (mid green
+      background) — computed contrast ratio ~2.1:1, far below the 4.5:1 AA threshold for
+      normal text. In `light_1280_list.png` and `light_768.png`, the "Run now" button
+      label is barely readable against the green background. Dark mode is fine (the same
+      green on near-black gives adequate contrast). Fix: use white (`#ffffff`) for the
+      `.btn-primary` text colour in light mode, which reaches ~4.7:1 on `rgb(46,139,87)`.
+      This is the same systemic `.btn-primary` light-mode contrast failure seen on other
+      pages (G4–G15). **Highest-impact theming fix on this page.**
+- [ ] **Dark inter-card background bleeds in light (same systemic root as G12–G15).**
+      `mainBg: rgba(0,0,0,0)` does not switch in `data-theme=light`. Confirmed in
+      `light_1280_list.png`, `light_1440.png`, `light_768.png`. Fix: align with the G12–
+      G15 content-area background token fix.
+- [ ] **Mermaid flowchart background in light.** The Mermaid condition-diamond fill in
+      light mode renders as a light lavender/purple (`rgb(~224,220,255)` approximate from
+      visual inspection of `light_1280_list.png`). This is a Mermaid default theme colour
+      and is aesthetically discordant against the app's warm neutral palette. In dark mode
+      the same diamond uses the near-black fill of the dark surface, which looks correct.
+      Consider overriding Mermaid's default theme with a neutral token that fits the
+      app palette in both themes.
+- [ ] **`rowMetaColor: rgb(86,86,92)` in light is borderline on the primary info line.**
+      The workflow meta line — "When a transaction is added · if expense > 100 · 1 action"
+      — renders in the muted grey token (~5.4:1 on white). This line carries critical
+      operational information (what the workflow does and when) and should arguably use
+      the full `--text` / `--fg` token (~18:1) rather than the muted secondary token.
+      Confirmed `light_1280_dryrun.png`.
+
+_4 · Styling_
+
+- [ ] **All form inputs are placeholder-only — no visible labels.** `labelCount: 0` (zero
+      `<label>` elements on the entire page). "Workflow name", "Condition (optional)", and
+      "Task title / message / tag" are placeholder-only. `aria-label` coverage: the
+      selects have no `aria-label`; the inputs have no associated `<label>`. Cross-ref
+      C65 (labelling gaps) and B15 (systemic a11y). Add visible `<label>` elements for
+      at minimum the name and condition inputs; add `aria-label` to the trigger and
+      action-kind selects.
+- [ ] **H3 card titles instead of H2 — heading hierarchy broken.** `cardHeadingLevels:
+      ["H3", "H3", "H3"]` across all three cards on the page. The rest of the app uses
+      H2 for card titles; H3 implies these are sub-headings of a parent H2 that does not
+      exist. Screen readers experience a heading-level skip (H1 page title → H3 card
+      title). Cross-ref C65 (heading order), B15 (a11y/landmarks). Normalize to H2.
+- [ ] **"Add action" button is full-width on 1280 desktop.** In `dark_1280_list.png` the
+      "Add action" button spans the full third column of the action-builder grid — roughly
+      300px wide for a secondary staging action. This makes it visually heavier than the
+      primary "Save workflow" button below it. "Add action" should be `btn-sm` or
+      `fit-content` width, matching the pattern of add-form buttons on other pages (Goals,
+      Tasks). The "Save workflow" button correctly uses a compact width.
+- [ ] **"Run now" is `.btn-primary` (green) in light mode; "Dry run" is `.btn` (neutral).**
+      At a glance the green "Run now" button is the loudest element in every workflow row
+      — louder than the workflow name itself. For a non-destructive automation page, "Dry
+      run" (the safe exploratory action) should be the primary affordance and "Run now"
+      (the live execution) should be a secondary or confirmation-gated action. Visually
+      the hierarchy is inverted. Swap visual weight: `.btn` for "Run now" (or use a
+      warning-yellow accent), `.btn-primary` or `.btn-outline` for "Dry run". Cross-ref
+      C65 ("buttons aren't oversized" — correct, but the _colour hierarchy_ is wrong).
+
+_5 · Positioning_
+
+- [ ] **Condition input is the third field in a three-column form-grid, truncated at
+      1280.** In `dark_1280_list.png` and `light_1280_list.png` the condition input shows
+      only "Condition (optional) — e.g. t" — the placeholder is cut off after the first
+      few characters. At 1280 the three-column grid (name | trigger-select | condition)
+      divides the row into three equal columns, giving the condition field only ~290px.
+      The condition field needs more width than the other two (it holds a formula
+      expression). Move the condition input to its own full-width row below the name +
+      trigger row, mirroring how the action builder uses a separate row.
+- [ ] **"Save workflow" button is flush-left, visually separate from the action builder.**
+      The green "Save workflow" button sits below the staged-action list with a `mt-2`
+      gap. It reads as a floating button unrelated to the form above it. Wrapping it in
+      a `form-actions` row that right-aligns it (consistent with other form save patterns)
+      and adding `mt-4` above it would anchor it to the form and make the save action
+      feel conclusive.
+
+_6 · Ordering_
+
+- [ ] **Mermaid flowchart appears immediately under the workflow name/meta/actions row**
+      before any dry-run result. The ordering is: name + meta → dry-run result (if any)
+      → flowchart. The flowchart always renders even when no dry-run has been fired.
+      A cleaner order: name + meta → action summary line → [dry-run result if fired] →
+      [flowchart, collapsed by default]. The always-on diagram currently pushes the run
+      history entirely out of view at any normal viewport.
+- [ ] **Run history card requires scrolling past all expanded flowcharts.** With 4
+      workflows each rendering a full Mermaid SVG, run history starts at ~2000px. The
+      history is operational feedback Raj checks after running a workflow — it should be
+      accessible without major scrolling. Collapsing flowcharts by default (see _1 ·
+      Layout_) would solve this.
+
+_7 · General UX / Glanceability_
+
+- [ ] **HIGHEST IMPACT: no edit for an existing workflow (C65 still open).** `hasEditBtn:
+      false` confirmed by DOM audit. The four sample workflows — "Tag freelance income",
+      "Categorize coffee runs", "Flag large purchases", "Monthly budget review" — offer
+      only: Dry run / Run now / Disable / Delete. There is no edit. Raj cannot fix a
+      typo in the condition, add a second action, or change the trigger without deleting
+      and recreating the entire workflow. Every other CRUD entity in the app (accounts,
+      budgets, goals, rules, transactions) has inline edit. This is the single largest
+      usability gap on the page. Add an Edit button per row that populates the builder
+      card with the workflow's current values and changes "Save workflow" to "Update
+      workflow" for that session.
+- [ ] **Condition field has no formula help or variable reference.** Unlike the Customize
+      page (which has 4 example buttons + a full Available Variables card), the condition
+      input here is a raw freeform text field with a placeholder giving two examples. Raj
+      has no way to discover what variables are available (`txn_abs`, `txn_payee`,
+      `expense`, `income`, etc.) without leaving the page or reading source code. C65
+      flagged this gap. Share the formula-help pattern from Customize: at minimum a
+      "Variables you can use" toggle below the condition field listing available
+      identifiers and their types. Cross-ref C65, C61.
+- [ ] **"Dry run" on a manual-trigger workflow against sample data returns "Would do:
+      • ..."** — the dry-run label "Would do:" correctly signals simulation. However,
+      for trigger-bound workflows (e.g. "When a transaction is added"), the dry-run
+      semantics are ambiguous: does it simulate the last transaction, all transactions,
+      or a hypothetical one? The dry-run result text gives no context about what data was
+      evaluated. Add a parenthetical note: "Would do (evaluated against 32 existing
+      transactions):" or "Condition matched 5 of 32 transactions." Cross-ref C65 (dry-run
+      is "excellent" — this is a refinement, not a defect, but raises clarity).
+- [ ] **Condition truncates in the meta line at 768px.** In `dark_768.png` the workflow
+      meta line reads "When a transaction is added · if expense > 100 · 1 action" — it
+      wraps correctly in the row. At very long conditions this would be cut off. The line
+      uses `row-meta` styling with no clamping; confirm with a longer condition string
+      that it wraps (not truncates) correctly.
+- [ ] **No empty state for "Your workflows" when the list is empty.** DOM shows
+      `emptyText: "No transactions yet."` which is the Dashboard's empty state leaking
+      through a `.empty` selector, not the workflow list's own empty state. The workflow
+      list uses a conditional: if `len(rows) > 0` it renders `.rows`, otherwise it renders
+      `P(css.Class("empty"), T("workflows.empty"))`. The actual workflows.empty string
+      should be confirmed (not tested in this session since sample data always has 4
+      workflows). Verify the empty state text is guiding ("No workflows yet. Create one
+      above to automate your finances.") rather than just "No workflows yet."
+
+---
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `light_1280_list.png`, `light_1440.png`, `light_768.png` | "Run now" `.btn-primary` label `rgb(5,46,19)` on `rgb(46,139,87)` — ~2.1:1, FAILS WCAG AA | Use `#ffffff` for `.btn-primary` text in `data-theme=light`; same systemic fix as G4–G15 |
+| 2 | `light_1280_list.png`, `light_1440.png`, `light_768.png` | Black inter-card divider band between "Create a workflow" and "Your workflows" cards in light mode | Switch content-area bg token in `data-theme=light` — same systemic fix as G12–G15 |
+| 3 | DOM (`hasEditBtn: false`) | No edit button on any workflow row — delete+recreate is the only way to change a saved workflow | Add per-row Edit that populates the builder card (C65 top gap, still open) |
+| 4 | `dark_1280_list.png`, `light_1280_list.png` | Each workflow row renders full Mermaid flowchart always-on — 4 workflows → ~2000px scroll to reach run history | Collapse flowchart by default; expand on click |
+| 5 | DOM (`cardHeadingLevels: ["H3","H3","H3"]`, `labelCount: 0`) | All card titles are H3 (should be H2); zero `<label>` elements | Normalize to H2; add `<label>` or `aria-label` for all inputs/selects (C65, B15) |
+| 6 | `dark_1280_list.png`, `light_1280_list.png` | Condition input truncates to ~10 chars in 3-column grid — placeholder "Condition (optional) — e.g. t" | Move condition to its own full-width row below name + trigger |
+| 7 | `dark_1280_list.png` | "Add action" button is full-width in action-builder row — visually heavier than "Save workflow" | Shrink to `btn-sm` / `fit-content` |
+| 8 | `light_1280_list.png` | "Run now" is green (primary) and "Dry run" is neutral — action weight hierarchy is inverted for a simulation-first workflow page | Swap visual hierarchy: "Dry run" = primary/accent, "Run now" = secondary or confirmation-gated |
+| 9 | `light_1280_list.png` | Mermaid condition diamond fill is lavender (~`rgb(224,220,255)`) in light mode — discordant with warm neutral palette | Override Mermaid default theme to use app-palette neutral fills |
+| 10 | C65 (confirmed by DOM: condition placeholder only, no variable reference) | Condition field has no formula help or variable list — Raj cannot discover valid identifiers | Add collapsible variable-reference panel under condition field (share Customize pattern) |
+
+**Probe hardening**
+
+- The probe's `stagedCount` DOM selector (`.row,.row-edit` with ≥2 buttons in row) over-
+  counted: it included the 4 sample workflow rows in "Your workflows" (which have 4
+  buttons each) in addition to the builder's staged-action rows. Corrected reading:
+  `stagedCount: 5` = 4 sample workflow rows + 1 staged builder row after test. Future
+  probes targeting staged-action rows specifically should scope to the builder card:
+  `section.card:first-of-type .rows .row` or look for `button[aria-label="Remove action"]`
+  exclusively.
+- Light theme recipe (G4 canonical `bootWithTheme()` pattern): confirmed working —
+  `data-theme="light"` on `<html>` verified before navigation. `pageBg:
+  rgb(247,246,243)` confirms warm-white body background in light.
+- `navToWorkflows` correctly found the nav link via `nav a[title="Workflows"]` without
+  needing fallback path. The Workflows nav entry is in the BUILD sub-group (confirmed
+  `dark_1280_list.png` rail).
+- The dry-run button selector `button:filter({hasText:/dry.?run/i})` correctly targeted
+  the first workflow row's "Dry run" button and produced the inline result in the same
+  row. Screenshot confirmed in `dark_1280_dryrun.png`.
+- `overflowCount: 0` at all widths — no horizontal scroll issues.
+
+**Cross-references**
+- C65: no edit (still open → defect #3); staged-action remove (CLOSED ✓ verified);
+  condition unguided (still open → defect #10); heading H3 (still open → defect #5);
+  labelling gaps (still open → defect #5); "Verify" checklist: edit + condition-help
+  still unverifiable.
+- C37: filled-but-unstaged action persists on save — CLOSED, code confirmed + dry-run
+  screenshot shows the action was included.
+- G4–G15 systemic: `.btn-primary` light-mode text contrast failure → defect #1.
+- G12–G15 systemic: dark body bg bleeds between cards in light → defect #2.
+- C70: Mermaid flowchart per workflow row — feature present and rendering correctly;
+  collapse-by-default recommendation above is a UX refinement on top of the working
+  feature.
+
+
 ## 0. Foundation & tooling (Phase 0)
 
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH

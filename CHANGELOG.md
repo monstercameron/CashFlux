@@ -38,8 +38,8 @@ and every commit updates this file under `Unreleased`.
   it), and the neutral draft-import amounts are readable in light mode (scoped so the green/red
   semantic amount colors are preserved). **Customize (G15):** the formula calculator now leads the
   page (above the custom-fields manager, behind a section divider) instead of being buried below the
-  fold, and the variable-reference amounts are readable in light mode. This completes the GLAMOR
-  per-page review series (G1–G15).
+  fold, and the variable-reference amounts are readable in light mode. **Members (G16):** the
+  net-worth-by-member amounts are now readable in light mode (they were inheriting the dark `--text`).
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**

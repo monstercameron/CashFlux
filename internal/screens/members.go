@@ -157,13 +157,16 @@ func Members() ui.Node {
 		v := ownerDisp(m.ID)
 		ownerRows = append(ownerRows, Div(css.Class("row"),
 			Span(css.Class("row-desc"), m.Name),
-			Span(ClassStr(accentFor(v)), fmtMoney(v)),
+			// "amount" (not the bare accentFor class) so the figure carries tabular-nums
+			// and the light-mode contrast pin — the net-worth amounts were inheriting
+			// --text and vanishing on white (G16 CRITICAL).
+			Span(ClassStr("amount "+accentFor(v)), fmtMoney(v)),
 		))
 	}
 	grp := ownerDisp(domain.GroupOwnerID)
 	ownerRows = append(ownerRows, Div(css.Class("row"),
 		Span(css.Class("row-desc"), uistate.T("owner.group")),
-		Span(ClassStr(accentFor(grp)), fmtMoney(grp)),
+		Span(ClassStr("amount "+accentFor(grp)), fmtMoney(grp)),
 	))
 
 	// When the reassign panel opens, move focus to its target select so a
