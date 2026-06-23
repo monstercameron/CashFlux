@@ -13456,7 +13456,7 @@ Screenshots in `e2e/screenshots/glamor_04_budgets_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout*
-- [ ] **Over-budget rows are not sorted to the top — the most urgent items are buried (CRITICAL
+- [x] **Over-budget rows are not sorted to the top — the most urgent items are buried (CRITICAL
       for Renu's scan).** DOM-confirmed order: Dining (on track, idx 0), Entertainment (on track,
       idx 1), Gifts & Charity (on track, idx 2), Groceries (over, idx 3), Shopping (over, idx 4),
       Subscriptions (near, idx 5), Transportation (near, idx 6). Renu must scroll or scan three
@@ -13464,19 +13464,19 @@ Screenshots in `e2e/screenshots/glamor_04_budgets_*.png`.
       first: Over budget → Near limit / At risk → On track, then alphabetical within each tier.
       Add a sort-control affordance (a compact dropdown or segmented: "Severity · Name · Amount
       used · Remaining") in the card header row so power users can re-sort.
-- [ ] **No "Add budget" button is visible on the page.** The global "+" FAB (topbar) opens a
+- [x] **No "Add budget" button is visible on the page.** The global "+" FAB (topbar) opens a
       generic quick-add panel, not a budget-specific form. There is no page-level "+ Add budget"
       button anchored to the Budgets card heading. A returning user who wants to add a budget for
       the first time mid-month must discover the FAB mechanism. Add a small "+ Add budget" button
       in the card header row (right of the "Budgets" heading), matching the pattern used on
       Accounts / Goals / other entity pages. (DOM confirms `addBtns` includes "New budget" from
       the quick-add panel, but it is behind a two-tap flow rather than a single visible button.)
-- [ ] **Summary stat bar: BUDGETED figure is visually faint in light mode.** At 1280 light and
+- [x] **Summary stat bar: BUDGETED figure is visually faint in light mode.** At 1280 light and
       1440 light, the BUDGETED value ($1,585.00) renders in very low-contrast grey against the
       white stat panel — it is nearly invisible compared to SPENT (red) and LEFT (green). Dark
       mode renders BUDGETED in white, which is fine. The light-mode stat label color for BUDGETED
       must use the same foreground token as SPENT and LEFT, not a muted variant.
-- [ ] **No per-budget "% of month elapsed" reference line on bars.** At mid-month (the 15th),
+- [x] **No per-budget "% of month elapsed" reference line on bars.** At mid-month (the 15th),
       Renu has consumed ~50% of June's days. A faint vertical tick at 50% on each bar would let
       her instantly judge "am I ahead or behind pace?" for every on-track budget without reading
       the sub-line text. This is a structural enhancement to the progress bar (a thin `::after`
@@ -13484,49 +13484,49 @@ Screenshots in `e2e/screenshots/glamor_04_budgets_*.png`.
       month-pulse use case.
 
 *2. Spacing*
-- [ ] **Budget rows have no visual separation between them.** At 1280/1440px, rows are separated
+- [x] **Budget rows have no visual separation between them.** At 1280/1440px, rows are separated
       only by ~8px of implicit margin — there is no hairline divider, no alternating background,
       and no card-shadow between rows. On a glance-scan, the eye struggles to see where one budget
       ends and the next begins, especially when a row has multiple sub-lines (Groceries has 2,
       Subscriptions has 2). Add a subtle separator (`border-bottom: 1px solid var(--border)`) on
       each `.budget` row, or increase bottom-padding to 20px so the row bottom breathes before the
       next bar begins.
-- [ ] **Sub-lines are "glued" to the bar above them (C50-flagged pattern).** The primary sub-line
+- [x] **Sub-lines are "glued" to the bar above them (C50-flagged pattern).** The primary sub-line
       ("Monthly · Over budget · 100% · ($70.00) left") appears with ~4px gap below the bar and
       immediately before the secondary line ("Carried from previous period: ($240.00)"). When two
       sub-lines stack, they read as a run-on block rather than distinct pieces of information.
       Increase top-margin between the bar and the first sub-line (from ~4px to ~8px), and add a
       2px gap between sub-line 1 and sub-line 2 so the rollover-carry and pace-over lines are
       visually distinct from the primary status line.
-- [ ] **Row heights are inconsistent: 98–99px for single-sub-line rows, 120–123px for multi-sub-
+- [x] **Row heights are inconsistent: 98–99px for single-sub-line rows, 120–123px for multi-sub-
       line rows.** This variable height (DOM-confirmed) makes the page rhythmically unsteady.
       While some height variation is correct (more lines = more height), the jump from 98→123px
       is jarring. A consistent minimum row height (e.g. 104px) with additional lines expanding
       naturally would stabilize the visual rhythm.
 
 *3. Theming*
-- [ ] **BUDGETED figure in the stat bar is near-invisible in light mode (CRITICAL contrast
+- [x] **BUDGETED figure in the stat bar is near-invisible in light mode (CRITICAL contrast
       failure).** Confirmed in `glamor_04_budgets_1280_light.png` and `glamor_04_budgets_1440_
       light.png`: the BUDGETED value renders as a very light grey that fails contrast against the
       white stat panel. The SPENT (red) and LEFT (green) figures use semantic colored tokens that
       pass in light mode; BUDGETED appears to fall through to a muted foreground token that is
       appropriate for dark but fails on white. Fix: ensure the BUDGETED figure uses `--fg` (full
       foreground) or a neutral token that passes AA in both themes, not the muted grey.
-- [ ] **Budget row category names are invisibly faint in light mode.** In `glamor_04_budgets_
+- [x] **Budget row category names are invisibly faint in light mode.** In `glamor_04_budgets_
       1280_light.png`, row names like "Dining", "Entertainment", "Gifts & Charity", "Groceries",
       "Shopping", "Subscriptions" all render in extremely low-contrast grey against the white card
       background — effectively invisible as drillable link names. They are clearly readable in
       dark mode. The `.row-desc.budget-drill` anchor in light mode must use `--fg` or at minimum
       a mid-contrast token that passes AA-normal (4.5:1) on white. This is a blanket light-mode
       text contrast failure on the primary identifier of every budget row.
-- [ ] **Sub-line color (`rgb(171, 171, 179)`) in dark mode — verify AA.** DOM-confirmed sub-line
+- [x] **Sub-line color (`rgb(171, 171, 179)`) in dark mode — verify AA.** DOM-confirmed sub-line
       color is `rgb(171,171,179)` on a near-black background. Approximate contrast ratio against
       `#181820` (the dark surface): ~7:1 — passes AA. But the rollover-carry line ("Carried from
       previous period") renders in red (`tw.TextDown`) — verify it also passes AA on the dark
       surface (red-on-dark typically does, but the shade should be confirmed).
 
 *4. Styling*
-- [ ] **"2 over budget" pill is the only status summary cue — it is a text pill, not a visual
+- [x] **"2 over budget" pill is the only status summary cue — it is a text pill, not a visual
       count widget.** The pill "2 over budget" is red text — correct semantic color. But "near
       limit" budgets (Subscriptions, Transportation) are only represented by the bar color; there
       is no "2 near limit" companion pill. The sub-heading currently shows only one pill
@@ -13538,19 +13538,19 @@ Screenshots in `e2e/screenshots/glamor_04_budgets_*.png`.
       `overCount > 0 || nearCount > 0` — but in this dataset nearCount IS 2, so the pill should
       appear. Investigate whether the near pill is rendering but invisible in light mode, or
       whether there is a conditional bug suppressing it.
-- [ ] **Progress bar track is nearly invisible in both themes.** The bar track (the background
+- [x] **Progress bar track is nearly invisible in both themes.** The bar track (the background
       rail behind the fill) is a very faint grey. At 1280 dark, the on-track green fill is visible,
       but the remaining-track behind it blends with the card background. On empty bars (0% fill,
       Entertainment/Gifts & Charity), the bar track is barely perceptible — users cannot tell
       whether the bar is empty or absent. Increase bar track contrast: `background: var(--border)`
       or `rgba(255,255,255,0.12)` in dark / `rgba(0,0,0,0.10)` in light.
-- [ ] **Category name and spent/limit amount are left-and-right within `.budget-head`** but the
+- [x] **Category name and spent/limit amount are left-and-right within `.budget-head`** but the
       amount is center-positioned at mid-row rather than right-edge-aligned against the card
       boundary. At 1280px, the amount ($155.00 / $250.00) appears roughly center-left of the
       available space, leaving a large visual gap to the Edit/Delete buttons on the right. The
       amount should be right-aligned flush with the button group, so the row reads cleanly as
       [name left] [amount · Cover · Edit · Delete right].
-- [ ] **Edit button uses text label + icon in every row at all times.** This is consistent with
+- [x] **Edit button uses text label + icon in every row at all times.** This is consistent with
       the Accounts page pattern but is dense on the budget list: Edit appears as "✏ Edit" as a
       full pill button in every single row. For Renu's scan workflow this is fine (she is not
       editing), but the constant edit affordance competes visually with the status information.
@@ -13559,38 +13559,38 @@ Screenshots in `e2e/screenshots/glamor_04_budgets_*.png`.
       direction noted in G2 for Transactions.
 
 *5. Positioning*
-- [ ] **The "Cover…" button appears between the amount and Edit button in the header row.**
+- [x] **The "Cover…" button appears between the amount and Edit button in the header row.**
       At 1280px: [name] [amount] [Cover…] [Edit] [×]. This ordering puts "Cover…" — a secondary
       action for over-budget rows only — between the primary amount display and the primary Edit
       action. "Cover…" should be positioned to the left of Edit or below the bar as a contextual
       secondary action, not between the amount and Edit where it breaks the visual scan line of
       [name → amount → actions].
-- [ ] **Period control is in the topbar (shared, C7) — correct positioning for a global control.**
+- [x] **Period control is in the topbar (shared, C7) — correct positioning for a global control.**
       The Budgets card no longer has its own competing period stepper (confirmed by DOM and code).
       The "Month" segmented + "Jun 2026" stepper in the topbar is the correct single source of
       truth for the viewed period. ✓ No fix needed here.
-- [ ] **Summary stat bar position is correct (above the card) — no fix needed.** The SPENT /
+- [x] **Summary stat bar position is correct (above the card) — no fix needed.** The SPENT /
       BUDGETED / LEFT bar renders above the Budgets card at the top of the content area, providing
       immediate context before Renu reads any row. ✓
 
 *6. Ordering*
-- [ ] **Alphabetical default order buries critical rows (HIGHEST IMPACT — see Layout fix #1).**
+- [x] **Alphabetical default order buries critical rows (HIGHEST IMPACT — see Layout fix #1).**
       DOM-confirmed: Dining → Entertainment → Gifts & Charity → Groceries → Shopping →
       Subscriptions → Transportation. Over-budget rows (Groceries, Shopping) are at positions 4
       and 5; near-limit rows (Subscriptions, Transportation) are at 6 and 7. Renu must scan past
       three healthy rows to reach the first problem. Default must be severity-first sort. This is
       the single most important structural fix for glanceability on this page.
-- [ ] **Within the "on-track" tier, sort by % used descending (most at-risk-of-becoming-near
+- [x] **Within the "on-track" tier, sort by % used descending (most at-risk-of-becoming-near
       first), not alphabetically.** Dining at 62% is more worth monitoring than Entertainment at
       0% or Gifts & Charity at 0%. The alphabetical tie-break within the on-track tier should be
       % descending so the most-used-relative-to-limit on-track budgets surface first.
 
 *7. General UX / Glanceability*
-- [ ] **Renu cannot answer "which categories am I overspending?" without scanning past healthy
+- [x] **Renu cannot answer "which categories am I overspending?" without scanning past healthy
       rows.** The lack of severity sort (Ordering fix #1) is the root cause. Once fixed, the
       two red over-budget rows will be immediately visible at the top without any scrolling
       (DOM-confirmed: only 6 total budget rows, all visible above fold at 1280px).
-- [ ] **Sub-line text packs too much into one string (C50-flagged "text-busy" pattern).**
+- [x] **Sub-line text packs too much into one string (C50-flagged "text-busy" pattern).**
       "Monthly · On track · 62% · $95.00 left" has four pieces of information separated by
       middle-dots. For Renu's glance scan, the period ("Monthly") and the percentage ("62%") are
       secondary to the status label ("On track") and the remaining amount ("$95.00 left"). Consider
@@ -13708,24 +13708,24 @@ confirmed.
 **Structure fixes (bottom-up)**
 
 *1. Layout*
-- [ ] **Summary bar panels are equal-weight — Net Worth should visually dominate.** At 1280px
+- [x] **Summary bar panels are equal-weight — Net Worth should visually dominate.** At 1280px
       the three panels (NET WORTH / ASSETS / LIABILITIES) are equal-width, equal-height siblings.
       Net worth is the derived output — the number Theo cares most about — yet it gets identical
       visual weight to its two inputs. Widen the NET WORTH panel to ~40% of the bar (vs. 30/30
       for Assets/Liabilities), or increase its figure font-size by 4–6px, so it reads as the
       headline rather than peer.
-- [ ] **No "Add account" affordance is visible above the fold without scrolling to an empty
+- [x] **No "Add account" affordance is visible above the fold without scrolling to an empty
       section.** The global "+" FAB in the topbar opens a generic quick-add menu — there is no
       page-level "Add account" button anchored to the Accounts page header. A first-time or
       returning user who wants to add an account must discover the FAB menu. Add a small
       "＋ Add account" button in the page header row (next to the "Accounts" breadcrumb title)
       so the action is contextually obvious.
-- [ ] **No net-worth trend / change indicator in the summary bar.** The NET WORTH panel shows
+- [x] **No net-worth trend / change indicator in the summary bar.** The NET WORTH panel shows
       the point-in-time balance ($60,386.00) with no direction signal (▲/▼, % change vs last
       week/month). Without a trend cue Theo cannot answer "Is net worth up or down?" at a glance
       — he only knows the absolute value. Add a subtitle line with period-over-period delta
       (e.g., "▲ $1,240 this month") matching the KPI tile pattern used on Dashboard.
-- [ ] **768px layout is broken: account name, STALE badge, balance, and action buttons all
+- [x] **768px layout is broken: account name, STALE badge, balance, and action buttons all
       collide.** At 768px the row layout does not reflow — account name wraps mid-word across
       multiple lines ("401(k) /\nBrokerage"), the STALE badge and balance overlap the action
       buttons, and type and currency render as orphaned fragments ("Investment\n.\nUSD\n.\n
@@ -13734,81 +13734,81 @@ confirmed.
       actions right-aligned.
 
 *2. Spacing*
-- [ ] **Section heading ("Assets") has insufficient separation from the summary bar above and
+- [x] **Section heading ("Assets") has insufficient separation from the summary bar above and
       the first account row below.** At 1280px the "Assets" heading has ~8px margin above it from
       the "Mark all updated" button, and the first account row begins immediately below with
       ~4px gap. Increase section heading top-margin to at least 24px and bottom-margin to 12px
       so each group breathes as a distinct unit.
-- [ ] **Row padding is tight at 1280px.** Account rows render at approximately 60px height with
+- [x] **Row padding is tight at 1280px.** Account rows render at approximately 60px height with
       name, meta-line, and balance packed closely. For a weekly-review workflow (not high-density
       data entry) increase row padding to 14–16px vertical so each account reads as a card-weight
       row, not a table row. This also gives the STALE badge visual room to breathe.
-- [ ] **The "Mark all updated" button sits flush against the summary bar bottom edge** — no
+- [x] **The "Mark all updated" button sits flush against the summary bar bottom edge** — no
       visual separation between the three-panel summary and the bulk-action button. Add 12–16px
       top margin to the button so it reads as a content-area action, not a summary-bar appendage.
 
 *3. Theming*
-- [ ] **Light-mode unverified** — same WASM prefs boot-overwrite issue as G1/G2. All captures
+- [x] **Light-mode unverified** — same WASM prefs boot-overwrite issue as G1/G2. All captures
       landed in dark. Must be tested via in-session Settings-panel toggle. Until verified, treat
       light-mode visual correctness as unknown for this page.
-- [ ] **STALE badge color in dark mode is amber-on-dark** ("STALE" in amber/gold pill) — this
+- [x] **STALE badge color in dark mode is amber-on-dark** ("STALE" in amber/gold pill) — this
       works for the warning signal, but the amber-on-#222 contrast may fall below AA on smaller
       text. Measure contrast ratio; target ≥ 4.5:1 for the badge text. If borderline, add a
       subtle amber border to the pill to reinforce the affordance without relying on color alone.
-- [ ] **The "Mark all updated" button uses a muted dark-grey style** that blends into the dark
+- [x] **The "Mark all updated" button uses a muted dark-grey style** that blends into the dark
       background — at a glance it reads as a label, not an actionable button. Add a visible border
       or a subtle tinted background (amber-tinted, matching the STALE badge family) so the
       connection between "8 stale accounts → click this to fix them" is visually self-evident.
 
 *4. Styling*
-- [ ] **No account-type icon differentiation.** All account rows (Checking, Savings, Investment,
+- [x] **No account-type icon differentiation.** All account rows (Checking, Savings, Investment,
       Credit Card, Loan) use identical row styling with no icon or color token per account type.
       Adding a small type icon (e.g., bank icon for checking/savings, chart icon for investment,
       card icon for credit) to the left of the account name would let Theo scan account type
       without reading the meta-line subtitle.
-- [ ] **Balance figures on asset rows are green, liability rows are red — but the green/red is
+- [x] **Balance figures on asset rows are green, liability rows are red — but the green/red is
       the only distinguisher between the two groups (besides the section heading).** Consider
       adding a faint left-border accent (2px) on liability rows using the red semantic token to
       reinforce group membership even when the STALE badge is distracting the eye.
-- [ ] **"Cleared balance" sub-label uses inline dot-separated notation** ("cleared $44,917.00")
+- [x] **"Cleared balance" sub-label uses inline dot-separated notation** ("cleared $44,917.00")
       — this is compact but buries a meaningful reconciliation signal. Consider replacing the dot
       separator with a dedicated "Cleared:" label in `text-dim` so the line reads as a key:value
       pair rather than a run-on string.
 
 *5. Positioning*
-- [ ] **Net worth is correctly positioned (top-left of summary bar) but lacks visual dominance**
+- [x] **Net worth is correctly positioned (top-left of summary bar) but lacks visual dominance**
       — see Layout fix #1 above. Position is right; weight needs adjustment.
-- [ ] **The summary bar stacks all three panels in a single horizontal row at 768px** — at this
+- [x] **The summary bar stacks all three panels in a single horizontal row at 768px** — at this
       width the three labels and figures are extremely compressed (see Layout fix #4). The bar
       should reflow to a vertical or 2+1 grid at mobile widths.
 
 *6. Ordering*
-- [ ] **Accounts within the Assets group appear to be insertion-ordered**, not sorted by balance
+- [x] **Accounts within the Assets group appear to be insertion-ordered**, not sorted by balance
       descending. For a net-worth check, Theo wants the largest assets first (401k $45k, Roth IRA
       $18k, Emergency Savings $12k, Everyday Checking $5k, CD $5k, Cash $200). Current order
       puts 401k first (coincidence), but Cash Wallet ($200) appears before the $5k CD, suggesting
       no balance sort. Add a default sort of "balance descending" within each group, with a
       sort-control affordance in the section heading.
-- [ ] **"Mark all updated" button appears between the summary bar and the Assets section** —
+- [x] **"Mark all updated" button appears between the summary bar and the Assets section** —
       fine for discoverability, but visually ambiguous as to whether it applies to Assets only or
       all accounts. Its position before the first section heading implies it applies globally —
       which it does (8 total). Confirm with a label change: "Mark all 8 accounts updated" or
       move it to a more clearly global position (e.g., in the page header row).
 
 *7. General UX / Glanceability*
-- [ ] **Staleness state dominates the page but lacks urgency ranking.** All 8 accounts carry the
+- [x] **Staleness state dominates the page but lacks urgency ranking.** All 8 accounts carry the
       same "STALE" badge with no indication of which account is most out-of-date (e.g., "last
       updated 6 weeks ago" vs "last updated 2 days ago"). Add a "last updated" relative timestamp
       (e.g., "updated 3w ago") as a second meta-line so Theo can prioritize which account to
       update first.
-- [ ] **No empty state or zero-account scaffold is visible** — the page jumps straight into
+- [x] **No empty state or zero-account scaffold is visible** — the page jumps straight into
       content. When a new user arrives with no accounts, the page should render a welcoming empty
       state with a single prominent "Add your first account" CTA.
-- [ ] **The "Archived" section is present** (confirmed via DOM headings harvest) but below the
+- [x] **The "Archived" section is present** (confirmed via DOM headings harvest) but below the
       fold and not visible in any above-fold screenshot. If there are archived accounts, a
       collapsed "Archived (N)" disclosure should be visible at page bottom without requiring full
       scroll — the current implementation requires scrolling past all active accounts to see it.
-- [ ] **No quick-balance-update affordance per row.** The row has Transactions / Edit / ellipsis
+- [x] **No quick-balance-update affordance per row.** The row has Transactions / Edit / ellipsis
       / delete — but "Update balance" (reconcile) is buried in the Edit flow. For Theo's use
       case (weekly balance reconciliation), a dedicated "Update balance" button or inline input
       on the row would remove 2 modal steps. At minimum, the ellipsis menu should surface
