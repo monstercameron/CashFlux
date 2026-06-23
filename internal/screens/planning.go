@@ -435,16 +435,18 @@ func Planning() ui.Node {
 			)
 		}
 
-		affordCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("planning.affordTitle")),
-			P(css.Class("muted"), uistate.T("planning.affordHint")),
-			Form(css.Class("form-grid"),
-				labeledField(uistate.T("planning.affordAmountPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(afAmount.Get()), Step("0.01"), OnInput(onAfAmount))),
-				labeledField(uistate.T("planning.affordMonthsPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(afMonths.Get()), Step("1"), OnInput(onAfMonths))),
-				labeledField(uistate.T("planning.affordReservePlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(afReserve.Get()), Step("0.01"), OnInput(onAfReserve))),
+		affordCard = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("planning.affordTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("planning.affordHint")),
+				Form(css.Class("form-grid"),
+					labeledField(uistate.T("planning.affordAmountPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(afAmount.Get()), Step("0.01"), OnInput(onAfAmount))),
+					labeledField(uistate.T("planning.affordMonthsPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(afMonths.Get()), Step("1"), OnInput(onAfMonths))),
+					labeledField(uistate.T("planning.affordReservePlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(afReserve.Get()), Step("0.01"), OnInput(onAfReserve))),
+				),
+				afBody,
 			),
-			afBody,
-		)
+		})
 	}
 
 	// Cash runway (L13): project liquid balance over the next 60 days against the
@@ -519,14 +521,16 @@ func Planning() ui.Node {
 			}
 		}
 
-		runwayCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("planning.runwayTitle")),
-			P(css.Class("muted"), uistate.T("planning.runwayHint")),
-			Form(css.Class("form-grid"),
-				labeledField(uistate.T("planning.runwayBufferPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(rwBuffer.Get()), Step("0.01"), OnInput(onRwBuffer))),
+		runwayCard = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("planning.runwayTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("planning.runwayHint")),
+				Form(css.Class("form-grid"),
+					labeledField(uistate.T("planning.runwayBufferPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(rwBuffer.Get()), Step("0.01"), OnInput(onRwBuffer))),
+				),
+				rwBody,
 			),
-			rwBody,
-		)
+		})
 	}
 
 	recurringCard := Fragment()
@@ -563,26 +567,28 @@ func Planning() ui.Node {
 				},
 			)),
 		)
-		recurringCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("recurring.title")),
-			P(css.Class("muted"), uistate.T("recurring.hint")),
-			Form(css.Class("form-grid"), OnSubmit(addRecurring),
-				Input(append([]any{css.Class("field"), Attr("id", "recurring-add"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)}, errAttrs("refi-err", rErr.Get())...)...),
-				labeledField(uistate.T("recurring.amountPlaceholder", base), Input(css.Class("field"), Type("number"), Value(rAmount.Get()), Step("0.01"), OnInput(onRAmount))),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), Title(uistate.T("recurring.cadence")), OnChange(onRCadence), cadenceOpts),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.account")), Title(uistate.T("recurring.account")), OnChange(onRAccount), acctOpts),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.category")), Title(uistate.T("recurring.category")), OnChange(onRCategory), catOpts),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
+		recurringCard = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("recurring.title"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("recurring.hint")),
+				Form(css.Class("form-grid"), OnSubmit(addRecurring),
+					Input(append([]any{css.Class("field"), Attr("id", "recurring-add"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)}, errAttrs("refi-err", rErr.Get())...)...),
+					labeledField(uistate.T("recurring.amountPlaceholder", base), Input(css.Class("field"), Type("number"), Value(rAmount.Get()), Step("0.01"), OnInput(onRAmount))),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), Title(uistate.T("recurring.cadence")), OnChange(onRCadence), cadenceOpts),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.account")), Title(uistate.T("recurring.account")), OnChange(onRAccount), acctOpts),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.category")), Title(uistate.T("recurring.category")), OnChange(onRCategory), catOpts),
+					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
+				),
+				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
+				errText("refi-err", rErr.Get()),
+				totalNote,
+				list,
+				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
+					Button(css.Class("btn"), Type("button"), Title(uistate.T("recurring.postDueTitle")), OnClick(postDue), uistate.T("recurring.postDue")),
+					If(postMsg.Get() != "", Span(css.Class("muted"), postMsg.Get())),
+				),
 			),
-			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
-			errText("refi-err", rErr.Get()),
-			totalNote,
-			list,
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("recurring.postDueTitle")), OnClick(postDue), uistate.T("recurring.postDue")),
-				If(postMsg.Get() != "", Span(css.Class("muted"), postMsg.Get())),
-			),
-		)
+		})
 	}
 
 	plansCard := Fragment()
@@ -606,27 +612,29 @@ func Planning() ui.Node {
 				},
 			)),
 		)
-		plansCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("plans.title")),
-			P(css.Class("muted"), uistate.T("plans.hint")),
-			Form(css.Class("form-grid"), OnSubmit(addPlan),
-				Input(append([]any{css.Class("field"), Attr("id", "plan-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
-				labeledField(uistate.T("plans.horizonPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon))),
-				// Account prefill: selecting an account fills the start-balance input
-				// from that account's current balance so the user doesn't look it up.
-				Label(css.Class("field-label"), uistate.T("plans.prefillAccount"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("plans.prefillAccount")),
-						Attr("data-testid", "plan-prefill-account"), OnChange(onPlAccount), plAcctOpts),
+		plansCard = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("plans.title"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("plans.hint")),
+				Form(css.Class("form-grid"), OnSubmit(addPlan),
+					Input(append([]any{css.Class("field"), Attr("id", "plan-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
+					labeledField(uistate.T("plans.horizonPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon))),
+					// Account prefill: selecting an account fills the start-balance input
+					// from that account's current balance so the user doesn't look it up.
+					Label(css.Class("field-label"), uistate.T("plans.prefillAccount"),
+						Select(css.Class("field"), Attr("aria-label", uistate.T("plans.prefillAccount")),
+							Attr("data-testid", "plan-prefill-account"), OnChange(onPlAccount), plAcctOpts),
+					),
+					labeledField(uistate.T("plans.startPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart))),
+					labeledField(uistate.T("plans.monthlyPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly))),
+					labeledField(uistate.T("plans.onceAmtPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plOnceAmt.Get()), Step("0.01"), OnInput(onPlOnceAmt))),
+					labeledField(uistate.T("plans.onceMonthPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", plHorizon.Get()), Value(plOnceMonth.Get()), Step("1"), OnInput(onPlOnceMonth))),
+					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("plans.add")),
 				),
-				labeledField(uistate.T("plans.startPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart))),
-				labeledField(uistate.T("plans.monthlyPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly))),
-				labeledField(uistate.T("plans.onceAmtPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plOnceAmt.Get()), Step("0.01"), OnInput(onPlOnceAmt))),
-				labeledField(uistate.T("plans.onceMonthPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", plHorizon.Get()), Value(plOnceMonth.Get()), Step("1"), OnInput(onPlOnceMonth))),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("plans.add")),
+				errText("plan-err", plErr.Get()),
+				list,
 			),
-			errText("plan-err", plErr.Get()),
-			list,
-		)
+		})
 	}
 
 	// Debt strategy (D9): compare snowball vs avalanche across the household's
@@ -782,27 +790,29 @@ func Planning() ui.Node {
 				)
 			}
 		}
-		debtCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("planning.debtStrategyTitle")),
-			P(css.Class("muted"), uistate.T("planning.debtStrategyHint")),
-			Form(css.Class("form-grid"),
-				labeledField(uistate.T("planning.debtStrategyExtra", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra))),
-			),
-			If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 0 && payoff.SuggestedExtra(debts) > 0,
-				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-					Span(css.Class("muted"), "At $0 extra the strategies tie."),
-					Button(css.Class("btn"), Type("button"), Title("Fill a sensible extra to compare snowball vs avalanche"),
-						OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
-						"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo"),
+		debtCard = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("planning.debtStrategyTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("planning.debtStrategyHint")),
+				Form(css.Class("form-grid"),
+					labeledField(uistate.T("planning.debtStrategyExtra", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra))),
 				),
+				If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 0 && payoff.SuggestedExtra(debts) > 0,
+					Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
+						Span(css.Class("muted"), "At $0 extra the strategies tie."),
+						Button(css.Class("btn"), Type("button"), Title("Fill a sensible extra to compare snowball vs avalanche"),
+							OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
+							"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo"),
+					),
+				),
+				body,
+				progressNode,
+				If(len(includeToggles) > 0, Div(Style(map[string]string{"margin-top": "0.6rem"}),
+					P(css.Class("budget-sub"), "Include in payoff plan (a mortgage is excluded by default):"),
+					Div(includeToggles),
+				)),
 			),
-			body,
-			progressNode,
-			If(len(includeToggles) > 0, Div(Style(map[string]string{"margin-top": "0.6rem"}),
-				P(css.Class("budget-sub"), "Include in payoff plan (a mortgage is excluded by default):"),
-				Div(includeToggles),
-			)),
-		)
+		})
 	}
 
 	return Div(
