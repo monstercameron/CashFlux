@@ -507,6 +507,7 @@ func Reports() ui.Node {
 			uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
 		)),
 		If(len(cfDefs) > 0, customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w)),
+		deductibleSection(txns, cats, cs, ce, rates, base, fmtMinor, w),
 	)
 }
 
@@ -612,4 +613,89 @@ func rollupLabelKey(on bool) string {
 		return "reports.rollupOn"
 	}
 	return "reports.rollupOff"
+}
+
+// deductibleSection renders the "Deductible totals" card (L16/L58): a ranked
+// list of deductible-flagged categories with their expense totals for the
+// period, a headline total, and a CSV export.  Returns an empty fragment when
+// no categories are marked deductible, so the section stays invisible until the
+// user sets up at least one deductible category.
+func deductibleSection(
+	txns []domain.Transaction,
+	cats []domain.Category,
+	start, end time.Time,
+	rates currency.Rates,
+	base string,
+	fmtMinor func(int64) string,
+	win period.Window,
+) ui.Node {
+	// Only show the section when at least one deductible category exists.
+	hasDeductible := false
+	catName := make(map[string]string, len(cats))
+	for _, c := range cats {
+		catName[c.ID] = c.Name
+		if c.Deductible {
+			hasDeductible = true
+		}
+	}
+	if !hasDeductible {
+		return Fragment()
+	}
+
+	summary, _ := reports.DeductibleTotals(txns, cats, start, end, rates)
+	nameOf := func(id string) string {
+		if n := catName[id]; n != "" {
+			return n
+		}
+		return uistate.T("reports.uncategorized")
+	}
+
+	var rowNodes []ui.Node
+	var maxAmt int64
+	for _, r := range summary.Rows {
+		if r.Amount > maxAmt {
+			maxAmt = r.Amount
+		}
+	}
+	for _, r := range summary.Rows {
+		pct := 0
+		if maxAmt > 0 {
+			pct = int(r.Amount * 100 / maxAmt)
+		}
+		if pct > 100 {
+			pct = 100
+		}
+		bar := Div(Style(map[string]string{"height": "4px", "max-width": "260px", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
+		rowNodes = append(rowNodes, Div(css.Class("row"),
+			Div(css.Class("row-main"), Span(css.Class("row-desc"), nameOf(r.CategoryID)), bar),
+			Span(css.Class("budget-amount"), fmtMinor(r.Amount)),
+		))
+	}
+
+	var body ui.Node
+	if len(rowNodes) == 0 {
+		body = P(css.Class("empty"), uistate.T("reports.empty"))
+	} else {
+		body = Div(css.Class("rows"), rowNodes)
+	}
+
+	return Section(css.Class("card"), Attr("data-testid", "deductible-section"),
+		H2(css.Class("card-title"), uistate.T("reports.deductibleTitle")),
+		P(css.Class("muted"), uistate.T("reports.deductibleHint")),
+		If(summary.Total > 0, P(css.Class("muted"), uistate.T("reports.deductibleTotal", fmtMinor(summary.Total)))),
+		body,
+		If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+			Button(css.Class("btn"), Type("button"),
+				Attr("data-testid", "deductible-download-csv"),
+				Title(uistate.T("reports.deductibleDownloadTitle")),
+				Attr("aria-label", uistate.T("reports.deductibleDownloadTitle")),
+				OnClick(func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes(reports.ExportFilename("deductible-totals", win.Res, win.From), "text/csv", reports.DeductibleCSV(summary, nameOf, csvAmount))
+				}),
+				uistate.T("reports.downloadCsv"),
+			),
+		)),
+	)
 }

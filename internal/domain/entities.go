@@ -55,12 +55,13 @@ type Account struct {
 
 // Category classifies transactions as income or expense; categories may nest.
 type Category struct {
-	ID       string         `json:"id"`
-	Name     string         `json:"name"`
-	Kind     CategoryKind   `json:"kind"`
-	Color    string         `json:"color,omitempty"`
-	ParentID string         `json:"parentId,omitempty"`
-	Custom   map[string]any `json:"custom,omitempty"`
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	Kind       CategoryKind   `json:"kind"`
+	Color      string         `json:"color,omitempty"`
+	ParentID   string         `json:"parentId,omitempty"`
+	Deductible bool           `json:"deductible,omitempty"`
+	Custom     map[string]any `json:"custom,omitempty"`
 }
 
 // Transaction is a single money movement. A positive Amount is income, a

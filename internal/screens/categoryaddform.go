@@ -40,6 +40,7 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 	kind := ui.UseState(string(domain.KindExpense))
 	parentID := ui.UseState("")
 	color := ui.UseState("#7c83ff")
+	deductible := ui.UseState(false)
 	errMsg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
@@ -49,6 +50,7 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 		parentID.Set("") // a parent must share the new kind; clear the stale choice
 	})
 	onParent := ui.UseEvent(func(e ui.Event) { parentID.Set(e.GetValue()) })
+	onDeductible := ui.UseEvent(func(e ui.Event) { deductible.Set(e.IsChecked()) })
 
 	add := ui.UseEvent(Prevent(func() {
 		n := strings.TrimSpace(name.Get())
@@ -56,7 +58,7 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 			errMsg.Set(uistate.T("categories.nameRequired"))
 			return
 		}
-		c := domain.Category{ID: id.New(), Name: n, Kind: domain.CategoryKind(kind.Get()), ParentID: parentID.Get(), Color: color.Get()}
+		c := domain.Category{ID: id.New(), Name: n, Kind: domain.CategoryKind(kind.Get()), ParentID: parentID.Get(), Color: color.Get(), Deductible: deductible.Get()}
 		if err := app.PutCategory(c); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -66,6 +68,7 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 		kind.Set(string(domain.KindExpense))
 		parentID.Set("")
 		color.Set("#7c83ff")
+		deductible.Set(false)
 		errMsg.Set("")
 		uistate.PostNotice(uistate.T("categories.addedToast", n), false)
 		if props.OnDone != nil {
@@ -95,6 +98,10 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 		Select(css.Class("field"), Attr("aria-label", "Category type"), OnChange(onKind), kindOptions),
 		Select(css.Class("field"), Attr("aria-label", "Parent category (optional)"), Title(uistate.T("categories.parentOptional")), OnChange(onParent), parentOpts),
 		Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(color.Get()), OnInput(onColor)),
+		Label(css.Class("checkbox-label"), Attr("title", uistate.T("categories.deductibleTitle")),
+			Input(Type("checkbox"), Attr("id", "cat-add-deductible"), Attr("aria-label", uistate.T("categories.deductible")), CheckedIf(deductible.Get()), OnChange(onDeductible)),
+			Text(" "+uistate.T("categories.deductible")),
+		),
 		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		errText("cat-err", errMsg.Get()),
 	)

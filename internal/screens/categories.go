@@ -118,7 +118,7 @@ func Categories() ui.Node {
 			expenseList = append(expenseList, c)
 		}
 	}
-	saveCat := func(id, newName, kind, parent, color string) {
+	saveCat := func(id, newName, kind, parent, color string, deductible bool) {
 		for _, c := range app.Categories() {
 			if c.ID != id {
 				continue
@@ -131,6 +131,7 @@ func Categories() ui.Node {
 			}
 			c.ParentID = parent
 			c.Color = color
+			c.Deductible = deductible
 			if err := app.PutCategory(c); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -227,7 +228,7 @@ type categoryRowProps struct {
 	Collapsed     bool              // true when this category's children are hidden
 	OnView        func(string)      // drill into Transactions filtered by category
 	OnDelete      func(string)
-	OnSave        func(id, name, kind, parent, color string)
+	OnSave        func(id, name, kind, parent, color string, deductible bool)
 	OnToggle      func(id string) // toggle collapse/expand for this category
 }
 
@@ -274,6 +275,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 	kindS := ui.UseState(string(c.Kind))
 	parentS := ui.UseState(c.ParentID)
 	colorS := ui.UseState(catColor(c.Color))
+	deductibleS := ui.UseState(c.Deductible)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
 	onKind := ui.UseEvent(func(e ui.Event) {
@@ -281,16 +283,18 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		parentS.Set("") // parent must share the kind
 	})
 	onParent := ui.UseEvent(func(e ui.Event) { parentS.Set(e.GetValue()) })
+	onDeductible := ui.UseEvent(func(e ui.Event) { deductibleS.Set(e.IsChecked()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(c.Name)
 		kindS.Set(string(c.Kind))
 		parentS.Set(c.ParentID)
 		colorS.Set(catColor(c.Color))
+		deductibleS.Set(c.Deductible)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(c.ID, nameS.Get(), kindS.Get(), parentS.Get(), colorS.Get())
+		props.OnSave(c.ID, nameS.Get(), kindS.Get(), parentS.Get(), colorS.Get(), deductibleS.Get())
 		editing.Set(false)
 	}))
 
@@ -327,6 +331,10 @@ func CategoryRow(props categoryRowProps) ui.Node {
 				),
 				Select(css.Class("field"), Attr("aria-label", "Parent category"), Title(uistate.T("categories.parent")), OnChange(onParent), parentOpts),
 				Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(colorS.Get()), OnInput(onColor)),
+				Label(css.Class("checkbox-label"), Attr("title", uistate.T("categories.deductibleTitle")),
+					Input(Type("checkbox"), Attr("id", "cat-edit-deductible-"+c.ID), Attr("aria-label", uistate.T("categories.deductible")), Attr("data-testid", "cat-deductible-"+c.ID), CheckedIf(deductibleS.Get()), OnChange(onDeductible)),
+					Text(" "+uistate.T("categories.deductible")),
+				),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
