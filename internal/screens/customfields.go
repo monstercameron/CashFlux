@@ -154,7 +154,7 @@ func CustomFieldsManager() ui.Node {
 
 	list := ui.Node(nil)
 	if len(sections) == 0 {
-		list = Section(css.Class("card"), P(css.Class("empty"), uistate.T("cf.empty")))
+		list = uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("cf.empty"))})
 	} else {
 		list = Fragment(sections...)
 	}

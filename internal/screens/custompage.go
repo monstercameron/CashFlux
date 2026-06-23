@@ -47,7 +47,7 @@ func CustomPage(slug string) ui.Node {
 	}
 	page, ok := pages.BySlug(app.CustomPages(), slug)
 	if !ok {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("pages.notFound")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("pages.notFound"))})
 	}
 
 	// A version counter forces a re-render after a mutation (add/delete/resize/
@@ -118,7 +118,7 @@ func CustomPage(slug string) ui.Node {
 	if len(page.Widgets) == 0 {
 		return Div(
 			toolbar,
-			Section(css.Class("card"), P(css.Class("empty"), uistate.T("pages.empty"))),
+			uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("pages.empty"))}),
 		)
 	}
 
