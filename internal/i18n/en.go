@@ -331,6 +331,7 @@ var english = Catalog{
 	"categories.deleteTitle":     "Delete category",
 	"categories.collapseTitle":   "Collapse %s",
 	"categories.expandTitle":     "Expand %s",
+	"categories.addedToast":      "%s added.",
 
 	// Rules screen (auto-categorization)
 	"rules.add":                "Add rule",
@@ -405,6 +406,8 @@ var english = Catalog{
 	"budgets.editTitle":        "Edit budget",
 	"budgets.deleteTitle":      "Delete budget",
 	"budgets.rowSub":           "%s · %s · %d%% · %s left",
+	"budgets.addedToast":       "Budget created.",
+	"budgets.duplicateBudget":  "A budget for this category, period, and owner already exists.",
 
 	// Goals screen
 	"goals.add":               "Add goal",
@@ -443,6 +446,12 @@ var english = Catalog{
 	"goals.unarchiveTitle":    "Move this goal back to active",
 	"goals.achieved":          "Achieved",
 	"goals.achievedCount":     "%d achieved",
+	"goals.contributedToast":  "Added %s to goal.",
+	"goals.milestone25":       "25%% of the way there — keep going!",
+	"goals.milestone50":       "Halfway there! You're doing great.",
+	"goals.milestone75":       "75%% funded — almost there!",
+	"goals.milestone100":      "Goal reached! 🎉",
+	"goals.nameRequired":      "Enter a name for this goal.",
 
 	// Planning screen
 	"planning.forecastTitle":            "Net worth in 12 months",

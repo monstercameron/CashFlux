@@ -198,6 +198,37 @@ func TestOverfund(t *testing.T) {
 	}
 }
 
+func TestMilestoneCrossed(t *testing.T) {
+	tests := []struct {
+		name       string
+		before     int
+		after      int
+		wantMilestone int
+	}{
+		{"no milestone", 20, 24, 0},
+		{"exactly at 25", 20, 25, 25},
+		{"cross 25", 10, 30, 25},
+		{"already past 25", 26, 30, 0},
+		{"cross 50", 40, 55, 50},
+		{"cross 50 from below 25", 20, 60, 50}, // highest is 50
+		{"cross 75", 70, 80, 75},
+		{"cross 100", 99, 100, 100},
+		{"cross 100 from zero", 0, 100, 100},
+		{"before clamped negative", -5, 25, 25},
+		{"after clamped above 100", 99, 105, 100},
+		{"no change", 50, 50, 0},
+		{"decrease", 60, 50, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MilestoneCrossed(tt.before, tt.after)
+			if got != tt.wantMilestone {
+				t.Errorf("MilestoneCrossed(%d, %d) = %d, want %d", tt.before, tt.after, got, tt.wantMilestone)
+			}
+		})
+	}
+}
+
 func TestOverallProgress(t *testing.T) {
 	archived := func(target, current int64) domain.Goal {
 		g := goal(target, current)

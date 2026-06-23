@@ -189,6 +189,34 @@ func OverallProgress(goals []domain.Goal, includeArchived bool) (int, error) {
 	return pct, nil
 }
 
+// MilestoneCrossed reports whether a contribution that moved the goal's progress
+// from beforePct to afterPct crossed one of the celebratory milestones (25, 50,
+// 75, or 100 percent). It returns the highest milestone crossed, or 0 if none.
+// Both inputs are clamped to 0..100 before comparison. This is used to decide
+// whether to show a milestone toast after a contribution.
+//
+// Examples:
+//
+//	MilestoneCrossed(20, 30) → 25   (crossed 25%)
+//	MilestoneCrossed(20, 60) → 50   (crossed both 25% and 50%; highest returned)
+//	MilestoneCrossed(50, 60) → 0    (no milestone crossed)
+//	MilestoneCrossed(0, 100) → 100  (crossed 25, 50, 75, 100; highest returned)
+func MilestoneCrossed(beforePct, afterPct int) int {
+	if beforePct < 0 {
+		beforePct = 0
+	}
+	if afterPct > 100 {
+		afterPct = 100
+	}
+	highest := 0
+	for _, m := range []int{25, 50, 75, 100} {
+		if beforePct < m && afterPct >= m {
+			highest = m
+		}
+	}
+	return highest
+}
+
 // Evaluate returns the full Status for a goal given an assumed monthly
 // contribution and a reference date.
 func Evaluate(goal domain.Goal, monthly money.Money, from time.Time) (Status, error) {

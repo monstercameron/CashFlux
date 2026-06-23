@@ -61,8 +61,9 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 			errMsg.Set(err.Error())
 			return
 		}
-		// Reset fields.
+		// Reset fields (including kind — so subsequent adds start as Expense, L42).
 		name.Set("")
+		kind.Set(string(domain.KindExpense))
 		parentID.Set("")
 		color.Set("#7c83ff")
 		errMsg.Set("")

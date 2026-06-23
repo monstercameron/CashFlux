@@ -201,3 +201,42 @@ func TestEvaluateZeroLimit(t *testing.T) {
 		t.Errorf("zero limit with spend: state=%s pct=%d, want over/100", s.State, s.Percent)
 	}
 }
+
+func TestIsDuplicateBudget(t *testing.T) {
+	existing := []domain.Budget{
+		{ID: "b1", CategoryID: "food", Period: domain.PeriodMonthly, OwnerID: "grp"},
+		{ID: "b2", CategoryID: "rent", Period: domain.PeriodMonthly, OwnerID: "grp"},
+		{ID: "b3", CategoryID: "food", Period: domain.PeriodWeekly, OwnerID: "grp"},
+	}
+
+	tests := []struct {
+		name      string
+		catID     string
+		period    string
+		ownerID   string
+		excludeID string
+		want      bool
+	}{
+		{"exact match → duplicate", "food", "monthly", "grp", "", true},
+		{"different category → ok", "transport", "monthly", "grp", "", false},
+		{"different period → ok", "food", "quarterly", "grp", "", false},
+		{"different owner → ok", "food", "monthly", "alice", "", false},
+		{"exclude own ID → ok (edit self)", "food", "monthly", "grp", "b1", false},
+		{"weekly food already exists", "food", "weekly", "grp", "", true},
+		{"no existing budgets", "food", "monthly", "grp", "", true}, // still finds b1
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsDuplicateBudget(existing, tt.catID, tt.period, tt.ownerID, tt.excludeID)
+			if got != tt.want {
+				t.Errorf("IsDuplicateBudget(%q,%q,%q,excl=%q) = %v, want %v",
+					tt.catID, tt.period, tt.ownerID, tt.excludeID, got, tt.want)
+			}
+		})
+	}
+
+	// Empty slice → never a duplicate.
+	if IsDuplicateBudget(nil, "food", "monthly", "grp", "") {
+		t.Error("empty existing slice should never be a duplicate")
+	}
+}

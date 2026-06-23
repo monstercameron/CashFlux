@@ -183,3 +183,24 @@ func classify(spent, limit money.Money, nearThreshold float64) State {
 	}
 	return StateOK
 }
+
+// IsDuplicateBudget reports whether adding a budget for the given (categoryID,
+// period, ownerID) triple would create a second live budget with the same scope.
+// The "one budget per category per period per owner" rule prevents ambiguous
+// spend attribution: two budgets competing for the same category + period + owner
+// would both accrue the same transactions, making their totals misleading.
+//
+// It ignores the existing budget whose ID matches excludeID (pass "" to check
+// against all). Pass the ID of the budget being edited to allow a save of its
+// own unchanged triple.
+func IsDuplicateBudget(existing []domain.Budget, categoryID, period, ownerID, excludeID string) bool {
+	for _, b := range existing {
+		if b.ID == excludeID {
+			continue
+		}
+		if b.CategoryID == categoryID && string(b.Period) == period && b.OwnerID == ownerID {
+			return true
+		}
+	}
+	return false
+}

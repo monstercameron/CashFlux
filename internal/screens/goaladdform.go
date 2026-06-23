@@ -75,6 +75,10 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	}
 
 	add := ui.UseEvent(Prevent(func() {
+		if strings.TrimSpace(name.Get()) == "" {
+			errMsg.Set(uistate.T("goals.nameRequired"))
+			return
+		}
 		tgt, err := money.ParseMinor(strings.TrimSpace(target.Get()), currency.Decimals(base))
 		if err != nil || tgt <= 0 {
 			errMsg.Set(uistate.T("goals.targetRequired"))

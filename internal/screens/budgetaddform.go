@@ -93,6 +93,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			errMsg.Set(uistate.T("budgets.limitRequired"))
 			return
 		}
+		// One budget per (category, period, owner) — reject duplicates (L40).
+		if budgeting.IsDuplicateBudget(app.Budgets(), catID.Get(), period.Get(), owner.Get(), "") {
+			errMsg.Set(uistate.T("budgets.duplicateBudget"))
+			return
+		}
 		scope := domain.ScopeIndividual
 		if owner.Get() == domain.GroupOwnerID {
 			scope = domain.ScopeShared

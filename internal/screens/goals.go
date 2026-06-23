@@ -128,13 +128,20 @@ func Goals() ui.Node {
 		if err != nil || amt <= 0 { // reject $0 and negative contributions (L41)
 			return
 		}
+		beforePct := goalsvc.Percent(g)
 		g.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, cur)
+		afterPct := goalsvc.Percent(g)
 		if err := app.PutGoal(g); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		bump()
 		uistate.PostNotice(uistate.T("goals.contributedToast", fmtMoney(money.New(amt, cur))), false) // L41
+		// Milestone toast: celebrate 25/50/75/100% crossings (L38).
+		if m := goalsvc.MilestoneCrossed(beforePct, afterPct); m > 0 {
+			key := fmt.Sprintf("goals.milestone%d", m)
+			uistate.PostNotice(uistate.T(key), false)
+		}
 	}
 
 	allGoals := app.Goals()
