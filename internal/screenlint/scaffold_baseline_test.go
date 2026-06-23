@@ -23,12 +23,13 @@ const (
 	rowsScaffold = `Div(css.Class("rows`
 
 	// scaffoldBaseline is the TOTAL count of the two raw scaffolds across
-	// internal/screens at the time this ratchet was introduced (2026-06-23):
-	// 117 card scaffolds + 48 rows scaffolds = 165. This is a ONE-WAY ratchet —
+	// internal/screens. Introduced at 165 (117 card + 48 rows) on 2026-06-23 and
+	// ratcheted down as screens migrate to EntityListSection/Card/DataTable. This
+	// is a ONE-WAY ratchet —
 	// contributors may only ever LOWER it as screens are ported to primitives.
 	// If this constant needs to go UP, you are adding bespoke markup the epic is
 	// trying to delete: use a primitive instead. Lower it whenever you migrate.
-	scaffoldBaseline = 165
+	scaffoldBaseline = 158
 )
 
 // countScaffolds returns the combined occurrences of the two raw scaffolds in a

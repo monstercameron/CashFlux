@@ -284,8 +284,13 @@ type EntityListSectionProps struct {
 	// Empty is rendered when Body is nil and EmptyState is non-nil. If both Body
 	// and EmptyState are nil, nothing is rendered inside the card body area.
 	EmptyState uic.Node
-	// Body is the list content (typically a Div(.rows) with mapped rows).
-	// When non-nil it is rendered; EmptyState is ignored.
+	// Rows, when non-nil, is wrapped in the canonical Div(.rows) list container by
+	// the primitive — so screens stop hand-writing the `Div(css.Class("rows"), …)`
+	// scaffold. Takes precedence over Body. Renders byte-identically to the
+	// hand-rolled list div.
+	Rows []uic.Node
+	// Body is the list content when you need full control (non-list bodies, or a
+	// pre-built Div(.rows)). Used when Rows is nil. EmptyState is ignored when set.
 	Body uic.Node
 }
 
@@ -295,9 +300,16 @@ type EntityListSectionProps struct {
 // pattern so screens only supply title, header action, and list body.
 func EntityListSection(props EntityListSectionProps) uic.Node {
 	var content uic.Node
-	if props.Body != nil {
+	switch {
+	case props.Rows != nil:
+		args := []any{css.Class("rows")}
+		for _, r := range props.Rows {
+			args = append(args, r)
+		}
+		content = Div(args...)
+	case props.Body != nil:
 		content = props.Body
-	} else if props.EmptyState != nil {
+	case props.EmptyState != nil:
 		content = props.EmptyState
 	}
 	return Card(CardProps{

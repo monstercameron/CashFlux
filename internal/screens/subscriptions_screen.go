@@ -41,7 +41,7 @@ func nameSlug(name string) string {
 func Subscriptions() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -370,28 +370,30 @@ func Subscriptions() ui.Node {
 			stat(uistate.T("subs.count"), fmt.Sprintf("%d", len(subs)), ""),
 			shareStat,
 		)),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("nav.subscriptions")),
-			body,
-			savingsSummary,
-			If(len(subs) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")), OnClick(func() {
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					downloadBytes("subscriptions.csv", "text/csv", subscriptions.CSV(subs, csvAmount))
-				}), uistate.T("subs.downloadCsv")),
-			)),
-		),
-		If(len(changes) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("subs.priceChangesTitle")),
-			Div(css.Class("rows"), changeRows),
-		)),
-		If(len(soon) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("subs.renewingSoon")),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("nav.subscriptions"),
+			Body: Fragment(
+				body,
+				savingsSummary,
+				If(len(subs) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+					Button(css.Class("btn"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")), OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						downloadBytes("subscriptions.csv", "text/csv", subscriptions.CSV(subs, csvAmount))
+					}), uistate.T("subs.downloadCsv")),
+				)),
+			),
+		}),
+		If(len(changes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("subs.priceChangesTitle"),
+			Rows:  changeRows,
+		})),
+		If(len(soon) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("subs.renewingSoon"),
 			// Renewing-soon rows reuse the full SubscriptionRow so each imminent
 			// renewal is actionable in place (remind / cancel) — not a stripped
 			// read-only card (C56). The cancelledOn lookup, selection state, and
 			// all callbacks are wired identically to the main list.
-			Div(css.Class("rows"), MapKeyed(soon,
+			Rows: MapKeyed(soon,
 				func(s subscriptions.Subscription) any { return "soon|" + s.Name + "|" + fmt.Sprint(s.Amount) },
 				func(s subscriptions.Subscription) ui.Node {
 					cancelledOn, isCancelled := cancelMap[strings.ToLower(strings.TrimSpace(s.Name))]
@@ -416,22 +418,24 @@ func Subscriptions() ui.Node {
 						OnIgnore:       doIgnore,
 					})
 				},
-			)),
-		)),
-		If(len(ignoredSubs) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("subs.ignoredTitle")),
-			P(css.Class("row-meta"), uistate.T("subs.ignoredDesc")),
-			Div(css.Class("rows"), MapKeyed(ignoredSubs,
-				func(s subscriptions.Subscription) any { return "ignored|" + s.Name },
-				func(s subscriptions.Subscription) ui.Node {
-					return ui.CreateElement(IgnoredSubscriptionRow, ignoredSubRowProps{
-						Sub:        s,
-						Base:       base,
-						OnUnignore: doUnignore,
-					})
-				},
-			)),
-		)),
+			),
+		})),
+		If(len(ignoredSubs) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("subs.ignoredTitle"),
+			Body: Fragment(
+				P(css.Class("row-meta"), uistate.T("subs.ignoredDesc")),
+				Div(css.Class("rows"), MapKeyed(ignoredSubs,
+					func(s subscriptions.Subscription) any { return "ignored|" + s.Name },
+					func(s subscriptions.Subscription) ui.Node {
+						return ui.CreateElement(IgnoredSubscriptionRow, ignoredSubRowProps{
+							Sub:        s,
+							Base:       base,
+							OnUnignore: doUnignore,
+						})
+					},
+				)),
+			),
+		})),
 	)
 }
 
