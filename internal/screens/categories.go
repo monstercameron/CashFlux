@@ -259,21 +259,16 @@ func Categories() ui.Node {
 			Title: "Category map",
 			Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.FromCategories(cats), Label: "Category hierarchy diagram"}),
 		})),
-		Section(css.Class("card"),
-			Div(css.Class("card-head"),
-				H2(css.Class("card-title"), uistate.T("categories.expenseTitle")),
-				sortToggleBtn(),
-				addCatBtn(),
-			),
-			IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(expenseFlats, flatKey, renderFlat))),
-		),
-		Section(css.Class("card"),
-			Div(css.Class("card-head"),
-				H2(css.Class("card-title"), uistate.T("categories.incomeTitle")),
-				addCatBtn(),
-			),
-			IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(incomeFlats, flatKey, renderFlat))),
-		),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title:        uistate.T("categories.expenseTitle"),
+			HeaderAction: Fragment(sortToggleBtn(), addCatBtn()),
+			Body:         IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(expenseFlats, flatKey, renderFlat))),
+		}),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title:        uistate.T("categories.incomeTitle"),
+			HeaderAction: addCatBtn(),
+			Body:         IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(incomeFlats, flatKey, renderFlat))),
+		}),
 	)
 }
 

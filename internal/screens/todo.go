@@ -207,30 +207,30 @@ func Todo() ui.Node {
 		}
 	}
 
-	return Section(css.Class("card"),
-		Div(css.Class("card-head"),
-			H2(css.Class("card-title"), uistate.T("todo.listTitle")),
-			Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap, tw.ItemsCenter),
-				// Priority filter — lightweight selector; "" means show all (C52).
-				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.filterPrioLabel")),
-					Attr("data-testid", "todo-filter-prio"), OnChange(onFilterPrio),
-					Option(Value(""), SelectedIf(filterPrio.Get() == ""), uistate.T("todo.filterPrioAll")),
-					Option(Value(string(domain.PriorityHigh)), SelectedIf(filterPrio.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
-					Option(Value(string(domain.PriorityMedium)), SelectedIf(filterPrio.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
-					Option(Value(string(domain.PriorityLow)), SelectedIf(filterPrio.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
-				),
-				Button(css.Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
-				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-					Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
-					uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("todo.addTask"))),
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("todo.listTitle"),
+		HeaderAction: Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap, tw.ItemsCenter),
+			// Priority filter — lightweight selector; "" means show all (C52).
+			Select(css.Class("field"), Attr("aria-label", uistate.T("todo.filterPrioLabel")),
+				Attr("data-testid", "todo-filter-prio"), OnChange(onFilterPrio),
+				Option(Value(""), SelectedIf(filterPrio.Get() == ""), uistate.T("todo.filterPrioAll")),
+				Option(Value(string(domain.PriorityHigh)), SelectedIf(filterPrio.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
+				Option(Value(string(domain.PriorityMedium)), SelectedIf(filterPrio.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
+				Option(Value(string(domain.PriorityLow)), SelectedIf(filterPrio.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
 			),
+			Button(css.Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+				Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
+				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("todo.addTask"))),
 		),
-		If(len(tasks) > 0, P(css.Class("todo-summary", tw.TextDim),
-			Text(uistate.T("todo.summary", openCount, overdueCount, doneCount)))),
-		If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
-		listBody,
-	)
+		Body: Fragment(
+			If(len(tasks) > 0, P(css.Class("todo-summary", tw.TextDim),
+				Text(uistate.T("todo.summary", openCount, overdueCount, doneCount)))),
+			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
+			listBody,
+		),
+	})
 }
 
 type taskRowProps struct {

@@ -44,7 +44,9 @@ func Card(props CardProps) uic.Node {
 	}
 	if props.Title != "" {
 		if props.HeaderAction != nil {
-			args = append(args, Div(css.Class("card-header"),
+			// .card-head is the existing flex header class (title left, actions right)
+			// used across screens; match it so a hand-rolled header ports unchanged.
+			args = append(args, Div(css.Class("card-head"),
 				H2(css.Class("card-title"), props.Title),
 				props.HeaderAction,
 			))
