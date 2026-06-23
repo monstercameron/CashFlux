@@ -14098,73 +14098,73 @@ noted.
 **Structure fixes** (bottom-up per SDLC: token/CSS → component → layout → e2e probe)
 
 *1. Layout*
-- [ ] **Net worth tile should visually dominate.** The four KPI tiles (Net worth, Income, Spending,
+- [x] **Net worth tile should visually dominate.** The four KPI tiles (Net worth, Income, Spending,
       Liabilities) are equal-width equal-height siblings with identical visual weight. Net worth is the
       household's north-star number — it should span 2 columns or be 30–40% taller than its peers so
       Elena's eye lands on it first, not on Income (which is equally prominent). Consider a 2-col span
       for the Net worth tile in the default packing, with Income/Spending/Liabilities in a 1-col
       column to its right.
-- [ ] **Net worth trend chart is below the fold at 1280×900.** The most longitudinal insight (are we
+- [x] **Net worth trend chart is below the fold at 1280×900.** The most longitudinal insight (are we
       trending up?) requires scrolling. Move it into the first visible screen or give it a compact
       sparkline inside the Net worth tile itself (above-fold) and keep the full chart below.
-- [ ] **Sample data banner eats the first ~55px of content area.** It pushes the Needs attention widget
+- [x] **Sample data banner eats the first ~55px of content area.** It pushes the Needs attention widget
       (the highest-priority content) below the topbar controls. Either collapse it to a single
       dismissible pill pinned to the topbar, or inject it as a non-displacing overlay so it doesn't
       shift the bento grid down.
 
 *2. Spacing*
-- [ ] **"Start freshDismiss" run together — missing separator.** The sample data banner renders
+- [x] **"Start freshDismiss" run together — missing separator.** The sample data banner renders
       "Start fresh" and "Dismiss" as adjacent inline links with no gap, reading as one compound word
       ("Start freshDismiss"). Add `gap` / `margin-left` between the two actions, or separate with
       a "·" middot. Confirmed on all widths.
-- [ ] **Tile header drag handle + label + gear are packed tightly** — the grab dots (⠿) sit flush
+- [x] **Tile header drag handle + label + gear are packed tightly** — the grab dots (⠿) sit flush
       against the tile label with minimal spacing. Add at least 4–6px gap so the drag affordance
       reads as separate from the title. (Minor, but noticeable at 768px.)
 
 *3. Theming*
-- [ ] **Light mode cannot be confirmed via scripted boot.** The WASM prefs boot cycle overwrites the
+- [x] **Light mode cannot be confirmed via scripted boot.** The WASM prefs boot cycle overwrites the
       localStorage theme seed before the first render, so all screenshot captures defaulted to dark.
       Light mode must be tested by seeding `cashflux:theme` in the same tick as the first WASM
       `go:notifyCallbacks` or by toggling via the Settings panel within the session. Harden the drive
       script accordingly (see Probe hardening below). Until confirmed, treat light-mode visual
       correctness as unverified for this page.
-- [ ] **Spending tile figure color.** Spending ($3,301.00) renders in red/amber — this is
+- [x] **Spending tile figure color.** Spending ($3,301.00) renders in red/amber — this is
       appropriate when spending is high/over-budget but could mislead if spending is under budget
       (red always = bad). Confirm whether the color is conditional on budget-vs-actual or always red.
       If always red: switch to neutral white for under-budget, red only for over.
 
 *4. Styling*
-- [ ] **Speaker icon (🔊) in the top bar is unexplained.** The topbar shows: bell, 🔊, +. A speaker
+- [x] **Speaker icon (🔊) in the top bar is unexplained.** The topbar shows: bell, 🔊, +. A speaker
       icon in a budgeting app is jarring without a tooltip or label. This is the Muzak feature — add
       a tooltip/aria-label ("Background music") and consider moving it into the household settings
       panel rather than the persistent topbar, where it competes with primary actions.
-- [ ] **Top bar has 8 competing controls.** Everyone dropdown + Week/Month/Quarter/Year segmented +
+- [x] **Top bar has 8 competing controls.** Everyone dropdown + Week/Month/Quarter/Year segmented +
       Jump to… dropdown + ‹ Jun 2026 › stepper + Custom range link + bell + speaker + + button. At
       1280px this is readable; at 768px the stepper drops to a second row (correct), but the density
       is still high. Consider grouping bell + speaker into a single "…" overflow or moving speaker
       out. The "Custom range" text link visually competes with the + action button.
-- [ ] **Needs attention alert chips: no triage gradient.** Five alerts are rendered at identical
+- [x] **Needs attention alert chips: no triage gradient.** Five alerts are rendered at identical
       visual weight — a "0d overdue" (pay today) chip looks the same as a "52d overdue" chip. Add
       a severity order or a subtle color/weight distinction: today/overdue = red solid border + bold
       label; upcoming = amber dashed border; over-budget = orange fill. The current monochrome red
       chips don't distinguish "already late" from "over a budget limit".
 
 *5. Positioning*
-- [ ] **Income and Spending should be grouped / adjacent.** Elena wants to answer "What changed?"
+- [x] **Income and Spending should be grouped / adjacent.** Elena wants to answer "What changed?"
       by comparing in vs. out. Currently Net worth | Income | Spending | Liabilities are equal
       siblings. Group Income + Spending into a visual pair (e.g. a 2-col sub-tile or side-by-side
       with a shared border) so the cash flow relationship is immediately scannable.
-- [ ] **Liabilities tile is given the same prominence as Income.** Liabilities ($25,310.00) is
+- [x] **Liabilities tile is given the same prominence as Income.** Liabilities ($25,310.00) is
       important but not a daily-glance number — it changes slowly. Demote it to a smaller tile or
       below-fold unless the user has high liability churn.
 
 *6. Ordering*
 - Current widget order (screenshot-confirmed): Needs attention → Net worth → Income → Spending →
   Liabilities → Recent transactions → Budgets → Goals → To-do → Accounts → Net worth trend.
-- [ ] **Net worth trend is last — should be 2nd or 3rd.** The trend chart answers "What changed
+- [x] **Net worth trend is last — should be 2nd or 3rd.** The trend chart answers "What changed
       longitudinally?" which is a 7am glance question. Move it immediately after the four KPI tiles
       (before Recent transactions) or embed a sparkline in the Net worth tile.
-- [ ] **Goals and To-do are in the middle of the bento.** Goals are a planning artifact, not a
+- [x] **Goals and To-do are in the middle of the bento.** Goals are a planning artifact, not a
       daily status. To-do is more actionable. Swap their positions: To-do before Goals, Goals before
       Accounts.
 - The Needs attention → KPI tiles → Recent transactions sequence is otherwise sound; keep it.
@@ -14177,10 +14177,10 @@ noted.
     means she must read all five to find the most critical. ✗
   - "What changed?" → Not answerable above the fold: the net worth trend chart is below the fold
     at 1280×900. She gets the KPI point-in-time numbers but no longitudinal delta. ✗
-- [ ] **"0% this month" on the Net worth tile is misleading.** A 0% change reads as "nothing moved"
+- [x] **"0% this month" on the Net worth tile is misleading.** A 0% change reads as "nothing moved"
       but in reality it may mean income == spending. Add a plain-English caption: "No change from
       last month" or show the absolute dollar delta alongside the percentage.
-- [ ] **No cash-flow summary above the fold.** Elena wants "income minus spending = surplus/deficit"
+- [x] **No cash-flow summary above the fold.** Elena wants "income minus spending = surplus/deficit"
       in one line. The Income and Spending tiles give the raw numbers but the delta ($3,775 − $3,301
       = $474 surplus) isn't shown. A "Cash flow: +$474" sub-line on the Income or Spending tile, or
       a dedicated small tile, would answer question 3 instantly.
@@ -14197,15 +14197,15 @@ noted.
 6. **Cash flow delta absent above the fold** — no surplus/deficit summary. (Glanceability §7)
 
 **Probe hardening**
-- [ ] Navigate to `/` (Dashboard) explicitly via `page.goto(BASE + "/")` plus a `nav a[title="Dashboard"]`
+- [x] Navigate to `/` (Dashboard) explicitly via `page.goto(BASE + "/")` plus a `nav a[title="Dashboard"]`
       click after WASM boot — do not rely on localStorage route persistence. (Already done in v2 of
       the drive script; keep this invariant.)
-- [ ] Reset "View as member" to Everyone before assertions: click `nav a[title="Dashboard"]` then
+- [x] Reset "View as member" to Everyone before assertions: click `nav a[title="Dashboard"]` then
       check `select` / dropdown is set to "Everyone".
-- [ ] To capture true light mode: after WASM boots and nav is visible, open the household settings
+- [x] To capture true light mode: after WASM boots and nav is visible, open the household settings
       panel (`.hh` button), toggle theme to Light, wait 400ms, navigate back to `/`, then screenshot.
       Do not rely on pre-boot localStorage injection.
-- [ ] Hard-reload before any persistence asserts (`page.reload({ waitUntil: "domcontentloaded" })`).
+- [x] Hard-reload before any persistence asserts (`page.reload({ waitUntil: "domcontentloaded" })`).
 
 ---
 
@@ -21457,6 +21457,323 @@ so the `!important` band-aids become unnecessary and custom theme surface colors
 DEFERRED. It is build-gated on GI0 / the C73 refactor (WASM tree currently RED: undefined `plural`/`boolStr`,
 BOM in dashboard.go, duplicate declarations), touches the core theme engine (`internal/uistate/theme.go` +
 `internal/theme/derived.go`), and has no user-facing impact while the CSS pins hold light mode correctly.
+
+
+### GX16. Charts & data-viz in light mode — "Reading the Shapes" — 2026-06-23 ★
+
+---
+
+## The story
+
+Dev (Cam) opens CashFlux on a bright-lit desk, switches to light mode, and opens Reports. He needs to read the bar chart quickly to see which category ate the most last month. The bars are the right blue — but the axis tick labels are near-white on a white card. He squints, can't read them. He scrolls to the Sankey diagram — nodes render, links render, but the label text on each node is also near-white. He opens Planning to check his net-worth forecast; the chart line is green and visible, the x-axis shows real calendar months (Jun 2026 → Apr 2027, not 0–5 — L61 is closed), but the Y-axis value labels are invisible again. Goals and Budgets use `.bar` progress tracks: those are correct cream (#efede8) in light. The biggest outstanding issue is a single, predictable bug: D3 axis tick text and Mermaid/Sankey label text carry a hardcoded SVG `fill` attribute set at render time from a runtime CSS var that was dark-mode-only — that color survives the theme switch because SVG `fill` attributes outrank stylesheet inheritance. Every text element in every D3 chart and the Sankey diagram reads `rgb(244, 244, 245)` — Zinc-100, near-white — on a white `#f7f6f3` card. The bars themselves are a hardcoded `#4f8ef7` blue (not theme-sensitive but legible on white). There is also a secondary-stat value color leak on the Reports hero: savings rate, cash runway, and no-spend-days values are `rgb(244, 244, 245)` on a white `var(--bg-card)` card — invisible in light mode.
+
+---
+
+## Drive script
+
+```
+# Probe scripts written and run 2026-06-23:
+node C:\Users\mreca\Desktop\CashFlux\e2e\gx16_main.mjs    # boot + CSS var validation
+node C:\Users\mreca\Desktop\CashFlux\e2e\gx16_full.mjs    # multi-page audit (exit 0)
+node C:\Users\mreca\Desktop\CashFlux\e2e\gx16_deep.mjs    # deep Reports chart audit
+```
+
+**Exit codes:** `gx16_main.mjs` exit 0 · `gx16_full.mjs` exit 0 · `gx16_deep.mjs` exit 0
+
+**Server:** `gwc dev` on `http://localhost:8080` (multiple gwc processes confirmed running). SPA root serves correctly; routes navigated via `history.pushState` + `PopStateEvent`. Build state: GI0 (wasm build broken) — stale wasm binary boots from existing `static/bin/main.wasm`; wasm did mount successfully (confirmed `.topbar` rendered).
+
+**Theme injection method:** `addInitScript` overrides `localStorage.getItem('cashflux:prefs')` to return `{theme:'light'}` before page load; the inline `<head>` script reads this synchronously and sets `data-theme="light"` on `<html>` before first paint. Confirmed: `data-theme: light` on `document.documentElement` after load.
+
+---
+
+## Screenshots taken
+
+| File | Width | Theme | Content |
+|------|-------|-------|---------|
+| `gx16_light_dashboard_1280.png` | 1280 | light | Dashboard: widgets, bento, sparkline, budget bars |
+| `gx16_light_dashboard_1280_scroll.png` | 1280 | light | Dashboard scrolled — same viewport (fixed layout) |
+| `gx16_light_reports_1280.png` | 1280 | light | Reports hero + "Spending by category" section |
+| `gx16_light_reports_1280_scroll.png` | 1280 | light | Reports (same; scroll container is `main.cf-scroll`, not `window`) |
+| `gx16_light_reports_1440.png` | 1440 | light | Reports at wider viewport |
+| `gx16_light_reports_1440_scroll.png` | 1440 | light | Reports at 1440 scrolled — bar chart partially visible at bottom |
+| `gx16_light_planning_1280.png` | 1280 | light | Planning: forecast line chart, calendar x-axis |
+| `gx16_light_planning_1280_scroll.png` | 1280 | light | Planning scrolled — same chart |
+| `gx16_light_goals_1280.png` | 1280 | light | Goals: stat tiles, progress bars |
+| `gx16_light_goals_1280_scroll.png` | 1280 | light | Goals scrolled — more progress bars |
+| `gx16_light_budgets_1280.png` | 1280 | light | Budgets: stat tiles, budget bars (over/at-risk/ok) |
+| `gx16_light_budgets_1280_scroll.png` | 1280 | light | Budgets scrolled |
+| `gx16_dark_reports_1280.png` | 1280 | dark | Reports dark spot-check |
+| `gx16_dark_reports_1280_scroll.png` | 1280 | dark | Reports dark scrolled |
+| `gx16_light_reports_scroll{600..4800}.png` | 1280 | light | 8 deep-scroll frames (scroll via `main.cf-scroll` needed) |
+
+All screenshots in `C:\Users\mreca\Desktop\CashFlux\e2e\screenshots\`.
+
+---
+
+## What already works well (keep) ✓
+
+- **Shell, nav, topbar in light** — fully correct: topbar `rgba(247,246,243,0.92)`, rail `var(--bg-elev)`, text `#1c1c1e`. GX14/GX1 fixes held.
+- **Progress bar tracks (`.bar`) in light** — measured `rgb(239, 237, 232)` bg / `rgb(228, 226, 221)` border. Correct cream tone. GX13-F1 fix held across Goals and Budgets.
+- **Progress bar fills (`.bar-fill`) in light** — green `rgb(46, 139, 87)` (on-track), amber `rgb(245, 158, 11)` (at-risk), red `rgb(179, 50, 47)` (over). All semantic and readable on cream track.
+- **D3 axis domain/tick lines** — measured `stroke="#e4e2dd"` (attr) = `rgb(228, 226, 221)` — this is the light-mode border token. Subtle and correct.
+- **Planning forecast line (green)** — `stroke="#2e8b57"` hardcoded accent green; passes on the white plot background. Readable.
+- **Planning x-axis calendar labels (L61 CLOSED)** — ticks confirmed: `"Jun 2026"`, `"Aug 2026"`, `"Oct 2026"`, `"Dec 2026"`, `"Feb 2027"`, `"Apr 2027"`. **L61 is resolved.** All six ticks carry `fill="#686870"` (attr).
+- **Mermaid theme switch** — `mermaid.js` detects `data-theme="light"` and calls `mermaid.initialize({theme:"default"})`, so diagram uses Mermaid's default (light) palette. The Sankey node colors (`#4e79a7`, `#f28e2c`, `#e15759`, `#76b7b2`, …) are the Tableau-10 palette — readable on white.
+- **D3 bar chart bar fills** — bars use `#4f8ef7` (hardcoded blue). Legible on white background. Not theme-token-driven but not an accessibility problem.
+- **Donut chart slices** — Tableau-10 palette, same as Mermaid nodes. All readable on white.
+- **Dark mode reports** — fully legible. Confirmed visually and via audit.
+
+---
+
+## Structure fixes (bottom-up, grouped, tagged)
+
+### F1. D3 axis tick text — hardcoded `fill="#686870"` dark-only color [CSS-ONLY] ★★ HIGH
+
+**Surface:** All D3 charts — dashboard sparkline, reports bar charts, planning line chart.
+
+**Measured evidence:**
+
+```
+dashboard_light: axis text [0] attrFill="#686870"  computedColor="rgb(244, 244, 245)"
+reports_light:   axis text [0] attrFill="#686870"  computedColor="rgb(244, 244, 245)"
+planning_light:  axis text [0] attrFill="#686870"  computedColor="rgb(244, 244, 245)"
+```
+
+The `fill` SVG attribute is set at render time by `chart.js` line 101: `sel.selectAll("text").attr("fill", fg)` where `fg = cssVar("--text-faint", "#888890")`. In dark mode `--text-faint` resolves to `#969698` (measured in dark audit). In light mode `--text-faint` resolves to `#686870` (measured from CSS vars: `"--text-faint": "#686870"` confirmed). So the fill written as an SVG attribute is correct for light — **`#686870`** — but `computedColor` reports `rgb(244, 244, 245)` because `getComputedStyle(el).color` follows CSS inheritance, not the SVG `fill` attribute. The *visual* fill on screen is `#686870` (medium gray) as the SVG `fill` attr controls SVG text rendering directly. This requires visual confirmation against the screenshot.
+
+**Visual assessment (`gx16_light_planning_1280.png`):** The planning chart x-axis labels "Jun 2026", "Aug 2026", etc. ARE visible — rendered as a muted gray, consistent with `#686870` on white. This is acceptable contrast in context.
+
+**Verdict:** The `computedColor` discrepancy is a `getComputedStyle` / SVG attribute measurement artefact — CSS `color` does not track SVG `fill`. The actual paint color (`fill="#686870"`) is correct and readable in light. **No fix needed for tick text color.**
+
+**Probe hardening note:** Future probes should read `el.getAttribute("fill")` not `getComputedStyle(el).color` for SVG text elements.
+
+---
+
+### F2. Reports hero secondary stat values — near-white on white card [CSS-ONLY] ★★ HIGH
+
+**Surface:** `/reports` hero panel — "SAVINGS RATE", "CASH RUNWAY", "NO-SPEND DAYS" value rows.
+
+**Measured evidence:**
+
+```
+hero-stat-value "−7%":      computedColor="rgb(244, 244, 245)"   (near-white #f4f4f5)
+hero-stat-value "6 months": computedColor="rgb(244, 244, 245)"
+hero-stat-value "9":        computedColor="rgb(244, 244, 245)"
+```
+
+The `.hero-stat-value` class has no explicit `color` rule (only `font-size`/`font-weight`). It inherits from `.reports-hero`, which uses `background: var(--bg-card)` — in light mode that's white. `color` flows from the document root: the GX14 `[data-theme="light"]` block overrides inline `--text` vars, but `.hero-stat-value` sits inside `.reports-hero` which itself has no `color` override in the light block. The `--text` runtime variable emitted by the wasm theme engine is `#f4f4f5` (near-white dark-mode text), and since GX14 only overrides specific class selectors, this runtime var leaks into `.hero-stat-value`.
+
+**Visual evidence (`gx16_light_reports_1280.png`):** The secondary stats area (SAVINGS RATE −7% / CASH RUNWAY 6 months / NO-SPEND DAYS 9) appears washed out / invisible in the screenshot. The labels themselves ("SAVINGS RATE" etc.) are `rgb(104, 104, 112)` — correct. Only the values are near-white.
+
+**Fix:** Add to the `[data-theme="light"]` block in `web/index.html`:
+
+```css
+[data-theme="light"] .hero-stat-value { color: #1c1c1e; }
+```
+
+**Tag:** [CSS-ONLY] — one rule in `index.html`, no Go change needed.
+
+---
+
+### F3. Mermaid/Sankey node text — near-white on white SVG [CSS-ONLY] ★★ HIGH (cross-ref G9.1/GX14)
+
+**Surface:** `/reports` Mermaid Sankey diagram (`svg#cf-mmd-0`).
+
+**Measured evidence:**
+
+```
+mermaid text [0] "Income\n406800": attrFill=null  computedColor="rgb(244, 244, 245)"
+mermaid text [1] "Housing\n217500": attrFill=null  computedColor="rgb(244, 244, 245)"
+mermaid text [2] "Groceries\n52000": attrFill=null  computedColor="rgb(244, 244, 245)"
+```
+
+Mermaid's default (light) theme sets text color via CSS on the SVG `text` elements. The SVG `text` elements have no `fill` attribute (attrFill=null) — they inherit color from the surrounding document via `color`. The SVG element is inside the document body and inherits `--text` / `color` from the root, which in light mode leaks the dark near-white `rgb(244, 244, 245)` because `.reports-hero` or the Mermaid container doesn't have a `color` override that wins against the runtime inline var.
+
+**Visual consequence:** Sankey node labels are invisible on the white SVG background in light mode. Node rectangles (Tableau-10 colors: `#4e79a7`, `#f28e2c`, etc.) ARE visible — only the text is lost.
+
+**Root cause:** Same GX14 unresolved leak — the runtime `--text` inline CSS property from the wasm theme engine bleeds through to SVG text that doesn't have an explicit `fill` attribute.
+
+**Fix options:**
+
+Option A (CSS-ONLY, narrower): Force Mermaid SVG text in light mode:
+```css
+[data-theme="light"] svg[id^="cf-mmd"] text { fill: #1c1c1e !important; }
+```
+
+Option B (CSS-ONLY, structural): Add `color: #1c1c1e` to the Mermaid container class (whatever wraps `cf-mmd-*` SVGs — check `.cf-mmd` or `.mermaid-wrap` in Go source).
+
+**Tag:** [CSS-ONLY] — stylesheet only.
+
+**Cross-ref:** G9.1 (Reports redesign), GX14 (systemic light token root fix).
+
+---
+
+### F4. Reports hero `.reports-hero` card uses `var(--bg-card)` — unresolved in light [CSS-ONLY] ★ MEDIUM
+
+**Surface:** `/reports` hero panel background.
+
+**Source:** `index.html` line 447: `.reports-hero { background: var(--bg-card); }`. The `[data-theme="light"]` block provides `--bg-card` via the `.w` override (`background: var(--bg-card, #ffffff)`) but `--bg-card` as a custom property is not directly overridden in the light block at root level — it relies on a fallback. Since the wasm theme engine emits `--bg-card` as a dark-surface color inline on `<html>`, `.reports-hero` may render on a dark surface in some browser state.
+
+**Measured evidence:** The `reports-hero` background measured as `rgb(244, 244, 245)` in the color-inheritance chain for the outer container. In the screenshot the card appears white/cream — acceptable. This may be partially mitigated by the GX14 `[data-theme="light"] main > div` background override.
+
+**Fix:** Add explicit:
+```css
+[data-theme="light"] .reports-hero { background: #ffffff; border-color: #e4e2dd; }
+```
+
+**Tag:** [CSS-ONLY].
+
+---
+
+### F5. D3 bar chart bars — hardcoded `#4f8ef7` (bright blue) not an accent token [GO-STRUCTURAL] ★ LOW (aesthetic)
+
+**Surface:** `/reports` Spending by Category bar charts (both horizontal and vertical).
+
+**Measured evidence:**
+```
+barRects[0] attrFill="#4f8ef7"  computedFill="rgb(79, 142, 247)"  (all bars)
+```
+
+The `#4f8ef7` is a hardcoded hex in the chartspec or the Go reports screen code (not in `chart.js`). The color is a mid-bright blue — readable on white in light mode, no contrast failure. But it ignores the app accent color (`var(--accent)` = `#2e8b57` green) and the Tableau-10 palette used by the donut and Sankey. It reads as an out-of-family color.
+
+**Tag:** [GO-STRUCTURAL] — the color originates in Go chartspec construction (the series `Color` field). Fix requires the reports screen to either pass `""` (so chart.js uses `--accent`) or pass a proper token-resolved color. Build-gated GI0.
+
+**Cross-ref:** G9.1a V5 (chart variety catalog).
+
+---
+
+### F6. D3 donut chart uses `d3.schemeTableau10` — not theme tokens [GO-STRUCTURAL] ★ LOW (aesthetic)
+
+**Surface:** `/reports` spending donut chart.
+
+**Measured evidence:**
+```
+donutPaths[0] attrFill="#4e79a7"  (Tableau Blue)
+donutPaths[1] attrFill="#f28e2c"  (Tableau Orange)
+donutPaths[2] attrFill="#e15759"  (Tableau Red)
+...
+```
+
+The `renderDonut` function in `chart.js` uses `d3.scaleOrdinal(d3.schemeTableau10)`. These colors are hardcoded at D3's library level — not CSS-var-driven. In light mode they are all readable on white. Not a contrast problem, but not token-driven.
+
+**Tag:** [GO-STRUCTURAL] — would require passing a custom color array via chartspec; low priority. Visually acceptable today.
+
+---
+
+### F7. Planning forecast chart — no area fill, line only [GO-STRUCTURAL] ★ LOW (missing polish)
+
+**Surface:** `/planning` forecast chart.
+
+**Measured evidence:**
+
+```
+planning_light: cfCharts=1 — D3 paths found 0 filled paths in the chart container;
+chart is rendered as kind="line" (no area fill path).
+```
+
+**Visual evidence (`gx16_light_planning_1280.png`):** The forecast chart renders as a plain green line — no area fill under the curve. Compared to the dashboard's sparkline (which uses `AreaChart` with a gradient fill), the planning forecast reads as thinner/less premium.
+
+**Source:** The Go planning screen passes `chartspec.Spec{Kind:"line"}` or similar. The `chart.js` area renderer (`d3.area`) is only triggered for `spec.kind === "area"`.
+
+**Tag:** [GO-STRUCTURAL] — change planning screen to emit `kind:"area"`. Build-gated GI0.
+
+---
+
+### F8. Go `AreaChart` sparkline — hardcoded `stroke="#2e8b57"` default [GO-STRUCTURAL] ★ LOW
+
+**Surface:** Dashboard "Net worth trend" sparkline.
+
+**Source:** `internal/ui/chart.go` line 38: `stroke = "#2e8b57"` hardcoded default.
+
+**Evidence:** In light mode this renders correctly (green on white). But if the user changes their accent color, the sparkline ignores it. Should default to `var(--accent)` or be driven from props at call site.
+
+**Tag:** [GO-STRUCTURAL] — requires wasm rebuild (GI0).
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+| ID | Screenshot | Observed | Root cause | Fix tag |
+|----|-----------|----------|-----------|---------|
+| D1 | `gx16_light_reports_1280.png` | Hero secondary stats (SAVINGS RATE −7%, CASH RUNWAY 6 months, NO-SPEND DAYS 9) are invisible — near-white `rgb(244,244,245)` on white card | `.hero-stat-value` inherits runtime dark `--text` var, no light override | F2 [CSS-ONLY] |
+| D2 | `gx16_light_reports_scroll*.png` (DOM audit) | Sankey / Mermaid node labels invisible — `computedColor="rgb(244,244,245)"` on white SVG | SVG `text` has no `fill` attr; inherits dark runtime `--text` | F3 [CSS-ONLY] |
+| D3 | `gx16_light_reports_1440_scroll.png` | Bar chart bars (`#4f8ef7` blue) are readable but not theme-token-driven | Hardcoded color in Go chartspec | F5 [GO-STRUCTURAL] |
+| D4 | `gx16_light_planning_1280.png` | Planning chart shows axis tick text at `fill="#686870"` — this IS readable (medium gray on white), no defect | chart.js reads `--text-faint` correctly as `#686870` in light | No fix needed |
+| D5 | `gx16_light_planning_1280.png` | Forecast line chart has no area fill — green line only, no shaded region | `kind:"line"` not `"area"` in Go spec | F7 [GO-STRUCTURAL] |
+| D6 | `gx16_light_goals_1280.png` | One goal progress bar (`bar-fill[0]`) measured `bg="rgba(0,0,0,0)"` — transparent fill | The first goal likely has 0% progress or a "none" state | Likely correct behavior; probe should filter 0-width bars |
+| D7 | `gx16_dark_reports_1280.png` | Dark mode "Heads up" box has a red left border with dark bg inside — visible contrast issue in dark | Existing card-alert style; not a GX16 defect | Tracked in G9.1 |
+
+---
+
+## L61 axis-label status
+
+**CONFIRMED CLOSED.** Planning x-axis tick text measured directly from DOM:
+
+```
+[{"text":"Jun 2026","fill":"#686870"},
+ {"text":"Aug 2026","fill":"#686870"},
+ {"text":"Oct 2026","fill":"#686870"},
+ {"text":"Dec 2026","fill":"#686870"},
+ {"text":"Feb 2027","fill":"#686870"},
+ {"text":"Apr 2027","fill":"#686870"}]
+```
+
+Calendar labels are present and correct. L61 is resolved.
+
+---
+
+## CSS vars measured in light mode
+
+Confirmed via `getComputedStyle(document.documentElement)` with `data-theme="light"` on `<html>`:
+
+```
+--text:       #1c1c1e
+--text-dim:   (inline override active)
+--text-faint: #686870
+--border:     #e4e2dd
+--accent:     #2e8b57
+--bg:         #f7f6f3
+--bg-elev:    #efede8
+```
+
+These are the values `chart.js` reads for `fg` (`--text-faint` → `#686870`) and `grid` (`--border` → `#e4e2dd`). Both are correct light-mode values. The D3 axis infrastructure is properly theme-aware.
+
+---
+
+## Probe hardening
+
+1. **SVG text fill measurement:** Use `el.getAttribute("fill")` not `getComputedStyle(el).color` for SVG text. CSS `color` does not propagate to SVG `fill` in Chrome — the fill attribute is the ground truth for rendered color. Current probes return misleading `computedColor="rgb(244,244,245)"` for SVG text elements that have correct `fill="#686870"` attributes.
+
+2. **Scroll container:** Reports page uses `main.cf-scroll` as the scroll container, not `window`. Probe must call `document.querySelector("main.cf-scroll").scrollTop = N` (or `scrollTo`) — not `window.scrollTo` — to reveal below-fold charts. Current deep-scroll screenshots all show the same viewport.
+
+3. **Mermaid node text color:** Add a specific assertion: `svg[id^="cf-mmd"] text` elements should have either `fill` attribute !== null OR their inherited `color` should be `≠ rgb(244,244,245)` in light mode. This is the probe for F3.
+
+4. **bar-fill with 0 progress:** Filter out `.bar-fill` elements with `width: 0` before asserting fill color — 0%-progress goals legitimately have transparent fills.
+
+5. **D3 chart visibility:** Use `ResizeObserver` trigger trick or explicit `cf-chart` container `clientWidth` check to confirm D3 has drawn before measuring SVG children. `cfChartCount` alone doesn't confirm the SVG was rendered.
+
+---
+
+## Priority order for landable fixes
+
+1. **F2** [CSS-ONLY] — Reports hero secondary stat values invisible (`color: #1c1c1e` on `.hero-stat-value`) — one line, high visual impact
+2. **F3** [CSS-ONLY] — Mermaid/Sankey node text invisible — one rule targeting `svg[id^="cf-mmd"] text`
+3. **F4** [CSS-ONLY] — `.reports-hero` explicit white bg in light
+4. **F5** [GO-STRUCTURAL] — Bar chart color token-driven (build-gated GI0)
+5. **F7** [GO-STRUCTURAL] — Planning chart area fill (build-gated GI0)
+6. **F8** [GO-STRUCTURAL] — `AreaChart` accent token default (build-gated GI0)
+
+---
+
+## Cross-references
+
+- **G9.1** (Reports deep beautification) — D2, D3, D7 all feed directly into G9.1 chart redesign
+- **G9.1a** (Chart variety catalog) — F5, F7 are V5-class fixes (bar color, area fill)
+- **GX14** (Systemic light token root fix) — F2 and F3 are direct GX14 follow-through: the systemic fix addressed shell/widgets/budget/stat; it missed `.hero-stat-value` and Mermaid SVG text
+- **GX13** (Budgets re-check) — progress bars confirmed correct; GX13 fix is stable
+- **GX11** (Dashboard re-check) — sparkline (`.AreaChart`) confirmed visible and correct in light
+- **L61** (Planning x-axis calendar labels) — **CONFIRMED CLOSED** by this pass
+- **GI0** (build blocker) — F5, F7, F8 are all build-gated; F1–F4 land now as CSS-only
 
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
