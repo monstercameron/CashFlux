@@ -55,7 +55,10 @@ and every commit updates this file under `Unreleased`.
   now leads the page (precedence chain next, the 15-row suggestions card last) instead of being
   pushed below the fold, plus an in-card "+ Add rule" button. **Workflows (G19):** primary buttons
   ("Run now" etc.) now use white text in light mode — the previous dark-green-on-green failed AA
-  (~2.1:1); this fix applies app-wide.
+  (~2.1:1); this fix applies app-wide. **Artifacts (G20):** row meta reordered (ref status leads),
+  "Referenced by N" shown in green vs neutral-muted "not referenced", upload date added per row,
+  `.notice`/`.notice-warn`/`.storage-bar`/`.csv-preview`/`.ref-positive` CSS rules added (were
+  used in Go but missing from the stylesheet — quota nudge and storage bar were invisible).
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**

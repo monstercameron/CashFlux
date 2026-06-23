@@ -272,16 +272,30 @@ func artifactRow(props artifactRowProps) ui.Node {
 		)
 	}
 
+	// "Referenced" is a positive signal; "not referenced" is neutral muted.
+	// Reorder meta: ref label first (Lena's primary question), then kind/size,
+	// then upload date — so the most important info is at the top of the meta stack.
+	refLabel := referencedByLabel(props.ReferencedBy)
+	refClass := "row-meta"
+	if props.ReferencedBy > 0 {
+		refClass = "row-meta ref-positive"
+	}
+	uploadedOn := ""
+	if !a.CreatedAt.IsZero() {
+		uploadedOn = "Uploaded " + a.CreatedAt.Format("Jan 2, 2006")
+	}
+
 	return Div(css.Class("row"),
 		Div(css.Class("row-main", tw.Flex, tw.ItemsCenter),
 			preview,
 			Div(
 				Div(css.Class("row-desc"), Attr("data-testid", "artifact-name"), a.Name),
-				Div(css.Class("row-meta"), meta+" · "+artifacts.HumanSize(a.Size)),
-				Div(css.Class("row-meta"), Attr("data-testid", "artifact-refs"), referencedByLabel(props.ReferencedBy)),
+				Div(css.Class(refClass), Attr("data-testid", "artifact-refs"), refLabel),
 				If(props.UsedByPages > 0,
 					Div(css.Class("row-meta"), Attr("data-testid", "artifact-page-refs"),
 						uistate.T("artifacts.usedByPages", props.UsedByPages))),
+				Div(css.Class("row-meta"), meta+" · "+artifacts.HumanSize(a.Size)),
+				If(uploadedOn != "", Div(css.Class("row-meta"), uploadedOn)),
 				csvPreview,
 			),
 		),

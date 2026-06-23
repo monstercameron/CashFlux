@@ -15356,6 +15356,30 @@ _7 · General UX / Glanceability_
 
 ### G20. Artifacts — "Keep the Receipt" (Lena) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** Contained fixes shipped:
+- **Row meta reordered** — reference status (Lena's primary question) now leads each row, above
+  kind/size and upload date, instead of trailing at the bottom of the meta stack.
+- **"Referenced by N transaction(s)" rendered in green** (`.ref-positive` / `var(--accent)` in dark,
+  `#1a7a47` pinned in light) while "Not referenced" stays neutral muted — positive/neutral distinction
+  now visible at a glance.
+- **Upload date added to row meta** — `CreatedAt` shown as "Uploaded Jan 2, 2006" so Lena can see
+  when a receipt was uploaded without hovering or knowing sort order.
+- **`.notice` / `.notice-warn` CSS added** — quota nudge inside the upload card was using classes
+  with no stylesheet rule; now has amber border + legible amber text in dark, pinned `#92620a` in
+  light (was near-invisible white on white card).
+- **`.storage-bar` / `.storage-bar-fill` / `.storage-bar-warn` CSS added** — the storage meter
+  progress bar had no stylesheet backing; now renders as a thin accent-colored track with amber warn
+  tone above 80%.
+- **`.csv-preview` CSS added** — the inline CSV preview table had no stylesheet rule; now renders
+  with collapsed borders, dim header row, and font-size consistent with the rest of the meta area.
+- **`.ref-positive` light-mode pin added** — dark `var(--accent)` would be unreadable on white;
+  pinned to `#1a7a47` (dark green, passes WCAG AA on white) for light mode.
+- **Deferred**: dark body-bg bleed between cards in light mode (systemic shell theming, G20 defect
+  #1 / `mainBg: rgb(14,14,15)` in light); primary-button text contrast in dark (contrast-aware for
+  arbitrary custom accents — already fixed for light via `[data-theme="light"] .btn-primary`);
+  two-card merge / upload-inline-above-list layout (large structural rewrite); newest-first sort
+  control; broken-thumbnail `onerror` placeholder; drag-to-reorder / bulk-delete.
+
 **The story**
 Lena opens Artifacts to see her uploaded receipts and CSV datasets. She wants to know what each
 file is, whether it is being used anywhere (transaction attachments or custom-page widgets), and
@@ -16472,6 +16496,225 @@ _7 · General UX / Glanceability_
   wide viewports → defect #9.
 - B15: systemic a11y — heading levels, label elements, resize button ARIA → defects #7, #8.
 
+
+### G23. Epic — "GLAMOR design-system: cross-page fixes for a world-class, glanceable, enterprise app" (synthesis of G1-G22) — 2026-06-23 ★★
+
+#### Summary
+
+The GLAMOR sweep across all 22 pages confirms that CashFlux has genuinely strong structural bones: the bento-card grid is coherent, dark mode is solid, semantic color (income green / expense red / muted amber) is consistently applied, and the core information architecture is sound. However, a small cluster of SYSTEMIC token and CSS failures recurs on nearly every page — light mode is essentially broken at the foreground-token level, and the body/card background does not switch. These are not 22 separate bugs; they are 4–6 root-cause failures in the design-token layer that, once fixed, lift all 22 pages at once. Alongside those global fixes sits a consistent structural pattern: primary user tasks (the user's own rules, the formula calculator, the calendar) are positioned below secondary/suggestive content on arrival, and interactive management pages lack discoverable "Add" entry points. Fixing the token layer first (an afternoon of global CSS work) is the highest-leverage change in the entire backlog and unlocks the rest of the Tier 2 structural work on a visually sound foundation.
+
+---
+
+#### TIER 1 — Global token/CSS fixes (fix once, fixes everywhere)
+
+Ranked by number of pages confirmed affected.
+
+---
+
+**T1-A. LIGHT-MODE FOREGROUND TOKEN INVISIBILITY**
+**Affected pages: 19 of 22 (G4–G22)**
+
+- **Issue:** Card titles (`h2.card-title`), row descriptions (`.row-desc`), draft-row text, variable amounts (`.amount`, `.fig`, `.pos`, `.neg`), toggle-row labels (`.toggle-row span`), and widget tile titles all render in `rgb(244,244,245)` — near-white — on a white card background (`rgb(255,255,255)`) in light mode. Measured contrast ratio: ~1.02–1.05:1. Catastrophically fails WCAG AA (requires 4.5:1). The text is for practical purposes invisible.
+- **Root cause:** The foreground token (`--fg` / `--text`) resolves to `rgb(244,244,245)` regardless of `data-theme`. It is set for dark mode (where it reads ~17:1 against `rgb(18,18,20)`) and never overridden in `[data-theme="light"]`. Every component that uses this token inherits the failure without any component-level fix.
+- **Affected selectors confirmed:** `h2.card-title`, `.row-desc`, `.amount`, `.fig`, `.pos`, `.neg`, `.toggle-row span`, `.wh h2`/`.wh h3` (custom widget tiles), draft row text, variable row labels (Customize page), net-worth amounts (Members page), subscription names, category usage labels.
+- **Fix:** In `[data-theme="light"]`, override `--fg` / `--text` to `rgb(28,28,30)` (or equivalent near-black). This is a single global token change. Component-specific overrides already used as spot-fixes (e.g. `[data-theme="light"] .amount`) should be consolidated into the token layer and removed.
+- **Confirmed pages:** G4 (Budgets), G5 (Goals), G6 (To-do), G7 (Planning), G8 (Allocate), G9 (Reports), G10 (Subscriptions), G11 (Bills), G12 (Split), G13 (Insights), G14 (Documents), G15 (Customize), G16 (Members), G17 (Categories), G18 (Rules), G19 (Workflows), G20 (Artifacts), G21 (Settings — toggle labels), G22 (Custom pages — tile titles + empty-state text).
+- **Note:** G1 (Dashboard) and G2 (Transactions) and G3 (Accounts) were either reviewed before systematic light-mode probing was in place or have separate partial fixes. G21/G22 exhibit the same root failure on newer component types (toggle spans, widget tile headings).
+
+---
+
+**T1-B. BODY/CARD BACKGROUND NOT SWITCHING IN LIGHT — dark background bleeds between cards**
+**Affected pages: ~14 of 22 (G12–G22 confirmed; likely earlier pages too)**
+
+- **Issue:** The content-area/shell background (`mainBg`) renders as `rgb(14,14,15)` or `rgba(0,0,0,0)` (transparent, allowing the dark body color through) in light mode. This produces a wide near-black band between white cards, making the page appear partially broken — white cards floating on a black void. Confirmed in `light_1280.png` screenshots on all G12–G22 pages.
+- **Root cause:** The shell body background (applied at the layout level, outside any card) is set to a dark color and never overridden in `[data-theme="light"]`. Inter-card gaps and the content-area below the last card expose raw body color.
+- **Confirmed values:** `mainBg: rgb(14,14,15)` (G20 Artifacts), `mainBg: rgba(0,0,0,0)` exposing dark body (G19 Workflows, G21 Settings, G22 Custom pages). The nav rail also remains dark in light mode (G4–G17).
+- **Fix:** In `[data-theme="light"]`, set the shell/layout background and the dark nav rail to use light surface tokens (e.g. `--surface` or `rgb(247,246,243)` to match `pageBg`). Card backgrounds correctly switch to white (`rgb(255,255,255)`) — the gap is the shell layer between and around them.
+- **Confirmed pages:** G12 (Split), G13 (Insights — deferred), G14 (Documents), G15 (Customize), G16 (Members), G17 (Categories), G18 (Rules), G19 (Workflows), G20 (Artifacts), G21 (Settings — panel backdrop `rgba(4,4,6,0.6)`), G22 (Custom pages — content area transparent). The dark nav rail bleed is noted from G4 onward.
+
+---
+
+**T1-C. PRIMARY BUTTON LABEL CONTRAST IN LIGHT — dark-green text on mid-green background**
+**Affected pages: 19 of 22 (G4–G22)**
+
+- **Issue:** `.btn-primary` renders with label color `rgb(5,46,19)` (very dark green) on background `rgb(46,139,87)` (mid-green). Measured contrast: ~2.1:1. Fails WCAG AA (requires 4.5:1 for normal text). Confirmed in "Run now" (G19), "Add widget" (G22), "Upload image" (G20 — ~3.7:1 variant), and every primary CTA across the reviewed pages.
+- **Root cause:** `.btn-primary` is styled once (dark-green label + mid-green bg) with no `[data-theme="light"]` override. In dark mode this reads adequately against dark surroundings; in light mode the button itself is the only "bright" element and the near-black-on-green fails.
+- **Fix:** Add `[data-theme="light"] .btn-primary { color: #ffffff; }`. White on `rgb(46,139,87)` yields ~3.7:1 (AA for large text / UI components) or switch to a darker green bg in light (`rgb(22,101,52)`) for full AA compliance on normal text.
+- **Confirmed pages:** G4–G22 (the systemic citation pattern in the tickets reads "same systemic fix as G4–G15/G19/G22" — every page with a primary button is affected).
+
+---
+
+**T1-D. MUTED/AMBER TEXT — borderline AA on load-bearing data**
+**Affected pages: ~18 of 22 (G4–G21)**
+
+- **Issue:** The muted token resolves to `rgb(86,86,92)` in light mode (~4.3–5.4:1 on white depending on measurement). This is the secondary/meta text color used for: rule descriptions, row metadata, section labels, per-member share amounts (G12 split amounts `rgb(86,86,92)`), category usage counts (G17), Bills payment amounts (G11), budget amounts (G4), and subscription names (G10). Many of these are load-bearing data, not decorative secondary text. At small sizes (~13–14px) the 4.3:1 ratio is borderline and fails for body-weight text.
+- **Root cause:** A single muted token (`--fg-muted` or equivalent) is used both for genuinely secondary labels AND for primary numeric data. The token value is suitable for large/bold secondary text but insufficient for small-size primary data.
+- **Fix:** (1) Bump `--fg-muted` in `[data-theme="light"]` to `rgb(60,60,67)` (~7:1 on white) — a safe muted that passes AA at all sizes. (2) Audit all load-bearing data fields (amounts, counts, payment figures) and promote them to `--fg` or `--text` rather than `--fg-muted` regardless of theme. G12 per-member share amounts and G11 bill amounts are the highest-priority cases.
+- **Confirmed pages:** G4 (Budgets), G5 (Goals), G6 (To-do), G8 (Allocate), G9 (Reports), G10 (Subscriptions — subscription names), G11 (Bills — payment amounts), G12 (Split — share amounts), G14 (Documents), G15 (Customize), G16 (Members — role labels), G17 (Categories — usage counts), G18 (Rules — row meta), G19 (Workflows — row meta), G20 (Artifacts — storage meta), G21 (Settings — section labels), and others.
+
+---
+
+#### TIER 2 — Cross-cutting structural/UX patterns (per-page work, shared principle)
+
+Each requires page-by-page implementation but follows a single principle. Ordered by total user impact.
+
+---
+
+**T2-A. PRIMARY CONTENT BURIED BELOW SECONDARY/SUGGESTIVE CONTENT ON ARRIVAL**
+
+Pages where the user's own data or primary action is scrolled off-screen because suggestions, helper cards, or secondary context cards appear first:
+
+- **G18 (Rules):** "Your rules" card was entirely below the fold; 15-row "Suggested rules" card filled the viewport (RESOLVED in G18 — reordered).
+- **G15 (Customize):** Formula calculator was below the fold behind 3 custom-field cards (RESOLVED in G15 — reordered).
+- **G7 (Planning):** Inputs in card 6, results in card 7 — seven cards below the fold before reaching the scenario result.
+- **G11 (Bills):** Calendar is below the fold at all widths — list and calendar are never in view together at 1280/1440.
+- **G17 (Categories):** "Category map" card is last, below 22+ category rows — the structural overview is never seen on arrival.
+- **G13 (Insights):** Ask CashFlux input below the fold at 768px.
+- **G21 (Settings):** Appearance controls buried below AI + Cloud sections in the right column.
+
+**Principle:** The user's primary task on arrival (their own data, or the action form) must be at or near the top. Suggestive/contextual content (suggestions, tips, map views) follows. Apply card-order audit to each affected page independently.
+
+---
+
+**T2-B. NO DISCOVERABLE "ADD" ENTRY POINT ON MANAGEMENT PAGES**
+
+Management pages (list + manage an entity) consistently lack a visible on-page "Add" button, forcing users to discover the command palette:
+
+- **G16 (Members):** No "Add member" button in the card header.
+- **G17 (Categories):** No "Add category" CTA — confirmed as highest-impact glanceability fix for that page.
+- **G18 (Rules):** No "Add rule" button (RESOLVED in G18 — added to card header).
+- **G6 (To-do):** No "Add task" CTA visible without knowing the command palette.
+
+**Principle:** Every management/list card must carry a `+ Add [entity]` button in its card header (following the B11 flip-modal pattern). This is a one-line addition per card but requires doing each page individually.
+
+---
+
+**T2-C. DEFAULT CARD/ROW ORDERING DOESN'T SURFACE WHAT NEEDS ATTENTION — no severity/urgency sort**
+
+- **G4 (Budgets):** Budgets sorted alphabetically; over-budget categories not surfaced first.
+- **G5 (Goals):** Goals alphabetical; behind-pace / at-risk goals not surfaced.
+- **G9 (Reports):** Category list in fixed order; overspending categories not top.
+- **G10 (Subscriptions):** Subscriptions in store order; upcoming renewals or high-cost items not sorted.
+- **G11 (Bills):** Bills not sorted by due date — most urgent items not at the top.
+- **G18 (Rules):** Suggestions (15 rows) precede user's own rules regardless of urgency.
+- **G17 (Categories):** Zero-transaction (inactive) categories indistinguishable from active ones; no usage-ranked option.
+
+**Principle:** Default sort order should be attention-first (overdue/at-risk/due-soonest) not alphabetical/store order. A "Sort by" toggle on the relevant cards handles this per-entity.
+
+---
+
+**T2-D. REPEATED PRIMARY-STYLED ACTION BUTTONS FORM A LOUD BAND LOUDER THAN DATA**
+
+On pages with per-row actions (subscriptions, bills, rules, workflows, artifacts), multiple identical primary-green buttons stacked vertically visually dominate the content column they are supposed to serve:
+
+- **G10 (Subscriptions):** Per-row action buttons form a right-side green band.
+- **G11 (Bills):** "Mark paid" and "Schedule" per-row duplicate primary styling.
+- **G18 (Rules):** 15 "Add" buttons on suggestion rows, all primary green, dominate the page.
+- **G19 (Workflows):** "Run now" as primary + "Dry run" as neutral — hierarchy inverted (simulation-first page).
+- **G20 (Artifacts):** Rename/delete buttons icon-only with no accessible label.
+
+**Principle:** Per-row actions should use `btn-sm` or `btn-outline` (or an overflow `⋮` menu at 768px). Only the page-level primary CTA (e.g. "Add rule", "Save workflow") should be `btn-primary` full-weight. Reserve green for the single most important action per page.
+
+---
+
+**T2-E. HEADING HIERARCHY SKIPS AND MISSING `<label>` ELEMENTS — accessibility throughout**
+
+- **G6 (To-do):** Placeholder-only inputs; `labelCount` low vs `inputCount`.
+- **G15 (Customize):** `labelCount: 0`; form inputs placeholder-only.
+- **G19 (Workflows):** `labelCount: 0` for 5 fields; all card titles H3 (should be H2 below H1).
+- **G21 (Settings):** `labelCount: 8` for 30 inputs; `set-label` sections are `<div>` not `<h4>`; no landmarks for 23 sections.
+- **G22 (Custom pages):** `labelCount: 0`; widget tile headings H3 skip H2; resize buttons bare Unicode with no `aria-label`.
+- **G18 (Rules):** `labelTexts: []` — no visible labels on inline edit form.
+- **G16 (Members):** H3 card titles confirmed (should be H2).
+
+**Principle:** The `FormField` component (noted in the backlog as fixing C49–C65/B15) needs systematic rollout. Every `<input>` and `<select>` must have a corresponding `<label>`. Card titles should be H2. Section headers within panels should be H4. This is a single component rollout (not 22 individual fixes), but it requires touching each form on each page.
+
+---
+
+**T2-F. MISSING OR INCONSISTENT SUMMARY STRIP / STAT-CARD LIGHT-MODE STYLING**
+
+Several pages have stat cards or summary strips that either don't appear in all themes or have a two-tone "dark header, white body" appearance in light that was not the intended design:
+
+- **G4 (Budgets):** Stat cards show dark-bg header over white card body in light — two-tone appearance not resolved.
+- **G9 (Reports):** "Heads up" summary strip card — near-invisible in light.
+- **G12 (Split):** Summary amounts muted in light mode.
+- **G11 (Bills):** No summary strip ("Total due this week: $X") — Tomas must sum mentally.
+- **G10 (Subscriptions):** No "Total monthly spend" summary strip.
+
+**Principle:** Every management page should have a one-line summary strip ("X items — $Y total / $Z over"). Stat cards must use `--fg` (not `--fg-muted`) for their headline numbers in both themes.
+
+---
+
+**T2-G. WIDGETS AND ITEMS NOT DRILLABLE; RAW ERROR STRINGS SURFACED TO USERS**
+
+- **G22 (Custom pages):** KPI widget body shows raw `"widgetspec: no formula set"` error string. Widget tile titles not drillable (L63 GAP-B).
+- **G15 (Customize):** Formula variables not afforded as clickable/drillable to transactions.
+- **G17 (Categories):** Usage count not afforded as clickable (no underline-on-hover or link style despite drill being implemented).
+- **G9 (Reports):** Category rows are not afforded as drillable in all contexts.
+
+**Principle:** Every count, amount, or label that resolves to a filtered view must be visually afforded (underline on hover, pointer cursor, `role="link"` or `<a>` wrapper). Raw internal error strings must never appear in the UI — replace with a friendly muted message + a contextual action ("No formula — click Edit to add one").
+
+---
+
+#### TIER 3 — Notable per-page one-offs worth scheduling
+
+Short list of non-systemic, page-specific issues that are confirmed and worth a dedicated fix ticket:
+
+- **G22 (Custom pages):** Newly created custom page absent from MY PAGES nav rail after creation (C32 gap #67 — STILL OPEN). Root: `bump()` fires before navigate, not after.
+- **G7 (Planning):** X-axis labels on the scenario chart show month indices not dates — makes the chart uninterpretable without a legend.
+- **G14 (Documents):** Spatial order of review cards (review + de-dupe flow) — content layout confusing.
+- **G21 (Settings):** 5 identically styled "Import" buttons (L47) — no visual distinction between import types; should label each distinctly.
+- **G19 (Workflows):** Mermaid flowchart always-on full-size per workflow row — 4 workflows = ~2000px of diagrams before reaching run history. Collapse to accordion by default.
+- **G22 (Custom pages):** Bento grid does not expand at 1440px wide — tiles pinned top-left with a 900px void on the right (distinct from B2/C14 dashboard bento; same root but separate instance).
+- **G20 (Artifacts):** Broken image thumbnail with no `onerror` fallback placeholder.
+- **G12 (Split):** Settle-up amounts styled identically whether positive or negative — no color distinction (income green / expense red) for who owes whom.
+
+---
+
+#### What's already world-class — confirmed anchors (keep, do not change)
+
+- **Dark mode:** Near-perfect across all 22 pages. Card backgrounds `rgb(18,18,20)` with titles `rgb(244,244,245)` → ~17:1. Row text passes. Stat values pass. Zero regressions found across G1–G22.
+- **Bento-card grid:** Coherent, reconfigurable, and glanceable. Confirmed solid across G1–G5 and praised throughout. Basis for the custom-pages builder.
+- **Semantic color — income/expense/progress:** Income green, expense red, and amber warning are consistently applied and do not bleed across themes. Progress bars (Goals G5, Budgets G4, Allocate G8) are correctly color-coded and pass contrast in both themes (G5 praised, G8 praised).
+- **Accessible progress bars:** ARIA `role="progressbar"` + `aria-valuenow` confirmed (G5, G8). Praised explicitly.
+- **Transaction filtering, sorting, and bulk actions (G2):** Filter persistence, cleared-balance, sort, bulk-delete/recategorize all work correctly. G2 confirmed world-class.
+- **Dry-run preview in Workflows (G19):** "Would do:" unambiguous, Mermaid flowchart per workflow correct. C70 CONFIRMED.
+- **Drag-to-reorder (G18, G22):** Grip present and labelled (`title="Drag to reorder precedence"`). draggableCount probe confirms 10 elements in custom pages.
+- **Custom pages persistence (G22):** Widgets persist across hard reload (C32 persistence CONFIRMED). Widget add/remove works end-to-end.
+- **Documents vision import (G14):** CSV and image import with review+dedupe flow functional. L29 receipt attachment confirmed.
+- **Inline edit (G16, G17, G18):** Auto-focus, aria-labelled fields, and correct inline save/cancel throughout management pages.
+
+---
+
+#### Items the GLAMOR sweep CONFIRMED RESOLVED — close these
+
+The following C-tickets were confirmed fixed by the GLAMOR drive scripts:
+
+- **C8 (Color picker):** Confirmed working in G16 Members — color swatch picker functional, `swatchCount: 10`. CLOSE.
+- **C63 (Em-dash nesting in categories):** `emDashRows: []` in G17 DOM audit — zero em-dash prefix rows. CLOSE.
+- **C66 (Card titles + silent upload failures in Artifacts):** G20 confirmed both cards are H2 (`cardTitles: ["Upload an artifact", "Your artifacts"]`) and upload failure surfaces via `notify`. CLOSE these two C66 sub-items. (CSV preview sub-item remains open.)
+- **C37 (Workflows: filled-but-unstaged save lost):** G19 confirmed `stagedCount: 5` present and staged-action remove ✕ operational. C37 CLOSE.
+- **C65 (Staged-action remove ✕ button):** G19 confirmed `stagedCount` probe and ✕ present. CLOSE the staged-action remove sub-item. (Workflow Edit button still absent — that sub-item of C65 remains open.)
+- **C6 (Weight labels in Allocate):** G8 confirmed weight labels visible and allocation ranks readable. CLOSE.
+- **C57 (Mark-paid + urgency in Bills):** G11 confirmed "Mark paid" button present per row, urgency sort working. CLOSE.
+
+---
+
+#### Recommended execution order
+
+1. **Tier 1 first — one light-mode token/CSS pass lifts all 22 pages.** Write `[data-theme="light"]` overrides for: `--fg`/`--text` token → `rgb(28,28,30)`; shell/nav body background → `rgb(247,246,243)`; `.btn-primary { color: #fff }`; `--fg-muted` bump to `rgb(60,60,67)`. Estimated effort: 1–2 hours for a single focused CSS audit. This is the single highest-leverage change in the entire backlog.
+
+2. **Tier 2-A (card ordering) and Tier 2-B (Add buttons)** — per-page Go changes, low-risk, high visible impact. Start with the pages not yet resolved: G7 Planning, G11 Bills, G17 Categories, G13 Insights.
+
+3. **Tier 2-E (FormField rollout / heading hierarchy)** — the `FormField` component exists in the backlog; rolling it out systematically closes the label-gap on all forms.
+
+4. **Tier 2-C (attention-first sort)** — add "Sort by" toggle per entity; most natural next after the form/label work.
+
+5. **Tier 2-D, 2-F, 2-G** — lower-visibility polish; address as part of per-page sprints.
+
+6. **Tier 3 one-offs** — schedule individually. The MY PAGES rail gap (G22 C32 #67) is the highest-priority Tier 3 item as it leaves a user stranded after creating a page.
+
+---
 
 ## 0. Foundation & tooling (Phase 0)
 

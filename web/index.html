@@ -620,6 +620,27 @@
       .bg-warn { background-color: #cfa14e; } .bg-dim { background-color: #ababb3; }
       .bg-fg { background-color: #f4f4f5; } .bg-line { background-color: #232325; }
 
+      /* Artifacts (G20) --------------------------------------------------- */
+      /* Inline quota-nudge notice inside a card (not a toast). */
+      .notice { padding: 0.45rem 0.7rem; border-radius: 6px; font-size: 0.85rem;
+        border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim); }
+      .notice-warn { border-color: #d39200; background: rgba(211,146,0,0.08); color: #cfa14e; }
+      [data-theme="light"] .notice-warn { color: #92620a; background: #fff8e1; border-color: #d39200; }
+      /* Storage progress bar (quota meter below the upload buttons). */
+      .storage-bar { height: 6px; background: var(--bg-elev); border: 1px solid var(--border);
+        border-radius: 999px; overflow: hidden; }
+      .storage-bar-fill { height: 100%; background: var(--accent); border-radius: 999px;
+        transition: width 0.35s ease; }
+      .storage-bar-fill.storage-bar-warn { background: #f59e0b; }
+      /* CSV inline preview table shown inside an artifact row. */
+      .csv-preview { border-collapse: collapse; font-size: 0.78rem; width: 100%; }
+      .csv-preview th, .csv-preview td { padding: 0.15rem 0.5rem; border: 1px solid var(--border);
+        text-align: left; white-space: nowrap; }
+      .csv-preview thead { background: var(--bg-elev); color: var(--text-dim); }
+      /* Positive reference badge on artifact rows ("Referenced by N transaction(s)"). */
+      .ref-positive { color: var(--accent); }
+      [data-theme="light"] .ref-positive { color: #1a7a47; }
+
       /* To-do */
       .field-wide { grid-column: 1 / -1; }
       .check { background: transparent; border: 1px solid transparent; color: var(--text-dim); cursor: pointer; font-size: 1.15rem; line-height: 1; min-width: 24px; min-height: 24px; display: inline-grid; place-items: center; margin-right: 0.4rem; box-sizing: border-box; }
@@ -1033,6 +1054,33 @@
         background-size:16px 16px; overflow:auto; }
       .wb-tile { position:static !important; transition:width .15s ease, height .15s ease; }
       .wb-size { display:flex; flex-wrap:wrap; gap:.75rem; }
+
+      /* n8n-style pipeline canvas: step nodes joined by directed connectors on a
+         dotted, horizontally-scrollable surface. */
+      .wb-canvas { display:flex; align-items:center; gap:0; min-height:128px; padding:1.5rem 1rem;
+        border-radius:12px; border:1px solid var(--line,#e5e7eb); background:var(--bg,#0e0e10);
+        background-image:radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px);
+        background-size:16px 16px; overflow-x:auto; }
+      .wb-node { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:.15rem;
+        min-width:8.5rem; padding:.7rem .9rem; border-radius:10px; cursor:pointer; text-align:left;
+        color:inherit; background:var(--bg-elev,#1a1a1d); border:1.5px solid var(--line,#e5e7eb);
+        transition:border-color .12s ease, box-shadow .12s ease, transform .12s ease; }
+      .wb-node:hover { border-color:color-mix(in srgb, var(--accent,#3b82f6) 45%, var(--line,#e5e7eb)); }
+      .wb-node.is-active { border-color:var(--accent,#3b82f6);
+        box-shadow:0 0 0 3px color-mix(in srgb, var(--accent,#3b82f6) 22%, transparent); }
+      .wb-node-kind { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint,#9ca3af); }
+      .wb-node-val { font-size:14px; font-weight:600; color:var(--fg,#e5e7eb); }
+      /* Inbound/outbound ports — small circles centred on the node's side edges. */
+      .wb-port { position:absolute; top:50%; width:9px; height:9px; border-radius:999px;
+        background:var(--bg,#0e0e10); border:1.5px solid var(--dim,#6b7280); transform:translateY(-50%); }
+      .wb-port-in { left:-5px; }
+      .wb-port-out { right:-5px; }
+      .wb-node.is-active .wb-port { border-color:var(--accent,#3b82f6); }
+      /* Connector: a line between two nodes with an arrowhead at its end. */
+      .wb-edge { position:relative; flex:0 0 2.75rem; height:2px; background:var(--line,#e5e7eb); }
+      .wb-edge::after { content:""; position:absolute; right:-1px; top:50%; transform:translateY(-50%);
+        border-top:5px solid transparent; border-bottom:5px solid transparent;
+        border-left:7px solid var(--line,#e5e7eb); }
 
       /* Background-music (muzak) top-bar toggle. */
       .muzak-btn, .notify-btn, .add-btn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
