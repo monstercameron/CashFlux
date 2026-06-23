@@ -5,7 +5,9 @@ package ui
 import (
 	"strconv"
 
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/pagination"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -87,18 +89,21 @@ func dtHeader(props dtHeaderProps) ui.Node {
 		}
 		return Th(args...)
 	}
-	ariaSort, caret := "none", ""
+	ariaSort := "none"
+	var caretIcon ui.Node
 	if props.Sort == c.SortKey {
 		if props.Dir == "asc" {
-			ariaSort, caret = "ascending", " ▲"
+			ariaSort = "ascending"
+			caretIcon = Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 		} else {
-			ariaSort, caret = "descending", " ▼"
+			ariaSort = "descending"
+			caretIcon = Icon(icon.ArrowDown, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 		}
 	}
 	key := c.SortKey
 	on := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnSort(key) })
 	args = append(args, Attr("aria-sort", ariaSort),
-		Button(css.Class("th-sort"), Type("button"), OnClick(on), c.Label+caret))
+		Button(css.Class("th-sort"), Type("button"), OnClick(on), c.Label, caretIcon))
 	return Th(args...)
 }
 

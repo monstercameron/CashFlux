@@ -219,7 +219,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			Div(ClassStr(innerCls),
 				// Front face — a neutral card briefly seen during the flip.
 				Div(css.Class("flip-face"),
-					Div(css.Class("wh"), Span(css.Class("grip"), "⠿"), H3(props.Title)),
+					Div(css.Class("wh"), Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.MoreH, css.Class(tw.W4, tw.H4))), H3(props.Title)),
 				),
 				// Back face — the settings panel.
 				Div(css.Class("flip-face flip-back"),

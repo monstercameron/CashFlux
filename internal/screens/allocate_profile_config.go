@@ -3,8 +3,10 @@
 package screens
 
 import (
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -80,7 +82,7 @@ func ProfileConfig(p profileConfigProps) ui.Node {
 			Button(css.Class("btn disclosure-toggle"), Type("button"),
 				Attr("aria-expanded", ariaBool(p.WeightsOpen)), Attr("data-testid", "allocate-advanced-toggle"),
 				OnClick(p.OnToggleWeights),
-				IfElse(p.WeightsOpen, Text(uistate.T("allocate.advancedHide")), Text(uistate.T("allocate.advancedShow")))),
+				"Advanced: tune weights ", IfElse(p.WeightsOpen, uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4, tw.ShrinkO)), uiw.Icon(icon.ChevronDown, css.Class(tw.W4, tw.H4, tw.ShrinkO)))),
 			If(p.WeightsOpen, WeightEditor(weightEditorProps{
 				WReturns:        p.WReturns,
 				WStability:      p.WStability,

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -49,7 +50,7 @@ func WidgetBuilder() ui.Node {
 			Body: Div(css.Class("wb-stage"),
 				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(c), "height": span(r)}),
 					Div(css.Class("wh"),
-						Span(css.Class("grip"), Attr("aria-hidden", "true"), "⠿"),
+						Span(css.Class("grip"), Attr("aria-hidden", "true"), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 						H3(uistate.T("widgetBuilder.sampleTitle")),
 					),
 					Div(css.Class("wbody"),

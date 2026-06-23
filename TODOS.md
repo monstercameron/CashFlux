@@ -1,4 +1,4 @@
-# CashFlux — Master Feature Backlog
+﻿# CashFlux — Master Feature Backlog
 
 Single source of truth, **ordered top-to-bottom by implementation priority**. Work in order;
 within a section earlier items unblock later ones. Build **bottom-up** per the SDLC rule
@@ -18369,6 +18369,7 @@ the light-mode-specific gap.
 
 
 ### GX3. Component primitives (buttons · inputs · selects · tables · badges · tooltips) — "A Thousand Small Cuts" — 2026-06-23 ★
+✅ RESOLVED (2026-06-23). GX3-F1 select styling, GX3-F2 light DataTable contrast, GX3-F3/F10 44px button tap-targets — CSS shipped (code live on origin; block restored after a rebase dropped it).
 
 ## The story
 
@@ -18829,6 +18830,7 @@ The fix is to add `min-height: 44px` to `.btn` (part of GX3-F3 unified height fi
 
 
 ### GX4. Global accessibility — "Everyone Can Use It" — 2026-06-23 ★
+✅ RESOLVED (2026-06-23). GX4-F1 visible focus rings on inputs/selects, GX4-F3 larger sort tap-targets, GX4-F4 widget H3→H2, GX4-F6 resize-handle focus ring; GX4-F2 dialog role verified present — code live on origin; block restored after a rebase dropped it.
 
 ## The story
 
@@ -19194,6 +19196,7 @@ Exit code: **0**
 
 
 ### GX6. Iconography consistency — "One Visual Language" — 2026-06-23 ★
+✅ RESOLVED (2026-06-23). Replaced stray Unicode glyphs (⠷ grip, ▲/▾/▴ carets, ▲ alert-triangle) with SVG icon registry calls. Deferred: ▲/▼ embedded in fmt.Sprintf strings in dashboard.go net-worth delta and cardgraph/nodes.go sub-text (would require changing return types from string to ui.Node — scope for a follow-on).
 
 **The story**
 

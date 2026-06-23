@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -863,12 +864,13 @@ func dashTaskRow(props dashTaskRowProps) ui.Node {
 	})
 	openTodo := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/todo")) })
 
-	dotTone, dot, prio := "text-faint", "○", "Low priority"
+	dotTone, prio := "text-faint", "Low priority"
+	var dotContent any = "○"
 	switch t.Priority {
 	case domain.PriorityHigh:
-		dotTone, dot, prio = "text-warn", "▲", "High priority"
+		dotTone, dotContent, prio = "text-warn", uiw.Icon(icon.AlertTriangle, css.Class(tw.W4, tw.H4, tw.ShrinkO)), "High priority"
 	case domain.PriorityMedium:
-		dotTone, dot, prio = "text-dim", "●", "Medium priority"
+		dotTone, dotContent, prio = "text-dim", "●", "Medium priority"
 	}
 	titleCls := tw.Fold(tw.Flex1, tw.TextLeft, tw.Truncate)
 	if done {
@@ -881,7 +883,7 @@ func dashTaskRow(props dashTaskRowProps) ui.Node {
 		Button(css.Class("dash-check"), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", boolStr(done)),
 			Attr("aria-label", checkLabel), Attr("title", checkLabel), OnClick(toggle),
 			Text(checkGlyph(done))),
-		Span(ClassStr(dotTone), Attr("title", prio), Attr("aria-label", prio), dot),
+		Span(ClassStr(dotTone), Attr("title", prio), Attr("aria-label", prio), dotContent),
 		Button(ClassStr("dash-task "+titleCls), Type("button"), OnClick(openTodo), t.Title),
 	)
 }
@@ -1264,7 +1266,7 @@ func attentionRow(props attentionRowProps) ui.Node {
 	}
 	return Button(ClassStr("attention-item "+attentionTone(it.Severity)), Type("button"), OnClick(open),
 		Attr("title", uistate.T("dashboard.attentionOpen")),
-		Span(css.Class("attention-dot"), Attr("aria-hidden", "true"), Text(attentionGlyph(it.Severity))),
+		Span(css.Class("attention-dot"), Attr("aria-hidden", "true"), attentionGlyph(it.Severity)),
 		Span(css.Class("attention-text"), attentionText(it, props.Base)),
 	)
 }
@@ -1313,14 +1315,14 @@ func attentionTone(s attention.Severity) string {
 	}
 }
 
-func attentionGlyph(s attention.Severity) string {
+func attentionGlyph(s attention.Severity) ui.Node {
 	switch s {
 	case attention.SeverityCritical:
-		return "▲"
+		return uiw.Icon(icon.AlertTriangle, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 	case attention.SeverityWarning:
-		return "●"
+		return Text("●")
 	default:
-		return "○"
+		return Text("○")
 	}
 }
 

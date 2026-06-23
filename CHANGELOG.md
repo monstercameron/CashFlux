@@ -82,6 +82,7 @@ and every commit updates this file under `Unreleased`.
   a shared e2e `ready()` helper + forms-a11y gate (L12/L7). Confirmed many items already shipped.
 
 ### Changed
+- **GLAMOR series, GX6 iconography (2026-06-23).** **Iconography (GX6):** replaced stray Unicode glyphs (grip/carets/alert-triangle) with the SVG icon registry.
 - **Empty states (GX2):** Transactions/Accounts/Insights now show a proper EmptyStateCTA with icon + action instead of a bare line.
 - **App shell (GX1):** light-mode topbar/rail-active-chip/+Add button now switch correctly.
 - **GLAMOR series, GX5 toasts & notices (2026-06-23).** **Toasts & notices (GX5):** per-type toast icons, readable light-mode toast surface, elevated notifications card.

@@ -560,9 +560,9 @@ func Reports() ui.Node {
 	// G9.1: Advanced disclosure toggle state (wraps custom field + deductible cards).
 	showAdvanced := ui.UseState(false)
 	onToggleAdvanced := ui.UseEvent(func() { showAdvanced.Set(!showAdvanced.Get()) })
-	advancedLabel := "Advanced ▾"
+	advancedCaret := uiw.Icon(icon.ChevronDown, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 	if showAdvanced.Get() {
-		advancedLabel = "Advanced ▲"
+		advancedCaret = uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 	}
 
 	return Div(
@@ -762,7 +762,7 @@ func Reports() ui.Node {
 				Button(css.Class("disclosure-toggle"), Type("button"),
 					Attr("aria-expanded", boolStr(showAdvanced.Get())),
 					OnClick(onToggleAdvanced),
-					advancedLabel,
+					"Advanced ", advancedCaret,
 				),
 				If(showAdvanced.Get(),
 					Div(

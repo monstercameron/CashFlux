@@ -388,7 +388,7 @@ func widget(props WidgetProps) uic.Node {
 	}
 	args = append(args,
 		Div(css.Class("wh"),
-			Span(css.Class("grip"), Attr("aria-hidden", "true"), "⠿"), // decorative drag grip
+			Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.MoreH, css.Class(tw.W4, tw.H4))), // decorative drag grip
 			titleNode,
 			gear,
 		),

@@ -407,7 +407,7 @@ var english = Catalog{
 	"rules.coverage":           "Your rules auto-file %d of %d transactions.",
 	"rules.suggestShowAll":     "Show all (%d)",
 	"rules.suggestShowFewer":   "Show fewer",
-	"rules.dragHint":           "Drag ⠿ to reorder — first match wins",
+	"rules.dragHint":           "Drag to reorder — first match wins",
 
 	"common.owner": "Owner",
 
@@ -723,8 +723,8 @@ var english = Catalog{
 	"allocate.maxPerPlaceholder":      "Cap per destination (%s)",
 	"allocate.modeLabel":              "Mode",
 	"allocate.profileLabel":           "Profile",
-	"allocate.advancedShow":           "Advanced: tune weights ▾",
-	"allocate.advancedHide":           "Advanced: tune weights ▴",
+	"allocate.advancedShow":           "Advanced: tune weights",
+	"allocate.advancedHide":           "Advanced: tune weights",
 	"allocate.maxPerTitle":            "Cap how much any one destination can receive",
 	"allocate.keptBack":               "Kept back: %s (buffer plus anything caps or rounding left over).",
 	"allocate.suggestionsTitle":       "Where to put your money next",

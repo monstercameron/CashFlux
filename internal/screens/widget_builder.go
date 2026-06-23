@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/cardgraph"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -190,7 +191,7 @@ func VisualBuilder() ui.Node {
 			Body: Div(css.Class("wb-stage"),
 				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(c), "height": span(r)}),
 					Div(css.Class("wh"),
-						Span(css.Class("grip"), Attr("aria-hidden", "true"), "⠿"),
+						Span(css.Class("grip"), Attr("aria-hidden", "true"), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 						H3(vbCardTitle(res, vbDefaultTitle(cfg))),
 					),
 					Div(ClassStr("wbody"), vbStageBody(res, vizFormat.Get())),
