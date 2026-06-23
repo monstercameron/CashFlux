@@ -10,7 +10,10 @@ and every commit updates this file under `Unreleased`.
 - **GLAMOR series, second wave (G7+).** **Planning (G7):** the forecast card now leads with a
   display-weight headline stat (projected 12-month net worth + avg monthly net), and the forecast
   chart's X-axis shows real calendar months ("Jul 2026") instead of opaque indices. Series-wide:
-  card titles pinned to a full-contrast token so they stay readable in light mode.
+  card titles pinned to a full-contrast token so they stay readable in light mode. **Allocate (G8):**
+  weight tuning + save-profile collapse behind an "Advanced" disclosure so the typical flow is
+  profile → amount → list; Mode/Profile selects get persistent labels; each candidate row shows a
+  `#1/#2/#3` rank badge; emergency-buffer/cap placeholders shortened so they don't clip at 768px.
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**

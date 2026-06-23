@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series wave 2 — G8 Allocate "Every Dollar a Job"
+
+The headline gap was the config wall: Marcus had to scroll past 11 inputs (mode, profile, 3 amounts,
+5 weights, save-profile) before seeing a single candidate. Collapsed the weight tuning + save-profile
+behind an "Advanced: tune weights" disclosure (a UseState toggle, not native `<details>`, for
+reliability) so the common path is profile → amount → list. Labelled the two unlabelled selects,
+added `#N` rank badges to candidate rows (via a rankByID map so MapKeyed keeps its keying), shortened
+the placeholders that clipped at 768, and made the save-profile button fit-content.
+
+Deferred the bigger reworks (sticky apply bar, amount-field promotion, inline non-AI "why" summary).
+
 ## 2026-06-23 - feat: GLAMOR series wave 2 — G7 Planning "The What-If Sunday"
 
 Cam extended the glamor sweep to G7–G11 (Planning, Allocate, Reports, Subscriptions, Bills). Starting

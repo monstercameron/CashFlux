@@ -10412,6 +10412,341 @@ Most of these pivots are state+UI only — the target screens already filter cor
 
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
 
+### G13. Insights — "The Money Question" (Renu) — 2026-06-23 ★
+
+**The story**
+Renu opens Insights to ask a plain-English question about her finances and read a clear
+answer. She has not yet added an API key. She lands on the page and sees: spending
+highlights (no AI needed), her two pinned insights from past conversations, four
+data-tailored starter chips, and an Ask box. She types "Can I afford a $500 vacation?"
+and expects either a deterministic affordability answer (no key required) or a clear,
+un-nag-gy path to add her OpenAI key. The no-key state must explain what's missing and
+show a direct Settings button — not a dead-end sentence. The page must orient her in
+under five seconds even with zero prior chat history.
+
+**Drive script**
+`e2e/glamor_13_insights.mjs` — widths 1280/1440/768, dark + light themes (light-theme
+recipe: set `cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`).
+No API key set (no-key state). Navigates via in-app "Insights" nav link. Screenshots the
+empty/no-key state, typed state, and after-send state. DOM audit + light-contrast JSON.
+Run: `node e2e/glamor_13_insights.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_13_insights.mjs` → EXIT 0
+- Screenshots captured (11 total):
+  `glamor_13_insights_1280_dark_nokey.png`, `glamor_13_insights_1280_dark_nokey_full.png`,
+  `glamor_13_insights_1280_dark_typed.png`, `glamor_13_insights_1280_dark_after_send.png`,
+  `glamor_13_insights_1440_dark_nokey.png`, `glamor_13_insights_768_dark_nokey.png`,
+  `glamor_13_insights_1280_light_nokey.png`, `glamor_13_insights_1280_light_nokey_full.png`,
+  `glamor_13_insights_1280_light_typed.png`,
+  `glamor_13_insights_1440_light_nokey.png`, `glamor_13_insights_768_light_nokey.png`
+- JSON: `glamor_13_insights_dom.json`, `glamor_13_insights_light_contrast.json`
+- DOM audit: 3 cards ("Spending highlights", "Pinned insights", "Ask CashFlux").
+  `hasThread: false` (no prior turns), `hasInput: true`, `chipCount: 4`, `hasPinnedCard:
+  true`, `hasHighlightsCard: true`, `hasSettingsBtn: true`, `hasSendBtn: false` (no-key
+  path — Send button absent, Settings CTA shown instead), `hasNewChatBtn: true`,
+  `hasEditPromptBtn: true`. `overflowCount: 0`. `pageHeight === viewportH === 900` at
+  1280px dark — full page fits the viewport. `composerNearBottom: false` (composer is
+  NOT sticky — it scrolls with the page; see Layout fix #1).
+- Dark: `cardTitleColor: rgb(244,244,245)` on `cardBg: rgb(18,18,20)` — adequate
+  contrast in dark mode. `pageBg: rgb(14,14,15)`.
+- Light contrast: `cardTitleColor: rgb(28,28,30)` on `cardBg: rgb(255,255,255)` —
+  ~18:1, PASSES WCAG AA. `pageBg: rgb(247,246,243)`. `mutedColor: rgb(86,86,92)`.
+  `inputBg: rgb(241,241,242)`, `chipBg: rgb(241,241,242)`.
+- 0 page errors (dark and light sessions).
+- After typing "Can I afford a $500 vacation?" and pressing Enter: the affordability
+  fast-path fires (no key needed) — query text appears in the input box but the thread
+  did not render a result bubble in the screenshot (`after_send`). The input remained
+  filled; no error message appeared. This is a probe timing issue (1s wait was
+  insufficient for the Markdown effect); visual structure of the affordability card
+  itself was not screenshot-confirmed in this run (see Probe hardening).
+
+**What already works well (keep — regression anchors)** ✓
+- **Three-card vertical structure is logical: highlights → pinned → chat.** "Spending
+  highlights" (no AI needed) surfaces the most immediately useful data above the chat
+  fold; "Pinned insights" gives persistent references; "Ask CashFlux" is the
+  interactive Q&A. The ordering mirrors Renu's mental model: see what changed → recall
+  saved answers → ask a question. ✓
+- **Spending highlights card is content-first and AI-free.** Renders two anomaly rows
+  ("Transit spending is up 200%", "Health & Fitness spending is up 61%") with directional
+  red arrows, plain-English sentences, and a clear "no AI needed" sub-label. Renu gets
+  value immediately without an API key. ✓
+- **No-key state is clear and actionable.** The composer shows the Ask input, the
+  hint paragraph explains exactly what's missing ("Add your OpenAI key in Settings to
+  enable AI insights. Your key stays on this device and is only sent to OpenAI when you
+  ask."), and a "Settings" button is present. `hasSettingsBtn: true` confirmed by DOM
+  audit. Cross-reference C59/L62 (CTA navigates; modal open is a separate known bug).
+  The no-key CTA is well-written and non-naggy. ✓
+- **4 data-tailored starter chips are shown even without a key.** Chips render above
+  the Ask box: "How much did we spend on Housing last month?", "Where did our money go
+  last month?", "How is our Entertainment budget doing?", "Are we on track for our Max
+  out Roth IRA goal?" They fill the Ask box on tap without sending, letting Renu preview
+  and edit the question first. Confirmed chip count: 4. ✓
+- **Pinned insights card is present and shows two saved insights.** Texts are clamped
+  with "Show more" expand controls; dates (Jun 5, May 2) give temporal context.
+  `hasPinnedCard: true`. ✓
+- **"New chat" + "Edit prompt" switcher controls are present.** `hasNewChatBtn: true`,
+  `hasEditPromptBtn: true` — power-user controls for multi-conversation management and
+  persona editing are accessible but not visually dominant. ✓
+- **No horizontal overflow at any width.** `overflowCount: 0` at 1280px. ✓
+- **Zero JavaScript page errors.** Both dark and light sessions clean. ✓
+- **Page fits the 1280×900 viewport in the no-key state.** `pageHeight === viewportH ===
+  900`. Full content visible without scroll in the no-key empty state. ✓
+- **Light-mode card title contrast PASSES on this page — a GLAMOR first.** Computed
+  `cardTitleColor: rgb(28,28,30)` on `cardBg: rgb(255,255,255)` — very high contrast.
+  The systemic `--fg` token failure seen in G4–G12 does NOT appear on the Insights page
+  card titles. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout — composer not sticky; thread obscures input as conversation grows*
+- [ ] **CRITICAL: The chat composer (Ask input) is NOT sticky/fixed — it scrolls with
+      the page.** `composerNearBottom: false` in DOM audit. As the conversation thread
+      grows (several exchanges), Renu must scroll all the way to the bottom of the page
+      to type her next question. The thread has `max-h-[55vh]` overflow-scroll (good
+      for the thread container) but the composer itself is not pinned to the viewport
+      bottom. A long thread pushes the composer off-screen. The fix: the entire "Ask
+      CashFlux" card's composer row (input + send/cancel) should be sticky at the
+      viewport bottom, or the thread should live inside a `height: 100vh` flex column
+      with the composer always at the bottom. The pinned-insights card and highlights
+      card are better positioned above the sticky chat pane rather than inline.
+      Confirmed by `composerNearBottom: false` in DOM audit. Visible in
+      `glamor_13_insights_1280_dark_nokey.png` — the composer input appears near the
+      bottom of the page only coincidentally (it fits now because the thread is empty;
+      with content it will be pushed out of view).
+- [ ] **The "Ask CashFlux" card sits at the bottom of a three-card page — Renu must
+      scroll past highlights and pinned insights before she can see the chat input.**
+      At 768px (`glamor_13_insights_768_dark_nokey.png`), the chat card is entirely
+      below the fold. The Insights page is a *chat-first* screen; the composer should
+      be the primary visual anchor, not the third item in a scrolling page. Consider
+      making the chat pane the main content area (full height, fixed below a compact
+      highlights strip) with pinned insights accessible via a side panel or inline
+      toggle above the chat.
+- [ ] **Affordability fast-path result not screenshot-confirmed.** The "Can I afford a
+      $500 vacation?" affordability card (the `AffordResultBubble` with
+      `data-cf="afford-result"`) did not render in the `after_send` screenshot — the
+      input still shows the typed text 1 second after Enter. Either the fast-path fires
+      but the Markdown effect runs after the next screenshot tick, or the Enter keydown
+      via the test driver didn't register. The `after_send` screenshot shows the
+      composer still filled, chips still visible, and no thread bubble present. This
+      may be a probe timing issue (the wait should be extended to 2000ms post-Enter
+      and the affordability card should be explicitly awaited via `data-cf="afford-result"`).
+
+*2. Spacing — inter-card black bands in light mode; chip row density*
+- [ ] **CRITICAL: Inter-card gaps render as thick opaque black bands in light mode —
+      identical to G4–G12 two-tone pattern.** Visible in all light screenshots:
+      `glamor_13_insights_1280_light_nokey.png`, `glamor_13_insights_1440_light_nokey.png`,
+      `glamor_13_insights_768_light_nokey.png`. The three white cards are separated by
+      ~20–25px opaque black/near-black bands. The page background (`pageBg:
+      rgb(247,246,243)` — a warm off-white) is NOT rendering between cards; instead the
+      dark page-background token bleeds through. The left nav sidebar also remains dark
+      in light mode at all widths. This is the Insights-page manifestation of the
+      systemic page-background token failure confirmed G4–G12. Cross-reference G4 D1.
+- [ ] **At 768px the chips wrap to 1 per row, consuming excessive vertical space.**
+      In `glamor_13_insights_768_dark_nokey.png` and `glamor_13_insights_768_light_nokey.png`,
+      the chip row shows chips stacking vertically (only the first 1–2 chips visible
+      before the fold) because each chip wraps to a full-width row at 768px. The chip
+      text is long ("How much did we spend on Housing last month?") and forces the wrap.
+      Consider shorter chip text at 768px (2-line max), a scrollable horizontal chip
+      rail instead of wrapping rows, or limiting chips to 2 at 768px.
+- [ ] **"New chat" and "Edit prompt" pills are visually invisible in light mode.**
+      In `glamor_13_insights_1280_light_nokey.png` and `glamor_13_insights_1440_light_nokey.png`,
+      the "New chat" and "Edit prompt" pills render as borderless white-on-white
+      controls — completely indistinguishable from the card background. The pill style
+      uses `tw.BorderBlack10` (a very subtle border) which disappears in light mode.
+      They appear as faint grey text with no visible button boundary. Confirmed visually
+      in the 1440px light screenshot.
+
+*3. Theming — light-mode content invisibility (systemic `--fg` token, tenth consecutive page)*
+- [ ] **CRITICAL: Pinned insight text is nearly invisible in light mode.** The two
+      pinned insight paragraphs ("Your emergency fund covers roughly…", "You're saving
+      about 20%…") use the same `--fg` token that fails in G4–G12. In
+      `glamor_13_insights_1280_light_nokey.png` the pinned insight text is extremely
+      faint — barely legible ghost text on the white card. The dates ("Jun 5, 2026",
+      "May 2, 2026") in green/teal are visible but the body text is not. Also confirmed
+      in `glamor_13_insights_1440_light_nokey.png` and `glamor_13_insights_768_light_nokey.png`.
+      This is the tenth consecutive GLAMOR page with this failure. A global CSS token
+      fix is the only sustainable path. Cross-reference G4/G5/G6/G7/G8/G9/G10/G11/G12 D1.
+- [ ] **Spending highlights anomaly rows are nearly invisible in light mode.** In
+      `glamor_13_insights_1280_light_nokey.png`, the two anomaly rows ("Transit
+      spending is up 200%…", "Health & Fitness spending is up 61%…") are barely
+      readable — same `--fg` token failure. Only the red arrow icons are clearly
+      visible; the text sentence is ghosted. This page-specific failure is notable
+      because the highlights card is the *only AI-free value* on the page — making its
+      content invisible in light mode deprives Renu of the page's primary immediate
+      value.
+- [ ] **"Show more" links in pinned insights use the same invisible `--fg` token in
+      light mode.** In the pinned insights card in light mode, "Show more" appears as
+      faint ghost text. The link is the only way to expand truncated insights.
+- [ ] **Nav sidebar stays dark in light mode at all widths.** Confirmed in all light
+      screenshots: the left navigation rail retains its dark background when the main
+      content switches to light. This is the same cross-component theming failure
+      observed in G4–G12 — the sidebar's background token is not picking up the light
+      theme. Consistent with `mainBg: rgba(0,0,0,0)` / `contentBg: rgba(0,0,0,0)` in
+      light contrast audit.
+
+*4. Styling — bubble styles unconfirmed; chip contrast in light; no-key CTA button weight*
+- [ ] **User and assistant message bubble styles cannot be confirmed in the no-key
+      state with no prior turns.** `userBubbleBg: N/A`, `assistBubbleBg: N/A` — no
+      bubbles rendered. The user bubble is styled `BgSky10` (sky-tinted) and the
+      assistant bubble is `BgBlack04` (dark surface). These should be screenshot-
+      confirmed in a keyed or affordability-result state. The affordability result
+      bubble uses `border-sky-200 bg-sky-50` (light blue border + background), distinct
+      from the AI assistant bubble — good differentiation. Regression anchor for a
+      future keyed session.
+- [ ] **Suggestion chip styling is hard-edged and form-like in dark mode.** In
+      `glamor_13_insights_1280_dark_nokey.png`, the chips render as dark, rectangular
+      bordered buttons with no visual softness — they read as data entry controls
+      rather than exploratory prompts. Chips for a Q&A starter should feel lighter and
+      more inviting: consider a softer pill border-radius, a slightly lighter background,
+      or a subtle hover animation that signals "tap to explore" rather than "submit a
+      form field". The chip style (`btn chip-suggest`) needs a dedicated style
+      separated from the base `.btn` form aesthetics.
+- [ ] **"Settings" CTA button in the no-key hint uses `.btn` (neutral style) — no
+      visual differentiation from secondary actions.** The no-key hint paragraph
+      explains what's needed; the "Settings" button below it (confirmed `hasSettingsBtn:
+      true`) uses the base `.btn` style. For a CTA that unblocks the primary value of
+      the page (AI chat), it should use `.btn-primary` or a distinct accent style to
+      signal "this is what to do next." Visible in `glamor_13_insights_1280_light_nokey.png`
+      where the "Settings" button is unstyled / borderless in light mode.
+- [ ] **Markdown rendering in pinned insights not screenshot-confirmed.** The
+      `PinnedInsightRow` component renders via `marked + DOMPurify` into `innerHTML`
+      (C71). In dark mode the insight text appears as plain prose — no evidence of
+      markdown headings, bold, lists, or code blocks in the sample data. The `md
+      insights-answer` class that governs markdown styling (C71) is applied but cannot
+      be verified for correct heading/code/list rendering without markdown-rich pinned
+      content. The `line-clamp-3` class clamps long text — confirmed by "Show more"
+      control presence. Regression risk: if `marked` library isn't loaded, text falls
+      back to raw markdown syntax visible to the user.
+
+*5. Positioning — composer placement, no-key CTA proximity, chip-to-input relationship*
+- [ ] **The no-key hint and Settings button sit BELOW the Ask input** (composer
+      structure: input row → hint paragraph → Settings button). In
+      `glamor_13_insights_1280_light_nokey.png` and `glamor_13_insights_1440_light_nokey.png`,
+      Renu sees the Ask input first, then below it the hint text, then the Settings
+      button. This ordering makes sense (input first, then fallback CTA), but the hint
+      text and Settings button are below the input and partially off-screen at 1280×900.
+      The full-page screenshot confirms they are visible at 1280 (page fits viewport),
+      but at 768px the Settings button is pushed below the chips below the input — the
+      CTA is well below the fold. The no-key path should keep the hint + Settings button
+      above the fold at all widths, or consolidate the CTA into the input row itself
+      (e.g. a "Settings →" trailing link next to the disabled input).
+- [ ] **At 768px the Ask CashFlux card is entirely below the fold.** In
+      `glamor_13_insights_768_dark_nokey.png` and `glamor_13_insights_768_light_nokey.png`,
+      the chat card starts below the pinned insights card which is itself below the
+      spending highlights card. On a 1024px-tall viewport at 768px width, Renu must
+      scroll ~400px to reach the Ask box. The no-key CTA (Settings button) is even
+      further below the fold. At mobile widths the chat screen is effectively hidden.
+
+*6. Ordering — card vertical order on the insights page*
+- [ ] **Current order (Highlights → Pinned → Chat) buries the interactive chat.**
+      The "Ask CashFlux" chat card — the page's primary purpose — is last. Users land
+      on a passive anomaly card and a saved-answers list before they reach the Q&A box.
+      Consider: Chat card first (with the Ask input immediately in view), Highlights
+      below the thread as context, Pinned insights accessible via a side panel or
+      collapsible section. The current order works when Renu opens the page just to
+      scan highlights, but it works against her when she arrives with a question in mind
+      — which is the modal use case (C59).
+- [ ] **Pinned insights ordering (newest first) is correct but not visually
+      differentiated by recency.** Two pinned items: "Jun 5, 2026" then "May 2, 2026"
+      — newest first, confirmed by `sort.Slice`. However, a date 7 weeks old and one
+      4 weeks old look equally "current." A mild recency fade or "Recently pinned" label
+      on items from the last 7 days would help Renu identify fresh vs. older references.
+
+*7. General UX / Glanceability — Insights page as AI chat screen*
+- [ ] **The no-key state is well-explained but the Settings button is borderless and
+      easy to miss in light mode.** The hint text is clear and non-naggy (C59 ✓).
+      But in light mode (`glamor_13_insights_1280_light_nokey.png`) the "Settings"
+      button appears as plain underlined-or-unstyled text rather than a button. The
+      affordance is lost — it doesn't look like a clickable button. Upgrade to
+      `.btn-primary` for visual clarity.
+- [ ] **L62 known bug: Settings button navigates but modal doesn't open.** Cross-
+      reference L62: the no-key CTA navigates to `/settings` but the API key section
+      modal doesn't scroll into view or open automatically. This is a separate bug from
+      the visual review but remains open. Not re-confirmed in this run (the drive script
+      did not click Settings).
+- [ ] **The "Edit prompt" pill is a power-user feature with low discoverability
+      hints.** In `glamor_13_insights_1280_dark_nokey.png`, "Edit prompt" sits next to
+      "New chat" in the switcher row. Its purpose (editing the AI persona / system
+      prompt) is non-obvious from the label alone. A short tooltip or `title` attribute
+      should explain it: "Customize how CashFlux AI responds to you." Confirmed in
+      code: `Title(uistate.T("insights.editPrompt"))` — the title IS set via the
+      `insights.editPrompt` i18n key. Need to confirm the key's English string is
+      explanatory enough.
+- [ ] **Empty thread state shows "Ask anything about your money" hint paragraph and
+      chips, but no explicit empty state visual.** The `If(empty, P(css.Class("muted"),
+      uistate.T("insights.chatHint")))` hint is a single muted paragraph with no
+      illustration, icon, or visual warmth. For a conversational screen, an empty state
+      with a small icon (sparkles/chat bubble) and the hint text would feel more
+      inviting and signal that this is an interactive chat surface rather than a static
+      form. Confirmed from screenshot: the empty thread area is invisible (no container
+      rendered) — the hints and chips appear inside the card with no visual separation
+      from the composer.
+- [ ] **Streaming/typing indicator not screenshot-confirmed.** The thinking indicator
+      (`Div(css.Class(tw.TextFaint), uistate.T("insights.thinking"))`) fires during AI
+      response. No key → no streaming state reachable in this review. Regression anchor:
+      must be screenshot-confirmed in a keyed session.
+
+**UI/UX defects (screenshot-confirmed)**
+
+- **D1 — Light-mode pinned insight text invisible (CRITICAL).** Confirmed in
+  `glamor_13_insights_1280_light_nokey.png`, `glamor_13_insights_1440_light_nokey.png`,
+  `glamor_13_insights_768_light_nokey.png`. Pinned insight body text is ghost-faint
+  on white card background. Tenth consecutive GLAMOR page with `--fg` token failure.
+  Fix: global `--fg`/`--text` contrast pin for light mode (same root cause as G4–G12).
+
+- **D2 — Light-mode spending highlights anomaly text invisible.** Confirmed in
+  `glamor_13_insights_1280_light_nokey.png`, `glamor_13_insights_1440_light_nokey.png`.
+  The key insights ("Transit spending is up 200%…") are unreadable in light mode.
+  Same `--fg` token. Unique severity: this is the only AI-free content on the page.
+
+- **D3 — Inter-card black bands in light mode (systemic, tenth page).** Confirmed in
+  `glamor_13_insights_1280_light_nokey.png`, `glamor_13_insights_1440_light_nokey.png`,
+  `glamor_13_insights_768_light_nokey.png`. Dark page-background bleeds between white
+  cards. Same root cause as G4–G12 — page background token not switching in light mode.
+
+- **D4 — "New chat" / "Edit prompt" pills invisible in light mode.** Confirmed in
+  `glamor_13_insights_1280_light_nokey.png`, `glamor_13_insights_1440_light_nokey.png`.
+  Pills render as borderless white-on-white, indistinguishable from card background.
+  `tw.BorderBlack10` is ~2% black — insufficient in light mode. Fix: use a slightly
+  darker border token (`--border` or `--fg` at 20%) in light theme.
+
+- **D5 — Settings CTA button unstyled/borderless in light mode.** Confirmed in
+  `glamor_13_insights_1280_light_nokey.png` and `glamor_13_insights_1440_light_nokey.png`.
+  The "Settings" button below the no-key hint has no visible border or background in
+  light mode — it reads as plain text. Fix: upgrade to `.btn-primary` for the Settings
+  CTA since it's the primary unblocking action on the no-key Insights screen.
+
+- **D6 — Ask input is below the fold at 768px.** Confirmed in
+  `glamor_13_insights_768_dark_nokey.png` and `glamor_13_insights_768_light_nokey.png`.
+  Chat card starts below the pinned insights card which is below the highlights card.
+  At 1024px tall the Ask box requires ~400px scroll. Primary interactive element is
+  hidden at the most common mobile breakpoint.
+
+- **D7 — Composer not sticky; scrolls off-screen as thread grows (architectural).**
+  `composerNearBottom: false` in DOM audit. The thread has a bounded max-height scroll
+  region but the composer row is not position-fixed or sticky. In a long conversation
+  the composer scrolls out of view and Renu must scroll to the page bottom to continue
+  chatting. Fix: sticky composer at the viewport bottom, or full-height flex chat pane.
+
+**Probe hardening**
+- [ ] **Affordability fast-path needs a longer wait + explicit result await.** The
+      `after_send` screenshot shows the input still filled 1s after Enter — either the
+      fast-path fired but Markdown rendering ran after the screenshot, or the Enter
+      keydown didn't dispatch to the Go listener. Fix: await `page.waitForSelector('[data-cf="afford-result"]',
+      { timeout: 5000 })` after pressing Enter, then screenshot. If the selector never
+      appears, fall back to a 2000ms wait + screenshot for the error path.
+- [ ] **Settings CTA click + modal verification.** After clicking "Settings" in the
+      no-key hint, assert the URL changes to `/settings` and look for the API key input
+      (`input[type=password]` or `[data-cf="openai-key"]`). This closes the L62 bug
+      track in the drive script.
+- [ ] **Keyed session for bubble + streaming verification.** A future pass should
+      inject a fake key (or use a test-mode backend flag) to trigger the streaming
+      state and render user + assistant bubbles. This would confirm bubble contrast,
+      markdown rendering (C71), token cost note display, Copy/Pin/Retry action
+      visibility, and the typing indicator.
+
 ### G12. Split — "Who Owes Whom" (Priya) — 2026-06-23 ★
 
 **The story**
@@ -13074,6 +13409,19 @@ noted.
 ---
 
 ### G8. Allocate — "Every Dollar a Job" (Marcus) — 2026-06-23 ★
+
+**✅ RESOLVED (2026-06-23).** Highest-value fixes shipped:
+- **Config wall collapsed** (CRITICAL §1/§6) — the 5 weight inputs + save-profile form now live behind
+  an "Advanced: tune weights" disclosure, so the typical path is profile → amount → list.
+- **Mode/Profile selects labelled** (§4) — both wrapped in `labeledField` (persistent visible labels);
+  fixes the 2 unlabelled selects.
+- **Rank ordinals** (§7) — each candidate row shows a `#1/#2/#3` `.rank-badge` so first priority is glanceable.
+- **768 placeholder clipping** (§7) — "Emergency buffer ($)" / "Cap per destination ($)" replace the
+  long clipping placeholders; Save-profile button is `width: fit-content` not full-width.
+- **Card/label light contrast** — global `.card-title` pin; weight labels use `--text-dim` (AA), no real bug.
+- **Intentionally deferred**: sticky "Apply $X" bar, amount-field-own-row promotion, and an inline
+  algorithmic "why this order" summary in the AI card are larger UX reworks; the disclosure +
+  rank + labels already address the core "config out of the way / glanceable" intent.
 
 **The story**
 Marcus is a zero-based budgeter: every dollar has a job. He has $2,000 of surplus this month

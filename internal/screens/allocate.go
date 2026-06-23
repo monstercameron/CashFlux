@@ -38,6 +38,7 @@ func ApplyConfirmRow(props applyRowProps) ui.Node {
 
 type allocRowProps struct {
 	R         allocate.Ranked
+	Rank      int    // 1-based priority position, shown as "#1" (G8 glanceability)
 	Amount    string // suggested dollar amount (empty when no split amount entered)
 	OnExclude func(string)
 }
@@ -71,6 +72,7 @@ func AllocRow(props allocRowProps) ui.Node {
 	scoreLabel := uistate.T("allocate.scoreLabel", float64(scorePct))
 	return Div(css.Class("budget"),
 		Div(css.Class("budget-head"),
+			If(props.Rank > 0, Span(css.Class("rank-badge"), Attr("aria-hidden", "true"), fmt.Sprintf("#%d", props.Rank))),
 			Span(css.Class("row-desc"), r.Candidate.Name),
 			Span(css.Class("budget-amount fig"), headRight),
 			Button(css.Class("btn"), Type("button"), Title(uistate.T("allocate.excludeTitle")), OnClick(excl), uistate.T("allocate.exclude")),
@@ -166,6 +168,12 @@ func Allocate() ui.Node {
 	// allocationMode toggles between score-weighted and fill-to-target (envelope) allocation.
 	allocationMode := ui.UseState("weighted")
 	onMode := ui.UseEvent(func(e ui.Event) { allocationMode.Set(e.GetValue()) })
+
+	// Weight-tuning is a power-user override (G8 §1/§6): collapse it behind an
+	// "Advanced" disclosure so the typical path — pick profile, enter amount, see
+	// list — isn't gated behind a wall of 5 weight inputs + a save-profile form.
+	weightsOpen := ui.UseState(false)
+	toggleWeights := ui.UseEvent(Prevent(func() { weightsOpen.Set(!weightsOpen.Get()) }))
 
 	profile := ui.UseState("balanced")
 	// Editable criterion weights drive the ranking; the profile select loads a
@@ -522,10 +530,16 @@ func Allocate() ui.Node {
 	case len(ranked) == 0:
 		listBody = P(css.Class("empty"), uistate.T("allocate.allExcluded"))
 	default:
+		// 1-based priority rank per candidate, so each row can show "#1/#2/#3" — the
+		// at-a-glance "what's my first priority?" cue the score bars alone don't give (G8).
+		rankByID := make(map[string]int, len(ranked))
+		for i, r := range ranked {
+			rankByID[r.Candidate.ID] = i + 1
+		}
 		listBody = Div(MapKeyed(ranked,
 			func(r allocate.Ranked) any { return r.Candidate.ID },
 			func(r allocate.Ranked) ui.Node {
-				return ui.CreateElement(AllocRow, allocRowProps{R: r, Amount: amountFor(r.Candidate.ID), OnExclude: toggleExclude})
+				return ui.CreateElement(AllocRow, allocRowProps{R: r, Rank: rankByID[r.Candidate.ID], Amount: amountFor(r.Candidate.ID), OnExclude: toggleExclude})
 			},
 		))
 	}
@@ -568,40 +582,48 @@ func Allocate() ui.Node {
 			H2(css.Class("card-title"), uistate.T("allocate.profileTitle")),
 			P(css.Class("muted"), uistate.T("allocate.profileDesc")),
 			Form(css.Class("form-grid"),
-				Select(css.Class("field"), Attr("data-testid", "allocate-mode"), OnChange(onMode),
-					Option(Value("weighted"), SelectedIf(allocationMode.Get() == "weighted"), uistate.T("allocate.modeWeighted")),
-					Option(Value("fill"), SelectedIf(allocationMode.Get() == "fill"), uistate.T("allocate.modeFillToTarget")),
-				),
-				Select(css.Class("field"), OnChange(onProfile),
-					Option(Value("balanced"), SelectedIf(profile.Get() == "balanced"), uistate.T("allocate.balanced")),
-					Option(Value("returns"), SelectedIf(profile.Get() == "returns"), uistate.T("allocate.maxReturns")),
-					Option(Value("safety"), SelectedIf(profile.Get() == "safety"), uistate.T("allocate.safety")),
-					Option(Value("debt"), SelectedIf(profile.Get() == "debt"), uistate.T("allocate.debt")),
-					Option(Value("goals"), SelectedIf(profile.Get() == "goals"), uistate.T("allocate.goals")),
-					savedOpts,
-				),
+				labeledField(uistate.T("allocate.modeLabel"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("allocate.modeLabel")), Attr("data-testid", "allocate-mode"), OnChange(onMode),
+						Option(Value("weighted"), SelectedIf(allocationMode.Get() == "weighted"), uistate.T("allocate.modeWeighted")),
+						Option(Value("fill"), SelectedIf(allocationMode.Get() == "fill"), uistate.T("allocate.modeFillToTarget")),
+					)),
+				labeledField(uistate.T("allocate.profileLabel"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("allocate.profileLabel")), OnChange(onProfile),
+						Option(Value("balanced"), SelectedIf(profile.Get() == "balanced"), uistate.T("allocate.balanced")),
+						Option(Value("returns"), SelectedIf(profile.Get() == "returns"), uistate.T("allocate.maxReturns")),
+						Option(Value("safety"), SelectedIf(profile.Get() == "safety"), uistate.T("allocate.safety")),
+						Option(Value("debt"), SelectedIf(profile.Get() == "debt"), uistate.T("allocate.debt")),
+						Option(Value("goals"), SelectedIf(profile.Get() == "goals"), uistate.T("allocate.goals")),
+						savedOpts,
+					)),
 				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
-				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("allocate.reservePlaceholder")), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve)),
+				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("allocate.reservePlaceholder", base)), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve)),
 				Input(css.Class("field"), Type("number"), Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)), Value(maxPerStr.Get()), Step("0.01"), OnInput(onMaxPer)),
 			),
-			P(css.Class("set-label"), uistate.T("allocate.weightsTitle")),
-			Form(css.Class("form-grid"),
-				Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wReturns")),
-					Input(css.Class("field"), Type("number"), Value(wReturns.Get()), Step("0.5"), OnInput(onWReturns))),
-				Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wStability")),
-					Input(css.Class("field"), Type("number"), Value(wStability.Get()), Step("0.5"), OnInput(onWStability))),
-				Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wLiquidity")),
-					Input(css.Class("field"), Type("number"), Value(wLiquidity.Get()), Step("0.5"), OnInput(onWLiquidity))),
-				Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wDebt")),
-					Input(css.Class("field"), Type("number"), Value(wDebt.Get()), Step("0.5"), OnInput(onWDebt))),
-				Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wGoal")),
-					Input(css.Class("field"), Type("number"), Value(wGoal.Get()), Step("0.5"), OnInput(onWGoal))),
-			),
-			Form(css.Class("form-grid"), OnSubmit(saveProfile),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("allocate.profileNamePlaceholder")), Value(profName.Get()), OnInput(onProfName)),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("allocate.saveProfile")),
-				If(strings.HasPrefix(profile.Get(), "saved:"), Button(css.Class("btn"), Type("button"), OnClick(deleteProfile), uistate.T("allocate.deleteProfile"))),
-			),
+			Button(css.Class("btn disclosure-toggle"), Type("button"),
+				Attr("aria-expanded", ariaBool(weightsOpen.Get())), Attr("data-testid", "allocate-advanced-toggle"),
+				OnClick(toggleWeights),
+				IfElse(weightsOpen.Get(), Text(uistate.T("allocate.advancedHide")), Text(uistate.T("allocate.advancedShow")))),
+			If(weightsOpen.Get(), Div(
+				P(css.Class("set-label"), uistate.T("allocate.weightsTitle")),
+				Form(css.Class("form-grid"),
+					Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wReturns")),
+						Input(css.Class("field"), Type("number"), Value(wReturns.Get()), Step("0.5"), OnInput(onWReturns))),
+					Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wStability")),
+						Input(css.Class("field"), Type("number"), Value(wStability.Get()), Step("0.5"), OnInput(onWStability))),
+					Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wLiquidity")),
+						Input(css.Class("field"), Type("number"), Value(wLiquidity.Get()), Step("0.5"), OnInput(onWLiquidity))),
+					Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wDebt")),
+						Input(css.Class("field"), Type("number"), Value(wDebt.Get()), Step("0.5"), OnInput(onWDebt))),
+					Label(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Span(css.Class("muted", tw.Text11), uistate.T("allocate.wGoal")),
+						Input(css.Class("field"), Type("number"), Value(wGoal.Get()), Step("0.5"), OnInput(onWGoal))),
+				),
+				Form(css.Class("form-grid"), OnSubmit(saveProfile),
+					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("allocate.profileNamePlaceholder")), Value(profName.Get()), OnInput(onProfName)),
+					Button(css.Class("btn btn-primary fit"), Type("submit"), uistate.T("allocate.saveProfile")),
+					If(strings.HasPrefix(profile.Get(), "saved:"), Button(css.Class("btn"), Type("button"), OnClick(deleteProfile), uistate.T("allocate.deleteProfile"))),
+				),
+			)),
 			If(profMsg.Get() != "", P(css.Class("muted"), profMsg.Get())),
 			If(totalMinor > 0 && remainder > 0, P(css.Class("muted"), uistate.T("allocate.keptBack", fmtMoney(money.New(remainder, base))))),
 		),

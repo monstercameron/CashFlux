@@ -514,6 +514,18 @@
         letter-spacing: 0.02em; padding: 0.12rem 0.5rem; border-radius: 999px;
         background: var(--bg-elev); border: 1px solid var(--border); white-space: nowrap; }
 
+      /* Allocate rank badge (G8): a compact "#1/#2" ordinal so the priority order
+         is glanceable, not just inferred from bar length. */
+      .rank-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.5rem;
+        height: 1.5rem; padding: 0 0.35rem; border-radius: 999px; background: var(--accent-dim);
+        color: var(--accent); font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+      /* "Advanced" disclosure toggle (G8): subordinate, left-aligned, not a primary button. */
+      .disclosure-toggle { background: transparent; border: 0; color: var(--accent); font: inherit;
+        padding: 0.35rem 0; cursor: pointer; text-align: left; }
+      .disclosure-toggle:hover { text-decoration: underline; }
+      /* Buttons that should size to their content, not stretch a form-grid cell (G8). */
+      .btn.fit { width: fit-content; }
+
       /* Card header row (G5): a card title with a right-aligned action (e.g.
          "+ Add goal") so adding is discoverable without hunting for the FAB. */
       .card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.75rem; }
