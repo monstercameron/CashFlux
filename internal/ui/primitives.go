@@ -27,6 +27,11 @@ type CardProps struct {
 	// Attrs holds any extra attributes/nodes to place on the section root (e.g. an
 	// aria-label or a second data-* attribute) — appended right after the class.
 	Attrs []any
+	// Header, when non-nil, is rendered as the card's header verbatim INSTEAD of the
+	// auto-generated H2/.card-head. Use it to port a bespoke header unchanged — an
+	// H3 title, a flex header div, a .budget-head/.card-head with custom controls —
+	// so the DOM stays byte-identical. Title/HeaderAction are ignored when set.
+	Header uic.Node
 	// Body is the card's content area.
 	Body uic.Node
 }
@@ -42,7 +47,9 @@ func Card(props CardProps) uic.Node {
 	if len(props.Attrs) > 0 {
 		args = append(args, props.Attrs...)
 	}
-	if props.Title != "" {
+	if props.Header != nil {
+		args = append(args, props.Header)
+	} else if props.Title != "" {
 		if props.HeaderAction != nil {
 			// .card-head is the existing flex header class (title left, actions right)
 			// used across screens; match it so a hand-rolled header ports unchanged.
@@ -278,6 +285,9 @@ type EntityListSectionProps struct {
 	Title string
 	// HeaderAction is an optional node placed to the right of the title (e.g. add button).
 	HeaderAction uic.Node
+	// Header, when non-nil, replaces the auto title header verbatim (H3 titles, flex
+	// headers, .budget-head/.card-head with custom controls) for a byte-identical port.
+	Header uic.Node
 	// TestID, when non-empty, lands as data-testid on the section root (preserves a
 	// hand-rolled card's test id during a port).
 	TestID string
@@ -317,6 +327,7 @@ func EntityListSection(props EntityListSectionProps) uic.Node {
 	return Card(CardProps{
 		Title:        props.Title,
 		HeaderAction: props.HeaderAction,
+		Header:       props.Header,
 		TestID:       props.TestID,
 		Attrs:        props.Attrs,
 		Body:         content,

@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -184,9 +185,9 @@ func VisualBuilder() ui.Node {
 	setRow := func(n int) { row.Set(clampSpan(n, dashMaxRowSpan)) }
 
 	return Div(css.Class("wb"),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetBuilder.stageTitle")),
-			Div(css.Class("wb-stage"),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.stageTitle")),
+			Body: Div(css.Class("wb-stage"),
 				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(c), "height": span(r)}),
 					Div(css.Class("wh"),
 						Span(css.Class("grip"), Attr("aria-hidden", "true"), "⠿"),
@@ -195,26 +196,30 @@ func VisualBuilder() ui.Node {
 					Div(ClassStr("wbody"), vbStageBody(res, vizFormat.Get())),
 				),
 			),
-		),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetBuilder.pipelineTitle")),
-			P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.pipelineHint")),
-			vbCanvas(active.Get(), vbStepValues(cfg), positions, func(step string) { active.Set(step) }),
-		),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetBuilder.configTitle")),
-			vbConfigPanel(active.Get(), cfg, h),
-		),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetBuilder.sizeTitle")),
-			P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.sizeHint")),
-			Div(css.Class("wb-size"),
-				wmStepper("W", c, uistate.T("widget.narrower"), uistate.T("widget.wider"),
-					func() { setCol(c - 1) }, func() { setCol(c + 1) }),
-				wmStepper("H", r, uistate.T("widget.shorter"), uistate.T("widget.taller"),
-					func() { setRow(r - 1) }, func() { setRow(r + 1) }),
+		}),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.pipelineTitle")),
+			Body: Fragment(
+				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.pipelineHint")),
+				vbCanvas(active.Get(), vbStepValues(cfg), positions, func(step string) { active.Set(step) }),
 			),
-		),
+		}),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.configTitle")),
+			Body:   vbConfigPanel(active.Get(), cfg, h),
+		}),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.sizeTitle")),
+			Body: Fragment(
+				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.sizeHint")),
+				Div(css.Class("wb-size"),
+					wmStepper("W", c, uistate.T("widget.narrower"), uistate.T("widget.wider"),
+						func() { setCol(c - 1) }, func() { setCol(c + 1) }),
+					wmStepper("H", r, uistate.T("widget.shorter"), uistate.T("widget.taller"),
+						func() { setRow(r - 1) }, func() { setRow(r + 1) }),
+				),
+			),
+		}),
 	)
 }
 

@@ -44,9 +44,9 @@ func WidgetBuilder() ui.Node {
 	setRow := func(n int) { row.Set(clampSpan(n, dashMaxRowSpan)) }
 
 	return Div(css.Class("wb"),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetBuilder.stageTitle")),
-			Div(css.Class("wb-stage"),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.stageTitle")),
+			Body: Div(css.Class("wb-stage"),
 				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(c), "height": span(r)}),
 					Div(css.Class("wh"),
 						Span(css.Class("grip"), Attr("aria-hidden", "true"), "⠿"),
@@ -58,22 +58,26 @@ func WidgetBuilder() ui.Node {
 					),
 				),
 			),
-		),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetBuilder.pipelineTitle")),
-			P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.pipelineHint")),
-			wbPipeline(active.Get(), func(step string) { active.Set(step) }),
-		),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetBuilder.sizeTitle")),
-			P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.sizeHint")),
-			Div(css.Class("wb-size"),
-				wmStepper("W", c, uistate.T("widget.narrower"), uistate.T("widget.wider"),
-					func() { setCol(c - 1) }, func() { setCol(c + 1) }),
-				wmStepper("H", r, uistate.T("widget.shorter"), uistate.T("widget.taller"),
-					func() { setRow(r - 1) }, func() { setRow(r + 1) }),
+		}),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.pipelineTitle")),
+			Body: Fragment(
+				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.pipelineHint")),
+				wbPipeline(active.Get(), func(step string) { active.Set(step) }),
 			),
-		),
+		}),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.sizeTitle")),
+			Body: Fragment(
+				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.sizeHint")),
+				Div(css.Class("wb-size"),
+					wmStepper("W", c, uistate.T("widget.narrower"), uistate.T("widget.wider"),
+						func() { setCol(c - 1) }, func() { setCol(c + 1) }),
+					wmStepper("H", r, uistate.T("widget.shorter"), uistate.T("widget.taller"),
+						func() { setRow(r - 1) }, func() { setRow(r + 1) }),
+				),
+			),
+		}),
 	)
 }
 
@@ -246,19 +250,21 @@ func WidgetManager() ui.Node {
 	)
 
 	return Div(css.Class("wm"),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetManager.layoutTitle")),
-			P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetManager.layoutHint")),
-			Div(css.Class("wm-toolbar"),
-				DashboardLayoutControls(),
-				Span(css.Class("wm-sep"), Attr("aria-hidden", "true")),
-				Button(css.Class("data-btn"), Type("button"), OnClick(showAll), uistate.T("widgetManager.showAll")),
-				Button(css.Class("data-btn"), Type("button"), OnClick(hideAll), uistate.T("widgetManager.hideAll")),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetManager.layoutTitle")),
+			Body: Fragment(
+				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetManager.layoutHint")),
+				Div(css.Class("wm-toolbar"),
+					DashboardLayoutControls(),
+					Span(css.Class("wm-sep"), Attr("aria-hidden", "true")),
+					Button(css.Class("data-btn"), Type("button"), OnClick(showAll), uistate.T("widgetManager.showAll")),
+					Button(css.Class("data-btn"), Type("button"), OnClick(hideAll), uistate.T("widgetManager.hideAll")),
+				),
 			),
-		),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetManager.widgetsTitle")),
-			uiw.DataTable(uiw.DataTableProps{
+		}),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetManager.widgetsTitle")),
+			Body: uiw.DataTable(uiw.DataTableProps{
 				Class: "wm-table",
 				Columns: []uiw.Column{
 					{Label: uistate.T("widgetManager.colWidget"), SortKey: "name"},
@@ -271,12 +277,14 @@ func WidgetManager() ui.Node {
 				Dir:    dir,
 				OnSort: onSort,
 			}),
-		),
-		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("widgetManager.styleTitle")),
-			P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetManager.styleHint")),
-			ui.CreateElement(tileStyleEditor, struct{}{}),
-		),
+		}),
+		uiw.Card(uiw.CardProps{
+			Header: H3(css.Class("card-title"), uistate.T("widgetManager.styleTitle")),
+			Body: Fragment(
+				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetManager.styleHint")),
+				ui.CreateElement(tileStyleEditor, struct{}{}),
+			),
+		}),
 	)
 }
 
