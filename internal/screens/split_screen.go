@@ -242,7 +242,9 @@ func Split() ui.Node {
 	if len(members) > 1 {
 		memberControls = Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
 			Button(css.Class("btn"), Type("button"), OnClick(selectAll), "Select all"),
-			Button(css.Class("btn"), Type("button"), OnClick(clearAll), "Clear"),
+			// "Clear" is the destructive (deselect-all) counterpart to the additive
+			// "Select all" — a ghost-danger style distinguishes the two (G12 §2).
+			Button(css.Class("btn btn-ghost-danger"), Type("button"), OnClick(clearAll), "Clear"),
 		)
 	}
 

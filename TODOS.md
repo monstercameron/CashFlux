@@ -10749,6 +10749,16 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
 
 ### G12. Split — "Who Owes Whom" (Priya) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** The page's core flow already works (instant per-member shares, settle-up
+ledger with minimal-transfer path, select-all/clear). Fixes shipped:
+- **Card titles in light mode** (CRITICAL §3) — closed by the G9 definitive `[data-theme="light"]`
+  contrast fix (member names already measured visible at `rgb(28,28,30)`).
+- **Select-all vs Clear undifferentiated** (§2) — "Clear" (the destructive deselect) is now a
+  `.btn-ghost-danger`, visually distinct from the additive "Select all".
+- **Intentionally deferred**: merging the entry-form + member-picker cards, relabeling/visually
+  distinguishing the payer select from the topbar "View as member" control, and the 768 form
+  single-column reflow are layout reworks; the entry→result loop already reads within the fold.
+
 **The story**
 Priya shares an apartment with Sam and Lee. She opens Split to enter a shared grocery
 run ($90), picks who's in, sees each person's share instantly, and reads who owes whom
@@ -13639,6 +13649,211 @@ with weights tucked into a disclosure, (c) all placeholder text readable at 768p
   all still open; this G8 review confirms and re-evidences each sub-issue.
 - L60: "Every Dollar a Job" story — apply flow, ZERO_REMAINDER, goal funding all confirmed
   working. G8 covers the pre-apply visual layer L60 did not audit.
+
+
+### G14. Documents — "Import the Statement" (Omar) — 2026-06-23 ★
+
+**The story**
+Omar opens the Documents page to bring in a bank CSV or snap a receipt, reviews the
+parsed rows, dedupes against existing transactions, and confirms the import.
+
+**Drive script**
+`e2e/glamor_14_documents.mjs` — navigates to Documents via the nav link, resets
+"View as member" to Everyone, screenshots the empty state at 1280/1440/768px in dark
+and light themes, then pastes a 5-row sample statement, clicks "Parse statement", and
+screenshots the resulting review table at 1280 dark and light. Performs a DOM audit
+(empty and review states) and a light-contrast JSON audit. No AI call; no image
+required. Run against `:8099`.
+
+Screenshots produced:
+- `glamor_14_documents_dark_1280_empty.png`
+- `glamor_14_documents_dark_1280_empty_full.png`
+- `glamor_14_documents_dark_1440_empty.png`
+- `glamor_14_documents_dark_768_empty.png`
+- `glamor_14_documents_dark_1280_review.png`
+- `glamor_14_documents_dark_1280_review_full.png`
+- `glamor_14_documents_light_1280_empty.png`
+- `glamor_14_documents_light_1280_empty_full.png`
+- `glamor_14_documents_light_1440_empty.png`
+- `glamor_14_documents_light_768_empty.png`
+- `glamor_14_documents_light_1280_review.png`
+- `glamor_14_documents_light_1280_review_full.png`
+
+JSON: `glamor_14_documents_dom.json`, `glamor_14_documents_dom_review.json`,
+`glamor_14_documents_light_contrast.json`
+
+**Build/run evidence**
+- `node e2e/glamor_14_documents.mjs` → EXIT 0
+- DOM audit (empty/dark): `cardTitles: ["Read a receipt or statement image", "Import a bank
+  or card statement", "Import transactions from CSV", "Import history"]`. `cardCount: 4`.
+  `hasChooseImageBtn: true`, `hasReadAIBtn: true`, `hasStmtTextarea: true`,
+  `hasCSVTextarea: true`, `textareaCount: 2`, `hasAccountSelect: true`,
+  `hasImportBtn: true`, `hasParseBtn: true`. `hasImagePreview: false` (C60
+  no-preview-by-default confirmed). `historyEmpty: false` (sample data has imports).
+  `overflowCount: 0`. `pageHeight === viewportH === 900` at 1280px dark.
+  `hasDraftRows: true, draftRowCount: 3` — sample data pre-populates a partial draft
+  in the empty state (persisted from sample dataset, not from our paste).
+- DOM audit (review/dark after paste + parse): `draftRowCount: 5` — all 5 pasted rows
+  parsed correctly.
+- Dark: `cardTitleColor: rgb(244,244,245)` on `cardBg: rgb(18,18,20)` — adequate.
+  `pageBg: rgb(14,14,15)`. `fieldBg: rgb(32,32,34)` — textarea fields readable.
+- Light contrast: `cardTitleColor: rgb(28,28,30)` on `cardBg: rgb(255,255,255)` — ~18:1,
+  PASSES AA. `pageBg: rgb(247,246,243)`. `mutedColor: rgb(86,86,92)`. `fieldBg:
+  rgb(241,241,242)`, `fieldColor: rgb(28,28,30)` — PASSES. **CRITICAL FAILURE:
+  `draftRowColor: rgb(244,244,245)` and `amtColor: rgb(244,244,245)` on `draftRowBg:
+  rgba(0,0,0,0)` (transparent over white card `rgb(255,255,255)`) — near-white text on
+  white, contrast ~1.05:1, FAILS AA catastrophically.** Confirmed visually in
+  `light_1280_review.png`: all amount figures ($4,200.00, ($86.40), etc.) are nearly
+  invisible in light mode.
+- 0 page errors (dark and light).
+
+**What already works well (keep — regression anchors)** ✓
+- **Four-card vertical structure is logical and complete.** Image import → statement paste
+  → CSV import → history. Each card has a clear title and plain-English description. ✓
+- **Statement auto-parse works end-to-end.** Paste a CSV-shaped statement, click "Parse
+  statement", 5 rows appear in the review table with correct descriptions, dates, and
+  formatted amounts (parentheses for negatives). Column-detection handled
+  `Date,Description,Amount` correctly. ✓
+- **Review table is well-structured in dark mode.** Each row shows description (bold),
+  date (muted meta), amount in accounting style, "Edit" button with pencil icon, and
+  "×" remove button. Clean and scannable. ✓
+- **Account selector is above the Import button (L44 fixed).** Account `<select>` and
+  "Import" / "Import these" button are above the textarea in the CSV card, and below the
+  row list in the review card — always visible without scrolling. ✓
+- **"Import as one receipt" toggle is present and clearly labelled.** Appears directly
+  above the draft rows in the review card, discoverable without being visually dominant. ✓
+- **No image preview shown without a chosen file (C60 correct).** `hasImagePreview: false`
+  confirmed. ✓
+- **No horizontal overflow at any width.** `overflowCount: 0`. ✓
+- **Zero JavaScript page errors.** Both dark and light sessions clean. ✓
+- **Card title contrast passes in light mode.** `rgb(28,28,30)` on `rgb(255,255,255)` —
+  consistent with G13; the failure is in draft row body text, not card titles. ✓
+- **Textarea fields pass contrast in both themes.** `fieldBg: rgb(241,241,242)` with
+  `fieldColor: rgb(28,28,30)` in light — adequate. ✓
+- **768px layout is clean — no collisions.** Cards remain readable; account select and
+  Import button sit side-by-side and don't clip. ✓
+
+**Structure fixes (bottom-up)**
+
+_1 · Layout_
+- [ ] **CRITICAL: Review card appears above the statement card that produced it.** DOM
+      order: image card → [draftBody] → [summaryBody] → statement card → CSV card →
+      history. After parsing the statement, review results pop in just below the image
+      card — above the statement card. Omar pastes in card 2, clicks "Parse statement",
+      and the review appears spatially before card 2. Fix: move `draftBody`/`summaryBody`
+      below the statement card in `documents.go`. Confirmed in `dark_1280_review.png`
+      and `light_1280_review.png`.
+- [ ] **The page has no visual step indicator or flow hierarchy between four flat cards.**
+      All four cards have equal visual weight; no signal that the review card is a "next
+      step" when it materialises. At minimum the review card should interrupt with a
+      colored left-border, "Step 2" label, or scroll-into-view focus on appearance.
+      Visible in all empty shots.
+- [ ] **Draft rows persist from sample dataset into the "empty" first-load state.**
+      `draftRowCount: 3` on first load — pre-existing from sample data. A fresh user
+      would be confused by a review table they didn't trigger. Either clear draft state
+      on page navigation or carry a "Continuing from last session — N rows waiting" label
+      with a "Start over" button.
+
+_2 · Spacing_
+- [ ] **Both textareas are tall in the empty state (8 rows / 6 rows).** At 768px the
+      two stacked tall textareas push both action buttons far below the fold. Collapse to
+      3 rows by default, expanding on focus or paste. Visible in `dark_768_empty.png`.
+- [ ] **Minimal gap between explanatory paragraph and textarea in each card.** A modest
+      `mt-3` spacer between the description prose and the input would improve visual
+      breathing.
+
+_3 · Theming_
+- [ ] **CRITICAL: Draft row text and amounts near-invisible in light mode.**
+      `draftRowColor: rgb(244,244,245)` and `amtColor: rgb(244,244,245)` on transparent
+      background over white card — contrast ~1.05:1, fails WCAG AA (4.5:1). The review
+      table is the most data-critical part of the page; in light mode it is functionally
+      unreadable. Root cause: `--fg` foreground token not switching in `data-theme=light`
+      within the `.rows .row` context — same root as G4–G12 card-title failures, now in
+      row body text. **Highest-impact fix on this page.** Confirmed in
+      `light_1280_review.png`.
+- [ ] **Dark inter-card dividers bleed through in light mode.** Body background
+      `rgb(14,14,15)` shows as near-black bands between white cards in
+      `light_1280_empty.png`. In light mode gap regions should show `rgb(247,246,243)`.
+      Same systemic fix as G12/G13: content-area bg token must switch.
+- [ ] **"Import as one receipt" toggle label renders in muted amber in light mode.**
+      The `.muted` color applied on light theme reads as an active/warning state rather
+      than a secondary label. Use `--fg` for toggle labels instead of `.muted`.
+- [ ] **Muted text in light (`rgb(86,86,92)`) is borderline** (~5.4:1 on white) — passes
+      AA for normal body text but tight for small paragraph text. Flag for token audit.
+
+_4 · Styling_
+- [ ] **No drag-and-drop affordance on the image import card.** No drop zone, no dashed
+      border, no "Drag a file here" hint — two flat buttons only. Add a dashed drop zone
+      with a cloud-upload icon and "Drag here or choose…" hint for desktop users. Visible
+      in all empty screenshots.
+- [ ] **"Read with AI" is the primary (green) button; "Choose image" is secondary.**
+      Primary weight should be on "Choose image" until `imageURL` is set, then shift to
+      "Read with AI". Currently inverted. Confirmed in all screenshots.
+- [ ] **No per-row duplicate badge.** Rows that will be skipped on import carry no visual
+      indicator — dedupe is only mentioned in the card description paragraph. Add an
+      "Already imported" badge (amber) to flagged rows. `draftRowCount: 3` in sample-
+      data empty state with no badges in `dark_1280_review.png`.
+- [ ] **"Edit" button on draft rows is verbose.** Each row renders the pencil icon AND
+      the full word "Edit". The "×" remove uses icon-only. Trim "Edit" to icon-only
+      (with `aria-label="Edit this row"`) to match the remove affordance.
+
+_5 · Positioning_
+- [ ] **"Parse statement" button is below the tall textarea and off-screen at 768px.**
+      Move above the textarea, or add in both positions. Confirmed in `dark_768_empty.png`.
+- [ ] **Monthly spend summary card is a separate card below the review card.** Confirmed
+      in `dark_1280_review_full.png`. Consider embedding monthly totals as a compact row
+      inside the review card above the account selector and "Import these" button.
+
+_6 · Ordering_
+- [ ] **Image import (highest friction: needs key + file + AI call) is the first card.**
+      For a desktop user, statement paste and CSV are far lower friction and more
+      frequent. Consider: statement paste → CSV → image ordering, or a single
+      "How would you like to import?" method switcher.
+- [ ] **History appears last.** A returning user must scroll past three large import
+      cards to check their last import. A compact history strip at top ("Last import:
+      3 rows · Jun 20 · Checking") would orient returning users immediately.
+
+_7 · General UX / Glanceability_
+- [ ] **The page does not communicate its current state at a glance.** Four flat cards,
+      no entry-point signal, no indication of which step is active. Needs a legible state
+      model: "Nothing yet" vs "N rows to review" (action-required) vs "Last import N
+      rows on [date]".
+- [ ] **Import success message is easy to miss.** After CSV import, a short muted text
+      appears below the CSV textarea — low priority and transient. A brief top-of-card
+      success banner or highlighted history entry would confirm completion more clearly.
+- [ ] **Card description paragraphs are long and dense.** A shorter sub-label with an
+      expandable "How?" detail would be more glanceable.
+
+**UI/UX defects (screenshot-confirmed)**
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `light_1280_review.png` | Draft row text + amounts near-invisible in light (rgb(244,244,245) on white, ~1.05:1) | Fix `--fg` token in `.rows .row` so it switches in `data-theme=light`; same root as G4–G12 |
+| 2 | `light_1280_empty.png` | Dark inter-card dividers in light (body bg rgb(14,14,15) bleeding between white cards) | Switch content-area bg to light token in `data-theme=light` (same fix as G12/G13) |
+| 3 | `dark_1280_review.png` | Review card appears above the statement card that produced it | Reorder DOM in `documents.go`: move `draftBody`/`summaryBody` below the statement card |
+| 4 | `dark_1280_empty.png` | "Read with AI" is primary (green) before image is chosen | Swap: "Choose image" = primary until imageURL is set; "Read with AI" = secondary |
+| 5 | `dark_1280_review.png` | No per-row duplicate badge — skipped rows not visually flagged | Add "Duplicate" badge (amber) to rows dedupe would skip |
+| 6 | `dark_768_empty.png` | "Parse statement" button off-screen at 768px | Move above textarea or collapse textarea to 3 rows default |
+| 7 | `light_1280_review.png` | "Import as one receipt" toggle label in muted amber | Use `--fg` (primary text) for toggle label instead of `.muted` |
+| 8 | All empty shots | No drag-drop affordance on image import card | Add dashed drop zone with upload icon |
+
+**Probe hardening**
+- Script searches textareas by `placeholder` content to identify statement vs CSV textarea;
+  fallback to first textarea. Correctly targeted the statement textarea (placeholder:
+  "Posting Date,Description,Debit,Credit…") in both sessions.
+- Empty-state DOM audit found `hasDraftRows: true, draftRowCount: 3` — persisted sample
+  draft. Review DOM audit confirmed `draftRowCount: 5` after paste + parse, proving parse
+  succeeded and replaced the draft.
+- Light contrast audit explicitly captures `draftRowBg` and `amtColor` — the critical
+  new data points that exposed the near-invisible row text in light mode.
+- 1200ms settle was adequate; no timing issues.
+
+**Cross-references**
+- C60: Image preview only after file pick — `hasImagePreview: false` confirmed (preview
+  absent until file chosen ✓); drop zone absence is the open gap.
+- L44: Account selector below fold — FIXED. Account select + Import above textarea in CSV
+  card; account select + "Import these" below row list in review card. ✓
+- G12/G13: Dark inter-card dividers in light mode — same systemic body-bg bleed confirmed
+  here (defect #2 above). Same root-cause fix applies.
 
 ---
 

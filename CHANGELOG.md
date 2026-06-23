@@ -22,8 +22,8 @@ and every commit updates this file under `Unreleased`.
   were squeezed to invisible at 1280/1440 (the action buttons claimed the whole row) — the name now
   keeps a reserved width and the actions sit in a fixed trailing group with a compact ghost-danger
   Cancel button. **Bills (G11):** dollar amounts now render full-contrast in light mode, and the
-  "Next due" stat date no longer hyphenates across two lines at 768px. This completes the GLAMOR
-  per-page review series (G1–G11).
+  "Next due" stat date no longer hyphenates across two lines at 768px. **Split (G12):** the
+  destructive "Clear" member button is now a ghost-danger style, visually distinct from "Select all".
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**
