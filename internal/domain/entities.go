@@ -461,6 +461,17 @@ type Task struct {
 	Recurrence RecurringCadence `json:"recurrence,omitempty"`
 }
 
+// SubscriptionIgnore records that the user has marked a detected subscription as
+// "not a subscription" — it is suppressed from the detected list indefinitely.
+// SubName is the transaction Desc / display name that identifies the charge, and
+// is the join key against Subscription.Name (case-insensitive). Only one ignore
+// record per SubName is kept; IgnoreSubscription deduplicates on save.
+type SubscriptionIgnore struct {
+	ID        string    `json:"id"`
+	SubName   string    `json:"subName"`
+	IgnoredOn time.Time `json:"ignoredOn"`
+}
+
 // SubscriptionCancellation records that the user has explicitly cancelled a
 // detected subscription. SubName is the subscription's display name (the
 // transaction Desc that identifies the recurring charge) and is the join key

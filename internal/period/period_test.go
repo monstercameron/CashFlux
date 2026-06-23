@@ -32,7 +32,7 @@ func TestTruncate(t *testing.T) {
 		{Quarter, d(2026, time.December, 31), d(2026, time.October, 1)}, // Q4
 		{Year, d(2026, time.June, 15), d(2026, time.January, 1)},
 		{Year, d(2026, time.December, 31), d(2026, time.January, 1)},
-		{Week, d(2026, time.June, 17), d(2026, time.June, 15)},          // Wed -> Mon
+		{Week, d(2026, time.June, 17), d(2026, time.June, 15)}, // Wed -> Mon
 	}
 	for _, tt := range tests {
 		if got := Truncate(tt.res, tt.in, time.Monday); !got.Equal(tt.want) {

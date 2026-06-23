@@ -62,7 +62,28 @@ func Subscriptions() ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
-	subs, _ := subscriptions.Detect(app.Transactions(), rates, 2)
+	rawSubs, _ := subscriptions.Detect(app.Transactions(), rates, 2)
+
+	// Build a lookup of ignored subscriptions by lower-case name so we can
+	// filter them out of the active detected list and show them in a separate
+	// "ignored" section with an undo action.
+	ignoreList := app.IgnoredSubscriptions()
+	ignoreMap := make(map[string]bool, len(ignoreList))
+	for _, ig := range ignoreList {
+		ignoreMap[strings.ToLower(strings.TrimSpace(ig.SubName))] = true
+	}
+
+	// Partition detected subscriptions into active (not ignored) and ignored.
+	var subs []subscriptions.Subscription
+	var ignoredSubs []subscriptions.Subscription
+	for _, s := range rawSubs {
+		if ignoreMap[strings.ToLower(strings.TrimSpace(s.Name))] {
+			ignoredSubs = append(ignoredSubs, s)
+		} else {
+			subs = append(subs, s)
+		}
+	}
+
 	changes, _ := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3)
 	soon := subscriptions.UpcomingRenewals(subs, 7, time.Now())
 
@@ -130,6 +151,33 @@ func Subscriptions() ui.Node {
 		// Success notice triggers a re-render so the row immediately shows its
 		// active state again (L49).
 		notice.Set(notice.Get().With(uistate.T("subs.uncancelledConfirm", name), false))
+	}
+
+	doIgnore := func(name string) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.IgnoreSubscription(name); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		// Success notice triggers a re-render so the row immediately disappears from
+		// the active list.
+		notice.Set(notice.Get().With(uistate.T("subs.ignoredConfirm", name), false))
+	}
+	doUnignore := func(name string) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.UnignoreSubscription(name); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		// Success notice triggers a re-render so the subscription reappears in the
+		// active list.
+		notice.Set(notice.Get().With(uistate.T("subs.unignoredConfirm", name), false))
 	}
 
 	// --- Cancel-candidates multi-select (L12) ---
@@ -235,6 +283,7 @@ func Subscriptions() ui.Node {
 				OnCancel:       doCancel,
 				OnUncancel:     doUncancel,
 				OnToggleSelect: toggle,
+				OnIgnore:       doIgnore,
 			})
 		},
 	)
@@ -364,6 +413,21 @@ func Subscriptions() ui.Node {
 						OnCancel:       doCancel,
 						OnUncancel:     doUncancel,
 						OnToggleSelect: toggle,
+						OnIgnore:       doIgnore,
+					})
+				},
+			)),
+		)),
+		If(len(ignoredSubs) > 0, Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("subs.ignoredTitle")),
+			P(css.Class("row-meta"), uistate.T("subs.ignoredDesc")),
+			Div(css.Class("rows"), MapKeyed(ignoredSubs,
+				func(s subscriptions.Subscription) any { return "ignored|" + s.Name },
+				func(s subscriptions.Subscription) ui.Node {
+					return ui.CreateElement(IgnoredSubscriptionRow, ignoredSubRowProps{
+						Sub:        s,
+						Base:       base,
+						OnUnignore: doUnignore,
 					})
 				},
 			)),
@@ -386,6 +450,7 @@ type subscriptionRowProps struct {
 	OnCancel       func(name string)
 	OnUncancel     func(name string)
 	OnToggleSelect func(name string) // toggle cancel-candidate selection for this row
+	OnIgnore       func(name string) // mark as "not a subscription"; nil = action not available (ignored rows)
 }
 
 // SubscriptionRow renders one detected subscription with cancel/uncancel and
@@ -415,6 +480,11 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 	uncancel := ui.UseEvent(Prevent(func() {
 		if props.OnUncancel != nil {
 			props.OnUncancel(s.Name)
+		}
+	}))
+	ignore := ui.UseEvent(Prevent(func() {
+		if props.OnIgnore != nil {
+			props.OnIgnore(s.Name)
 		}
 	}))
 	toggleSelect := ui.UseEvent(Prevent(func() {
@@ -472,6 +542,15 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 				OnClick(cancel),
 				uistate.T("subs.cancel"),
 			),
+			If(props.OnIgnore != nil, Button(
+				css.Class("btn btn-sm"),
+				Type("button"),
+				Title(uistate.T("subs.ignoreTitle")),
+				Attr("aria-label", uistate.T("subs.ignoreTitle")+" "+s.Name),
+				Attr("data-testid", "sub-ignore-"+slug),
+				OnClick(ignore),
+				uistate.T("subs.ignore"),
+			)),
 		)
 	}
 
@@ -540,6 +619,42 @@ func subShareBar(monthly, total int64) ui.Node {
 			"background":    "var(--accent)",
 			"border-radius": "999px",
 		})),
+	)
+}
+
+// ignoredSubRowProps holds the props for one row in the "not a subscription" section.
+type ignoredSubRowProps struct {
+	Sub        subscriptions.Subscription
+	Base       string
+	OnUnignore func(name string) // restore to the active detected list
+}
+
+// IgnoredSubscriptionRow renders one subscription that the user has marked as
+// "not a subscription". It owns its own click hook (per the On*-hooks-in-loops
+// rule) and shows the charge amount plus an "Undo" button to restore it.
+func IgnoredSubscriptionRow(props ignoredSubRowProps) ui.Node {
+	s := props.Sub
+	unignore := ui.UseEvent(Prevent(func() {
+		if props.OnUnignore != nil {
+			props.OnUnignore(s.Name)
+		}
+	}))
+	slug := nameSlug(s.Name)
+	return Div(css.Class("row sub-row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), s.Name),
+			Span(css.Class("row-meta"), uistate.T("subs.ignoredState")),
+		),
+		Span(css.Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),
+		Button(
+			css.Class("btn btn-sm"),
+			Type("button"),
+			Title(uistate.T("subs.unignoreTitle")),
+			Attr("aria-label", uistate.T("subs.unignoreTitle")+" "+s.Name),
+			Attr("data-testid", "sub-unignore-"+slug),
+			OnClick(unignore),
+			uistate.T("subs.unignore"),
+		),
 	)
 }
 

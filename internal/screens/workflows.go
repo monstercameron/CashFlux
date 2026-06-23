@@ -189,6 +189,19 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		}))
 	}
 
+	// insertVar appends a workflow condition variable token to the condition
+	// input. Each variable gets its own component (condVarButton) so the handler
+	// hook lives at a stable position — never called inside a loop (framework
+	// gotcha). The insert callback is a plain func passed as a prop.
+	insertVar := func(v string) {
+		cur := condition.Get()
+		if cur != "" {
+			condition.Set(cur + " " + v)
+		} else {
+			condition.Set(v)
+		}
+	}
+
 	return Section(css.Class("card"),
 		H2(css.Class("card-title"), uistate.T("workflows.create")),
 		Div(css.Class("form-grid"),
@@ -210,6 +223,23 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				),
 			),
 			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.condition")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition)),
+		),
+		// Inline variable reference for the condition formula (C65). Lists every
+		// available variable with a click-to-insert button so users don't need to
+		// memorise the names. Each variable is its own component (condVarButton) so
+		// its OnClick hook never runs inside a variable-length loop (framework rule).
+		// Transaction-context variables are only injected when the trigger is
+		// "transaction added"; all four are always shown here as reference since users
+		// can test conditions with "run now" on any trigger.
+		Div(css.Class(tw.Mt2),
+			P(css.Class("muted"), uistate.T("workflows.conditionHint")),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap15, tw.Mt1),
+				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_abs", Desc: uistate.T("workflows.varTxnAbs"), OnInsert: insertVar}),
+				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_amount", Desc: uistate.T("workflows.varTxnAmount"), OnInsert: insertVar}),
+				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_payee", Desc: uistate.T("workflows.varTxnPayee"), OnInsert: insertVar}),
+				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_category", Desc: uistate.T("workflows.varTxnCategory"), OnInsert: insertVar}),
+			),
+			P(css.Class("muted", tw.Mt1), uistate.T("workflows.conditionExamples")),
 		),
 		// Action builder. The parameter control depends on the chosen action:
 		// a category picker for "set category", a text field for create-task /
@@ -472,4 +502,23 @@ func stagedActionRow(props stagedActionRowProps) ui.Node {
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", "Remove action"), Title("Remove action"),
 			OnClick(func() { props.OnRemove(props.Index) }), "✕"),
 	)
+}
+
+type condVarButtonProps struct {
+	Token    string       // variable name, e.g. "txn_abs"
+	Desc     string       // short description shown as a tooltip
+	OnInsert func(string) // called with Token when the user clicks
+}
+
+// condVarButton renders one workflow-condition variable as a clickable pill that
+// appends the variable name to the condition input (C65). It is its own component
+// (not rendered inside a loop) so its OnClick hook always runs at a stable render
+// position — satisfying the framework's no-hooks-in-loops rule.
+func condVarButton(props condVarButtonProps) ui.Node {
+	ins := ui.UseEvent(Prevent(func() { props.OnInsert(props.Token) }))
+	return Button(css.Class("data-btn"), Type("button"),
+		Attr("data-testid", "cond-var-"+props.Token),
+		Title(props.Desc),
+		Attr("aria-label", "Insert "+props.Token+" into condition"),
+		OnClick(ins), props.Token)
 }

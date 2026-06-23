@@ -93,9 +93,6 @@ func Documents() ui.Node {
 
 	onCsv := ui.UseEvent(func(v string) { csvText.Set(v) })
 	onStmt := ui.UseEvent(func(v string) { stmtText.Set(v) })
-	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
-	onReceiptTotal := ui.UseEvent(func(v string) { receiptTotal.Set(v) })
-	onReceiptMerchant := ui.UseEvent(func(v string) { receiptMerchant.Set(v) })
 
 	// recordDocument saves a best-effort audit record of an import (logged by
 	// appstate on failure). Declared before the import handlers that call it.
@@ -105,6 +102,35 @@ func Documents() ui.Node {
 			Status: domain.DocImported, Extracted: toDocumentRows(rows),
 		})
 	}
+
+	// chooseCsvFile opens a file picker for .csv files and feeds the bytes
+	// directly into the CSV import pipeline, skipping the paste step (C60).
+	chooseCsvFile := ui.UseEvent(func() {
+		pickFile(".csv,text/csv", func(_, _ string, data []byte) {
+			if len(data) == 0 {
+				msg.Set(uistate.T("documents.csvFileEmpty"))
+				return
+			}
+			n, skipped, err := app.ImportTransactionsCSV(data, importAcct.Get())
+			if err != nil {
+				friendly := strings.TrimPrefix(err.Error(), "store: ")
+				msg.Set(uistate.T("documents.csvError", friendly))
+				return
+			}
+			if n > 0 {
+				recordDocument(domain.DocCSV, "", nil)
+			}
+			summary := uistate.T("documents.importedCsv", plural(n, "transaction"))
+			if len(skipped) > 0 {
+				summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
+			}
+			msg.Set(summary)
+			rev.Set(rev.Get() + 1)
+		})
+	})
+	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
+	onReceiptTotal := ui.UseEvent(func(v string) { receiptTotal.Set(v) })
+	onReceiptMerchant := ui.UseEvent(func(v string) { receiptMerchant.Set(v) })
 
 	importCSV := ui.UseEvent(Prevent(func() {
 		data := strings.TrimSpace(csvText.Get())
@@ -143,15 +169,18 @@ func Documents() ui.Node {
 			msg.Set(uistate.T("documents.stmtEmpty"))
 			return
 		}
-		// Parse amounts at the import account's currency precision.
+		// Parse amounts at the import account's currency precision. ParseAny
+		// auto-detects the format — OFX 1.x/2.x (bank/card statements) as well as the
+		// delimited CSV/TSV/pipe path — so a pasted .ofx/.qfx statement now imports
+		// through the same review pipeline (C74 Tier 2).
 		dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
-		st, err := statement.Parse(data, dec)
+		stRows, err := statement.ParseAny(strings.NewReader(data), dec)
 		if err != nil {
 			msg.Set(uistate.T("documents.stmtError", strings.TrimPrefix(err.Error(), "statement: ")))
 			return
 		}
-		rows := make([]extract.Row, 0, len(st.Rows))
-		for _, r := range st.Rows {
+		rows := make([]extract.Row, 0, len(stRows))
+		for _, r := range stRows {
 			rows = append(rows, extract.Row{
 				Date:        r.Date.Format("2006-01-02"),
 				Description: r.Description,
@@ -163,11 +192,7 @@ func Documents() ui.Node {
 			return
 		}
 		draft.Set(rows)
-		if n := len(st.Errors); n > 0 {
-			msg.Set(uistate.T("documents.stmtParsedWithErrors", plural(len(rows), "row"), plural(n, "row")))
-		} else {
-			msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
-		}
+		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
 		rev.Set(rev.Get() + 1)
 	}))
 
@@ -501,11 +526,19 @@ func Documents() ui.Node {
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("documents.csvTitle")),
 			P(css.Class("muted"), uistate.T("documents.csvDesc")),
+			// File picker: the primary path for real .csv files — no copy-paste needed
+			// (C60). Reads the file and imports it immediately through the same
+			// ImportTransactionsCSV / review pipeline as the paste path below.
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt1),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "csv-file-picker"),
+					OnClick(chooseCsvFile), uistate.T("documents.chooseCsvFile")),
+				Span(css.Class("muted"), uistate.T("documents.csvFileOrPaste")),
+			),
 			Form(OnSubmit(importCSV),
 				// Account selector + Import button appear above the textarea so
 				// they are always visible without scrolling on short viewports
 				// (L44: button was below the fold on a 900 px viewport).
-				Div(css.Class("form-grid"), Style(map[string]string{"margin-bottom": "0.5rem"}),
+				Div(css.Class("form-grid"), Style(map[string]string{"margin-bottom": "0.5rem", "margin-top": "0.5rem"}),
 					csvAcctSelect(accounts, importAcct.Get(), onAcct),
 					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
 				),

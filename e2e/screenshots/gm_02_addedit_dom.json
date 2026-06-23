@@ -1,0 +1,1254 @@
+{
+  "dark_1280": {
+    "menu": {
+      "items": [
+        "New transaction",
+        "New account",
+        "New budget",
+        "New goal",
+        "New task",
+        "New category",
+        "New member",
+        "New rule",
+        "Scan a document"
+      ],
+      "menuBg": "rgb(32, 32, 34)",
+      "itemColor": "rgb(244, 244, 245)",
+      "menuVisible": true,
+      "addBtnBg": "rgb(32, 32, 34)"
+    },
+    "account": {
+      "entity": "account",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(4, 4, 6, 0.6)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(18, 18, 20)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 5,
+      "labels": [
+        "Name",
+        "Account typeCheckingDebitSavingsCashCredit cardLine of creditLoanPersonal loanMortgageInvestmentOther",
+        "OwnerGroup (shared)Daniel CarterJordan Lee (roommate)",
+        "CurrencyAUD — Australian DollarCAD — Canadian DollarCHF — Swiss FrancCNY — Chinese YuanEUR — EuroGBP — British PoundINR — Indian RupeeJPY — Japanese YenMXN — Mexican PesoUSD — US Dollar",
+        "Opening balance"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Opening balance",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Account number (last 4)",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Account number (last 4)",
+          "id": ""
+        }
+      ],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add account",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(32, 32, 34)",
+      "inputBorder": "rgb(42, 42, 44)",
+      "inputColor": "rgb(244, 244, 245)",
+      "errEls": []
+    },
+    "budget": {
+      "entity": "budget",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(4, 4, 6, 0.6)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(18, 18, 20)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 5,
+      "labels": [
+        "Name",
+        "CategoryDiningEducation & LoansElectricityEntertainmentFees & ChargesGasGifts & CharityGroceriesHealth & FitnessHousingInsuranceInternetShoppingSubscriptionsTransitTransportationTravelUtilities",
+        "OwnerGroup (shared)Daniel CarterJordan Lee (roommate)",
+        "PeriodWeeklyMonthlyQuarterly",
+        "Limit",
+        "Roll over unused funds"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": "budget-add"
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Limit (USD)",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "checkbox",
+          "placeholder": "",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(32, 32, 34)",
+      "inputBorder": "rgb(42, 42, 44)",
+      "inputColor": "rgb(244, 244, 245)",
+      "errEls": []
+    },
+    "goal": {
+      "entity": "goal",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(4, 4, 6, 0.6)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(18, 18, 20)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 3,
+      "labels": [
+        "Name",
+        "Target",
+        "Target date"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": "goal-add"
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Target (USD)",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "date",
+          "placeholder": "",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(32, 32, 34)",
+      "inputBorder": "rgb(42, 42, 44)",
+      "inputColor": "rgb(244, 244, 245)",
+      "errEls": []
+    },
+    "transaction": {
+      "hasPanel": true,
+      "hasForm": true,
+      "labels": [
+        "I've reviewed this — don't flag it"
+      ],
+      "inputInfo": [
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Amount",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "What was it for?",
+          "hasLabel": false
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "date",
+          "placeholder": "",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "checkbox",
+          "placeholder": "",
+          "hasLabel": true
+        }
+      ]
+    },
+    "inlineEdit": {
+      "hasRowEdit": true,
+      "hasGrid": true,
+      "labels": [],
+      "labeledFieldCount": 0,
+      "inputs": 5,
+      "placeholderOnly": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "ph": "Description"
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "ph": "Amount"
+        }
+      ],
+      "btns": [
+        {
+          "text": "Save",
+          "cls": "btn btn-primary"
+        },
+        {
+          "text": "Cancel",
+          "cls": "btn"
+        }
+      ],
+      "bg": "rgba(0, 0, 0, 0)",
+      "inputBg": "rgb(32, 32, 34)",
+      "inputColor": "rgb(244, 244, 245)"
+    }
+  },
+  "dark_768": {
+    "menu": {
+      "items": [
+        "New transaction",
+        "New account",
+        "New budget",
+        "New goal",
+        "New task",
+        "New category",
+        "New member",
+        "New rule",
+        "Scan a document"
+      ],
+      "menuBg": "rgb(32, 32, 34)",
+      "itemColor": "rgb(244, 244, 245)",
+      "menuVisible": true,
+      "addBtnBg": "rgb(32, 32, 34)"
+    },
+    "account": {
+      "entity": "account",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(4, 4, 6, 0.6)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(18, 18, 20)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 5,
+      "labels": [
+        "Name",
+        "Account typeCheckingDebitSavingsCashCredit cardLine of creditLoanPersonal loanMortgageInvestmentOther",
+        "OwnerGroup (shared)Daniel CarterJordan Lee (roommate)",
+        "CurrencyAUD — Australian DollarCAD — Canadian DollarCHF — Swiss FrancCNY — Chinese YuanEUR — EuroGBP — British PoundINR — Indian RupeeJPY — Japanese YenMXN — Mexican PesoUSD — US Dollar",
+        "Opening balance"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Opening balance",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Account number (last 4)",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Account number (last 4)",
+          "id": ""
+        }
+      ],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add account",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(32, 32, 34)",
+      "inputBorder": "rgb(42, 42, 44)",
+      "inputColor": "rgb(244, 244, 245)",
+      "errEls": []
+    },
+    "budget": {
+      "entity": "budget",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(4, 4, 6, 0.6)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(18, 18, 20)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 5,
+      "labels": [
+        "Name",
+        "CategoryDiningEducation & LoansElectricityEntertainmentFees & ChargesGasGifts & CharityGroceriesHealth & FitnessHousingInsuranceInternetShoppingSubscriptionsTransitTransportationTravelUtilities",
+        "OwnerGroup (shared)Daniel CarterJordan Lee (roommate)",
+        "PeriodWeeklyMonthlyQuarterly",
+        "Limit",
+        "Roll over unused funds"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": "budget-add"
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Limit (USD)",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "checkbox",
+          "placeholder": "",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(32, 32, 34)",
+      "inputBorder": "rgb(42, 42, 44)",
+      "inputColor": "rgb(244, 244, 245)",
+      "errEls": []
+    },
+    "goal": {
+      "entity": "goal",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(4, 4, 6, 0.6)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(18, 18, 20)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 3,
+      "labels": [
+        "Name",
+        "Target",
+        "Target date"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": "goal-add"
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Target (USD)",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "date",
+          "placeholder": "",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(32, 32, 34)",
+      "inputBorder": "rgb(42, 42, 44)",
+      "inputColor": "rgb(244, 244, 245)",
+      "errEls": []
+    },
+    "transaction": {
+      "hasPanel": true,
+      "hasForm": true,
+      "labels": [
+        "I've reviewed this — don't flag it"
+      ],
+      "inputInfo": [
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Amount",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "What was it for?",
+          "hasLabel": false
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "date",
+          "placeholder": "",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "checkbox",
+          "placeholder": "",
+          "hasLabel": true
+        }
+      ]
+    },
+    "inlineEdit": {
+      "hasRowEdit": true,
+      "hasGrid": true,
+      "labels": [],
+      "labeledFieldCount": 0,
+      "inputs": 5,
+      "placeholderOnly": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "ph": "Description"
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "ph": "Amount"
+        }
+      ],
+      "btns": [
+        {
+          "text": "Save",
+          "cls": "btn btn-primary"
+        },
+        {
+          "text": "Cancel",
+          "cls": "btn"
+        }
+      ],
+      "bg": "rgba(0, 0, 0, 0)",
+      "inputBg": "rgb(32, 32, 34)",
+      "inputColor": "rgb(244, 244, 245)"
+    },
+    "responsive": {
+      "overflow": false,
+      "wrapW": 384,
+      "vw": 768,
+      "widthPct": 50
+    }
+  },
+  "light_1280": {
+    "menu": {
+      "items": [
+        "New transaction",
+        "New account",
+        "New budget",
+        "New goal",
+        "New task",
+        "New category",
+        "New member",
+        "New rule",
+        "Scan a document"
+      ],
+      "menuBg": "rgb(241, 241, 242)",
+      "itemColor": "rgb(28, 28, 30)",
+      "menuVisible": true,
+      "addBtnBg": "rgb(241, 241, 242)"
+    },
+    "account": {
+      "entity": "account",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(239, 237, 232, 0.75)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(255, 255, 255)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 5,
+      "labels": [
+        "Name",
+        "Account typeCheckingDebitSavingsCashCredit cardLine of creditLoanPersonal loanMortgageInvestmentOther",
+        "OwnerGroup (shared)Daniel CarterJordan Lee (roommate)",
+        "CurrencyAUD — Australian DollarCAD — Canadian DollarCHF — Swiss FrancCNY — Chinese YuanEUR — EuroGBP — British PoundINR — Indian RupeeJPY — Japanese YenMXN — Mexican PesoUSD — US Dollar",
+        "Opening balance"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Opening balance",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Account number (last 4)",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Account number (last 4)",
+          "id": ""
+        }
+      ],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add account",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(241, 241, 242)",
+      "inputBorder": "rgb(228, 226, 221)",
+      "inputColor": "rgb(28, 28, 30)",
+      "errEls": []
+    },
+    "budget": {
+      "entity": "budget",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(239, 237, 232, 0.75)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(255, 255, 255)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 5,
+      "labels": [
+        "Name",
+        "CategoryDiningEducation & LoansElectricityEntertainmentFees & ChargesGasGifts & CharityGroceriesHealth & FitnessHousingInsuranceInternetShoppingSubscriptionsTransitTransportationTravelUtilities",
+        "OwnerGroup (shared)Daniel CarterJordan Lee (roommate)",
+        "PeriodWeeklyMonthlyQuarterly",
+        "Limit",
+        "Roll over unused funds"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": "budget-add"
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Limit (USD)",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "checkbox",
+          "placeholder": "",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(241, 241, 242)",
+      "inputBorder": "rgb(228, 226, 221)",
+      "inputColor": "rgb(28, 28, 30)",
+      "errEls": []
+    },
+    "goal": {
+      "entity": "goal",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(239, 237, 232, 0.75)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(255, 255, 255)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 3,
+      "labels": [
+        "Name",
+        "Target",
+        "Target date"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": "goal-add"
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Target (USD)",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "date",
+          "placeholder": "",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(241, 241, 242)",
+      "inputBorder": "rgb(228, 226, 221)",
+      "inputColor": "rgb(28, 28, 30)",
+      "errEls": []
+    },
+    "transaction": {
+      "hasPanel": true,
+      "hasForm": true,
+      "labels": [
+        "I've reviewed this — don't flag it"
+      ],
+      "inputInfo": [
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Amount",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "What was it for?",
+          "hasLabel": false
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "date",
+          "placeholder": "",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "checkbox",
+          "placeholder": "",
+          "hasLabel": true
+        }
+      ]
+    },
+    "inlineEdit": {
+      "hasRowEdit": true,
+      "hasGrid": true,
+      "labels": [],
+      "labeledFieldCount": 0,
+      "inputs": 5,
+      "placeholderOnly": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "ph": "Description"
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "ph": "Amount"
+        }
+      ],
+      "btns": [
+        {
+          "text": "Save",
+          "cls": "btn btn-primary"
+        },
+        {
+          "text": "Cancel",
+          "cls": "btn"
+        }
+      ],
+      "bg": "rgba(0, 0, 0, 0)",
+      "inputBg": "rgb(241, 241, 242)",
+      "inputColor": "rgb(28, 28, 30)"
+    }
+  },
+  "light_768": {
+    "menu": {
+      "items": [
+        "New transaction",
+        "New account",
+        "New budget",
+        "New goal",
+        "New task",
+        "New category",
+        "New member",
+        "New rule",
+        "Scan a document"
+      ],
+      "menuBg": "rgb(241, 241, 242)",
+      "itemColor": "rgb(28, 28, 30)",
+      "menuVisible": true,
+      "addBtnBg": "rgb(241, 241, 242)"
+    },
+    "account": {
+      "entity": "account",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(239, 237, 232, 0.75)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(255, 255, 255)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 5,
+      "labels": [
+        "Name",
+        "Account typeCheckingDebitSavingsCashCredit cardLine of creditLoanPersonal loanMortgageInvestmentOther",
+        "OwnerGroup (shared)Daniel CarterJordan Lee (roommate)",
+        "CurrencyAUD — Australian DollarCAD — Canadian DollarCHF — Swiss FrancCNY — Chinese YuanEUR — EuroGBP — British PoundINR — Indian RupeeJPY — Japanese YenMXN — Mexican PesoUSD — US Dollar",
+        "Opening balance"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Opening balance",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Account number (last 4)",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Account number (last 4)",
+          "id": ""
+        }
+      ],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add account",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(241, 241, 242)",
+      "inputBorder": "rgb(228, 226, 221)",
+      "inputColor": "rgb(28, 28, 30)",
+      "errEls": []
+    },
+    "budget": {
+      "entity": "budget",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(239, 237, 232, 0.75)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(255, 255, 255)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 5,
+      "labels": [
+        "Name",
+        "CategoryDiningEducation & LoansElectricityEntertainmentFees & ChargesGasGifts & CharityGroceriesHealth & FitnessHousingInsuranceInternetShoppingSubscriptionsTransitTransportationTravelUtilities",
+        "OwnerGroup (shared)Daniel CarterJordan Lee (roommate)",
+        "PeriodWeeklyMonthlyQuarterly",
+        "Limit",
+        "Roll over unused funds"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": "budget-add"
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Limit (USD)",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "checkbox",
+          "placeholder": "",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(241, 241, 242)",
+      "inputBorder": "rgb(228, 226, 221)",
+      "inputColor": "rgb(28, 28, 30)",
+      "errEls": []
+    },
+    "goal": {
+      "entity": "goal",
+      "hasBackdrop": true,
+      "backdropCls": "flip-backdrop show",
+      "backdropBg": "rgba(239, 237, 232, 0.75)",
+      "hasWrap": true,
+      "hasBack": true,
+      "wrapW": 384,
+      "wrapH": 470,
+      "bodyH": 350,
+      "faceBg": "rgb(255, 255, 255)",
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "titleColor": "rgb(244, 244, 245)",
+      "hasDialogRole": true,
+      "hasAriaModal": true,
+      "hasAriaLabel": true,
+      "hasFormGrid": true,
+      "labeledFieldCount": 3,
+      "labels": [
+        "Name",
+        "Target",
+        "Target date"
+      ],
+      "inputTypes": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "Name",
+          "id": "goal-add"
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Target (USD)",
+          "id": ""
+        },
+        {
+          "tag": "INPUT",
+          "type": "date",
+          "placeholder": "",
+          "id": ""
+        }
+      ],
+      "placeholderOnly": [],
+      "footBtns": [
+        "Close"
+      ],
+      "submitBtns": [
+        {
+          "text": "Add",
+          "cls": "btn btn-primary"
+        }
+      ],
+      "inputBg": "rgb(241, 241, 242)",
+      "inputBorder": "rgb(228, 226, 221)",
+      "inputColor": "rgb(28, 28, 30)",
+      "errEls": []
+    },
+    "transaction": {
+      "hasPanel": true,
+      "hasForm": true,
+      "labels": [
+        "I've reviewed this — don't flag it"
+      ],
+      "inputInfo": [
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "placeholder": "Amount",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "placeholder": "What was it for?",
+          "hasLabel": false
+        },
+        {
+          "tag": "SELECT",
+          "type": "select-one",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "date",
+          "placeholder": "",
+          "hasLabel": false
+        },
+        {
+          "tag": "INPUT",
+          "type": "checkbox",
+          "placeholder": "",
+          "hasLabel": true
+        }
+      ]
+    },
+    "inlineEdit": {
+      "hasRowEdit": true,
+      "hasGrid": true,
+      "labels": [],
+      "labeledFieldCount": 0,
+      "inputs": 5,
+      "placeholderOnly": [
+        {
+          "tag": "INPUT",
+          "type": "text",
+          "ph": "Description"
+        },
+        {
+          "tag": "INPUT",
+          "type": "number",
+          "ph": "Amount"
+        }
+      ],
+      "btns": [
+        {
+          "text": "Save",
+          "cls": "btn btn-primary"
+        },
+        {
+          "text": "Cancel",
+          "cls": "btn"
+        }
+      ],
+      "bg": "rgba(0, 0, 0, 0)",
+      "inputBg": "rgb(241, 241, 242)",
+      "inputColor": "rgb(28, 28, 30)"
+    },
+    "responsive": {
+      "overflow": false,
+      "wrapW": 384,
+      "vw": 768,
+      "widthPct": 50
+    }
+  }
+}

@@ -56,6 +56,8 @@ func captureUndoPoint() {
 		return
 	}
 	undoStack.Push(cs)
+	// Feed the audit log so the Activity timeline shows a per-change entry (C78).
+	RecordAuditPoint(cs)
 	lastUndoSnap = snap
 }
 

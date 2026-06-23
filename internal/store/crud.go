@@ -444,6 +444,28 @@ func (s *SQLiteStore) ListSubscriptionCancellations() ([]domain.SubscriptionCanc
 	return loadRows[domain.SubscriptionCancellation](s.db, "subcancellations")
 }
 
+// --- Subscription ignores ---
+
+// PutSubscriptionIgnore upserts a subscription-ignore record by its ID.
+func (s *SQLiteStore) PutSubscriptionIgnore(ig domain.SubscriptionIgnore) error {
+	return putJSON(s.db, "subignores", ig.ID, ig)
+}
+
+// GetSubscriptionIgnore retrieves a subscription-ignore record by its ID.
+func (s *SQLiteStore) GetSubscriptionIgnore(id string) (domain.SubscriptionIgnore, bool, error) {
+	return getJSON[domain.SubscriptionIgnore](s.db, "subignores", id)
+}
+
+// DeleteSubscriptionIgnore removes a subscription-ignore record by its ID.
+func (s *SQLiteStore) DeleteSubscriptionIgnore(id string) (bool, error) {
+	return deleteRow(s.db, "subignores", id)
+}
+
+// ListSubscriptionIgnores returns every persisted subscription-ignore record.
+func (s *SQLiteStore) ListSubscriptionIgnores() ([]domain.SubscriptionIgnore, error) {
+	return loadRows[domain.SubscriptionIgnore](s.db, "subignores")
+}
+
 // --- Shared expenses + settlements (the roommate "settle up" ledger) ---
 
 func (s *SQLiteStore) PutSharedExpense(e domain.SharedExpense) error {

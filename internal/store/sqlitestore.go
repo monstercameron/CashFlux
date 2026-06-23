@@ -44,8 +44,9 @@ CREATE TABLE IF NOT EXISTS workflowruns (id TEXT PRIMARY KEY, data TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS sharedexpenses (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settlements  (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS earmarks         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS subcancellations (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS settings         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS subcancellations  (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS subignores        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settings          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 `
 
 // NewMemory opens a fresh in-memory SQLite database and creates the schema. A
@@ -171,6 +172,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "subcancellations", ds.SubscriptionCancellations, func(c domain.SubscriptionCancellation) string { return c.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "subignores", ds.SubscriptionIgnores, func(ig domain.SubscriptionIgnore) string { return ig.ID }); err != nil {
+		return err
+	}
 
 	settingsData, err := json.Marshal(ds.Settings)
 	if err != nil {
@@ -259,6 +263,9 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.SubscriptionCancellations, err = loadRows[domain.SubscriptionCancellation](s.db, "subcancellations"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.SubscriptionIgnores, err = loadRows[domain.SubscriptionIgnore](s.db, "subignores"); err != nil {
 		return Dataset{}, err
 	}
 

@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **C-series epic + tail closeout (2026-06-23).** Built the genuinely-open remainder:
+  - **C56** subscription correction path — `SubscriptionIgnore` entity (SQLite-persisted) + "Not a
+    subscription" / Undo UI.
+  - **C60/C65** Documents CSV file-picker + Workflows condition variable-reference (click-to-insert).
+  - **C73** the missing reusable UI primitives — `SelectInput`/`OptionsFrom`, `OverflowMenu`,
+    `InlineEditForm`, `TreeRows` (50+ tests).
+  - **C74** statement-import Tier 2 — OFX/QFX (1.x SGML + 2.x XML) parser, import-map profiles, keyword
+    categorizer, and `statement.ParseAny` auto-detect, wired into the Documents paste/import path.
+  - **C78** audit log — `internal/auditlog` + a new **Activity** timeline screen (`/activity`) fed by the
+    undo capture, with inline undo.
+  - Narrow-screen row-action buttons collapse to icon-only (C49–C65 responsive bullets).
+
+### Added
 - **C74 Tier 2/3 — OFX parser, import-mapping profiles, categorizer, ParseAny (2026-06-23).** `internal/ofx`: pure-Go OFX 1.x SGML + OFX 2.x XML parser → signed minor-unit rows; handles `[tz]` annotations, date format variants, and both bank/credit-card message sets. `internal/importmap`: `Profile` struct for saveable column-mapping + `Apply` (CSV rows → `statement.Row`) + `DefaultProfile` (auto-detect from header names). `internal/statement`: `Category string` field added to `Row`; `Categorizer` interface + `Categorize` helper + `DefaultCategorizer` keyword-table; `ParseAny` format-sniffing dispatcher (OFX vs CSV/TSV, BOM-safe). All three packages: `go vet` clean, 20 tests passing.
 
 - **C-series 6-lane sweep (2026-06-23).** Audited the C backlog (mostly already-shipped via the L-series

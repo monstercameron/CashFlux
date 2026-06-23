@@ -200,9 +200,9 @@ func TestOverfund(t *testing.T) {
 
 func TestMilestoneCrossed(t *testing.T) {
 	tests := []struct {
-		name       string
-		before     int
-		after      int
+		name          string
+		before        int
+		after         int
 		wantMilestone int
 	}{
 		{"no milestone", 20, 24, 0},

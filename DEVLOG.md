@@ -11294,3 +11294,14 @@ import Tier 2/3: XLSX/OFX/PDF/AI), C78 (audit-log SQLite + activity-timeline UI)
 out-of-scope follow-ups: C56 subscription confirm/ignore (needs a domain entity), C60 CSV file-picker,
 C65 condition-help, and C52/C54/C62 narrow-screen action-wrap (CSS/responsive). All built gates green;
 go test ./... green.
+
+## 2026-06-23 — C-series epic + tail closeout
+Built the 46 I'd flagged open. C56 (full bottom-up SubscriptionIgnore), C60/C65 (CSV picker + condition
+help), C73 (the 4 missing UI primitives + tests), C74 (OFX 1.x/2.x parser + importmap + categorizer +
+ParseAny, wired into Documents), C78 (auditlog pkg + Activity timeline screen + route + RecordAuditPoint
+fed from undo capture), and the narrow-screen icon-only row actions (CSS). Integration: wired ParseAny
+into documents.parseStatement, registered the /activity route, added RecordAuditPoint to undo.go, merged
+~19 i18n keys. Reverted (again) the incomplete out-of-scope widget-builder edit that re-appeared and broke
+the build. Residual tails remain and are NOT claimed done: C73 per-screen migration to the new primitives;
+C74 XLSX/scanned-PDF/DOCX; C78 SQLite audit persistence + Phase-2 commit seam + inline toast-undo. All
+built gates + regressions green; go test ./... green.

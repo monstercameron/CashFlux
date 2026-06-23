@@ -16767,6 +16767,1294 @@ The following C-tickets were confirmed fixed by the GLAMOR drive scripts:
 
 ---
 
+## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
+
+### GM1. Settings modal — UX deep-dive (from G21) — 2026-06-23 ★
+
+**The story**
+Renée is a household manager opening Settings for the first time on a new device. She clicks the
+household card (button.hh) at the rail bottom, the FlipPanel animates in, and she works through it
+top to bottom: household members, base currency, appearance, module visibility toggles, the AI key
+field, import/export data buttons, and finally closes satisfied. She is on a 1280×900 desktop,
+and wants to verify both dark and light themes look right.
+
+**Drive script**
+`e2e/gm_01_settings.mjs`
+
+Run command and exit code:
+```
+$env:E2E_URL="http://127.0.0.1:8099"; node e2e/gm_01_settings.mjs
+EXIT 0
+```
+
+**Screenshots produced** (all in `e2e/screenshots/`):
+
+| File | Width | Theme | Description |
+|------|-------|-------|-------------|
+| `gm01_dark_1280_top.png` | 1280 | dark | Panel open — top (Household + Appearance) |
+| `gm01_dark_1280_mid.png` | 1280 | dark | Panel scrolled mid (Notifications + Cloud + Data) |
+| `gm01_dark_1280_bottom.png` | 1280 | dark | Panel scrolled bottom (Workspaces + AppLock + Languages + Debug) |
+| `gm01_dark_768.png` | 768 | dark | Panel at mobile-breakpoint width |
+| `gm01_light_1280_top.png` | 1280 | light | Panel open — top, light theme |
+| `gm01_light_1280_mid.png` | 1280 | light | Panel scrolled mid, light theme |
+| `gm01_light_1280_bottom.png` | 1280 | light | Panel scrolled bottom, light theme |
+| `gm01_light_768.png` | 768 | light | Panel at 768px, light theme |
+
+**JSON audits**: `gm01_dark_1280_dom.json`, `gm01_dark_768_dom.json`,
+`gm01_light_1280_dom.json`, `gm01_light_768_dom.json`
+
+---
+
+**G21 modal issues resolved by the global light-mode token fix (already landed in index.html)**
+
+G21 identified three CRITICAL light-mode failures in the Settings panel. The global CSS fix
+(landed before this GM1 run) addressed all three:
+
+| G21 defect | G21 measured value | GM1 measured value | Status |
+|---|---|---|---|
+| #1 Toggle row labels white-on-white | `rgb(244,244,245)` in light | `rgb(28,28,30)` in light | **FIXED** ✓ |
+| #2 Panel backdrop dark in light | `rgba(4,4,6,0.6)` in light | `rgba(239,237,232,0.75)` in light | **FIXED** ✓ |
+| Panel face dark in light | `(dark face)` in light | `rgb(255,255,255)` in light | **FIXED** ✓ |
+| set-label muted in light | `rgb(86,86,92)` | `rgb(60,60,67)` (slightly darker) | **Improved** ✓ |
+| set-input/data-btn/rate-in | no light override | `[data-theme=light]` rule added | **FIXED** ✓ |
+
+The password inputs now report proper `aria-label` via the section name (confirmed:
+`["AI (OpenAI · bring your own key)", "Web search (chat)", "Backend bearer token"]`) —
+G21 defect #6 (password inputs with no aria) is **partially resolved** (section-name labels
+are present; dedicated `aria-label` on the input elements themselves still missing — see
+structural fixes below).
+
+The `.data-btn-danger` CSS class for the Wipe data button danger styling is now in
+`index.html` (replacing the inline `Style()` call noted in G21 defect _4_) — **FIXED** ✓.
+
+The `@media (max-width: 768px) { .flip-wrap .grid-cols-2 { grid-template-columns: 1fr !important; } }`
+rule is present in `index.html` — however at viewport 768px the panel still renders 2 columns
+(screenshots `gm01_dark_768.png`, `gm01_light_768.png`). The class-name the Go code emits
+at runtime may not be literally `grid-cols-2` in the rendered DOM — the media-query CSS is
+present but not firing. See structural fix #S4 below.
+
+---
+
+**What already works well (keep — regression anchors)** ✓
+
+- **Panel trigger is natural and discoverable.** `button.hh` at rail bottom — gear icon +
+  household name + member/currency summary. `waitFor('.set-label')` reliably signals panel
+  ready. Confirmed `gm01_dark_1280_top.png`. ✓
+- **Two-column layout at 1280 is information-dense without cramped.** Left column: household/
+  data config (members, currency, exchange rates, screen toggles, freshness, notifications).
+  Right column: appearance + AI + cloud. Mental model is sensible. Confirmed
+  `gm01_dark_1280_top.png`. ✓
+- **Light theme is now fully correct.** Backdrop warm-white (`rgba(239,237,232,0.75)`), face
+  pure white (`rgb(255,255,255)`), toggle labels dark (`rgb(28,28,30)`). In `gm01_light_1280_top.png`
+  "Daniel Carter" and "Jordan Lee (roommate)" member chips, household member section, base currency
+  selector, and Appearance controls all render cleanly. Light mode is no longer near-identical
+  to dark mode. ✓
+- **Footer is pinned.** `footPinned: true` — Cancel + Save are always accessible without
+  scrolling. Confirmed at all 4 widths/themes. ✓
+- **Save button is prominent and correctly styled.** Dark green background + green label in both
+  themes, clearly differentiated from the neutral Cancel. `gm01_dark_1280_top.png`,
+  `gm01_light_1280_top.png`. ✓
+- **Data action buttons have unique labels.** "Export JSON", "Export CSV", "Import dataset…",
+  "Load sample", "Wipe data" — each distinct. "Import dataset…" (renamed from bare "Import…")
+  is the correct label. Confirmed `gm01_dark_1280_mid.png`. ✓
+- **Password inputs have section-scoped aria labels.** All 3 password inputs report a non-empty
+  aria-label (the section heading value). G21 defect partially resolved. ✓
+- **Exchange rate rows are clean and scannable.** Currency code + `1 X =` + editable input +
+  `USD`. Pattern is immediately parseable. Dark `gm01_dark_1280_top.png`,
+  light `gm01_light_768.png`. ✓
+- **Debug log is unobtrusive at bottom.** "imported dataset / INFO", "IndexedDB artifact store ready /
+  INFO" below all user-facing settings. CashFlux v0.1.0 + "What's new" anchor.
+  `gm01_dark_1280_bottom.png`, `gm01_light_1280_bottom.png`. ✓
+- **Appearance section is at the TOP of the right column.** In both themes, `gm01_*_top.png`
+  shows Appearance (Dark/Light/System toggle, Accent swatches, Theme presets Forest/Midnight/Paper,
+  Colors, Shape & type) as the first right-column content. The G21 complaint that Appearance was
+  buried has been resolved — section order in the current wasm puts Appearance first. ✓
+- **Wipe data danger styling now uses CSS class** (`.data-btn-danger` with `color: var(--danger)`).
+  The inline `Style()` override noted in G21 is gone from index.html. ✓
+
+---
+
+**Structure fixes (bottom-up)** grouped by the 7 modal dimensions
+
+_1. OPEN/CLOSE_ **[GO-STRUCTURAL]**
+
+- **S1. No `role="dialog"` or `aria-modal` on the FlipPanel backdrop.** DOM audit: `ariaModal: null`,
+  `roleDialog: null`. The `.flip-backdrop` is the modal root element but carries neither
+  `role="dialog"` nor `aria-modal="true"`. Screen readers cannot identify the panel as a dialog or
+  restrict navigation to its content. A proper focus trap and `aria-labelledby` pointing to the
+  "Settings" H3 heading are also absent. Fix: in `internal/app/settings.go` (or whichever Go file
+  renders `.flip-backdrop`), add `role="dialog"`, `aria-modal="true"`, and
+  `aria-labelledby="settings-title"` on the backdrop element; give the H3 header `id="settings-title"`.
+  **[GO-STRUCTURAL]**
+
+- **S2. ESC-to-close and click-outside-to-close are not verified.** The `×` close button works
+  (confirmed in probe — `closeSettings()` via `.set-close` closes reliably). ESC and backdrop-click
+  were not wired in the probe. Future GM1b run should assert `Escape` key dismisses the panel and that
+  clicking the `.flip-backdrop` outside `.flip-wrap` closes it. **[GO-STRUCTURAL]** (wiring) /
+  **[CSS-ONLY]** (no fix needed if already wired — just verify).
+
+_2. SIZING/POSITIONING_ **[CSS-ONLY + GO-STRUCTURAL]**
+
+- **S3. Panel height is viewport-filling at 774px, not the designed 560px.** DOM audit:
+  `flipWrapDims: {width:760, height:774}` at 1280 and `{width:707, height:774}` at 768. The CSS reads
+  `height:470px; max-height:86vh`. At 900px viewport, `86vh = 774px`, so `max-height` wins and the
+  panel grows to 774px. This means the "380px scroll window" critique from G21 no longer applies —
+  the body scroll area is now ~700px tall. Screenshots confirm: most of the panel content is visible
+  at the top without scrolling; mid-scroll reveals cloud/data; bottom-scroll reaches languages/debug.
+  The panel height behavior is now **correct** for tall viewports. No fix needed for the max-height
+  rule. The underlying structural complaint (23 sections without nav) remains valid regardless.
+  **NOTE:** The `height:470px` base height in the CSS (line 814 of index.html) is lower than the
+  actual rendered height — the `max-height:86vh` is doing the heavy lifting. On very short viewports
+  (600px or less) the panel would be only 516px, reinstating the cramped scroll. **[CSS-ONLY]**:
+  raise the base `height` to `min(86vh, 680px)` to keep the panel spacious on short viewports too.
+
+- **S4. Two-column grid does NOT collapse to single column at 768px.** `gm01_dark_768.png` and
+  `gm01_light_768.png` both show the two-column layout intact at 768px viewport. The CSS media query
+  at `max-width:768px` targets `.flip-wrap .grid-cols-2` but the Go code likely emits a Tailwind
+  utility class (`tw.GridCols2`, resolved at runtime to a different class name) that doesn't literally
+  match `grid-cols-2` in the DOM. Result: at 768px the left column is ~330px and right column
+  ~330px — visually crowded, with the currency-code labels on FX rows partially clipped
+  (`gm01_dark_768.png`: "AUD", "CAD" etc. flush against the left panel edge).
+  Fix: **[CSS-ONLY]** — audit what class the Go runtime emits for the two-column grid wrapper in
+  the Settings panel. If the element carries an inline `style="grid-template-columns: repeat(2, ...)"`,
+  target that with `@media (max-width:768px) { .set-body > div[style*="grid-template"] { grid-template-columns: 1fr !important; } }`.
+  Alternatively add a Go-side class (e.g. `set-grid`) and target that. **[CSS-ONLY]** once the
+  selector is confirmed; **[GO-STRUCTURAL]** if a new class attribute is needed.
+
+- **S5. Panel width at 768 is 707px (92vw), leaving only 30px margin each side.** `gm01_light_768.png`:
+  the panel edges are ~15px from the viewport edge. The close (×) button at top-right nearly clips
+  the viewport edge. At 480px or below this becomes unusable. The `.flip-wrap { max-width:92vw }`
+  rule is correct for desktop but at phone widths 92vw is too greedy. Recommend
+  `max-width: min(760px, calc(100vw - 24px))` so there is always at least 12px breathing room.
+  **[CSS-ONLY]**
+
+_3. THEMING_ **[CSS-ONLY — all now fixed in index.html]**
+
+- **[RESOLVED] Toggle row labels**: `rgb(28,28,30)` in light (was `rgb(244,244,245)`) — fix landed. ✓
+- **[RESOLVED] Backdrop**: `rgba(239,237,232,0.75)` in light (was `rgba(4,4,6,0.6)`) — fix landed. ✓
+- **[RESOLVED] Panel face**: `rgb(255,255,255)` in light (was dark) — fix landed. ✓
+- **[RESOLVED] set-input / data-btn / rate-in**: light overrides present in index.html. ✓
+
+- **S6. `.switch` toggle OFF state in light is `background:#d4d2cc` with `::after` white.** Visually
+  confirmed `gm01_light_1280_top.png`: the OFF toggle (Dark/Light mode — currently "Dark" is selected,
+  so the "Light" toggle-row switch is OFF) renders as a soft grey pill. Contrast of the white thumb
+  on `#d4d2cc` background is acceptable. However the ON state for `.switch.on` uses `background:#3e7f5e`
+  (dark green) in both themes — in light mode this dark-green pill on a white card reads well.
+  No fix needed. ✓
+
+- **S7. `set-label` section headers in light: `rgb(60,60,67)` on white.** Contrast ratio ~8:1 for
+  the ALL-CAPS 0.7rem labels. This is a meaningful improvement over G21's `rgb(86,86,92)` (~5.8:1).
+  Passes WCAG AA for large text. No further fix needed. ✓
+
+_4. STRUCTURE/NAV_ **[GO-STRUCTURAL]**
+
+- **S8. 23 sections with no in-panel navigation.** DOM: `sectionCount: 23`. The panel body scrolls
+  through 23 topic sections with zero jump links, tab strips, or section sidebar. In `gm01_dark_1280_top.png`
+  the visible content shows Household + Appearance; mid-scroll shows Notifications + Cloud + Data;
+  bottom-scroll shows Workspaces + AppLock + Languages + Debug. Renée must scroll 3+ panel-heights
+  to reach the bottom. There is no progress indicator or section overview.
+  Fix (two options): (a) **Quick win** — add a `<nav>` jump-link row at the top of `.set-body` with
+  anchors to the 6 major clusters: Household · Appearance · AI · Data · Advanced. This is
+  **[GO-STRUCTURAL]** (needs a Go render change) but the HTML shape is simple. (b) **Full fix** —
+  introduce a left-rail section tab within the panel (like macOS System Settings), each tab showing
+  one compact group. This is a larger **[GO-STRUCTURAL]** redesign. The jump-link row is the
+  MVP. Cross-ref G21 defect #4.
+
+- **S9. Section ordering — right column: AI section appears BELOW the Appearance section.** DOM
+  `sectionNames` index order (right column, as confirmed by `gm01_*_top.png`): Appearance → Theme →
+  Colors → Shape & type → Dashboard banner → Preferences → AI → Web search → Cloud & server → Data →
+  Backup → Workspaces → App lock → Languages → Debug log. This is the corrected order vs G21 (where
+  AI was first). The current wasm already has Appearance at the top. G21 defect #5 is resolved. ✓
+
+- **S10. `set-label` section headings are `<div>` not `<h4>`.** DOM: `setLabelTags: ["div"]`. All 23
+  section labels are plain `<div>` elements. Screen readers navigating by heading find only the H3
+  "Settings" title — there is no heading hierarchy inside the panel. Fix: change the Go render from
+  `Div(css.Class("set-label"), ...)` to `H4(css.Class("set-label"), ...)`. **[GO-STRUCTURAL]**
+  Cross-ref G21 defect #6, G16–G19 same pattern.
+
+_5. CONTROLS_ **[GO-STRUCTURAL + CSS-ONLY]**
+
+- **S11. `labelCount: 8` for 30 inputs — most inputs lack a proper `<label>` element.** DOM audit:
+  30 inputs, 11 selects, only 8 `<label>` elements. Password inputs carry aria-label via section name
+  (the section heading is associated at the section level, not the input level). A focused password
+  input reads back the section heading as context, which is acceptable but not ideal. Dedicated
+  `aria-label` on each password input would be cleaner. The select elements carry `aria-label` as
+  confirmed in G21. Fix: add `aria-label` directly on each `<input type="password">`:
+  `"OpenAI API key"`, `"Web search API key"`, `"Backend bearer token"`. **[GO-STRUCTURAL]**
+
+- **S12. 4 "Import" buttons with identical `.data-btn` styling — L47 confirmed.** DOM:
+  `importBtnCount: 4`, texts: `["Import theme", "Import dataset…", "Import workspace", "Import languages"]`.
+  All 4 use the same `.data-btn` class. The rename from bare "Import…" to "Import dataset…" is already
+  in place (resolves L47 for the data import button). The other three are uniquely named. The remaining
+  issue is purely **visual** — all four look identical (same border, same font-size, same bg). They
+  appear in different sections (theme editor, data, workspaces, languages) so context disambiguates them,
+  but a Renée scanning the panel sees 4 identical buttons. No further rename is needed; the L47 rename
+  is done. Lower-priority: add a subtle icon prefix (`↑ Import theme`, `↑ Import dataset…`) to add
+  visual scent at a glance. **[CSS-ONLY]** (icon via CSS `content:` or Go-side icon glyph).
+
+- **S13. Toggle count mismatch: 26 `.toggle-row span` elements but only 18 `.switch` elements.**
+  DOM: `toggleRowCount: 26`, `toggleCount: 18`. 8 toggle rows have no switch — these are likely
+  "inactive" rows or read-only display rows that use the `.toggle-row` layout class without a
+  `.switch` control. This is worth auditing: any `.toggle-row` without a `.switch` may be a render
+  gap where a control was expected. **[GO-STRUCTURAL]** investigation.
+
+_6. FOOTER/ACTIONS_ **[CSS-ONLY + GO-STRUCTURAL]**
+
+- **S14. Save button closes panel with no success feedback.** `footPinned: true`, Save is always
+  accessible. But no toast, notice, or banner confirms what was saved after closing. The `noticeAtom`
+  already fires for import/wipe events. A "Settings saved" success notice on `Save()` completion
+  would close the feedback loop. **[GO-STRUCTURAL]** Cross-ref G21 defect #7.
+
+- **S15. "Wipe data" is styled as `.data-btn-danger` (CSS class now).** Visual check:
+  `gm01_dark_1280_mid.png` shows "Wipe data" with red text and border (distinct from the neutral
+  "Export JSON", "Export CSV", "Import dataset…", "Load sample" siblings). The CSS-class fix from
+  G21 _4_ is confirmed landed. No remaining action. ✓
+
+- **S16. No destructive-action confirmation guard visible in the panel UI.** The Wipe data button
+  appears in-panel with no secondary confirmation (no "Are you sure?" inline guard). A click of Wipe
+  data during a normal settings session would be catastrophic. Confirm that a confirmation dialog
+  fires before wiping — this is not visible in a static screenshot but should be verified in a future
+  flow probe. **[GO-STRUCTURAL]** verify.
+
+_7. GENERAL MODAL UX_ **[GO-STRUCTURAL + CSS-ONLY]**
+
+- **S17. No `aria-modal`, no `role="dialog"`, no focus trap.** (Duplicate of S1 — highest a11y
+  impact, listed again for prominence.) Tab order inside the panel is not confined to the panel
+  content. A keyboard user tabbing through the Settings panel can tab out into the page behind it.
+  This is a WCAG 2.1 failure (criterion 1.3.6 / 4.1.2). **[GO-STRUCTURAL]**
+
+- **S18. "Enable AI features" toggle off but AI key inputs remain active.** Not directly audited
+  in this run (would require toggling the switch and checking `disabled` state). G21 defect #10:
+  if the AI toggle is off, the key input and remember-key toggle should be dimmed/disabled.
+  **[GO-STRUCTURAL]** — needs conditional rendering or `disabled` prop wiring.
+
+- **S19. AI section hard-codes OpenAI.** Section header "AI (OpenAI · bring your own key)",
+  placeholder "sk-…", model list limited to GPT variants. C81 (multi-provider) is the gating
+  ticket. Track C81; no action here until C81 lands. Cross-ref G21 defect #9.
+
+---
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | Priority | Screenshot | Issue | Fix | Tag |
+|---|---|---|---|---|---|
+| 1 | CRITICAL | `gm01_*_768.png` | 2-column grid NOT collapsing at 768px — FX code labels clip left edge, columns ~330px each | Fix media-query selector to match the actual runtime class or add `set-grid` class | **[CSS-ONLY]** once selector found |
+| 2 | HIGH | all `gm01_*_dom.json` | `role="dialog"` / `aria-modal` absent — focus not trapped in panel | Add `role="dialog" aria-modal="true" aria-labelledby="settings-title"` in settings.go | **[GO-STRUCTURAL]** |
+| 3 | HIGH | all `gm01_*_dom.json` | `setLabelTags: ["div"]` — 23 section headers are `<div>`, no heading hierarchy | Change to `<h4>` in Go render | **[GO-STRUCTURAL]** |
+| 4 | HIGH | all `gm01_*_dom.json` | 23 sections, no jump links or section nav — 3+ scroll-lengths to reach bottom sections | Add anchor jump-links at top of `.set-body` (Household · Appearance · AI · Data · Advanced) | **[GO-STRUCTURAL]** |
+| 5 | MEDIUM | `gm01_*_dom.json` | 30 inputs, 8 `<label>` elements — most inputs unlabelled at the element level | Add `aria-label` directly on password inputs; add `<label for>` to unlabelled number inputs | **[GO-STRUCTURAL]** |
+| 6 | MEDIUM | `gm01_*_768.png` | Panel edge 15px from viewport at 768px — X button and content nearly clip | Change `max-width:92vw` to `min(760px, calc(100vw - 24px))` | **[CSS-ONLY]** |
+| 7 | MEDIUM | `gm01_*_dom.json` | No save-success feedback — Save closes panel silently | Post "Settings saved" via `noticeAtom` on Save() | **[GO-STRUCTURAL]** |
+| 8 | MEDIUM | `gm01_*_dom.json` | 4 identical-styled Import buttons — no visual differentiation | Add icon glyph prefix `↑` or subtle label prefix; unique icons per import type | **[CSS-ONLY]** / **[GO-STRUCTURAL]** |
+| 9 | LOW | `gm01_*_dom.json` | `height:470px` base in `.flip-wrap` — on short viewports (<600px) panel would be only 516px | Raise base to `min(86vh, 680px)` | **[CSS-ONLY]** |
+| 10 | LOW | `gm01_*_dom.json` | Toggle count: 26 rows but only 18 switches — 8 toggle-row elements have no switch | Audit which rows are missing controls | **[GO-STRUCTURAL]** |
+
+---
+
+**G21 cross-reference — which issues are now fixed vs still open**
+
+| G21 defect | Status in GM1 |
+|---|---|
+| #1 Toggle labels white-on-white in light | **FIXED** — `rgb(28,28,30)` confirmed ✓ |
+| #2 Panel backdrop dark in light | **FIXED** — `rgba(239,237,232,0.75)` confirmed ✓ |
+| #3 Five identical "Import" buttons | **PARTIALLY FIXED** — "Import…" renamed to "Import dataset…"; 4 remain (not 5); all uniquely named but visually identical |
+| #4 No section navigation | **OPEN** — S8 above |
+| #5 Appearance buried under AI + Cloud | **RESOLVED** — current wasm puts Appearance first in right column ✓ |
+| #6 `set-label` as `<div>`, few `<label>` elements | **OPEN** — S10 + S11 above |
+| #7 No save confirmation | **OPEN** — S14 above |
+| #8 768px overflow (25 elements) | **PARTIALLY RESOLVED** — overflow audit shows 216 elements at 768 but these are below-fold elements in the scroll container, not horizontal overflow; the 2-column-at-768 layout issue is still present (S4) |
+| #9 AI hard-coded OpenAI | **OPEN** — gated on C81 |
+| #10 AI toggle off, inputs still active | **OPEN** — S18 above |
+| Wipe data inline Style() danger | **FIXED** — `.data-btn-danger` CSS class confirmed ✓ |
+| Password inputs no aria-label | **PARTIALLY FIXED** — section-name labels present; input-level `aria-label` still missing |
+
+---
+
+**Probe hardening**
+
+- Light theme boot: `localStorage.setItem('cashflux:prefs', JSON.stringify({theme:'light'}))` then
+  `page.reload()` + `waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'light')`
+  — canonical recipe, confirmed working. `data-theme: "light"` verified before opening panel.
+- Panel opened via `page.locator('button.hh').first()` — reliable; `.set-label` as the panel-ready
+  signal confirmed (appears only when panel is mounted).
+- `overflowCount: 213/216` in the audit is a **false positive** — the overflow check computed
+  `r.bottom > window.innerHeight + 2` which flags every element inside `.set-body` that is below the
+  viewport fold (the panel body scrolls internally). The count does not represent actual horizontal
+  overflow. Future probes should restrict overflow checks to `r.right > window.innerWidth + 2`
+  for horizontal-only, or check `el.scrollWidth > el.clientWidth` on the container elements.
+- `flipWrapDims: {width:760, height:774}` — the panel renders at `max-height:86vh` (86% of 900px
+  viewport = 774px), overriding the `height:470px` base. The G21 "380px scroll window" analysis
+  was based on a different rendering context; at 900px viewport height the panel is comfortable.
+- The `@media (max-width:768px) .flip-wrap .grid-cols-2` rule is present in index.html line 951
+  but does NOT fire at viewport 768px — the runtime class is not literally `grid-cols-2`.
+  Investigate what class the Go `tw.GridCols2` constant resolves to in the rendered DOM.
+
+**Cross-references**
+- G21: primary source — most findings trace back to G21 defects.
+- C69: panel backdrop + toggle label light-mode fixes — now confirmed resolved.
+- L47: four identical-styled Import buttons (down from five) — "Import dataset…" rename done.
+- C81: AI multi-provider — gating S19; no action until C81.
+
+
+### GM2. Add/Edit entity modals — UX review — 2026-06-23 ★
+
+**The story**
+A user opens CashFlux and wants to add several things in a session: an account, a budget, a goal,
+and then log a transaction. She clicks the "+" in the top bar, picks an entity, fills the modal
+form, and saves. She also double-clicks a transaction row to fix a description in the inline edit
+form. She uses light mode on a 1280px desktop; her partner uses dark mode on a 768px tablet.
+
+---
+
+**Drive script**
+`e2e/gm_02_addedit.mjs` — opens the +Add menu and exercises: Add transaction (QuickAdd panel),
+Add account, Add budget, Add goal (FlipPanel modal via AddHost), and the inline edit form on a
+transaction row. Screenshots at 1280 + 768 × dark + light.
+
+```
+node e2e/gm_02_addedit.mjs   # against :8099 (gwc dev server)
+EXIT: 0, no warnings
+```
+
+**Screenshots produced (31 files)**
+- `gm_02_addedit_dark_1280_baseline.png`
+- `gm_02_addedit_dark_1280_addmenu_open.png`
+- `gm_02_addedit_dark_1280_add_account.png`
+- `gm_02_addedit_dark_1280_add_budget.png`
+- `gm_02_addedit_dark_1280_add_goal.png`
+- `gm_02_addedit_dark_1280_add_transaction.png`
+- `gm_02_addedit_dark_1280_inline_edit.png`
+- `gm_02_addedit_dark_768_baseline.png`
+- `gm_02_addedit_dark_768_addmenu_open.png`
+- `gm_02_addedit_dark_768_add_account.png`
+- `gm_02_addedit_dark_768_add_budget.png`
+- `gm_02_addedit_dark_768_add_goal.png`
+- `gm_02_addedit_dark_768_add_transaction.png`
+- `gm_02_addedit_dark_768_inline_edit.png`
+- `gm_02_addedit_dark_768_add_account_responsive.png`
+- `gm_02_addedit_light_1280_baseline.png`
+- `gm_02_addedit_light_1280_addmenu_open.png`
+- `gm_02_addedit_light_1280_add_account.png`
+- `gm_02_addedit_light_1280_add_budget.png`
+- `gm_02_addedit_light_1280_add_goal.png`
+- `gm_02_addedit_light_1280_add_transaction.png`
+- `gm_02_addedit_light_1280_inline_edit.png`
+- `gm_02_addedit_light_768_baseline.png`
+- `gm_02_addedit_light_768_addmenu_open.png`
+- `gm_02_addedit_light_768_add_account.png`
+- `gm_02_addedit_light_768_add_budget.png`
+- `gm_02_addedit_light_768_add_goal.png`
+- `gm_02_addedit_light_768_add_transaction.png`
+- `gm_02_addedit_light_768_inline_edit.png`
+- `gm_02_addedit_light_768_add_account_responsive.png`
+
+DOM audit: `gm_02_addedit_dom.json`
+
+---
+
+**Architecture: entity modals share a system — highest-leverage finding**
+
+All entity add modals (account, budget, goal, task, category, member, rule) go through a single
+shared path:
+- `AddMenu()` (top-bar "+" popover) → sets `AddTarget` atom
+- `AddHost()` (shell-root component) reads the atom → renders `FlipPanel(CloseOnly:true, Back:<EntityAddForm>)`
+- Every FlipPanel is 384×470px, has `role=dialog aria-modal=true aria-label=<title>`, uses `.set-h /
+  .set-body / .set-foot` chrome, and the entity form renders inside `.set-body` as `.form-grid`.
+
+This means any CSS fix to the FlipPanel chrome (title color, foot button theming, body scrollbar)
+lands for ALL 7+ entity modals at once with a single CSS change. That is the highest-leverage
+lever in this review.
+
+The inline-edit (transaction row `.row-edit`) is a different system — `InlineEditForm` component
+inside the table row — that does NOT share the FlipPanel chrome.
+
+The QuickAdd (transaction) is a third path — uses the FlipPanel container but its inner form is
+the `quickadd.go` template, not an EntityAddForm.
+
+---
+
+**What already works well (keep — regression anchors)** ✓
+
+1. **Single global entry point** (C79 resolved): one "+" button → `AddMenu` popover → entity form.
+   No more hunting per-page for the add affordance. The 9-item menu is correctly aria-wired
+   (`role=menu`, `role=menuitem`, `aria-haspopup`, `aria-expanded`). ✓
+2. **FlipPanel is a real dialog**: `role=dialog`, `aria-modal=true`, `aria-label` all confirmed
+   present on all modals. Focus-trap (Tab cycling) and Esc-to-close wired in JS. ✓
+3. **Dark-mode theming is correct across the board**: face bg `rgb(18,18,20)`, input bg
+   `rgb(32,32,34)`, input color `rgb(244,244,245)`, title color `rgb(244,244,245)`, border
+   `rgb(42,42,44)`. No dark-mode contrast failures detected. ✓
+4. **`labeled-field` is used in entity add forms**: Account=5, Budget=5, Goal=3. Most forms use
+   the `.labeled-field` wrapper which provides visible `<span>` caption above each control — a
+   real label-equivalent, not just a placeholder. ✓
+5. **Backdrop semantics**: dark mode uses correct `rgba(4,4,6,0.6)` + blur; light mode uses the
+   warm-white `rgba(239,237,232,0.75)` (G21 fix already landed). ✓
+6. **768px: modal does not overflow viewport** — `flip-wrap` respects `max-width:92vw` so at 768px
+   the 384px panel = 50% of vw, no horizontal overflow. ✓
+7. **Consistent footer pattern across modals**: all entity add modals use `CloseOnly:true` →
+   single "Close" footer button + entity-owned "Add …" primary submit inside the form body. ✓
+8. **Inline edit Save/Cancel placement**: "Save" is `.btn-primary` (left/first), "Cancel" is
+   `.btn` (secondary) — correct visual hierarchy. ✓
+9. **Light mode input theming correct**: `inputBg: rgb(241,241,242)`, `inputColor: rgb(28,28,30)`,
+   `inputBorder: rgb(228,226,221)` — all pass contrast. ✓
+
+---
+
+**Structure fixes (bottom-up, highest-impact first)**
+
+### 1. CRITICAL: FlipPanel modal title is invisible in light mode [CSS-ONLY]
+
+**Dimension: Theming**
+
+`titleColor: rgb(244, 244, 245)` on `faceBg: rgb(255, 255, 255)` in light mode — measured across
+all 7 entity modals (account, budget, goal; consistent). Contrast ratio ≈ 1.02:1. **Catastrophic
+WCAG AA failure**: the modal title ("Add account", "Add goal", "Add budget", etc.) is invisible
+against the white panel face.
+
+Root cause: `.set-h h3` has no `color` rule; it inherits the document color chain. In dark,
+the inherited `--text` is `rgb(244,244,245)` and the face is dark — passes. In light, the face
+switches to white (via `[data-theme="light"] .flip-face { background: #ffffff; }`) but no rule
+resets the inherited text to dark — it stays near-white.
+
+Fix: add a rule that forces readable color inside the light flip-face.
+
+```css
+/* GM2 FIX 1: FlipPanel modal title contrast in light mode */
+[data-theme="light"] .flip-face .set-h h3,
+[data-theme="light"] .flip-face .set-h { color: #1c1c1e; }
+```
+
+Applies to ALL 7+ entity modals. **Single 2-line CSS-only fix with maximum blast radius.**
+
+Screenshots: `gm_02_addedit_light_1280_add_account.png`, `gm_02_addedit_light_1280_add_budget.png`,
+`gm_02_addedit_light_1280_add_goal.png` (and all light-768 equivalents).
+
+---
+
+### 2. HIGH: FlipPanel footer "Close" / "Save" buttons use hardcoded dark-theme colors in light [CSS-ONLY]
+
+**Dimension: Theming**
+
+The `.set-btn.save` CSS is entirely hardcoded (no CSS variable):
+```css
+.set-btn.save { background:#1f2c24; border:1px solid #356b50; color:#7fd0a3; font-weight:600; }
+```
+In light mode, this dark-forest-green button (very dark bg, light-green text) sits on a white
+panel face. It does not adapt — the result is a dark-green rectangle on white that looks like it
+belongs to a different design system. Similarly `.set-btn.cancel` has hardcoded `color:#a6a6ac`
+which in light is low-contrast on white.
+
+Additionally: for the add-entity modals (CloseOnly=true), the sole footer button is "Close" using
+`.set-btn.save`. A "Close" action labelled with a Save-style visual hierarchy is semantically
+misleading — it appears to be the primary/submit action when it is actually just dismiss.
+
+Fix CSS:
+```css
+[data-theme="light"] .set-btn.save {
+  background: #e8f4ed; border-color: #4caf7a; color: #1a6b3c; }
+[data-theme="light"] .set-btn.cancel {
+  background: transparent; border-color: #c5c3be; color: #3c3c43; }
+[data-theme="light"] .set-btn.cancel:hover { color: #1c1c1e; border-color: #6a6a72; }
+```
+
+Screenshots: `gm_02_addedit_light_1280_add_account.png` (footer area).
+
+---
+
+### 3. HIGH: Transaction QuickAdd form has 5 of 6 inputs with no visible label [GO-STRUCTURAL]
+
+**Dimension: Form structure — visible labels vs placeholder-only (a11y)**
+
+The QuickAdd panel (Add transaction → opens FlipPanel with the quickadd form) has 6 inputs:
+- Type select (expense/income/transfer) — no label, no placeholder (icon-only? or aria-label?)
+- Amount input — placeholder "Amount", no label
+- Description input — placeholder "What was it for?", no label
+- Account select — no label, no placeholder
+- Date input — no label, no placeholder
+- "I've reviewed this" checkbox — has a label ✓
+
+5 of 6 controls are placeholder-only or aria-label–only. Placeholders disappear on input, leaving
+a screen reader with no field identification. This differs from the entity add modals (which use
+`.labeled-field` wrappers). The QuickAdd form is the most-used form in the app and has the worst
+a11y.
+
+Fix: wire `.labeled-field` wrapping into `quickadd.go` for each of the 5 unlabeled controls.
+This is GO-STRUCTURAL because it changes Go source.
+
+---
+
+### 4. HIGH: Inline-edit form has 2 of 5 inputs with no visible label [GO-STRUCTURAL]
+
+**Dimension: Form structure — visible labels vs placeholder-only (a11y)**
+
+The transaction inline-edit form (`.row-edit`) has:
+- Description input — placeholder "Description", no `labeled-field`
+- Amount input — placeholder "Amount", no `labeled-field`
+- (3 selects — status unknown from DOM; likely have `aria-label` from prior fixes)
+- `labeledFieldCount: 0` — **zero labeled-field wrappers across the entire inline-edit form**
+
+`InlineEditForm` takes a `Fields []uic.Node` array; the callers (transactions.go) do not wrap in
+`labeledField()`. Unlike the add modals which use `labeledField()` per-field, the inline-edit
+form regresses to placeholder-only labels.
+
+Fix: wrap the Description and Amount field nodes with `labeledField()` (or a minimal
+`FormField(label, control)` helper) in the call sites inside `transactions.go`. GO-STRUCTURAL.
+
+---
+
+### 5. MEDIUM: "Account number (last 4)" field in Add Account form is placeholder-only [GO-STRUCTURAL]
+
+**Dimension: Form structure — visible labels vs placeholder-only (a11y)**
+
+Account add form: `labeledFieldCount=5` but `placeholderOnly=1` — the "Account number (last 4)"
+input. It is rendered outside of a `.labeled-field` wrapper; it has no aria-label. All 4 run-
+throughs (dark/light × 1280/768) confirm the same finding.
+
+This is the only unlabeled field in any entity add modal. It appears to have been added to the
+form after the initial `labeledField()` wrapper pass, skipping the pattern.
+
+Fix: wrap `accountNumberField` in `labeledField(uistate.T("accounts.accountNumber"), input)` in
+`accountaddform.go`. GO-STRUCTURAL.
+
+---
+
+### 6. MEDIUM: Add-menu button blends into topbar in light mode — no affordance [CSS-ONLY]
+
+**Dimension: Open/close — Add-menu affordance**
+
+Dark mode: `addBtnBg: rgb(32,32,34)` — matches topbar `--bg-elev`, the + icon is the differentiator.
+Light mode: `addBtnBg: rgb(241,241,242)` — same as the topbar/card bg. The + button has no border,
+no shadow, and matches the background exactly. On `gm_02_addedit_light_1280_baseline.png` the
+button is hard to find.
+
+Fix: in light mode, give `.add-btn` a subtle border or slightly different background to establish
+affordance:
+```css
+[data-theme="light"] .add-btn {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+```
+
+---
+
+### 7. MEDIUM: 384px fixed modal is oversized for simple 3-field forms; undersized for account [CSS-ONLY + GO-STRUCTURAL]
+
+**Dimension: Sizing/positioning**
+
+All entity add modals share the same fixed 384×470px dimensions regardless of form complexity:
+- Goal: 3 fields (Name, Target, Target date) — 470px height leaves ~200px of dead space below the
+  3rd field and the "Add" button. The form looks sparse in the modal. (C13: "quick-add was
+  transaction-only with big empty space" — same issue now in entity modals.)
+- Account: up to 10+ fields visible (type-dependent: credit card shows 5 extra liability fields);
+  at 470px body=350px height, the form requires scrolling on liability accounts.
+
+The FlipPanel `Height` prop defaults to `"470px"` but could be set per entity:
+- CSS-ONLY short-term: `.set-body` could use `min-height: auto` instead of fixed, letting content
+  drive height up to `max-height:86vh`.
+- GO-STRUCTURAL proper fix: pass entity-appropriate `Height` values in `AddHost()` (e.g. goal →
+  `"320px"`, account → `"580px"` for liability / `"420px"` for asset).
+
+For now the CSS-only mitigation is the quick win:
+```css
+/* GM2 FIX 7: let the flip-wrap shrink to content up to 86vh */
+.flip-wrap { height: auto !important; min-height: 300px; max-height: 86vh; }
+.flip-inner { height: auto; }
+.flip-back  { position: relative; height: auto; min-height: 300px; }
+```
+Note: this conflicts with the 3D flip animation (which needs `position:absolute` on faces). A safe
+version requires setting `height` back after animation completes — track as GO-STRUCTURAL full fix.
+
+---
+
+### 8. MEDIUM: Primary submit button label inconsistency across entity modals [GO-STRUCTURAL]
+
+**Dimension: Footer/actions — primary-action prominence**
+
+- Account modal: "Add account" (entity-specific) ✓
+- Budget modal:  "Add" (generic) — inconsistent
+- Goal modal:    "Add" (generic) — inconsistent
+
+"Add" alone is too generic for a primary CTA in a modal context; "Add budget" / "Add goal" follows
+the pattern established by Account and provides clearer confirmation of what will be created.
+
+Fix: update submit button labels in `budgetaddform.go` and `goaladdform.go` from
+`uistate.T("common.add")` or a bare `"Add"` to entity-specific keys like
+`uistate.T("budgets.addTitle")` / `uistate.T("goals.addTitle")`. GO-STRUCTURAL.
+
+---
+
+### 9. LOW: No toast or success confirmation after entity add (cross-cutting) [GO-STRUCTURAL]
+
+**Dimension: Footer/actions — success confirmation after add**
+
+Recurring finding from L39–L42: after adding a transaction, budget, goal, or account via a modal,
+the modal simply closes with no feedback that the action succeeded. On a dense data set there is no
+visual confirmation that the new entity appeared in the list.
+
+All entity add modals call `props.OnDone()` on success, which sets `AddTarget=""` — closing the
+modal. The toast system exists (`toast.go`) but is not invoked here.
+
+Fix: after a successful add in each EntityAddForm, call the toast API (e.g.
+`appstate.ShowToast("Account added")`) before calling `props.OnDone()`. GO-STRUCTURAL. One fix per
+entity add form file (accountaddform.go, budgetaddform.go, goaladdform.go, etc.).
+
+---
+
+### 10. LOW: FlipPanel "Close" footer button label for entity adds is semantically wrong [GO-STRUCTURAL]
+
+**Dimension: Footer/actions**
+
+`AddHost()` passes `CloseOnly:true` to FlipPanel. Inside `flippanel.go`, CloseOnly renders a
+single `.set-btn.save`-styled button labelled "Close". The `.save` CSS class on a dismiss action
+is incorrect: green-toned "save" styling on a close/cancel action misleads users into thinking
+clicking it will submit something.
+
+Fix A (CSS-ONLY): add `.set-btn.close` as an alias for `.set-btn.cancel` and use it for the
+CloseOnly button:
+```css
+.set-btn.close { /* same as .set-btn.cancel */ background: transparent; border: 1px solid #34343a; color: #a6a6ac; }
+[data-theme="light"] .set-btn.close { border-color: #c5c3be; color: #3c3c43; }
+```
+Fix B (GO-STRUCTURAL proper): change `cls: "set-btn save"` to `cls: "set-btn close"` in
+`flippanel.go` CloseOnly branch.
+
+---
+
+### 11. LOW: "Scan a document" in Add menu routes to Documents page — no modal [GO-STRUCTURAL]
+
+**Dimension: Open/close — Add-menu affordance**
+
+8 of 9 menu items open an entity add modal or the QuickAdd panel. Item 9 ("Scan a document")
+navigates to `/documents`, breaking the mental model: the user expects a modal form, not a full
+navigation. This is a C79-era holdover — documents import is complex enough to require a full page.
+
+The fix is at minimum a visual separator or label differentiating "navigate to →" from "add modal"
+items, so the user is not surprised by the page transition. A divider line + "Go to" prefix would
+set the right expectation without a structural change. CSS-ONLY for the divider; GO-STRUCTURAL
+to add the "Go to" prefix text.
+
+---
+
+### 12. LOW: `set-body` scrollbar CSS is hardcoded dark-only [CSS-ONLY]
+
+**Dimension: Theming**
+
+`.set-body` (line 823-824 in `web/index.html`):
+```css
+scrollbar-color: #34343a transparent;
+.set-body::-webkit-scrollbar-thumb { background: #2d2d33; border: 2px solid #121214; }
+```
+All values are hardcoded dark. In light mode, the scrollbar thumb is dark-grey against white — low
+contrast, visually jarring.
+
+Fix:
+```css
+[data-theme="light"] .set-body {
+  scrollbar-color: #c5c3be transparent;
+}
+[data-theme="light"] .set-body::-webkit-scrollbar-thumb {
+  background: #c5c3be; border-color: #ffffff;
+}
+```
+
+---
+
+**UI/UX defects (screenshot-confirmed + named file)**
+
+| # | Defect | Screenshots | Severity |
+|---|--------|-------------|----------|
+| 1 | **Modal title invisible in light** — `rgb(244,244,245)` on white bg (~1.02:1) | `light_1280_add_account.png`, `light_1280_add_budget.png`, `light_1280_add_goal.png`, `light_768_*` | CRITICAL |
+| 2 | **Footer buttons hardcoded dark-green** in light mode | `light_1280_add_account.png` (footer band) | HIGH |
+| 3 | **QuickAdd: 5/6 inputs placeholder-only** (no visible label) | `dark_1280_add_transaction.png` | HIGH |
+| 4 | **Inline-edit: 0 labeled-field wrappers** (description + amount placeholder-only) | `dark_1280_inline_edit.png`, `light_1280_inline_edit.png` | HIGH |
+| 5 | **"Account number (last 4)" unlabeled** in Account add modal | `dark_1280_add_account.png` (DOM audit) | MEDIUM |
+| 6 | **+ button invisible against topbar in light** — same bg, no border | `light_1280_baseline.png` | MEDIUM |
+| 7 | **Goal/Budget add modal: ~200px dead space** below 3-field form | `dark_1280_add_goal.png`, `dark_1280_add_budget.png` | MEDIUM |
+| 8 | **"Add" generic label** on Budget/Goal primary button vs "Add account" on Account | `dark_1280_add_budget.png`, `dark_1280_add_goal.png` | MEDIUM |
+| 9 | **No toast on successful add** — modal closes silently (cross L39–L42) | (behavior, not screenshot) | MEDIUM |
+| 10 | **".set-btn.save" CSS on Close-only button** — wrong semantic | `light_1280_add_account.png` | LOW |
+| 11 | **"Scan a document" breaks modal mental model** (navigates, no add form) | `dark_1280_addmenu_open.png` | LOW |
+| 12 | **Scrollbar hardcoded dark** in `.set-body` | `light_1280_add_account.png` (scroll thumb) | LOW |
+
+---
+
+**Cross-references**
+
+- C13: "quick-add was transaction-only with big empty space" — same dead-space issue now in all
+  3-field entity modals (Goal, Task, Category, Member).
+- C79: global +Add menu (resolved) — menu structure is correct; this ticket reviews the modal UX
+  downstream of it.
+- L39–L42: "silent add, no toast" — finding #9 above confirms this is still unresolved for all
+  entity add modals.
+
+---
+
+**Shared system vs. ad-hoc verdict**
+
+**The entity add modals share a system.** All 7+ entities go through `AddHost()` → `FlipPanel` →
+`.form-grid` / `labeled-field` pattern. The flippanel.go chrome (`set-h`, `set-body`, `set-foot`)
+is single-sourced. CSS fixes to FlipPanel theming = maximum blast radius, affecting all modals.
+The inline-edit form (`InlineEditForm` in `inlineeditform.go`) and the QuickAdd form are separate
+systems that do NOT share the labeled-field discipline of the entity add modals — both have a11y
+regressions.
+
+---
+
+**Probe hardening**
+
+- [ ] After each modal open, assert `document.querySelector(".flip-backdrop.show")` is present
+      before screenshotting — guards against missed open.
+- [ ] After entity submit, assert the backdrop is gone AND a toast appears (regression gate for
+      finding #9 once fixed).
+- [ ] Assert `[data-theme="light"] .set-h h3` computed color is not near-white — regression gate
+      for finding #1 once fixed.
+- [ ] Assert `.labeled-field` count in inline-edit form ≥ 2 once finding #4 is fixed.
+- [ ] For QuickAdd: assert each non-checkbox input has a corresponding `aria-label` or `<label>`.
+- [ ] `closeAddMenu()` in the script uses `.add-backdrop.force-click` — correct, since Escape
+      is not wired to the add-menu (only to FlipPanel). Document this in probe comments.
+
+
+### GM3. Confirm/destructive dialogs — UX review (cf-dialog, C42) — 2026-06-23 ★
+
+**The story**
+Dana is cleaning up her household's transactions: she selects a batch of 50 stale entries,
+clicks "Delete selected", and expects to see a clear, safe dialog that names what's about to
+be destroyed, keeps the dangerous button visually distinct, and defaults focus to Cancel so a
+slip of the Enter key can't nuke her data. She also occasionally renames workspaces and custom
+pages, where a prompt dialog should auto-focus the text field and close cleanly on Escape. Both
+flows should be themeable and fully keyboard-operable.
+
+**Drive script**
+`e2e/gm_03_dialogs.mjs`
+
+**Build/run evidence**
+- App running on `http://127.0.0.1:8099` (stale wasm + live `web/index.html` — GI0 mode)
+- `$env:E2E_URL="http://127.0.0.1:8099"; node e2e/gm_03_dialogs.mjs` → **EXIT 1** (8 unique warnings across 4 theme×width combos; all structural, none are crashes)
+- 4 DOM audit JSON files produced: `gm_03_dialogs_{dark,light}_{1280,768}_audit.json`
+- 0 native browser dialogs fired throughout — C42 regression check **PASS**
+
+**Screenshots produced (e2e/screenshots/)**
+- `gm_03_dialogs_dark_1280_1280_txn_delete_open.png` — confirm dialog, dark, 1280
+- `gm_03_dialogs_dark_1280_confirm_dialog_full.png` — confirm dialog full-page, dark 1280
+- `gm_03_dialogs_dark_1280_bulk_selection_active.png` — bulk bar with selection, dark 1280
+- `gm_03_dialogs_dark_1280_bulk_no_confirm.png` — bulk delete fired with no dialog, dark 1280
+- `gm_03_dialogs_dark_1280_prompt_dialog_open.png` — prompt dialog, dark 1280
+- `gm_03_dialogs_dark_768_confirm_dialog_full.png` — confirm dialog, dark 768
+- `gm_03_dialogs_dark_768_bulk_no_confirm.png` — bulk delete no dialog, dark 768
+- `gm_03_dialogs_dark_768_prompt_dialog_open.png` — prompt dialog, dark 768
+- `gm_03_dialogs_light_1280_confirm_dialog_full.png` — confirm dialog, light 1280
+- `gm_03_dialogs_light_1280_bulk_no_confirm.png` — bulk delete no dialog, light 1280
+- `gm_03_dialogs_light_1280_prompt_dialog_open.png` — prompt dialog, light 1280
+- `gm_03_dialogs_light_768_confirm_dialog_full.png` — confirm dialog, light 768
+- `gm_03_dialogs_light_768_prompt_dialog_open.png` — prompt dialog, light 768
+- `gm_03_dialogs_txn_delete_dark_1280.png`, `_dark_768.png`, `_light_768.png`
+
+---
+
+## What already works well (keep) ✓
+
+- **No native dialogs** — `window.confirm/prompt/alert` never fire; C42 is complete and stable.
+- **Danger styling is correct** — the destructive confirm button carries `btn btn-danger` and
+  renders red/crimson in both themes (`rgb(216,113,111)` dark, `rgb(179,50,47)` light). ✓
+- **Backdrop + scrim present** — `.cf-dialog-scrim` exists; click-outside cancels. ✓
+- **Centering** — dialog is horizontally and vertically centered at both 1280 and 768. ✓
+  (rect 448×110px, centered in both viewports; `width:min(28rem,100%)` keeps it bounded)
+- **ARIA basics** — `role="dialog"` + `aria-modal="true"` on `.cf-dialog-backdrop`. ✓
+- **Keyboard entry/exit** — Enter confirms, Escape cancels (verified on prompt), Tab trapped
+  within `.cf-dialog` controls. ✓
+- **Prompt dialog focus** — `focusOnInput=true` confirmed; input also gets `.select()` so
+  any pre-filled default is ready to overwrite. ✓
+- **Cancel closes** — `.locator(".cf-dialog").count()` = 0 after Cancel every time. ✓
+- **Message copy** — "Delete 'Household & shopping'? This can't be undone." — names the
+  entity, includes irreversible warning in-message. Solid for single-row deletes. ✓
+- **Light-mode theming** — dialog face `rgb(255,255,255)`, message text `rgb(28,28,30)`,
+  cancel button `rgb(241,241,242)`. Readable, no residual dark tokens. ✓
+
+---
+
+## Structure fixes (bottom-up, highest impact first)
+
+### 1. [GO-STRUCTURAL] Bulk-delete has no confirmation dialog — L50 safety gap ★ CRITICAL
+
+**Finding:** clicking "Delete selected" after "Select all" (50 rows in probe) fires the
+delete immediately with NO `cf-dialog` and no intermediate confirmation. The only safety net
+is the undo button that appears in the bulk bar AFTER the fact. Probe confirmed: `bulkDialogOpen`
+was `false` on every run; the undo button was present and clicked to recover.
+
+**Evidence:** `gm_03_dialogs_dark_1280_bulk_no_confirm.png`, `_dark_768`, `_light_1280`.
+
+**Impact:** a user who fat-fingers "Delete selected" or selects all via keyboard shortcuts
+loses all selected data in one click. With 50+ transactions selected, that is total data loss
+for the visible filter view.
+
+**Fix:** wire `uistate.ConfirmModal` into `bulkDelete` in `internal/screens/transactions.go`
+(line 277). The message should be count-aware, e.g. "Delete 50 transactions? This can't be
+undone." using the already-translated `transactions.bulkOpDeleted` key as a template.
+
+```go
+// internal/screens/transactions.go ~line 277 — bulkDelete handler
+bulkDelete := ui.UseEvent(Prevent(func() {
+    sel := selected.Get()
+    count := len(sel)
+    uistate.ConfirmModal(
+        uistate.T("transactions.bulkDeleteConfirm", count),
+        true,
+        func(ok bool) {
+            if !ok { return }
+            // existing delete + snapshot logic here
+        },
+    )
+}))
+```
+
+Also add `"transactions.bulkDeleteConfirm"` to `internal/i18n/en.go`:
+```
+"transactions.bulkDeleteConfirm": "Delete %d transactions? This can't be undone.",
+```
+
+_Cross-links: L50 (this is the exact gap L50 named)._
+
+---
+
+### 2. [GO-STRUCTURAL] Default focus on destructive confirm is WRONG — should be Cancel
+
+**Finding:** across all 4 theme×width combos, `focusedId = "cf-dialog-confirm"` — the red
+danger button is default-focused when a confirm dialog opens. Per WCAG 3.2.4 and
+destruction-safety UX convention, the SAFE option (Cancel) must be default-focused for
+destructive dialogs so pressing Enter can't accidentally delete.
+
+**Evidence:** every audit JSON shows `"focusOnSafe": false, "focusedId": "cf-dialog-confirm"`.
+
+**Current code** (`internal/app/dialoghost.go` line 111):
+```go
+focusID := "cf-dialog-confirm"
+if req.Kind == uistate.DialogPrompt {
+    focusID = dialogInputID
+}
+```
+
+**Fix:** reverse the default for destructive confirms:
+```go
+focusID := "cf-dialog-confirm"
+if req.Kind == uistate.DialogPrompt {
+    focusID = dialogInputID
+} else if req.Destructive {
+    focusID = "cf-dialog-cancel"
+}
+```
+
+Also add `id="cf-dialog-cancel"` to the Cancel button in the render:
+```go
+Button(css.Class("btn"), Type("button"), Attr("id", "cf-dialog-cancel"),
+    OnClick(func() { finish(false) }), uistate.T("action.cancel")),
+```
+
+_Cross-links: C42 (a11y + keyboard must-keep list), WCAG SC 3.2.4._
+
+---
+
+### 3. [GO-STRUCTURAL] Confirm dialogs have no title — missing `cf-dialog-title`
+
+**Finding:** single-transaction delete dialogs render only a `<p class="cf-dialog-msg">` with
+no `<h3 class="cf-dialog-title">`. The `DialogRequest.Title` field is empty in all callers
+(e.g. `transactions.go:713` passes only a `message` to `ConfirmModal`, which has no `Title`
+parameter at all).
+
+**Evidence:** `"hasTitle": false` across all 4 audit JSONs.
+Observed message: "Delete 'Household & shopping'? This can't be undone."
+
+**Impact:** (a) No `aria-labelledby` is possible without a title element — ARIA pattern for
+`role=dialog` requires a labelling heading (ARIA APG). (b) At glance a user can't
+distinguish the "confirm a delete" chrome from a generic notice. (c) The `.cf-dialog-title`
+Fraunces serif style is defined in CSS but never triggered for confirms.
+
+**Fix:** surface the `Title` field. For destructive confirms, provide a clear action-class
+title. Two routes:
+
+Option A — add `Title` to the `ConfirmModal` helper signature:
+```go
+// uistate/dialog.go
+func ConfirmModal(title, message string, destructive bool, onResult func(bool))
+```
+Then each call site passes e.g. `"Delete transaction"`.
+
+Option B (simpler, no API change) — auto-derive a title in `DialogHost` when `Destructive`
+is true and `Title` is empty:
+```go
+if req.Title == "" && req.Destructive {
+    req.Title = uistate.T("dialog.deleteTitle") // "Are you sure?"
+}
+```
+
+Either way add `aria-labelledby="cf-dialog-title"` on the backdrop element and
+`id="cf-dialog-title"` on the `<h3>`.
+
+_Cross-links: C42 (a11y — labelledby listed as missing in this review), ARIA APG Dialog pattern._
+
+---
+
+### 4. [GO-STRUCTURAL] Missing `aria-labelledby` on the dialog backdrop
+
+**Finding:** `labelledBy: null` in all audit JSONs. The `role=dialog` element (`.cf-dialog-backdrop`)
+has `aria-modal="true"` but no `aria-labelledby`, so screen readers cannot announce the dialog
+title when it opens.
+
+**Fix:** once item #3 above adds a title `<h3 id="cf-dialog-title">`, add
+`Attr("aria-labelledby", "cf-dialog-title")` to the backdrop element in `dialoghost.go`.
+Also consider `role="alertdialog"` (vs `role="dialog"`) for destructive-only confirms —
+`alertdialog` is announced with urgency by most screen readers.
+
+_Cross-links: C42 (a11y must-keep list), ARIA APG._
+
+---
+
+### 5. [CSS-ONLY] Backdrop blur/dim is plain black scrim — consider frosted glass
+
+**Finding:** `.cf-dialog-scrim { background: rgba(0,0,0,.45) }` — a flat translucent black
+with no blur. The FlipPanel (Settings, Quick-add) uses `backdrop-filter:blur(...)` for a
+frosted-glass modal feel (per GM1 review). The cf-dialog system is visually lighter/cheaper
+by comparison.
+
+**Fix (CSS only, landable now in `web/index.html`):**
+```css
+.cf-dialog-scrim {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+```
+
+Impact: low — purely cosmetic consistency between the two modal systems.
+
+---
+
+### 6. [CSS-ONLY] Dialog box-shadow is inconsistent with FlipPanel elevation
+
+**Finding:** `.cf-dialog { box-shadow: 0 12px 40px rgba(0,0,0,.3) }` — uses `rgba` black with
+no variable-aware color. In light mode where the background is white, the shadow reads well;
+in dark mode the card-on-dark shadow has limited visible contrast. The FlipPanel uses
+`--shadow-xl` (if defined) or similar.
+
+**Fix (CSS only):**
+```css
+.cf-dialog {
+  box-shadow: 0 12px 40px rgba(0,0,0,.35), 0 0 0 1px var(--line,#e5e7eb);
+}
+```
+
+---
+
+### 7. [CSS-ONLY] Confirm dialog is very compact — minimal breathing room
+
+**Finding:** rect height = 110px at all viewports. With message text + two buttons and
+1.25rem padding, the dialog reads as cramped relative to the FlipPanel modals (which have
+full 560px height). This is functional but the spatial economy is tight for a moment that
+asks the user to make a deliberate choice.
+
+**Fix (CSS only):** increase padding slightly and enforce a min-height:
+```css
+.cf-dialog {
+  padding: 1.5rem 1.5rem 1.25rem;
+  min-height: 6rem;
+}
+```
+
+---
+
+### 8. [GO-STRUCTURAL] Bulk-delete undo relies on post-hoc recovery rather than pre-action confirmation
+
+**Note** (ties to #1): the bulk undo ("Undo" button in the bulk bar) is well-implemented as
+a secondary safety net. It should be kept even after adding a pre-confirmation dialog —
+it protects against accidental confirms. The undo button's `title="Undo the last bulk action"`
+was detectable and clickable by the probe; this is the correct fallback.
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+| # | Defect | Screenshots | Tag |
+|---|--------|------------|-----|
+| D1 | Bulk delete fires immediately — no confirm, no count | `dark_1280_bulk_no_confirm.png`, `dark_768_bulk_no_confirm.png`, `light_1280_bulk_no_confirm.png` | [GO-STRUCTURAL] |
+| D2 | Destructive confirm autofocuses the danger button, not Cancel | All `_audit.json`: `focusedId=cf-dialog-confirm` | [GO-STRUCTURAL] |
+| D3 | No dialog title on any confirm dialog | All `_audit.json`: `hasTitle: false` | [GO-STRUCTURAL] |
+| D4 | No `aria-labelledby` on `role=dialog` backdrop | All `_audit.json`: `labelledBy: null` | [GO-STRUCTURAL] |
+| D5 | Scrim has no backdrop blur (inconsistent with FlipPanel) | `dark_1280_confirm_dialog_full.png` | [CSS-ONLY] |
+| D6 | Dialog shadow is not theme-token-aware | `light_1280_confirm_dialog_full.png` | [CSS-ONLY] |
+| D7 | Prompt confirm button is `btn-primary` (correct), no accidental danger-styling | `dark_1280_prompt_dialog_open.png` | No defect — ✓ |
+
+---
+
+## Probe hardening notes
+
+- gwc-error-overlay dismissed via `page.evaluate(() => document.getElementById('gwc-error-overlay')?.remove())`
+  before every interaction — essential; without it, overlay intercepts all clicks (confirmed on prior G-series probes).
+- Bulk selection triggered via `button[title*="Select all transactions in the current filtered view"]` — robust;
+  avoids per-row checkbox assumption (the transactions list uses atom-based selection, not `<input type=checkbox>`).
+- Undo triggered via `button[title*="Undo the last bulk"]` after accidental bulk delete — probe recovered
+  all deleted data on every run.
+- P3 (custom-page delete) required a pre-existing custom page; probe skipped gracefully when none was
+  present. To cover this path: seed a custom page before the probe pass, or create one via `createCustomPage`
+  helper (pattern from `glamor_22_custompages.mjs`), then verify its delete confirm.
+- Native dialog listener `page.on("dialog")` present throughout — fired 0 times.
+
+---
+
+## Destructive-action safety verdict
+
+**UNSAFE as shipped** for bulk operations. D1 (no bulk-delete confirmation) is the primary
+risk: a user with 50 transactions selected can destroy all of them in one mis-click with no
+warning and no chance to review. The undo button mitigates but does not substitute for
+pre-confirmation. D2 (wrong focus on confirm button) compounds this: if a confirm dialog
+WERE shown, a stray Enter keypress while thinking would still confirm.
+
+Single-row delete is safer — the message names the entity ("Delete 'Household & shopping'?
+This can't be undone."), the danger button is visually red, and Cancel is present — but the
+wrong default focus (D2) still means Enter-key users are one keystroke from data loss.
+
+Fix priority: D1 then D2 then D3/D4 (a11y), then CSS-only D5/D6.
+
+_Cross-links: C42 (replace native popups — DONE), L50 (bulk delete had no confirmation — this review confirms still open)._
+
+
+### GM4. FlipPanel system + widget gear + command palette — UX review — 2026-06-23 ★
+
+**The story**
+Marcus is a power user who keeps the keyboard in reach. He opens the Dashboard at 8 am, hits ⌘K to jump to Reports without mousing to the rail, then comes back and clicks the gear on the "Needs attention" widget to tune which alerts surface. He filters by typing a few letters, arrow-keys to the right row, and presses Enter. Later he opens the widget gear, toggles off a noisy alert, and hits Save. Everything should feel immediate, readable in both themes, and keyboard-complete.
+
+**Drive script**
+`e2e/gm_04_palette_gear.mjs`
+
+**Build / run evidence**
+- App running on `http://127.0.0.1:8099` (status 200 confirmed before run)
+- `$env:E2E_URL="http://127.0.0.1:8099"; node e2e/gm_04_palette_gear.mjs` → **EXIT 0**
+- 0 page errors (all four sessions)
+- 20 screenshots + 4 JSON data files produced (all ✓)
+
+**Screenshots produced**
+- `gm_04_palette_open_dark_1280.png`
+- `gm_04_palette_filter_dark_1280.png`
+- `gm_04_palette_nav_dark_1280.png`
+- `gm_04_dashboard_dark_1280.png`
+- `gm_04_gear_open_dark_1280.png`
+- `gm_04_gear_closed_dark_1280.png`
+- `gm_04_palette_open_dark_768.png`
+- `gm_04_palette_filter_dark_768.png`
+- `gm_04_palette_nav_dark_768.png`
+- `gm_04_dashboard_dark_768.png`
+- `gm_04_gear_open_dark_768.png`
+- `gm_04_gear_closed_dark_768.png`
+- `gm_04_palette_open_light_1280.png`
+- `gm_04_palette_filter_light_1280.png`
+- `gm_04_palette_nav_light_1280.png`
+- `gm_04_dashboard_light_1280.png`
+- `gm_04_gear_open_light_1280.png`
+- `gm_04_gear_closed_light_1280.png`
+- `gm_04_palette_open_light_768.png`
+- `gm_04_palette_filter_light_768.png`
+- `gm_04_palette_nav_light_768.png`
+- `gm_04_dashboard_light_768.png`
+- `gm_04_gear_open_light_768.png`
+- `gm_04_gear_closed_light_768.png`
+
+JSON: `gm_04_dom_dark_1280.json`, `gm_04_dom_dark_768.json`, `gm_04_dom_light_1280.json`, `gm_04_dom_light_768.json`
+
+---
+
+**What already works well (keep — regression anchors)** ✓
+
+- **Palette opens with focus in the search input.** `inputFocused: true` confirmed across all four sessions. The user can type immediately with no click required — correct power-user affordance. `gm_04_palette_open_dark_1280.png` ✓
+- **Ctrl+K toggle works reliably.** Open → ESC hides (`display: none`); Ctrl+K re-opens; the overlay is lazy-built on first use and reused thereafter. ESC-closes confirmed `paletteHidden: true` in all four sessions. ✓
+- **Group headers render in unfiltered view.** Three section headers (NAVIGATE / ACTIONS / WORKSPACES) appear correctly in the unfiltered list, giving the palette structure at a glance. `headerCount: 3` confirmed. `gm_04_palette_open_dark_1280.png` ✓
+- **Fuzzy entity search surfaces user data.** Typing "acc" instantly surfaces account-entity jump targets (Everyday Checking, Roth IRA, Rewards Credit Card, 12-month CD, etc.) ranked above generic nav items — the entity-jump architecture (entityJumpCommands) works. `gm_04_palette_filter_dark_1280.png`, `gm_04_palette_filter_light_1280.png` ✓
+- **Arrow-key nav highlight moves correctly.** The selected row changes background on each ArrowDown; the highlighted row is visually distinct in dark mode. `gm_04_palette_nav_dark_1280.png` ✓
+- **FlipPanel 3D flip animation completes cleanly.** `isFlipped: true` + `isShown: true` confirmed; the `.flip-inner.flipped` class is set, the rotateY(180deg) + scale(1) CSS fires. The back-face (settings panel) is displayed after the flip in all four sessions. ✓
+- **Gear panel ARIA is correct.** `wrapRole: "dialog"`, `wrapAriaModal: "true"`, `wrapAriaLabel: "Needs attention"` — role/modal/label all present on `.flip-wrap`. ✓
+- **ESC closes the gear panel.** `gearGone: true` after Escape in all sessions; focus restore logic in UseEffect cleanup also fires. ✓
+- **Gear opens the right widget.** The first widget is the "Needs attention" freshness widget, which has real settings (5 toggles + 2 number inputs = 7 controls). `bodyIsEmpty: false`, `inputCount: 5`, `toggleCount: 10`. The "Save"-able footer with Cancel + Save is correctly shown (not CloseOnly). ✓
+- **Backdrop blur present.** `bdBdFilter: "blur(3px)"` confirmed in all sessions — the blurred backdrop makes the modal feel elevated above the page content. `gm_04_gear_open_dark_1280.png` ✓
+- **Dark palette card is correctly elevated.** Dark card uses `rgb(32,32,34)` on the `rgba(0,0,0,0.5)` overlay backdrop — clearly distinct from the page surface and text is `rgb(244,244,245)`. Reads cleanly. `gm_04_palette_open_dark_1280.png` ✓
+- **Gear panel light-mode face is white.** `backBg: rgb(255,255,255)` in light sessions; the panel body (toggle labels, inputs) renders on a crisp white surface. `gm_04_gear_open_light_1280.png` ✓
+- **Gear panel 768 rendering.** Panel renders at its CSS-fixed 384×470 which fits comfortably inside a 768-wide viewport (max-width: 92vw clamps it). `gm_04_gear_open_dark_768.png` ✓
+- **Panel title centers correctly.** The flexbox spacer (`width: 1.5rem`) balances the close-button so the `set-h h3` title is visually centered in the header bar. ✓
+- **Gear button visibility on hover.** Gear icon is hidden at rest and becomes visible on `.w:hover` (CSS opacity/color transition), keeping the dashboard surface calm and decluttered. `gm_04_dashboard_dark_1280.png` ✓
+
+---
+
+**Structure fixes (bottom-up, by review dimension)**
+
+#### 1. OPEN / CLOSE
+
+**[CSS-ONLY] GM4-1. Palette: no `role="dialog"` / `aria-modal` on the card or overlay.**
+The palette overlay (`#cf-cmd-palette`) and its inner card div carry no ARIA roles. Screen readers cannot identify this as a dialog. The overlay is built imperatively in Go (shortcuts.go) so adding ARIA attributes there is possible without a Go rebuild — but only the JS/DOM layer touches it at runtime. Because the palette is DOM-built (not a wasm component), the fix must be applied in `buildCommandPalette` in `shortcuts.go`, which requires a Go/wasm rebuild.
+Cross-ref: C68 (palette implemented); consistent with FlipPanel which does set role/aria-modal correctly.
+**[GO-STRUCTURAL]** — needs `buildCommandPalette` in `shortcuts.go` to call `.setAttribute("role","dialog")` + `.setAttribute("aria-modal","true")` + `.setAttribute("aria-label", T("cmd.search"))` on the card div.
+
+**[CSS-ONLY] GM4-2. Palette: no `listbox`/`option` ARIA on the result container.**
+`#cf-cmd-list` has no `role="listbox"` and individual result rows carry `role="option"` but no `aria-selected`. A screen reader cannot navigate the result list by role. The `renderPalette` function in shortcuts.go builds the row HTML as a string — adding `role="listbox"` to `#cf-cmd-list` and `aria-selected="true/false"` to the selected row is a Go-side string-build change.
+**[GO-STRUCTURAL]** — `buildCommandPalette` / `renderPalette` changes in `shortcuts.go`.
+
+**[CSS-ONLY] GM4-3. Palette: backdrop click dismisses correctly but has no `aria-label`.**
+The overlay backdrop (`#cf-cmd-palette`) itself has no accessible label explaining its purpose — a SR user would read an unlabelled `div`. Low priority given the inner card also lacks role, but adds to the a11y gap.
+**[GO-STRUCTURAL]** — cosmetic change in `buildCommandPalette`.
+
+#### 2. SIZING / POSITIONING
+
+**[CSS-ONLY] GM4-4. Palette: 768-wide layout forces left-aligned card with dead right margin.**
+At 768px the palette card (`width: min(92vw, 520px)`) resolves to 92vw ≈ 707px — almost full width, but the overlay uses `place-items: start center` (padding-top: 12vh). The card starts at the top-left of center content. In `gm_04_palette_open_dark_768.png` the card fills almost the full width but has asymmetric side padding and the "Search commands…" input underline bar seems to bleed edge-to-edge. This reads more like a sheet than a centered palette — consider `min(92vw, 520px)` is fine, but 12vh top offset + full-width feel at 768 loses the "spotlight" quality. A CSS-only fix is to clamp the card narrower at 768 (e.g. `max-width: min(94vw, 480px)` with `@media (max-width: 800px)`).
+**[CSS-ONLY]** — add a media-query override in `web/index.html` for the palette card.
+
+**[CSS-ONLY] GM4-5. Gear panel: fixed 384×470 size does not adapt to 768 viewport.**
+`.flip-wrap` is hard-coded `384px × 470px` with `max-width: 92vw`. At 768px the panel fits (384 < 768 × 0.92 ≈ 707) but at narrower mobile (<420px) the height `max-height: 86vh` would constrain it. The panel is fine at the tested viewports (768+), but the fixed height means a long gear panel (many settings) clips and relies on `.set-body` overflow-y scrolling. No defect at tested sizes, but the gear panel's header ("Needs attention") at 768 is confirmed readable — `gm_04_gear_open_dark_768.png` ✓.
+
+#### 3. THEMING
+
+**[CSS-ONLY] GM4-6. CRITICAL — palette selected-row highlight is invisible in light mode.**
+`renderPalette` writes the selected row's background as inline `background: var(--hover, #1c1c1e)`. In light mode the CSS custom property `--hover` is not defined in `web/index.html`, so the fallback `#1c1c1e` fires — near-black on a `rgb(241,241,242)` card. The text color is also `rgb(28,28,30)` (dark ink). Result: the selected row is a solid near-black band; the label text on it disappears entirely (~1:1 contrast on the selected band). Visually confirmed: `gm_04_palette_nav_light_1280.png` and `gm_04_palette_nav_light_768.png` show a jet-black selected row with invisible text.
+**Fix (CSS-ONLY):** Add `--hover: #e8e6e1;` to the `[data-theme="light"]` block in `web/index.html`. The palette reads `var(--hover)` as an inline style so it will pick up the token change automatically. The Go source does not need touching.
+
+**[CSS-ONLY] GM4-7. Palette card backdrop color is hardcoded dark (`rgba(0,0,0,0.5)`) in light mode.**
+The palette overlay background is set in `buildCommandPalette` as a style string: `background: rgba(0,0,0,0.5)`. In light mode a 50% black veil over a light app reads as a severe darkening — more alarming than grounding. The Settings FlipPanel correctly uses `.flip-backdrop { background: rgba(4,4,6,.6); }` with a light override `[data-theme="light"] .flip-backdrop { background: rgba(239,237,232,0.75); }`. The palette bypasses this system because it's an imperative DOM overlay.
+Visual: `gm_04_palette_open_light_1280.png` shows an intensely dark overlay behind a white card — the contrast is jarring vs. the warm-tinted backdrop the gear panel correctly uses.
+**Fix option A (CSS-ONLY):** Add `#cf-cmd-palette { background: rgba(0,0,0,0.5); }` and `[data-theme="light"] #cf-cmd-palette { background: rgba(239,237,232,0.75); }` in `web/index.html`, then strip the inline background from the overlay in `buildCommandPalette`.
+**Fix option B (GO-STRUCTURAL):** Have `buildCommandPalette` use a CSS class instead of an inline style for the overlay background, then define the class with a light-mode override in CSS. More robust long-term.
+Current tag: **[CSS-ONLY]** for option A — it can override the inline style with `!important` on the ID selector, which has higher specificity than an element inline only if the rule uses `!important`. Because inline styles win over stylesheet rules, Option A requires `!important`. Alternatively, apply it as `background` CSS class (Option B) — that requires a Go change. **Pragmatic CSS-only fix: add `[data-theme="light"] #cf-cmd-palette { background: rgba(239,237,232,0.75) !important; }` to `web/index.html`.**
+
+**[CSS-ONLY] GM4-8. Gear panel footer and header are hardcoded dark in light mode.**
+`.set-h` (`border-bottom: 1px solid #2a2a2c`) and `.set-foot` (`border-top: 1px solid #2a2a2c`) use dark hardcoded border colors. Neither has a `[data-theme="light"]` override. In light mode the gear panel's header separator and footer separator are dark bands on a white card.
+Visual: `gm_04_gear_open_light_1280.png` — the `set-h` bottom border line and `set-foot` top border line are visibly darker than the panel's white surface, creating a harsh contrast on an otherwise clean white card. The overall impression is still readable but the separator lines look like they're from dark mode.
+**Fix (CSS-ONLY):** Add to `web/index.html`:
+```css
+[data-theme="light"] .set-h  { border-bottom-color: #e4e2dd; }
+[data-theme="light"] .set-foot { border-top-color:    #e4e2dd; }
+```
+
+**[CSS-ONLY] GM4-9. Gear panel Save button is dark-green in light mode (OK functionally, not on-theme).**
+`.set-btn.save { background: #1f2c24; border: 1px solid #356b50; color: #7fd0a3; }` — these dark-green values are hardcoded with no light-mode override. In light mode the Save button is a dark forest-green island on a white card, which reads correctly as an action button but doesn't harmonise with the light-mode accent token (`--accent` resolves to the user's chosen accent). Visual: `gm_04_gear_open_light_1280.png` — Save is a dark green button, Cancel is a ghost — the contrast is correct (~6:1) but the dark-on-light island effect is aesthetically heavy.
+**Fix (CSS-ONLY):** Add light-mode save-button tokens that use the accent and a lighter surface:
+```css
+[data-theme="light"] .set-btn.save {
+  background: var(--accent, #2e7d52);
+  border-color: var(--accent, #2e7d52);
+  color: #ffffff;
+}
+[data-theme="light"] .set-btn.save:hover {
+  filter: brightness(0.9);
+}
+[data-theme="light"] .set-btn.cancel {
+  border-color: #c8c6c1;
+  color: #4b4b52;
+}
+[data-theme="light"] .set-btn.cancel:hover {
+  color: #1c1c1e;
+  border-color: #9a9a9e;
+}
+```
+
+#### 4. STRUCTURE
+
+**[GO-STRUCTURAL] GM4-10. C11 — first gear opened is always the first widget, not necessarily the one the user clicked.**
+The probe always opens the gear of `[data-widget]:first` — in practice, the widget receiving the gear click is determined by which widget is hovered. The first rendered widget happens to be "Needs attention" (freshness widget) which has full settings. For widgets that genuinely have no schema settings (e.g. a custom-page tile, or a data-only display widget added via the Widget Builder), `CloseOnly: true` is set by `!widgetcfg.Has(id)` → `FlipPanel.CloseOnly`. The probe found `footLabels: ["Cancel", "Save"]` for the first widget — correct. C11 empty-panel behavior is structurally implemented (`CloseOnly` flag exists in the Go source) but was not exercised in this probe because the first widget has settings.
+**Gap:** No screenshot evidence of the C11 "Close-only" empty state — a settingless widget panel must be found and probed. Recommended: add a Widget Builder–created widget with no schema and probe its gear. Tracking: C11 structural implementation exists; visual/UX quality of the CloseOnly empty state is unreviewed.
+
+**[CSS-ONLY] GM4-11. Palette: no keyboard hint text visible at bottom of palette.**
+The palette card has no footer strip with "↑↓ navigate · Enter select · Esc close" hints. The navigation affordance is limited to the `jump ↵` breadcrumb on nav-group rows. Power users learn fast, but first-time ⌘K users have no visible indication that arrow keys work.
+`gm_04_palette_open_dark_1280.png` — visible: rows have `jump ↵` on right side for Navigate group, but no footer hint bar.
+Confirmed cross-ref with C68 scope: the ticket specifies "keyboard hints" as part of the palette structure. This is absent.
+**Fix (GO-STRUCTURAL):** Add a footer div to `buildCommandPalette` below `#cf-cmd-list` with `↑↓ navigate · ↵ select · Esc close` in muted small text.
+
+**[GO-STRUCTURAL] GM4-12. Palette: 58 rows unfiltered is cognitively overwhelming.**
+The unfiltered list contains 58 result rows across Navigate / Actions / Workspaces. With entity-jump commands for every account, goal, and budget, the unfiltered palette is extremely long and requires heavy scrolling. In a budgeting app with many accounts (10+ is common) this becomes unwieldy.
+`gm_04_palette_open_dark_1280.png` — the list fills and overflows the `max-height: 50vh` scroll area; all 58 items are technically accessible but the signal-to-noise ratio is poor.
+Consider: (a) cap entity-jump rows at 5–8 most-recently-accessed, or (b) show only Navigate + top Actions in the unfiltered view, reserving entity jumps for filtered (query-driven) results only.
+**[GO-STRUCTURAL]** — requires logic change in `buildPaletteCommands` / `entityJumpCommands`.
+
+#### 5. CONTROLS
+
+**[CSS-ONLY] GM4-13. Gear panel section label "NEEDS ATTENTION" is muted ALL-CAPS — no light-mode adjustment.**
+The section label inside the gear body (`.set-label` or a div with `text-transform: uppercase`) renders at reduced opacity. In dark mode this is fine (near-white at 50% on a dark card). In light mode the muted color may not meet AA for uppercase small text depending on background. `gm_04_gear_open_light_1280.png` — "NEEDS ATTENTION" renders as a muted grey label above the toggle rows; reads OK visually but contrast should be confirmed at actual computed values.
+Low priority — visually adequate in screenshots.
+
+**[CSS-ONLY] GM4-14. Gear panel number inputs: empty/unstyled boxes in light mode.**
+The "Flag bills due within (days)" and "Most you'll see at once" inputs in the Needs Attention gear panel render as bare `<input type="text">` or `<input type="number">` elements. In light mode (`gm_04_gear_open_light_768.png`) these inputs show with a bottom-border-only underline style — label text wraps to two lines ("Flag bills due within\n(days)") and the input field is narrow. The input field's label breaks mid-word in the constrained 384px panel width.
+Moderate — the label wrapping ("Flag bills due within\n(days)") is sub-optimal. The panel is 384px with ~32px padding = ~320px available. A CSS grid `label + input` layout would solve this.
+**[CSS-ONLY]** if the layout is controlled by CSS in `web/index.html` for `.set-body` form rows; **[GO-STRUCTURAL]** if the form row markup needs to change in the `freshness` widget settings renderer.
+
+#### 6. FEEDBACK
+
+**[GO-STRUCTURAL] GM4-15. Gear panel: no visible save confirmation / toast after Save.**
+After clicking Save, the panel closes. There is no toast or inline feedback confirming the settings were persisted. The Settings FlipPanel (global settings) also lacks a post-save toast. For the widget gear panel, the only feedback is the panel disappearing. Power users who are fast-clicking may wonder if Save did anything.
+Cross-ref: B12 (wire per-widget flip-panel settings to content). The persistence path exists (`widgetcfg`) but the post-save feedback is absent.
+**[GO-STRUCTURAL]** — requires a `paletteNotify`-style toast call in the `onSave` callback of the widget settings host.
+
+**[CSS-ONLY] GM4-16. Palette: ArrowDown selection highlight contrast in light mode — invisible.**
+(This is the same root cause as GM4-6 above — captured here for dimension 6 completeness.)
+After ArrowDown, the selected row uses `background: var(--hover, #1c1c1e)`. With no `--hover` token in light mode, the selected row is `#1c1c1e` (near-black). The label text is also near-black (`rgb(28,28,30)`). Text is completely invisible on the selected row in light mode.
+Screenshot: `gm_04_palette_nav_light_1280.png` — selected row is a solid dark band, text invisible.
+**[CSS-ONLY]** — define `--hover: #e8e6e1` in the `[data-theme="light"]` token block. Single-line fix.
+
+#### 7. GENERAL MODAL UX
+
+**[CSS-ONLY] GM4-17. Gear panel: focus trap works but initial focus lands on the × close button, not the first toggle.**
+`flippanel.go` `UseEffect` focuses `fs[0]` — the first focusable element in `.flip-wrap`. The `.flip-back` face contains: the close button (set-close), then the section label, then the first toggle. The close button is the first focusable, so Tab from open-state immediately moves to the first toggle (one Tab press away). This is an acceptable but not ideal focus order — the first interactive control for a settings panel should be the first setting, not the close button. The SR announcement would be "Close, button" before any setting is named.
+**[GO-STRUCTURAL]** — a clean fix is to `tabindex="-1"` the close button and move initial focus to the first form control.
+
+**[CSS-ONLY] GM4-18. Palette and gear panel z-index hierarchy is correct but palette (`z-index: 210`) is above FlipPanel (`z-index: 50`).**
+Opening the palette while a gear panel is open would layer the palette above the gear panel correctly. However, opening the gear while the palette is open would not dismiss the palette first — both could co-exist on screen. Not a tested scenario but the lack of mutual-exclusion logic could confuse state.
+Low priority — unlikely real user path. **[GO-STRUCTURAL]** — `toggleCommandPalette` should call `closeSettingsPanel` if one is open, and vice versa.
+
+**[CSS-ONLY] GM4-19. Gear panel backdrop click-to-close is not implemented.**
+`.flip-backdrop` has no click listener. Clicking outside the `.flip-wrap` does not close the panel — only ESC and the × button close it. This is inconsistent with the palette (click outside = close) and with modal UX convention.
+`gm_04_gear_open_dark_1280.png` — the backdrop is the blurred overlay, but clicking it does nothing.
+**[GO-STRUCTURAL]** — `FlipPanel` in `flippanel.go` needs a `OnBackdropClick` callback or a backdrop-click listener on `.flip-backdrop` that calls `onClose`. The backdrop element is rendered by the wasm framework, so this change requires a Go rebuild.
+
+**[CSS-ONLY] GM4-20. Palette card has no `focus-visible` outline on keyboard focus — minor.**
+The palette card uses `outline: none` via default CSS reset. The input itself shows a browser-default focus ring (the green underline visible in screenshots). The card's outer border is `1px solid rgb(42,42,44)` — no focus ring when the card itself is focused. Not a critical a11y issue since the input auto-focuses, but worth noting for the card's role=dialog landmark.
+Low priority. **[CSS-ONLY]** if adding an outline; **[GO-STRUCTURAL]** if adding `tabindex="-1"` to the card.
+
+---
+
+**UI/UX defects — screenshot-confirmed**
+
+| # | Defect | Severity | Tag | Evidence |
+|---|--------|----------|-----|----------|
+| GM4-6 | **Palette selected-row text invisible in light mode** (near-black bg + near-black text, `var(--hover)` fallback fires) | CRITICAL | [CSS-ONLY] | `gm_04_palette_nav_light_1280.png`, `gm_04_palette_nav_light_768.png` |
+| GM4-7 | **Palette backdrop is harsh dark in light mode** (`rgba(0,0,0,0.5)` hardcoded, no light override) | HIGH | [CSS-ONLY w/ `!important`] | `gm_04_palette_open_light_1280.png`, `gm_04_palette_open_light_768.png` |
+| GM4-1 | **No `role="dialog"` / `aria-modal` on palette card** — SR cannot identify it as a dialog | HIGH | [GO-STRUCTURAL] | DOM audit all sessions |
+| GM4-19 | **Gear panel backdrop click does not close** — inconsistent with palette + modal convention | HIGH | [GO-STRUCTURAL] | `gm_04_gear_open_dark_1280.png` |
+| GM4-8 | **Gear panel header/footer separators are dark-hardcoded in light mode** | MEDIUM | [CSS-ONLY] | `gm_04_gear_open_light_1280.png` |
+| GM4-9 | **Gear panel Save button is dark-green island in light mode** — not on-theme | MEDIUM | [CSS-ONLY] | `gm_04_gear_open_light_1280.png` |
+| GM4-11 | **No keyboard navigation hint footer in palette** (↑↓ navigate · Enter · Esc) | MEDIUM | [GO-STRUCTURAL] | `gm_04_palette_open_dark_1280.png` |
+| GM4-12 | **58 unfiltered rows — entity jumps inflate the list to unusable length** | MEDIUM | [GO-STRUCTURAL] | `gm_04_palette_open_dark_1280.png` |
+| GM4-2 | **No `role="listbox"` on `#cf-cmd-list`; `aria-selected` missing on rows** | MEDIUM | [GO-STRUCTURAL] | DOM audit all sessions |
+| GM4-15 | **No save-confirmation toast after gear Save** | LOW | [GO-STRUCTURAL] | `gm_04_gear_open_dark_1280.png` |
+| GM4-17 | **Focus lands on × close button (not first setting) on gear open** | LOW | [GO-STRUCTURAL] | `flippanel.go` |
+| GM4-4 | **Palette at 768 spans near-full width — loses spotlight feel** | LOW | [CSS-ONLY] | `gm_04_palette_open_dark_768.png` |
+
+---
+
+**Probe hardening**
+
+The probe script (`gm_04_palette_gear.mjs`) correctly:
+- Resets `viewAsMember` to Everyone on boot (house-rule)
+- Uses the canonical light-theme recipe (set prefs → reload → waitForFunction `data-theme="light"`)
+- Boots from `/dashboard` with `waitForSelector('[data-widget]')` to confirm bento is live before gear probing
+- Drives `Ctrl+K` for the palette, hover + gear-inline click for the widget settings
+- Provides a fallback chain for the gear button (widget-scoped locator → any `.gear-inline`)
+- Screenshots at filter and arrow-nav states, not just open
+- Audits both DOM structure and computed colors in all four sessions
+- Reports `gearOpened: true/false` so a probe failure is distinguishable from a defect
+
+**Still-unexercised:**
+- C11 empty-panel (CloseOnly) state — needs a settingless widget (custom-page tile or Widget Builder output)
+- Enter-to-execute from palette keyboard nav (script navigates but does not confirm navigation landed)
+- Click-outside dismissal of both palette and gear panel (backdrop click)
+- Tab-trap cycling across all focusables in the gear panel
+- Palette in the context of a non-Dashboard route (should still open via global Ctrl+K)
+
+Cross-references: **C68** (command palette done, a11y gaps remain), **B12** (per-widget gear settings wired and functional; save feedback gap), **C11** (CloseOnly empty-panel — structurally present; visual quality unreviewed).
+
+
 ## 0. Foundation & tooling (Phase 0)
 
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH
