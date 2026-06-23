@@ -219,6 +219,16 @@
       .insight-row { display: flex; align-items: flex-start; gap: 0.6rem; margin: 0; line-height: 1.45; }
       .insight-dot { flex: none; font-weight: 800; font-size: 1rem; line-height: 1.35; }
       /* Compact density: tighter cards, rows, and fields (set via data-density on <html>). */
+      /* Section divider (G9): groups a long card scroll into labelled clusters
+         (Spending / Income / Trends) so the page can be navigated, not just read
+         top-to-bottom. An uppercase muted label with a hairline rule. */
+      .section-divider { display: flex; align-items: center; gap: 0.6rem; margin: 1.6rem 0 0.6rem;
+        font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+        color: var(--text-faint); }
+      .section-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+      .section-divider:first-child { margin-top: 0; }
+      [data-theme="light"] .section-divider { color: #686870; }
+
       [data-density="compact"] .card { padding: 0.7rem 0.8rem; margin-bottom: 0.6rem; }
       [data-density="compact"] .card-title { margin-bottom: 0.45rem; }
       [data-density="compact"] .row { padding-top: 0.3rem; padding-bottom: 0.3rem; }
@@ -238,6 +248,20 @@
       [data-theme="light"] .text-fg { color: #1c1c1e; }
       [data-theme="light"] .text-dim { color: #56565c; }
       [data-theme="light"] .text-faint { color: #686870; }
+      /* Legacy components read var(--text)/(--text-dim), but the theme engine emits
+         those as runtime vars that can outrank the [data-theme="light"] palette
+         override — so in light mode a card title or category name could keep the
+         dark theme's near-white --text and vanish on a white card (G9 measured
+         rgb(244,244,245) on white). Pin the COLOR directly (not via the var) under
+         data-theme="light" so these always read on white, whatever --text resolves
+         to. This is the definitive fix for the recurring G4–G11 light-mode finding. */
+      [data-theme="light"] .card-title, [data-theme="light"] .page-title,
+      [data-theme="light"] .row-desc, [data-theme="light"] .stat-value,
+      [data-theme="light"] .budget .row-desc { color: #1c1c1e; }
+      [data-theme="light"] .muted, [data-theme="light"] .row-meta,
+      [data-theme="light"] .budget-amount, [data-theme="light"] .budget-sub,
+      [data-theme="light"] .stat-label, [data-theme="light"] .page-sub,
+      [data-theme="light"] .set-label, [data-theme="light"] .t-caption { color: #56565c; }
       [data-theme="light"] .border-line, [data-theme="light"] .border-r, [data-theme="light"] .border-b { border-color: #e4e2dd; }
       [data-theme="light"] .bg-\[\#1c1c1e\] { background-color: #ececec; color: #1c1c1e; }
       [data-theme="light"] .bg-fg { background-color: #1c1c1e; }

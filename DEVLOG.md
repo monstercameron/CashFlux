@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series wave 2 — G9 Reports + the real light-mode root cause
+
+G9's audit finally gave a *measurement* for the "card titles invisible in light mode" finding that
+had recurred since G4: `cardTitleColor: rgb(244,244,245)` (the dark theme's `--text`) on a white card.
+That cracked it. I'd been assuming it was a capture artifact because `.card-title` inherits `--text`
+and `[data-theme="light"]` overrides `--text` to dark. But the theme engine (`theme.CSSVars`) emits
+`--text`/`--text-dim` as *runtime* custom properties that outrank the stylesheet's `[data-theme=light]`
+override — so a legacy component reading `var(--text)` keeps the dark value even with the light
+palette active, while the light palette's `--bg-card: #fff` (applied via a different path) does take.
+White text on white card.
+
+Fix: stop routing those through the var in light mode — pin the `color` *directly* under
+`[data-theme="light"]` for the legacy text classes (`.card-title`, `.row-desc`, `.muted`, `.budget-*`,
+etc.). A direct `color` rule wins because the theme engine sets `--text`, not `.card-title { color }`.
+This is the definitive fix and retroactively repairs G4–G8 light mode too.
+
+Also added Spending/Income/Trends section dividers to break up Reports' 13-card scroll (C55). The
+divider wiring sits in reports_screen.go alongside Cam's in-flight reports refactor, so it lands with
+that commit; the CSS + i18n keys + the light-mode fix shipped now.
+
 ## 2026-06-23 - feat: GLAMOR series wave 2 — G8 Allocate "Every Dollar a Job"
 
 The headline gap was the config wall: Marcus had to scroll past 11 inputs (mode, profile, 3 amounts,

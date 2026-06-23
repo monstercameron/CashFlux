@@ -11546,6 +11546,21 @@ screenshots captured cleanly.
 
 ### G9. Reports — "The Monthly Review" (Priya) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** Key fixes shipped:
+- **Light-mode contrast — DEFINITIVE FIX for the whole G4–G11 recurring finding.** Root cause found
+  via G9's measurement (`cardTitleColor: rgb(244,244,245)` on white): legacy components read
+  `var(--text)`, but the theme engine (`theme.CSSVars`) emits `--text`/`--text-dim` as runtime vars
+  that can outrank the `[data-theme="light"]` palette override — so titles/row-names kept the dark
+  theme's near-white `--text` on white cards. Fixed by pinning the **color directly** (not via the
+  var) under `[data-theme="light"]` for `.card-title`/`.page-title`/`.row-desc`/`.stat-value`/`.muted`/
+  `.budget-*`/`.set-label`/`.t-caption`. This closes the light-mode finding across every glamor screen.
+- **Section grouping (C55 core / §1)** — added "Spending this period / Income & money flow / Trends
+  over recent periods" `.section-divider` headers so the 13-card scroll is navigable, not linear.
+  (The reports_screen.go divider wiring lands with the in-flight reports refactor; CSS + keys shipped.)
+- **Intentionally deferred**: two-column layout, moving the Sankey above the category list, and adding
+  a donut/bar chart to the spending section are larger layout reworks; the dividers + contrast fix
+  deliver the core "navigable, readable" intent.
+
 **The story**
 Priya opens Reports on the last day of the month. She wants three things in a single session:
 understand where the money went this period (biggest categories at a glance), see if anything

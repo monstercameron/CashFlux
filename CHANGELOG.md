@@ -14,6 +14,11 @@ and every commit updates this file under `Unreleased`.
   weight tuning + save-profile collapse behind an "Advanced" disclosure so the typical flow is
   profile → amount → list; Mode/Profile selects get persistent labels; each candidate row shows a
   `#1/#2/#3` rank badge; emergency-buffer/cap placeholders shortened so they don't clip at 768px.
+  **Reports (G9):** added Spending / Income / Trends **section dividers** so the long card scroll is
+  navigable. **Definitive light-mode fix** for the whole series — legacy text classes
+  (`.card-title`/`.row-desc`/`.muted`/etc.) now pin their color directly under `[data-theme="light"]`,
+  so they no longer keep the dark theme's near-white `--text` (emitted as a runtime var by the theme
+  engine) on white cards.
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**
