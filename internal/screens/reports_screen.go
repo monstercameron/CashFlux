@@ -604,118 +604,129 @@ func Reports() ui.Node {
 		If(spendTrend != "", P(css.Class("muted"), spendTrend)),
 		If(spendStats.Count > 0, P(css.Class("muted"), uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))),
 		// G9.1 Item 3 — Heads-up anomaly card gets .card-alert urgency border.
-		If(len(anomalyNodes) > 0, Section(css.Class("card", "card-alert"),
-			H2(css.Class("card-title"), uistate.T("reports.headsUp")),
-			Div(anomalyNodes),
-		)),
+		If(len(anomalyNodes) > 0, uiw.Card(uiw.CardProps{
+			ClassParts: []any{"card-alert"},
+			Header:     H2(css.Class("card-title"), uistate.T("reports.headsUp")),
+			Body:       Div(anomalyNodes),
+		})),
 		// Section dividers group the 13-card scroll into Spending / Income / Trends so
 		// Priya can navigate the page instead of reading it top-to-bottom (G9/C55).
 		H3(css.Class("section-divider"), uistate.T("reports.sectionSpending")),
-		Section(css.Class("card"),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
+		uiw.Card(uiw.CardProps{
+			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
 				H2(css.Class("card-title"), uistate.T("reports.byCategory")),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
 					Attr("aria-pressed", boolStr(rollupCats.Get())),
 					Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
 					uistate.T(rollupLabelKey(rollupCats.Get()))),
 			),
-			P(css.Class("muted"), narrative),
-			If(weekdayPeakLine != "", P(css.Class("muted"), weekdayPeakLine)),
-			If(len(catBarNodes) > 0, Div(catBarNodes)),
-			If(len(catDonutNodes) > 0, Div(catDonutNodes)),
-			catBody,
-			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					downloadBytes(reports.ExportFilename("spending-by-category", w.Res, w.From), "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
-				}), uistate.T("reports.downloadCsv")),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-tax-summary"), Title(uistate.T("reports.taxSummaryTitle")), OnClick(func() {
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					// Tax summary always covers a full calendar year. When viewing
-					// a Year window use that year; otherwise fall back to the current
-					// calendar year so the export is always a complete annual set.
-					yr := w.From.Year()
-					if w.Res != period.Year {
-						yr = time.Now().Year()
-					}
-					ys := time.Date(yr, time.January, 1, 0, 0, 0, 0, time.UTC)
-					ye := time.Date(yr+1, time.January, 1, 0, 0, 0, 0, time.UTC)
-					summary, _ := reports.YearTax(txns, yr, ys, ye, rates)
-					downloadBytes(reports.ExportFilename("tax-summary", period.Year, ys), "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
-				}), uistate.T("reports.taxSummary")),
-			)),
-		),
+			Body: Fragment(
+				P(css.Class("muted"), narrative),
+				If(weekdayPeakLine != "", P(css.Class("muted"), weekdayPeakLine)),
+				If(len(catBarNodes) > 0, Div(catBarNodes)),
+				If(len(catDonutNodes) > 0, Div(catDonutNodes)),
+				catBody,
+				If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+					Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						downloadBytes(reports.ExportFilename("spending-by-category", w.Res, w.From), "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
+					}), uistate.T("reports.downloadCsv")),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-tax-summary"), Title(uistate.T("reports.taxSummaryTitle")), OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						// Tax summary always covers a full calendar year. When viewing
+						// a Year window use that year; otherwise fall back to the current
+						// calendar year so the export is always a complete annual set.
+						yr := w.From.Year()
+						if w.Res != period.Year {
+							yr = time.Now().Year()
+						}
+						ys := time.Date(yr, time.January, 1, 0, 0, 0, 0, time.UTC)
+						ye := time.Date(yr+1, time.January, 1, 0, 0, 0, 0, time.UTC)
+						summary, _ := reports.YearTax(txns, yr, ys, ye, rates)
+						downloadBytes(reports.ExportFilename("tax-summary", period.Year, ys), "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
+					}), uistate.T("reports.taxSummary")),
+				)),
+			),
+		}),
 		// G9.1 Item 5 — Sankey moved up: directly after category → Sankey → payees → biggest expenses.
 		If(len(moneyFlows) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: "Money flow",
 			Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow"}),
 		})),
-		If(len(payeeNodes) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.topPayees")),
-			If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
-			Div(css.Class("rows"), payeeNodes),
-			Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
-				Button(css.Class("btn"), Type("button"),
-					Attr("data-testid", "reports-payees-csv"),
-					Title(uistate.T("reports.downloadCsvTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes(reports.ExportFilename("top-payees", w.Res, w.From), "text/csv", reports.PayeeCSV(payees, csvAmount))
-					}),
-					uistate.T("reports.downloadCsv")),
+		If(len(payeeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("reports.topPayees"),
+			Body: Fragment(
+				If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
+				Div(css.Class("rows"), payeeNodes),
+				Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
+					Button(css.Class("btn"), Type("button"),
+						Attr("data-testid", "reports-payees-csv"),
+						Title(uistate.T("reports.downloadCsvTitle")),
+						OnClick(func() {
+							csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+							downloadBytes(reports.ExportFilename("top-payees", w.Res, w.From), "text/csv", reports.PayeeCSV(payees, csvAmount))
+						}),
+						uistate.T("reports.downloadCsv")),
+				),
 			),
-		)),
-		If(len(largestNodes) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.biggestExpenses")),
-			If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
-			Div(css.Class("rows"), largestNodes),
-			Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
-				Button(css.Class("btn"), Type("button"),
-					Attr("data-testid", "reports-largest-csv"),
-					Title(uistate.T("reports.downloadCsvTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes(reports.ExportFilename("largest-expenses", w.Res, w.From), "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
-					}),
-					uistate.T("reports.downloadCsv")),
+		})),
+		If(len(largestNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("reports.biggestExpenses"),
+			Body: Fragment(
+				If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
+				Div(css.Class("rows"), largestNodes),
+				Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
+					Button(css.Class("btn"), Type("button"),
+						Attr("data-testid", "reports-largest-csv"),
+						Title(uistate.T("reports.downloadCsvTitle")),
+						OnClick(func() {
+							csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+							downloadBytes(reports.ExportFilename("largest-expenses", w.Res, w.From), "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
+						}),
+						uistate.T("reports.downloadCsv")),
+				),
 			),
-		)),
+		})),
 		H3(css.Class("section-divider"), uistate.T("reports.sectionIncome")),
 		If(len(bigIncomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("reports.biggestDeposits"),
 			Rows:  bigIncomeNodes,
 		})),
-		If(len(incomeNodes) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.incomeBySource")),
-			If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
-			Div(css.Class("rows"), incomeNodes),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
-				}), uistate.T("reports.downloadCsv")),
+		If(len(incomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("reports.incomeBySource"),
+			Body: Fragment(
+				If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
+				Div(css.Class("rows"), incomeNodes),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+					Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
+					}), uistate.T("reports.downloadCsv")),
+				),
 			),
-		)),
+		})),
 		// L21: show the member-spend section whenever the household has ≥2 members
 		// and at least one has attributed spending — not just when both have spend.
 		// With one member doing all the spending, the section still answers "who
 		// spent what?" and surfaces the unattributed remainder.
-		If(len(app.Members()) >= 2 && len(memberSpend) >= 1, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.byMember")),
-			Div(css.Class("rows"), memberNodes),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					nm := func(id string) string {
-						if n := memberName[id]; n != "" {
-							return n
+		If(len(app.Members()) >= 2 && len(memberSpend) >= 1, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("reports.byMember"),
+			Body: Fragment(
+				Div(css.Class("rows"), memberNodes),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+					Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						nm := func(id string) string {
+							if n := memberName[id]; n != "" {
+								return n
+							}
+							return uistate.T("reports.noMember")
 						}
-						return uistate.T("reports.noMember")
-					}
-					downloadBytes(reports.ExportFilename("spending-by-member", w.Res, w.From), "text/csv", reports.MemberCSV(memberSpend, nm, csvAmount))
-				}), uistate.T("reports.downloadCsv")),
+						downloadBytes(reports.ExportFilename("spending-by-member", w.Res, w.From), "text/csv", reports.MemberCSV(memberSpend, nm, csvAmount))
+					}), uistate.T("reports.downloadCsv")),
+				),
 			),
-		)),
+		})),
 		H3(css.Class("section-divider"), uistate.T("reports.sectionTrends")),
 		If(len(netSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("dashboard.cashFlow"),
@@ -836,27 +847,30 @@ func customFieldSpendSection(
 	sectionLabel := uistate.T("reports.byCustomField", activeDef.Label)
 	selectorLabel := uistate.T("reports.customFieldSelectLabel")
 
-	return Section(css.Class("card"), Attr("data-testid", "customfield-spend-section"),
-		H2(css.Class("card-title"), sectionLabel),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Py1),
-			Label(Attr("for", "cf-field-select"), selectorLabel),
-			Select(css.Class("field"), Attr("id", "cf-field-select"), Attr("aria-label", selectorLabel), Attr("data-testid", "cf-field-select"), onKeyChange, fieldOpts),
-		),
-		body,
-		If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-			Button(css.Class("btn"), Type("button"),
-				Attr("data-testid", "cf-download-csv"),
-				Title(uistate.T("reports.customFieldDownloadTitle")),
-				Attr("aria-label", uistate.T("reports.customFieldDownloadTitle")),
-				OnClick(func() {
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					filename := reports.ExportFilename("spending-by-"+activeDef.Key, win.Res, win.From)
-					downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
-				}),
-				uistate.T("reports.downloadCsv"),
+	return uiw.Card(uiw.CardProps{
+		TestID: "customfield-spend-section",
+		Header: H2(css.Class("card-title"), sectionLabel),
+		Body: Fragment(
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Py1),
+				Label(Attr("for", "cf-field-select"), selectorLabel),
+				Select(css.Class("field"), Attr("id", "cf-field-select"), Attr("aria-label", selectorLabel), Attr("data-testid", "cf-field-select"), onKeyChange, fieldOpts),
 			),
-		)),
-	)
+			body,
+			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+				Button(css.Class("btn"), Type("button"),
+					Attr("data-testid", "cf-download-csv"),
+					Title(uistate.T("reports.customFieldDownloadTitle")),
+					Attr("aria-label", uistate.T("reports.customFieldDownloadTitle")),
+					OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						filename := reports.ExportFilename("spending-by-"+activeDef.Key, win.Res, win.From)
+						downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
+					}),
+					uistate.T("reports.downloadCsv"),
+				),
+			)),
+		),
+	})
 }
 
 // reportsCatRowProps carries the display data and drill callback for one
@@ -989,22 +1003,25 @@ func deductibleSection(
 		body = Div(css.Class("rows"), rowNodes)
 	}
 
-	return Section(css.Class("card"), Attr("data-testid", "deductible-section"),
-		H2(css.Class("card-title"), uistate.T("reports.deductibleTitle")),
-		P(css.Class("muted"), uistate.T("reports.deductibleHint")),
-		If(summary.Total > 0, P(css.Class("muted"), uistate.T("reports.deductibleTotal", fmtMinor(summary.Total)))),
-		body,
-		If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-			Button(css.Class("btn"), Type("button"),
-				Attr("data-testid", "deductible-download-csv"),
-				Title(uistate.T("reports.deductibleDownloadTitle")),
-				Attr("aria-label", uistate.T("reports.deductibleDownloadTitle")),
-				OnClick(func() {
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					downloadBytes(reports.ExportFilename("deductible-totals", win.Res, win.From), "text/csv", reports.DeductibleCSV(summary, nameOf, csvAmount))
-				}),
-				uistate.T("reports.downloadCsv"),
-			),
-		)),
-	)
+	return uiw.Card(uiw.CardProps{
+		TestID: "deductible-section",
+		Header: H2(css.Class("card-title"), uistate.T("reports.deductibleTitle")),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("reports.deductibleHint")),
+			If(summary.Total > 0, P(css.Class("muted"), uistate.T("reports.deductibleTotal", fmtMinor(summary.Total)))),
+			body,
+			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+				Button(css.Class("btn"), Type("button"),
+					Attr("data-testid", "deductible-download-csv"),
+					Title(uistate.T("reports.deductibleDownloadTitle")),
+					Attr("aria-label", uistate.T("reports.deductibleDownloadTitle")),
+					OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						downloadBytes(reports.ExportFilename("deductible-totals", win.Res, win.From), "text/csv", reports.DeductibleCSV(summary, nameOf, csvAmount))
+					}),
+					uistate.T("reports.downloadCsv"),
+				),
+			)),
+		),
+	})
 }

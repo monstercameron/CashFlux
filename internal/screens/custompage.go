@@ -708,7 +708,7 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 	}
 
 	return uiw.Card(uiw.CardProps{
-		Attrs: []any{css.Class(tw.Mb3)},
+		ClassParts: []any{tw.Mb3},
 		Body: Fragment(
 			Div(css.Class("form-grid"),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("pages.labelType")), OnChange(onType), typeOpts),
