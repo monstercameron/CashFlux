@@ -209,6 +209,9 @@ func Subscriptions() ui.Node {
 		savingsSummary = Fragment()
 	}
 
+	// Monthly total drives the per-row share-bar width (G10 follow-up).
+	monthlyTotal := subscriptions.MonthlyTotal(subs)
+
 	now := time.Now()
 	rows := MapKeyed(subs,
 		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
@@ -226,6 +229,7 @@ func Subscriptions() ui.Node {
 				CancelledOn:    cancelledDate,
 				Selected:       sel[s.Name],
 				NeedsReview:    !isCancelled && subscriptions.NeedsReview(s, now),
+				MonthlyTotal:   monthlyTotal,
 				OnRemind:       remind,
 				OnDrill:        viewCharges,
 				OnCancel:       doCancel,
@@ -354,6 +358,7 @@ func Subscriptions() ui.Node {
 						CancelledOn:    cancelledDate,
 						Selected:       sel[s.Name],
 						NeedsReview:    false, // renewing soon ≠ stale
+						MonthlyTotal:   monthlyTotal,
 						OnRemind:       remind,
 						OnDrill:        viewCharges,
 						OnCancel:       doCancel,
@@ -375,6 +380,7 @@ type subscriptionRowProps struct {
 	CancelledOn    string // pre-formatted cancellation date, set when Cancelled is true
 	Selected       bool   // whether the row's cancel-candidate checkbox is checked
 	NeedsReview    bool   // whether the subscription hasn't been charged in 2+ cadence intervals
+	MonthlyTotal   int64  // sum of all active subscriptions' monthly amounts; drives the per-row share-bar
 	OnRemind       func(subscriptions.Subscription)
 	OnDrill        func(payee string) // open Transactions searched for this subscription's payee
 	OnCancel       func(name string)
@@ -493,6 +499,7 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			Span(css.Class("row-meta"), meta),
 			statusArea,
 			reviewBadge,
+			subShareBar(s.MonthlyAmount(), props.MonthlyTotal),
 		),
 		// Only show the normalized "/mo" figure when it differs from the actual
 		// charge (i.e. weekly/yearly). For monthly subs they're identical, so
@@ -501,6 +508,38 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			Span(css.Class("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base))))),
 		Span(css.Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),
 		actions,
+	)
+}
+
+// subShareBar renders a thin proportional bar showing this subscription's
+// share of the total monthly recurring burden (G10 follow-up). Width equals
+// MonthlyAmount / MonthlyTotal × 100%, capped at 100%. Returns an empty
+// fragment when the total is zero to avoid division-by-zero and visual noise
+// in edge cases (e.g. all subscriptions are free trials at $0).
+func subShareBar(monthly, total int64) ui.Node {
+	if total <= 0 || monthly <= 0 {
+		return Fragment()
+	}
+	pct := int(monthly * 100 / total)
+	if pct > 100 {
+		pct = 100
+	}
+	return Div(
+		css.Class("share-bar"),
+		Style(map[string]string{
+			"height":        "4px",
+			"max-width":     "180px",
+			"margin-top":    "0.3rem",
+			"background":    "var(--border)",
+			"border-radius": "999px",
+			"overflow":      "hidden",
+		}),
+		Div(Style(map[string]string{
+			"height":        "100%",
+			"width":         fmt.Sprintf("%d%%", pct),
+			"background":    "var(--accent)",
+			"border-radius": "999px",
+		})),
 	)
 }
 

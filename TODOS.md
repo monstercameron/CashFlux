@@ -11308,8 +11308,9 @@ captured cleanly.
 - **768 action overflow** (§2) — `.sub-actions` wraps within the row at narrow widths instead of
   breaking out as a full-width page-level button.
 - **Light mode** — covered by the G9 definitive `[data-theme="light"]` contrast fix.
-- **Intentionally deferred**: per-row share-bars (proportional cost viz) is a nice-to-have that needs
-  the monthly total threaded into the row; the name-visibility + action fixes deliver the core audit-ability.
+- **Per-row share-bars (G10 follow-up, 2026-06-23):** `MonthlyTotal` threaded into `subscriptionRowProps`;
+  `subShareBar()` helper renders a 4 px proportional bar (width = MonthlyAmount / MonthlyTotal × 100%)
+  inside `.row-main`, using `var(--accent)` fill on `var(--border)` track, matching the Reports pattern.
 
 **The story**
 Marcus and Lin open Subscriptions every few months to audit their recurring charges. Their
@@ -11405,13 +11406,15 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       column; the name should get the majority of the row. Confirmed in
       `glamor_10_subscriptions_1440_light.png`: same pattern — rows read as "cadence-date /
       amount / Remind me / Mark as cancelled" with no visible name.
-- [ ] **No share-bars or proportional visualizations in the subscription list.** The category
+- [x] **No share-bars or proportional visualizations in the subscription list.** The category
       rows in Reports have `.share-bar` elements (30 confirmed in G9 DOM audit). Subscription
       rows have none (`shareBars` not present in DOM audit). With $1,450 Rent dominating 53%
       of the monthly subscription total, a proportional bar behind each row would make "Rent is
       most of the bill" instantly obvious — Marcus would not need to mentally compute the ratios
       from the dollar figures. A share-bar per row (width = MonthlyAmount / MonthlyTotal ×
       100%) would give the page the glanceability it currently lacks.
+      **SHIPPED 2026-06-23** — `subShareBar()` in `subscriptions_screen.go`; `MonthlyTotal`
+      threaded into `subscriptionRowProps` and both `CreateElement` call sites.
 
 *2. Spacing — row density and action button dominance*
 - [ ] **"Mark as cancelled" button is oversized (full `.btn-danger` at every row) and

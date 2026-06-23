@@ -41,7 +41,10 @@ and every commit updates this file under `Unreleased`.
   engine) on white cards. **Subscriptions (G10):** fixed the critical bug where subscription names
   were squeezed to invisible at 1280/1440 (the action buttons claimed the whole row) — the name now
   keeps a reserved width and the actions sit in a fixed trailing group with a compact ghost-danger
-  Cancel button. **Bills (G11):** dollar amounts now render full-contrast in light mode, and the
+  Cancel button. G10 follow-up (2026-06-23): each subscription row now shows a proportional share-bar
+  (width = MonthlyAmount / MonthlyTotal × 100%) inside `.row-main`, using `var(--accent)` fill on a
+  `var(--border)` track — the same pattern as Reports category rows — so the cost distribution is
+  scannable at a glance without mentally computing ratios from dollar figures. **Bills (G11):** dollar amounts now render full-contrast in light mode, and the
   "Next due" stat date no longer hyphenates across two lines at 768px. **Split (G12):** the
   destructive "Clear" member button is now a ghost-danger style, visually distinct from "Select all".
   **Insights (G13):** the no-key "Settings" CTA is now a primary button, the New-chat/Edit-prompt
