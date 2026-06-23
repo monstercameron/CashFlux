@@ -1608,7 +1608,7 @@ var english = Catalog{
 
 	// Artifacts screen additions (C66 rename + page-ref guard + section headings)
 	"artifacts.uploadTitle":  "Upload an artifact",
-	"artifacts.uploadDesc":   "Upload images or CSV datasets to use in your custom pages.",
+	"artifacts.uploadDesc":   "Upload images or CSV datasets to use in your custom pages. Uploaded images also attach to transactions as receipts.",
 	"artifacts.listTitle":    "Your artifacts",
 	"artifacts.renameTitle":  "Rename",
 	"artifacts.renameLabel":  "New name",

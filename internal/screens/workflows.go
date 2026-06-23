@@ -44,11 +44,17 @@ func Workflows() ui.Node {
 	if len(rows) > 0 {
 		listBody = Div(css.Class("rows"), rows)
 	}
+	// Count badge on the "Your workflows" heading so Raj can see the list size at a
+	// glance, consistent with Accounts / Goals / Transactions (G19).
+	yoursTitle := uistate.T("workflows.yours")
+	if n := len(wfs); n > 0 {
+		yoursTitle += "  " + strconv.Itoa(n)
+	}
 
 	return Div(
 		ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("workflows.yours"),
+			Title: yoursTitle,
 			Body:  listBody,
 		}),
 		ui.CreateElement(workflowHistory, workflowHistoryProps{}),
@@ -246,10 +252,13 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				),
 				P(css.Class("muted", tw.Mt1), uistate.T("workflows.conditionExamples")),
 			),
-			// Action builder. The parameter control depends on the chosen action:
-			// a category picker for "set category", a text field for create-task /
-			// notify / add-tag, and nothing for apply-rules / flag-for-review.
-			Div(css.Class("form-grid", tw.Mt2),
+			// Action builder. A small "Actions" sub-label and a light divider visually
+			// separate the workflow identity section (name/trigger/condition) from the
+			// action-builder section (what it will do), so Raj doesn't process them as
+			// one undifferentiated block (G19 spacing fix).
+			Hr(css.Class(tw.Mt2)),
+			P(css.Class("muted"), "Actions"),
+			Div(css.Class("form-grid", tw.Mt1),
 				Select(css.Class("field"), Attr("aria-label", "Action type"), OnChange(onDraftKind),
 					Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
 					Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
@@ -261,9 +270,13 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 					Option(Value(string(workflow.ActionFlagBudgetOver)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagBudgetOver)), uistate.T("workflows.actFlagBudgetOver")),
 				),
 				paramControl,
-				Button(css.Class("btn"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
+				// btn-sm: "Add action" is a staging step, not the primary save — giving it
+				// full-column width made it visually heavier than "Save workflow" (G19).
+				Button(css.Class("btn btn-sm"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
 			),
-			If(len(staged) > 0, Div(css.Class("rows"), staged)),
+			// mt-3 + "rows" wrapper gives the staged list a clear visual gap so it reads
+			// as "what will be done" rather than a continuation of the action inputs (G19).
+			If(len(staged) > 0, Div(css.Class("rows", tw.Mt3), staged)),
 			If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
 			Div(css.Class(tw.Mt2),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.save")),
@@ -383,7 +396,11 @@ func workflowRow(props workflowRowProps) ui.Node {
 				Div(css.Class("row-meta"), triggerLabel(w.Trigger.Kind)+conditionSuffix(w.Condition)+" · "+actionsLabel(len(w.Actions))),
 			),
 			Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap),
+				// "Dry run" is the safe exploratory action and gets the primary accent so
+				// Raj's first instinct is simulation, not live execution (G19 hierarchy fix).
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
+				// "Run now" is the live-execution action; neutral weight signals it is the
+				// deliberate, secondary step after previewing the dry run.
 				Button(css.Class("btn"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow")),
 				Button(css.Class("btn"), Type("button"), OnClick(toggle), enableLabel),
 				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("action.edit")), Title(uistate.T("action.edit")), OnClick(startEdit), uistate.T("action.edit")),

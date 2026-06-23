@@ -678,16 +678,19 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 	var bindControl ui.Node
 	switch wtype.Get() {
 	case widgetspec.TypeKPI:
-		bindControl = Input(css.Class("field"), Attr("placeholder", uistate.T("pages.kpiFormula")),
+		bindControl = Input(css.Class("field"), Attr("aria-label", uistate.T("pages.kpiFormula")),
+			Attr("placeholder", uistate.T("pages.kpiFormula")),
 			Value(bind.Get()), OnInput(onBind))
 	case widgetspec.TypeList:
 		srcOpts := make([]ui.Node, 0)
 		for _, d := range widgetspec.ListSources() {
 			srcOpts = append(srcOpts, Option(Value(d.Type), SelectedIf(bind.Get() == d.Type), d.Label))
 		}
-		bindControl = Select(css.Class("field"), OnChange(onBind), srcOpts)
+		bindControl = Select(css.Class("field"), Attr("aria-label", uistate.T("pages.pickSource")),
+			OnChange(onBind), srcOpts)
 	case widgetspec.TypeText:
-		bindControl = Input(css.Class("field"), Attr("placeholder", uistate.T("pages.textContent")),
+		bindControl = Input(css.Class("field"), Attr("aria-label", uistate.T("pages.textContent")),
+			Attr("placeholder", uistate.T("pages.textContent")),
 			Value(bind.Get()), OnInput(onBind))
 	case widgetspec.TypeImage, widgetspec.TypeTable:
 		arts := appstate.Default.Artifacts()
@@ -702,7 +705,8 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 			}
 			artOpts = append(artOpts, Option(Value(a.ID), SelectedIf(bind.Get() == a.ID), a.Name))
 		}
-		bindControl = Select(css.Class("field"), OnChange(onBind), artOpts)
+		bindControl = Select(css.Class("field"), Attr("aria-label", uistate.T("pages.chooseArtifact")),
+			OnChange(onBind), artOpts)
 	default: // Chart needs no binding in Phase B
 		bindControl = P(css.Class("muted"), uistate.T("pages.chartDefault"))
 	}

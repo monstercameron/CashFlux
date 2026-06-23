@@ -246,6 +246,32 @@
          older :active translateY with a cleaner scale; combine both for buttons. */
       .btn, .data-btn, .seg-btn, .add-item, .menu-btn, .icon-btn { transition: transform var(--wonder-dur-fast) var(--wonder-ease), background-color var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease; }
       .btn:active, .data-btn:active, .seg-btn:active, .add-item:active, .menu-btn:active, .icon-btn:active, [role="button"]:active { transform: scale(var(--wonder-press)); }
+      /* W-5 · Nav-item hover — subtle lift + icon micro-scale on .nv / .nav-link.
+         Transform scaled by --wonder-on so the intensity dial + reduced-motion both zero it.
+         Collapsed-rail flyout span is position:absolute so it is unaffected by translateY. */
+      .nv { transition: transform var(--wonder-dur-fast) var(--wonder-ease), background var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease; }
+      .nv:hover { transform: translateY(calc(-1px * var(--wonder-on))); }
+      .nav-link { transition: background 0.12s, color 0.12s, transform var(--wonder-dur-fast) var(--wonder-ease); } /* extends GX8-F2 */
+      .nav-link:hover { transform: translateY(calc(-1px * var(--wonder-on))); }
+      /* Icon micro-scale: any svg/emoji inside the nav item gets a gentle scale on hover. */
+      .nv:hover svg, .nv:hover .nav-icon { transform: scale(calc(1 + 0.06 * var(--wonder-on))); transition: transform var(--wonder-dur-fast) var(--wonder-ease); }
+
+      /* W-6 hover transforms — placed here (early) only for :hover rules; the transition
+         extensions are placed after the base rules further down so cascade order is correct. */
+      .gear-inline:hover, .gear-abs:hover { transform: rotate(calc(38deg * var(--wonder-on))); color: #f4f4f5; }
+      .add-btn:hover    { transform: scale(calc(1 + 0.12 * var(--wonder-on))); }
+      .notify-btn:hover { transform: rotate(calc(18deg * var(--wonder-on))); }
+      .muzak-btn:hover  { transform: scale(calc(1 + 0.08 * var(--wonder-on))); }
+
+      /* W-20 · Focus-ring ease — `:focus-visible` ring fades in softly (≤120ms).
+         We add a transition on outline-offset so the ring eases in from 0px to 2px.
+         The ring remains fully visible (a11y preserved) — only the onset is eased. */
+      a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible,
+      textarea:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible,
+      [role="switch"]:focus-visible, [role="radio"]:focus-visible {
+        transition: outline-offset 100ms var(--wonder-ease), box-shadow 100ms var(--wonder-ease);
+        outline-offset: 2px; /* unchanged — just now eased */
+      }
       /* ========================== /WONDER ============================ */
 
       #boot-error {
@@ -818,6 +844,10 @@
       .split-summary { font-weight: 600; color: var(--fg, var(--text)); margin-top: 0.4rem; }
       .cadence-badge { display: inline-block; font-size: 0.72rem; font-weight: 600; color: var(--text-dim); background: var(--bg-elev, rgba(255,255,255,0.04)); padding: 0.05rem 0.35rem; border-radius: 6px; margin: 0 0.3rem; vertical-align: middle; }
       .subs-select-all-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
+      /* G20 Artifacts: fixed-size thumbnail wrapper + broken-image fallback + list footer. */
+      .artifact-thumb-wrap { position: relative; width: 2.5rem; height: 2.5rem; flex-shrink: 0; }
+      .artifact-thumb-fallback { display: none; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; background: var(--bg-elev, rgba(255,255,255,0.04)); border-radius: 4px; color: var(--text-dim); }
+      .artifact-list-footer { border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.5rem; }
       /* G14 Documents: step-indicator accent on the active review card + amber duplicate-row badge. */
       .card-step-active { border-left: 3px solid var(--accent); }
       .badge-warn { display: inline-block; background: #b45309; color: #fff; font-size: 0.7rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 6px; }
@@ -1043,6 +1073,8 @@
       .gear-inline:hover { color:#f4f4f5; }
       .gear-abs { position:absolute; top:7px; right:16px; z-index:3; color:#5a5a64; background:transparent; border:0; cursor:pointer; font-size:.95rem; line-height:1; }
       .gear-abs:hover { color:#f4f4f5; }
+      /* W-6 · gear transition extension (after base rule so cascade order is correct) */
+      .gear-inline, .gear-abs { transition: color .12s ease, transform var(--wonder-dur-fast) var(--wonder-ease); }
 
       /* time resolution + range controls */
       .seg { display:inline-flex; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; padding:2px; }
@@ -1110,6 +1142,11 @@
       .toggle-row { display:flex; align-items:center; justify-content:space-between; padding:.55rem 0; border-bottom:1px solid #1f1f22; font-size:.9rem; }
       .switch { width:40px; height:24px; border-radius:999px; background:#34343a; position:relative; cursor:pointer; transition:background .2s; flex-shrink:0; }
       .switch::after { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#9a9aa4; transition:.2s; }
+      /* W-8 · Toggle/switch spring — overrides the bare .2s above with an overshoot ease.
+         cubic-bezier(.34,1.56,.64,1) gives a spring; [data-wonder="off"] zeroes --wonder-dur
+         (→ 0ms) so the knob snaps; the universal reduced-motion transition-duration:0.001ms
+         already covers ::after, neutralising motion for those users too. */
+      .switch::after { transition: left var(--wonder-dur) cubic-bezier(.34,1.56,.64,1), background var(--wonder-dur) var(--wonder-ease-out); }
       .switch.on { background:#3e7f5e; } .switch.on::after { left:19px; background:#e6f3ec; }
       .swatch { width:24px; height:24px; border-radius:6px; cursor:pointer; border:2px solid transparent; }
       .swatch.sel { border-color:#f4f4f5; }
@@ -1430,6 +1467,8 @@
         color:var(--accent,#3b82f6); font-size:15px; line-height:1;
         transition:background .12s ease, color .12s ease, opacity .12s ease; }
       .muzak-btn:hover, .notify-btn:hover, .add-btn:hover { background:color-mix(in srgb, var(--accent,#3b82f6) 18%, var(--bg-elev,#1a1a1d)); }
+      /* W-6 · add/notify/muzak transition extension (after base rule so cascade order is correct) */
+      .muzak-btn, .notify-btn, .add-btn { transition: background .12s ease, color .12s ease, opacity .12s ease, transform var(--wonder-dur-fast) var(--wonder-ease); }
       .muzak-btn.is-off { color:var(--faint,#9ca3af); opacity:.7; }
       .muzak-btn.relative { position:relative; }
       .notify-badge { position:absolute; top:-3px; right:-3px; min-width:15px; height:15px; padding:0 3px;

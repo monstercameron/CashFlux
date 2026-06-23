@@ -35,8 +35,15 @@ type settingsLeftProps struct {
 // freshness windows, notifications, music). Pure rendering helper — no hooks.
 func settingsLeftColumn(p settingsLeftProps) uic.Node {
 	return Div(
+		// Household members first — Renée reviews who is in the household before
+		// adjusting anything else. Screens immediately after so she can hide modules
+		// she doesn't use before diving into currency/budget config.
 		H4(css.Class("set-label"), uistate.T("settings.householdMembers")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), p.MemberChips),
+		H4(css.Class("set-label"), uistate.T("settings.screens")),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.screensHint")),
+		Div(p.ScreenToggles),
+		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.baseCurrency")),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.baseCurrency")), Title(uistate.T("settings.baseCurrency")), OnChange(p.OnBase), baseCurrencyOptions(p.Base)),
 		H4(css.Class("set-label"), uistate.T("settings.budgetMethod")),
@@ -49,9 +56,7 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 		H4(css.Class("set-label"), uistate.T("settings.exchangeRates")),
 		If(len(p.FXRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
 		Div(p.FXRows),
-		H4(css.Class("set-label"), uistate.T("settings.screens")),
-		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.screensHint")),
-		Div(p.ScreenToggles),
+		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
 		Div(p.FreshnessRows),
@@ -71,6 +76,7 @@ type settingsRightProps struct {
 	Pr          prefs.Prefs
 	OnTheme     func(string)
 	OnAccent    func(string)
+	OnMotion    func(string)
 	OnDateStyle uic.Handler // UseEvent
 	OnWeekStart func(string)
 	// AI
@@ -136,6 +142,15 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			OnSelect: p.OnTheme,
 		}),
 		Div(css.Class("toggle-row"),
+			Span(uistate.T("settings.motion")),
+			ui.Segmented(ui.SegmentedProps{
+				Options:  []ui.SegOption{{Value: string(prefs.MotionFull), Label: uistate.T("settings.motionFull")}, {Value: string(prefs.MotionSubtle), Label: uistate.T("settings.motionSubtle")}, {Value: string(prefs.MotionOff), Label: uistate.T("settings.motionOff")}},
+				Selected: string(p.Pr.Motion),
+				OnSelect: p.OnMotion,
+			}),
+		),
+		P(css.Class("muted", tw.TextXs), uistate.T("settings.motionHint")),
+		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.accent")),
 			ui.SwatchPicker(ui.SwatchPickerProps{
 				Colors:   []string{"#2e8b57", "#cfa14e", "#7c83ff", "#d8716f"},
@@ -148,6 +163,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		uic.CreateElement(themeEditor),
 
 		// 2 · Preferences — date/week-start sit naturally after appearance.
+		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.preferences")),
 		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.weekStart")),
@@ -165,6 +181,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		),
 
 		// 3 · AI — setup-once; key + model select in one logical cluster.
+		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.aiTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: p.AiOn, OnChange: p.OnAiToggle}),
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.aiKeyPlaceholder")), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(p.AiKey), OnInput(p.OnKey)),
@@ -184,6 +201,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
 
 		// 4 · Cloud & server — power-user sync config after AI.
+		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable
@@ -238,6 +256,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		)),
 
 		// 5 · Data — export/import/wipe actions.
+		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.data")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportJSON"), false, p.OnExportJSON),
@@ -255,6 +274,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		),
 
 		// 6 · Advanced — workspaces, app lock, languages; rarely needed at the bottom.
+		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("ws.section")),
 		P(css.Class("muted", tw.TextXs), uistate.T("ws.sectionHint")),
 		workspacesSection(p.Bump),

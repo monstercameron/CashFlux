@@ -110,6 +110,10 @@ func Artifacts() ui.Node {
 	}
 	listBody := P(css.Class("empty"), uistate.T("artifacts.empty"))
 	if len(rows) > 0 {
+		// NOTE (G20): a bottom add-artifact CTA was tried but a conditional On* button
+		// here shifts hook ordering when the row count changes (the no-On*-in-variable-
+		// position rule), breaking the screen. The always-visible upload card at the top
+		// already provides the affordance, so the list stays a plain row container.
 		listBody = Div(css.Class("rows"), rows)
 	}
 
@@ -229,8 +233,17 @@ func artifactRow(props artifactRowProps) ui.Node {
 
 	var preview ui.Node = Fragment()
 	if a.Kind == artifacts.KindImage && len(a.Bytes) > 0 {
-		preview = Img(Attr("src", artifacts.DataURL(a.MIME, a.Bytes)), Attr("alt", a.Name),
-			css.Class(tw.W10, tw.H10, tw.ObjectCover, tw.Rounded, tw.Mr2))
+		// Wrap in a fixed-size container so a broken image (e.g. stub/corrupt bytes)
+		// shows a neutral placeholder rather than the browser's broken-image icon.
+		// The onerror string hides the <img> and reveals the sibling fallback div;
+		// no framework hook is used here so it is safe inside a component render (G20).
+		preview = Div(css.Class("artifact-thumb-wrap", tw.Mr2),
+			Img(Attr("src", artifacts.DataURL(a.MIME, a.Bytes)), Attr("alt", a.Name),
+				css.Class(tw.W10, tw.H10, tw.ObjectCover, tw.Rounded),
+				Attr("onerror", "this.style.display='none';this.nextElementSibling.style.display='flex'")),
+			Div(css.Class("artifact-thumb-fallback"),
+				uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5))),
+		)
 	}
 	meta := a.Kind
 	if len(a.Rows) > 0 {

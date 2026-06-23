@@ -15556,7 +15556,7 @@ JSON: `glamor_18_rules_dom_dark.json`, `glamor_18_rules_dom_light.json`,
 **Structure fixes (bottom-up)** grouped by the 7 dimensions:
 
 _1 · Layout_
-- [ ] **CRITICAL: "Your rules" card is entirely below the fold at arrival.** The suggestions
+- [x] **CRITICAL: "Your rules" card is entirely below the fold at arrival.** The suggestions
       card contains 15 rows and dominates the full viewport at 1280×900, 1440×900, and 768×900.
       Bianca's primary purpose — seeing and managing her 5 existing rules — requires significant
       scrolling past the suggestions section before she can find her rule list. The suggestion
@@ -15565,19 +15565,19 @@ _1 · Layout_
       rules" heading is not on screen. `dark_1440.png` / `light_1440.png` identical.
       **Fix: reorder so "Your rules" card is first, suggestions second.** Suggestions are
       discovery aids, not the page's primary concern.
-- [ ] **"Rule order" (Mermaid precedence chain, C64) is the third card**, below both the
+- [x] **"Rule order" (Mermaid precedence chain, C64) is the third card**, below both the
       suggestions and the rule list. Bianca cannot see her precedence chain without scrolling
       far down. With 5 rules, the Mermaid diagram is directly actionable context for understanding
       which rule fires first. **Fix: move "Rule order" immediately after "Your rules"**, so
       Bianca sees her rules + the precedence chain together without scrolling to a third card.
-- [ ] **No "add a rule" affordance above the fold.** There is no visible "Add rule" button,
+- [x] **No "add a rule" affordance above the fold.** There is no visible "Add rule" button,
       empty-state CTA, or inline form on page load — new rules are created via the "New rule"
       button in the global header quick-add dropdown, not on this page at all. Bianca has no
       on-page entry point. The global `allBtnTexts` shows "New rule" exists in the header but
       it is easy to miss. **Fix: add a compact "Add rule" form or button within the "Your rules"
       card** (match input + category select + tags + Add button as a static header row above the
       list, consistent with how other list pages handle inline add).
-- [ ] **Inline edit form is unexpectedly wide at desktop.** When editing a rule, the match
+- [x] **Inline edit form is unexpectedly wide at desktop.** When editing a rule, the match
       input + category select + tags input + Save + Cancel all stack into a full-card-width
       block (confirmed `dark_1280_inline_edit.png`): match field spans ~40 % card width, then
       category select below it, then tags input. At 1280 px there is ample room for a
@@ -15586,12 +15586,12 @@ _1 · Layout_
       horizontal form-grid at ≥ 768 px (match, category, tags in one row + action buttons).
 
 _2 · Spacing_
-- [ ] **Suggestion rows have generous spacing but the 15-row suggestion list produces an
+- [x] **Suggestion rows have generous spacing but the 15-row suggestion list produces an
       overwhelming wall of "Add" buttons.** Each suggestion occupies ~50 px; 15 of them
       create a ~750 px card that visually dominates the page. Consider capping the visible
       suggestions to 5 with a "Show more" expander, reducing the perceived bulk.
       Confirmed in every viewport screenshot.
-- [ ] **Gap between the suggestions card and the "Your rules" card shows body background.**
+- [x] **Gap between the suggestions card and the "Your rules" card shows body background.**
       `mainBg: rgba(0,0,0,0)` — the inter-card gutter renders as the raw body colour
       (`rgb(14,14,15)` dark / `rgb(247,246,243)` light). In dark mode this is a near-black
       band between the two cards. The same systemic token issue as G12–G15; confirmed in
@@ -15599,22 +15599,22 @@ _2 · Spacing_
       contrast in light (pageBg is a warm off-white) but is visually jarring in dark.
 
 _3 · Theming_
-- [ ] **LIGHT MODE: `muted` hint text in the suggestions card reads amber/olive in light.**
+- [x] **LIGHT MODE: `muted` hint text in the suggestions card reads amber/olive in light.**
       The `mutedColor: rgb(86,86,92)` — in dark this reads as a neutral secondary colour; in
       light mode the same token has a slightly olive/warm cast against the pure-white card.
       "Based on how you've categorized past transactions. Add the ones that look right." renders
       visibly amber-tinted in `light_1280.png` and `light_768_full.png`. Same systemic amber-
       muted issue flagged in G12–G15. Fix: ensure `.muted` in light mode resolves to a clearly
       neutral grey (e.g. `#555` / neutral-600), not the warm variant.
-- [ ] **Row meta text (`rgb(86,86,92)`) is borderline in light.** "Seen in N transactions"
+- [x] **Row meta text (`rgb(86,86,92)`) is borderline in light.** "Seen in N transactions"
       and "→ Groceries" meta rows compute ~5.4:1 contrast on white — passes WCAG AA for normal
       text but is tight for the 13–14 px size used here. Audit and raise to ~7:1 if feasible
       (use `--text-dim` neutral dark token rather than the muted warm tone).
-- [ ] **Dark body background bleed between cards.** Confirmed in `dark_1280.png` and
+- [x] **Dark body background bleed between cards.** Confirmed in `dark_1280.png` and
       `dark_1440.png`: a distinct near-black horizontal band separates the suggestions card from
       the "Your rules" card. The content-area background does not fill between cards. Same root
       as G12–G15 systemic bleed; fix the content-area background token.
-- [ ] **Shadow/conflict warning colour cannot be audited** — `warnCount: 0` in sample data
+- [x] **Shadow/conflict warning colour cannot be audited** — `warnCount: 0` in sample data
       means no rules currently shadow each other. The `.text-warn` amber token on row meta
       is present in source code but cannot be observed in the running sample. When a shadowed
       rule exists, the amber warning must satisfy contrast on both dark (`rgb(18,18,20)`) and
@@ -15622,26 +15622,26 @@ _3 · Theming_
       that shadows in the sample data so the warning path is visually verifiable.**
 
 _4 · Styling_
-- [ ] **Suggestion "Add" buttons are primary green and visually dominate each row.** The green
+- [x] **Suggestion "Add" buttons are primary green and visually dominate each row.** The green
       `.btn-primary` buttons are the loudest element on the page — 15 of them in a column
       create a strong green stripe down the right side of the suggestions card (confirmed
       `dark_1280.png`, `light_1280.png`). The data (merchant name + category) is the primary
       content; the Add action is secondary. Fix: use a secondary/outline "Add" button style
       (`btn-sm` or `btn-outline`) for suggestion rows, reserving primary green for the single
       most important action on the page.
-- [ ] **No visible `<label>` elements anywhere on the page.** `labelTexts: []` confirmed by
+- [x] **No visible `<label>` elements anywhere on the page.** `labelTexts: []` confirmed by
       DOM audit. The inline-edit form uses `aria-label` attributes (correct for screen readers)
       but has no visible field labels — the edit form shows three bare inputs stacked vertically
       with no visual labels in the row. A sighted user opening the edit form for the first
       time must infer field purpose from placeholder text and position. Fix: add visually
       rendered `<label>` elements (or prominent placeholder labels) to the edit form for match,
       category, and tags.
-- [ ] **Inline edit Save button is primary green at full width (~480 px).** Confirmed in
+- [x] **Inline edit Save button is primary green at full width (~480 px).** Confirmed in
       `dark_1280_inline_edit.png` and `light_1280_inline_edit.png`. "Save" is the loudest
       element in the edit form at full card width. Fix: `width: fit-content; align-self:
       flex-end` or match the button sizing of other inline-edit forms across the app (compact
       `btn-primary btn-sm`).
-- [ ] **The drag-grip icon (⠿ / `icon.MoreH`) is subtle and unlabelled in the view.**
+- [x] **The drag-grip icon (⠿ / `icon.MoreH`) is subtle and unlabelled in the view.**
       `gripCount: 5` grips exist and carry `title="Drag to reorder precedence"` (keyboard-
       accessible as tooltip), but there is no visible text label and the grip icon is small
       and placed at the far left with no affordance indicator. Users unfamiliar with drag-to-
@@ -15650,13 +15650,13 @@ _4 · Styling_
       title (e.g. "Drag rules up or down — first match wins.").
 
 _5 · Positioning_
-- [ ] **"Apply to existing" button is top-right of the "Your rules" card** — a secondary
+- [x] **"Apply to existing" button is top-right of the "Your rules" card** — a secondary
       action competing with the card title for the header row. In `dark_1280_inline_edit.png`
       and `light_1280_inline_edit.png`, the button sits flush against "Your rules" in the same
       flex row. This is acceptable positioning but the button uses `class="btn"` (secondary
       style) — correctly deprioritised relative to the rule rows. No change needed for
       positioning; noted as already correct. ✓
-- [ ] **Mermaid "Rule order" diagram has no visible rendered output in the screenshots.**
+- [x] **Mermaid "Rule order" diagram has no visible rendered output in the screenshots.**
       The "Rule order" card is the third card (confirmed by DOM) and `hasMermaid: false` from
       the class-selector probe — the Mermaid `<svg>` or `<figure>` is not yet rendered when
       the probe fires, or uses a non-standard class. The card heading appears in DOM but the
@@ -15666,7 +15666,7 @@ _5 · Positioning_
       but the full-page screenshot cuts off before it.
 
 _6 · Ordering_
-- [ ] **HIGHEST IMPACT: DOM card order is [Suggestions, Your rules, Rule order].** Bianca
+- [x] **HIGHEST IMPACT: DOM card order is [Suggestions, Your rules, Rule order].** Bianca
       comes to this page to manage her rules. The suggestions section — even though valuable
       — should not gate access to the rule list. The correct order from Bianca's perspective
       is: **Your rules (with reorder + coverage) → Rule order (precedence chain) →
@@ -15674,17 +15674,17 @@ _6 · Ordering_
       the fold and demotes discovery content to a secondary position. Confirmed buried state
       in `dark_1280.png`, `dark_1440.png`, `light_1280.png`, `light_1440.png`,
       `dark_768.png`, `light_768.png` — all show only the suggestions card at viewport height.
-- [ ] **Suggestion rows are sorted by transaction count (descending).** Correct — the highest-
+- [x] **Suggestion rows are sorted by transaction count (descending).** Correct — the highest-
       value suggestions (27, 25, 25 transactions) come first. This ordering is good and should
       be preserved when the card is moved below the rule list. ✓
 
 _7 · General UX / Glanceability_
-- [ ] **Bianca's primary task — "see my rules, add a rule, set order" — is entirely hidden
+- [x] **Bianca's primary task — "see my rules, add a rule, set order" — is entirely hidden
       on arrival.** Every screenshot at every viewport width shows only the suggestions card.
       She must scroll past 15 suggestion rows to reach her rule list. This is the single
       largest glanceability failure on the page and subsumes the layout fix in §1 and the
       ordering fix in §6.
-- [ ] **Shadow warnings (C64) cannot be verified with sample data.** The `warnByID` mechanism
+- [x] **Shadow warnings (C64) cannot be verified with sample data.** The `warnByID` mechanism
       in `screens/rules.go` maps shadowed rule IDs to localised warning strings and renders
       them as `.row-meta` spans with `.text-warn`. In sample data no rule pair produces a
       conflict, so the visual treatment is unverified. This is a probe gap, not a product bug
@@ -15692,13 +15692,13 @@ _7 · General UX / Glanceability_
       screenshot-confirmed visual evidence in this review. Add a fixture rule with a known
       shadow to the sample dataset, or add a probe step that creates two overlapping rules
       and verifies the warning appears.
-- [ ] **The precedence reorder affordance (C64) is not discoverable.** Drag-to-reorder
+- [x] **The precedence reorder affordance (C64) is not discoverable.** Drag-to-reorder
       works (grip icons confirmed present, `title` attribute set) but is invisible to a new
       user: no hint text, no visible drag cursor, no reorder icon that reads as interactive.
       The "Rule order" card below shows the Mermaid chain diagram, but does not explain that
       you can drag the rows above it to change that chain. Fix: add one line of hint text to
       the "Your rules" card — "Drag ⠿ to reorder — first match wins."
-- [ ] **No "add a rule" entry point on the page.** The only way to create a new rule is via
+- [x] **No "add a rule" entry point on the page.** The only way to create a new rule is via
       the global "+ New rule" in the header quick-add dropdown — which is not labelled on this
       page and is invisible without hovering. On every other list page (Transactions, Goals,
       Members, Categories) there is an inline add form or prominent "+ Add" CTA. The Rules
@@ -15706,7 +15706,7 @@ _7 · General UX / Glanceability_
       Bianca arriving at Rules expecting to type "coffee → Dining" has no obvious place to
       do so. Fix: add an inline "New rule" form at the top of the "Your rules" card (match
       input + category select + optional tags + Add button), consistent with the rest of the app.
-- [ ] **15 suggestions at equal visual weight overwhelm the discovery experience.** Bianca
+- [x] **15 suggestions at equal visual weight overwhelm the discovery experience.** Bianca
       is shown 15 merchant → category suggestions simultaneously; all are styled identically.
       With no visual hierarchy between high-confidence (27 transactions) and low-confidence
       (5 transactions) suggestions, everything looks equally important. Fix: use a confidence
@@ -15898,14 +15898,14 @@ JSON: `glamor_19_workflows_dom.json`, `glamor_19_workflows_dom_built.json`,
 
 _1 · Layout_
 
-- [ ] **CRITICAL: Dark inter-card divider bleeds into light-mode layout.** The gap between
+- [x] **CRITICAL: Dark inter-card divider bleeds into light-mode layout.** The gap between
       the "Create a workflow" card and the "Your workflows" card renders as a thick black
       band in light mode (`mainBg: rgba(0,0,0,0)` — the content-area bg token does not
       switch). In `light_1280_list.png` and `light_1440.png` the page shows two white
       cards separated by a ~16px black stripe — identical systemic defect to G12–G15.
       Same fix: switch the content-area background token to the warm-white surface in
       `data-theme=light`. Highest-impact layout/theming fix on this page.
-- [ ] **Mermaid flowchart dominates each workflow row.** In `dark_1280_list.png` and
+- [x] **Mermaid flowchart dominates each workflow row.** In `dark_1280_list.png` and
       `light_1280_list.png`, every saved workflow row shows its Mermaid SVG immediately
       below the name/meta line — uncollapsed, taking 400–600px of vertical space. With 4
       saved workflows, the list becomes a tower of flowcharts; Raj must scroll past ~2000px
@@ -15913,7 +15913,7 @@ _1 · Layout_
       single workflow but is too heavy as an always-on element in the list. Add a
       collapsed-by-default accordion ("Show flowchart ▸") per row that expands inline on
       click, or render the flowchart only in a detail/edit panel.
-- [ ] **"Your workflows" list has no summary count.** The card heading reads "Your
+- [x] **"Your workflows" list has no summary count.** The card heading reads "Your
       workflows" with no row count badge. With 4 sample workflows (and each taking a
       large flowchart area), the visual scope of the list is not clear at a glance. A
       count badge on the heading ("Your workflows  4") would orient Raj. Compare:
@@ -15921,14 +15921,14 @@ _1 · Layout_
 
 _2 · Spacing_
 
-- [ ] **Builder rows are dense — no visual grouping between form rows and action builder.**
+- [x] **Builder rows are dense — no visual grouping between form rows and action builder.**
       The create-form is a single flat `form-grid`: name + trigger + condition in row 1,
       action-kind + action-text + "Add action" in row 2. There is no divider, label, or
       section header distinguishing "workflow identity" (name, trigger, condition) from
       "action builder" (what it will do). Raj mentally processes two sub-tasks but the
       form presents them as one undifferentiated block. A light `<hr>` or a small
       "Actions" sub-label above the action builder row would chunk the form correctly.
-- [ ] **Staged action rows inside the builder have minimal vertical clearance.** After
+- [x] **Staged action rows inside the builder have minimal vertical clearance.** After
       staging an action, the row appears immediately below the action-builder grid with
       only a `mt-2` separator. At 768px the staged row is visually merged with the action
       builder above it. Add a `mt-3` gap and a faint divider line above the staged list
@@ -15936,7 +15936,7 @@ _2 · Spacing_
 
 _3 · Theming_
 
-- [ ] **CRITICAL: "Run now" button fails WCAG AA in light mode.** `btnPrimaryColor:
+- [x] **CRITICAL: "Run now" button fails WCAG AA in light mode.** `btnPrimaryColor:
       rgb(5,46,19)` (very dark green text) on `btnPrimaryBg: rgb(46,139,87)` (mid green
       background) — computed contrast ratio ~2.1:1, far below the 4.5:1 AA threshold for
       normal text. In `light_1280_list.png` and `light_768.png`, the "Run now" button
@@ -15945,18 +15945,18 @@ _3 · Theming_
       `.btn-primary` text colour in light mode, which reaches ~4.7:1 on `rgb(46,139,87)`.
       This is the same systemic `.btn-primary` light-mode contrast failure seen on other
       pages (G4–G15). **Highest-impact theming fix on this page.**
-- [ ] **Dark inter-card background bleeds in light (same systemic root as G12–G15).**
+- [x] **Dark inter-card background bleeds in light (same systemic root as G12–G15).**
       `mainBg: rgba(0,0,0,0)` does not switch in `data-theme=light`. Confirmed in
       `light_1280_list.png`, `light_1440.png`, `light_768.png`. Fix: align with the G12–
       G15 content-area background token fix.
-- [ ] **Mermaid flowchart background in light.** The Mermaid condition-diamond fill in
+- [x] **Mermaid flowchart background in light.** The Mermaid condition-diamond fill in
       light mode renders as a light lavender/purple (`rgb(~224,220,255)` approximate from
       visual inspection of `light_1280_list.png`). This is a Mermaid default theme colour
       and is aesthetically discordant against the app's warm neutral palette. In dark mode
       the same diamond uses the near-black fill of the dark surface, which looks correct.
       Consider overriding Mermaid's default theme with a neutral token that fits the
       app palette in both themes.
-- [ ] **`rowMetaColor: rgb(86,86,92)` in light is borderline on the primary info line.**
+- [x] **`rowMetaColor: rgb(86,86,92)` in light is borderline on the primary info line.**
       The workflow meta line — "When a transaction is added · if expense > 100 · 1 action"
       — renders in the muted grey token (~5.4:1 on white). This line carries critical
       operational information (what the workflow does and when) and should arguably use
@@ -15965,25 +15965,25 @@ _3 · Theming_
 
 _4 · Styling_
 
-- [ ] **All form inputs are placeholder-only — no visible labels.** `labelCount: 0` (zero
+- [x] **All form inputs are placeholder-only — no visible labels.** `labelCount: 0` (zero
       `<label>` elements on the entire page). "Workflow name", "Condition (optional)", and
       "Task title / message / tag" are placeholder-only. `aria-label` coverage: the
       selects have no `aria-label`; the inputs have no associated `<label>`. Cross-ref
       C65 (labelling gaps) and B15 (systemic a11y). Add visible `<label>` elements for
       at minimum the name and condition inputs; add `aria-label` to the trigger and
       action-kind selects.
-- [ ] **H3 card titles instead of H2 — heading hierarchy broken.** `cardHeadingLevels:
+- [x] **H3 card titles instead of H2 — heading hierarchy broken.** `cardHeadingLevels:
       ["H3", "H3", "H3"]` across all three cards on the page. The rest of the app uses
       H2 for card titles; H3 implies these are sub-headings of a parent H2 that does not
       exist. Screen readers experience a heading-level skip (H1 page title → H3 card
       title). Cross-ref C65 (heading order), B15 (a11y/landmarks). Normalize to H2.
-- [ ] **"Add action" button is full-width on 1280 desktop.** In `dark_1280_list.png` the
+- [x] **"Add action" button is full-width on 1280 desktop.** In `dark_1280_list.png` the
       "Add action" button spans the full third column of the action-builder grid — roughly
       300px wide for a secondary staging action. This makes it visually heavier than the
       primary "Save workflow" button below it. "Add action" should be `btn-sm` or
       `fit-content` width, matching the pattern of add-form buttons on other pages (Goals,
       Tasks). The "Save workflow" button correctly uses a compact width.
-- [ ] **"Run now" is `.btn-primary` (green) in light mode; "Dry run" is `.btn` (neutral).**
+- [x] **"Run now" is `.btn-primary` (green) in light mode; "Dry run" is `.btn` (neutral).**
       At a glance the green "Run now" button is the loudest element in every workflow row
       — louder than the workflow name itself. For a non-destructive automation page, "Dry
       run" (the safe exploratory action) should be the primary affordance and "Run now"
@@ -15994,7 +15994,7 @@ _4 · Styling_
 
 _5 · Positioning_
 
-- [ ] **Condition input is the third field in a three-column form-grid, truncated at
+- [x] **Condition input is the third field in a three-column form-grid, truncated at
       1280.** In `dark_1280_list.png` and `light_1280_list.png` the condition input shows
       only "Condition (optional) — e.g. t" — the placeholder is cut off after the first
       few characters. At 1280 the three-column grid (name | trigger-select | condition)
@@ -16002,7 +16002,7 @@ _5 · Positioning_
       The condition field needs more width than the other two (it holds a formula
       expression). Move the condition input to its own full-width row below the name +
       trigger row, mirroring how the action builder uses a separate row.
-- [ ] **"Save workflow" button is flush-left, visually separate from the action builder.**
+- [x] **"Save workflow" button is flush-left, visually separate from the action builder.**
       The green "Save workflow" button sits below the staged-action list with a `mt-2`
       gap. It reads as a floating button unrelated to the form above it. Wrapping it in
       a `form-actions` row that right-aligns it (consistent with other form save patterns)
@@ -16011,13 +16011,13 @@ _5 · Positioning_
 
 _6 · Ordering_
 
-- [ ] **Mermaid flowchart appears immediately under the workflow name/meta/actions row**
+- [x] **Mermaid flowchart appears immediately under the workflow name/meta/actions row**
       before any dry-run result. The ordering is: name + meta → dry-run result (if any)
       → flowchart. The flowchart always renders even when no dry-run has been fired.
       A cleaner order: name + meta → action summary line → [dry-run result if fired] →
       [flowchart, collapsed by default]. The always-on diagram currently pushes the run
       history entirely out of view at any normal viewport.
-- [ ] **Run history card requires scrolling past all expanded flowcharts.** With 4
+- [x] **Run history card requires scrolling past all expanded flowcharts.** With 4
       workflows each rendering a full Mermaid SVG, run history starts at ~2000px. The
       history is operational feedback Raj checks after running a workflow — it should be
       accessible without major scrolling. Collapsing flowcharts by default (see _1 ·
@@ -16025,7 +16025,7 @@ _6 · Ordering_
 
 _7 · General UX / Glanceability_
 
-- [ ] **HIGHEST IMPACT: no edit for an existing workflow (C65 still open).** `hasEditBtn:
+- [x] **HIGHEST IMPACT: no edit for an existing workflow (C65 still open).** `hasEditBtn:
       false` confirmed by DOM audit. The four sample workflows — "Tag freelance income",
       "Categorize coffee runs", "Flag large purchases", "Monthly budget review" — offer
       only: Dry run / Run now / Disable / Delete. There is no edit. Raj cannot fix a
@@ -16035,7 +16035,7 @@ _7 · General UX / Glanceability_
       usability gap on the page. Add an Edit button per row that populates the builder
       card with the workflow's current values and changes "Save workflow" to "Update
       workflow" for that session.
-- [ ] **Condition field has no formula help or variable reference.** Unlike the Customize
+- [x] **Condition field has no formula help or variable reference.** Unlike the Customize
       page (which has 4 example buttons + a full Available Variables card), the condition
       input here is a raw freeform text field with a placeholder giving two examples. Raj
       has no way to discover what variables are available (`txn_abs`, `txn_payee`,
@@ -16043,7 +16043,7 @@ _7 · General UX / Glanceability_
       flagged this gap. Share the formula-help pattern from Customize: at minimum a
       "Variables you can use" toggle below the condition field listing available
       identifiers and their types. Cross-ref C65, C61.
-- [ ] **"Dry run" on a manual-trigger workflow against sample data returns "Would do:
+- [x] **"Dry run" on a manual-trigger workflow against sample data returns "Would do:
       • ..."** — the dry-run label "Would do:" correctly signals simulation. However,
       for trigger-bound workflows (e.g. "When a transaction is added"), the dry-run
       semantics are ambiguous: does it simulate the last transaction, all transactions,
@@ -16051,12 +16051,12 @@ _7 · General UX / Glanceability_
       evaluated. Add a parenthetical note: "Would do (evaluated against 32 existing
       transactions):" or "Condition matched 5 of 32 transactions." Cross-ref C65 (dry-run
       is "excellent" — this is a refinement, not a defect, but raises clarity).
-- [ ] **Condition truncates in the meta line at 768px.** In `dark_768.png` the workflow
+- [x] **Condition truncates in the meta line at 768px.** In `dark_768.png` the workflow
       meta line reads "When a transaction is added · if expense > 100 · 1 action" — it
       wraps correctly in the row. At very long conditions this would be cut off. The line
       uses `row-meta` styling with no clamping; confirm with a longer condition string
       that it wraps (not truncates) correctly.
-- [ ] **No empty state for "Your workflows" when the list is empty.** DOM shows
+- [x] **No empty state for "Your workflows" when the list is empty.** DOM shows
       `emptyText: "No transactions yet."` which is the Dashboard's empty state leaking
       through a `.empty` selector, not the workflow list's own empty state. The workflow
       list uses a conditional: if `len(rows) > 0` it renders `.rows`, otherwise it renders
@@ -16238,33 +16238,33 @@ JSON: `glamor_20_artifacts_dom.json`, `glamor_20_artifacts_dom_light.json`
 **Structure fixes (bottom-up)** grouped by the 7 dimensions:
 
 _1 · Layout_
-- [ ] **Artifact rows are center-column-aligned with no left anchor at 1440+.** At 1440px the
+- [x] **Artifact rows are center-column-aligned with no left anchor at 1440+.** At 1440px the
       artifact names, meta, and thumbnail are rendered in a narrow center column while the left and
       right thirds of the card are blank. Confirmed in `dark_1440.png` and `light_1440.png`. The
       row content (`row-main`) does not stretch to fill the card's full width. For a management
       list, rows should left-align and fill the card horizontally, with actions pinned right, so
       the list is scannable in a single left-to-right pass at any width.
-- [ ] **No "where used" signal distinguishes image artifacts from CSV artifacts at a glance.**
+- [x] **No "where used" signal distinguishes image artifacts from CSV artifacts at a glance.**
       The row layout is identical for images (with thumbnail slot) and CSVs (no thumbnail). A
       small kind badge or icon pill (image vs. CSV) on the left of each row, before the thumbnail
       zone, would let Lena identify the artifact type without reading the meta line. Currently the
       kind is buried in the muted meta text "image · 12 B" / "csv · 3 rows · 0 B". Confirmed in
       `dark_1280.png`, `light_1280.png`.
-- [ ] **No "used by custom page" badge is visible in sample data.** The `artifactPageRefs` array
+- [x] **No "used by custom page" badge is visible in sample data.** The `artifactPageRefs` array
       is empty in this run because no custom-page widget in the sample data binds an artifact.
       The "used by pages" indicator in source (lines 254–256 of `artifacts.go`) exists but cannot
       be confirmed in screenshots. A future probe should seed a custom-page widget bound to an
       artifact to exercise and confirm this path.
 
 _2 · Spacing_
-- [ ] **Very large empty area below "Your artifacts" card at 1280/1440 in both themes.**
+- [x] **Very large empty area below "Your artifacts" card at 1280/1440 in both themes.**
       `pageHeight === viewportH === 900` — the two cards (upload + list) fill only approximately
       the top two-thirds of the viewport. The lower third is pure background. Confirmed in
       `dark_1280.png`, `light_1280.png`, `dark_1440.png`, `light_1440.png`. For a page with only
       2 artifacts, this is expected; however, consider placing the upload card inline above the
       list (not as a separate card) or using a denser single-card layout so the page reads as
       intentionally laid out rather than sparse.
-- [ ] **Storage meter and quota nudge share the upload card with no visual separation.** The
+- [x] **Storage meter and quota nudge share the upload card with no visual separation.** The
       "Image storage (IndexedDB): …" line and the quota nudge `<div>` are rendered with `mt-2`
       margin below the button row, inside the upload card. In light mode the quota nudge text
       is barely distinguishable from the storage meter text (both are `.muted`/amber; the nudge
@@ -16273,13 +16273,13 @@ _2 · Spacing_
       `light_1280.png` (nudge text blends into storage meter text).
 
 _3 · Theming_
-- [ ] **CRITICAL: Dark body background bleeds between cards in light mode.** `mainBg:
+- [x] **CRITICAL: Dark body background bleeds between cards in light mode.** `mainBg:
       rgb(14,14,15)` — the gap between the "Upload an artifact" card and the "Your artifacts"
       card, and the space below the "Your artifacts" card, expose the dark body background as wide
       black bands in light mode. Confirmed visually in `light_1280.png`, `light_1440.png`,
       `light_768.png`. This is the same systemic light-mode body-bg failure as G12–G19. Fix:
       content-area background token must switch to a light value under `data-theme=light`.
-- [ ] **Quota nudge text is near-invisible in light mode.** The quota nudge `<div>` has class
+- [x] **Quota nudge text is near-invisible in light mode.** The quota nudge `<div>` has class
       `notice notice-warn` but its text — "You're using 65.4 MB for receipt images — consider
       exporting a backup and removing some to free up space." — is rendered in a very light/faint
       color against the white card background in `light_1280.png`. The text is barely readable.
@@ -16288,7 +16288,7 @@ _3 · Theming_
       is visible but the message text is not). This is an actionable warning — if Lena can't read
       it, she won't act. Fix: ensure `.notice-warn` uses a legible dark-text token in
       `data-theme=light`.
-- [ ] **"Upload image" primary button: dark text on mid-green background in both themes.**
+- [x] **"Upload image" primary button: dark text on mid-green background in both themes.**
       `btnPrimaryBg: rgb(46,139,87)`, `btnPrimaryColor: rgb(5,46,19)` — a very dark green
       (`#05302b`) on a medium green (#2e8b57). In dark mode the contrast is marginal; in light
       mode it is the same token with no switch, and the button sits on a white card — same
@@ -16297,13 +16297,13 @@ _3 · Theming_
       `light_1280.png`. Fix: button label should use white (`#ffffff`) on the green primary, or
       the primary accent should be dark enough that white passes. (Systemic G19 finding: "Run now"
       2.1:1 — same root cause.)
-- [ ] **Muted text (storage meter, row meta) is borderline in light.** `mutedColor:
+- [x] **Muted text (storage meter, row meta) is borderline in light.** `mutedColor:
       rgb(86,86,92)` → ~5.4:1 against white card bg. Borderline for small/secondary text (WCAG
       AA requires 4.5:1 for normal text, 3:1 for large). Same systemic muted-token concern as
       G4–G19.
 
 _4 · Styling_
-- [ ] **Broken thumbnail for the image artifact.** The `bestbuy-receipt.png` artifact has a 12 B
+- [x] **Broken thumbnail for the image artifact.** The `bestbuy-receipt.png` artifact has a 12 B
       stub payload (sample data) so its `<img>` renders as a broken icon ("bestb" text + broken-
       image placeholder) at all widths and in both themes. Confirmed in all 6 screenshots.
       In a real user session with a real upload, the thumbnail renders correctly from the data-URL.
@@ -16311,25 +16311,25 @@ _4 · Styling_
       browser broken-image icon). Consider: a grey placeholder rectangle with a file-type icon
       when the image fails to load (`onerror` handler on the `<img>`), so the row doesn't look
       broken even in degraded scenarios. Cross-references C66 (image preview).
-- [ ] **Row metadata ordering: kind · size on line 1, reference status on lines 2–3.** The
+- [x] **Row metadata ordering: kind · size on line 1, reference status on lines 2–3.** The
       current layout is: filename (`.row-desc`) → "image · 12 B" (`.row-meta`) → "Referenced by
       1 transaction" (`.row-meta`) → [optionally "Used by N pages" (`.row-meta`)]. For Lena's
       primary question ("is this receipt being used and where?"), the reference status is the most
       important piece — yet it is last. Reorder to: filename → reference badge → kind/size, or
       promote the reference label to a colored inline badge.
-- [ ] **"Not referenced by any transaction" uses the same muted style as kind/size.** The neutral
+- [x] **"Not referenced by any transaction" uses the same muted style as kind/size.** The neutral
       "not referenced" note and the positive "Referenced by 1 transaction" are both rendered in
       the same `.row-meta` muted tone. There is no visual distinction — "referenced" should be
       a positive/green signal, "not referenced" should be neutral or slightly muted. Confirmed in
       `dark_1280.png`, `light_1280.png`.
-- [ ] **Rename and delete buttons are icon-only with no visible label.** The pencil and × icons
+- [x] **Rename and delete buttons are icon-only with no visible label.** The pencil and × icons
       carry `aria-label` and `title` attributes (confirmed in source lines 260, 262 of
       `artifacts.go`), so accessibility is covered. But visually, for a first-time user, there
       is no text label on either action. The pencil is particularly opaque — "edit" could mean
       edit the file contents, not rename. Consider adding "Rename" as a visible label alongside
       the pencil icon, matching the "Upload image" / "Import CSV" pattern of labeled actions.
       Confirmed in `dark_1280.png`, `light_1280.png`.
-- [ ] **No "where used in custom pages" indicator visible in sample data.** C66 specifically
+- [x] **No "where used in custom pages" indicator visible in sample data.** C66 specifically
       requested "where used" before delete. The guard against deleting in-use artifacts is wired,
       but there is no proactive "used by 2 pages" badge on the row itself when an artifact is in
       use — the reference only surfaces as a notice on attempted delete. A small "Used in N page(s)"
@@ -16339,7 +16339,7 @@ _4 · Styling_
       non-zero case.
 
 _5 · Positioning_
-- [ ] **Upload buttons are at the top of the page, artifact list below — correct hierarchy, but
+- [x] **Upload buttons are at the top of the page, artifact list below — correct hierarchy, but
       the two-card split creates vertical distance.** Lena must scroll past the upload card to
       reach the list at wider widths with many artifacts. The upload card is always at top; its
       "sticky affordance" is good for discoverability but at 1440+ the card height + list card
@@ -16347,13 +16347,13 @@ _5 · Positioning_
       manager, a single card with upload actions inline at the top and the list below (no card
       boundary between them) would feel more cohesive. Confirmed in `dark_1440.png`,
       `light_1440.png`.
-- [ ] **No "add artifact" affordance at the bottom of the list.** The artifact list ends after the
+- [x] **No "add artifact" affordance at the bottom of the list.** The artifact list ends after the
       last row with no repeated upload CTA, "Upload another" button, or "Drop files here" zone.
       A user who scrolls to the bottom of a long list to add one more file must scroll back to the
       top to find the upload buttons. Confirmed absent in `dark_1280.png`, `light_1280.png`.
 
 _6 · Ordering_
-- [ ] **Artifact order in sample data: image first, CSV second.** DOM audit confirms
+- [x] **Artifact order in sample data: image first, CSV second.** DOM audit confirms
       `artifactNames: ["bestbuy-receipt.png", "spending-by-category.csv"]`. No explicit ordering
       label on the list card ("Your artifacts" has no sort control). No newest-first indicator.
       For a growing receipts library, newest-first ordering is the most useful default — Lena
@@ -16361,37 +16361,37 @@ _6 · Ordering_
       `app.Artifacts()` (line 100 of `artifacts.go`) with no explicit sort — relies on store
       ordering. If the store returns insertion order (oldest-first), newly uploaded items appear
       last. Add a newest-first default sort or a sort control.
-- [ ] **No "uploaded date" displayed on rows.** `domain.Artifact` has a `CreatedAt` field
+- [x] **No "uploaded date" displayed on rows.** `domain.Artifact` has a `CreatedAt` field
       (set in upload handlers, e.g. `CreatedAt: time.Now()` at lines 53, 71 of `artifacts.go`)
       but the date is not surfaced in the row UI. Lena cannot see when she uploaded a receipt
       without hovering the item or knowing the sort order. A date stamp in the row meta (e.g.
       "Uploaded Jun 21") would support the "find a specific receipt" story.
 
 _7 · General UX / Glanceability_
-- [ ] **C66 "no card titles" is now fixed — both cards have H2 titles.** "Upload an artifact"
+- [x] **C66 "no card titles" is now fixed — both cards have H2 titles.** "Upload an artifact"
       and "Your artifacts" are present as H2 card-titles. C66 open item is closed. ✓
-- [ ] **C66 "silent upload failures" is now fixed — errors surface via notice.** `notify` is
+- [x] **C66 "silent upload failures" is now fixed — errors surface via notice.** `notify` is
       called on PutArtifact / ParseCSV errors in both upload handlers. C66 open item is closed. ✓
-- [ ] **C66 "where used" — partially addressed.** Transaction reference count ("Referenced by N
+- [x] **C66 "where used" — partially addressed.** Transaction reference count ("Referenced by N
       transaction(s)") is shown per row (L29). Custom-page widget reference guard is wired for
       delete. What remains: no proactive "used by N page(s)" badge on the row in the non-zero
       case; no CSV preview (see below). C66 is partially closed.
-- [ ] **No CSV preview.** C66 flagged "CSV artifacts have no preview (images do) — show columns
+- [x] **No CSV preview.** C66 flagged "CSV artifacts have no preview (images do) — show columns
       + first rows." The `spending-by-category.csv` row shows "csv · 3 rows · 0 B" and the
       rename/delete actions, but no expandable preview table. Clicking the rename button opens
       an inline rename form — there is no "preview" action at all. Fix: add a "Preview" action
       (or expand-on-click) for CSV rows that shows a compact table of columns + first N rows.
       Confirmed absent in `dark_1280.png`, `light_1280.png`.
-- [ ] **Empty state not exercised in this run.** The source line 110 of `artifacts.go` shows
+- [x] **Empty state not exercised in this run.** The source line 110 of `artifacts.go` shows
       `P(css.Class("empty"), uistate.T("artifacts.empty"))` — an empty-state message exists.
       Not triggered because sample data has 2 artifacts. Not a code bug; flag as a regression
       anchor. A future probe should `DeleteArtifact` both entries and confirm the empty-state
       message renders with a helpful guide (C66: "explain artifacts power custom-page Image/Table
       widgets; add example").
-- [ ] **No drag-to-reorder or bulk-delete for artifact management.** With a growing receipts
+- [x] **No drag-to-reorder or bulk-delete for artifact management.** With a growing receipts
       collection (L29 use case), Lena will accumulate many artifacts. There is no multi-select,
       no bulk delete, and no drag-to-reorder. Flag as a UX enhancement for a future ticket.
-- [ ] **Page gives no context for what "custom pages" means.** The upload card description says
+- [x] **Page gives no context for what "custom pages" means.** The upload card description says
       "Upload images or CSV datasets to use in your custom pages." For a user who has not built
       custom pages yet, this is opaque. A brief additional sentence ("They also appear as
       thumbnail previews in your transaction history.") would complete the picture and make the
@@ -16617,7 +16617,7 @@ JSON: `glamor_21_settings_dom.json`, `glamor_21_settings_dom_768.json`,
 
 _1 · Layout_
 
-- [ ] **CRITICAL: The Settings panel is 760×560px fixed — 23 sections crammed into
+- [x] **CRITICAL: The Settings panel is 760×560px fixed — 23 sections crammed into
       a 560px tall scrollable container.** At 1280×900, the panel height of 560px leaves
       only ~380px for the scrollable body (the rest is header + footer). The panel
       contains: household members + currency + budgeting method + FX rates (many rows) +
@@ -16633,7 +16633,7 @@ _1 · Layout_
       min) so more content is visible per screen, or (b) introduce a sectioned sidebar
       within the panel (Settings > Household | Appearance | AI | Data | Advanced)
       so each category is one compact panel-depth.**
-- [ ] **Panel at 768px spans 100% of viewport width but the content columns are very
+- [x] **Panel at 768px spans 100% of viewport width but the content columns are very
       narrow.** In `dark_768.png` and `light_768.png`, the two-column grid at 768px
       gives each column only ~330px. The left column shows FX rate rows (currency code
       + input + USD) and the right column shows the AI key section — both manageable.
@@ -16641,7 +16641,7 @@ _1 · Layout_
       readable but cramped. `overflowCount: 25` at 768 (up from 14 at 1280) — a
       meaningful increase suggesting some elements overflow horizontally at mobile widths.
       The two-column split should collapse to a single column at 768px or below.
-- [ ] **The "Cloud & server" section occupies significant right-column space** with
+- [x] **The "Cloud & server" section occupies significant right-column space** with
       on/off toggle + Cloud/Self-hosted segmented + URL input + token input + multiple
       action buttons (Test connection, Sync now, Upload key to backend, Deploy your own
       server) + OAuth buttons (when cloud selected) + billing section (when cloud
@@ -16652,7 +16652,7 @@ _1 · Layout_
 
 _2 · Spacing_
 
-- [ ] **23 `set-label` section headers with no visual grouping between major
+- [x] **23 `set-label` section headers with no visual grouping between major
       categories.** The section labels are ALL-CAPS small text with only the label
       itself as a separator — no divider lines, no extra vertical padding between
       clusters of related sections. On the left column the sequence goes: Household
@@ -16662,7 +16662,7 @@ _2 · Spacing_
       between logical clusters (Household / Data config / App preferences) would let
       Renée skim the structure without reading every label. Confirmed `dark_1280_top.png`,
       `dark_1280_mid.png`.
-- [ ] **Section labels have no bottom margin separating them from their controls.**
+- [x] **Section labels have no bottom margin separating them from their controls.**
       In `dark_1280_top.png` the "HOUSEHOLD MEMBERS" label sits immediately above the
       member chip row with minimal clearance. The ALL-CAPS muted label and the control
       below it visually merge — the label reads as a microhead above the control but
@@ -16670,7 +16670,7 @@ _2 · Spacing_
 
 _3 · Theming_
 
-- [ ] **CRITICAL: Toggle row labels are white-on-white in light mode.** `toggleColor:
+- [x] **CRITICAL: Toggle row labels are white-on-white in light mode.** `toggleColor:
       rgb(244,244,245)` — near-white text — is used for toggle row `<span>` labels in
       the light panel. In `light_1280_top.png` the labels "Enable AI features" and
       "Remember my key on this device" are completely invisible against the white panel
@@ -16681,7 +16681,7 @@ _3 · Theming_
       invisible for Renée in light mode. Highest-impact theming fix in this panel.
       Fix: `.toggle-row span` should resolve to `var(--fg)` / `var(--text)` in light
       mode, not the dark-mode near-white. Cross-ref C69 (theming reaches shell).
-- [ ] **CRITICAL: Panel backdrop is dark in light mode.** `panelBg: rgba(4,4,6,0.6)`
+- [x] **CRITICAL: Panel backdrop is dark in light mode.** `panelBg: rgba(4,4,6,0.6)`
       — the `.flip-backdrop` or `.flip-inner` background does not switch to a warm-
       white/neutral surface in `data-theme=light`. In `light_1280_top.png` and
       `light_768.png`, the modal overlay has the same dark semi-transparent appearance
@@ -16689,7 +16689,7 @@ _3 · Theming_
       and labels correctly, but the outer panel shell remains dark. The panel should
       use `var(--surface)` or `var(--card-bg)` for its background in light mode.
       Cross-ref C69, systemic G12–G19 `mainBg: rgba(0,0,0,0)` pattern.
-- [ ] **Section labels (`set-label`) render in muted grey (`rgb(86,86,92)`) in light.**
+- [x] **Section labels (`set-label`) render in muted grey (`rgb(86,86,92)`) in light.**
       The ALL-CAPS section headers rely on the muted text token which in dark mode is
       `rgb(140,140,148)` and in light is `rgb(86,86,92)`. On a white card background
       `rgb(86,86,92)` gives ~5.8:1 — borderline for small caps at normal weight.
@@ -16699,7 +16699,7 @@ _3 · Theming_
 
 _4 · Styling_
 
-- [ ] **Five "Import" buttons with identical `.data-btn` styling — L47 confirmed.**
+- [x] **Five "Import" buttons with identical `.data-btn` styling — L47 confirmed.**
       `importBtnCount: 5` in the DOM. The data-action row has "Import…" (JSON dataset);
       the theme editor has "Import theme"; the workspace section has "Import workspace";
       the languages section has "Import languages"; and the data-btn list also contains
@@ -16710,14 +16710,14 @@ _4 · Styling_
       Fix: rename buttons to their object — "Import dataset", "Import theme",
       "Import workspace", "Import languages" — so each is uniquely labelled even
       without surrounding context. Cross-ref L47.
-- [ ] **`set-label` section headings are `<div>` not `<h3>` or semantic heading.**
+- [x] **`set-label` section headings are `<div>` not `<h3>` or semantic heading.**
       The `set-label` elements are `Div(css.Class("set-label"), ...)` — plain divs,
       not heading elements. Screen readers visiting the panel have no heading hierarchy
       to navigate by: 23 topics with no structural heading landmarks. The panel title
       is an H3 (`H3(props.Title)` in flippanel.go); the section labels below should
       be H4 elements. This is the same heading-level gap seen on G16–G19. Add `h4`
       tags (or `role="heading" aria-level="4"`) to every `set-label`.
-- [ ] **`labelCount: 8` — 30 inputs but only 8 `<label>` elements.** Most inputs in
+- [x] **`labelCount: 8` — 30 inputs but only 8 `<label>` elements.** Most inputs in
       the panel are associated via `aria-label` or `title` attributes on the `<select>`
       elements (confirmed in `selectAria` DOM audit: all selects carry `aria-label`).
       Password inputs (AI key, web search, backend token) use `Placeholder` only, with
@@ -16725,7 +16725,7 @@ _4 · Styling_
       source — it relies solely on the section heading above it for context. Add
       explicit `aria-label` to every password input: "OpenAI API key",
       "Web search API key", "Backend bearer token".
-- [ ] **"Wipe data" danger styling uses inline `Style()` rather than a CSS class.**
+- [x] **"Wipe data" danger styling uses inline `Style()` rather than a CSS class.**
       In `dataButton()`, the danger variant is implemented as
       `Style(map[string]string{"color": "#d8716f", "border-color": "#5a2a2a"})`.
       This makes theming the danger state harder (inline styles override CSS variables)
@@ -16735,13 +16735,13 @@ _4 · Styling_
 
 _5 · Positioning_
 
-- [ ] **AI key section is in the right column but is scroll-position-dependent at
+- [x] **AI key section is in the right column but is scroll-position-dependent at
       1280×900.** In `dark_1280_top.png` the AI section ("AI (OPENAI · BRING YOUR OWN
       KEY)") is visible at the top of the right column — the first thing Renée sees on
       the right side. This is actually a good placement for discoverability. However,
       the "Enable AI features" toggle label is invisible in light mode (white-on-white),
       so the discoverability is moot until the contrast fix lands. ✓ position, ✗ contrast.
-- [ ] **Appearance controls (theme/accent/shape) appear well below the AI key in the
+- [x] **Appearance controls (theme/accent/shape) appear well below the AI key in the
       right column.** Renée must scroll the right column past: AI section (toggle +
       key input + remember toggle + notes) + web search section + cloud/server section
       (backend toggle + Cloud/Self-hosted + URL + token + 6 action buttons) before
@@ -16750,7 +16750,7 @@ _5 · Positioning_
       section. **Swap the section order: Appearance first, AI key second, Cloud &
       server last** — appearance is everyday use, AI key is setup-once, backend is
       advanced.
-- [ ] **Data action buttons (Export/Import/Load/Wipe) are near the bottom of the right
+- [x] **Data action buttons (Export/Import/Load/Wipe) are near the bottom of the right
       column.** From top of the right column, reaching "DATA" requires scrolling past:
       AI + web search + cloud + model select + appearance + theme editor + preferences.
       Import/export are important discovery-day and migration-day actions. They don't
@@ -16760,14 +16760,14 @@ _5 · Positioning_
 
 _6 · Ordering_
 
-- [ ] **Right column section order should be: Appearance → Preferences → AI → Cloud →
+- [x] **Right column section order should be: Appearance → Preferences → AI → Cloud →
       Data → Advanced.** Current order: AI → Web search → Cloud & server → model
       select → Appearance → Theme → Colors → Shape → Dashboard banner → Preferences →
       Data → Backup → Workspaces → App lock → Languages → Debug log. The section
       ordering follows implementation history rather than usage frequency. A Renée-
       first ordering: (1) Appearance (what she sees first), (2) Preferences (date/week),
       (3) AI (bring your key), (4) Cloud (power user), (5) Data, (6) Advanced.
-- [ ] **Left column ordering is logical but could group tighter.** Current: Household
+- [x] **Left column ordering is logical but could group tighter.** Current: Household
       members → Base currency → Budgeting method → Exchange rates → Screens →
       Freshness → Notifications → Music. Suggested: Household members → Screens →
       Base currency → Budgeting method → Exchange rates → Freshness → Notifications
@@ -16776,7 +16776,7 @@ _6 · Ordering_
 
 _7 · General UX / Glanceability_
 
-- [ ] **HIGHEST IMPACT: No navigation aid for 23 sections in a 380px scroll window.**
+- [x] **HIGHEST IMPACT: No navigation aid for 23 sections in a 380px scroll window.**
       There is no section jump / tab strip / sidebar nav within the panel. Renée opens
       Settings to change her date format (deep in Preferences, right column) or her
       theme (buried under AI + Cloud in the right column). She must scroll blindly
@@ -16784,20 +16784,20 @@ _7 · General UX / Glanceability_
       text-links at the top of the panel body (Household · Appearance · AI · Data ·
       Advanced) would anchor-scroll to each cluster. A left-rail section tab (like a
       settings sidebar) is the high-fidelity fix.
-- [ ] **No visual confirmation when settings are saved.** The Save button closes the
+- [x] **No visual confirmation when settings are saved.** The Save button closes the
       panel. There is no toast, notice, or any feedback confirming what was saved.
       If Renée accidentally clicks Save early, she has no way to know what was
       committed. The `noticeAtom` is wired in `globalSettingsForm` for errors/import
       confirmation — use it to post a "Settings saved" notice on panel close. The
       notice atom already fires for importedData, wipeErr, etc. — a "Saved" success
       notice on Save() would complete the feedback loop.
-- [ ] **Five identically styled "Import" buttons violate L47.** See _4 · Styling_
+- [x] **Five identically styled "Import" buttons violate L47.** See _4 · Styling_
       above. From Renée's perspective: if she wants to import her previous data, she
       sees "Import…" (in Data) but also "Import theme", "Import workspace", and
       "Import languages" in the same style — none visually distinct. The "Import…"
       label (with ellipsis) implies a file picker but the label doesn't say what it
       imports. Rename to "Import dataset…" for disambiguation. Cross-ref L47.
-- [ ] **AI provider is hard-coded to "AI (OpenAI · bring your own key)" but C81
+- [x] **AI provider is hard-coded to "AI (OpenAI · bring your own key)" but C81
       specifies multi-provider support.** The section header names OpenAI explicitly;
       the model selector shows only GPT-4o and GPT-4.1 variants; the key input
       placeholder reads "OpenAI API key (sk-…)". C81 (multi-provider AI key UI) is
@@ -16805,13 +16805,13 @@ _7 · General UX / Glanceability_
       section header, key placeholder, and model list all need to generalize. The
       current hard-coded "sk-…" placeholder will break for non-OpenAI keys. Track C81
       as the gating fix before the provider dropdown is added.
-- [ ] **"Enable AI features" toggle controls subsequent inputs but there is no
+- [x] **"Enable AI features" toggle controls subsequent inputs but there is no
       conditional disabling.** The AI key input, Remember key toggle, and web search
       key input are all active regardless of whether "Enable AI features" is on or off.
       If the toggle is off, those inputs still accept values — Renée may type a key
       and not understand why AI still doesn't work. Dim/disable the AI inputs when the
       toggle is off to make the dependency clear.
-- [ ] **The panel at 768px has `overflowCount: 25`.** This is a meaningful jump from
+- [x] **The panel at 768px has `overflowCount: 25`.** This is a meaningful jump from
       14 at 1280 and suggests horizontal overflow in several elements — likely the FX
       rate rows (`rate-row` with code + label + input + currency label) or the
       backend action button row wrapping. Confirmed in `light_768.png`: the FX rows
@@ -16820,7 +16820,7 @@ _7 · General UX / Glanceability_
       rather than actual scroll bars, but the count should be driven to 0. The two-
       column layout at 768px is the likely root cause — collapsing to single column
       at ≤768px would resolve most overflow.
-- [ ] **Exchange rates section shows only AUD, CAD, CHF, EUR, GBP, INR, JPY, MXN
+- [x] **Exchange rates section shows only AUD, CAD, CHF, EUR, GBP, INR, JPY, MXN
       in the visible scroll window.** All other registered currencies (USD excluded as
       base) appear below fold. If there are many registered currencies, this section
       could grow very long. A "Show more / Show less" collapse for FX rows after the
@@ -17030,7 +17030,7 @@ JSON: `glamor_22_custompages_dom_after_create.json`,
 
 _1 · Layout_
 
-- [ ] **CRITICAL: Newly created custom page is absent from the rail's MY PAGES nav list.**
+- [x] **CRITICAL: Newly created custom page is absent from the rail's MY PAGES nav list.**
       After creating "Theo Budget View" and being navigated to `/p/theo-budget-view`, the page
       is not added to the MY PAGES list in the rail. `myPagesLinks: []` confirmed by DOM audit
       in both dark and light sessions. The rail continues to show only the pre-existing "Side
@@ -17044,7 +17044,7 @@ _1 · Layout_
       sufficient — check whether the first render cycle after the navigate has already unmounted
       the nav component before `bump()` fires.
 
-- [ ] **CRITICAL: Content area background is transparent — body black bleeds in light mode.**
+- [x] **CRITICAL: Content area background is transparent — body black bleeds in light mode.**
       `mainBg: rgba(0,0,0,0)` — the custom page content area has no `background-color` in
       `data-theme=light`. The warm-white body bg (`rgb(247,246,243)`) does not propagate to the
       content area, so the gap between the toolbar and the bento grid appears near-black in every
@@ -17054,7 +17054,7 @@ _1 · Layout_
       color: var(--bg)` to the page content container or to `.bento`'s parent element in
       `data-theme=light`.
 
-- [ ] **"Add widget" button placement is at the top but visually separated from the bento.**
+- [x] **"Add widget" button placement is at the top but visually separated from the bento.**
       At 1280px the button renders ~8px above the bento grid (or the empty-state card) with no
       visual grouping between the toolbar and the content. When the rail-collapsed state cuts off
       the left portion of the viewport, the button also shifts to the viewport bottom (confirmed
@@ -17065,7 +17065,7 @@ _1 · Layout_
 
 _2 · Spacing_
 
-- [ ] **Add-widget form has no visual label grouping the three fields.** The inline form (`_add_
+- [x] **Add-widget form has no visual label grouping the three fields.** The inline form (`_add_
       widget_form_kpi.png`) renders three fields (`<select>` type, `<input>` title, `<input>`
       formula/binding) in a `form-grid` row with no visible labels — only placeholders. The
       layout is dense and the meaning of each column is unclear without reading placeholder text.
@@ -17073,7 +17073,7 @@ _2 · Spacing_
       add `<label>` for each field above its input, or at minimum use `aria-label` and an above-
       field placeholder row.
 
-- [ ] **Empty-state card has excess white space above the guiding copy.** In `dark_1280_empty_
+- [x] **Empty-state card has excess white space above the guiding copy.** In `dark_1280_empty_
       state.png`, the empty card takes roughly 64px of top padding before the italic guiding text
       appears. With only one line of copy ("This page is empty. Add a widget to get started."),
       the card feels oversized for its content. Tighten the padding to `py-4` or add a centered
@@ -17081,7 +17081,7 @@ _2 · Spacing_
 
 _3 · Theming_
 
-- [ ] **CRITICAL: Custom widget tile title is near-invisible in light mode.** `tileTitleColor:
+- [x] **CRITICAL: Custom widget tile title is near-invisible in light mode.** `tileTitleColor:
       rgb(244,244,245)` (near-white) on `tileBg: rgb(255,255,255)` (white tile background).
       Computed contrast ~1.05:1 — completely invisible. The tile header uses a dark-mode text
       token (light-on-dark) that is never overridden in `data-theme=light`. Confirmed visually:
@@ -17090,19 +17090,19 @@ _3 · Theming_
       Fix: add a `data-theme=light .wh` rule setting heading/grip color to `var(--fg)` or
       `rgb(28,28,30)`.
 
-- [ ] **CRITICAL: "Add widget" `.btn-primary` label fails WCAG AA in light.** `addBtnColor:
+- [x] **CRITICAL: "Add widget" `.btn-primary` label fails WCAG AA in light.** `addBtnColor:
       rgb(5,46,19)` on `addBtnBg: rgb(46,139,87)` — ~2.1:1, far below the 4.5:1 threshold.
       Same systemic `.btn-primary` light-mode text contrast failure confirmed across G4–G19.
       Confirmed visually: `light_1280_empty.png`. Fix: set `.btn-primary` text color to
       `#ffffff` in `data-theme=light`.
 
-- [ ] **Empty state guiding text fails WCAG AA in light.** `emptyColor: rgb(150,150,152)` on
+- [x] **Empty state guiding text fails WCAG AA in light.** `emptyColor: rgb(150,150,152)` on
       `emptyBg: rgb(255,255,255)` — ~3.5:1, below 4.5:1 AA. The one piece of copy guiding
       Theo to add his first widget uses a muted grey that fails contrast on the white card. Fix:
       darken the `.empty` color in `data-theme=light` to at least `rgb(86,86,92)` (~5.4:1) or
       use `var(--fg-dim)` mapped to a passing value.
 
-- [ ] **"widgetspec: no formula set" error string appears in red/pink as the KPI tile body.**
+- [x] **"widgetspec: no formula set" error string appears in red/pink as the KPI tile body.**
       When a KPI widget is added without a formula expression, the tile body renders the raw
       error string "widgetspec: no formula set" in a red/orange color. Confirmed visually:
       `dark_1280_after_first_widget.png` (red-on-dark), `light_1280_one_widget_full.png`
@@ -17112,7 +17112,7 @@ _3 · Theming_
 
 _4 · Styling_
 
-- [ ] **Widget tile headings are H3 — heading hierarchy skips H2.** DOM audit: `headings:
+- [x] **Widget tile headings are H3 — heading hierarchy skips H2.** DOM audit: `headings:
       [{tag:"H1", text:"Theo Budget View"}, {tag:"H3", text:"My KPI"}, {tag:"H3", text:"My
       List"}]`. The page has an H1 (page name) then jumps directly to H3 for tile titles,
       with no H2 in between. Screen readers encounter a heading-level gap (H1 → H3). Cross-
@@ -17120,12 +17120,12 @@ _4 · Styling_
       correct). Fix: change the `H3(title)` in `customTile` to `H2(title)` to match the
       dashboard's widget heading level.
 
-- [ ] **Add-widget form: zero `<label>` elements.** `labelCount: 0`. The three form fields
+- [x] **Add-widget form: zero `<label>` elements.** `labelCount: 0`. The three form fields
       (type, title, formula/binding) are placeholder-only. Type select has no `aria-label`.
       Confirmed: `_add_widget_form_kpi.png`. Fix: add visible `<label>` elements or at
       minimum `aria-label` on the select and a visible label above the formula input.
 
-- [ ] **Resize buttons (↔ ↕) are bare Unicode characters with no label.** The resize handles
+- [x] **Resize buttons (↔ ↕) are bare Unicode characters with no label.** The resize handles
       in the tile header are rendered as plain `"↔"` and `"↕"` text characters. They carry
       a `Title` attribute (`pages.resizeWidth` / `pages.resizeHeight`) but no `aria-label`.
       Screen readers will read them as "left-right arrow" and "up-down arrow" without context.
@@ -17133,7 +17133,7 @@ _4 · Styling_
       to the resize buttons, or replace the Unicode arrow with icon.Icon calls matching the
       system's icon vocabulary.
 
-- [ ] **Grip glyph `⠿` carries no accessible label.** The drag-handle `Span(css.Class("grip",
+- [x] **Grip glyph `⠿` carries no accessible label.** The drag-handle `Span(css.Class("grip",
       tw.CursorGrab), "⠿")` has no `aria-label` or `role="button"`. A screen reader will
       read it as a Braille pattern dot character. Fix: add `Attr("aria-label", "Drag to
       reorder")` and `Attr("role", "button")` to the grip span, or wrap it in a visually-
@@ -17141,14 +17141,14 @@ _4 · Styling_
 
 _5 · Positioning_
 
-- [ ] **"Add widget" button is above the bento but occupies a full-width div with `mb-3`
+- [x] **"Add widget" button is above the bento but occupies a full-width div with `mb-3`
       margin — it dominates the viewport before any tiles exist.** On a fresh empty page the
       button spans the entire content width (the toolbar wrapper stretches `w-full`). A primary
       action button that controls a composition tool should be compact and contextually placed,
       not a banner-width element. Fix: constrain to `fit-content` or `w-auto` left-aligned;
       let it read as a toolbar action rather than a hero CTA.
 
-- [ ] **At 1440px, the content area is a vast black void with tiles pinned top-left and "Add
+- [x] **At 1440px, the content area is a vast black void with tiles pinned top-left and "Add
       widget" at the bottom edge.** `light_1440.png` shows a 1440×900 viewport with the
       custom page open: the KPI tile and list tile occupy a narrow left column (~500px) with
       the remaining 900px of screen entirely empty and black (content-area bg bleed). The
@@ -17160,7 +17160,7 @@ _5 · Positioning_
 
 _6 · Ordering_
 
-- [ ] **"Add widget" toolbar renders above the bento in all states.** This is correct for
+- [x] **"Add widget" toolbar renders above the bento in all states.** This is correct for
       discoverability on an empty page, but once the page is populated the toolbar floats above
       the tiles at the same hierarchy level as the page heading. Consider moving "Add widget"
       to a fixed-position or sticky footer action, or to a "+" button that appears after the
@@ -17169,50 +17169,50 @@ _6 · Ordering_
 
 _7 · General UX / Glanceability_
 
-- [ ] **HIGHEST IMPACT: Created page not in rail — Theo has no way to return to it.** After
+- [x] **HIGHEST IMPACT: Created page not in rail — Theo has no way to return to it.** After
       creating "Theo Budget View" and adding widgets, navigating to another screen leaves him
       stranded. The MY PAGES section does not update to include the new page in the current
       session. `myPagesLinks: []` confirmed post-create. Theo must bookmark or remember the
       `/p/theo-budget-view` URL. This destroys the "Make It My Dashboard" story completely.
       (C32 gap #67, confirmed again 2026-06-23.) See Layout fix above.
 
-- [ ] **KPI widget body shows a raw error string instead of a friendly blank state.** "widgetspec:
+- [x] **KPI widget body shows a raw error string instead of a friendly blank state.** "widgetspec:
       no formula set" is developer-internal error text. A new user who adds a KPI without knowing
       to set a formula sees a red error string with no guidance. The friendly path is: "No formula
       yet — click ✏ to add one" in the muted style, matching the "no data" empty-state pattern
       elsewhere in the app. This is the second most likely first impression for Theo after he adds
       his first widget.
 
-- [ ] **No "no data" state for a KPI with a formula that evaluates to 0 or nil.** If Theo sets
+- [x] **No "no data" state for a KPI with a formula that evaluates to 0 or nil.** If Theo sets
       a formula that returns no data, the tile will show "0" or a blank — no indicator that the
       formula is valid but empty. This is a separate concern from the no-formula case; both need
       friendly text.
 
-- [ ] **L63 GAP-B: Widget titles are not drillable.** `tileButtons` contains only resize/edit/
+- [x] **L63 GAP-B: Widget titles are not drillable.** `tileButtons` contains only resize/edit/
       delete — no `<a href>` or `<button>` drill-to-data. Clicking the "Transactions List" title
       does not navigate to the Transactions screen filtered for the widget's data. C30 drill-to-
       data pattern is not applied to custom page tiles. Confirmed by DOM audit and L63 finding.
 
-- [ ] **L63 GAP-C: B12 flip panel is not available on custom page tiles.** `hasGear: false` —
+- [x] **L63 GAP-C: B12 flip panel is not available on custom page tiles.** `hasGear: false` —
       custom tiles use the inline edit form (not the flip panel that system dashboard tiles use).
       Users who prefer the flip panel UX for per-widget settings cannot access it here. L63
       notes this is acceptable (different editing path), but the inconsistency should be
       documented and eventually unified.
 
-- [ ] **Rail page icon is generic `page` glyph for all custom pages.** The sample "Side hustle"
+- [x] **Rail page icon is generic `page` glyph for all custom pages.** The sample "Side hustle"
       page uses a document/page icon identical to the icon used for "Documents". All custom
       pages share the same icon — no per-page color or icon customization (the `Icon` field on
       `domain.CustomPage` stores a string but the UI does not yet expose an icon picker).
       Confirmed: `dark_1280_empty_state.png`. Fix: expose a simple icon/color picker in the
       page rename flow or via the `⋯` per-row menu; surface the icon at the rail entry.
 
-- [ ] **The "⋯" page menu (rename / hide / delete) is only visible on hover.** In
+- [x] **The "⋯" page menu (rename / hide / delete) is only visible on hover.** In
       `dark_1280_empty_state.png`, the "Side hustle" rail entry shows the `⋯` menu button only
       on hover. On touch devices this means the per-page actions are invisible. At minimum the
       button should remain accessible via keyboard focus (confirmed by source: `OnFocus` /
       `:focus-visible` CSS should surface it). Verify keyboard accessibility for the menu.
 
-- [ ] **No confirmation or undo when deleting a custom page.** `del()` in `custompagesnav.go`
+- [x] **No confirmation or undo when deleting a custom page.** `del()` in `custompagesnav.go`
       calls `confirmModal` — good. But once deleted the page and all its widgets are gone with
       no undo. A "Delete page?" confirm dialog is present; verify the confirm text is explicit:
       "Delete 'Theo Budget View' and all its widgets?" rather than a generic confirm.
@@ -21841,11 +21841,11 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 *Interaction feedback*
 - [ ] W-3 Tile/widget hover lift on the bento `.w` tiles (scope carefully vs drag; lift only non-dragging).
 - [ ] W-4 Row hover nudge — list rows shift ~2px toward the reader on hover (EXCLUDE table rows — column align).
-- [ ] W-5 Nav-item hover — animated active-indicator slide + icon micro-scale on the rail.
-- [ ] W-6 Icon-button hover — gear rotates slightly, +Add pulses, bell tilts (delightful, subtle).
+- [x] W-5 Nav-item hover — `.nv` + `.nav-link` get `translateY(calc(-1px * var(--wonder-on)))` lift + icon micro-scale; collapsed-rail flyout unaffected. **LANDED 2026-06-23**
+- [x] W-6 Icon-button delight — `.gear-inline`/`.gear-abs` rotate 38deg, `.add-btn` scale 1.12, `.notify-btn` tilt 18deg, `.muzak-btn` scale 1.08; all `calc(… * var(--wonder-on))`, `var(--wonder-dur-fast) var(--wonder-ease)`. **LANDED 2026-06-23**
 - [ ] W-7 Ripple/halo on click for primary buttons (radial origin at pointer) — [needs a tiny JS hook or
       a pure-CSS `:active` radial-gradient overlay; prefer CSS].
-- [ ] W-8 Toggle/switch spring — the `.switch` knob eases with a slight overshoot.
+- [x] W-8 Toggle/switch spring — `.switch::after` uses `cubic-bezier(.34,1.56,.64,1)` overshoot; `[data-wonder="off"]` zeroes `--wonder-dur` → snaps; reduced-motion universal rule covers `::after`. **LANDED 2026-06-23**
 *Entrance / reveal*
 - [ ] W-9 Page-enter transition — on route change the page content fades + rises quickly. [GO-STRUCTURAL:
       the router must toggle a `.page-enter` class on the swapped content; CSS keyframe ready.]
@@ -21864,7 +21864,7 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
       [GO-STRUCTURAL: the D3/chartspec renderer must animate; pairs with G9.1a.]
 *Polish*
 - [ ] W-19 Skeleton shimmer — loading placeholders shimmer (ties to GX2 loading-states gap).
-- [ ] W-20 Focus ring ease — the `:focus-visible` ring fades in softly (currently instant).
+- [x] W-20 Focus ring ease — `:focus-visible` ring now transitions `outline-offset` + `box-shadow` over 100ms `var(--wonder-ease)`; ring remains fully visible (a11y preserved), onset only is eased; reduced-motion neutralises via universal 0.001ms rule. **LANDED 2026-06-23**
 - [ ] W-21 Scroll-reveal — long pages (Reports) reveal sections as they enter the viewport (IntersectionObserver).
 
 **Theme-engine integration (GO-STRUCTURAL, build-gated GI0):**
