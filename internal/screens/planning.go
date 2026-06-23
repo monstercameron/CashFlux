@@ -364,30 +364,32 @@ func Planning() ui.Node {
 			Y:      chartspec.Axis{Format: yFmt},
 			Legend: len(chartSeries) > 1,
 		}
-		forecastCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("planning.forecastTitle")),
-			// Headline answer (G7 §4/§5): surface the projected 12-month net worth as a
-			// display-weight figure so Dev's primary question ("where will I be?") is
-			// answerable at glance-speed, before parsing the chart or the hint sentence.
-			Div(css.Class("stat-grid"),
-				stat(uistate.T("planning.projectedNetWorth"), fmtMoney(endVal), accentFor(endVal)),
-				stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
-			),
-			P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
-			P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
-			uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
-			Form(css.Class("form-grid"),
-				labeledField(uistate.T("planning.trimPlaceholder", base), Input(css.Class("field"), Type("number"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim))),
-				If(len(savedPlans) > 0,
-					Label(css.Class("field-label"), uistate.T("plans.compareLabel"),
-						Select(css.Class("field"), Attr("aria-label", uistate.T("plans.compareLabel")),
-							Attr("data-testid", "plan-compare-select"), OnChange(onCompare), compareOpts),
+		forecastCard = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("planning.forecastTitle"),
+			Body: Fragment(
+				// Headline answer (G7 §4/§5): surface the projected 12-month net worth as a
+				// display-weight figure so Dev's primary question ("where will I be?") is
+				// answerable at glance-speed, before parsing the chart or the hint sentence.
+				Div(css.Class("stat-grid"),
+					stat(uistate.T("planning.projectedNetWorth"), fmtMoney(endVal), accentFor(endVal)),
+					stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
+				),
+				P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
+				P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
+				uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
+				Form(css.Class("form-grid"),
+					labeledField(uistate.T("planning.trimPlaceholder", base), Input(css.Class("field"), Type("number"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim))),
+					If(len(savedPlans) > 0,
+						Label(css.Class("field-label"), uistate.T("plans.compareLabel"),
+							Select(css.Class("field"), Attr("aria-label", uistate.T("plans.compareLabel")),
+								Attr("data-testid", "plan-compare-select"), OnChange(onCompare), compareOpts),
+						),
 					),
 				),
+				trimNote,
+				compareNote,
 			),
-			trimNote,
-			compareNote,
-		)
+		})
 	}
 
 	// Affordability check (L8): "can I afford $X (in N months, keeping a buffer)?"
