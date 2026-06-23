@@ -5,6 +5,7 @@
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import path from "path";
+import { ready } from "./_ready.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
@@ -54,8 +55,7 @@ try {
 
   // /transactions carries the period Segmented (Week/Month/Quarter) in the top bar.
   await page.goto(BASE + "/transactions", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#app *", { timeout: 60000 });
-  await page.waitForTimeout(600);
+  await ready(page);
   const n1 = await check(page, "/transactions");
   if (n1 === 0) fail("/transactions exposed no radiogroup to check (expected the period control)");
 

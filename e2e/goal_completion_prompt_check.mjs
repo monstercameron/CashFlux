@@ -56,6 +56,9 @@ try {
   await form.locator('input[type="text"]').first().fill(GOAL_NAME);
   // Target = 100.00
   await form.locator('input[type="number"]').first().fill("100.00");
+  // Saved so far is behind "Show advanced fields" (L38) — expand first.
+  const advC = form.locator('.cf-adv-toggle');
+  if (await advC.count()) { await advC.first().click(); await page.waitForTimeout(150); }
   // Saved so far = 90.00
   const numInputs = form.locator('input[type="number"]');
   await numInputs.nth(1).fill("90.00");

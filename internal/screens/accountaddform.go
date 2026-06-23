@@ -45,6 +45,20 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	if baseCur == "" {
 		baseCur = "USD"
 	}
+	// A "single-currency household" has no FX rates configured and no accounts that
+	// use a currency other than the base. In that case the currency picker adds noise
+	// without value — hide it and default silently to the base currency (L37).
+	singleCurrency := func() bool {
+		if len(app.Settings().FXRates) > 0 {
+			return false
+		}
+		for _, a := range app.Accounts() {
+			if a.Currency != "" && a.Currency != baseCur {
+				return false
+			}
+		}
+		return true
+	}()
 
 	name := ui.UseState("")
 	curr := ui.UseState(baseCur)
@@ -182,8 +196,8 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			Select(css.Class("field"), Attr("aria-label", uistate.T("accounts.typeLabel")), OnChange(onType), typeOptions)),
 		labeledField(uistate.T("common.owner"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
-		labeledField(uistate.T("accounts.currency"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("accounts.currency")), OnChange(onCurr), currencyOptions(app, curr.Get()))),
+		If(!singleCurrency, labeledField(uistate.T("accounts.currency"),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("accounts.currency")), Attr("data-testid", "account-currency-select"), OnChange(onCurr), currencyOptions(app, curr.Get())))),
 		labeledField(uistate.T("accounts.openingBalance"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
 		If(isLiab, labeledField(uistate.T("accounts.creditLimit"),

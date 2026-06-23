@@ -5,6 +5,7 @@
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import path from "path";
+import { ready } from "./_ready.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
@@ -39,8 +40,7 @@ try {
 
   for (const route of ROUTES) {
     await page.goto(BASE + route, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("#app *", { timeout: 60000 }); // app rendered
-    await page.waitForTimeout(1500); // allow the fade + display:none removal
+    await ready(page); // waits for nav rail + boot splash gone
     const s = await bootState(page);
     if (!s.gone) {
       fail(`boot splash still visible on ${route}: ${JSON.stringify(s)}`);

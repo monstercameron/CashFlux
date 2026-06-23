@@ -131,6 +131,28 @@ func Budgets() ui.Node {
 		return nil
 	}
 
+	// topupBudget raises a budget's limit by the entered amount so the user can
+	// proactively add capacity before overspending (L43).
+	topupBudget := func(toID, amountStr string) error {
+		amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(base))
+		if err != nil || amt <= 0 {
+			return fmt.Errorf("enter an amount greater than zero")
+		}
+		for _, b := range app.Budgets() {
+			if b.ID != toID {
+				continue
+			}
+			b.Limit = money.New(b.Limit.Amount+amt, base)
+			if err := app.PutBudget(b); err != nil {
+				return err
+			}
+			bump()
+			uistate.PostNotice(uistate.T("budgets.toppedUpToast", fmtMoney(money.New(amt, base))), false)
+			return nil
+		}
+		return fmt.Errorf("budget not found")
+	}
+
 	budgets := app.Budgets()
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
@@ -263,7 +285,7 @@ func Budgets() ui.Node {
 				if shortfall.IsPositive() {
 					coverDefault = money.FormatMinor(shortfall.Amount, currency.Decimals(shortfall.Currency))
 				}
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnDrill: viewTransactions})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnTopUp: topupBudget, OnDrill: viewTransactions})
 			},
 		)
 		listBody = Div(rows)
@@ -308,7 +330,8 @@ type budgetRowProps struct {
 	OnDelete       func(string)
 	OnSave         func(id, name, limit, period, owner string, rollover bool)
 	OnCover        func(toID, fromID, amount string) error
-	OnDrill        func(categoryID string) // open Transactions filtered to this budget's category
+	OnTopUp        func(id, amount string) error // increase this budget's limit by the entered amount
+	OnDrill        func(categoryID string)       // open Transactions filtered to this budget's category
 }
 
 // coverSource is one budget offered as a funding source in a row's "Cover…" picker.
@@ -430,6 +453,27 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		covering.Set(false)
 	}))
 
+	// "Top up…" inline form (L43): increase this budget's limit by a chosen amount,
+	// available on budgets that are not already over (proactive capacity add).
+	toppingUp := ui.UseState(false)
+	topupAmt := ui.UseState("")
+	topupErr := ui.UseState("")
+	onTopupAmt := ui.UseEvent(func(v string) { topupAmt.Set(v) })
+	startTopup := ui.UseEvent(Prevent(func() {
+		topupAmt.Set("")
+		topupErr.Set("")
+		toppingUp.Set(true)
+	}))
+	cancelTopup := ui.UseEvent(Prevent(func() { toppingUp.Set(false) }))
+	submitTopup := ui.UseEvent(Prevent(func() {
+		if err := props.OnTopUp(s.Budget.ID, topupAmt.Get()); err != nil {
+			topupErr.Set(err.Error())
+			return
+		}
+		topupErr.Set("")
+		toppingUp.Set(false)
+	}))
+
 	// Land the cursor in the first field when the inline editor opens (§6.7).
 	editKey := "closed"
 	if editing.Get() {
@@ -526,6 +570,29 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	if isOver && hasSource && !covering.Get() {
 		coverBtn = Button(css.Class("btn"), Type("button"), Title("Move money from another budget to cover this overspend"), OnClick(startCover), "Cover…")
 	}
+
+	// "Top up…" is offered on budgets that are not over, letting the user raise
+	// the limit proactively before they hit the ceiling (L43).
+	var topupBtn ui.Node = Fragment()
+	if !isOver && props.OnTopUp != nil && !toppingUp.Get() && !covering.Get() {
+		topupBtn = Button(css.Class("btn"), Type("button"), Title("Increase this budget's limit for the current period"), OnClick(startTopup), "Top up…")
+	}
+	var topupForm ui.Node = Fragment()
+	if toppingUp.Get() {
+		var topupErrLine ui.Node = Fragment()
+		if topupErr.Get() != "" {
+			topupErrLine = P(css.Class("budget-sub", tw.TextDown), topupErr.Get())
+		}
+		topupForm = Div(css.Class("cover-form"),
+			Span(css.Class("budget-sub"), "Increase this budget's limit by:"),
+			Form(css.Class("form-grid"), OnSubmit(submitTopup),
+				Input(css.Class("field"), Type("number"), Attr("aria-label", "Amount to add"), Placeholder("Amount"), Value(topupAmt.Get()), Step("0.01"), OnInput(onTopupAmt)),
+				Button(css.Class("btn btn-primary"), Type("submit"), "Add funds"),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelTopup), uistate.T("action.cancel")),
+			),
+			topupErrLine,
+		)
+	}
 	var coverForm ui.Node = Fragment()
 	if covering.Get() {
 		srcOpts := make([]ui.Node, 0, len(props.CoverSources))
@@ -561,6 +628,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Span(css.Class("row-desc"), title)),
 			Span(css.Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
 			coverBtn,
+			topupBtn,
 			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
@@ -574,5 +642,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		rolloverLine,
 		envLine,
 		coverForm,
+		topupForm,
 	)
 }

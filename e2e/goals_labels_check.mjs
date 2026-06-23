@@ -30,6 +30,10 @@ try {
   await page.locator('[role="menuitem"]', { hasText: /goal/i }).first().click();
   await page.waitForSelector('#goal-add', { timeout: 10000 });
   await page.waitForSelector(".labeled-field", { timeout: 5000 });
+  // Advanced fields (Saved-so-far / Owner / Linked account) are tucked behind a
+  // disclosure (L38); expand it so all labeled fields are present to count.
+  const advT = page.locator('[role="dialog"] .cf-adv-toggle');
+  if (await advT.count()) { await advT.first().click(); await page.waitForTimeout(150); }
 
   const count = await page.locator(".labeled-field").count();
   if (count < 5) fail(`expected the goal add form to have several labeled fields, got ${count}`);

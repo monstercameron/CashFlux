@@ -131,7 +131,7 @@ func Insights() ui.Node {
 	keyHintNode := func() ui.Node {
 		return Div(
 			P(css.Class("muted"), uistate.T("insights.keyHint")),
-			Button(css.Class("btn"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
+			Button(css.Class("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
 		)
 	}
 
@@ -816,7 +816,9 @@ func Insights() ui.Node {
 	// switcher row is always present so its New-chat hook stays at a stable position).
 	convs := app.Conversations()
 	sort.Slice(convs, func(i, j int) bool { return convs[i].UpdatedAt.After(convs[j].UpdatedAt) })
-	pill := tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border, tw.BorderBlack10, tw.HoverBgBlack03)
+	// chat-pill pins a --border outline so the New-chat / Edit-prompt pills stay
+	// visible in light mode (the BorderBlack10 tint vanished on white) (G13).
+	pill := tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border, tw.HoverBgBlack03) + " chat-pill"
 	switcher := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb3, tw.ItemsCenter),
 		Button(ClassStr(pill), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
 		Button(ClassStr(pill), Type("button"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),

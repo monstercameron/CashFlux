@@ -162,8 +162,10 @@ func (a *App) TransactionsCSV(txns []domain.Transaction) ([]byte, error) {
 // skipped (per-row parse failures), and any structural error (malformed CSV).
 // Missing currencies default to the household base currency, and
 // account/category/member cells given as names (a hand-written CSV) are
-// resolved to ids (C27).
-func (a *App) ImportTransactionsCSV(data []byte) (imported int, skipped []store.CSVRowError, err error) {
+// resolved to ids (C27). fallbackAccountID is applied to any row whose account
+// column is blank or unresolvable — pass "" to keep the previous behavior
+// (rows without an account are rejected by the validated write path).
+func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (imported int, skipped []store.CSVRowError, err error) {
 	base := "USD"
 	if s := a.Settings(); s.BaseCurrency != "" {
 		base = s.BaseCurrency
@@ -188,6 +190,9 @@ func (a *App) ImportTransactionsCSV(data []byte) (imported int, skipped []store.
 	resolveAcc, resolveCat, resolveMem := idResolver(accPairs), idResolver(catPairs), idResolver(memPairs)
 	for i := range txns {
 		txns[i].AccountID = resolveAcc(txns[i].AccountID)
+		if txns[i].AccountID == "" && fallbackAccountID != "" {
+			txns[i].AccountID = fallbackAccountID
+		}
 		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
 		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
 		txns[i].MemberID = resolveMem(txns[i].MemberID)

@@ -178,7 +178,7 @@ func TestRulesEntryImportApplyAndConflictFlow(t *testing.T) {
 	}
 
 	csv := "date,account,payee,desc,amount\n2026-06-04,Checking,Starbucks,Latte,-6.25\n"
-	n, _, err := a.ImportTransactionsCSV([]byte(csv))
+	n, _, err := a.ImportTransactionsCSV([]byte(csv), "")
 	if err != nil {
 		t.Fatalf("ImportTransactionsCSV: %v", err)
 	}

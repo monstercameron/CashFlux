@@ -30,6 +30,8 @@ try {
   const dialog = page.locator('[role="dialog"]');
   await dialog.locator("#goal-add").fill(NAME);
   await dialog.locator('input[type="number"]').nth(0).fill("100"); // target
+  const advW = dialog.locator('.cf-adv-toggle'); // saved-so-far behind Advanced (L38)
+  if (await advW.count()) { await advW.first().click(); await page.waitForTimeout(150); }
   await dialog.locator('input[type="number"]').nth(1).fill("100"); // saved so far
   await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(500);

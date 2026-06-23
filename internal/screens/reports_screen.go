@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -51,6 +52,25 @@ func Reports() ui.Node {
 	if app == nil {
 		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
+	// Subscribe to the shared data-revision atom so Reports re-renders whenever a
+	// recategorize (or any other mutation) bumps the revision mid-session
+	// (RECAT_UPDATES, L58). The atom is read for its side-effect of registering
+	// the subscription; the value itself is not used here.
+	_ = uistate.UseDataRevision().Get()
+
+	// Navigation + filter wiring for the category drill-through (L58): clicking a
+	// category row opens /transactions pre-filtered to that category, mirroring
+	// the budgets→transactions drill (C30/C50). Hooks are called once at a stable
+	// position; the per-row handler is threaded down as a plain func.
+	nav := router.UseNavigate()
+	txFilterAtom := uistate.UseTxFilter()
+	viewCategoryTransactions := func(categoryID string) {
+		f := uistate.TxFilter{Category: categoryID}.Normalize()
+		txFilterAtom.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -212,8 +232,9 @@ func Reports() ui.Node {
 		}
 	}
 
-	// Category rows are plain text (no interactive controls), so building them in
-	// a loop is safe (no On* hooks involved).
+	// Category rows each carry a drill-through click handler. Because On* hooks
+	// must not be called inside a variable-length loop, each row is its own
+	// component (reportsCatRow); the handler func is passed as a plain prop.
 	var maxCat int64
 	for _, r := range rows {
 		if a := absI64(r.Amount); a > maxCat {
@@ -225,24 +246,18 @@ func Reports() ui.Node {
 		if r.Amount == 0 && r.Prior == 0 {
 			continue
 		}
-		delta := Fragment()
-		if r.HasDelta && r.Amount != r.Prior {
-			// Spending up is red (worse), down is green (better).
-			tone, arrow := "text-down", icon.ArrowUp
-			if r.DeltaPct < 0 {
-				tone, arrow = "text-up", icon.ArrowDown
-			}
-			pct := r.DeltaPct
-			if pct < 0 {
-				pct = -pct
-			}
-			delta = Span(ClassStr("row-meta "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" "+tw.ColorClass(tone)), uiw.Icon(arrow, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Text(fmt.Sprintf("%d%%", pct)))
-		}
-		rowNodes = append(rowNodes, Div(css.Class("row"),
-			Div(css.Class("row-main"), Span(css.Class("row-desc"), nameOf(r.CategoryID)), shareBar(r.Amount, maxCat)),
-			delta,
-			Span(css.Class("budget-amount"), fmtMinor(r.Amount)),
-		))
+		rowNodes = append(rowNodes, ui.CreateElement(reportsCatRow, reportsCatRowProps{
+			CategoryID: r.CategoryID,
+			Name:       nameOf(r.CategoryID),
+			Amount:     r.Amount,
+			Prior:      r.Prior,
+			HasDelta:   r.HasDelta,
+			DeltaPct:   r.DeltaPct,
+			MaxCat:     maxCat,
+			FmtMinor:   fmtMinor,
+			ShareBar:   shareBar,
+			OnDrill:    func(id string) { viewCategoryTransactions(id) },
+		}))
 	}
 
 	var catBody ui.Node
@@ -385,6 +400,9 @@ func Reports() ui.Node {
 			H2(css.Class("card-title"), uistate.T("reports.headsUp")),
 			Div(anomalyNodes),
 		)),
+		// Section dividers group the 13-card scroll into Spending / Income / Trends so
+		// Priya can navigate the page instead of reading it top-to-bottom (G9/C55).
+		H3(css.Class("section-divider"), uistate.T("reports.sectionSpending")),
 		Section(css.Class("card"),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
 				H2(css.Class("card-title"), uistate.T("reports.byCategory")),
@@ -417,6 +435,7 @@ func Reports() ui.Node {
 				}), uistate.T("reports.taxSummary")),
 			)),
 		),
+		H3(css.Class("section-divider"), uistate.T("reports.sectionIncome")),
 		If(len(moneyFlows) > 1, Section(css.Class("card"),
 			H2(css.Class("card-title"), "Money flow"),
 			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow"}),
@@ -483,6 +502,7 @@ func Reports() ui.Node {
 				}), uistate.T("reports.downloadCsv")),
 			),
 		)),
+		H3(css.Class("section-divider"), uistate.T("reports.sectionTrends")),
 		If(len(netSeries) >= 2, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("dashboard.cashFlow")),
 			P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
@@ -603,6 +623,62 @@ func customFieldSpendSection(
 				uistate.T("reports.downloadCsv"),
 			),
 		)),
+	)
+}
+
+// reportsCatRowProps carries the display data and drill callback for one
+// spending-by-category row. The OnDrill func is called with the category ID
+// when the user clicks the row label, navigating to /transactions filtered to
+// that category (L58 FILTER_CARRY drill-through).
+type reportsCatRowProps struct {
+	CategoryID string
+	Name       string
+	Amount     int64
+	Prior      int64
+	HasDelta   bool
+	DeltaPct   int64
+	MaxCat     int64
+	FmtMinor   func(int64) string
+	ShareBar   func(amount, max int64) ui.Node
+	OnDrill    func(id string)
+}
+
+// reportsCatRow renders one row of the spending-by-category table with a
+// clickable label that drills through to /transactions filtered by that
+// category. It is a standalone component so its OnClick hook is registered at
+// a stable render position (not inside a variable-length loop in Reports).
+func reportsCatRow(props reportsCatRowProps) ui.Node {
+	drill := ui.UseEvent(func() { props.OnDrill(props.CategoryID) })
+
+	delta := Fragment()
+	if props.HasDelta && props.Amount != props.Prior {
+		tone, arrow := "text-down", icon.ArrowUp
+		if props.DeltaPct < 0 {
+			tone, arrow = "text-up", icon.ArrowDown
+		}
+		pct := props.DeltaPct
+		if pct < 0 {
+			pct = -pct
+		}
+		delta = Span(ClassStr("row-meta "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" "+tw.ColorClass(tone)),
+			uiw.Icon(arrow, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+			Text(fmt.Sprintf("%d%%", int(pct))))
+	}
+
+	return Div(css.Class("row"), Attr("data-testid", "reports-cat-row"), Attr("data-category-id", props.CategoryID),
+		Div(css.Class("row-main"),
+			Button(
+				css.Class("row-desc", "btn-link"),
+				Type("button"),
+				Attr("data-testid", "reports-cat-drill"),
+				Attr("aria-label", "View transactions: "+props.Name),
+				OnClick(drill),
+				props.Name,
+			),
+			props.ShareBar(props.Amount, props.MaxCat),
+		),
+		delta,
+		Span(css.Class("budget-amount"), props.FmtMinor(props.Amount)),
 	)
 }
 

@@ -1,0 +1,32 @@
+{
+  "cardTitles": [
+    "Split",
+    "Who's sharing?",
+    "Settle up"
+  ],
+  "memberRowCount": 5,
+  "hasSettleUp": true,
+  "settleUpRowCount": 3,
+  "hasMermaid": false,
+  "hasForm": true,
+  "hasSelectAll": true,
+  "hasClear": true,
+  "hasSaveBtn": false,
+  "hasCsvBtn": false,
+  "errText": "",
+  "pageHeight": 900,
+  "viewportH": 900,
+  "overflowCount": 0,
+  "hasStatGrid": false,
+  "cardTitleColor": "rgb(244, 244, 245)",
+  "amtColor": "rgb(171, 171, 179)",
+  "mutedColor": "rgb(171, 171, 179)",
+  "dataTheme": "dark",
+  "hasWeightedToggle": false,
+  "settleAboveFold": true,
+  "owesRows": [
+    "Daniel Carter owes $32.00",
+    "Jordan Lee (roommate) is owed $32.00",
+    "Daniel Carter pays Jordan Lee (roommate)"
+  ]
+}

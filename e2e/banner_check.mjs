@@ -5,6 +5,7 @@
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import path from "path";
+import { ready } from "./_ready.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
@@ -24,7 +25,7 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('nav[aria-label="Main navigation"] a[title]', { timeout: 60000 });
+  await ready(page);
   await page.locator("button.hh").first().click();
   await page.waitForSelector(".theme-editor", { timeout: 8000 });
 

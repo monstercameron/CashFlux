@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **L-series 6-lane sweep, round 3 — closing the long tail (2026-06-23).** Documents CSV-import account
+  selector + above-fold Import button (L44); Reports category-row drill-through to Transactions (L58);
+  budget "Top up" for under-limit budgets (L43) + rollover label fix (L40); definitive load-splash
+  dismissal + label-wrap CSS (L2/L11/L37/L41); hide the currency control for single-currency households
+  (L37) + goal-add progressive disclosure (L38) + clearer over-funded "Funded 120% — $X over" (L59);
+  a shared e2e `ready()` helper + forms-a11y gate (L12/L7). Confirmed many items already shipped.
+
 ### Changed
 - **GLAMOR series, second wave (G7+).** **Planning (G7):** the forecast card now leads with a
   display-weight headline stat (projected 12-month net worth + avg monthly net), and the forecast

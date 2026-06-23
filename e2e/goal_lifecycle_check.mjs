@@ -48,6 +48,8 @@ try {
   await dialog.locator("#goal-add").fill(OVER_NAME);
   const nums = dialog.locator('.field[type="number"]');
   await dialog.locator('input[type="number"]').nth(0).fill("1");   // target
+  const advL = dialog.locator('.cf-adv-toggle'); // saved-so-far is behind Advanced (L38)
+  if (await advL.count()) { await advL.first().click(); await page.waitForTimeout(150); }
   await dialog.locator('input[type="number"]').nth(1).fill("2");   // saved so far (over-funded by $1)
   await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(700);
@@ -59,6 +61,8 @@ try {
   const dialog2 = page.locator('[role="dialog"]');
   await dialog2.locator("#goal-add").fill(ACTIVE_NAME);
   await dialog2.locator('input[type="number"]').nth(0).fill("100");
+  const advL2 = dialog2.locator('.cf-adv-toggle'); // saved-so-far behind Advanced (L38)
+  if (await advL2.count()) { await advL2.first().click(); await page.waitForTimeout(150); }
   await dialog2.locator('input[type="number"]').nth(1).fill("0");
   await dialog2.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(700);

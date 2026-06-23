@@ -109,7 +109,7 @@ func Documents() ui.Node {
 			msg.Set(uistate.T("documents.csvEmpty"))
 			return
 		}
-		n, skipped, err := app.ImportTransactionsCSV([]byte(data))
+		n, skipped, err := app.ImportTransactionsCSV([]byte(data), importAcct.Get())
 		if err != nil {
 			// Don't surface the internal "store:" package prefix to the user (C27).
 			friendly := strings.TrimPrefix(err.Error(), "store: ")
@@ -485,12 +485,16 @@ func Documents() ui.Node {
 			H2(css.Class("card-title"), uistate.T("documents.csvTitle")),
 			P(css.Class("muted"), uistate.T("documents.csvDesc")),
 			Form(OnSubmit(importCSV),
-				Textarea(css.Class("field field-wide"), Attr("rows", "8"),
+				// Account selector + Import button appear above the textarea so
+				// they are always visible without scrolling on short viewports
+				// (L44: button was below the fold on a 900 px viewport).
+				Div(css.Class("form-grid"), Style(map[string]string{"margin-bottom": "0.5rem"}),
+					csvAcctSelect(accounts, importAcct.Get(), onAcct),
+					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
+				),
+				Textarea(css.Class("field field-wide"), Attr("rows", "6"),
 					Placeholder("date,payee,amount,account\n2026-06-01,Salary,4200.00,Checking\n2026-06-02,Groceries,-86.40,Checking"),
 					OnInput(onCsv),
-				),
-				Div(Style(map[string]string{"margin-top": "0.6rem"}),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
 				),
 			),
 			If(msg.Get() != "", P(css.Class("muted"), msg.Get())),
@@ -658,6 +662,23 @@ func docStatusLabel(s domain.DocumentStatus) string {
 	default:
 		return uistate.T("documents.statusImported")
 	}
+}
+
+// csvAcctSelect renders the account picker used by the CSV import form. It is
+// extracted as a helper so the select's option list can be built outside the
+// Documents render function without calling On*/UseX (framework gotcha: no hook
+// calls inside variable-length loops).
+func csvAcctSelect(accounts []domain.Account, selected string, onChange ui.Handler) ui.Node {
+	opts := make([]ui.Node, 0, len(accounts))
+	for _, a := range accounts {
+		opts = append(opts, Option(Value(a.ID), SelectedIf(selected == a.ID), a.Name))
+	}
+	args := make([]any, 0, 3+len(opts))
+	args = append(args, css.Class("field"), Attr("aria-label", uistate.T("documents.csvAccount")), OnChange(onChange))
+	for _, o := range opts {
+		args = append(args, o)
+	}
+	return Select(args...)
 }
 
 // reviewCurrencyFor returns the currency code to format/parse review amounts in:

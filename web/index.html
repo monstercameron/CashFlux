@@ -540,6 +540,14 @@
         letter-spacing: 0.02em; padding: 0.12rem 0.5rem; border-radius: 999px;
         background: var(--bg-elev); border: 1px solid var(--border); white-space: nowrap; }
 
+      /* Insights starter chips (G13): a softer, more inviting pill — distinct from
+         the hard-edged form .btn so they read as "tap to explore", not data entry. */
+      .chip-suggest { border-radius: 999px; background: var(--bg-elev); border: 1px solid var(--border);
+        color: var(--text-dim); font-size: 0.84rem; padding: 0.3rem 0.7rem; font-weight: 500; }
+      .chip-suggest:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent-dim); }
+      /* Chat switcher pills stay outlined in both themes (G13). */
+      .chat-pill { border-color: var(--border) !important; }
+
       /* Subscriptions row (G10): the name was being squeezed to zero because
          .row-main can shrink (min-width:0) and the two action buttons claimed the
          row. Reserve name width and pin the actions to a fixed trailing group so the

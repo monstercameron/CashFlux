@@ -12,6 +12,7 @@
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import path from "path";
+import { ready } from "./_ready.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
@@ -209,16 +210,14 @@ try {
   // Sweep /transactions and /accounts as the primary a11y surfaces.
   for (const route of ["/transactions", "/accounts"]) {
     await page.goto(BASE + route, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("#app *", { timeout: 60000 });
-    await page.waitForTimeout(700);
+    await ready(page);
     await sweep(page, route);
   }
 
   // (d) Focus-outline check on /transactions: after one Tab press the focused
   //     element should differ from body AND have a visible outline.
   await page.goto(BASE + "/transactions", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#app *", { timeout: 60000 });
-  await page.waitForTimeout(500);
+  await ready(page);
   await page.keyboard.press("Tab");
   await page.waitForTimeout(100);
 

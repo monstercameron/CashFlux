@@ -34,6 +34,9 @@ try {
   const dialog = page.locator('[role="dialog"]');
   await dialog.locator("#goal-add").fill(NAME);
   await dialog.locator('input[type="number"]').nth(0).fill("1000");
+  // The Linked-account select is tucked behind "Show advanced fields" (L38).
+  const advToggle = dialog.locator('.cf-adv-toggle');
+  if (await advToggle.count()) { await advToggle.first().click(); await page.waitForTimeout(150); }
   await dialog.locator('select').nth(1).selectOption({ index: 1 });
   await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(700);

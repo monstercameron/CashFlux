@@ -147,7 +147,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
 		Label(css.Class("field"),
 			Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
-			Span(uistate.T("budgets.rollover")),
+			Span(Title("Roll unused funds into the next period"), "Roll over unused funds"),
 		),
 		MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})

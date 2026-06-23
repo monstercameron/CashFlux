@@ -504,13 +504,19 @@ func GoalRow(props goalRowProps) ui.Node {
 	}
 
 	// Over-funding note: shown whenever the current amount exceeds the target.
+	// We compute the real (un-clamped) percentage so e.g. a goal funded to 120%
+	// reads "Funded 120% — $X over" rather than a bare surplus dollar amount (L59).
 	var overfundNote ui.Node = Fragment()
 	if overfund.IsPositive() {
+		realPct := 0
+		if g.TargetAmount.Amount > 0 {
+			realPct = int(g.CurrentAmount.Amount * 100 / g.TargetAmount.Amount)
+		}
 		overfundNote = Span(
 			css.Class("budget-sub"),
 			Attr("data-testid", "goal-overfund-"+g.ID),
 			Style(map[string]string{"color": "var(--up)"}),
-			uistate.T("goals.overTarget", fmtMoney(overfund)),
+			fmt.Sprintf("Funded %d%% — %s", realPct, uistate.T("goals.overTarget", fmtMoney(overfund))),
 		)
 	}
 

@@ -3,6 +3,7 @@
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import path from "path";
+import { ready } from "./_ready.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
@@ -22,7 +23,8 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".app-version", { timeout: 60000 });
+  await ready(page);
+  await page.waitForSelector(".app-version", { timeout: 10000 });
 
   const v = (await page.locator(".app-version").first().innerText()).trim();
   if (!/^v\d+\.\d+\.\d+/.test(v)) fail(`rail version should read like "v0.1.0", got "${v}"`);

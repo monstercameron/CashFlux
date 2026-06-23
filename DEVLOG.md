@@ -11213,3 +11213,14 @@ Paperclip to the curated set) so `go test ./...` is finally all-green, plus docs
 wasm built after one fix (added a CheckedIf checkbox helper the deductible lane assumed). Integration:
 merged ~8 i18n keys, fixed the agents' allocate_income gate (seed via addInitScript not the removed
 inline form) and the goals_drill stale #txn-add marker. All 6 new gates + regression sweep green.
+
+## 2026-06-23 — L-series 6-agent sweep round 3 (long-tail close)
+Third 6-agent pass targeting the remaining genuinely-open items. Built: CSV-import account selector (L44),
+reports category drill (L58), budget top-up (L43), splash hardening + label-wrap (L2/L11/L37/L41), hide-
+currency-single-household + goal-add disclosure + overfund clarity (L37/L38/L59), shared e2e ready()
+helper + forms a11y (L12/L7). Combined tree built clean (concurrent-edit transients resolved on their own).
+Integration: merged 2 i18n keys; fixed agent e2e gates (budget_topup tracked by id not row-position vs the
+health-sort; account_currency_hide forces single-currency via injection; reports_drill uses sample data not
+the removed inline form). The L38 goal-add disclosure hid saved-so-far/linked-account, which broke 6 goal
+gates — fixed each to expand "Show advanced fields" first. All round-3 gates + regressions green; go test
+./... green.

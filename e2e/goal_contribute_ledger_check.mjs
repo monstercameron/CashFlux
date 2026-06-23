@@ -74,6 +74,9 @@ try {
   await form.waitFor({ timeout: 8000 });
   await form.locator('input[type="text"]').first().fill(GOAL_NAME);
   await form.locator('input[type="number"]').first().fill("200.00");
+  // Linked-account select is behind "Show advanced fields" (L38) — expand first.
+  const advT = form.locator('.cf-adv-toggle');
+  if (await advT.count()) { await advT.first().click(); await page.waitForTimeout(150); }
   await form.locator('select[aria-label="Linked account (optional)"]').selectOption({ label: ACCT_NAME });
   await form.locator('button[type="submit"]').click();
 

@@ -60,7 +60,7 @@ func TestBulkImportFiresOnceNoDuplicateTasks(t *testing.T) {
 		Actions: []workflow.Action{{Kind: workflow.ActionCreateTask, Title: "Imported batch"}},
 	})
 	csv := "date,account_id,desc,amount\n2026-06-10,Checking,Row one,-10\n2026-06-11,Checking,Row two,-20\n2026-06-12,Checking,Row three,-30\n"
-	n, _, err := a.ImportTransactionsCSV([]byte(csv))
+	n, _, err := a.ImportTransactionsCSV([]byte(csv), "")
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
