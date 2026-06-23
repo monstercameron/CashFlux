@@ -10145,6 +10145,1294 @@ node e2e/loopstory_75_planning_session.mjs
 
 ---
 
+### L76. Story — "Following the Thread" (Marco) — 2026-06-22 ★
+
+**The ritual**
+
+Marco, 29, data-curious, wants to follow every relationship. From a transaction he wants to
+reach its account, category, budget, and the rule that filed it. From an account he wants its
+ledger, its linked goals, and its recurring bills. From a category he wants its transactions,
+its budget owner, and the rules that reference it. From a budget he wants to hop to the
+category it governs and from there back to transactions. From a rule he wants a preview of
+which transactions it has touched. From a goal he wants to reach the linked account directly.
+He also checks whether every screen tells him where he is — the breadcrumb trail.
+
+Marco discovers a clear picture: the app has thorough breadcrumbs everywhere (every screen
+shows "Dashboard›ScreenName") and the two most critical downward drills (account→transactions,
+category→transactions) are filtered correctly. Budget category rows also filter correctly — but
+their button label is the category name, not "Transactions", which makes the affordance invisible.
+The missing links are all the *lateral/reverse* relationships: transaction→account, transaction→
+category-detail, category→budget, category→rules, account→goals, account→bills, goals→linked-
+account-detail. The "· linked to X" button on /goals navigates to /transactions, not /accounts —
+GAP-G is a mislabeled pivot (transactions, not the account itself). /rules has no transaction
+preview: "Apply to existing" is a bulk-categorize action, not a filtered view of affected rows.
+
+**Drive script**: `e2e/loopstory_76_following_the_thread.mjs`
+
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_76_following_the_thread.mjs`
+
+**What already works well (regression anchors)** ✓
+
+- ✓ **HYDRATION**: App loads, nav visible, zero JS errors across all 9 screens. (`L76_hop1_transactions.png`)
+- ✓ **BREADCRUMBS**: All 9 tested screens have a working breadcrumb trail ("Dashboard›ScreenName"). Previously undetected — the breadcrumb element matches the probe. (`All L76_hop* screenshots`)
+- ✓ **LL-4 /transactions → /rules**: "Always categorize like this" button (per transaction row) navigates directly to /rules. One-hop pivot from transaction to rule confirmed. (`L76_hop1b_transactions_pivots.png`)
+- ✓ **LL-5 /accounts → /transactions (filtered)**: "Transactions" button per account row navigates to /transactions with account filter applied. Row count = 32 of 50 total; chip shows ✕ (active filter). (`L76_hop2b_accounts_ledger.png`)
+- ✓ **LL-8 /categories → /transactions (filtered)**: "N transactions" button per category row navigates to /transactions with category filter applied and correct row count (25 rows = label count). **GAP-E from L74/L75 is CLOSED for /categories.** (`L76_hop3b_categories_txn_drill.png`)
+- ✓ **LL-12 /budgets → /transactions (filtered)**: Budget category buttons (text = category name, title = "Transactions") navigate to /transactions with category filter applied. Row count = 25 of 50. **GAP-E IS CLOSED for /budgets** — the filter works, it was a selector/label issue in prior probes. (`L76_hop4b_budgets_txn_drill.png`)
+- ✓ **LL-13 /rules → action**: "Apply to existing" button present on /rules (bulk-categorize action). (`L76_hop5b_rules_pivots.png`)
+- ✓ **LL-14/15 /goals → /transactions**: "· linked to X (account)" button on goal rows (title="Transactions") navigates to /transactions — transactions drill from goals is present. (`L76_hop6b_goals_pivots.png`)
+- ✓ **NO_JS_ERRORS**: Zero runtime JS errors across all 9 screens.
+
+**LATERAL-LINK matrix**
+
+| ID    | From           | To                                         | Exists | Specific | Notes                                                                                        |
+|-------|----------------|--------------------------------------------|--------|----------|----------------------------------------------------------------------------------------------|
+| LL-1  | /transactions  | /accounts (that account)                   | NO     | NO       | Account column is display text only — no clickable link/button per row                       |
+| LL-2  | /transactions  | /categories (that category)                | NO     | NO       | Category column is display text only — no clickable link/button per row                      |
+| LL-3  | /transactions  | /budgets (category's budget)               | NO     | N/A      | No budget pivot on /transactions                                                              |
+| LL-4  | /transactions  | /rules (→ /rules prefilled)               | YES    | YES      | "Always categorize like this" per row → /rules with payee+category prefilled                 |
+| LL-5  | /accounts      | /transactions (ledger — filtered)          | YES    | YES      | "Transactions" button per account → /transactions with account filter; rows=32/50; chip=✕    |
+| LL-6  | /accounts      | /goals (goal linked to account)            | NO     | N/A      | No reverse relationship from account → goal; /accounts has no goal link                      |
+| LL-7  | /accounts      | /bills (bills drawing from account)        | NO     | N/A      | No reverse relationship from account → bills; /accounts has no bill link                     |
+| LL-8  | /categories    | /transactions (filtered by category)       | YES    | YES      | "N transactions" button per category → /transactions; rows=25/50; label count matches exact  |
+| LL-9  | /categories    | /budgets (budget this category belongs to) | NO     | N/A      | /categories shows only Edit/Delete + transaction count per row; no budget pivot               |
+| LL-10 | /categories    | /rules (rules referencing this category)   | NO     | N/A      | No rule link from category; /categories has no rule pivot                                     |
+| LL-11 | /budgets       | /categories (that category)               | NO     | N/A      | Budget category buttons navigate to /transactions, not /categories; no category pivot         |
+| LL-12 | /budgets       | /transactions (filtered — GAP-E re-test)  | YES    | YES      | Category name buttons (title="Transactions") → /transactions filtered; rows=25/50 ✓          |
+| LL-13 | /rules         | /transactions (preview of affected rows)  | PARTIAL| NO       | "Apply to existing" runs bulk categorize (not a filtered preview of affected transactions)    |
+| LL-14 | /goals         | /accounts (specific linked account)       | NO     | NO       | "· linked to X" button (title="Transactions") → /transactions, NOT /accounts — GAP-G open   |
+| LL-15 | /goals         | /transactions (goal contributions)        | YES    | YES      | "· linked to X" button navigates to /transactions (mislabeled as account ref, works as txn drill) |
+
+**BREADCRUMB audit**
+
+| Screen        | Present | Functional | Notes                                     |
+|---------------|---------|------------|-------------------------------------------|
+| /transactions | YES     | YES        | "Dashboard›Transactions"                  |
+| /accounts     | YES     | YES        | "Dashboard›Accounts"                      |
+| /categories   | YES     | YES        | "Dashboard›Categories"                    |
+| /budgets      | YES     | YES        | "Dashboard›Budgets"                       |
+| /rules        | YES     | YES        | "Dashboard›Rules"                         |
+| /goals        | YES     | YES        | "Dashboard›Goals"                         |
+| /bills        | YES     | YES        | "Dashboard›Bills"                         |
+| /planning     | YES     | YES        | "Dashboard›Planning"                      |
+| /dashboard    | YES     | YES        | "Dashboard" (root — single crumb, correct)|
+
+**Breadcrumb verdict**: All 9 main screens have a working breadcrumb trail. The trail is flat
+("Dashboard›ScreenName") and does not preserve sub-navigation state (e.g., after drilling from
+/accounts to /transactions it shows "Dashboard›Transactions" not "Dashboard›Accounts›Transactions").
+The breadcrumb is orientation-only, not a stateful back-trail. This is acceptable for a flat nav
+architecture but means multi-hop paths are not reflected.
+
+**Mechanical gaps** (missing lateral links), highest-value first
+
+**⚠ GAP-LL1 (LL-1/LL-2): /transactions — account and category columns are display-only text.**
+The transaction table shows account name and category name in each row but neither is clickable.
+Marco cannot hop from a transaction to its account or category detail — he must manually navigate
+and locate the item. This is the single most-requested lateral pivot in a budgeting app.
+- Fix (LL-1): wrap the account cell text in a button (or `A(Href("/accounts#"+txn.AccountID), ...)`)
+  that navigates to /accounts highlighting the relevant account row.
+- Fix (LL-2): wrap the category cell text in a button that opens /categories scrolled to or filtered
+  by that category. A simpler approach: clicking the category opens a filter for that category on
+  /transactions (i.e., pre-filters /transactions by category, giving the same UX as LL-8).
+- Screenshot: `L76_hop1_transactions.png` (account + category shown as plain text, no affordance).
+
+**⚠ GAP-LL3 (LL-3): /transactions has NO budget pivot.**
+No path from a transaction to the budget that governs its category. Marco cannot see "this grocery
+spend is eating into my Groceries budget" without manually navigating to /budgets.
+- Fix: add a budget-name chip or "In budget: Groceries" link on each transaction row (or in the
+  transaction detail/edit form) linking to /budgets filtered by that budget.
+
+**⚠ GAP-LL6 (LL-6): /accounts has NO reverse link to goals linked to it.**
+An account that is the target of a savings goal shows no "Goal: Emergency Fund" indicator or link.
+The relationship only exists in /goals direction (goal → account name as text); there is no
+back-link from the account side.
+- Fix: add a "Linked goal: [name] →" indicator on account rows whose ID matches any goal's
+  LinkedAccountID. Clicking it navigates to /goals (or scrolls to that goal row).
+
+**⚠ GAP-LL7 (LL-7): /accounts has NO reverse link to recurring bills drawing from it.**
+An account used as the payment source for a recurring bill shows no "Bills: 3 upcoming" indicator.
+- Fix: add a "Bills from this account: N →" link per account row that navigates to /bills filtered
+  by that account.
+
+**⚠ GAP-LL9 (LL-9): /categories has NO link to the budget that owns it.**
+Category rows show transaction counts and Edit/Delete. No "Budget: Everyday Expenses →" link.
+Users cannot discover which budget a category belongs to from the category list.
+- Fix: add a "Budget: [name] →" label-link per category row → /budgets.
+
+**⚠ GAP-LL10 (LL-10): /categories has NO link to rules referencing it.**
+Categories and rules are related (rules assign categories) but there is no "Rules using this
+category: 2 →" pivot on /categories.
+- Fix: add a "Rules: N →" button per category that navigates to /rules pre-filtered by category.
+
+**⚠ GAP-LL11 (LL-11): /budgets category buttons navigate to transactions, not /categories.**
+The budget row's category name button (e.g., "Dining", title="Transactions") is a transaction drill,
+not a link to the /categories detail for that category. There is no path from /budgets to /categories
+for the same category.
+- Fix: make the category name text in the budget row a link to /categories scrolled to that
+  category, distinct from the "Transactions" drill action. Or add a "View in categories →" icon link.
+
+**⚠ GAP-LL13 (LL-13 partial): /rules has no filtered transaction preview.**
+"Apply to existing" is a bulk-categorize action (runs rules on uncategorized transactions and
+refreshes the page). It is not a "preview which transactions this rule would affect" link.
+Users cannot see the transactions a rule has acted on without navigating manually.
+- Fix: add a "Transactions affected: N →" link per rule row that opens /transactions filtered
+  by the rule's payee pattern or category (showing transactions the rule categorized).
+
+**⚠ GAP-LL14 (LL-14 / GAP-G confirmed): /goals "linked to" button goes to /transactions, not /accounts.**
+The "· linked to Emergency Savings (HYSA)" button (title="Transactions") navigates to /transactions,
+not to /accounts. GAP-G remains open: there is no direct one-click path from a goal to the specific
+linked account in /accounts.
+- The button's title="Transactions" confirms the intent is to show goal-related transactions, which
+  is valid but confusingly labeled. A separate "View account →" link is needed.
+- Fix: add a distinct "View linked account →" anchor per goal row →
+  `/accounts#<linkedAccountID>` (or `/accounts?highlight=<id>`), separate from the "· linked to"
+  transaction button.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **LL-12 LABEL BUG** (`L76_hop4_budgets.png`): Budget category drill buttons use the category
+  name as their text (e.g., "Dining", "Groceries") with title="Transactions". The affordance is
+  invisible: the button looks like a name label, not a drill action. Users will not know it is
+  clickable. Rename or add a secondary "→ Transactions" label / disclosure arrow.
+- **LL-14 MISLABEL** (`L76_hop6_goals.png`): "· linked to Emergency Savings (HYSA)" button
+  title="Transactions" navigates to /transactions. The label implies an account link but the
+  action is a transaction filter. Confusing: user expects to reach the account, lands on transactions.
+- **LL-13 ACTION vs PREVIEW** (`L76_hop5_rules.png`): "Apply to existing" is a bulk-execute
+  action, not an informational "see affected transactions" view. After clicking, the page refreshes
+  silently with no confirmation of how many transactions were categorized. No undo.
+
+**GAP-E definitive verdict (re-test from L74/L75)**
+
+| Source         | Button navigates to | Row count | Total | Filtered? | Chip     |
+|----------------|---------------------|-----------|-------|-----------|----------|
+| /accounts row  | /transactions       | 32        | 50    | YES ✓     | ✕ (active)|
+| /categories row| /transactions       | 25        | 50    | YES ✓     | ✕ (active)|
+| /budgets row   | /transactions       | 25        | 50    | YES ✓     | ✕ (active)|
+
+**GAP-E IS CLOSED.** All three entity→transaction drills correctly filter the result set. The
+confusion in L74/L75 was probe-level: those probes looked for `a[href*="transaction"]` but the
+links are `<button>` elements. The filter mechanism itself was always working. The residual UX
+issue is that /budgets buttons are labeled with the category name (not "Transactions"), making
+the drill affordance invisible.
+
+**Probe hardening**
+
+- **All lateral link probes must query `button` not `a[href]`**: CashFlux implements drill
+  actions as `<button>` elements, not anchor tags. Any probe that only checks `a[href*="..."]`
+  will incorrectly report ABSENT for links that exist as buttons. The DOM has zero content-area
+  anchors; all navigation from entity rows is via buttons. Update all future probes to check both.
+- **Budget drill button labels**: The category name buttons on /budgets have title="Transactions"
+  but text="{categoryName}". Probe by `title` attribute, not button text, to reliably find them:
+  `button[title="Transactions"]` or filter by title containing "Transactions".
+- **Goals "linked to" button**: title="Transactions", text="· linked to {accountName}". Probing
+  by "linked to" regex finds it but its action is transaction drill, not account pivot. Any probe
+  for LL-14 must verify `dest === "/accounts"` not just that a button was found.
+- **LL-5 chip**: After account drill, chip text shows "✕" only (not "Account: name✕"). The filter
+  is active (confirmed by row count) but the chip label was stripped. Future probe should use
+  row count as primary filter-confirmation, not chip text.
+
+**Evidence**
+
+```
+# App running on http://127.0.0.1:8080 (gwc dev)
+cd C:\Users\mreca\Desktop\CashFlux
+$env:E2E_URL="http://127.0.0.1:8080"
+node e2e/loopstory_76_following_the_thread.mjs
+  → 7 PASS · 0 FAIL · 10 ABSENT    EXIT 0
+```
+
+**Screenshots produced (23):**
+`L76_hop1_transactions.png` · `L76_hop1b_transactions_pivots.png` ·
+`L76_hop2_accounts.png` · `L76_hop2b_accounts_ledger.png` · `L76_hop2c_accounts_pivots.png` ·
+`L76_hop3_categories.png` · `L76_hop3b_categories_txn_drill.png` · `L76_hop3c_categories_pivots.png` ·
+`L76_hop4_budgets.png` · `L76_hop4b_budgets_txn_drill.png` · `L76_hop4c_budgets_pivots.png` ·
+`L76_hop5_rules.png` · `L76_hop5b_rules_pivots.png` ·
+`L76_hop6_goals.png` · `L76_hop6b_goals_pivots.png` ·
+`L76_hop7_bills.png` · `L76_hop7_planning.png` · `L76_hop7_dashboard.png` ·
+`L76_final.png`
+(plus `L76_hop1b_transactions_links.png` · `L76_hop5b_rules_txn_link.png` · `L76_hop7b_planning.png` · `L76_hop7c_dashboard.png` from first-pass run)
+
+**Re-test status**
+- **L74/L75 GAP-E** (drill-filter broken): **CLOSED** — all three drills (account/category/budget → /transactions) correctly filter the result set. The L75 probe was looking for `a[href]` not `button`; the filter itself was never broken.
+- **L74 GAP-G** (/goals linked-account): **STILL OPEN** — "· linked to X" button navigates to /transactions, not /accounts. The goal→account specific pivot is absent; the button is a transaction drill with a confusing label.
+- **L74 GAP-F** (bills widget → /accounts instead of /bills): not re-tested in L76 (out of scope).
+- **L75 SA-10** (/reports → /transactions link): not re-tested in L76 (reports not in scope).
+
+---
+
+### L77. Epic — "Link map: cross-page links to create for planning & reviewing" (synthesis of L74-L76) — 2026-06-22 ★★
+
+**Summary**
+
+Across L74, L75, and L76, the three probe sessions confirm that drill-down navigation and breadcrumbs are fundamentally solid: account, category, and budget rows all filter /transactions correctly, inline actions (Goals Contribute, Budgets Cover, Bills Mark-paid) exist and work, dashboard alerts route to the right screens, and flat breadcrumbs appear on every screen. The real gap is everything lateral and reverse — the pivots that let a user hop sideways from one entity to a related one (transaction→account, transaction→category, category→budget, account→goals, account→bills, rules→preview) and the signal→action CTAs that turn an insight or shortfall into a one-tap next step. These pivots do not exist yet, and their absence breaks the planning and reviewing workflows that motivated L74-L76.
+
+**What works (banked anchors)**
+
+- Drill-down filters correctly: accounts→/transactions (32/50), categories→/transactions (25/50), budgets→/transactions (25/50); filter chip active on all three.
+- Inline actions exist and work: Goals "Contribute — Add to this goal" (SA-2), Budgets "Cover… — Move money from another budget" (SA-4), Bills "Mark paid — Log a payment for this bill" (SA-6).
+- Dashboard alerts link to the right screen: over-budget + overdue signals surface with 11 action elements (SA-1).
+- Flat breadcrumbs on all 9 main screens: "Dashboard›ScreenName" confirmed present and functional on every tested screen (L76 breadcrumb audit).
+- Transaction→rule prefill: "Always categorize like this" per transaction row navigates to /rules with payee+category prefilled (LL-4).
+- /insights→/settings CTA: L62 gap closed — /settings route now registered and navigates correctly (LM-12, L74).
+
+**PRIORITIZED "links to create"**
+
+| Rank | Link name | Source (screen + item) | Target (screen + specific item) | Filter/period to pre-apply | Affordance | Why it helps planning/reviewing | Source ticket |
+|------|-----------|------------------------|----------------------------------|---------------------------|------------|----------------------------------|---------------|
+| 1 | Transaction→Account pivot | /transactions row | /accounts filtered to that account | account=X, current period | Click account chip/label in row | Jump from a transaction to all activity on its account | L74 LL-1 |
+| 2 | Transaction→Category pivot | /transactions row | /transactions filtered to that category | category=X, current period | Click category chip/label in row | Jump to all spending in the same category | L74 LL-2 |
+| 3 | Transaction→Budget pivot | /transactions row | /budgets detail for that budget | budget=X | Click budget badge if assigned | See how the transaction affects its budget | L74 LL-3 |
+| 4 | Dashboard net-worth tile→/accounts | /dashboard net-worth tile | /accounts | none | Click tile | Let user drill into account balances from dashboard | L74 LM-1 |
+| 5 | Dashboard goal tile→/goals | /dashboard goal tile | /goals (specific goal) | goal=X | Click tile | Navigate directly to the goal detail | L74 LM-4 |
+| 6 | Dashboard recent-transactions "view all"→/transactions | /dashboard recent-transactions widget | /transactions | none | "View all" link at widget bottom | Full transaction history from dashboard | L74 LM-6 |
+| 7 | Goal→linked account | /goals goal card | /accounts filtered to linked account | account=X | Click account name on goal | See the savings account behind a goal | L74 GAP-G / L75 LL-14 |
+| 8 | Category→budget | /categories category row | /budgets detail for that category's budget | budget=X | Click budget name on category | Jump from spending category to its budget | L74 LL-9 |
+| 9 | Account→goals reverse | /accounts account detail | /goals filtered to this account | account=X | "Linked goals" section link | See which goals are funded by this account | L74 LL-6 |
+| 10 | Account→bills reverse | /accounts account detail | /bills filtered to this account | account=X | "Linked bills" section link | See bills drawn from this account | L74 LL-7 |
+| 11 | Budget→categories | /budgets budget detail | /categories filtered to this budget | budget=X | "Categories" section link | Explore spending categories under a budget | L74 LL-11 |
+| 12 | Rules→filtered preview | /settings rules list | /transactions filtered by that rule's criteria | rule criteria | "Preview matches" action on rule | Verify rule is matching expected transactions | L74 LL-13 |
+| 13 | Insights suggestion→act / save-as-task | /insights suggestion card | relevant action screen OR task created | varies | "Act on this" / "Save as task" CTA | Turn an insight into a concrete next step | L75 SA-11 |
+
+**Real bugs to fix (not links to create)**
+
+- **GAP-F (HIGH)**: Dashboard Upcoming-Bills widget links to /accounts instead of /bills — one-line route fix. Source: L74 GAP-F.
+- **Invisible budget-drill affordance**: on /categories the category-name button that drills into budgets has only a title tooltip and looks like a plain label — needs visible affordance (underline, chevron, or color). Source: L76.
+- **Flat breadcrumb doesn't preserve multi-hop drill state**: breadcrumbs exist on all screens but only show one level; if user drills account→transactions→transaction-detail, the trail loses the account context. Source: L76.
+
+**Bottom-up implementation note**
+
+Most of these pivots are state+UI only — the target screens already filter correctly when given the right params. A single shared helper (e.g. `buildFilteredRoute(screen, filters, period)`) that produces a route/URL with the right filter+period preset would be reused across nearly all the above pivots. No new filtering logic needed.
+
+**Resolved / false-positive items (do not reopen)**
+
+- **GAP-E — "drill-filter severed"**: PROBE ARTIFACT. Drill actions are `<button>` elements, not `<a href>`, so the link-matrix probe missed them. L76 verified the row sets ARE correctly filtered (accounts→32/50, categories→25/50, budgets→25/50). Not a bug.
+- **Breadcrumb-absent claim (L74/L75)**: PROBE MISS. Breadcrumbs exist and work on all 9 screens. L76 confirmed presence. The only real gap is the flat/one-level trail noted above.
+
+---
+
+## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
+
+### G5. Goals — "Are We There Yet?" (Aaliyah) — 2026-06-22 ★
+
+**The story**
+Aaliyah, a 29-year-old saver juggling five active financial goals (emergency fund, car down payment,
+vacation, retirement account, student loan payoff), opens the Goals page with one question cluster:
+How close am I to each goal, am I on pace, and what should I fund next? She is not adding goals
+today — she is scanning progress and pace at a glance and deciding where to direct her next
+contribution. She has goals at 91% (nearly there), 61%, 36%, 22%, and 20%. The page must surface
+the most actionable goal — the near-complete one — instantly, and make the contribute action
+discoverable without hunting.
+
+**Drive script**
+`e2e/glamor_05_goals.mjs` — widths 1280/1440/768, dark + light themes (light-theme recipe from G4).
+Run: `node e2e/glamor_05_goals.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_05_goals_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_05_goals.mjs` → EXIT 0
+- Screenshots captured:
+  `glamor_05_goals_1280_dark.png`, `glamor_05_goals_1280_dark_full.png`,
+  `glamor_05_goals_1440_dark.png`, `glamor_05_goals_768_dark.png`,
+  `glamor_05_goals_1280_light.png`, `glamor_05_goals_1440_light.png`,
+  `glamor_05_goals_768_light.png`
+- DOM audit: `glamor_05_goals_dom.json` — stat tiles, progress bars (5 bars, valuenow confirmed),
+  contribute buttons, add-goal affordance, ordering, member filter (Everyone), above-fold count.
+- Light theme confirmed: `data-theme="light"` on `<html>` for all three light captures.
+
+**What already works well (keep — regression anchors)** ✓
+- **Three-stat summary bar (SAVED SO FAR / TOTAL TARGET / OVERALL PROGRESS) at the very top**
+  renders above all goal rows — Aaliyah's portfolio context (54% overall, $37,400 of $69,000) is
+  immediately visible above the list. SAVED SO FAR in green semantic color — correct positive
+  sentiment. ✓
+- **Progress bars are full-width and visually prominent** — at 1280/1440px, bars span the entire
+  card width. Fill percentage is instantly readable by eye. All five bars confirmed by DOM audit
+  (`valuenow`: 61, 20, 36, 91, 22 — matching the five goals). ✓
+- **"Contribute" button is prominent on every row** — the primary funding action is a first-class
+  button (not a buried overflow menu) present on all five rows, confirmed by DOM (`contributeButtons`
+  array contains five "Contribute" entries). The action is discoverable without hover or drilling. ✓
+- **Sub-line is information-dense**: "61% · $7,800.00 to go · by 2027-03-01 · save $866.67/mo"
+  packs progress %, remaining amount, deadline, and required monthly savings into one scannable line.
+  The monthly savings figure ("save $X/mo") is a pace signal that partially answers "am I on track?"
+  without requiring a separate calculation. ✓
+- **Linked account chip is present and dotted-underlined** — "· linked to Emergency Savings (HYSA)"
+  and "· linked to Roth IRA" appear as dotted-underline links on rows with linked accounts. Aaliyah
+  can see where her savings live without opening an edit form. ✓
+- **"Edit" button is present and labelled** — consistent with Accounts/Budgets pattern; in-line edit
+  affordance on every row. ✓
+- **Breadcrumb "Dashboard › Goals"** is present and correct at all viewport widths. ✓
+- **Progress bar ARIA** (`role="progressbar"`, `aria-valuenow`, `aria-label="Goal progress"`) is
+  present on all five bars. DOM-confirmed. ✓
+- **768px layout reflows** — at 768px the goal name wraps to multiple lines ("6-month emergency /
+  fund", "Car down / payment", "Max out Roth / IRA") but the card structure holds. Contribute + Edit
+  buttons remain on the same row as the amount. Sub-lines remain readable. ✓
+- **"Add something new" / "+ New goal" affordance** is accessible — DOM confirms both an "Add
+  something new" button and a "New goal" entry in the contribute-buttons set. ✓
+- **Member filter defaults to "Everyone"** — confirmed by DOM (`sortControls` shows the select with
+  "Everyone / Daniel Carter / Jordan Lee"). Filter is at the top-right, consistent with other pages. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout*
+- [ ] **Goal name and current/target amount are on the same row as Contribute + Edit buttons, but
+      the name column is extremely narrow and wraps badly at all widths (CRITICAL at 768px).** At
+      1280px, goal names like "6-month emergency fund" and "Pay off student loan" are left-aligned
+      in a column that ends where "$12,200.00 / $20,000.00" begins mid-row. At 768px this layout
+      collapses catastrophically: "6-month emergency fund" wraps to three lines ("6-month /
+      emergency / fund"), "Car down payment" to two, "Max out Roth IRA" to three — making the
+      row very tall and visually noisy. The name should have priority width. Consider a two-row
+      layout: [name left · amount right] on row 1, [bar] on row 2, [sub-line] on row 3, [buttons
+      row or hover-reveal] — consistent with the Budgets page pattern which avoids this wrapping
+      at 768px. Screenshot: `glamor_05_goals_768_dark.png`.
+- [ ] **No "Add goal" button is visible at page level in the content area.** The card heading
+      says "Goals" but has no companion "+ Add goal" button in the header row. The "Add something
+      new" button is in the FAB/quick-add flow; the "New goal" entry is behind two taps. Add a
+      small "+ Add goal" button immediately right of the "Goals" card heading, matching the
+      Accounts/Budgets page pattern (visible at rest, single-tap).
+- [ ] **No pace indicator (on track / behind / ahead) is rendered as a distinct visual element.**
+      The sub-line text "save $866.67/mo" is the only pace signal — it tells Aaliyah what she
+      *needs* to save monthly, not whether she *is* on pace. There is no "on track", "behind",
+      or "ahead" badge or colored cue. The `goals` package computes pace (C51 flagged "silent
+      contribute" and pace gap); the UI must surface it. A compact colored badge ("On track ✓",
+      "Behind — needs $X more/mo", "Nearly done!") on each row, positioned below or beside the
+      sub-line amount, would transform the page from a progress ledger into an action surface.
+      Cross-reference C51 "flat progress tone" — there is no sense of near/far/complete; all five
+      bars render in the same flat green regardless of urgency.
+
+*2. Spacing*
+- [ ] **Goal rows have no visual separators between them.** At 1280/1440px, rows are separated
+      only by very thin lines (hairline borders, barely visible in dark mode). At 1440px the
+      separation is so faint that the five goals read as a continuous undifferentiated block.
+      Increase row bottom-padding or add a more visible `border-bottom: 1px solid var(--border)`
+      that contrasts against the card background. Screenshot: `glamor_05_goals_1440_dark.png`.
+- [ ] **Sub-line is directly adjacent to the progress bar with no breathing room (~2–3px gap).**
+      The sub-line "61% · $7,800.00 to go · by 2027-03-01 · save $866.67/mo" appears immediately
+      below the bar. Increasing the gap from ~2px to ~8px would visually separate the bar (a
+      graphic element) from the metadata text (a text element), improving rhythm.
+- [ ] **Row height is uneven between linked-account rows and plain rows.** Rows with a linked
+      account line ("· linked to Emergency Savings (HYSA)") are taller than rows with a single
+      sub-line. While some height variation is appropriate, the jump is visually unsteady.
+      A consistent minimum row height (~100px) with the linked-account line adding naturally
+      would stabilize the card grid.
+
+*3. Theming*
+- [ ] **TOTAL TARGET and OVERALL PROGRESS figures are near-invisible in light mode (CRITICAL
+      contrast failure — same G4 pattern).** Confirmed in `glamor_05_goals_1280_light.png`,
+      `glamor_05_goals_1440_light.png`, and `glamor_05_goals_768_light.png`: the TOTAL TARGET
+      value ($69,000.00) and the OVERALL PROGRESS value (54%) both render in very low-contrast
+      grey on the white stat panel — nearly invisible. SAVED SO FAR ($37,400.00) is rendered in
+      green and passes. This is the identical muted foreground token failure identified in G4 for
+      the BUDGETED stat. Fix: ensure all three stat figures use `--fg` or a neutral full-weight
+      token in light mode, not a muted variant.
+- [ ] **Goal names are near-invisible in light mode (CRITICAL contrast failure).** Confirmed in
+      `glamor_05_goals_1280_light.png` and `glamor_05_goals_1440_light.png`: goal names ("6-month
+      emergency fund", "Car down payment", "Japan trip", "Max out Roth IRA", "Pay off student
+      loan") render in extremely faint grey on the white card background — effectively invisible.
+      In `glamor_05_goals_768_light.png`, the names are similarly invisible while the wrapping
+      layout makes the problem worse (the faint text now spans three visual lines). This is the
+      same blanket light-mode foreground token failure as G4's budget row category names. The
+      goal name element must use `--fg` or a mid-contrast token that passes AA-normal (4.5:1)
+      on white. Screenshot: `glamor_05_goals_1280_light.png`, `glamor_05_goals_1440_light.png`,
+      `glamor_05_goals_768_light.png`.
+- [ ] **All progress bars are the same flat green regardless of urgency (C51 "flat progress
+      tone").** The 91% goal (nearly done) renders the same bar color as the 20% goal (just
+      started). There is no color differentiation between: nearly-complete (celebrate / finish
+      line approaching), on-pace, behind-pace, or just-started. Consider a goal-state color
+      vocabulary: nearly-complete (e.g. 90%+) → a distinct "almost there" accent (teal or amber
+      celebration tone), overdue/behind-pace → red/amber warning, on-pace → green, no-progress
+      → muted grey. This color differentiation is the single strongest signal the bar can send.
+      Cross-reference C51, L59 lifecycle (completion/celebration state).
+
+*4. Styling*
+- [ ] **The current/target amount ("$12,200.00 / $20,000.00") is center-positioned in the
+      header row, leaving a large gap between the amount and the Contribute button.** At 1280px:
+      [name left] [amount center-left] [Contribute button] [Edit button] [×]. The amount should
+      be left-adjacent to the Contribute button or right-aligned to the card boundary so the
+      header reads as a clean [name · amount | actions] layout. The current positioning leaves
+      dead whitespace between the amount and the first action button.
+- [ ] **Sub-line text is a single-weight, middle-dot-separated string (same C50 "text-busy"
+      pattern as G4 Budgets).** "61% · $7,800.00 to go · by 2027-03-01 · save $866.67/mo"
+      has four pieces of equal visual weight. For Aaliyah's glance scan, the deadline ("by
+      2027-03-01") and required savings ("save $866.67/mo") are the actionable items; the
+      percentage and remaining dollar amount are secondary confirmation. Split into primary
+      (remaining + deadline) and secondary (% + monthly needed) using `text-dim` on the latter.
+- [ ] **"Contribute" button uses a full pill with icon on every row at rest state.** This is
+      correct for discoverability (C51 "silent contribute" fix), but the button competes with
+      "Edit" and the delete × for visual attention. At 1440px, each row shows three action
+      elements at all times (Contribute, Edit, ×). Consider making × hover-only (it is
+      destructive), showing Contribute + Edit at rest, to reduce the action-button density
+      without hiding the primary funding action.
+- [ ] **No completion/celebration state is visible for any goal, even the 91% one.** L59
+      lifecycle defines a completion state. The 91% goal ("Max out Roth IRA", $1,800 to go)
+      is close enough to warrant a "Nearly there!" affordance — a subtle visual differentiation
+      (e.g. a progress bar that shifts to a "final stretch" accent, or a badge "90% — almost
+      done!") that signals Aaliyah should fund this one first. Nothing distinguishes a 91%
+      goal from a 22% one except the bar length.
+
+*5. Positioning*
+- [ ] **Progress bar is the most visually prominent element in each row — correct.** The bar
+      spans the full card width and is the largest visual element. ✓ No fix needed here.
+- [ ] **Pace signal ("save $X/mo") is buried in the sub-line at equal weight with three other
+      pieces of information.** The sub-line reads "61% · $7,800.00 to go · by 2027-03-01 ·
+      save $866.67/mo" — all four fields in the same muted-grey, same size, separated by
+      middle-dots. Aaliyah's most actionable question is "how much do I need to save per month
+      to hit this?" — the "save $X/mo" figure is the answer, but it is visually last and equal-
+      weight with the others. Position "save $X/mo" as the primary right-aligned pace figure
+      next to the deadline, elevated in size or weight, so Aaliyah can scan the right edge of
+      each row for the monthly commitment without reading the whole sub-line.
+- [ ] **The "Contribute" button is correctly positioned (prominent, every row, first-class
+      button) — this is the key fix from C51.** ✓ No further repositioning needed, but
+      confirm the button fires the contribute flow (not a nav link) — drill actions must be
+      `<button>` not `<a href>`.
+
+*6. Ordering*
+- [ ] **Goals are ordered by name alphabetically rather than by urgency or actionability.**
+      Current order: 6-month emergency fund (61%, deadline 2027-03-01), Car down payment (20%,
+      deadline 2027-09-01), Japan trip (36%, deadline 2027-04-01), Max out Roth IRA (91%,
+      deadline 2026-12-31), Pay off student loan (22%, deadline 2029-06-01). The most urgent
+      goal — Max out Roth IRA at 91% with the nearest deadline (2026-12-31, only 6 months away)
+      — is at position 4. The nearly-done goal is buried. Default ordering should be urgency-
+      first: nearest deadline → highest % complete → alphabetical within tier. Alternatively,
+      a "what should I fund next?" sort that surfaces the most actionable goal (most progress +
+      nearest deadline) at top. Add a compact sort control in the card header (e.g. "Sort: Nearest
+      deadline · % complete · Name") so Aaliyah can switch without leaving the page.
+- [ ] **Within the current dataset, "Max out Roth IRA" (91%, deadline 2026-12-31) should be
+      first by any urgency-based sort.** It has the nearest deadline (6 months), the highest
+      % complete (91%), and the smallest remaining amount ($1,800). Under the current alphabetical
+      sort it is 4th of 5. This is the clearest single mis-ordering: Aaliyah's most actionable
+      goal is buried past three less-urgent goals.
+
+*7. General UX / Glanceability*
+- [ ] **Aaliyah cannot answer "what should I fund next?" from the current page without reading
+      every sub-line.** The combination of (a) alphabetical ordering (most actionable goal at
+      position 4), (b) flat-green progress bars (no urgency differentiation), and (c) equal-
+      weight sub-line text (pace buried in noise) means she must do mental arithmetic across five
+      rows to identify where to direct her next dollar. Fixes: urgency-first ordering (Ordering
+      #1) + pace badge (Layout #3) + progress bar color by state (Theming #3) together would
+      make the answer visible at the top of the page in under 2 seconds.
+- [ ] **No "% saved of monthly commitment" or "on track / behind" status is shown anywhere.**
+      The sub-line reports "save $866.67/mo" as a required amount, but never tells Aaliyah
+      whether she is *actually* saving that much. A goal with a $866.67/mo requirement that is
+      receiving $200/mo is behind — but the page shows the same sub-line as one receiving
+      $900/mo. Without the `pace` status signal, Aaliyah cannot answer "am I on pace?" without
+      going to Transactions and doing manual math. Cross-reference C51 ("silent contribute"
+      and pace gap) and L59 lifecycle.
+- [ ] **No completion/celebration state exists for any goal near 100%.** L59 defines a lifecycle
+      endpoint. The 91% goal has no visual distinction from the 22% goal except bar length.
+      A "Final stretch" or "Nearly complete!" treatment — a progress bar that fills to a
+      different accent, a celebration chip, or a prominent "Finish this goal — only $1,800 to go"
+      CTA — would make the near-complete goal the obvious "fund this first" candidate.
+- [ ] **"linked to X" line is an underlined-dotted link but has no affordance explaining what
+      it does.** Clicking "· linked to Emergency Savings (HYSA)" presumably navigates to or
+      filters the Accounts page by that account. The destination and behavior are not explained.
+      Add a `title` attribute or tooltip so Aaliyah knows what clicking the linked-account chip
+      will do ("View account transactions").
+- [ ] **Sub-line date format "2027-03-01" is ISO and not locale-friendly.** Aaliyah sees
+      "by 2027-03-01" rather than "by Mar 1, 2027". The app has a date-format preference
+      (prefs package); deadline dates in goal sub-lines should respect the user's preferred
+      date format (e.g. "by Mar 1, 2027" or "by 01/03/2027") rather than hardcoding ISO 8601.
+- [ ] **No empty state is visible (five goals exist).** The `EmptyStateCTA` pattern is
+      implemented in code. Confirm it renders correctly with a welcoming message + "Add your
+      first goal" CTA when a new user arrives with no goals.
+
+**UI/UX defects (screenshot-confirmed)**
+| # | File | Observation | Fix |
+|---|------|-------------|-----|
+| 1 | `glamor_05_goals_1280_light.png`, `glamor_05_goals_1440_light.png`, `glamor_05_goals_768_light.png` | Goal names ("6-month emergency fund", "Car down payment", "Japan trip", "Max out Roth IRA", "Pay off student loan") are near-invisible in light mode — extremely faint grey on white card | Goal name element must use `--fg` or AA-compliant foreground token in both themes |
+| 2 | `glamor_05_goals_1280_light.png`, `glamor_05_goals_1440_light.png`, `glamor_05_goals_768_light.png` | TOTAL TARGET ($69,000.00) and OVERALL PROGRESS (54%) stat figures are near-invisible in light mode — same muted-token failure as G4 BUDGETED stat | Apply `--fg` / neutral full-weight token to all three stat figures in light mode |
+| 3 | `glamor_05_goals_1280_dark.png`, DOM `allBars` | All five progress bars render in the same flat green (`bar-fill`, no state modifier) regardless of urgency — 91% goal looks identical to 20% goal | Add goal-state color classes: `bar-fill near-complete` (90%+), `bar-fill behind`, `bar-fill on-track` — differentiated accent per state (C51 flat-tone fix) |
+| 4 | `glamor_05_goals_1280_dark.png`, DOM `goalCards: []` | Goal ordering is alphabetical — Max out Roth IRA (91%, nearest deadline 2026-12-31) is at position 4; most actionable goal buried | Default sort: nearest deadline → highest % complete → alphabetical; add sort control in card header |
+| 5 | `glamor_05_goals_768_dark.png`, `glamor_05_goals_768_light.png` | Goal names wrap catastrophically at 768px — "6-month emergency fund" spans three lines, "Max out Roth IRA" spans three lines — rows become very tall and visually noisy | Restructure row layout to prioritize name column; consider two-row layout: [name · amount] / [bar] / [sub-line] |
+| 6 | `glamor_05_goals_1280_dark.png` | No pace badge (on track / behind / ahead) — sub-line buries "save $X/mo" as fourth equal-weight field; Aaliyah cannot answer "am I on pace?" at a glance | Add a compact colored pace badge per row; elevate monthly savings figure as primary right-aligned cue |
+| 7 | `glamor_05_goals_1280_dark.png` | No "+ Add goal" button in the card header row — new goal requires discovering the FAB quick-add panel | Add "+ Add goal" button right of "Goals" heading, matching Accounts/Budgets pattern |
+| 8 | `glamor_05_goals_1280_dark.png` | No completion or "nearly there" treatment on the 91% goal — L59 lifecycle endpoint invisible | Add "Final stretch" / "Nearly complete!" accent (bar color shift, badge, or prominent CTA) for goals >= 90% |
+
+**Probe hardening**
+- Light-theme recipe (G4-confirmed) worked correctly for all three light captures: `data-theme="light"`
+  confirmed on `<html>` for 1280/1440/768 light runs.
+- DOM selector `".goal, [class*='goal-row'], [class*='goal-card']"` returned 0 matches — the goal
+  rows use a different class structure. Progress bars and contribute buttons were captured via
+  `[role="progressbar"]` (5 bars confirmed) and button text scan respectively. For G5+ re-runs,
+  add the actual goal-row class from the source (inspect `internal/screens/goals.go`) to the
+  selector so `goalCards` populates. The bar-level and button-level captures were complete.
+- Member filter select was found and reset to Everyone via `selectOption({ index: 0 })` — confirmed
+  in DOM log (`sortControls` shows the three-member select).
+
+---
+
+### G4. Budgets — "The Mid-Month Pulse" (Renu) — 2026-06-22 ★
+
+**The story**
+Renu, a 38-year-old household budget manager, opens the Budgets page around the 15th of the
+month. She has one question cluster she needs answered in under 10 seconds: Which categories am
+I overspending? How much is left in the categories that matter? Where do I need to slow down
+before the end of the month? She is not adding budgets today — she is scanning the health of
+her spending plan and deciding whether to adjust behavior or move money.
+
+**Drive script**
+`e2e/glamor_04_budgets.mjs` — widths 1280/1440/768, dark + light themes (light-theme recipe
+confirmed working — see Probe hardening). Run: `node e2e/glamor_04_budgets.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_04_budgets_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_04_budgets.mjs` → EXIT 0
+- Screenshots captured:
+  `glamor_04_budgets_1280_dark.png`, `glamor_04_budgets_1280_dark_full.png`,
+  `glamor_04_budgets_1440_dark.png`, `glamor_04_budgets_768_dark.png`,
+  `glamor_04_budgets_1280_light.png`, `glamor_04_budgets_1440_light.png`,
+  `glamor_04_budgets_768_light.png`
+- DOM audit: `glamor_04_budgets_dom.json` — stat tiles, budget rows (height, fill class, sub-lines),
+  bar ARIA, over/near ordering, above-fold count, sub-line color, pills.
+- Light theme confirmed: `data-theme="light"` on `<html>` verified for all three light captures.
+
+**What already works well (keep — regression anchors)** ✓
+- **Three-stat summary bar (SPENT / BUDGETED / LEFT) at the very top** renders above all budget
+  rows — Renu's headline context (how much total headroom is left) is immediately visible.
+  SPENT in red, LEFT in green semantic color — correct at a glance. ✓
+- **"2 over budget" pill in red** appears immediately below the card heading, before the first
+  budget row — the existence of a problem is flagged before Renu has to scan any rows. ✓
+- **Semantic bar colors are correct**: on-track bars are green (`bar-fill`), over-budget bars are
+  red (`bar-fill over`), near-limit/at-risk bars are amber (`bar-fill near`). The traffic-light
+  gradient is coherent and meaningful. ✓
+- **Progress bars are full-width and visually prominent** — at 1280px they span the entire card
+  width, making fill percentage instantly readable by eye. ✓
+- **Sub-line text is correct and information-dense**: "Monthly · Over budget · 100% · ($70.00)
+  left" packs period, status label, percentage, and remaining into one line. DOM-confirmed format
+  is consistent across all rows. ✓
+- **"Cover…" button on over-budget rows** (L1) is present and correctly shown only on Groceries
+  and Shopping (the two over-budget rows). The move-money affordance is accessible at the moment
+  of problem discovery without leaving the page. ✓
+- **Rollover carry line** ("Carried from previous period: ($240.00)") is correctly shown in red
+  on the Groceries row as a second sub-line — the penalty of a prior overspend is surfaced inline
+  where Renu sees the current overspend. ✓
+- **"At risk" pace projection** ("At this pace, projected to go over by $0.63") shown on
+  Subscriptions and Transportation gives forward-looking signal, not just current-state. ✓
+- **768px layout reflows correctly**: the period control splits to two rows, budget row name +
+  amount stay on one line, bars render full-width, sub-lines remain legible. No text collision or
+  overflow observed. ✓
+- **Breadcrumb "Dashboard › Budgets"** is present and correct in all viewport widths. ✓
+- **Bar ARIA** (`role="progressbar"`, `aria-valuenow`, `aria-label="Budget usage"`) is present
+  on all seven bars. ✓
+- **Category-drill affordance**: budget names are underlined dotted links that navigate to
+  Transactions filtered by category — the "why am I over?" path is one click from the row. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout*
+- [ ] **Over-budget rows are not sorted to the top — the most urgent items are buried (CRITICAL
+      for Renu's scan).** DOM-confirmed order: Dining (on track, idx 0), Entertainment (on track,
+      idx 1), Gifts & Charity (on track, idx 2), Groceries (over, idx 3), Shopping (over, idx 4),
+      Subscriptions (near, idx 5), Transportation (near, idx 6). Renu must scroll or scan three
+      healthy rows before reaching the two over-budget ones. Default ordering must be severity-
+      first: Over budget → Near limit / At risk → On track, then alphabetical within each tier.
+      Add a sort-control affordance (a compact dropdown or segmented: "Severity · Name · Amount
+      used · Remaining") in the card header row so power users can re-sort.
+- [ ] **No "Add budget" button is visible on the page.** The global "+" FAB (topbar) opens a
+      generic quick-add panel, not a budget-specific form. There is no page-level "+ Add budget"
+      button anchored to the Budgets card heading. A returning user who wants to add a budget for
+      the first time mid-month must discover the FAB mechanism. Add a small "+ Add budget" button
+      in the card header row (right of the "Budgets" heading), matching the pattern used on
+      Accounts / Goals / other entity pages. (DOM confirms `addBtns` includes "New budget" from
+      the quick-add panel, but it is behind a two-tap flow rather than a single visible button.)
+- [ ] **Summary stat bar: BUDGETED figure is visually faint in light mode.** At 1280 light and
+      1440 light, the BUDGETED value ($1,585.00) renders in very low-contrast grey against the
+      white stat panel — it is nearly invisible compared to SPENT (red) and LEFT (green). Dark
+      mode renders BUDGETED in white, which is fine. The light-mode stat label color for BUDGETED
+      must use the same foreground token as SPENT and LEFT, not a muted variant.
+- [ ] **No per-budget "% of month elapsed" reference line on bars.** At mid-month (the 15th),
+      Renu has consumed ~50% of June's days. A faint vertical tick at 50% on each bar would let
+      her instantly judge "am I ahead or behind pace?" for every on-track budget without reading
+      the sub-line text. This is a structural enhancement to the progress bar (a thin `::after`
+      pseudo-element or an SVG overlay) that dramatically improves glanceability for the mid-
+      month-pulse use case.
+
+*2. Spacing*
+- [ ] **Budget rows have no visual separation between them.** At 1280/1440px, rows are separated
+      only by ~8px of implicit margin — there is no hairline divider, no alternating background,
+      and no card-shadow between rows. On a glance-scan, the eye struggles to see where one budget
+      ends and the next begins, especially when a row has multiple sub-lines (Groceries has 2,
+      Subscriptions has 2). Add a subtle separator (`border-bottom: 1px solid var(--border)`) on
+      each `.budget` row, or increase bottom-padding to 20px so the row bottom breathes before the
+      next bar begins.
+- [ ] **Sub-lines are "glued" to the bar above them (C50-flagged pattern).** The primary sub-line
+      ("Monthly · Over budget · 100% · ($70.00) left") appears with ~4px gap below the bar and
+      immediately before the secondary line ("Carried from previous period: ($240.00)"). When two
+      sub-lines stack, they read as a run-on block rather than distinct pieces of information.
+      Increase top-margin between the bar and the first sub-line (from ~4px to ~8px), and add a
+      2px gap between sub-line 1 and sub-line 2 so the rollover-carry and pace-over lines are
+      visually distinct from the primary status line.
+- [ ] **Row heights are inconsistent: 98–99px for single-sub-line rows, 120–123px for multi-sub-
+      line rows.** This variable height (DOM-confirmed) makes the page rhythmically unsteady.
+      While some height variation is correct (more lines = more height), the jump from 98→123px
+      is jarring. A consistent minimum row height (e.g. 104px) with additional lines expanding
+      naturally would stabilize the visual rhythm.
+
+*3. Theming*
+- [ ] **BUDGETED figure in the stat bar is near-invisible in light mode (CRITICAL contrast
+      failure).** Confirmed in `glamor_04_budgets_1280_light.png` and `glamor_04_budgets_1440_
+      light.png`: the BUDGETED value renders as a very light grey that fails contrast against the
+      white stat panel. The SPENT (red) and LEFT (green) figures use semantic colored tokens that
+      pass in light mode; BUDGETED appears to fall through to a muted foreground token that is
+      appropriate for dark but fails on white. Fix: ensure the BUDGETED figure uses `--fg` (full
+      foreground) or a neutral token that passes AA in both themes, not the muted grey.
+- [ ] **Budget row category names are invisibly faint in light mode.** In `glamor_04_budgets_
+      1280_light.png`, row names like "Dining", "Entertainment", "Gifts & Charity", "Groceries",
+      "Shopping", "Subscriptions" all render in extremely low-contrast grey against the white card
+      background — effectively invisible as drillable link names. They are clearly readable in
+      dark mode. The `.row-desc.budget-drill` anchor in light mode must use `--fg` or at minimum
+      a mid-contrast token that passes AA-normal (4.5:1) on white. This is a blanket light-mode
+      text contrast failure on the primary identifier of every budget row.
+- [ ] **Sub-line color (`rgb(171, 171, 179)`) in dark mode — verify AA.** DOM-confirmed sub-line
+      color is `rgb(171,171,179)` on a near-black background. Approximate contrast ratio against
+      `#181820` (the dark surface): ~7:1 — passes AA. But the rollover-carry line ("Carried from
+      previous period") renders in red (`tw.TextDown`) — verify it also passes AA on the dark
+      surface (red-on-dark typically does, but the shade should be confirmed).
+
+*4. Styling*
+- [ ] **"2 over budget" pill is the only status summary cue — it is a text pill, not a visual
+      count widget.** The pill "2 over budget" is red text — correct semantic color. But "near
+      limit" budgets (Subscriptions, Transportation) are only represented by the bar color; there
+      is no "2 near limit" companion pill. The sub-heading currently shows only one pill
+      (confirmed by DOM: `pills: ["2 over budget"]`). Adding a second pill "2 near limit" (amber)
+      alongside the red over-budget pill would complete the status summary, matching the code's
+      existing `nearCount` computation and the `overCount > 0 || nearCount > 0` conditional in
+      the render path. Currently `nearCount` is computed but the near pill is never shown because
+      the pill `If(nearCount > 0, …)` renders inside the same `P` that only fires when
+      `overCount > 0 || nearCount > 0` — but in this dataset nearCount IS 2, so the pill should
+      appear. Investigate whether the near pill is rendering but invisible in light mode, or
+      whether there is a conditional bug suppressing it.
+- [ ] **Progress bar track is nearly invisible in both themes.** The bar track (the background
+      rail behind the fill) is a very faint grey. At 1280 dark, the on-track green fill is visible,
+      but the remaining-track behind it blends with the card background. On empty bars (0% fill,
+      Entertainment/Gifts & Charity), the bar track is barely perceptible — users cannot tell
+      whether the bar is empty or absent. Increase bar track contrast: `background: var(--border)`
+      or `rgba(255,255,255,0.12)` in dark / `rgba(0,0,0,0.10)` in light.
+- [ ] **Category name and spent/limit amount are left-and-right within `.budget-head`** but the
+      amount is center-positioned at mid-row rather than right-edge-aligned against the card
+      boundary. At 1280px, the amount ($155.00 / $250.00) appears roughly center-left of the
+      available space, leaving a large visual gap to the Edit/Delete buttons on the right. The
+      amount should be right-aligned flush with the button group, so the row reads cleanly as
+      [name left] [amount · Cover · Edit · Delete right].
+- [ ] **Edit button uses text label + icon in every row at all times.** This is consistent with
+      the Accounts page pattern but is dense on the budget list: Edit appears as "✏ Edit" as a
+      full pill button in every single row. For Renu's scan workflow this is fine (she is not
+      editing), but the constant edit affordance competes visually with the status information.
+      Consider hover-revealing the Edit/Delete buttons and showing only the row name, amount,
+      bar, and status on rest-state — revealing actions on hover/focus — consistent with the
+      direction noted in G2 for Transactions.
+
+*5. Positioning*
+- [ ] **The "Cover…" button appears between the amount and Edit button in the header row.**
+      At 1280px: [name] [amount] [Cover…] [Edit] [×]. This ordering puts "Cover…" — a secondary
+      action for over-budget rows only — between the primary amount display and the primary Edit
+      action. "Cover…" should be positioned to the left of Edit or below the bar as a contextual
+      secondary action, not between the amount and Edit where it breaks the visual scan line of
+      [name → amount → actions].
+- [ ] **Period control is in the topbar (shared, C7) — correct positioning for a global control.**
+      The Budgets card no longer has its own competing period stepper (confirmed by DOM and code).
+      The "Month" segmented + "Jun 2026" stepper in the topbar is the correct single source of
+      truth for the viewed period. ✓ No fix needed here.
+- [ ] **Summary stat bar position is correct (above the card) — no fix needed.** The SPENT /
+      BUDGETED / LEFT bar renders above the Budgets card at the top of the content area, providing
+      immediate context before Renu reads any row. ✓
+
+*6. Ordering*
+- [ ] **Alphabetical default order buries critical rows (HIGHEST IMPACT — see Layout fix #1).**
+      DOM-confirmed: Dining → Entertainment → Gifts & Charity → Groceries → Shopping →
+      Subscriptions → Transportation. Over-budget rows (Groceries, Shopping) are at positions 4
+      and 5; near-limit rows (Subscriptions, Transportation) are at 6 and 7. Renu must scan past
+      three healthy rows to reach the first problem. Default must be severity-first sort. This is
+      the single most important structural fix for glanceability on this page.
+- [ ] **Within the "on-track" tier, sort by % used descending (most at-risk-of-becoming-near
+      first), not alphabetically.** Dining at 62% is more worth monitoring than Entertainment at
+      0% or Gifts & Charity at 0%. The alphabetical tie-break within the on-track tier should be
+      % descending so the most-used-relative-to-limit on-track budgets surface first.
+
+*7. General UX / Glanceability*
+- [ ] **Renu cannot answer "which categories am I overspending?" without scanning past healthy
+      rows.** The lack of severity sort (Ordering fix #1) is the root cause. Once fixed, the
+      two red over-budget rows will be immediately visible at the top without any scrolling
+      (DOM-confirmed: only 6 total budget rows, all visible above fold at 1280px).
+- [ ] **Sub-line text packs too much into one string (C50-flagged "text-busy" pattern).**
+      "Monthly · On track · 62% · $95.00 left" has four pieces of information separated by
+      middle-dots. For Renu's glance scan, the period ("Monthly") and the percentage ("62%") are
+      secondary to the status label ("On track") and the remaining amount ("$95.00 left"). Consider
+      a two-visual-weight split: status label + remaining in full-weight primary font; period +
+      percentage in `text-dim` secondary weight, so the eye lands on the actionable numbers first.
+      Cross-references C50's "glued sub-lines" and "text-busy" flags.
+- [ ] **No "% of period elapsed" quick-reference anywhere on the page.** For a mid-month check,
+      Renu intuitively wants to compare "how far through the month am I?" against "how far through
+      my budget am I?" There is no elapsed-time reference on the page. The pace-projection sub-line
+      ("At this pace, projected to go over by…") partially addresses this for at-risk rows, but
+      there is no passive reference for healthy rows. The proposed elapsed-time tick on bars
+      (Layout fix #3) would resolve this structurally.
+- [ ] **"Cover…" action has no tooltip or affordance explaining what it does** for a first-time
+      user. The button label "Cover…" is compact and idiomatic, but a new user may not understand
+      "moving money from another budget." Add a `title` attribute or a brief inline label: "Move
+      money from another budget to cover this overspend." (The code already sets `Title(…)` on
+      the button — confirm this renders as a native tooltip in the browser.)
+- [ ] **No empty state or zero-budget scaffold is visible** in the current screenshots (7 budgets
+      present). The empty state (`EmptyStateCTA`) is implemented in code — confirm it renders
+      correctly with a welcoming message + single CTA when a new user arrives with no budgets.
+- [ ] **768px: budget row names are rendered in very faint type in light mode.** Confirmed in
+      `glamor_04_budgets_768_light.png`: category names (Dining, Entertainment, Gifts & Charity,
+      Groceries, Shopping) are nearly invisible in light theme at 768px. Same root cause as the
+      1280px light-mode contrast failure (see Theming fix #2). Mobile users on light theme cannot
+      read the budget category names.
+
+**UI/UX defects (screenshot-confirmed)**
+| # | File | Observation | Fix |
+|---|------|-------------|-----|
+| 1 | `glamor_04_budgets_1280_dark.png`, DOM `overRows` | Over-budget rows at positions 4–5 (Groceries, Shopping), on-track rows at 1–3 — Renu scans past healthy budgets before reaching problems | Default sort: Over budget → Near limit → On track; secondary sort within tier by % used desc |
+| 2 | `glamor_04_budgets_1280_light.png`, `glamor_04_budgets_1440_light.png` | BUDGETED stat figure ($1,585.00) is near-invisible in light mode — very low contrast grey on white panel | Use `--fg` / neutral full-weight token for all three stat figures in light mode |
+| 3 | `glamor_04_budgets_1280_light.png`, `glamor_04_budgets_1440_light.png`, `glamor_04_budgets_768_light.png` | Budget row category names (Dining, Groceries, etc.) are near-invisible in light mode — faint grey on white card | Ensure `.row-desc.budget-drill` uses `--fg` or AA-compliant foreground in both themes |
+| 4 | `glamor_04_budgets_1280_dark.png`, DOM `pills: ["2 over budget"]` | "Near limit" pill is absent despite `nearCount = 2` being computed — Subscriptions and Transportation are near-limit but no amber pill summarizes them | Investigate near-pill render condition; add "2 near limit" amber pill alongside the red pill |
+| 5 | `glamor_04_budgets_1280_dark.png` | No row separators between budget entries — rows glue together visually, especially where multi-sub-line rows abut single-sub-line rows | Add `border-bottom: 1px solid var(--border)` on each `.budget` row |
+| 6 | `glamor_04_budgets_1280_dark.png` | Empty bar track nearly invisible (0% bars for Entertainment, Gifts & Charity) — users cannot tell if the bar exists | Increase bar track contrast: `--border` color or `rgba(255,255,255,0.12)` dark / `rgba(0,0,0,0.10)` light |
+| 7 | `glamor_04_budgets_1280_dark.png` | No "+ Add budget" button visible at page level — new budget requires discovering the FAB quick-add panel | Add "+ Add budget" button in the card header row, right of "Budgets" heading |
+| 8 | `glamor_04_budgets_1280_dark.png` | Sub-line "Monthly · On track · 62% · $95.00 left" is single-weight middle-dot string — period and % are low-signal noise for a glance scan | Split into primary (status + remaining) and secondary (period + %) with `text-dim` on the latter |
+
+**Probe hardening**
+LIGHT-THEME RECIPE — **CONFIRMED WORKING in G4** (first successful light capture in the G series):
+- Recipe: after first WASM boot, read `cashflux:prefs` from localStorage, set `p.theme = 'light'`,
+  write back, then `page.goto(BASE + "/", …)` (hard reload). Poll for `data-theme === "light"` on
+  `<html>`. Confirmed: `[ok] theme 'light' confirmed on <html>` logged for all three light runs.
+- The key insight: WASM must boot once to write its prefs to localStorage, then we patch the live
+  prefs blob (preserving other fields) and force a second boot. Pre-boot injection (G1/G2/G3) fails
+  because WASM overwrites; post-boot patch (G4) succeeds because WASM reads on boot, not live.
+- **Document this for G5+:** use `glamor_04_budgets.mjs` `bootWithTheme()` as the canonical recipe.
+  It supersedes the failed pre-boot approach in G1/G2/G3 — those tickets' light captures were all
+  dark and should be re-run in a future pass using this recipe.
+
+---
+
+### G3. Accounts — "The Net-Worth Check" (Theo) — 2026-06-22 ★
+
+**The story**
+Theo, a 40-year-old household CFO, opens Accounts once a week. He needs three things in under
+10 seconds: (1) Is net worth up or down? (2) Which accounts are stale and need a balance update?
+(3) Does the liability side look under control? He's not adding accounts today — he's auditing
+the household's financial position and deciding whether to move money.
+
+**Drive script**
+`e2e/glamor_03_accounts.mjs` — widths 768/1280/1440, dark + light themes (light deferred, see
+Theming below).
+Run: `node e2e/glamor_03_accounts.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_03_accounts_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_03_accounts.mjs` → EXIT 0
+- Screenshots captured: `glamor_03_accounts_1280_dark.png`,
+  `glamor_03_accounts_1280_dark_full.png`, `glamor_03_accounts_1440_dark.png`,
+  `glamor_03_accounts_768_dark.png`, `glamor_03_accounts_1280_light.png` (dark, deferred),
+  `glamor_03_accounts_1440_light.png` (dark, deferred), `glamor_03_accounts_768_light.png`
+  (dark, deferred).
+- DOM audit: `glamor_03_accounts_dom.json` — headings, balances, groups harvested.
+
+**Note on light-mode capture:** Same WASM prefs boot-overwrite issue as G1/G2 — all "light"
+captures landed in dark. `data-theme` polled for 6 seconds post-reload, never flipped. Light-
+mode is deferred to an in-session Settings-panel toggle pass. All findings below are dark-mode
+confirmed.
+
+**What already works well (keep — regression anchors)** ✓
+- **Three-panel summary bar** (NET WORTH / ASSETS / LIABILITIES) renders at the very top of the
+  content area — Theo's three headline numbers are immediately visible above the fold. ✓
+- **Net worth is the leftmost and largest number** in the summary bar at 1280/1440 —
+  $60,386.00 in large green type, NET WORTH label above it in small caps amber. Visual hierarchy
+  is correct: Theo's eye lands here first. ✓
+- **Semantic color is correct**: Assets ($85,813.00) in green, Liabilities ($25,427.00) in red —
+  the sign convention is immediately readable without reading labels. ✓
+- **Assets / Liabilities section grouping** is present with clear "Assets" and "Liabilities" h2
+  headings separating the two groups. ✓
+- **STALE badge on every stale account** — amber pill "STALE" appears inline with the account
+  name on all 8 accounts; the staleness signal is unambiguous. ✓
+- **"Mark all updated (8 accounts stale)"** bulk action button appears just below the summary
+  bar — Theo can fix all staleness in one click without touching individual rows. ✓
+- **Per-row actions** (Transactions button, Edit button, ellipsis overflow, × delete) are
+  consistently laid out and reachable without scrolling per row. ✓
+- **Liability sub-metadata** ("92% of limit used", cleared balance) surfaces inline under the
+  account name — key risk signal is already present. ✓
+- **Breadcrumb** "Dashboard › Accounts" in the topbar is present and correct. ✓
+- **Balances are right-aligned** and appear to use monospace/tabular digits — scan alignment is
+  correct. ✓
+- **1440px layout** uses available width well — the account list expands gracefully with no
+  wasted gutters or overflow. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout*
+- [ ] **Summary bar panels are equal-weight — Net Worth should visually dominate.** At 1280px
+      the three panels (NET WORTH / ASSETS / LIABILITIES) are equal-width, equal-height siblings.
+      Net worth is the derived output — the number Theo cares most about — yet it gets identical
+      visual weight to its two inputs. Widen the NET WORTH panel to ~40% of the bar (vs. 30/30
+      for Assets/Liabilities), or increase its figure font-size by 4–6px, so it reads as the
+      headline rather than peer.
+- [ ] **No "Add account" affordance is visible above the fold without scrolling to an empty
+      section.** The global "+" FAB in the topbar opens a generic quick-add menu — there is no
+      page-level "Add account" button anchored to the Accounts page header. A first-time or
+      returning user who wants to add an account must discover the FAB menu. Add a small
+      "＋ Add account" button in the page header row (next to the "Accounts" breadcrumb title)
+      so the action is contextually obvious.
+- [ ] **No net-worth trend / change indicator in the summary bar.** The NET WORTH panel shows
+      the point-in-time balance ($60,386.00) with no direction signal (▲/▼, % change vs last
+      week/month). Without a trend cue Theo cannot answer "Is net worth up or down?" at a glance
+      — he only knows the absolute value. Add a subtitle line with period-over-period delta
+      (e.g., "▲ $1,240 this month") matching the KPI tile pattern used on Dashboard.
+- [ ] **768px layout is broken: account name, STALE badge, balance, and action buttons all
+      collide.** At 768px the row layout does not reflow — account name wraps mid-word across
+      multiple lines ("401(k) /\nBrokerage"), the STALE badge and balance overlap the action
+      buttons, and type and currency render as orphaned fragments ("Investment\n.\nUSD\n.\n
+      cleared\n$44,917.00"). This is a critical mobile-breakpoint failure. The row must switch to
+      a two-row card layout below ~900px: name + badge on line 1, meta on line 2, balance +
+      actions right-aligned.
+
+*2. Spacing*
+- [ ] **Section heading ("Assets") has insufficient separation from the summary bar above and
+      the first account row below.** At 1280px the "Assets" heading has ~8px margin above it from
+      the "Mark all updated" button, and the first account row begins immediately below with
+      ~4px gap. Increase section heading top-margin to at least 24px and bottom-margin to 12px
+      so each group breathes as a distinct unit.
+- [ ] **Row padding is tight at 1280px.** Account rows render at approximately 60px height with
+      name, meta-line, and balance packed closely. For a weekly-review workflow (not high-density
+      data entry) increase row padding to 14–16px vertical so each account reads as a card-weight
+      row, not a table row. This also gives the STALE badge visual room to breathe.
+- [ ] **The "Mark all updated" button sits flush against the summary bar bottom edge** — no
+      visual separation between the three-panel summary and the bulk-action button. Add 12–16px
+      top margin to the button so it reads as a content-area action, not a summary-bar appendage.
+
+*3. Theming*
+- [ ] **Light-mode unverified** — same WASM prefs boot-overwrite issue as G1/G2. All captures
+      landed in dark. Must be tested via in-session Settings-panel toggle. Until verified, treat
+      light-mode visual correctness as unknown for this page.
+- [ ] **STALE badge color in dark mode is amber-on-dark** ("STALE" in amber/gold pill) — this
+      works for the warning signal, but the amber-on-#222 contrast may fall below AA on smaller
+      text. Measure contrast ratio; target ≥ 4.5:1 for the badge text. If borderline, add a
+      subtle amber border to the pill to reinforce the affordance without relying on color alone.
+- [ ] **The "Mark all updated" button uses a muted dark-grey style** that blends into the dark
+      background — at a glance it reads as a label, not an actionable button. Add a visible border
+      or a subtle tinted background (amber-tinted, matching the STALE badge family) so the
+      connection between "8 stale accounts → click this to fix them" is visually self-evident.
+
+*4. Styling*
+- [ ] **No account-type icon differentiation.** All account rows (Checking, Savings, Investment,
+      Credit Card, Loan) use identical row styling with no icon or color token per account type.
+      Adding a small type icon (e.g., bank icon for checking/savings, chart icon for investment,
+      card icon for credit) to the left of the account name would let Theo scan account type
+      without reading the meta-line subtitle.
+- [ ] **Balance figures on asset rows are green, liability rows are red — but the green/red is
+      the only distinguisher between the two groups (besides the section heading).** Consider
+      adding a faint left-border accent (2px) on liability rows using the red semantic token to
+      reinforce group membership even when the STALE badge is distracting the eye.
+- [ ] **"Cleared balance" sub-label uses inline dot-separated notation** ("cleared $44,917.00")
+      — this is compact but buries a meaningful reconciliation signal. Consider replacing the dot
+      separator with a dedicated "Cleared:" label in `text-dim` so the line reads as a key:value
+      pair rather than a run-on string.
+
+*5. Positioning*
+- [ ] **Net worth is correctly positioned (top-left of summary bar) but lacks visual dominance**
+      — see Layout fix #1 above. Position is right; weight needs adjustment.
+- [ ] **The summary bar stacks all three panels in a single horizontal row at 768px** — at this
+      width the three labels and figures are extremely compressed (see Layout fix #4). The bar
+      should reflow to a vertical or 2+1 grid at mobile widths.
+
+*6. Ordering*
+- [ ] **Accounts within the Assets group appear to be insertion-ordered**, not sorted by balance
+      descending. For a net-worth check, Theo wants the largest assets first (401k $45k, Roth IRA
+      $18k, Emergency Savings $12k, Everyday Checking $5k, CD $5k, Cash $200). Current order
+      puts 401k first (coincidence), but Cash Wallet ($200) appears before the $5k CD, suggesting
+      no balance sort. Add a default sort of "balance descending" within each group, with a
+      sort-control affordance in the section heading.
+- [ ] **"Mark all updated" button appears between the summary bar and the Assets section** —
+      fine for discoverability, but visually ambiguous as to whether it applies to Assets only or
+      all accounts. Its position before the first section heading implies it applies globally —
+      which it does (8 total). Confirm with a label change: "Mark all 8 accounts updated" or
+      move it to a more clearly global position (e.g., in the page header row).
+
+*7. General UX / Glanceability*
+- [ ] **Staleness state dominates the page but lacks urgency ranking.** All 8 accounts carry the
+      same "STALE" badge with no indication of which account is most out-of-date (e.g., "last
+      updated 6 weeks ago" vs "last updated 2 days ago"). Add a "last updated" relative timestamp
+      (e.g., "updated 3w ago") as a second meta-line so Theo can prioritize which account to
+      update first.
+- [ ] **No empty state or zero-account scaffold is visible** — the page jumps straight into
+      content. When a new user arrives with no accounts, the page should render a welcoming empty
+      state with a single prominent "Add your first account" CTA.
+- [ ] **The "Archived" section is present** (confirmed via DOM headings harvest) but below the
+      fold and not visible in any above-fold screenshot. If there are archived accounts, a
+      collapsed "Archived (N)" disclosure should be visible at page bottom without requiring full
+      scroll — the current implementation requires scrolling past all active accounts to see it.
+- [ ] **No quick-balance-update affordance per row.** The row has Transactions / Edit / ellipsis
+      / delete — but "Update balance" (reconcile) is buried in the Edit flow. For Theo's use
+      case (weekly balance reconciliation), a dedicated "Update balance" button or inline input
+      on the row would remove 2 modal steps. At minimum, the ellipsis menu should surface
+      "Update balance" as the first option for stale accounts.
+
+**UI/UX defects (screenshot-confirmed)**
+| # | File | Observation | Fix |
+|---|------|-------------|-----|
+| 1 | `glamor_03_accounts_768_dark.png` | Account name wraps mid-word ("401(k) /\nBrokerage"), STALE badge and balance collide with action buttons, meta-line fragments into separate orphaned lines | Reflow account row to two-line card layout below ~900px; name+badge line 1, meta line 2, balance+actions right-aligned |
+| 2 | `glamor_03_accounts_1280_dark.png` | NET WORTH, ASSETS, LIABILITIES summary panels are equal-width equal-height — net worth has no visual dominance despite being the primary KPI | Widen NET WORTH panel to ~40%, increase figure font-size by 4–6px |
+| 3 | `glamor_03_accounts_1280_dark.png` | No trend indicator under NET WORTH — Theo cannot answer "up or down this month?" at a glance | Add period-over-period delta subtitle ("▲ $1,240 this month") to NET WORTH panel |
+| 4 | `glamor_03_accounts_1280_dark.png` | "Mark all updated" button is visually muted (dark grey, no border), reads as a label not an action | Apply amber-tinted border or distinct button style tying it visually to the STALE badge color |
+| 5 | `glamor_03_accounts_1280_dark.png` | No account-type icons — all rows look identical; Checking / Investment / Credit Card are indistinguishable without reading the meta-line | Add a small type icon (bank/chart/card) to the left of each account name |
+| 6 | `glamor_03_accounts_1280_dark.png` | No "Update balance" quick-action per row for stale accounts — reconcile is buried inside the Edit modal | Add "Update balance" to ellipsis menu as first item for stale accounts, or inline input on the row |
+| 7 | `glamor_03_accounts_1280_dark.png` | Accounts within each group appear insertion-ordered, not by balance descending — $200 Cash Wallet appears before $5,000 12-month CD | Default sort: balance descending within each group |
+
+**Probe hardening**
+LIGHT-THEME RECIPE (not yet solved in G3 — same issue as G1/G2, deferred):
+- localStorage seed (`cashflux:theme` + `cashflux:prefs`) is overwritten by WASM prefs restore
+  on boot before first render. Setting values pre-WASM-load has no effect.
+- Candidate solution (not yet tested): after WASM boots, open Settings panel via click, click
+  the "Light" theme toggle, wait for `data-theme="light"` on `<html>`, then navigate to the
+  target page and screenshot. This is the only known reliable path.
+- Once solved (G4+), document the exact click selector path here for reuse.
+
+---
+
+### G2. Transactions — "The Reconciler" (Nadia) — 2026-06-22 ★
+
+**The story**
+Nadia opens the ledger every few days to spot anything wrong: a miscategorized charge, a
+duplicate, an unexpectedly large amount. She has 612 transactions and needs to scan 50 rows
+FAST, identify the anomaly by date + amount + description, and act on it (edit category,
+delete, mark cleared) without leaving the row context.
+
+**Drive script**
+`e2e/glamor_02_transactions.mjs` — screenshots at 1280/1440/768 × dark (light deferred, see
+Theming below); full-page shot at 1280 dark; DOM audit via `e2e/glamor_02_dom_audit.mjs`.
+Run: `node e2e/glamor_02_transactions.mjs` against `:8099`.
+Screenshots in `e2e/screenshots/glamor_02_transactions_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_02_transactions.mjs` → EXIT 0
+- `node e2e/glamor_02_dom_audit.mjs` → EXIT 0
+- Screenshots captured: `glamor_02_transactions_1280_dark.png`,
+  `glamor_02_transactions_1280_dark_full.png`, `glamor_02_transactions_1440_dark.png`,
+  `glamor_02_transactions_768_dark.png`, `glamor_02_transactions_1280_light.png` (dark,
+  deferred), `glamor_02_transactions_1440_light.png` (dark, deferred),
+  `glamor_02_transactions_768_light.png` (dark, deferred).
+- DOM audit: `glamor_02_dom_audit.json` (row heights, column widths, alignment, colors).
+
+**Note on light-mode capture:** Same WASM prefs boot-overwrite issue as G1 — all 6 captures
+(including the "light" runs) landed in dark mode. Light-mode is deferred to an in-session
+toggle pass. All findings below are dark-mode confirmed.
+
+**What already works well (keep — regression anchors)** ✓
+- Amounts are **right-aligned** and use **tabular-nums** — the most critical formatting
+  requirement for a scan-heavy ledger is correct. ✓
+- **Semantic color on amounts** is present and correct: income renders `rgb(46, 139, 87)`
+  (green), expense renders `rgb(216, 113, 111)` (red-pink). ✓
+- **Parenthetical expense notation** `($215.00)` is used — consistent accounting convention. ✓
+- `thead`/`tbody` structure is correct; column header row is present and sortable (click-to-
+  sort with active-column indicator `Date ▼`). ✓
+- **Pagination** is functional: "1–50 of 612" summary + rows-per-page selector (25/50/100/all)
+  is present. ✓
+- **Filter toolbar** with search input, Filters popover, Clear, and Export CSV is present and
+  reachable without scrolling. ✓
+- **Bulk operations** (select-all, bulk delete, bulk recategorize, bulk clear/unclear, undo) are
+  implemented — a critical power-user feature for Nadia's reconcile workflow. ✓
+- **Duplicate detection** notice ("N possible duplicates → Select duplicates") is surfaced
+  inline. ✓
+- **Breadcrumb** "Dashboard › Transactions" present in topbar. ✓
+- 768px: layout reflows correctly; nav collapses; table scrolls horizontally rather than
+  breaking. ✓
+
+**Structure fixes** (highest-impact first)
+
+*1. Layout — Actions column monopolizes 560px out of 1280px total*
+- [ ] **Actions column is 560px wide — the single biggest layout defect.** DOM-confirmed:
+      Select=50, Date=108, Description=110, Category=115, Account=92, Tags=86, Amount=100,
+      Cleared=98, Actions=560. The Actions column consumes 44% of the table width. At 1280px,
+      the combined content columns (Date+Desc+Cat+Acct+Tags+Amount+Cleared) total only 709px;
+      Actions eats the rest. This means Description (the primary identifier) gets only 110px —
+      barely two words — while the action button row sprawls to the right. Root cause: inline
+      text labels on every action button ("Edit", "Duplicate", "Always categorize like this",
+      "Attach receipt") are expanded in every row. Fix: collapse actions to an icon-only strip
+      (Edit pencil, Duplicate icon, Delete ×) that reveals text labels on hover/focus; move
+      "Always categorize like this" and "Attach receipt" into a "…" overflow menu or the inline
+      edit form. Target Actions ≤ 120px; Description ≥ 200px.
+- [ ] **"Always categorize like this" is full-text in every row.** This is a secondary action
+      that should appear in a context menu or the inline-edit form, not as a persistent wide
+      button in every data row. It reads as equal weight to Edit/Delete, creates visual noise,
+      and is the primary contributor to the 560px column width.
+- [ ] **Description column is 110px — too narrow for the primary scan field.** At 110px, most
+      descriptions wrap to 2 lines, inflating row height (68.5px measured). This is the field
+      Nadia reads first; it should be the widest column. After collapsing Actions, reallocate
+      freed space: Description → 240px+, Account → 120px+.
+
+*2. Spacing — 68.5px row height collapses scan density*
+- [ ] **68.5px rows are too tall for a ledger.** At 900px viewport height, with header + toolbar
+      overhead, only ~6–8 rows are visible at once. Nadia needs to see 15–20 rows simultaneously
+      to scan for anomalies without scrolling. Target: 40–48px rows (compact) with a density
+      toggle (comfortable 52px / compact 40px) wired to the existing prefs density setting.
+      Root cause: multi-line wrapping in Description (110px col) forces row expansion. Fixing
+      the column width (finding §1) will reduce row height automatically; a CSS `max-height` +
+      `overflow: hidden` on the description cell + `white-space: nowrap; text-overflow: ellipsis`
+      would lock rows to single-line height.
+- [ ] **"Select all" button is rendered as a standalone block-level element above the table**,
+      separated from the table header by a gap. It should live inside the table header or the
+      filter toolbar, not as a floating orphan button that consumes ~40px of vertical space
+      before the rows begin.
+
+*3. Theming — light mode unconfirmed; cleared state undifferentiated*
+- [ ] **Light theme visually unconfirmed.** WASM prefs overwrite localStorage before render —
+      same issue as G1. Must be tested via in-session Settings panel toggle. Treat light-mode
+      correctness as unverified until confirmed (see Probe hardening).
+- [ ] **No zebra striping.** DOM confirmed: all row backgrounds are `rgba(0,0,0,0)` — pure
+      transparent, no alternating tint. On a dense ledger, the eye loses track of which row it
+      is scanning across 9 columns. Add alternating row background (e.g. `tr:nth-child(even)`
+      → `rgba(255,255,255,0.03)` in dark / `rgba(0,0,0,0.025)` in light). A distinct hover
+      state (`tr:hover` highlight) is also absent or imperceptible.
+- [ ] **Cleared vs. uncleared rows are visually identical.** The "Cleared" column shows "Mark
+      cleared" text button in all visible rows — there is no distinct visual state for rows
+      that ARE cleared (no checkmark icon, no muted row color, no strikethrough). Nadia's
+      reconcile workflow requires a clear cleared/uncleared differentiation at a glance:
+      cleared rows should show a ✓ (green) and optionally be slightly dimmed; uncleared should
+      show an open circle or "○" affordance.
+
+*4. Styling — Tags column, typography, and icon consistency*
+- [ ] **Tags column wastes 86px on empty data.** In the sample data, all 612 rows have no tags
+      — the column is empty. Even in real usage tags are sparse. Make Tags conditionally visible
+      (hide the column if no transactions in the current filtered set have tags) or collapse it
+      to a compact `#tag` chip that appears inline with the Description cell, eliminating the
+      dedicated column.
+- [ ] **"Cleared" column header misleads — it's an action button, not a status display.** The
+      header says "Cleared" but the cells contain "Mark cleared" buttons. Rename the header to
+      "Status" or use a ✓/○ icon-only column header (with `aria-label="Cleared status"`).
+- [ ] **"Select" column header is visible as text.** DOM shows it renders as the word "Select"
+      (with `sr-only` class in the source). Verify the class is actually applied and the word
+      is hidden visually; in screenshots it appears the column head is blank (correct), but the
+      DOM `innerText` returning "Select" suggests it may be visible in some zoom conditions.
+
+*5. Positioning — Amount buried at column 7; filter actions split awkwardly*
+- [ ] **Amount is column 7 of 9 — should be column 3 or 4.** The scan sequence Nadia actually
+      uses: Date → Amount → Description → Category. The current order (Date → Description →
+      Category → Account → Tags → Amount) buries the dollar figure. Reorder to:
+      Select | Date | Amount | Description | Category | Account | [Tags if non-empty] |
+      Cleared | Actions.
+- [ ] **"Clear" button in the toolbar clears the search/filter state but is ambiguous** — it
+      sits next to "Export CSV" rather than adjacent to the search input or active filter chips.
+      Move "Clear" to be immediately right of the search box or rename it "Clear filters" and
+      keep it near the Filters popover button.
+- [ ] **"Select all" button is orphaned above the table** (see Spacing §2). Moving it into the
+      table header row (as a checkbox or small button in the Select column header) would also
+      free the 40px gap it currently occupies.
+
+*6. Ordering — column and default sort are correct; filter popover ordering*
+- Current column order: Select | Date ▼ | Description | Category | Account | Tags | Amount |
+  Cleared | Actions.
+- Default sort (newest first by date, descending) is correct for Nadia's "what changed recently"
+  scan. ✓
+- [ ] **Filter popover field order** (seen from code): Account → Category → Member → From date
+      → To date → Cleared status → Custom field. The most-used filters for Nadia are date range
+      and amount — neither is a top-level filter. Consider promoting "Date range" (From/To) to
+      the inline toolbar as two compact date inputs, visible without opening the popover.
+
+*7. General UX / Glanceability / Scan-speed*
+- [ ] **Nadia cannot scan 50 rows.** At 900px viewport, 6–8 rows are visible. The combination
+      of tall rows (68.5px) + narrow Description column (wraps to 2 lines) + wide Actions column
+      fundamentally breaks the scan-speed goal. The three root fixes (compact rows, wider desc,
+      collapsed actions) together would get visible rows to 15–20.
+- [ ] **No hover-to-reveal action pattern.** Five action buttons are fully visible in every row
+      at all times, creating a constant visual load. A hover/focus-reveal pattern (row hover
+      shows Edit + Delete; "…" overflow for Duplicate/rule/attach) would dramatically reduce
+      cognitive noise during scanning.
+- [ ] **"612 transactions shown · net $16,586.00" summary is useful but incomplete for
+      reconciliation.** Nadia also wants: how many are uncleared? Add an uncleared count:
+      "612 shown · 47 uncleared · net $16,586.00" or a dedicated "Uncleared: 47" chip.
+- [ ] **No in-row amount click to expand detail / no drill-down.** Tapping a row amount or
+      description opens nothing (no detail panel, no expand). For a reconciler, clicking a
+      suspicious row to see its full metadata (account, member, repeat schedule, attachments,
+      custom fields) without entering edit mode would be valuable.
+- [ ] **Empty/loading state:** Empty state is implemented (EmptyStateCTA component) ✓; loading
+      state (skeleton rows) was not observed — confirm whether the WASM render delay produces
+      a blank flash or a skeleton on first load.
+- [ ] **Bulk action UI is hidden until a row is selected** — correct, not noisy. But the
+      selection affordance (☐ checkbox glyph) is small and low-contrast; consider replacing
+      with a proper `<input type="checkbox">` styled element for better click target size and
+      accessibility.
+
+**UI/UX defects (screenshot-confirmed)**
+1. **Actions column 560px / 44% of total width** — dominates table, crushes content columns.
+   All widths. (`glamor_02_transactions_1280_dark.png`, `glamor_02_transactions_1440_dark.png`,
+   `glamor_02_transactions_768_dark.png`)
+2. **Only 6–8 rows visible at 900px** — scan density far below the 15–20 row target for a
+   reconciler persona. (`glamor_02_transactions_768_dark.png` most legible.)
+3. **No zebra striping; no hover highlight** — DOM-confirmed `rgba(0,0,0,0)` on all rows.
+   (`glamor_02_dom_audit.json`)
+4. **Amount at column 7** — buried after Tags (empty column). Column order is wrong for
+   scan-first workflow. (Source + DOM confirmed.)
+5. **"Mark cleared" text in every Cleared cell — no cleared/uncleared visual state difference.**
+   (`glamor_02_dom_audit.json` `clearedCells: ["Mark cleared","Mark cleared","Mark cleared"]`)
+6. **Tags column 86px wide, entirely empty in sample data** — wasted horizontal real estate.
+   (`glamor_02_dom_audit.json` `tagCells: ["","","","",""]`)
+7. **"Select all" button orphaned above the table** — breaks layout flow, costs 40px vertical.
+   (`glamor_02_transactions_768_dark.png`)
+8. **Light theme visually unconfirmed** — same WASM boot issue as G1.
+   (`glamor_02_transactions_1280_light.png` shows dark mode.)
+
+**Probe hardening**
+- [ ] Navigate to `/transactions` via `nav a[title="Transactions"]` click after WASM boot, not
+      via URL goto alone — ensure active-member state and persisted filters don't interfere.
+- [ ] Reset "View as member" to Everyone before assertions (select the first option in the
+      member switcher dropdown before navigating).
+- [ ] For light mode: after WASM boots, open Settings panel, toggle theme to Light, wait 400ms,
+      re-navigate to Transactions, then screenshot. Do not rely on pre-boot localStorage
+      injection (it gets overwritten by WASM prefs restore).
+- [ ] Assert row count visible in viewport (not just total) — use `getBoundingClientRect()` to
+      count rows whose `top < window.innerHeight`.
+- [ ] Assert Actions column width ≤ 150px (regression gate once fixed).
+- [ ] Assert `tr:nth-child(even)` background color differs from `tr:nth-child(odd)` (zebra
+      regression gate once added).
+
+---
+
+### G1. Dashboard — "The 7am Glance" (Elena) — 2026-06-22 ★
+
+**The story**
+Elena, a busy ops manager, opens CashFlux for 15 seconds over coffee. She needs to answer three
+questions at a glance: Am I OK today? Anything on fire? What changed?
+
+**Drive script**
+`e2e/glamor_01_dashboard.mjs` — screenshots at 1280/1440/768 × light/dark (exit 0).
+Run: `node e2e/glamor_01_dashboard.mjs` against `:8099` (serve via `go run e2e/serve.go`).
+Screenshots in `e2e/screenshots/glamor_01_dashboard_*.png`.
+
+**Note on light-mode capture:** The WASM app boots from its own persisted prefs and overwrites the
+localStorage seed before render, so all 8 screenshots landed in dark mode. Light-mode review is
+deferred to a follow-up pass using the Settings panel to flip theme in-session (see probe
+hardening). All findings below are dark-mode confirmed; light-mode is assumed symmetric unless
+noted.
+
+**What already works well (keep — regression anchors)** ✓
+- Bento grid is clean and professional at all three widths; tiles don't overlap or misalign. ✓
+- **Needs attention** widget correctly appears first in the content area — fire is visible the
+  moment the page loads without any scrolling. ✓
+- Alert chips in Needs attention carry a red triangle icon + red border — alarm state is
+  unambiguous; content is plain English ("Rewards Credit Card · due today — $35.00"). ✓
+- Four KPI tiles (Net worth / Income / Spending / Liabilities) render with a large hero figure,
+  semantic color (green income/net-worth, red/amber spending), and a useful subtitle
+  ("Jun 2026 · 2 deposits", "▲ 0% this month"). ✓
+- 768px responsive: tiles reflow cleanly to 2-column; the rail stays visible; the top bar stacks
+  the period stepper below the segmented control without overflow. ✓
+- Breadcrumb in top bar ("Dashboard ›") is present and correct. ✓
+- Rail navigation groups (primary / TOOLS / BILLS & RECURRING) are well-separated with section
+  labels; all main-line screens are reachable. ✓
+- Typography hierarchy is readable: tile labels are muted, hero figures are large and bold. ✓
+
+**Structure fixes** (bottom-up per SDLC: token/CSS → component → layout → e2e probe)
+
+*1. Layout*
+- [ ] **Net worth tile should visually dominate.** The four KPI tiles (Net worth, Income, Spending,
+      Liabilities) are equal-width equal-height siblings with identical visual weight. Net worth is the
+      household's north-star number — it should span 2 columns or be 30–40% taller than its peers so
+      Elena's eye lands on it first, not on Income (which is equally prominent). Consider a 2-col span
+      for the Net worth tile in the default packing, with Income/Spending/Liabilities in a 1-col
+      column to its right.
+- [ ] **Net worth trend chart is below the fold at 1280×900.** The most longitudinal insight (are we
+      trending up?) requires scrolling. Move it into the first visible screen or give it a compact
+      sparkline inside the Net worth tile itself (above-fold) and keep the full chart below.
+- [ ] **Sample data banner eats the first ~55px of content area.** It pushes the Needs attention widget
+      (the highest-priority content) below the topbar controls. Either collapse it to a single
+      dismissible pill pinned to the topbar, or inject it as a non-displacing overlay so it doesn't
+      shift the bento grid down.
+
+*2. Spacing*
+- [ ] **"Start freshDismiss" run together — missing separator.** The sample data banner renders
+      "Start fresh" and "Dismiss" as adjacent inline links with no gap, reading as one compound word
+      ("Start freshDismiss"). Add `gap` / `margin-left` between the two actions, or separate with
+      a "·" middot. Confirmed on all widths.
+- [ ] **Tile header drag handle + label + gear are packed tightly** — the grab dots (⠿) sit flush
+      against the tile label with minimal spacing. Add at least 4–6px gap so the drag affordance
+      reads as separate from the title. (Minor, but noticeable at 768px.)
+
+*3. Theming*
+- [ ] **Light mode cannot be confirmed via scripted boot.** The WASM prefs boot cycle overwrites the
+      localStorage theme seed before the first render, so all screenshot captures defaulted to dark.
+      Light mode must be tested by seeding `cashflux:theme` in the same tick as the first WASM
+      `go:notifyCallbacks` or by toggling via the Settings panel within the session. Harden the drive
+      script accordingly (see Probe hardening below). Until confirmed, treat light-mode visual
+      correctness as unverified for this page.
+- [ ] **Spending tile figure color.** Spending ($3,301.00) renders in red/amber — this is
+      appropriate when spending is high/over-budget but could mislead if spending is under budget
+      (red always = bad). Confirm whether the color is conditional on budget-vs-actual or always red.
+      If always red: switch to neutral white for under-budget, red only for over.
+
+*4. Styling*
+- [ ] **Speaker icon (🔊) in the top bar is unexplained.** The topbar shows: bell, 🔊, +. A speaker
+      icon in a budgeting app is jarring without a tooltip or label. This is the Muzak feature — add
+      a tooltip/aria-label ("Background music") and consider moving it into the household settings
+      panel rather than the persistent topbar, where it competes with primary actions.
+- [ ] **Top bar has 8 competing controls.** Everyone dropdown + Week/Month/Quarter/Year segmented +
+      Jump to… dropdown + ‹ Jun 2026 › stepper + Custom range link + bell + speaker + + button. At
+      1280px this is readable; at 768px the stepper drops to a second row (correct), but the density
+      is still high. Consider grouping bell + speaker into a single "…" overflow or moving speaker
+      out. The "Custom range" text link visually competes with the + action button.
+- [ ] **Needs attention alert chips: no triage gradient.** Five alerts are rendered at identical
+      visual weight — a "0d overdue" (pay today) chip looks the same as a "52d overdue" chip. Add
+      a severity order or a subtle color/weight distinction: today/overdue = red solid border + bold
+      label; upcoming = amber dashed border; over-budget = orange fill. The current monochrome red
+      chips don't distinguish "already late" from "over a budget limit".
+
+*5. Positioning*
+- [ ] **Income and Spending should be grouped / adjacent.** Elena wants to answer "What changed?"
+      by comparing in vs. out. Currently Net worth | Income | Spending | Liabilities are equal
+      siblings. Group Income + Spending into a visual pair (e.g. a 2-col sub-tile or side-by-side
+      with a shared border) so the cash flow relationship is immediately scannable.
+- [ ] **Liabilities tile is given the same prominence as Income.** Liabilities ($25,310.00) is
+      important but not a daily-glance number — it changes slowly. Demote it to a smaller tile or
+      below-fold unless the user has high liability churn.
+
+*6. Ordering*
+- Current widget order (screenshot-confirmed): Needs attention → Net worth → Income → Spending →
+  Liabilities → Recent transactions → Budgets → Goals → To-do → Accounts → Net worth trend.
+- [ ] **Net worth trend is last — should be 2nd or 3rd.** The trend chart answers "What changed
+      longitudinally?" which is a 7am glance question. Move it immediately after the four KPI tiles
+      (before Recent transactions) or embed a sparkline in the Net worth tile.
+- [ ] **Goals and To-do are in the middle of the bento.** Goals are a planning artifact, not a
+      daily status. To-do is more actionable. Swap their positions: To-do before Goals, Goals before
+      Accounts.
+- The Needs attention → KPI tiles → Recent transactions sequence is otherwise sound; keep it.
+
+*7. General UX / Glanceability*
+- Elena's 3 questions from the screenshots:
+  - "Am I OK today?" → Answerable: Needs attention shows 5 items, one due today. ✓
+  - "Anything on fire?" → Partially answerable: the chips list Entertainment at 420% over budget
+    and a credit card due today, but all 5 chips look equally urgent. The triage gap (finding 4.5)
+    means she must read all five to find the most critical. ✗
+  - "What changed?" → Not answerable above the fold: the net worth trend chart is below the fold
+    at 1280×900. She gets the KPI point-in-time numbers but no longitudinal delta. ✗
+- [ ] **"0% this month" on the Net worth tile is misleading.** A 0% change reads as "nothing moved"
+      but in reality it may mean income == spending. Add a plain-English caption: "No change from
+      last month" or show the absolute dollar delta alongside the percentage.
+- [ ] **No cash-flow summary above the fold.** Elena wants "income minus spending = surplus/deficit"
+      in one line. The Income and Spending tiles give the raw numbers but the delta ($3,775 − $3,301
+      = $474 surplus) isn't shown. A "Cash flow: +$474" sub-line on the Income or Spending tile, or
+      a dedicated small tile, would answer question 3 instantly.
+
+**UI/UX defects (screenshot-confirmed)**
+1. **"Start freshDismiss" — missing space between banner actions.** All widths. (Spacing §2)
+2. **All 5 alert chips at identical visual weight** — no triage between today/overdue/over-budget.
+   (Styling §4 / Glanceability §7)
+3. **Net worth trend below the fold at 1280×900** — longitudinal context requires scrolling.
+   (Layout §1 / Ordering §6)
+4. **Speaker icon (🔊) in the topbar unexplained / unlabelled.** (Styling §4)
+5. **Light theme visually unconfirmed** — drive script cannot inject theme before WASM prefs boot.
+   (Theming §3)
+6. **Cash flow delta absent above the fold** — no surplus/deficit summary. (Glanceability §7)
+
+**Probe hardening**
+- [ ] Navigate to `/` (Dashboard) explicitly via `page.goto(BASE + "/")` plus a `nav a[title="Dashboard"]`
+      click after WASM boot — do not rely on localStorage route persistence. (Already done in v2 of
+      the drive script; keep this invariant.)
+- [ ] Reset "View as member" to Everyone before assertions: click `nav a[title="Dashboard"]` then
+      check `select` / dropdown is set to "Everyone".
+- [ ] To capture true light mode: after WASM boots and nav is visible, open the household settings
+      panel (`.hh` button), toggle theme to Light, wait 400ms, navigate back to `/`, then screenshot.
+      Do not rely on pre-boot localStorage injection.
+- [ ] Hard-reload before any persistence asserts (`page.reload({ waitUntil: "domcontentloaded" })`).
+
+---
+
 ## 0. Foundation & tooling (Phase 0)
 
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH
