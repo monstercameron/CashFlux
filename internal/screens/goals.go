@@ -119,7 +119,7 @@ func Goals() ui.Node {
 		bump()
 	}
 
-	contribute := func(g domain.Goal, amtStr string) {
+	contribute := func(g domain.Goal, amtStr string, postLedger bool) {
 		cur := g.CurrentAmount.Currency
 		if cur == "" {
 			cur = base
@@ -129,18 +129,29 @@ func Goals() ui.Node {
 			return
 		}
 		beforePct := goalsvc.Percent(g)
-		g.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, cur)
-		afterPct := goalsvc.Percent(g)
-		if err := app.PutGoal(g); err != nil {
+		updatedG := g
+		updatedG.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, cur)
+		afterPct := goalsvc.Percent(updatedG)
+		res, err := app.ContributeToGoal(g, money.New(amt, cur), postLedger)
+		if err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		bump()
-		uistate.PostNotice(uistate.T("goals.contributedToast", fmtMoney(money.New(amt, cur))), false) // L41
+		notice := uistate.T("goals.contributedToast", fmtMoney(money.New(amt, cur)))
+		if postLedger && res.TransactionID != "" {
+			notice += " " + uistate.T("goals.contributedLedger")
+		}
+		uistate.PostNotice(notice, false) // L41
 		// Milestone toast: celebrate 25/50/75/100% crossings (L38).
 		if m := goalsvc.MilestoneCrossed(beforePct, afterPct); m > 0 {
 			key := fmt.Sprintf("goals.milestone%d", m)
 			uistate.PostNotice(uistate.T(key), false)
+		}
+		// Completion prompt: when the goal just became complete, fire a second
+		// notice prompting the user to archive it (L59 completion lifecycle).
+		if res.BecameComplete {
+			uistate.PostNotice(uistate.T("goals.completionPrompt"), false)
 		}
 	}
 
@@ -253,7 +264,7 @@ type goalRowProps struct {
 	Accounts       []domain.Account
 	Members        []domain.Member
 	OnDelete       func(string)
-	OnContribute   func(domain.Goal, string)
+	OnContribute   func(domain.Goal, string, bool) // goal, amountStr, postLedger
 	OnSave         func(id, name, target, date, accountID, owner string)
 	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
 	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section
@@ -321,14 +332,17 @@ func GoalRow(props goalRowProps) ui.Node {
 	editing := ui.UseState(false)
 	contributing := ui.UseState(false)
 	contribAmtS := ui.UseState("")
+	postLedgerS := ui.UseState(false)
 	contribute := ui.UseEvent(Prevent(func() {
 		contribAmtS.Set("")
+		postLedgerS.Set(false)
 		contributing.Set(true)
 	}))
 	onContribAmt := ui.UseEvent(func(v string) { contribAmtS.Set(v) })
+	onPostLedger := ui.UseEvent(func(e ui.Event) { postLedgerS.Set(e.IsChecked()) })
 	doContribute := ui.UseEvent(Prevent(func() {
 		if v := strings.TrimSpace(contribAmtS.Get()); v != "" {
-			props.OnContribute(g, v)
+			props.OnContribute(g, v, postLedgerS.Get())
 		}
 		contributing.Set(false)
 	}))
@@ -369,11 +383,24 @@ func GoalRow(props goalRowProps) ui.Node {
 	}, fmt.Sprintf("%t-%t", editing.Get(), contributing.Get()))
 
 	if contributing.Get() {
+		linkedAcctName := accountName(props.Accounts, g.AccountID)
+		var ledgerRow ui.Node = Fragment()
+		if linkedAcctName != "" {
+			cbArgs := []any{Type("checkbox"), Attr("id", "goal-contrib-ledger-"+g.ID), OnChange(onPostLedger)}
+			if postLedgerS.Get() {
+				cbArgs = append(cbArgs, Attr("checked", ""))
+			}
+			ledgerRow = labeledField(
+				uistate.T("goals.contributePostLedger", linkedAcctName),
+				Input(cbArgs...),
+			)
+		}
 		return Div(css.Class("budget"),
 			Div(css.Class("budget-head"), Span(css.Class("row-desc"), g.Name)),
 			Form(css.Class("form-grid"), OnSubmit(doContribute),
 				labeledField(uistate.T("goals.contributeAmount"),
 					Input(css.Class("field"), Attr("id", "goal-contrib-"+g.ID), Type("number"), Placeholder(uistate.T("goals.contributeAmount")), Value(contribAmtS.Get()), Step("0.01"), OnInput(onContribAmt))),
+				ledgerRow,
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("goals.contribute")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelContribute), uistate.T("action.cancel")),
 			),
