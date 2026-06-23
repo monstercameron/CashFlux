@@ -18221,6 +18221,35 @@ Cross-references: **C68** (command palette done, a11y gaps remain), **B12** (per
 
 ---
 
+### ✅ RESOLVED (2026-06-23).
+
+**Shipped (GO-STRUCTURAL — `shortcuts.go` + `flippanel.go`):**
+- **GM4-1** — `role="dialog"` + `aria-modal="true"` + `aria-label` on palette card div. Also added `aria-label` on backdrop (GM4-3). (`buildCommandPalette`)
+- **GM4-2** — `role="listbox"` on `#cf-cmd-list`; `aria-selected="true/false"` on each result row (emitted in `renderPalette`; updated in `movePaletteSel`).
+- **GM4-11** — Keyboard hint footer `↑↓ navigate · ↵ select · Esc close` added below the result list in `buildCommandPalette`.
+- **GM4-12** — Entity-jump commands capped at 8 (`entityJumpMaxUnfiltered = 8`) in `entityJumpCommands`; unfiltered palette drops from 58 rows to ≤ core nav + actions + 8 entity jumps. Typing any query still surfaces all matches.
+- **GM4-17** — Close (×) button in `FlipPanel` given `tabindex="-1"` so initial focus lands on the first form control (a setting), not the dismiss button. (`flippanel.go`)
+- **GM4-19** — Backdrop click-to-close for the gear panel: `UseEffect` in `flipPanel` adds a `click` listener on `document`; checks `event.target == .flip-backdrop` and calls `onClose`. Removed on unmount. (`flippanel.go`)
+- **movePaletteSel bug fix** — Previously `i == cmdPaletteSel` was compared against DOM child index, which is wrong when group-header divs are interleaved. Fixed to count only `[data-cmd-row]` children via a separate `rowPos` counter.
+
+**Verified already done (CSS in `web/index.html` — no changes needed):**
+- **GM4-6 / GM4-16** — `--hover: #e8e6e1` already in `[data-theme="light"]` block.
+- **GM4-7** — `[data-theme="light"] #cf-cmd-palette { background: rgba(239,237,232,0.72) !important; }` already present.
+- **GM4-8** — `.set-h` / `.set-foot` light-mode border overrides already present.
+- **GM4-9** — Save/Cancel button light-mode overrides already present.
+
+**Deferred:**
+- **GM4-4** (palette 768 spotlight width) — CSS-only, low priority; deferred to next CSS pass.
+- **GM4-5** (gear panel height responsiveness) — no defect at tested sizes; deferred.
+- **GM4-10** (C11 CloseOnly UX quality) — requires a settingless widget to probe; deferred.
+- **GM4-13** (section label contrast) — visually adequate; deferred.
+- **GM4-14** (number input label wrapping in gear) — panel layout CSS; deferred to next CSS pass.
+- **GM4-15** (no post-save toast after gear Save) — GO-STRUCTURAL; deferred (needs `paletteNotify` call in widget save callback, a separate concern).
+- **GM4-18** (palette + gear mutual exclusion) — low-priority edge case; deferred.
+- **GM4-20** (focus-visible outline on palette card) — low priority; deferred.
+
+---
+
 ### GI0. BUILD BLOCKER — wasm tree does not compile (resolve before GI1–GI3) ★★
 
 **✅ RESOLVED (2026-06-23).** The wasm tree now compiles clean (`GOOS=js GOARCH=wasm go build` → rc=0):

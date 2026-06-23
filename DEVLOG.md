@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — feat: GLAMOR GM4 palette/gear — a11y, keyboard hints, entity cap, backdrop close
+
+GM4 audit (20 screenshots, 4 DOM sessions) surfaced 20 findings across the command palette and widget gear panel. Six structural Go fixes shipped today; all CSS fixes were already landed from prior waves.
+
+**Palette (shortcuts.go):** Added `role="dialog"` + `aria-modal` + `aria-label` to the card div (GM4-1), `role="listbox"` on `#cf-cmd-list` with live `aria-selected` per row (GM4-2). Added keyboard-hint footer `↑↓ navigate · ↵ select · Esc close` to `buildCommandPalette` (GM4-11). Capped `entityJumpCommands` at 8 via `entityJumpMaxUnfiltered` const — the unfiltered list was 58+ rows with 10 accounts; typing still fuzzy-matches all entities (GM4-12). Also fixed a latent bug in `movePaletteSel`: the code compared `i == cmdPaletteSel` against the DOM child index but group-header `<div>` elements were interleaved, so the index was wrong whenever headers were present. Introduced a separate `rowPos` counter that only increments on `[data-cmd-row]` children.
+
+**Gear/FlipPanel (flippanel.go):** Close (×) button given `tabindex="-1"` so `focusables()` in UseEffect skips it and focus lands on the first toggle/input (GM4-17). Backdrop click-to-close added via a second `js.FuncOf` click listener on `document` in the same UseEffect, checking `event.target == .flip-backdrop`; listener is released in the cleanup func (GM4-19).
+
+**CSS verified already done:** GM4-6/16 (`--hover` light token), GM4-7 (palette backdrop light override), GM4-8 (set-h/foot border light), GM4-9 (Save/Cancel button light). No CSS changes needed.
+
+**Deferred:** GM4-4 (768 card width), GM4-14 (number-input label wrap), GM4-15 (post-save toast), GM4-18 (mutual-exclusion), GM4-20 (focus-visible ring) — low priority or requires separate probing setup.
+
 ## 2026-06-23 — feat: GLAMOR GM3 confirm dialogs — bulk-delete gate, safe focus, aria
 
 GM3 audit surfaced 7 defects across the cf-dialog system. All 4 structural ones are fixed in

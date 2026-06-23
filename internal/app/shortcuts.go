@@ -347,14 +347,25 @@ func buildPaletteCommands() []paletteCmd {
 	// goals, and budgets into jump targets so the palette navigates to anything by
 	// name, not just screens and actions. Each command routes to the entity's
 	// screen; the type word is added as a keyword so "checking account" matches.
+	// GM4-12: cap entity jumps at 8 in the unfiltered view — with 10+ accounts the
+	// unfiltered list ballooned to 58+ rows, overwhelming first-glance scan. The full
+	// set remains reachable by typing a few letters (fuzzy filter surfaces all entities).
 	cmds = append(cmds, entityJumpCommands()...)
 
 	return cmds
 }
 
+// entityJumpMaxUnfiltered is the maximum number of entity-jump commands shown in
+// the unfiltered palette view. When the user types a query the fuzzy matcher
+// surfaces all matching entities regardless of this cap, so nothing is hidden
+// from search — only the default view is de-cluttered.
+const entityJumpMaxUnfiltered = 8
+
 // entityJumpCommands builds palette jump targets for the user's named entities
 // (accounts, goals, budgets) — each navigates to that entity's screen. Boot-safe:
 // returns nothing when the app state isn't ready.
+// GM4-12: capped at entityJumpMaxUnfiltered entries so the unfiltered palette
+// stays scannable. Typing a query reveals all matches beyond the cap.
 func entityJumpCommands() []paletteCmd {
 	app := appstate.Default
 	if app == nil {
@@ -362,7 +373,7 @@ func entityJumpCommands() []paletteCmd {
 	}
 	var cmds []paletteCmd
 	jump := func(name, typeWord, route string) {
-		if name == "" {
+		if name == "" || len(cmds) >= entityJumpMaxUnfiltered {
 			return
 		}
 		path := route
@@ -450,9 +461,15 @@ func buildCommandPalette(doc js.Value) {
 	ov := doc.Call("createElement", "div")
 	ov.Set("id", cmdPaletteID)
 	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:210;display:grid;place-items:start center;padding-top:12vh;background:rgba(0,0,0,0.5);")
+	// GM4-3: label the backdrop so screen readers can identify the modal region.
+	ov.Call("setAttribute", "aria-label", uistate.T("cmd.search"))
 
 	card := doc.Call("createElement", "div")
 	card.Get("style").Set("cssText", "width:min(92vw,520px);background:var(--bg-elev,#1a1a1d);color:var(--text,#f4f4f5);border:1px solid var(--border,#2a2a2c);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,0.5);overflow:hidden;")
+	// GM4-1: identify the card as a dialog so screen readers can announce it correctly.
+	card.Call("setAttribute", "role", "dialog")
+	card.Call("setAttribute", "aria-modal", "true")
+	card.Call("setAttribute", "aria-label", uistate.T("cmd.search"))
 
 	inp := doc.Call("createElement", "input")
 	inp.Set("id", cmdInputID)
@@ -464,8 +481,16 @@ func buildCommandPalette(doc js.Value) {
 
 	list := doc.Call("createElement", "div")
 	list.Set("id", cmdListID)
+	// GM4-2: listbox role so screen readers expose the result list as a navigable widget.
+	list.Call("setAttribute", "role", "listbox")
 	list.Get("style").Set("cssText", "max-height:50vh;overflow-y:auto;padding:0.35rem;")
 	card.Call("appendChild", list)
+
+	// GM4-11: keyboard hint footer so first-time palette users know arrow nav / Enter / Esc work.
+	hints := doc.Call("createElement", "div")
+	hints.Get("style").Set("cssText", "padding:0.4rem 0.8rem;border-top:1px solid var(--border,#2a2a2c);font-size:0.72rem;opacity:0.45;user-select:none;display:flex;gap:1rem;")
+	hints.Set("innerHTML", "&#x2191;&#x2193;&nbsp;navigate &middot; &#x23CE;&nbsp;select &middot; Esc&nbsp;close")
+	card.Call("appendChild", hints)
 
 	ov.Call("appendChild", card)
 
@@ -573,12 +598,20 @@ func renderPalette(doc js.Value, query string) {
 			}
 		}
 		bg := "transparent"
-		if pos == cmdPaletteSel {
+		selected := pos == cmdPaletteSel
+		if selected {
 			bg = "var(--hover,#1c1c1e)"
+		}
+		// GM4-2: aria-selected marks the highlighted row for screen readers.
+		ariaSelected := "false"
+		if selected {
+			ariaSelected = "true"
 		}
 		b.WriteString(`<div data-cmd-row="`)
 		b.WriteString(strconv.Itoa(ci))
-		b.WriteString(`" role="option" style="padding:0.5rem 0.7rem;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:`)
+		b.WriteString(`" role="option" aria-selected="`)
+		b.WriteString(ariaSelected)
+		b.WriteString(`" style="padding:0.5rem 0.7rem;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:`)
 		b.WriteString(bg)
 		b.WriteString(`;">`)
 		b.WriteString(`<span>`)
@@ -599,6 +632,8 @@ func renderPalette(doc js.Value, query string) {
 }
 
 // movePaletteSel moves the highlighted row, wrapping at the ends.
+// Group header divs are interleaved with command rows in the DOM, so we count
+// only [data-cmd-row] elements when mapping cmdPaletteSel to a child index.
 func movePaletteSel(doc js.Value, delta int) {
 	n := len(cmdPaletteShown)
 	if n == 0 {
@@ -610,17 +645,22 @@ func movePaletteSel(doc js.Value, delta int) {
 		return
 	}
 	children := list.Get("children")
+	rowPos := 0 // counts only data-cmd-row children (skips group headers)
 	for i := 0; i < children.Get("length").Int(); i++ {
 		row := children.Index(i)
-		if row.Call("getAttribute", "data-cmd-row").IsNull() {
-			continue
+		attr := row.Call("getAttribute", "data-cmd-row")
+		if attr.IsNull() || attr.IsUndefined() {
+			continue // group header — skip
 		}
-		if i == cmdPaletteSel {
+		if rowPos == cmdPaletteSel {
 			row.Get("style").Set("background", "var(--hover,#1c1c1e)")
+			row.Call("setAttribute", "aria-selected", "true")
 			row.Call("scrollIntoView", map[string]any{"block": "nearest"})
 		} else {
 			row.Get("style").Set("background", "transparent")
+			row.Call("setAttribute", "aria-selected", "false")
 		}
+		rowPos++
 	}
 }
 
