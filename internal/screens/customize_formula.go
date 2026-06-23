@@ -148,35 +148,39 @@ func FormulaCalculator() ui.Node {
 	}
 
 	return Fragment(
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("customize.calcTitle")),
-			P(css.Class("muted"), uistate.T("customize.calcDesc")),
-			Form(css.Class("form-grid"),
-				Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("customize.calcTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("customize.calcDesc")),
+				Form(css.Class("form-grid"),
+					Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
+				),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt2, tw.ItemsCenter),
+					Span(css.Class("muted"), uistate.T("customize.try")),
+					Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round((income - expense) / income * 100)") }), uistate.T("customize.exSavings")),
+					Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round(expense / income * 100)") }), uistate.T("customize.exSpending")),
+					Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("net_worth + liabilities") }), uistate.T("customize.exGross")),
+					Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("if(expense > income, 1, 0)") }), uistate.T("customize.exOverBudget")),
+				),
+				Form(css.Class("form-grid", tw.Mt2), OnSubmit(saveFormula),
+					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("customize.savePlaceholder")), Value(fName.Get()), OnInput(onFName)),
+					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("customize.save")),
+				),
+				If(fMsg.Get() != "", P(css.Class("muted"), fMsg.Get())),
 			),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt2, tw.ItemsCenter),
-				Span(css.Class("muted"), uistate.T("customize.try")),
-				Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round((income - expense) / income * 100)") }), uistate.T("customize.exSavings")),
-				Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("round(expense / income * 100)") }), uistate.T("customize.exSpending")),
-				Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("net_worth + liabilities") }), uistate.T("customize.exGross")),
-				Button(css.Class("data-btn"), Type("button"), OnClick(func() { expr.Set("if(expense > income, 1, 0)") }), uistate.T("customize.exOverBudget")),
-			),
-			Form(css.Class("form-grid", tw.Mt2), OnSubmit(saveFormula),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("customize.savePlaceholder")), Value(fName.Get()), OnInput(onFName)),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("customize.save")),
-			),
-			If(fMsg.Get() != "", P(css.Class("muted"), fMsg.Get())),
-		),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("customize.resultTitle")),
-			resultBody,
-		),
+		}),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("customize.resultTitle"),
+			Body:  resultBody,
+		}),
 		savedFormulasCard(app.Formulas(), vars, loadFormula, deleteFormula),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("customize.varsTitle")),
-			P(css.Class("muted"), uistate.T("customize.varsInsertHint")),
-			Div(css.Class("rows"), varRows),
-		),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("customize.varsTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("customize.varsInsertHint")),
+				Div(css.Class("rows"), varRows),
+			),
+		}),
 	)
 }
 
@@ -193,10 +197,10 @@ func savedFormulasCard(formulas []domain.Formula, vars map[string]float64, onLoa
 			Formula: f, Result: evalFormulaDisplay(f.Expr, vars), OnLoad: onLoad, OnDelete: onDelete,
 		}))
 	}
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("customize.savedTitle")),
-		Div(css.Class("rows"), rows),
-	)
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("customize.savedTitle"),
+		Rows:  rows,
+	})
 }
 
 // evalFormulaDisplay evaluates an expression against the live vars and returns the

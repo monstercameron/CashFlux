@@ -253,53 +253,61 @@ func Split() ui.Node {
 	}
 
 	return Div(
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("nav.split")),
-			P(css.Class("muted"), uistate.T("split.hint")),
-			Div(css.Class("form-grid"),
-				Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
-				Input(css.Class("field"), Type("text"), Attr("aria-label", "What was it for? (optional)"), Placeholder("What was it for? (optional)"), Value(descS.Get()), OnInput(onDesc)),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("nav.split"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("split.hint")),
+				Div(css.Class("form-grid"),
+					Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
+					Input(css.Class("field"), Type("text"), Attr("aria-label", "What was it for? (optional)"), Placeholder("What was it for? (optional)"), Value(descS.Get()), OnInput(onDesc)),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
+				),
+				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),
+				errText("split-err", errS.Get()),
 			),
-			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),
-			errText("split-err", errS.Get()),
-		),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("split.members")),
-			memberControls,
-			memberBody,
-			splitSummary,
-		),
-		If(len(owes) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("split.settleUp")),
-			Div(css.Class("rows"), owes),
-			// Who-owes-whom as a Mermaid digraph (C70): debtor → payer, labelled.
-			uiw.Mermaid(uiw.MermaidProps{
-				Source: mermaid.FromSettleUp(transfers,
-					func(id string) string { return nameByID[id] },
-					func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }),
-				Label: "Who owes whom",
-				Class: tw.Fold(tw.Mt2),
-			}),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn btn-primary"), Type("button"), Title("Save this split to the settle-up ledger below"), OnClick(saveSplit), "Save split"),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
-					nm := func(id string) string { return nameByID[id] }
-					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-					downloadBytes("settle-up.csv", "text/csv", split.CSV(transfers, nm, csvAmount))
-				}), uistate.T("split.downloadCsv")),
+		}),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("split.members"),
+			Body: Fragment(
+				memberControls,
+				memberBody,
+				splitSummary,
 			),
-		)),
-		If(len(net) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), "Settle up"),
-			P(css.Class("muted"), "Running balance across every saved split."),
-			Div(css.Class("rows"), netRows),
-			If(len(netRows) > 0 && len(ledgerRows) > 0, Div(
-				P(css.Class("budget-sub"), "Simplest way to square up:"),
-				Div(css.Class("rows"), ledgerRows),
-			)),
-			If(len(netRows) == 0, P(css.Class("muted"), "All settled up — nobody owes anybody.")),
-		)),
+		}),
+		If(len(owes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("split.settleUp"),
+			Body: Fragment(
+				Div(css.Class("rows"), owes),
+				// Who-owes-whom as a Mermaid digraph (C70): debtor → payer, labelled.
+				uiw.Mermaid(uiw.MermaidProps{
+					Source: mermaid.FromSettleUp(transfers,
+						func(id string) string { return nameByID[id] },
+						func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }),
+					Label: "Who owes whom",
+					Class: tw.Fold(tw.Mt2),
+				}),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+					Button(css.Class("btn btn-primary"), Type("button"), Title("Save this split to the settle-up ledger below"), OnClick(saveSplit), "Save split"),
+					Button(css.Class("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
+						nm := func(id string) string { return nameByID[id] }
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						downloadBytes("settle-up.csv", "text/csv", split.CSV(transfers, nm, csvAmount))
+					}), uistate.T("split.downloadCsv")),
+				),
+			),
+		})),
+		If(len(net) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: "Settle up",
+			Body: Fragment(
+				P(css.Class("muted"), "Running balance across every saved split."),
+				Div(css.Class("rows"), netRows),
+				If(len(netRows) > 0 && len(ledgerRows) > 0, Div(
+					P(css.Class("budget-sub"), "Simplest way to square up:"),
+					Div(css.Class("rows"), ledgerRows),
+				)),
+				If(len(netRows) == 0, P(css.Class("muted"), "All settled up — nobody owes anybody.")),
+			),
+		})),
 	)
 }
 
