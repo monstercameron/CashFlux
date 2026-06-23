@@ -45,7 +45,8 @@ and every commit updates this file under `Unreleased`.
   (width = MonthlyAmount / MonthlyTotal × 100%) inside `.row-main`, using `var(--accent)` fill on a
   `var(--border)` track — the same pattern as Reports category rows — so the cost distribution is
   scannable at a glance without mentally computing ratios from dollar figures. **Bills (G11):** dollar amounts now render full-contrast in light mode, and the
-  "Next due" stat date no longer hyphenates across two lines at 768px. **Split (G12):** the
+  "Next due" stat date no longer hyphenates across two lines at 768px.
+  **Bills (G11) follow-up:** horizon filter (90 days default) + Show-all toggle, action-button group fix, two-column layout at ≥1024 px. **Split (G12):** the
   destructive "Clear" member button is now a ghost-danger style, visually distinct from "Select all".
   **Insights (G13):** the no-key "Settings" CTA is now a primary button, the New-chat/Edit-prompt
   pills stay outlined in light mode, and the starter chips get a softer dedicated pill style.

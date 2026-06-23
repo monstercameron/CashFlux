@@ -11052,9 +11052,14 @@ sort, visible names — all confirmed by the audit). Remaining fixes shipped:
   light-mode group so the figures Tomas compares are full-contrast, not secondary grey.
 - **"Next due" date hyphenating at 768** (§2) — `.stat-value { white-space: nowrap }` keeps the ISO
   date ("2026-07-01") on one line instead of breaking to "2026-07-" / "01".
-- **Intentionally deferred**: two-column list+calendar layout (calendar above the fold), a default
-  90-day horizon with "Show all", and a fixed trailing action-button group are larger layout/behavior
-  reworks; the page's core "what's due, how urgent, mark paid" loop already works above the fold.
+- **Horizon filter + Show-all toggle** (§1, G11 follow-up, 2026-06-23) — bills default to 90-day
+  window; a "Show all (N)" / "Show next 90 days" toggle exposes the full list on demand.
+- **Two-column layout at ≥1024 px** (§1, G11 follow-up, 2026-06-23) — `.bills-layout` flex
+  container puts the bill list left and the calendar right at wide viewports so both are visible
+  without scrolling; stacks on narrower screens.
+- **Fixed trailing action-button group** (§2, G11 follow-up, 2026-06-23) — `.bill-sub-actions`
+  wraps "Mark paid" + "Remind me" in a `flex:none` trailing group so the bill name and amount have
+  horizontal priority, mirroring the G10 `.sub-actions` pattern.
 
 **The story**
 Tomas opens Bills on a Monday morning to know exactly what he owes and when. His goal in

@@ -20,6 +20,10 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// billsHorizonDays is the default look-ahead window. Bills beyond this are hidden
+// unless the user enables "Show all" (G11 follow-up).
+const billsHorizonDays = 90
+
 // Bills lists upcoming payments derived from liability accounts' due-day and
 // minimum payment (B22): each bill's next due date, how soon it's due, and the
 // amount, soonest first, with the total due up top, a month calendar, and a
@@ -36,8 +40,26 @@ func Bills() ui.Node {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	pr := uistate.UsePrefs().Get()
 
+	// showAll controls whether bills beyond the 90-day default horizon are shown
+	// (G11 follow-up: default horizon + "Show all" toggle).
+	showAll := ui.UseState(false)
+	toggleShowAll := ui.UseEvent(Prevent(func() { showAll.Set(!showAll.Get()) }))
+
 	now := time.Now()
-	upcoming := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
+	allUpcoming := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
+
+	// Apply the 90-day horizon filter unless "Show all" is active.
+	horizon := now.AddDate(0, 0, billsHorizonDays)
+	upcoming := allUpcoming
+	if !showAll.Get() {
+		filtered := make([]bills.Bill, 0, len(allUpcoming))
+		for _, b := range allUpcoming {
+			if !b.DueDate.After(horizon) {
+				filtered = append(filtered, b)
+			}
+		}
+		upcoming = filtered
+	}
 
 	// remind creates a to-do dated to the bill's due date, so a "pay this" task
 	// surfaces in time (B22, via the existing to-do system).
@@ -122,6 +144,16 @@ func Bills() ui.Node {
 		nextDue = pr.FormatDate(upcoming[0].DueDate)
 	}
 
+	// toggleLabel for the horizon toggle: show which mode we're switching to.
+	var toggleLabel string
+	if showAll.Get() {
+		toggleLabel = "Show next 90 days"
+	} else {
+		toggleLabel = fmt.Sprintf("Show all (%d)", len(allUpcoming))
+	}
+
+	// bills-layout: stacked by default; two-column (list left, calendar right) at
+	// ≥1024 px via CSS so the calendar is visible alongside the list (G11 follow-up).
 	return Div(
 		If(len(upcoming) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("bills.totalDue"), fmtMoney(money.New(total, base)), "neg"),
@@ -129,26 +161,31 @@ func Bills() ui.Node {
 			stat(uistate.T("bills.count"), fmt.Sprintf("%d", len(upcoming)), ""),
 			stat(uistate.T("bills.nextDue"), nextDue, ""),
 		)),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("nav.bills")),
-			body,
-			If(len(upcoming) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
-					csvAmount := func(m money.Money) string {
-						c, err := rates.Convert(m, base)
-						if err != nil {
-							c = money.New(m.Amount, base)
+		Div(css.Class("bills-layout"),
+			Section(css.Class("card"),
+				H2(css.Class("card-title"), uistate.T("nav.bills")),
+				body,
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+					If(len(allUpcoming) > 0,
+						Button(css.Class("btn btn-sm"), Type("button"), OnClick(toggleShowAll), toggleLabel),
+					),
+					If(len(upcoming) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
+						csvAmount := func(m money.Money) string {
+							c, err := rates.Convert(m, base)
+							if err != nil {
+								c = money.New(m.Amount, base)
+							}
+							return money.FormatMinor(c.Amount, currency.Decimals(base))
 						}
-						return money.FormatMinor(c.Amount, currency.Decimals(base))
-					}
-					downloadBytes("bills.csv", "text/csv", bills.CSV(upcoming, csvAmount))
-				}), uistate.T("bills.downloadCsv")),
+						downloadBytes("bills.csv", "text/csv", bills.CSV(upcoming, csvAmount))
+					}), uistate.T("bills.downloadCsv"))),
+				),
+			),
+			If(len(allUpcoming) > 0, Section(css.Class("card"),
+				H2(css.Class("card-title"), uistate.T("bills.calendar", monthLabel(now))),
+				billsCalendar(bills.MonthCalendar(allUpcoming, now.Year(), now.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
 			)),
 		),
-		If(len(upcoming) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("bills.calendar", monthLabel(now))),
-			billsCalendar(bills.MonthCalendar(upcoming, now.Year(), now.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
-		)),
 	)
 }
 
@@ -203,8 +240,9 @@ type billRowProps struct {
 	OnMarkPaid func(b bills.Bill)
 }
 
-// BillRow renders one upcoming bill with a "remind me" action. It owns its click
-// hook (per the On*-hooks-in-loops rule) so the list can render many rows safely.
+// BillRow renders one upcoming bill with action buttons in a fixed trailing group
+// so the bill name and metadata have horizontal priority (G11 follow-up). It owns
+// its click hooks (per the On*-hooks-in-loops rule) so the list renders safely.
 func BillRow(props billRowProps) ui.Node {
 	d := props.Data
 	remind := ui.UseEvent(Prevent(func() { props.OnRemind(d.Bill, d.Shown, d.DueLabel) }))
@@ -227,8 +265,12 @@ func BillRow(props billRowProps) ui.Node {
 			Span(ClassStr(metaCls), meta),
 		),
 		Span(css.Class("budget-amount"), fmtMoney(d.Shown)),
-		Button(css.Class("btn btn-primary"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
-		Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
+		// bill-sub-actions: fixed trailing group so action buttons don't crowd the
+		// name/amount area, mirroring the .sub-actions pattern from G10 (G11 follow-up).
+		Div(css.Class("bill-sub-actions"),
+			Button(css.Class("btn btn-primary btn-sm"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
+			Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
+		),
 	)
 }
 
