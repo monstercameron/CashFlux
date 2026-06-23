@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series wave 2 — G10 Subscriptions "The Subscription Audit"
+
+The audit flagged a genuinely-broken CRITICAL: subscription names invisible at 1280/1440 (visible only
+at 768 after the row reflows). Root cause was `.row-main { min-width: 0 }` — it lets the name column
+shrink below its content, and the two wide action buttons ("Remind me" + a solid-red "Mark as
+cancelled") claimed the row, collapsing the name to nothing. Fixed by scoping a `.sub-row .row-main
+{ min-width: 9rem }`, moving the actions into a fixed `.sub-actions` trailing group, and toning the
+destructive button down to a compact ghost-danger so the page reads as a list, not 10 cancel alerts.
+Pinned the name to `var(--text)` + 600 weight for good measure. Deferred per-row share-bars.
+
 ## 2026-06-23 - feat: GLAMOR series wave 2 — G9 Reports + the real light-mode root cause
 
 G9's audit finally gave a *measurement* for the "card titles invisible in light mode" finding that

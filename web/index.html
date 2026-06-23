@@ -538,6 +538,21 @@
         letter-spacing: 0.02em; padding: 0.12rem 0.5rem; border-radius: 999px;
         background: var(--bg-elev); border: 1px solid var(--border); white-space: nowrap; }
 
+      /* Subscriptions row (G10): the name was being squeezed to zero because
+         .row-main can shrink (min-width:0) and the two action buttons claimed the
+         row. Reserve name width and pin the actions to a fixed trailing group so the
+         subscription name always reads — it's what Marcus is auditing. */
+      .sub-row .row-main { min-width: 9rem; flex: 1 1 auto; }
+      .sub-actions { flex: none; display: inline-flex; align-items: center; gap: 0.4rem; }
+      .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.82rem; min-height: 0; }
+      /* Ghost-danger: a low-weight destructive action so a per-row "Cancel" doesn't
+         out-shout the data (G10) — danger tone on hover, not a solid red block. */
+      .btn-ghost-danger { color: var(--danger); border: 1px solid var(--border); background: transparent; }
+      .btn-ghost-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+      @media (max-width: 760px) {
+        .sub-row .sub-actions { flex-wrap: wrap; }
+      }
+
       /* Allocate rank badge (G8): a compact "#1/#2" ordinal so the priority order
          is glanceable, not just inferred from bar length. */
       .rank-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.5rem;

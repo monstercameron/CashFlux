@@ -11263,6 +11263,19 @@ captured cleanly.
 
 ### G10. Subscriptions — "The Subscription Audit" (Marcus & Lin) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** Key fixes shipped:
+- **CRITICAL: subscription names invisible at 1280/1440** — root cause was `.row-main { min-width: 0 }`
+  letting the name shrink to nothing as the two wide action buttons claimed the row. Fixed with a
+  scoped `.sub-row .row-main { min-width: 9rem; flex: 1 1 auto }` + a fixed `.sub-actions` trailing
+  group; the name is also pinned to `var(--text)` + 600 weight so it always reads.
+- **Cancel-button dominance** (§2) — "Mark as cancelled" is now a compact `.btn-ghost-danger`
+  (danger on hover, not a solid red block) so the list reads as subscriptions, not 10 cancel alerts.
+- **768 action overflow** (§2) — `.sub-actions` wraps within the row at narrow widths instead of
+  breaking out as a full-width page-level button.
+- **Light mode** — covered by the G9 definitive `[data-theme="light"]` contrast fix.
+- **Intentionally deferred**: per-row share-bars (proportional cost viz) is a nice-to-have that needs
+  the monthly total threaded into the row; the name-visibility + action fixes deliver the core audit-ability.
+
 **The story**
 Marcus and Lin open Subscriptions every few months to audit their recurring charges. Their
 goal in a single session: see the total monthly and annual burden at a glance, scan every

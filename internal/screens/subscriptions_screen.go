@@ -453,10 +453,13 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			uistate.T("subs.uncancel"),
 		)
 	} else {
-		actions = Fragment(
-			Button(css.Class("btn"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
+		// Actions live in a fixed-width trailing group (G10): keeps the row's name
+		// from being squeezed to nothing, and the destructive "Cancel" is a compact
+		// ghost-danger button so the list reads as subscriptions, not 10 cancel alerts.
+		actions = Div(css.Class("sub-actions"),
+			Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
 			Button(
-				css.Class("btn btn-danger"),
+				css.Class("btn btn-sm btn-ghost-danger"),
 				Type("button"),
 				Title(uistate.T("subs.cancelTitle")),
 				Attr("aria-label", uistate.T("subs.cancelTitle")+" "+s.Name),
@@ -481,11 +484,11 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 		selectCheckbox = Fragment()
 	}
 
-	return Div(css.Class("row"),
+	return Div(css.Class("row sub-row"),
 		selectCheckbox,
 		Div(css.Class("row-main"),
 			Button(css.Class("row-desc sub-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
-				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
+				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "font-weight": "600", "color": "var(--text)", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
 				s.Name),
 			Span(css.Class("row-meta"), meta),
 			statusArea,

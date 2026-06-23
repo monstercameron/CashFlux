@@ -18,7 +18,10 @@ and every commit updates this file under `Unreleased`.
   navigable. **Definitive light-mode fix** for the whole series — legacy text classes
   (`.card-title`/`.row-desc`/`.muted`/etc.) now pin their color directly under `[data-theme="light"]`,
   so they no longer keep the dark theme's near-white `--text` (emitted as a runtime var by the theme
-  engine) on white cards.
+  engine) on white cards. **Subscriptions (G10):** fixed the critical bug where subscription names
+  were squeezed to invisible at 1280/1440 (the action buttons claimed the whole row) — the name now
+  keeps a reserved width and the actions sit in a fixed trailing group with a compact ghost-danger
+  Cancel button.
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**
