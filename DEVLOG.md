@@ -3,6 +3,38 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR GM1 Settings modal — 768px collapse, h4 headings, password aria-labels
+
+GM1 audit of the Settings FlipPanel surfaced ~10 open items after the G21 global light-mode fix
+had already resolved the critical theming issues. This pass shipped 3 surgical fixes:
+
+**S4 — 768px grid collapse (was CRITICAL):** The existing media query `@media (max-width:768px)`
+targeted `.flip-wrap .grid-cols-2` as a class, but `tw.GridCols2` in the Go tw package emits an
+inline `style="grid-template-columns: repeat(2, …)"` on the element — no class name. Fixed selector
+to `.flip-wrap div[style*="grid-template-columns"]` which matches by style attribute presence.
+At 768px the two-column layout now collapses to single column, preventing the FX-row label clipping
+shown in `gm01_dark_768.png`.
+
+**S10 — Heading hierarchy:** All 22 `set-label` section headers in settings.go changed from `<div>`
+to `<h4>`. The visual appearance is unchanged (the CSS `set-label` class controls it), but screen
+readers can now navigate the Settings panel by heading level (H3 "Settings" > H4 "Household
+Members", "Appearance", etc.). Also updated the one occurrence in `theme_editor.go`.
+
+**S11 — Password aria-labels:** The AI key input was using the section heading ("AI (OpenAI · bring
+your own key)") as its aria-label — usable but imprecise. Both the AI key and web-search key inputs
+now use their placeholder text as the aria-label ("OpenAI API key (sk-…)" and "Web search API key
+(optional)"), which is unambiguous. The backend bearer token input was already specific.
+
+**Not redone (already shipped):** `role="dialog"` + `aria-modal` (in flippanel.go L195), ESC/Tab
+focus trap (flippanel.go UseEffect), Save success toast (SettingsHost OnSave), panel edge gutter
+(`min(760px, calc(100vw-24px))`), wipe-data confirmation modal.
+
+**Deferred:** S8 jump-link nav across 23 sections (needs new Go render block), S12 import button
+icon prefixes (cosmetic), S18 AI-toggle disabling dependent inputs (deferred to C81).
+
+The pre-existing build error (`widgets.go` / `widget_builder.go` redeclarations) is unrelated to
+this change — it exists in both the worktree and main at the same commit.
+
 ## 2026-06-23 - feat: GLAMOR GI2 Categories — map-first, clickable usage, nesting cue, dim zero-usage, sort-by-usage
 
 GI2 polish pass on the Categories screen. Five items shipped (one was already done in G17):

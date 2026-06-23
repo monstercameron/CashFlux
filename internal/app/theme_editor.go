@@ -206,7 +206,7 @@ func themeEditor() uic.Node {
 	scalePct := strconv.Itoa(int(t.Scale*100 + 0.5))
 
 	return Div(css.Class("theme-editor"),
-		Div(css.Class("set-label"), "Theme"),
+		H4(css.Class("set-label"), "Theme"),
 		P(css.Class("muted", tw.TextXs), "Start from a preset, then fine-tune any color, the corner radius, the text size, and the fonts. Changes apply instantly."),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), presetBtns),
 

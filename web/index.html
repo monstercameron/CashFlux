@@ -994,9 +994,11 @@
       /* G21: theme-safe danger variant — replaces inline Style() on the Wipe data button. */
       .data-btn-danger { color: var(--danger, #d8716f); border-color: var(--danger-muted, #5a2a2a); }
       .data-btn-danger:hover { color: var(--danger, #d8716f); border-color: var(--danger, #d8716f); }
-      /* G21: collapse to single column at ≤768px to prevent overflowCount:25 overflow. */
+      /* GM1-S4: collapse settings grid to single column at ≤768px.
+         tw.GridCols2 emits an inline style (not a class), so we target the
+         attribute value rather than a class name. */
       @media (max-width: 768px) {
-        .flip-wrap .grid-cols-2 { grid-template-columns: 1fr !important; }
+        .flip-wrap div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
       }
 
       /* unified widget header: grip (left) · title (center) · gear (right) */

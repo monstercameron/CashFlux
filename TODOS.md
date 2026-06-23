@@ -17095,6 +17095,29 @@ _7. GENERAL MODAL UX_ **[GO-STRUCTURAL + CSS-ONLY]**
 - L47: four identical-styled Import buttons (down from five) — "Import dataset…" rename done.
 - C81: AI multi-provider — gating S19; no action until C81.
 
+---
+
+✅ RESOLVED (2026-06-23) — GM1 implementation pass
+
+**Shipped (this PR):**
+- **S4 (CRITICAL)**: Fixed 768px single-column collapse. The existing media query targeted `.grid-cols-2` class but `tw.GridCols2` emits an inline `style` attribute. Selector changed to `.flip-wrap div[style*="grid-template-columns"]` — now fires correctly at ≤768px. (`web/index.html`)
+- **S10 (HIGH)**: Changed all `set-label` section headings from `<div>` to `<h4>` elements in `settings.go` (22 occurrences) and `theme_editor.go` (1 occurrence). Screen readers can now navigate the panel by heading level inside the dialog.
+- **S11 (MEDIUM)**: Tightened `aria-label` on the two key-entry password inputs: AI key now uses the placeholder text "OpenAI API key (sk-…)" as its `aria-label` (was the generic section heading); web-search key similarly uses its own placeholder. Backend bearer token was already specific.
+
+**Already done (confirmed by GM1 audit — not redone):**
+- **S1/S17**: `role="dialog"`, `aria-modal="true"`, `aria-label` on `.flip-wrap` — already in `flippanel.go` (line 195).
+- **S2**: ESC-to-close focus trap — already implemented in `flippanel.go` keydown handler.
+- **S5/item 6**: Panel edge gutter (`max-width: min(760px, calc(100vw - 24px))`) — already landed in `index.html`.
+- **S14/item 7**: Save-success toast via `noticeAtom` — already wired in `SettingsHost` (`OnSave` callback).
+- G21 defects #1 #2 (toggle labels, backdrop): already fixed by prior global light-mode token pass.
+- Wipe data `confirmModal` guard (S16): `confirmModal(...)` call confirmed in `wipeData()`.
+
+**Deferred (with reason):**
+- **S8**: Jump-link nav across 23 sections — requires a new Go render block (nav anchor row); larger structural change, schedule as GM1b.
+- **S12**: Icon prefixes on 4 Import buttons — cosmetic, low-impact given unique labels; schedule as GM1c.
+- **S18**: AI toggle disabling dependent inputs — conditional `disabled` prop wiring; deferred to C81 multi-provider pass.
+- **S19**: AI multi-provider — gated on C81.
+- **S3/item 9**: base `height` on short viewports — global settings already passes `Height: "min(90vh, 900px)"` from Go so default `height:470px` only affects widget panels (not the global panel). Not a real issue for the global settings panel.
 
 ### GM2. Add/Edit entity modals — UX review — 2026-06-23 ★
 
