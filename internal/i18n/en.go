@@ -414,6 +414,11 @@ var english = Catalog{
 
 	// Goals screen
 	"goals.add":               "Add goal",
+	"goals.addGoal":           "+ Add goal",
+	"goals.paceFinal":         "Final stretch",
+	"goals.paceOverdue":       "Past due",
+	"goals.paceDueSoon":       "Due soon",
+	"goals.paceOnTrack":       "On track",
 	"goals.targetPlaceholder": "Target (%s)",
 	"goals.savedSoFar":        "Saved so far",
 	"goals.totalTarget":       "Total target",

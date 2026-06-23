@@ -50,6 +50,10 @@ func Goals() ui.Node {
 	// to work elsewhere (L20 "what next").
 	redirectToAllocate := func() { nav.Navigate(uistate.RoutePath("/allocate")) }
 
+	// Open the add-goal modal from the card header (G5: discoverable add without
+	// hunting for the FAB quick-add panel).
+	addGoal := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("goal") }))
+
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -167,14 +171,11 @@ func Goals() ui.Node {
 		}
 	}
 
-	// Active list: incomplete goals first, then alphabetical within each group.
+	// Active list: most actionable first — nearest target date, then highest
+	// percent complete, then name (G5). Surfaces the near-complete / time-pressed
+	// goal so Aaliyah's "what should I fund next?" is answered at the top.
 	sort.SliceStable(activeGoals, func(i, j int) bool {
-		ci, _ := goalsvc.IsComplete(activeGoals[i])
-		cj, _ := goalsvc.IsComplete(activeGoals[j])
-		if ci != cj {
-			return !ci
-		}
-		return activeGoals[i].Name < activeGoals[j].Name
+		return goalsvc.LessForList(activeGoals[i], activeGoals[j])
 	})
 	// Achieved list: alphabetical.
 	sort.SliceStable(achievedGoals, func(i, j int) bool {
@@ -252,7 +253,14 @@ func Goals() ui.Node {
 			stat(uistate.T("goals.overallProgress"), fmt.Sprintf("%d%%", overallPct), ""),
 		)),
 		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("nav.goals")),
+			Div(css.Class("card-head"),
+				H2(css.Class("card-title"), uistate.T("nav.goals")),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")),
+					OnClick(addGoal),
+					uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("goals.addGoal"))),
+			),
 			listBody,
 		),
 		achievedSection,
@@ -289,16 +297,49 @@ func accountName(accounts []domain.Account, id string) string {
 	return ""
 }
 
-// barFillStyle is the inline style for a goal's progress bar: the width, plus a
-// brighter success tone once the goal is complete so a reached goal reads as done
-// at a glance instead of using the same flat accent fill (C51). Inline (not a CSS
-// class) to stay out of the shared stylesheet.
-func barFillStyle(pct int, complete bool) string {
-	s := fmt.Sprintf("width:%d%%", pct)
-	if complete {
-		s += ";background:var(--up)"
+// barFillStyle is the inline width for a goal's progress bar. The fill *tone* is
+// driven by a CSS state class (see paceBarClass) so a near-complete, behind, or
+// on-track goal reads differently at a glance instead of one flat accent (G5/C51).
+func barFillStyle(pct int) string {
+	return fmt.Sprintf("width:%d%%", pct)
+}
+
+// paceBarClass maps a goal's pace to a progress-bar fill modifier class. The
+// classes (final/overdue/soon) are defined in the shared stylesheet; an empty
+// modifier keeps the default accent for on-track / undated goals.
+func paceBarClass(p goalsvc.Pace) string {
+	switch p {
+	case goalsvc.PaceComplete:
+		return "done"
+	case goalsvc.PaceFinalStretch:
+		return "final"
+	case goalsvc.PaceOverdue:
+		return "overdue"
+	case goalsvc.PaceDueSoon:
+		return "soon"
+	default:
+		return ""
 	}
-	return s
+}
+
+// paceBadge renders a compact colored badge for a goal's pace, or an empty
+// fragment when there's nothing to flag (undated, comfortably on track without a
+// near-term signal). It answers Aaliyah's "am I on pace?" at a glance (G5).
+func paceBadge(p goalsvc.Pace) ui.Node {
+	var label, mod string
+	switch p {
+	case goalsvc.PaceFinalStretch:
+		label, mod = uistate.T("goals.paceFinal"), "final"
+	case goalsvc.PaceOverdue:
+		label, mod = uistate.T("goals.paceOverdue"), "overdue"
+	case goalsvc.PaceDueSoon:
+		label, mod = uistate.T("goals.paceDueSoon"), "soon"
+	case goalsvc.PaceOnTrack:
+		label, mod = uistate.T("goals.paceOnTrack"), "ontrack"
+	default:
+		return Fragment()
+	}
+	return Span(ClassStr("pace-badge pace-"+mod), label)
 }
 
 // GoalRow renders one goal's progress toward its target, with contribute and
@@ -429,6 +470,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	rem, _ := goalsvc.Remaining(g)
 	complete, _ := goalsvc.IsComplete(g)
 	overfund, _ := goalsvc.Overfund(g)
+	pace := goalsvc.ClassifyPace(g, time.Now())
 
 	sub := uistate.T("goals.progressFmt", pct, fmtMoney(rem))
 	if complete {
@@ -512,13 +554,14 @@ func GoalRow(props goalRowProps) ui.Node {
 		Attr("data-testid", "goal-row-"+g.ID),
 		Div(css.Class("budget-head"),
 			Span(css.Class("row-desc"), g.Name),
+			paceBadge(pace),
 			Span(css.Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
 			archiveBtn,
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
-		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(pct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")), Div(css.Class("bar-fill"), Attr("style", barFillStyle(pct, complete)))),
+		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(pct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")), Div(ClassStr("bar-fill "+paceBarClass(pace)), Attr("style", barFillStyle(pct)))),
 		Span(css.Class("budget-sub"), sub),
 		overfundNote,
 		whatNext,

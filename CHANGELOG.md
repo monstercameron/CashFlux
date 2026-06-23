@@ -6,6 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Goals screen glamor pass (G5).** Active goals now sort by the most actionable first —
+  nearest target date, then highest percent complete, then name (`goals.LessForList`, pure +
+  table-tested) — so a near-complete or time-pressed goal surfaces at the top. Each row gains a
+  compact **pace badge** (Final stretch / Past due / Due soon / On track) and the progress-bar fill
+  takes a matching tone (`goals.ClassifyPace`, pure + tested) instead of one flat accent. Added a
+  discoverable **"+ Add goal"** button in the card header (`.card-head`), a 768px row-wrap so long
+  goal names no longer collide with the amount, and explicit full-contrast tokens on stat figures +
+  goal names for light mode.
+
 ### Added
 - **L-series 6-lane parallel sweep (2026-06-22).**
   - **Transactions:** single-row delete now asks for confirmation (L36); a "Mark as reviewed" checkbox

@@ -10412,7 +10412,283 @@ Most of these pivots are state+UI only — the target screens already filter cor
 
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
 
+### G6. To-do — "The Money To-Do List" (Nina) — 2026-06-22 ★
+
+**The story**
+Nina, 31, uses the To-do page as her financial action queue. She keeps tasks like "call about the
+bill," "move $200 to savings," and "cancel the gym free trial before the 30th." She opens the page
+two or three times a week, not to plan — to execute. She needs to see at a glance what is overdue
+(do it now), what is due soon (watch it), and what can wait. She checks tasks off fast, occasionally
+adds a new one, and closes the tab. Friction in any of those three motions is friction she will
+notice.
+
+**Drive script**
+`e2e/glamor_06_todo.mjs` — widths 1280/1440/768, dark + light themes (light-theme recipe: set
+`cashflux:prefs` in localStorage, reload, wait for `data-theme="light"`). Navigates from `/` via
+in-app click ("To-do" nav link) to avoid the wasm deep-link 404 (B1). Run: `node
+e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_06_todo_*.png`.
+
+**Build/run evidence**
+- `node e2e/glamor_06_todo.mjs` → EXIT 0
+- Screenshots captured:
+  `glamor_06_todo_dark_1280.png`, `glamor_06_todo_dark_1280_full.png`,
+  `glamor_06_todo_dark_1440.png`, `glamor_06_todo_dark_768.png`,
+  `glamor_06_todo_light_1280.png`, `glamor_06_todo_light_1440.png`,
+  `glamor_06_todo_light_768.png`
+- DOM audit: `glamor_06_todo_dom.json` — 6 rows (5 open + 1 done), 6 checkboxes, 0 nested
+  sub-tasks in seeded data, 9 due-date elements, 1 overdue element; both selects are labelled
+  (no unlabelled controls found); 6/6 rows visible above the fold at 1280px.
+- Light theme confirmed: `data-theme="light"` on `<html>` for all three light captures.
+
+**What already works well (keep — regression anchors)** ✓
+- **Overdue task is row 1 — urgency ordering is correct for the seeded data.** "Schedule annual
+  physical" (overdue since 2026-05-01) renders first, confirmed in all six viewport/theme
+  screenshots. Nina's most urgent item is at the top without any action from her. ✓
+- **Overdue meta carries the danger tone and the word "overdue."** DOM confirms `row-meta
+  text-down` class and the string "due 2026-05-01 · overdue" on the first row. The red color on
+  the due-date meta is visually confirmed in `glamor_06_todo_dark_1280.png` — it is distinctly
+  red against the dark background. C52 overdue-cue fix is live and working. ✓
+- **Priority badges are color-coded and legible in dark mode.** LOW = green pill, HIGH = red pill,
+  MEDIUM = gold/amber pill. Confirmed in `glamor_06_todo_dark_1280.png` and
+  `glamor_06_todo_dark_1440.png`. The color vocabulary is clear: Nina can read HIGH at a glance
+  without reading the text. ✓
+- **Entity-link chips are present and informative.** "→ Rewards Credit Card," "→ Max out Roth
+  IRA," "→ Groceries," "→ 401(k) / Brokerage," "→ Student Loan" give financial context on each
+  task row. Nina can see why a task exists without opening it. Confirmed in DOM and all screenshots. ✓
+- **Completed task is visually differentiated.** "Refinanced student loan" renders with
+  strikethrough text and a checked checkbox, confirmed in `glamor_06_todo_dark_1280.png` at row 6.
+  The done state is unambiguous. ✓
+- **Both filter controls are labelled (C52 fix confirmed).** DOM audit: `aria-label="Filter by
+  priority"` on the priority select, `aria-label="View as member"` on the member switcher.
+  No unlabelled selects or buttons found. ✓
+- **"Hide done" toggle is present and labelled.** The button text "Hide done" is visible in all
+  screenshots and DOM-confirmed. Nina can clear completed tasks from view in one click. ✓
+- **Breadcrumb "Dashboard › To-do" is present and correct** at all viewport widths. ✓
+- **All 6 rows are above the fold at 1280px (dark).** DOM: `aboveFoldRows: 6`. Nina sees the
+  entire task list without scrolling at desktop widths — the whole queue is immediately visible. ✓
+- **Notes field renders inline on the "Pay credit card" row.** The note "Autopay covers the
+  minimum; pay the statement balance." appears directly on the row at 1280/1440px — in-place
+  context, not buried in an edit modal. ✓
+
+**Structure fixes (bottom-up)**
+
+*1. Layout*
+- [ ] **No "Add task" affordance is visible anywhere on the page at rest (CRITICAL — Nina's
+      add-new flow is hidden).** The task list has no persistent add input at the bottom, no
+      "+ Add task" button in the card header, and no floating action button in the content area.
+      The only way to add a task is via the global "+" button in the top-right corner, which opens
+      an undifferentiated "Add something new" menu requiring a second click. At rest state, Nina
+      sees 6 tasks and no obvious "add more" entry point within the list context. This is the
+      single highest-priority layout gap. The Accounts, Budgets, and Goals pages all show a visible
+      "+ Add [entity]" button in the card header. The To-do page should match: a "+ Add task"
+      button in the `.budget-head` header row, or a persistent inline add form at the bottom of
+      `.rows` (the modal-form route already exists — just needs a header-level trigger). Confirmed:
+      `glamor_06_todo_dark_1280.png`, `glamor_06_todo_dark_1440.png`.
+- [ ] **The "All priorities" filter and "Hide done" button are stacked vertically in the top-right
+      of the card, consuming ~220px of horizontal space that could be on a single header row.**
+      At 1440px (`glamor_06_todo_dark_1440.png`), the card header row shows "Tasks" on the left
+      and then a gap before the priority dropdown appears in the upper-right corner — but "Hide
+      done" appears below it on a second line, creating a two-row header with dead whitespace. A
+      single inline control bar `[Tasks] [All priorities ▾] [Hide done] [+ Add task]` on one row
+      would match every other page's `.budget-head` pattern and reclaim the vertical space.
+- [ ] **No sub-tasks are visible in the seeded data (C72 confirmed done, but sub-task nesting UI
+      is not exercised in sample data).** DOM audit: `subTaskCount: 0`. The "+ Sub" button appears
+      on every row — the affordance exists — but no sample task demonstrates the nesting depth.
+      The visual indentation and nesting behavior cannot be assessed from these screenshots.
+      Recommend adding at least one seeded sub-task so G6 probes can confirm the indent rhythm,
+      visual hierarchy, and checkbox alignment at depth > 0. Cross-reference C72.
+
+*2. Spacing*
+- [ ] **Checkbox tap targets are visually approximately 20×20px — well below WCAG 2.5.5's 44×44px
+      minimum.** DOM audit: `cbRect: null` (the checkbox is rendered as a Unicode ☐ character,
+      not a native `<input type="checkbox">`, so the bounding-rect query returned null). In
+      `glamor_06_todo_dark_1280.png`, the checkbox column shows small square outlines
+      approximately 18–22px visible size. The entire clickable area for marking a task done is
+      that small square — there is no padding expansion making it 44px tall. This is a known
+      WCAG 2.5.5 failure. The surrounding row has enough vertical height, so a CSS
+      `min-width/min-height: 44px` with negative margin trick (or a larger `<button>` wrapper)
+      would fix it without reflowing the layout.
+- [ ] **Row vertical padding is tight — rows feel dense at all widths.** At 1440px
+      (`glamor_06_todo_dark_1440.png`), each task row has approximately 12–14px top/bottom
+      padding, making rows approximately 48–54px tall. For a touch-primary action surface (Nina
+      checks off tasks on mobile), the minimum recommended row height for comfortable tapping is
+      ~56–64px. The current density works at desktop but will feel cramped on a 375px phone screen
+      (not tested here — 768px is the narrowest shot).
+- [ ] **The filter controls ("All priorities" + "Hide done") have no top margin from the card
+      title.** At 1280px dark, the "Tasks" heading and the filters below it have approximately
+      12px gap — the controls feel like they float, with no visual grouping that says "these are
+      controls for this list." Increasing the gap from the heading or using a subtle separator
+      line between the heading row and controls row would give the filter zone clearer identity.
+
+*3. Theming*
+- [ ] **Task titles are near-invisible in light mode (CRITICAL contrast failure — same blanket
+      light-mode foreground token failure as G4/G5).** Confirmed in `glamor_06_todo_light_1280.png`
+      and `glamor_06_todo_light_1440.png`: every task title ("Schedule annual physical," "Pay
+      credit card before the 22nd," "Top up Roth IRA to hit the annual max," "Groceries trending
+      over budget — review," "Update 401(k) balance (stale)") renders in extremely faint grey on
+      the white card background — the text is effectively invisible at normal reading distance.
+      The "overdue" date meta in red ("due 2026-05-01 · overdue") is the most readable element
+      on the first row, while the actual task title is nearly invisible. This is the identical
+      light-mode `--text-dim`/`--fg` token failure as G4 and G5 — the task title element uses
+      a muted foreground variable that has insufficient contrast on a white background. Fix: task
+      title must use `--fg` or a full-weight token that passes WCAG AA (4.5:1) on white.
+      Screenshots: `glamor_06_todo_light_1280.png`, `glamor_06_todo_light_1440.png`,
+      `glamor_06_todo_light_768.png`.
+- [ ] **"Tasks" card heading is also faint in light mode.** In `glamor_06_todo_light_1280.png`,
+      the "Tasks" heading text at the top-left of the card renders in a low-contrast grey — not
+      as invisible as the task titles but clearly below the dark-mode heading weight. Same token
+      failure: heading should use `--fg` or `var(--text)` in light mode.
+- [ ] **Light-mode shell contrast is correct (rail, topbar, breadcrumb) but the card content is
+      entirely dim.** The dark sidebar and black topbar render at full contrast in light mode
+      (they don't switch to a light rail). The card background switches to white, but all text
+      inside the card uses the dim token. This is a systemic issue that will affect every content
+      card, not just To-do. Cross-reference G4 Budgets and G5 Goals for the same pattern.
+- [ ] **The "Refinanced student loan" (done) strikethrough renders in dark grey in dark mode —
+      correctly dimmed.** In light mode (`glamor_06_todo_light_1280.png`), the strikethrough is
+      visible because it is even lighter than the already-faint open tasks. The done-task styling
+      is correct in dark mode but will merge visually with open tasks in light mode once the open-
+      task contrast is fixed — the done state needs a relative contrast drop from the corrected
+      `--fg` value, not just the current absolute dim token.
+
+*4. Styling*
+- [ ] **Priority badge label-priority mismatch on "Pay credit card before the 22nd" row: badge
+      reads "HIGH" but seeded metadata shows `LOW`.** Confirmed: DOM audit `sampleRows[1]` reports
+      `"☐Pay credit card before the 22nd High due 2026-06-22..."` and the badge visually shows
+      "HIGH" in red in `glamor_06_todo_dark_1280.png`. Yet in the raw DOM text the badge text
+      reads "HIGH" while the task was created as high priority (correct — the credit card deadline
+      IS today, 2026-06-22). The issue is the *ordering*: the overdue LOW task appears first, then
+      HIGH appears second. The ordering by urgency places overdue first (correct), but within open
+      tasks due today vs. due in the future there is no further priority sort. "Pay credit card
+      before the 22nd" is HIGH and due TODAY — it should arguably be first or second, not behind
+      the overdue LOW task. See Ordering #1.
+- [ ] **The "→ Entity" chips are styled as dark outline buttons and compete with the "+ Sub" and
+      "Edit" action buttons on the right side of the row.** At 1280px, on the "Pay credit card"
+      row, there are five distinct interactive elements: checkbox, entity chip ("→ Rewards Credit
+      Card"), "+ Sub," "Edit," and "×" — all the same visual weight. Nina's eye has no clear
+      hierarchy: what is the primary action (check it off), what is context (the entity link), and
+      what is management (Edit/Delete)? The entity chip should be visually subordinate (muted,
+      small, inline text with an arrow) rather than a pill button competing with action controls.
+      Cross-reference C52 "unlabelled controls" fix — labels are now present, but visual hierarchy
+      is still flat.
+- [ ] **The "×" delete button is visible at rest on every row at all widths.** A destructive
+      action (delete the task) is always visible, equal-weight with "+ Sub" and "Edit," with no
+      confirmation pattern. While this is consistent with other list screens, for a task with sub-
+      tasks the deletion is cascading (deletes the whole tree — see `todo.go` `deleteTask`).
+      Consider making "×" hover-only on desktop (it is already the smallest element), or requiring
+      a two-step confirm on rows with sub-tasks. This mirrors the G5 Goals recommendation for
+      destructive actions.
+- [ ] **No due-date badge differentiation between "due today" and "due in future."** "Pay credit
+      card before the 22nd" has `due 2026-06-22` (today) and renders in the same unstyled grey
+      date text as "Top up Roth IRA" with `due 2026-12-15` (6 months away). Only overdue tasks
+      get a danger-tone colored meta. A task due TODAY should get an amber/warning color
+      ("due today"), distinguishing it from both overdue (red/danger) and future (neutral grey).
+      Nina's most time-sensitive non-overdue task — the credit card due today — is visually
+      identical to a task due in December. Screenshots: `glamor_06_todo_dark_1280.png`.
+
+*5. Positioning*
+- [ ] **The filter controls ("All priorities" + "Hide done") are positioned in the top-right of
+      the card, far from the "Tasks" heading on the left.** At 1280px, this is a wide gap (the
+      two controls float in the right corner with no visible grouping to the heading). The
+      conventional CashFlux pattern (seen on Budgets, Goals) places controls inline with the
+      heading using `budget-head` flex with `gap`. The to-do card uses `budget-head` but the
+      controls appear stacked below the filter rather than inline beside "Tasks". A single-row
+      `[Tasks heading] [spacer] [priority filter] [hide done] [+ add task]` would match house
+      style and be more scannable.
+- [ ] **No "add task" affordance is positioned within the task list flow.** On every other CashFlux
+      list page, the add entry point is either in the card header (Goals, Budgets) or at the bottom
+      of the list (Transactions inline row). The To-do page has neither — the only affordance is
+      the global "+" in the topbar, 700–900px away from the task list at 1280px. The add action
+      should be proximate to the list it affects.
+
+*6. Ordering*
+- [ ] **Within open tasks, priority is not a sort key — only overdue status is.** The seeded order
+      is: [overdue LOW] → [HIGH due today] → [MEDIUM due Dec] → [MEDIUM no date] → [LOW no date].
+      The overdue task correctly leads. But among the remaining four open tasks, a HIGH task due
+      TODAY (the credit card) appears before a MEDIUM due in December — which is accidentally
+      correct by due-date. However if "Hide done" is active and dates are absent, priority has no
+      visible sorting effect. The ordering rule should be explicit: overdue → due-today (with
+      priority as tiebreak) → due-soon → undated (priority-sorted) → done. The current ordering
+      is partially correct but not intentionally so. Cross-reference `tasksort` package.
+- [ ] **Completed tasks appear at the bottom of the visible list regardless of "Hide done"
+      state.** This is correct — done tasks sink. But when "Hide done" is active, the list
+      shrinks to 5 tasks with no visual indication that 1 completed task is hidden. A small
+      "1 completed task hidden" affordance (same pattern as the Transactions filter summary)
+      would confirm to Nina that she has completed work without showing it.
+
+*7. General UX / Glanceability*
+- [ ] **Nina cannot add a task without leaving the list context.** The "+" global button opens a
+      multi-entity menu ("New transaction / New account / New budget / New goal / New task…"). Nina
+      must find and click "New task" from that menu, which opens a modal. This is 3–4 interactions
+      for what should be 1–2 on a page whose primary purpose is task management. The To-do page
+      should have a direct, single-tap add-task affordance within the list — consistent with the
+      page's role as a task management surface, not a secondary feature of a financial ledger.
+- [ ] **At 768px, the "Pay credit card before the 22nd" and "Top up Roth IRA" rows suffer severe
+      layout collapse.** In `glamor_06_todo_dark_768.png` and `glamor_06_todo_light_768.png`: the
+      entity link chip ("→ Rewards Credit Card") overlaps the "+ Sub" and "Edit" buttons,
+      creating a visual collision where the chip text partially obscures the button labels. The "→
+      Max out Roth IRA" chip wraps to 4 lines of text ("→ Max / out / Roth / IRA") due to the
+      narrow available width. The action buttons remain right-aligned, but the content between the
+      checkbox and the buttons has no minimum width constraint, causing catastrophic wrapping.
+      At 768px, the action buttons (+ Sub, Edit, ×) should either collapse to icon-only or move
+      below the task content row — the 3-button cluster at constant width is consuming ~160px
+      that the content cannot spare at this viewport.
+- [ ] **The page has no "summary bar" or count of tasks (open / overdue / done).** Every other
+      list page (Budgets: SPENT/BUDGETED/LEFT; Goals: SAVED/TARGET/PROGRESS; Accounts: TOTAL
+      ASSETS/NET WORTH) opens with a headline stat panel above the rows. The To-do page opens
+      directly to the list with no summary. Nina has no immediate count of "5 open, 1 overdue, 1
+      done" — she must count the rows manually. A compact stat strip ("5 open · 1 overdue · 1
+      done") above the `.rows` block would give Nina the portfolio context she needs before
+      scanning the list. This also signals to new users that the list has content worth exploring.
+
+**UI/UX defects (screenshot-confirmed)**
+
+| # | Defect | Screenshot | Severity |
+|---|--------|-----------|---------|
+| D1 | Task titles near-invisible in light mode (blanket `--fg` contrast failure) | `glamor_06_todo_light_1280.png`, `glamor_06_todo_light_1440.png`, `glamor_06_todo_light_768.png` | Critical |
+| D2 | No "Add task" affordance on page — global "+" is 700px away from task list | `glamor_06_todo_dark_1280.png`, `glamor_06_todo_dark_1440.png` | Critical |
+| D3 | At 768px: entity chip ("→ Max out Roth IRA") wraps to 4 lines, collides with action buttons | `glamor_06_todo_dark_768.png`, `glamor_06_todo_light_768.png` | High |
+| D4 | No "due today" date cue — task due 2026-06-22 renders identically to task due 2026-12-15 | `glamor_06_todo_dark_1280.png` | High |
+| D5 | Checkbox tap target is ~20px (visually) — below WCAG 2.5.5 44px minimum | `glamor_06_todo_dark_1280.png` | High |
+| D6 | Filter controls ("All priorities" + "Hide done") stacked in two rows, not inline with "Tasks" heading | `glamor_06_todo_dark_1280.png`, `glamor_06_todo_dark_1440.png` | Medium |
+| D7 | "Tasks" heading faint in light mode (same `--fg` token failure as task titles) | `glamor_06_todo_light_1280.png` | Medium |
+| D8 | Entity chips styled as pill buttons competing with action buttons — no visual hierarchy | `glamor_06_todo_dark_1280.png` | Medium |
+| D9 | No task count / summary strip above the list ("5 open · 1 overdue · 1 done") | All screenshots | Medium |
+| D10 | "×" delete button always visible, including on tasks with cascading sub-tree deletion | `glamor_06_todo_dark_1280.png` | Low |
+
+**Re-screenshot close-out requirement:** After D1 (light-mode contrast fix), D3 (768px layout fix), and D4 (due-today cue), re-run `node e2e/glamor_06_todo.mjs` and confirm: (a) task titles readable in light mode, (b) no chip/button collision at 768px, (c) "due today" renders in amber/warning color distinct from future dates.
+
+**Probe hardening**
+- The drive script correctly uses in-app navigation (click "To-do" nav link from `/`) rather than
+  a direct deep-link to `/todo` — required because `gwc dev` returns 404 for non-root paths (B1).
+- Wait condition is `.card .rows, .card .budget-head` (not `#task-add`) — the add form lives in
+  a modal, not on the page at rest. Any probe that waits for `#task-add` on page load will time
+  out unless the "New task" modal is opened first.
+- DOM audit confirmed: `cbRect: null` because the checkbox is a Unicode character (☐) inside a
+  `<button class="check">`, not a native `<input type="checkbox">`. Tap-target probes should
+  measure the `<button class="check">` bounding rect, not an input element.
+- Sub-task nesting (C72) cannot be visually probed with current seeded data (0 sub-tasks in
+  sample dataset). Add a seeded sub-task or create one in a probe setup step before asserting
+  nesting indent and checkbox alignment at depth > 0.
+
+**Cross-references**
+- C52: "To-do UX review — unlabelled controls + no overdue cue" — overdue cue is live (D4 is a
+  *separate* "due today" gap, not regression of C52); labels are confirmed present.
+- C72: "To-do v2 — add-in-modal + nested sub-tasks" — modal add flow is live; sub-task CRUD
+  confirmed (D2 is about on-page discoverability of the add trigger, not modal functionality).
+- C77: "Dashboard To-do widget — show-completed + sort + inline checkboxes" — dashboard widget
+  done; this review is the main /todo screen.
+
 ### G5. Goals — "Are We There Yet?" (Aaliyah) — 2026-06-22 ★
+
+**✅ RESOLVED (2026-06-23).** All 8 consolidated fixes shipped:
+1–2 (light-mode contrast) — explicit `--text` pinned on `.stat-value` and `.budget .row-desc`.
+3 (flat bars) — `goals.ClassifyPace` (pure, tested) drives `.bar-fill` tone classes done/final/overdue/soon.
+4 (alphabetical order) — `goals.LessForList` sorts nearest-deadline → highest % → name.
+5 (768 wrap) — `@media (max-width:760px) .budget-head { flex-wrap }` so name no longer collides with amount.
+6 (no pace cue) — compact `.pace-badge` per row (Final stretch / Past due / Due soon / On track).
+7 (no add) — "+ Add goal" button in new `.card-head` opening the add-goal modal.
+8 (no near-complete treatment) — ≥90% reads as "Final stretch" badge + gradient bar.
+Logic in `internal/goals/pace.go` (+ `pace_test.go`); view in `goals.go`; CSS in `web/index.html`.
 
 **The story**
 Aaliyah, a 29-year-old saver juggling five active financial goals (emergency fund, car down payment,

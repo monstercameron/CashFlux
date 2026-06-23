@@ -439,6 +439,42 @@
       }
       .bar-fill.near { background: #f59e0b; }
       .bar-fill.over { background: var(--danger); }
+      /* Goal pace states (G5): the progress-bar fill tone differentiates a goal's
+         standing at a glance instead of one flat accent. done/final = success
+         tones, overdue = danger, soon = amber. on-track/undated keep the accent. */
+      .bar-fill.done { background: var(--up, #54b884); }
+      .bar-fill.final { background: linear-gradient(90deg, var(--accent), var(--up, #54b884)); }
+      .bar-fill.overdue { background: var(--danger); }
+      .bar-fill.soon { background: #f59e0b; }
+
+      /* Card header row (G5): a card title with a right-aligned action (e.g.
+         "+ Add goal") so adding is discoverable without hunting for the FAB. */
+      .card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.75rem; }
+      .card-head .card-title { margin: 0; }
+
+      /* Goal pace badge (G5): a compact colored chip per row answering "am I on
+         pace?". Tones mirror the bar states; readable in both themes. */
+      .pace-badge { display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em;
+        padding: 0.1rem 0.45rem; border-radius: 999px; white-space: nowrap; line-height: 1.5; }
+      .pace-final { background: var(--accent-dim); color: var(--accent); }
+      .pace-overdue { background: rgba(216,113,111,0.18); color: var(--danger); }
+      .pace-soon { background: rgba(245,158,11,0.18); color: #d98c00; }
+      [data-theme="light"] .pace-soon { color: #b45309; }
+      .pace-ontrack { background: var(--bg-elev); color: var(--text-dim); }
+
+      /* Goal/budget rows: at narrow widths the head wraps so a long goal name no
+         longer collides with the amount; the bar + sub-line stack below (G5 §768). */
+      @media (max-width: 760px) {
+        .budget-head { flex-wrap: wrap; align-items: baseline; }
+        .budget-head .row-desc { flex: 1 1 100%; }
+        .budget-head .budget-amount { flex: 0 0 auto; }
+      }
+
+      /* Stat figures must stay full-contrast in both themes (G4/G5): the plain
+         (non-pos/neg) value inherits body text, which the light palette keeps dark,
+         but pin it explicitly so a muted wrapper can never wash it out. */
+      .stat-value { color: var(--text); }
+      .budget .row-desc { color: var(--text); }
 
       /* Semantic tone classes (C91): up = positive, down = negative, warn = caution.
          Named so they style every usage path — both literal class strings and the

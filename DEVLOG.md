@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series — G5 Goals "Are We There Yet?"
+
+Started the GLAMOR per-page UX/visual structure review from the backlog (section G). Working
+bottom-up per SDLC. G5 (Goals) first since it was top of the file.
+
+The audit's headline gaps: all five progress bars rendered identical flat green regardless of
+urgency; ordering was alphabetical so the 91% goal with the nearest deadline was buried at position
+4; no pace cue ("am I on track?"); no header add button; long names collided/wrapped badly at 768.
+
+Key decision — **pace is honestly underivable** here. Goals carry only a target date + current/target
+amounts; there is no start date or contribution history, so a true on-pace/behind calc would be a
+fabrication. So I classified pace by what the app *does* know — completion, percent, and the target
+date vs now — into `goals.ClassifyPace`: complete → overdue → final-stretch (≥90%) → due-soon (≤60d)
+→ on-track, with undated goals having no pace. Put it (and `LessForList` for the new sort) in the
+pure `goals` package with table tests, then drove the badge + bar tone + sort from it in the view.
+CSS-only for the badge/bar tones, card-head, 768 wrap, and explicit light-mode contrast tokens.
+
+Next: G4 Budgets (same shape — sort by health, near-limit pill, row separators, contrast).
+
 ## 2026-06-22 - fix: palette/keyboard direct actions crashed the whole app
 
 Cam asked me to e2e the Ctrl+K toggle AND the direct actions — and that immediately surfaced a serious latent
